@@ -71,7 +71,7 @@ export async function saveBookData(id: string, data: ArrayBuffer): Promise<strin
 }
 
 /**
- * Get book data from storage
+ * Get book data from storage as ArrayBuffer
  */
 export async function getBookData(id: string, filePath?: string): Promise<ArrayBuffer | null> {
     const fs = await getTauriFs();
@@ -105,6 +105,52 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
         return null;
     } catch (error) {
         console.error('[Storage] Failed to get book data from IndexedDB:', error);
+        return null;
+    }
+}
+
+/**
+ * Get book data as a Blob - more memory efficient than ArrayBuffer
+ * This avoids extra memory copies when passing to EPUB.js
+ */
+export async function getBookBlob(id: string, filePath?: string): Promise<Blob | null> {
+    const fs = await getTauriFs();
+    
+    // If we have a Tauri file path (not an idb:// URL), read from there
+    const isIdbUrl = filePath?.startsWith('idb://');
+    
+    if (fs && filePath && !isIdbUrl) {
+        try {
+            console.log('[Storage] Reading blob from Tauri FS:', filePath);
+            const contents = await fs.readFile(filePath);
+            // Detect MIME type from extension
+            const ext = filePath.toLowerCase().split('.').pop();
+            const mimeType = ext === 'epub' ? 'application/epub+zip' :
+                ext === 'pdf' ? 'application/pdf' :
+                    'application/octet-stream';
+            return new Blob([contents], { type: mimeType });
+        } catch (error) {
+            console.error('[Storage] Error reading blob from Tauri FS:', error);
+            // Continue to fallback
+        }
+    }
+    
+    // Extract ID from idb:// URL if needed
+    const effectiveId = isIdbUrl ? filePath!.slice(6) : id;
+    
+    // Fallback to IndexedDB
+    try {
+        console.log('[Storage] Reading blob from IndexedDB, id:', effectiveId);
+        const data = await get<ArrayBuffer>(`${STORE_NAME}-${effectiveId}`);
+        if (data) {
+            console.log('[Storage] Found blob data in IndexedDB, size:', data.byteLength);
+            // Detect MIME type from stored metadata or default to epub
+            return new Blob([data], { type: 'application/epub+zip' });
+        }
+        console.error('[Storage] No blob data found in IndexedDB for id:', effectiveId);
+        return null;
+    } catch (error) {
+        console.error('[Storage] Failed to get book blob from IndexedDB:', error);
         return null;
     }
 }

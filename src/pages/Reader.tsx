@@ -17,23 +17,23 @@ import {
     BookInfoPopover,
     ReaderViewportHandle,
 } from '@/components/reader';
-import { DocLocation, DocMetadata, TocItem } from '@/types';
-import { readBookFile } from '@/lib/import';
+import { DocLocation, DocMetadata, TocItem, BookSection } from '@/types';
+import { getBookBlob } from '@/lib/storage';
 
 export function ReaderPage() {
     const { currentBookId, setRoute } = useUIStore();
-    const { getBook, updateProgress } = useLibraryStore();
+    const { getBook, updateProgress, saveBookLocations } = useLibraryStore();
     const { settings, updateReaderSettings } = useSettingsStore();
     const readerRef = useRef<ReaderViewportHandle>(null);
     const loadedBookIdRef = useRef<string | null>(null);
 
     // File state
-    const [file, setFile] = useState<File | null>(null);
+    const [file, setFile] = useState<File | Blob | null>(null);
     const [metadata, setMetadata] = useState<DocMetadata | null>(null);
     const [toc, setToc] = useState<TocItem[]>([]);
     const [location, setLocation] = useState<DocLocation | null>(null);
     const [sectionFractions, setSectionFractions] = useState<number[]>([]);
-
+    const [sections, setSections] = useState<BookSection[]>([]);
     // UI state
     const [showToolbar, setShowToolbar] = useState(true);
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | null;
@@ -47,11 +47,8 @@ export function ReaderPage() {
 
     // Load book file
     useEffect(() => {
-        console.log('[Reader] Book loading effect triggered, currentBookId:', currentBookId, 'already loaded:', loadedBookIdRef.current);
-
         // Skip if we've already loaded this book (using ref to avoid dependency issues)
         if (currentBookId && loadedBookIdRef.current === currentBookId) {
-            console.log('[Reader] Book already loaded, skipping');
             return;
         }
 
@@ -63,13 +60,9 @@ export function ReaderPage() {
         let isCancelled = false;
 
         const loadBook = async () => {
-            if (!currentBookId) {
-                console.log('[Reader] No currentBookId, skipping load');
-                return;
-            }
+            if (!currentBookId) return;
 
             const book = getBook(currentBookId);
-            console.log('[Reader] Got book from store:', book?.id, 'storagePath:', book?.storagePath);
             if (!book) {
                 setLoadError('Book not found in library');
                 return;
@@ -80,38 +73,27 @@ export function ReaderPage() {
             setMetadata(null);
             setToc([]);
             setLocation(null);
+            setSections([]);
             setInitialLocation(book.currentLocation);
             setLoadError(null);
 
             try {
-                console.log('[Reader] Loading book file for:', book.id);
-                const buffer = await readBookFile(book.storagePath || book.filePath, book.id);
+                // Use getBookBlob for memory efficiency - avoids extra ArrayBuffer copies
+                const blob = await getBookBlob(book.id, book.storagePath || book.filePath);
 
-                if (isCancelled) {
-                    console.log('[Reader] Load cancelled');
-                    return;
-                }
+                if (isCancelled) return;
 
-                if (!buffer) {
+                if (!blob) {
                     throw new Error('Could not read book file from storage.');
                 }
 
-                // Create a proper File object
-                const filename = book.filePath.split(/[/\\]/).pop() || 'book.epub';
-                const mimeType = book.format === 'epub' ? 'application/epub+zip' :
-                    book.format === 'pdf' ? 'application/pdf' :
-                        'application/octet-stream';
-
-                const fileObj = new File([buffer], filename, { type: mimeType });
-                console.log('[Reader] File created, setting state...', fileObj.size, 'bytes');
-
                 if (!isCancelled) {
                     loadedBookIdRef.current = book.id;
-                    setFile(fileObj);
+                    // Pass blob directly - EPUB.js accepts Blob natively
+                    setFile(blob);
                 }
             } catch (err) {
                 if (isCancelled) return;
-                console.error('[Reader] Failed to load book file:', err);
                 setLoadError(err instanceof Error ? err.message : 'Unknown error loading book');
             }
         };
@@ -119,7 +101,6 @@ export function ReaderPage() {
         loadBook();
 
         return () => {
-            console.log('[Reader] Cleanup - setting cancelled for book:', currentBookId);
             isCancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,7 +170,6 @@ export function ReaderPage() {
 
     // Handle ready event
     const handleReady = useCallback((meta: DocMetadata, tocItems: TocItem[]) => {
-        console.log('[Reader] Book ready:', meta.title);
         setMetadata(meta);
         setToc(tocItems);
     }, []);
@@ -198,31 +178,36 @@ export function ReaderPage() {
         setSectionFractions(fractions);
     }, []);
 
-    // Handle location change
-    const locationUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    useEffect(() => {
-        // Cleanup timeout on unmount
-        return () => {
-            if (locationUpdateRef.current) {
-                clearTimeout(locationUpdateRef.current);
-                locationUpdateRef.current = null;
-            }
-        };
+    const handleSections = useCallback((newSections: BookSection[]) => {
+        setSections(newSections);
     }, []);
 
+    // Handle location change - immediate updates for responsive UI
+    const lastClickFractionRef = useRef<number | null>(null);
+
     const handleLocationChange = useCallback((loc: DocLocation) => {
+        // Immediate UI update - no debounce for display
         setLocation(loc);
 
-        // Debounced progress update
-        if (locationUpdateRef.current) {
-            clearTimeout(locationUpdateRef.current);
+        // Fast progress save - use requestIdleCallback for non-critical save
+        if (currentBookId) {
+            const safePercentage = Math.max(0, Math.min(1, loc.percentage || 0));
+            const safeCfi = loc.cfi || '';
+            const lastClickFraction = lastClickFractionRef.current ?? undefined;
+            const pageProgress = loc.pageInfo ? {
+                currentPage: loc.pageInfo.currentPage,
+                endPage: loc.pageInfo.endPage,
+                totalPages: loc.pageInfo.totalPages,
+                range: loc.pageInfo.range || `${loc.pageInfo.currentPage}`,
+            } : undefined;
+
+            // Use microtask for immediate execution but don't block UI
+            queueMicrotask(() => {
+                updateProgress(currentBookId, safePercentage, safeCfi, lastClickFraction, pageProgress);
+            });
+
+            lastClickFractionRef.current = null;
         }
-        locationUpdateRef.current = setTimeout(() => {
-            if (currentBookId) {
-                updateProgress(currentBookId, loc.percentage, loc.cfi);
-            }
-        }, 500);
     }, [currentBookId, updateProgress]);
 
     // Handle navigation
@@ -233,17 +218,38 @@ export function ReaderPage() {
         setActivePanel(null);
     }, []);
 
+    // Toggle toolbar visibility
+    const handleToggleChrome = useCallback(() => {
+        setShowToolbar(prev => !prev);
+    }, []);
+
     const handleSeek = useCallback((fraction: number) => {
-        readerRef.current?.goToFraction(fraction);
+        console.log(`[Reader] handleSeek called with fraction: ${fraction}`);
+
+        // Store for progress saving consistency
+        lastClickFractionRef.current = fraction;
+
+        // Navigate immediately for responsive feedback
+        if (readerRef.current) {
+            readerRef.current.goToFraction(fraction);
+        } else {
+            console.warn('[Reader] handleSeek failed - readerRef not available');
+        }
     }, []);
 
     const handleBack = useCallback(() => {
         setRoute('library');
     }, [setRoute]);
 
-    const handleTextSelected = useCallback((cfi: string, text: string) => {
-        console.log('Text selected:', { cfi, text });
+    const handleTextSelected = useCallback((_cfi: string, _text: string) => {
+        // Handle text selection - can be used for highlights/annotations
     }, []);
+
+    const handleLocationsSaved = useCallback((locations: string) => {
+        if (currentBookId) {
+            saveBookLocations(currentBookId, locations);
+        }
+    }, [currentBookId, saveBookLocations]);
 
     // Error state
     if (loadError) {
@@ -313,24 +319,31 @@ export function ReaderPage() {
                     file={file}
                     settings={settings.readerSettings}
                     initialLocation={initialLocation}
+                    savedLocations={getBook(currentBookId || '')?.locations}
                     onReady={handleReady}
                     onLocationChange={handleLocationChange}
+                    onLocationsSaved={handleLocationsSaved}
                     onTextSelected={handleTextSelected}
                     onSectionFractions={handleSectionFractions}
+                    onSections={handleSections}
+                    onToggleChrome={handleToggleChrome}
                     className="w-full h-full"
                 />
             </div>
 
             {/* Progress Bar - Full width like top toolbar */}
-            <div className="fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
-                <div className="pointer-events-auto bg-[var(--color-surface)]/95 backdrop-blur-lg border-t border-[var(--color-border)] px-4 py-2">
+            <div className="fixed bottom-0 left-0 right-0 z-[100] pointer-events-none overflow-visible">
+                <div className="pointer-events-auto bg-[var(--color-surface)]/95 backdrop-blur-lg border-t border-[var(--color-border)] px-4 py-2 overflow-visible">
                     <ReaderProgressBar
                         location={location}
                         toc={toc}
+                        sections={sections}
                         sectionFractions={sectionFractions}
                         visible={true}
                         onSeek={handleSeek}
                         onNavigate={goTo}
+                        savedPageProgress={getBook(currentBookId || '')?.pageProgress}
+                        layout={settings.readerSettings.layout}
                     />
                 </div>
             </div>

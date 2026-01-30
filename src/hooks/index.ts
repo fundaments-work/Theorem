@@ -2,5 +2,6 @@
  * Export hooks
  */
 
-export { useDocumentReader } from './useDocumentReader';
-export type { UseDocumentReaderOptions, UseDocumentReaderReturn } from './useDocumentReader';
+// Main document reader hook
+export { useDocumentReader } from './useDocumentReader'
+export type { UseDocumentReaderOptions, UseDocumentReaderReturn } from './useDocumentReader'

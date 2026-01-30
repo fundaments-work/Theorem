@@ -23,12 +23,15 @@ const defaultReaderSettings: ReaderSettings = {
     hyphenation: false,
     margins: 10,
     flow: "paged",
-    layout: "single",
+    layout: "auto", // Auto-detect based on viewport
     brightness: 100,
     fullscreen: false,
     pageAnimation: "slide",
     toolbarAutoHide: false,
     autoHideDelay: 5,
+    zoom: 100,
+    wordSpacing: 0,
+    forcePublisherStyles: false,
     // Performance settings
     prefetchDistance: 1,
     enableAnimations: false,
@@ -113,6 +116,13 @@ interface CachedBookMetadata {
     coverPath?: string;
     currentLocation?: string;
     progress: number;
+    lastClickFraction?: number;
+    pageProgress?: {
+        currentPage: number;
+        endPage?: number;
+        totalPages: number;
+        range: string;
+    };
     lastReadAt: Date;
 }
 
@@ -130,9 +140,10 @@ interface LibraryStore {
     addBooks: (books: Book[]) => void;
     removeBook: (bookId: string) => void;
     updateBook: (bookId: string, updates: Partial<Book>) => void;
-    updateProgress: (bookId: string, progress: number, location: string) => void;
+    updateProgress: (bookId: string, progress: number, location: string, lastClickFraction?: number, pageProgress?: { currentPage: number; endPage?: number; totalPages: number; range: string }) => void;
     toggleFavorite: (bookId: string) => void;
     updateBookMetadata: (bookId: string, metadata: Partial<Book>) => void;
+    saveBookLocations: (bookId: string, locations: string) => void;
 
     // Collection actions
     addCollection: (collection: Collection) => void;
@@ -153,7 +164,7 @@ interface LibraryStore {
     getBooksByCategory: (category: string) => Book[];
     searchBooks: (query: string) => Book[];
     getCachedBook: (bookId: string) => CachedBookMetadata | undefined;
-    
+
     // Scanning
     setLastScannedAt: (date: Date) => void;
     // Cache management
@@ -171,7 +182,7 @@ export const useLibraryStore = create<LibraryStore>()(
             // Book actions
             addBook: (book) =>
                 set((state) => ({ books: [...state.books, book] })),
-                
+
             addBooks: (books) =>
                 set((state) => ({ books: [...state.books, ...books] })),
 
@@ -189,19 +200,21 @@ export const useLibraryStore = create<LibraryStore>()(
                     ),
                 })),
 
-            updateProgress: (bookId, progress, location) =>
+            updateProgress: (bookId, progress, location, lastClickFraction, pageProgress) =>
                 set((state) => {
                     const updatedBooks = state.books.map((b) =>
                         b.id === bookId
-                            ? { 
-                                ...b, 
-                                progress, 
-                                currentLocation: location, 
-                                lastReadAt: new Date() 
+                            ? {
+                                ...b,
+                                progress,
+                                currentLocation: location,
+                                ...(lastClickFraction !== undefined && { lastClickFraction }),
+                                ...(pageProgress !== undefined && { pageProgress }),
+                                lastReadAt: new Date()
                             }
                             : b
                     );
-                    
+
                     // Update cache as well for fast access
                     const book = updatedBooks.find(b => b.id === bookId);
                     if (book) {
@@ -213,12 +226,14 @@ export const useLibraryStore = create<LibraryStore>()(
                             coverPath: book.coverPath,
                             currentLocation: location,
                             progress,
+                            lastClickFraction,
+                            pageProgress: pageProgress || book.pageProgress,
                             lastReadAt: new Date(),
                         }, ...existingCache].slice(0, 20); // Keep last 20
-                        
+
                         return { books: updatedBooks, recentBooksCache: newCache };
                     }
-                    
+
                     return { books: updatedBooks };
                 }),
 
@@ -228,11 +243,18 @@ export const useLibraryStore = create<LibraryStore>()(
                         b.id === bookId ? { ...b, isFavorite: !b.isFavorite } : b
                     ),
                 })),
-                
+
             updateBookMetadata: (bookId, metadata) =>
                 set((state) => ({
                     books: state.books.map((b) =>
                         b.id === bookId ? { ...b, ...metadata } : b
+                    ),
+                })),
+
+            saveBookLocations: (bookId, locations) =>
+                set((state) => ({
+                    books: state.books.map((b) =>
+                        b.id === bookId ? { ...b, locations } : b
                     ),
                 })),
 
@@ -307,13 +329,13 @@ export const useLibraryStore = create<LibraryStore>()(
                         b.tags.some((t) => t.toLowerCase().includes(q))
                 );
             },
-            
+
             getCachedBook: (bookId) => {
                 return get().recentBooksCache.find(b => b.id === bookId);
             },
-            
+
             setLastScannedAt: (date) => set({ lastScannedAt: date }),
-            
+
             // Cache management
             updateRecentCache: (book) => {
                 set((state) => {
@@ -325,6 +347,7 @@ export const useLibraryStore = create<LibraryStore>()(
                         coverPath: book.coverPath,
                         currentLocation: book.currentLocation,
                         progress: book.progress,
+                        lastClickFraction: book.lastClickFraction,
                         lastReadAt: book.lastReadAt || new Date(),
                     };
                     return {
@@ -386,7 +409,7 @@ export const useSettingsStore = create<SettingsStore>()(
                 set({
                     settings: defaultAppSettings,
                 }),
-                
+
             resetReaderSettings: () =>
                 set((state) => ({
                     settings: {

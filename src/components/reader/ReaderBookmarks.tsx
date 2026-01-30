@@ -4,9 +4,9 @@
  */
 
 import { Bookmark, X, Trash2, ExternalLink } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useLibraryStore } from '@/store';
 import { format } from 'date-fns';
+import { Backdrop, FloatingPanel } from '@/components/ui';
 
 interface ReaderBookmarksProps {
     bookId: string;
@@ -28,27 +28,9 @@ export function ReaderBookmarks({
 
     return (
         <>
-            {/* Backdrop */}
-            {visible && (
-                <div
-                    className="fixed inset-0 z-40 bg-black/5"
-                    onClick={onClose}
-                />
-            )}
+            <Backdrop visible={visible} onClick={onClose} />
 
-            {/* Panel */}
-            <div
-                className={cn(
-                    'fixed top-16 right-6 w-80 max-w-[calc(100vw-3rem)] z-50',
-                    'bg-[var(--color-surface)] rounded-2xl shadow-2xl flex flex-col',
-                    'border border-[var(--color-border)]',
-                    'transform transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] origin-top-right',
-                    visible
-                        ? 'opacity-100 scale-100 translate-y-0'
-                        : 'opacity-0 scale-95 -translate-y-2 pointer-events-none',
-                    className
-                )}
-            >
+            <FloatingPanel visible={visible} className={className}>
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
                     <div className="flex items-center gap-2.5">
@@ -116,7 +98,7 @@ export function ReaderBookmarks({
                         </div>
                     )}
                 </div>
-            </div>
+            </FloatingPanel>
         </>
     );
 }

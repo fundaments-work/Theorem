@@ -3,9 +3,10 @@
  * Panel for searching within the book content
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X, Loader2, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Backdrop, FloatingPanel } from '@/components/ui';
 
 interface SearchMatch {
     cfi: string;
@@ -16,7 +17,6 @@ interface ReaderSearchProps {
     visible: boolean;
     onClose: () => void;
     onNavigate: (location: string) => void;
-    // We pass the search functions from the parent because they come from the engine ref
     onSearch: (query: string) => AsyncGenerator<any>;
     onClearSearch: () => void;
     className?: string;
@@ -34,20 +34,20 @@ export function ReaderSearch({
     const [results, setResults] = useState<SearchMatch[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [progress, setProgress] = useState(0);
-    const searchRef = useRef<number>(0);
+    const searchRef = useRef(0);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     // Focus input when visible
-    const inputRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
         if (visible) {
-            setTimeout(() => inputRef.current?.focus(), 100);
+            const timer = setTimeout(() => inputRef.current?.focus(), 100);
+            return () => clearTimeout(timer);
         } else {
-            // Clear search highlights when hidden
             handleClear();
         }
     }, [visible]);
 
-    const handleSearch = async (e?: React.FormEvent) => {
+    const handleSearch = useCallback(async (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!query.trim()) return;
 
@@ -60,7 +60,6 @@ export function ReaderSearch({
         try {
             const iter = onSearch(query);
             for await (const result of iter) {
-                // If a new search started, stop this one
                 if (currentSearchId !== searchRef.current) break;
 
                 if (result === 'done') {
@@ -79,40 +78,26 @@ export function ReaderSearch({
                 setIsSearching(false);
             }
         }
-    };
+    }, [query, onSearch]);
 
-    const handleClear = () => {
+    const handleClear = useCallback(() => {
         setQuery('');
         setResults([]);
         setIsSearching(false);
         setProgress(0);
         searchRef.current++;
         onClearSearch();
-    };
+    }, [onClearSearch]);
+
+    const handleNavigate = useCallback((cfi: string) => {
+        onNavigate(cfi);
+    }, [onNavigate]);
 
     return (
         <>
-            {/* Backdrop */}
-            {visible && (
-                <div
-                    className="fixed inset-0 z-40 bg-black/5"
-                    onClick={onClose}
-                />
-            )}
+            <Backdrop visible={visible} onClick={onClose} />
 
-            {/* Panel */}
-            <div
-                className={cn(
-                    'fixed top-16 right-6 w-80 max-w-[calc(100vw-3rem)] z-50',
-                    'bg-[var(--color-surface)] rounded-2xl shadow-2xl flex flex-col',
-                    'border border-[var(--color-border)]',
-                    'transform transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] origin-top-right',
-                    visible
-                        ? 'opacity-100 scale-100 translate-y-0'
-                        : 'opacity-0 scale-95 -translate-y-2 pointer-events-none',
-                    className
-                )}
-            >
+            <FloatingPanel visible={visible} className={cn('flex flex-col', className)}>
                 {/* Header/Search Input */}
                 <div className="p-4 border-b border-[var(--color-border)]">
                     <form onSubmit={handleSearch} className="relative">
@@ -174,10 +159,7 @@ export function ReaderSearch({
                         {results.map((result, index) => (
                             <button
                                 key={index}
-                                onClick={() => {
-                                    onNavigate(result.cfi);
-                                    // Don't close so they can see other results
-                                }}
+                                onClick={() => handleNavigate(result.cfi)}
                                 className="w-full flex flex-col gap-1 p-3 rounded-xl hover:bg-[var(--color-background)] transition-all text-left group"
                             >
                                 <p
@@ -205,7 +187,7 @@ export function ReaderSearch({
                         </p>
                     </div>
                 )}
-            </div>
+            </FloatingPanel>
         </>
     );
 }

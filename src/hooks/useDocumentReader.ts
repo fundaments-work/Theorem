@@ -1,25 +1,47 @@
 /**
  * useDocumentReader hook
- * React-friendly interface for the document engine with performance optimizations
+ * React-friendly interface for the document engine - optimized for performance
  */
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { DocumentEngine } from '@/engines';
-import type { 
-    DocLocation, 
-    DocMetadata, 
-    TocItem, 
-    HighlightColor, 
+import { EpubjsEngine } from '@/engines';
+import type {
+    DocLocation,
+    DocMetadata,
+    TocItem,
+    HighlightColor,
     Annotation,
-    SearchResult 
+    SearchResult,
+    ReadingFlow,
+    PageLayout,
 } from '@/types';
 
 export interface UseDocumentReaderOptions {
     onLocationChange?: (location: DocLocation) => void;
     onReady?: (metadata: DocMetadata, toc: TocItem[]) => void;
+    onLocationsGenerated?: () => void;
     onError?: (error: Error) => void;
     onTextSelected?: (cfi: string, text: string, range: Range) => void;
+    onLocationsSaved?: (locations: string) => void;
+}
 
+export interface ThemeSettings {
+    fontFamily?: string;
+    fontSize?: number;
+    lineHeight?: number;
+    letterSpacing?: number;
+    wordSpacing?: number;
+    paragraphSpacing?: number;
+    textAlign?: 'left' | 'justify' | 'center';
+    textColor?: string;
+    backgroundColor?: string;
+    linkColor?: string;
+    flow?: ReadingFlow;
+    layout?: PageLayout;
+    margins?: number;
+    zoom?: number;
+    hyphenation?: boolean;
+    forcePublisherStyles?: boolean;
 }
 
 export interface UseDocumentReaderReturn {
@@ -37,7 +59,7 @@ export interface UseDocumentReaderReturn {
     canGoForward: boolean;
 
     // Actions
-    open: (source: File | Blob | ArrayBuffer, filename?: string, initialLocation?: string) => Promise<void>;
+    open: (source: File | Blob | ArrayBuffer | string, filename?: string, initialLocation?: string, layout?: PageLayout, savedLocations?: string, flow?: ReadingFlow, zoom?: number, margins?: number) => Promise<void>;
     goTo: (target: string | number) => Promise<void>;
     goToFraction: (fraction: number) => Promise<void>;
     next: () => Promise<void>;
@@ -46,105 +68,163 @@ export interface UseDocumentReaderReturn {
     goRight: () => Promise<void>;
     goBack: () => void;
     goForward: () => void;
-    
+
     // Annotations
     addHighlight: (cfi: string, text: string, color: HighlightColor) => Promise<Annotation>;
     removeHighlight: (id: string) => Promise<void>;
-    
+
     // Search
     search: (query: string) => AsyncGenerator<SearchResult | { progress: number } | 'done'>;
     clearSearch: () => void;
-    
+
+    // Settings
+    setLayout: (layout: PageLayout) => void;
+    setFlow: (flow: ReadingFlow) => void;
+    setZoom: (zoom: number) => void;
+    setMargins: (margins: number) => void;
+    applyTheme: (settings: ThemeSettings) => void;
+
     // Cleanup
     close: () => void;
-    
+
     // Get engine instance for advanced usage
-    getEngine: () => DocumentEngine | null;
+    getEngine: () => EpubjsEngine | null;
+
+    // Force location update - useful for keyboard navigation
+    forceLocationUpdate: () => void;
 }
 
+// Stable empty array to avoid re-renders
+const EMPTY_TOC: TocItem[] = [];
+const EMPTY_ANNOTATIONS: Annotation[] = [];
+const EMPTY_FRACTIONS: number[] = [];
+
 /**
- * React hook for document reading with performance optimizations
+ * React hook for document reading 
  * 
  * Features:
  * - Lazy engine initialization
- * - Debounced state updates
+ * - Batched state updates
  * - Automatic cleanup
- * - Prefetching for smooth navigation
+ * - Minimal re-renders through stable references
  */
 export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDocumentReaderReturn {
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const engineRef = useRef<DocumentEngine | null>(null);
-    const optionsRef = useRef(options);
-    
-    // Keep options ref up to date
-    useEffect(() => {
-        optionsRef.current = options;
-    }, [options]);
+    const engineRef = useRef<EpubjsEngine | null>(null);
 
-    // State
-    const [isLoading, setIsLoading] = useState(false);
-    const [isInitialized, setIsInitialized] = useState(false);
-    const [isReady, setIsReady] = useState(false);
+    // Store callbacks in ref to avoid re-renders when options change
+    const callbacksRef = useRef(options);
+    useEffect(() => {
+        callbacksRef.current = options;
+    });
+
+    // State - grouped by update frequency for optimal render performance
+    const [initState, setInitState] = useState({
+        isInitialized: false,
+        isReady: false,
+        isLoading: false,
+    });
+
+    const [dataState, setDataState] = useState({
+        metadata: null as DocMetadata | null,
+        toc: EMPTY_TOC,
+        annotations: EMPTY_ANNOTATIONS,
+    });
+
+    const [locationState, setLocationState] = useState({
+        location: null as DocLocation | null,
+        sectionFractions: EMPTY_FRACTIONS,
+        canGoBack: false,
+        canGoForward: false,
+    });
+
+    // Ref for throttling location updates to prevent excessive re-renders
+    const locationUpdatePendingRef = useRef(false);
+    const pendingLocationRef = useRef<DocLocation | null>(null);
+
     const [error, setError] = useState<Error | null>(null);
-    const [metadata, setMetadata] = useState<DocMetadata | null>(null);
-    const [toc, setToc] = useState<TocItem[]>([]);
-    const [location, setLocation] = useState<DocLocation | null>(null);
-    const [sectionFractions, setSectionFractions] = useState<number[]>([]);
-    const [annotations, setAnnotations] = useState<Annotation[]>([]);
-    const [canGoBack, setCanGoBack] = useState(false);
-    const [canGoForward, setCanGoForward] = useState(false);
 
-    // Track mounted state to prevent state updates after unmount
+    // Mounted ref for cleanup
     const mountedRef = useRef(true);
-    
     useEffect(() => {
-        mountedRef.current = true;
         return () => {
             mountedRef.current = false;
         };
     }, []);
 
-    // Initialize engine once container is available
+    // Initialize engine
     useEffect(() => {
         const container = containerRef.current;
         if (!container || engineRef.current) return;
 
-        // Mark as initializing to prevent double init
-        if ((container as any).__engineInitializing) return;
-        (container as any).__engineInitializing = true;
+        // Prevent double init
+        const containerKey = '__lionReaderInit';
+        if ((container as any)[containerKey]) return;
+        (container as any)[containerKey] = true;
 
-        const engine = new DocumentEngine();
+        const engine = new EpubjsEngine();
         let isCancelled = false;
 
-        // Set up callbacks with refs to avoid re-renders
+        // Setup callbacks - throttled for performance
         engine.onLocationChange = (loc) => {
             if (!mountedRef.current || isCancelled) return;
-            setLocation(loc);
-            setCanGoBack(engine.canGoBack());
-            setCanGoForward(engine.canGoForward());
-            optionsRef.current.onLocationChange?.(loc);
+
+            // Batch location updates using RAF for smoother UI
+            pendingLocationRef.current = loc;
+            if (!locationUpdatePendingRef.current) {
+                locationUpdatePendingRef.current = true;
+                requestAnimationFrame(() => {
+                    locationUpdatePendingRef.current = false;
+                    const locToUpdate = pendingLocationRef.current;
+                    if (locToUpdate && mountedRef.current) {
+                        setLocationState(prev => ({
+                            ...prev,
+                            location: locToUpdate,
+                            canGoBack: engine.canGoBack(),
+                            canGoForward: engine.canGoForward(),
+                        }));
+                        callbacksRef.current.onLocationChange?.(locToUpdate);
+                    }
+                });
+            }
         };
 
         engine.onReady = (meta, tocItems) => {
             if (!mountedRef.current || isCancelled) return;
-            setMetadata(meta);
-            setToc(tocItems);
-            setSectionFractions(engine.getSectionFractions());
-            setIsReady(true);
-            setIsLoading(false);
-            optionsRef.current.onReady?.(meta, tocItems);
+            setInitState(prev => ({ ...prev, isReady: true, isLoading: false }));
+            setDataState({ metadata: meta, toc: tocItems, annotations: engine.getAnnotations() });
+            setLocationState(prev => ({
+                ...prev,
+                sectionFractions: engine.getSectionFractions(),
+            }));
+            callbacksRef.current.onReady?.(meta, tocItems);
+        };
+
+        engine.onLocationsGenerated = () => {
+            if (!mountedRef.current || isCancelled) return;
+            const fractions = engine.getSectionFractions();
+            setLocationState(prev => ({
+                ...prev,
+                sectionFractions: fractions,
+            }));
+            callbacksRef.current.onLocationsGenerated?.();
         };
 
         engine.onError = (err) => {
             if (!mountedRef.current || isCancelled) return;
             setError(err);
-            setIsLoading(false);
-            optionsRef.current.onError?.(err);
+            setInitState(prev => ({ ...prev, isLoading: false }));
+            callbacksRef.current.onError?.(err);
         };
 
         engine.onTextSelected = (cfi, text, range) => {
             if (!mountedRef.current || isCancelled) return;
-            optionsRef.current.onTextSelected?.(cfi, text, range);
+            callbacksRef.current.onTextSelected?.(cfi, text, range);
+        };
+
+        engine.onLocationsSaved = (locations) => {
+            if (!mountedRef.current || isCancelled) return;
+            callbacksRef.current.onLocationsSaved?.(locations);
         };
 
         // Initialize
@@ -152,40 +232,42 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
             .then(() => {
                 if (mountedRef.current && !isCancelled) {
                     engineRef.current = engine;
-                    setIsInitialized(true);
+                    setInitState(prev => ({ ...prev, isInitialized: true }));
                 } else {
-                    // Component unmounted during init, clean up
                     engine.destroy();
                 }
             })
             .catch((err) => {
                 if (mountedRef.current && !isCancelled) {
                     setError(err);
-                    setIsLoading(false);
+                    setInitState(prev => ({ ...prev, isLoading: false }));
                 }
             });
 
-        // Cleanup
         return () => {
             isCancelled = true;
-            (container as any).__engineInitializing = false;
-            setIsInitialized(false);
+            (container as any)[containerKey] = false;
             if (engineRef.current === engine) {
                 engineRef.current = null;
             }
             engine.destroy();
+            setInitState({ isInitialized: false, isReady: false, isLoading: false });
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Track open operation to handle race conditions
+    // Track open operations
     const openAbortRef = useRef<AbortController | null>(null);
 
-    // Open document
+    // Open document - with full settings support
     const open = useCallback(async (
-        source: File | Blob | ArrayBuffer, 
+        source: File | Blob | ArrayBuffer | string,
         filename: string = 'document.epub',
-        initialLocation?: string
+        initialLocation?: string,
+        layout: PageLayout = 'auto',
+        savedLocations?: string,
+        flow: ReadingFlow = 'paged',
+        zoom: number = 100,
+        margins: number = 10
     ) => {
         const engine = engineRef.current;
         if (!engine) {
@@ -193,36 +275,31 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
             return;
         }
 
-        // Abort any previous open operation
-        if (openAbortRef.current) {
-            openAbortRef.current.abort();
-        }
-        
+        // Abort previous open
+        openAbortRef.current?.abort();
         const abortController = new AbortController();
         openAbortRef.current = abortController;
 
-        // Reset state completely for new book
-        setIsLoading(true);
+        // Reset state
+        setInitState({ isInitialized: true, isLoading: true, isReady: false });
+        setDataState({ metadata: null, toc: EMPTY_TOC, annotations: EMPTY_ANNOTATIONS });
+        setLocationState({
+            location: null,
+            sectionFractions: EMPTY_FRACTIONS,
+            canGoBack: false,
+            canGoForward: false,
+        });
         setError(null);
-        setIsReady(false);
-        setMetadata(null);
-        setToc([]);
-        setLocation(null);
-        setSectionFractions([]);
-        setAnnotations([]);
-        setCanGoBack(false);
-        setCanGoForward(false);
 
         try {
-            await engine.open(source, filename, initialLocation);
-            // Only update state if not aborted
+            await engine.open(source, filename, initialLocation, layout, savedLocations, flow, zoom, margins);
             if (!abortController.signal.aborted && mountedRef.current) {
-                setAnnotations(engine.getAnnotations());
+                setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
             }
         } catch (err) {
             if (!abortController.signal.aborted && mountedRef.current) {
                 setError(err as Error);
-                setIsLoading(false);
+                setInitState(prev => ({ ...prev, isLoading: false }));
             }
         } finally {
             if (!abortController.signal.aborted) {
@@ -231,13 +308,22 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         }
     }, []);
 
-    // Navigation
+    // Navigation - stable references
     const goTo = useCallback(async (target: string | number) => {
         await engineRef.current?.goTo(target);
     }, []);
 
     const goToFraction = useCallback(async (fraction: number) => {
-        await engineRef.current?.goToFraction(fraction);
+        const engine = engineRef.current;
+        if (!engine) {
+            console.warn('[useDocumentReader] goToFraction failed - engine not initialized');
+            return;
+        }
+        try {
+            await engine.goToFraction(fraction);
+        } catch (err) {
+            console.error('[useDocumentReader] goToFraction error:', err);
+        }
     }, []);
 
     const next = useCallback(async () => {
@@ -256,12 +342,12 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         await engineRef.current?.goRight();
     }, []);
 
-    const goBack = useCallback(() => {
-        engineRef.current?.goBack();
+    const goBack = useCallback(async () => {
+        await engineRef.current?.goBack();
     }, []);
 
-    const goForward = useCallback(() => {
-        engineRef.current?.goForward();
+    const goForward = useCallback(async () => {
+        await engineRef.current?.goForward();
     }, []);
 
     // Annotations
@@ -270,7 +356,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         if (!engine) throw new Error('Engine not initialized');
 
         const annotation = await engine.addHighlight(cfi, text, color);
-        setAnnotations(engine.getAnnotations());
+        setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
         return annotation;
     }, []);
 
@@ -279,14 +365,14 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         if (!engine) return;
 
         await engine.removeHighlight(id);
-        setAnnotations(engine.getAnnotations());
+        setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
     }, []);
 
     // Search
     const search = useCallback(async function* (query: string) {
         const engine = engineRef.current;
         if (!engine) return;
-        
+
         yield* engine.search(query);
     }, []);
 
@@ -294,45 +380,80 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         engineRef.current?.clearSearch();
     }, []);
 
+    // Settings methods
+    const setLayout = useCallback((layout: PageLayout) => {
+        engineRef.current?.setLayout(layout);
+    }, []);
+
+    const setFlow = useCallback((flow: ReadingFlow) => {
+        engineRef.current?.setFlow(flow);
+    }, []);
+
+    const setZoom = useCallback((zoom: number) => {
+        engineRef.current?.setZoom(zoom);
+    }, []);
+
+    const setMargins = useCallback((margins: number) => {
+        engineRef.current?.setMargins(margins);
+    }, []);
+
+    const applyTheme = useCallback((settings: ThemeSettings) => {
+        engineRef.current?.applyTheme(settings);
+    }, []);
+
     // Cleanup
     const close = useCallback(() => {
-        // Abort any ongoing open operation
-        if (openAbortRef.current) {
-            openAbortRef.current.abort();
-            openAbortRef.current = null;
-        }
-        
+        openAbortRef.current?.abort();
+        openAbortRef.current = null;
+
         engineRef.current?.destroy();
         engineRef.current = null;
-        
-        setMetadata(null);
-        setToc([]);
-        setLocation(null);
-        setSectionFractions([]);
-        setAnnotations([]);
-        setIsReady(false);
-        setCanGoBack(false);
-        setCanGoForward(false);
-        setIsLoading(false);
+
+        setInitState({ isInitialized: false, isReady: false, isLoading: false });
+        setDataState({ metadata: null, toc: EMPTY_TOC, annotations: EMPTY_ANNOTATIONS });
+        setLocationState({
+            location: null,
+            sectionFractions: EMPTY_FRACTIONS,
+            canGoBack: false,
+            canGoForward: false,
+        });
         setError(null);
     }, []);
 
     const getEngine = useCallback(() => engineRef.current, []);
 
-    // Memoized return value
+    // Force location update - useful for keyboard navigation
+    const forceLocationUpdate = useCallback(() => {
+        const engine = engineRef.current;
+        if (!engine) return;
+
+        // Get current location directly from engine
+        const loc = engine.getCurrentLocation();
+        if (loc) {
+            setLocationState(prev => ({
+                ...prev,
+                location: loc,
+                canGoBack: engine.canGoBack(),
+                canGoForward: engine.canGoForward(),
+            }));
+            callbacksRef.current.onLocationChange?.(loc);
+        }
+    }, []);
+
+    // Memoized return value - minimal dependencies
     return useMemo(() => ({
         containerRef,
-        isLoading,
-        isInitialized,
-        isReady,
+        isLoading: initState.isLoading,
+        isInitialized: initState.isInitialized,
+        isReady: initState.isReady,
         error,
-        metadata,
-        toc,
-        location,
-        sectionFractions,
-        annotations,
-        canGoBack,
-        canGoForward,
+        metadata: dataState.metadata,
+        toc: dataState.toc,
+        location: locationState.location,
+        sectionFractions: locationState.sectionFractions,
+        annotations: dataState.annotations,
+        canGoBack: locationState.canGoBack,
+        canGoForward: locationState.canGoForward,
         open,
         goTo,
         goToFraction,
@@ -348,12 +469,45 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         clearSearch,
         close,
         getEngine,
+        setLayout,
+        setFlow,
+        setZoom,
+        setMargins,
+        applyTheme,
+        forceLocationUpdate,
     }), [
-        isLoading, isInitialized, isReady, error, metadata, toc, location, 
-        sectionFractions, annotations, canGoBack, canGoForward,
-        open, goTo, goToFraction, next, prev, goLeft, goRight,
-        goBack, goForward, addHighlight, removeHighlight, 
-        search, clearSearch, close, getEngine
+        initState.isLoading,
+        initState.isInitialized,
+        initState.isReady,
+        error,
+        dataState.metadata,
+        dataState.toc,
+        dataState.annotations,
+        locationState.location,
+        locationState.sectionFractions,
+        locationState.canGoBack,
+        locationState.canGoForward,
+        open,
+        goTo,
+        goToFraction,
+        next,
+        prev,
+        goLeft,
+        goRight,
+        goBack,
+        goForward,
+        addHighlight,
+        removeHighlight,
+        search,
+        clearSearch,
+        close,
+        getEngine,
+        setLayout,
+        setFlow,
+        setZoom,
+        setMargins,
+        applyTheme,
+        forceLocationUpdate,
     ]);
 }
 

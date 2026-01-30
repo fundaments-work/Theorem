@@ -4,8 +4,8 @@
  */
 
 import { X, Info, Calendar, Hash, Globe, FileText, User } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { DocMetadata } from '@/engines';
+import { Backdrop, FloatingPanel } from '@/components/ui';
 
 interface BookInfoPopoverProps {
     metadata: DocMetadata | null;
@@ -13,6 +13,14 @@ interface BookInfoPopoverProps {
     onClose: () => void;
     className?: string;
 }
+
+const METADATA_SECTIONS = [
+    { key: 'author', label: 'Author', icon: User },
+    { key: 'pubdate', label: 'Published', icon: Calendar },
+    { key: 'publisher', label: 'Publisher', icon: FileText },
+    { key: 'language', label: 'Language', icon: Globe },
+    { key: 'identifier', label: 'Identifier', icon: Hash },
+] as const;
 
 export function BookInfoPopover({
     metadata,
@@ -22,37 +30,19 @@ export function BookInfoPopover({
 }: BookInfoPopoverProps) {
     if (!metadata) return null;
 
-    const sections = [
-        { label: 'Author', value: metadata.author, icon: <User className="w-4 h-4" /> },
-        { label: 'Published', value: metadata.pubdate, icon: <Calendar className="w-4 h-4" /> },
-        { label: 'Publisher', value: metadata.publisher, icon: <FileText className="w-4 h-4" /> },
-        { label: 'Language', value: metadata.language, icon: <Globe className="w-4 h-4" /> },
-        { label: 'Identifier', value: metadata.identifier, icon: <Hash className="w-4 h-4" /> },
-    ].filter(s => s.value);
+    const sections = METADATA_SECTIONS
+        .map(({ key, label, icon: Icon }) => ({
+            label,
+            value: metadata[key as keyof DocMetadata],
+            Icon,
+        }))
+        .filter(s => s.value);
 
     return (
         <>
-            {/* Backdrop */}
-            {visible && (
-                <div
-                    className="fixed inset-0 z-40 bg-black/5"
-                    onClick={onClose}
-                />
-            )}
+            <Backdrop visible={visible} onClick={onClose} />
 
-            {/* Panel */}
-            <div
-                className={cn(
-                    'fixed top-16 right-6 w-80 max-w-[calc(100vw-3rem)] z-50',
-                    'bg-[var(--color-surface)] rounded-2xl shadow-2xl',
-                    'border border-[var(--color-border)]',
-                    'transform transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] origin-top-right',
-                    visible
-                        ? 'opacity-100 scale-100 translate-y-0'
-                        : 'opacity-0 scale-95 -translate-y-2 pointer-events-none',
-                    className
-                )}
-            >
+            <FloatingPanel visible={visible} className={className}>
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
                     <div className="flex items-center gap-2.5">
@@ -95,14 +85,14 @@ export function BookInfoPopover({
 
                     {/* Metadata List */}
                     <div className="space-y-4">
-                        {sections.map((section, idx) => (
+                        {sections.map(({ label, value, Icon }, idx) => (
                             <div key={idx} className="flex flex-col gap-1.5">
                                 <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1.5">
-                                    {section.icon}
-                                    {section.label}
+                                    <Icon className="w-4 h-4" />
+                                    {label}
                                 </span>
                                 <span className="text-xs text-[var(--color-text-primary)] font-medium leading-relaxed">
-                                    {section.value}
+                                    {value}
                                 </span>
                             </div>
                         ))}
@@ -120,7 +110,7 @@ export function BookInfoPopover({
                         </div>
                     )}
                 </div>
-            </div>
+            </FloatingPanel>
         </>
     );
 }

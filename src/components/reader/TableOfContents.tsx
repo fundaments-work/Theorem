@@ -3,10 +3,11 @@
  * Side panel displaying the book's table of contents
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { ChevronDown, ChevronRight, X, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TocItem } from '@/engines';
+import { Backdrop } from '@/components/ui';
 
 interface TableOfContentsProps {
     toc: TocItem[];
@@ -24,10 +25,15 @@ interface TocItemComponentProps {
     currentHref?: string;
 }
 
-function TocItemComponent({ item, depth, onNavigate, currentHref }: TocItemComponentProps) {
+const TocItemComponent = ({ item, depth, onNavigate, currentHref }: TocItemComponentProps) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const hasChildren = item.subitems && item.subitems.length > 0;
     const isActive = currentHref === item.href;
+
+    const handleToggle = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+        setIsExpanded(prev => !prev);
+    }, []);
 
     return (
         <div className="group/item">
@@ -44,10 +50,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref }: TocItemCompo
             >
                 {hasChildren ? (
                     <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setIsExpanded(!isExpanded);
-                        }}
+                        onClick={handleToggle}
                         className="p-1 rounded-lg hover:bg-[var(--color-border-subtle)] text-[var(--color-text-muted)] group-hover/item:text-[var(--color-text-secondary)] transition-colors"
                     >
                         {isExpanded ? (
@@ -82,7 +85,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref }: TocItemCompo
             )}
         </div>
     );
-}
+};
 
 export function TableOfContents({
     toc,
@@ -92,15 +95,14 @@ export function TableOfContents({
     currentHref,
     className,
 }: TableOfContentsProps) {
+    const handleNavigate = useCallback((href: string) => {
+        onNavigate(href);
+        onClose();
+    }, [onNavigate, onClose]);
+
     return (
         <>
-            {/* Backdrop */}
-            {visible && (
-                <div
-                    className="fixed inset-0 z-40 bg-black/5 backdrop-blur-[2px] transition-all duration-300"
-                    onClick={onClose}
-                />
-            )}
+            <Backdrop visible={visible} onClick={onClose} blur />
 
             {/* Panel */}
             <div
@@ -149,17 +151,14 @@ export function TableOfContents({
                                 key={index}
                                 item={item}
                                 depth={0}
-                                onNavigate={(href) => {
-                                    onNavigate(href);
-                                    onClose();
-                                }}
+                                onNavigate={handleNavigate}
                                 currentHref={currentHref}
                             />
                         ))
                     )}
                 </div>
 
-                {/* Footer / Context */}
+                {/* Footer */}
                 <div className="p-4 border-t border-[var(--color-border)] bg-[var(--color-background)]/50">
                     <div className="flex items-center justify-between text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest">
                         <span>{toc.length} Chapters</span>
@@ -172,4 +171,3 @@ export function TableOfContents({
 }
 
 export default TableOfContents;
-

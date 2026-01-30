@@ -1,230 +1,362 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+/**
+ * ReaderProgressBar Component
+ * Progress bar with chapter markers - Page-based display
+ */
+
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { DocLocation, TocItem } from '@/types';
+import { DocLocation, TocItem, BookSection } from '@/types';
+import { findSectionAtFraction, flattenToc } from '@/lib/toc';
 
 interface ReaderProgressBarProps {
     location: DocLocation | null;
     toc?: TocItem[];
     sectionFractions?: number[];
+    sections?: BookSection[];
     visible?: boolean;
     onSeek: (fraction: number) => void;
-    onNavigate?: (href: string) => void;
+    onNavigate?: (target: string) => void;
     className?: string;
+    // Saved page progress for instant correct display on reopen
+    savedPageProgress?: {
+        currentPage: number;
+        endPage?: number;
+        totalPages: number;
+        range: string;
+    };
+    // Layout mode for display format
+    layout?: 'single' | 'double' | 'auto';
 }
+
+interface SectionData {
+    index: number;
+    fraction: number;
+    nextFraction: number;
+    width: number;
+    label: string;
+    href: string;
+}
+
+// Fast stabilization for responsive feel
+const SEEK_STABILIZE_DELAY = 50;
 
 export function ReaderProgressBar({
     location,
     toc,
     sectionFractions,
-    visible: _visible,
+    sections: sectionsProp,
     onSeek,
     onNavigate,
     className,
+    savedPageProgress,
+    layout = 'single',
 }: ReaderProgressBarProps) {
     const [hoverFraction, setHoverFraction] = useState<number | null>(null);
-    const [hoverPos, setHoverPos] = useState(0);
-    const [isDragging, setIsDragging] = useState(false);
+    const [userControlledFraction, setUserControlledFraction] = useState<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const stabilizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastSeekFractionRef = useRef<number | null>(null);
+    const hoverFractionRef = useRef<number | null>(null);
 
-    const percentage = location?.percentage ?? 0;
+    // Use live page info from location, or fall back to saved page progress
+    const pageInfo = location?.pageInfo;
+    const hasLivePages = !!pageInfo && pageInfo.totalPages > 0;
 
-    // Flatten TOC to get all items
-    const flatToc = useMemo(() => {
-        if (!toc) return [];
-        
-        const result: { label: string; href: string; level: number }[] = [];
-        
-        const flatten = (items: TocItem[], level: number) => {
-            items.forEach(item => {
-                if (item.label?.trim()) {
-                    result.push({
-                        label: item.label.trim(),
-                        href: item.href,
-                        level
-                    });
-                }
-                if (item.subitems?.length) {
-                    flatten(item.subitems, level + 1);
-                }
+    // Use live page info when available, fallback to saved progress
+    const currentPage = hasLivePages
+        ? pageInfo.currentPage
+        : (savedPageProgress?.currentPage ?? 0);
+    const endPage = hasLivePages
+        ? pageInfo.endPage
+        : (savedPageProgress?.endPage ?? 0);
+    const totalPages = hasLivePages
+        ? pageInfo.totalPages
+        : (savedPageProgress?.totalPages ?? 0);
+
+    // Format page display based on layout mode
+    // Single: "2/20", Double: "1-2/10" (showing actual pages being viewed)
+    let pageDisplay: string;
+    if (totalPages > 0) {
+        if (layout === 'double' && endPage && endPage > currentPage) {
+            // Double layout showing a spread: show range like "1-2"
+            pageDisplay = `${currentPage}-${endPage}`;
+        } else {
+            // Single layout or only one page visible: show single number
+            pageDisplay = `${currentPage}`;
+        }
+    } else {
+        pageDisplay = '-';
+    }
+
+    // For total pages display: single shows total as-is, double shows half (since 2 pages per spread)
+    // Actually, the total pages should represent actual page count, not spread count
+    // So we keep the total as-is for both modes
+    const totalDisplay = totalPages > 0 ? totalPages : '-';
+
+    // Note: savedPageProgress is used above as fallback when live pages aren't available yet
+
+    // Calculate fill fraction based on page position
+    // Uses saved progress initially for instant correct display, then live data
+    const pageFraction = totalPages > 0
+        ? (currentPage - 1) / totalPages
+        : (location?.percentage ?? 0);
+    
+    // Determine what fraction to display:
+    // 1. User-controlled (during clicking/dragging) for immediate feedback
+    // 2. Page-based fraction if available, otherwise percentage-based
+    const displayFraction = userControlledFraction !== null
+        ? userControlledFraction
+        : pageFraction;
+
+    // Build sections - use shared flattenToc utility
+    const sections = useMemo<SectionData[]>(() => {
+        const flatToc = toc ? flattenToc(toc) : [];
+
+        if (sectionsProp && sectionsProp.length > 0) {
+            return sectionsProp.map((section, index) => {
+                const tocItem = flatToc[index];
+                const label = tocItem?.label || section.label || `Section ${index + 1}`;
+                const href = tocItem?.href || section.href || '';
+                const nextSection = sectionsProp[index + 1];
+                const nextFraction = nextSection?.fraction ?? 1;
+
+                return {
+                    index: section.index,
+                    fraction: section.fraction,
+                    nextFraction,
+                    width: nextFraction - section.fraction,
+                    label,
+                    href,
+                };
             });
-        };
-        
-        flatten(toc, 0);
-        return result;
-    }, [toc]);
-
-    // Map sections with proper TOC labels
-    const sections = useMemo(() => {
-        if (!sectionFractions || sectionFractions.length === 0) {
-            return [];
         }
 
-        return sectionFractions.map((fraction, index) => {
-            const nextFraction = sectionFractions[index + 1] ?? 1;
-            
-            // Try to find matching TOC item
-            let label = `Part ${index + 1}`;
-            let href = '';
-            
-            // Map section index to TOC item if available
-            if (flatToc[index]) {
-                label = flatToc[index].label;
-                href = flatToc[index].href;
-            }
-            
-            return {
+        if (flatToc.length > 0 && sectionFractions && sectionFractions.length > 0) {
+            const count = Math.min(flatToc.length, sectionFractions.length);
+            return flatToc.slice(0, count).map((item, index) => {
+                const fraction = sectionFractions[index];
+                const nextFraction = sectionFractions[index + 1] ?? 1;
+
+                return {
+                    index,
+                    fraction,
+                    nextFraction,
+                    width: nextFraction - fraction,
+                    label: item.label,
+                    href: item.href,
+                };
+            });
+        }
+
+        if (flatToc.length > 0) {
+            const count = flatToc.length;
+            return flatToc.map((item, index) => ({
                 index,
-                fraction,
-                nextFraction,
-                width: nextFraction - fraction,
-                label,
-                href,
-            };
-        });
-    }, [sectionFractions, flatToc]);
+                fraction: index / count,
+                nextFraction: (index + 1) / count,
+                width: 1 / count,
+                label: item.label,
+                href: item.href,
+            }));
+        }
 
-    // Find current section index
-    const currentSectionIndex = useMemo(() => {
-        if (!sections.length) return -1;
-        for (let i = sections.length - 1; i >= 0; i--) {
-            if (percentage >= sections[i].fraction) {
-                return i;
+        return [{
+            index: 0,
+            fraction: 0,
+            nextFraction: 1,
+            width: 1,
+            label: 'Book',
+            href: '',
+        }];
+    }, [toc, sectionsProp, sectionFractions]);
+
+    // Clear userControlledFraction when location changes from external navigation
+    // This ensures progress bar updates immediately when using keyboard/click zones
+    useEffect(() => {
+        if (userControlledFraction !== null && location?.cfi) {
+            // Clear immediately on location change to show actual current position
+            setUserControlledFraction(null);
+            lastSeekFractionRef.current = null;
+            if (stabilizeTimeoutRef.current) {
+                clearTimeout(stabilizeTimeoutRef.current);
+                stabilizeTimeoutRef.current = null;
             }
         }
-        return 0;
-    }, [percentage, sections]);
+    }, [location?.cfi]);
 
-    // Get hover info - find section at hover position
-    const getHoverInfo = useCallback((fraction: number) => {
-        if (!sections.length) return null;
-        
-        for (let i = sections.length - 1; i >= 0; i--) {
-            if (fraction >= sections[i].fraction) {
-                return sections[i];
+    // Check if location has stabilized after seek
+    useEffect(() => {
+        if (userControlledFraction !== null && lastSeekFractionRef.current !== null) {
+            const diff = Math.abs(pageFraction - lastSeekFractionRef.current);
+            if (diff < 0.02) {
+                if (stabilizeTimeoutRef.current) {
+                    clearTimeout(stabilizeTimeoutRef.current);
+                }
+                stabilizeTimeoutRef.current = setTimeout(() => {
+                    setUserControlledFraction(null);
+                    lastSeekFractionRef.current = null;
+                }, SEEK_STABILIZE_DELAY);
             }
         }
-        return sections[0];
-    }, [sections]);
+    }, [pageFraction, userControlledFraction]);
 
-    const handleMouseMove = (e: React.MouseEvent) => {
-        if (!containerRef.current) return;
+    // Get fraction at mouse position
+    const getFractionAtMouse = useCallback((clientX: number): number => {
+        if (!containerRef.current) return 0;
         const rect = containerRef.current.getBoundingClientRect();
-        const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-        const fraction = x / rect.width;
+        return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    }, []);
+
+    // Handle mouse move for hover - update both ref and state immediately
+    // This ensures tooltip always matches the exact position that will be used on click
+    const handleMouseMove = useCallback((e: React.MouseEvent) => {
+        const fraction = getFractionAtMouse(e.clientX);
+        hoverFractionRef.current = fraction;
         setHoverFraction(fraction);
-        setHoverPos(x);
+    }, [getFractionAtMouse]);
 
-        if (isDragging) {
-            onSeek(fraction);
-        }
-    };
-
-    const handleMouseLeave = () => {
+    const handleMouseLeave = useCallback(() => {
         setHoverFraction(null);
-        setIsDragging(false);
-    };
+        hoverFractionRef.current = null;
+    }, []);
 
-    const handleMouseDown = (e: React.MouseEvent) => {
-        if (!containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-        const fraction = x / rect.width;
-        setIsDragging(true);
-        onSeek(fraction);
-    };
+    // Handle click - navigate to exact fraction clicked (not chapter start)
+    const handleClick = useCallback((e: React.MouseEvent) => {
+        const targetFraction = hoverFractionRef.current ?? getFractionAtMouse(e.clientX);
 
-    const handleMouseUp = () => {
-        setIsDragging(false);
-    };
-
-    const handleSectionClick = (e: React.MouseEvent, section: typeof sections[0]) => {
-        e.stopPropagation();
-        onSeek(section.fraction);
-        if (onNavigate && section.href) {
-            onNavigate(section.href);
+        if (stabilizeTimeoutRef.current) {
+            clearTimeout(stabilizeTimeoutRef.current);
+            stabilizeTimeoutRef.current = null;
         }
-    };
 
-    const hoverInfo = hoverFraction !== null ? getHoverInfo(hoverFraction) : null;
+        // Find the section at this fraction for navigation
+        const sectionMatch = findSectionAtFraction(sections, targetFraction);
+        
+        // Navigate using section href if available for accuracy
+        if (sectionMatch) {
+            const sectionData = sections[sectionMatch.index];
+            if (sectionData?.href && onNavigate) {
+                console.log(`[ReaderProgressBar] Clicked fraction ${targetFraction.toFixed(3)}, navigating to: ${sectionData.label}`);
+                onNavigate(sectionData.href);
+                setUserControlledFraction(targetFraction);
+                lastSeekFractionRef.current = targetFraction;
+                return;
+            }
+        }
+        
+        // Fallback to fraction-based navigation
+        onSeek(targetFraction);
+        setUserControlledFraction(targetFraction);
+        lastSeekFractionRef.current = targetFraction;
+    }, [getFractionAtMouse, onSeek, onNavigate, sections]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (stabilizeTimeoutRef.current) {
+                clearTimeout(stabilizeTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    // Get section at hover position for tooltip
+    const hoverSection = hoverFraction !== null
+        ? findSectionAtFraction(sections, hoverFraction)
+        : null;
+
+    // Calculate hover page number for tooltip
+    const hoverPageNumber = hoverFraction !== null && totalPages > 0
+        ? Math.max(1, Math.min(totalPages, Math.floor(hoverFraction * totalPages) + 1))
+        : null;
 
     return (
         <div className={cn('flex items-center gap-3 w-full', className)}>
-            {/* Progress Bar Container - full width */}
             <div
                 ref={containerRef}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
-                onMouseDown={handleMouseDown}
-                onMouseUp={handleMouseUp}
-                className="relative flex-1 group cursor-pointer h-8 flex items-center"
+                onClick={handleClick}
+                className="relative flex-1 cursor-pointer h-10 flex items-center"
             >
-                {/* Tooltip on hover - shows actual TOC title */}
-                {hoverFraction !== null && hoverInfo && (
+                {/* Enhanced Tooltip with arrow */}
+                {hoverSection && hoverFraction !== null && (
                     <div
-                        className="absolute bottom-full mb-2 px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg text-xs font-medium text-[var(--color-text-primary)] whitespace-nowrap pointer-events-none -translate-x-1/2 z-20"
-                        style={{ left: `${hoverPos}px` }}
+                        className="absolute bottom-full mb-3 pointer-events-none z-50"
+                        style={{
+                            left: `${hoverFraction * 100}%`,
+                            transform: 'translateX(-50%)',
+                        }}
                     >
-                        <span className="max-w-[280px] truncate block">{hoverInfo.label}</span>
+                        <div className="relative bg-[var(--color-accent)] text-white px-4 py-2 rounded-lg shadow-xl">
+                            <div className="text-[10px] uppercase tracking-wider opacity-80 mb-0.5 font-medium">
+                                {hoverPageNumber !== null && totalPages > 0
+                                    ? `Page ${hoverPageNumber} of ${totalPages}`
+                                    : sections.length > 1
+                                        ? `Chapter ${hoverSection.index + 1} of ${sections.length}`
+                                        : 'Location'}
+                            </div>
+                            <div className="text-sm font-semibold whitespace-nowrap max-w-[280px] truncate">
+                                {'label' in hoverSection ? String(hoverSection.label) : 'Section'}
+                            </div>
+
+                            <div
+                                className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0"
+                                style={{
+                                    borderLeft: '6px solid transparent',
+                                    borderRight: '6px solid transparent',
+                                    borderTop: '6px solid var(--color-accent)',
+                                }}
+                            />
+                        </div>
                     </div>
                 )}
 
-                {/* Progress Bar Track with Sections */}
-                <div className="relative w-full h-1.5 bg-[var(--color-border)]/30 rounded-full overflow-hidden flex">
-                    {/* Section backgrounds - chapter markers */}
-                    {sections.map((section, index) => {
-                        const isActive = index === currentSectionIndex;
-                        const isPast = index < currentSectionIndex;
-                        
-                        return (
-                            <div
-                                key={index}
-                                className={cn(
-                                    'h-full transition-all duration-200 relative group/section',
-                                    isActive && 'bg-[var(--color-accent)]/30',
-                                    isPast && 'bg-[var(--color-accent)]/15',
-                                    !isActive && !isPast && 'hover:bg-[var(--color-accent)]/10'
-                                )}
-                                style={{ 
-                                    width: `${section.width * 100}%`,
-                                    marginLeft: index === 0 ? `${section.fraction * 100}%` : undefined
-                                }}
-                                onClick={(e) => handleSectionClick(e, section)}
-                            >
-                                {/* Section divider */}
-                                {index > 0 && (
-                                    <div className="absolute left-0 top-0 bottom-0 w-px bg-[var(--color-border)]/60" />
-                                )}
-                            </div>
-                        );
-                    })}
-
-                    {/* Progress fill overlay */}
-                    <div 
-                        className="absolute left-0 top-0 bottom-0 bg-[var(--color-accent)]/40 rounded-full pointer-events-none transition-all duration-150"
-                        style={{ width: `${percentage * 100}%` }}
-                    />
-
-                    {/* Current position indicator */}
+                {/* Hover indicator line */}
+                {hoverFraction !== null && (
                     <div
-                        className="absolute top-0 bottom-0 w-0.5 bg-[var(--color-accent)] rounded-full transition-all duration-150 z-10"
-                        style={{ left: `${percentage * 100}%` }}
-                    >
-                        {/* Thumb handle */}
-                        <div 
-                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-[var(--color-accent)] rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                        />
-                    </div>
+                        className="absolute top-0 bottom-0 w-0.5 bg-[var(--color-accent)] z-10 pointer-events-none"
+                        style={{
+                            left: `${hoverFraction * 100}%`,
+                            transform: 'translateX(-50%)',
+                        }}
+                    />
+                )}
+
+                {/* Progress track */}
+                <div className="relative w-full h-1.5 bg-[var(--color-border)]/30 rounded-full overflow-hidden">
+                    {/* Chapter markers */}
+                    {sections.length > 1 && sections.map((section, index) => (
+                        index > 0 && (
+                            <div
+                                key={`marker-${index}`}
+                                className="absolute top-0 bottom-0 w-px bg-[var(--color-border)]/60 pointer-events-none"
+                                style={{ left: `${section.fraction * 100}%` }}
+                            />
+                        )
+                    ))}
+
+                    {/* Progress fill - based on page position */}
+                    <div
+                        className="absolute left-0 top-0 bottom-0 bg-[var(--color-accent)] rounded-full pointer-events-none"
+                        style={{
+                            width: `${displayFraction * 100}%`,
+                            transition: userControlledFraction !== null ? 'none' : 'width 150ms ease-out',
+                            willChange: 'width',
+                        }}
+                    />
                 </div>
             </div>
 
-            {/* Percentage - Right Side */}
-            <div className="flex items-center text-xs whitespace-nowrap tabular-nums shrink-0">
-                <span className="text-[var(--color-accent)] font-medium">
-                    {Math.round(percentage * 100)}%
+            {/* Page number display - shows "5-6/50" for double, "5/50" for single */}
+            <div className="text-xs whitespace-nowrap tabular-nums shrink-0 min-w-[50px] text-right">
+                <span className="text-[var(--color-accent)] font-semibold">
+                    {pageDisplay}/{totalDisplay}
                 </span>
             </div>
         </div>
     );
 }
+
+
 
 export default ReaderProgressBar;

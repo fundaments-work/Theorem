@@ -20,7 +20,6 @@
     "date-fns": "^4.1.0",
     "epubjs": "^0.3.93",
     "idb-keyval": "^6.2.2",
-    "jszip": "^3.10.1",
     "lucide-react": "^0.563.0",
     "pdfjs-dist": "^5.4.530",
     "react": "^19.1.0",

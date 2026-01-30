@@ -14,7 +14,6 @@ Lion Reader is a cross-platform eBook reader built with Tauri + React + TypeScri
 
 ### Type Checking & Linting
 - **TypeScript**: `tsc --noEmit` - Type checking without emitting files
-- **ESLint**: `npx eslint src/` (config in `src/lib/foliate-js/eslint.config.js`)
 
 ### Testing
 No test framework currently configured. When adding tests, update this section.
@@ -27,8 +26,15 @@ src/
 │   ├── layout/         # Layout components (Sidebar, TopNav)
 │   └── reader/         # Reader-specific components
 ├── engines/            # Document rendering engines (EPUB, PDF)
+│   ├── epubjs-engine.ts            # EPUB.js rendering engine
+│   └── index.ts
 ├── hooks/              # Custom React hooks
+│   ├── useDocumentReader.ts        # Main reader hook
+│   └── index.ts
 ├── lib/                # Utility libraries
+│   ├── import.ts                   # Book import utilities
+│   ├── storage.ts                  # Storage abstraction
+│   └── utils.ts
 ├── pages/              # Page components
 ├── store/              # Zustand state management
 └── types/              # TypeScript type definitions
@@ -54,7 +60,7 @@ import { useDocumentReader } from '@/hooks'
 import type { DocLocation, Book } from '@/types'
 ```
 
-### Code Formatting (ESLint Rules)
+### Code Formatting
 - **Semicolons**: Disabled (no semicolons)
 - **Indentation**: 4 spaces
 - **Quotes**: Single quotes
@@ -94,11 +100,44 @@ import type { DocLocation, Book } from '@/types'
 
 ### Performance Guidelines
 - **Memoization**: Use `useMemo` for expensive computations, `useCallback` for stable references
-- **Virtual scrolling**: Enabled for long documents
-- **Prefetching**: Configurable prefetch distance (1-3 sections)
 - **Re-renders**: Be mindful in reader components
+- **GPU Acceleration**: Use `transform` and `opacity` for animations, never `top`/`left`
+- **CSS Containment**: Apply `contain: layout style paint` to isolated sections
 
-### File Organization
+## Rendering Engine
+
+The app uses EPUB.js for EPUB rendering:
+
+```typescript
+import { EpubjsEngine } from '@/engines'
+
+const engine = new EpubjsEngine()
+await engine.init(container)
+await engine.open(file, 'book.epub')
+```
+
+### Features
+- Fast loading with minimal processing
+- Proper pagination with spread (double page) support
+- GPU-accelerated rendering
+- Text selection and highlighting
+- Search functionality
+- Theme customization
+
+### GPU-Accelerated Animations
+All animations use GPU compositor:
+```css
+/* ✅ GPU accelerated */
+transform: translate3d(x, y, 0);
+opacity: 0.5;
+will-change: transform;
+
+/* ❌ Triggers layout/reflow */
+left: 100px;
+margin-left: 100px;
+```
+
+## File Organization
 - **Barrels**: Use `index.ts` files for clean exports from directories
 - **Types**: Centralized in `src/types/index.ts`
 - **Utils**: Shared utilities in `src/lib/utils.ts`

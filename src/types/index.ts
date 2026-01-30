@@ -36,6 +36,15 @@ export interface Book {
     lastReadAt?: Date;
     progress: number; // 0-1
     currentLocation?: string; // CFI for EPUB, page number for PDF
+    lastClickFraction?: number; // 0-1 - last position clicked on progress bar for visual consistency
+    // Page-based progress (stored for instant correct display on reopen)
+    pageProgress?: {
+        currentPage: number;
+        endPage?: number;
+        totalPages: number;
+        range: string;
+    };
+    locations?: string; // Serialized locations JSON string
     category?: string;
     tags: string[];
     rating?: number; // 1-5
@@ -85,19 +94,19 @@ export interface SmartFilter {
 export type ReaderTheme = "light" | "sepia" | "dark";
 export type FontFamily = "original" | "serif" | "sans" | "mono";
 export type ReadingFlow = "paged" | "scroll" | "auto";
-export type PageLayout = "single" | "double";
+export type PageLayout = "single" | "double" | "auto";
 export type PageAnimation = "slide" | "fade" | "instant";
 
 export interface ReaderSettings {
     theme: ReaderTheme;
     fontFamily: FontFamily;
-    fontSize: number; // 12-32
-    lineHeight: number; // 1.2-2.0
+    fontSize: number; // 12-36
+    lineHeight: number; // 1.0-2.5
     letterSpacing: number; // -0.05 to 0.2
     paragraphSpacing: number; // 0-2
-    textAlign: "left" | "justify";
+    textAlign: "left" | "justify" | "center";
     hyphenation: boolean;
-    margins: number; // percentage 0-25
+    margins: number; // percentage 0-35
     flow: ReadingFlow;
     layout: PageLayout;
     brightness: number; // 0-100
@@ -105,6 +114,9 @@ export interface ReaderSettings {
     pageAnimation: PageAnimation;
     toolbarAutoHide: boolean;
     autoHideDelay: number; // seconds
+    zoom: number; // 50-200, percentage
+    wordSpacing: number; // 0-0.5em
+    forcePublisherStyles: boolean; // Override book's CSS
     // Performance settings
     prefetchDistance: number; // Number of sections to prefetch (1-3)
     enableAnimations: boolean;
@@ -161,6 +173,14 @@ export interface DocLocation {
     pageItem?: {
         label: string;
     };
+    // Page-based location for accurate progress display
+    pageInfo?: {
+        currentPage: number;      // First visible page number
+        endPage?: number;         // Last visible page number (for spread view)
+        totalPages: number;       // Total pages in book
+        range?: string;           // Formatted range like "5-6"
+        isEstimated?: boolean;    // True if using byte-based estimation (not exact locations)
+    };
 }
 
 export interface TocItem {
@@ -185,14 +205,29 @@ export interface SearchResult {
     excerpt: string;
 }
 
+// Book Section for progress bar
+export interface BookSection {
+    label: string;
+    href: string;
+    fraction: number; // 0-1 position in book
+    index: number;
+}
+
 export interface ThemeSettings {
     fontFamily?: string;
     fontSize?: number;
     lineHeight?: number;
+    letterSpacing?: number;
+    wordSpacing?: number;
+    paragraphSpacing?: number;
+    textAlign?: "left" | "justify" | "center";
     textColor?: string;
     backgroundColor?: string;
     linkColor?: string;
     flow?: ReadingFlow;
     layout?: PageLayout;
     margins?: number;
+    zoom?: number;
+    hyphenation?: boolean;
+    forcePublisherStyles?: boolean;
 }
