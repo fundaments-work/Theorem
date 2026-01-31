@@ -44,8 +44,8 @@ export interface UseDocumentReaderReturn {
     open: (source: File | Blob | ArrayBuffer | string, filename?: string, initialLocation?: string, layout?: PageLayout, savedLocations?: string, flow?: ReadingFlow, zoom?: number, margins?: number) => Promise<void>;
     goTo: (target: string | number) => Promise<void>;
     goToFraction: (fraction: number) => Promise<void>;
-    next: () => Promise<void>;
-    prev: () => Promise<void>;
+    next: (distance?: number) => Promise<void>;
+    prev: (distance?: number) => Promise<void>;
     goLeft: () => Promise<void>;
     goRight: () => Promise<void>;
     goBack: () => void;
@@ -288,12 +288,12 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         }
     }, []);
 
-    const next = useCallback(async () => {
-        await engineRef.current?.next();
+    const next = useCallback(async (distance?: number) => {
+        await engineRef.current?.next(distance);
     }, []);
 
-    const prev = useCallback(async () => {
-        await engineRef.current?.prev();
+    const prev = useCallback(async (distance?: number) => {
+        await engineRef.current?.prev(distance);
     }, []);
 
     const goLeft = useCallback(async () => {

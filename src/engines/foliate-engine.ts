@@ -177,8 +177,20 @@ export class FoliateEngine {
         // Relocate event - location changed
         this.view.addEventListener('relocate', (e: any) => {
             const detail = e.detail;
+            
+            // Validate index before calling getCFI - index can be -1 during initial render
+            let cfi = '';
+            if (detail.index != null && detail.index >= 0 && this.view?.getCFI) {
+                try {
+                    cfi = this.view.getCFI(detail.index, detail.range) || '';
+                } catch (err) {
+                    // Silently ignore getCFI errors during initial render
+                    console.debug('[FoliateEngine] getCFI failed, likely during initial render:', err);
+                }
+            }
+            
             const location: DocLocation = {
-                cfi: this.view?.getCFI?.(detail.index, detail.range) || '',
+                cfi,
                 percentage: detail.fraction || 0,
                 tocItem: detail.tocItem,
                 pageItem: detail.pageItem,
@@ -487,22 +499,65 @@ export class FoliateEngine {
         await this.view.goTo({ index, fraction: sectionFraction });
     }
 
-    async next(): Promise<void> {
+    async next(distance?: number): Promise<void> {
         if (!this.view?.renderer) return;
         try {
-            await this.view.next();
+            await this.view.next(distance);
         } catch (e) {
             console.error('[FoliateEngine] next() error:', e);
         }
     }
 
-    async prev(): Promise<void> {
+    async prev(distance?: number): Promise<void> {
         if (!this.view?.renderer) return;
         try {
-            await this.view.prev();
+            await this.view.prev(distance);
         } catch (e) {
             console.error('[FoliateEngine] prev() error:', e);
         }
+    }
+
+    /**
+     * Scroll up by a specified distance (used in scroll mode)
+     * Falls back to prev() in paginated mode
+     */
+    async scrollUp(distance?: number): Promise<void> {
+        if (this.flow === 'scroll') {
+            // In scroll mode, use foliate-js's scroll methods if available
+            const scrollDistance = distance ?? this.getScrollDistance();
+            await this.view?.prev?.(scrollDistance);
+        } else {
+            // In paginated mode, go to previous page
+            await this.prev();
+        }
+    }
+
+    /**
+     * Scroll down by a specified distance (used in scroll mode)
+     * Falls back to next() in paginated mode
+     */
+    async scrollDown(distance?: number): Promise<void> {
+        if (this.flow === 'scroll') {
+            // In scroll mode, use foliate-js's scroll methods if available
+            const scrollDistance = distance ?? this.getScrollDistance();
+            await this.view?.next?.(scrollDistance);
+        } else {
+            // In paginated mode, go to next page
+            await this.next();
+        }
+    }
+
+    /**
+     * Calculate default scroll distance based on font size and line height
+     * Similar to Foliate GTK4's implementation
+     */
+    private getScrollDistance(): number {
+        // Get current settings from the store
+        const currentSettings = getCurrentReaderSettings();
+        if (!currentSettings) return 48; // Default fallback
+        
+        // Scroll distance = fontSize * lineHeight * 3 lines
+        return currentSettings.fontSize * currentSettings.lineHeight * 3;
     }
 
     async goLeft(): Promise<void> {
