@@ -17,7 +17,7 @@ import {
     BookInfoPopover,
     ReaderViewportHandle,
 } from '@/components/reader';
-import { DocLocation, DocMetadata, TocItem, BookSection } from '@/types';
+import { DocLocation, DocMetadata, TocItem } from '@/types';
 import { getBookBlob } from '@/lib/storage';
 
 export function ReaderPage() {
@@ -32,8 +32,6 @@ export function ReaderPage() {
     const [metadata, setMetadata] = useState<DocMetadata | null>(null);
     const [toc, setToc] = useState<TocItem[]>([]);
     const [location, setLocation] = useState<DocLocation | null>(null);
-    const [sectionFractions, setSectionFractions] = useState<number[]>([]);
-    const [sections, setSections] = useState<BookSection[]>([]);
     // UI state
     const [showToolbar, setShowToolbar] = useState(true);
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | null;
@@ -73,7 +71,6 @@ export function ReaderPage() {
             setMetadata(null);
             setToc([]);
             setLocation(null);
-            setSections([]);
             setInitialLocation(book.currentLocation);
             setLoadError(null);
 
@@ -172,14 +169,6 @@ export function ReaderPage() {
     const handleReady = useCallback((meta: DocMetadata, tocItems: TocItem[]) => {
         setMetadata(meta);
         setToc(tocItems);
-    }, []);
-
-    const handleSectionFractions = useCallback((fractions: number[]) => {
-        setSectionFractions(fractions);
-    }, []);
-
-    const handleSections = useCallback((newSections: BookSection[]) => {
-        setSections(newSections);
     }, []);
 
     // Handle location change - immediate updates for responsive UI
@@ -324,8 +313,6 @@ export function ReaderPage() {
                     onLocationChange={handleLocationChange}
                     onLocationsSaved={handleLocationsSaved}
                     onTextSelected={handleTextSelected}
-                    onSectionFractions={handleSectionFractions}
-                    onSections={handleSections}
                     onToggleChrome={handleToggleChrome}
                     className="w-full h-full"
                 />
@@ -336,10 +323,6 @@ export function ReaderPage() {
                 <div className="pointer-events-auto bg-[var(--color-surface)]/95 backdrop-blur-lg border-t border-[var(--color-border)] px-4 py-2 overflow-visible">
                     <ReaderProgressBar
                         location={location}
-                        toc={toc}
-                        sections={sections}
-                        sectionFractions={sectionFractions}
-                        visible={true}
                         onSeek={handleSeek}
                         savedPageProgress={getBook(currentBookId || '')?.pageProgress}
                         layout={settings.readerSettings.layout}

@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useMemo, useState } from 'react';
 import { useDocumentReader } from '@/hooks';
-import type { DocLocation, DocMetadata, TocItem, BookSection } from '@/types';
+import type { DocLocation, DocMetadata, TocItem } from '@/types';
 import type { ReaderSettings } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -26,8 +26,6 @@ interface ReaderViewportProps {
     onLocationChange?: (location: DocLocation) => void;
     onError?: (error: Error) => void;
     onTextSelected?: (cfi: string, text: string) => void;
-    onSectionFractions?: (fractions: number[]) => void;
-    onSections?: (sections: BookSection[]) => void;
     onToggleChrome?: () => void;
     onLocationsSaved?: (locations: string) => void;
     initialLocation?: string;
@@ -49,7 +47,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     onLocationChange,
     onError,
     onTextSelected,
-    onSectionFractions,
     onToggleChrome,
     onLocationsSaved,
     initialLocation,
@@ -91,20 +88,9 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         applyTheme,
         forceLocationUpdate,
     } = useDocumentReader({
-        onReady: (meta, tocItems) => {
-            onReady?.(meta, tocItems);
-            // Pass section fractions when ready
-            const engine = getEngine();
-            if (engine) {
-                onSectionFractions?.(engine.getSectionFractions());
-            }
-        },
+        onReady,
         onLocationsGenerated: () => {
-            // Pass updated section fractions when locations are generated
-            const engine = getEngine();
-            if (engine) {
-                onSectionFractions?.(engine.getSectionFractions());
-            }
+            // Locations generated callback
         },
         onLocationChange,
         onError,

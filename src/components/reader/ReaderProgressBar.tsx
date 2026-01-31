@@ -1,19 +1,14 @@
 /**
  * ReaderProgressBar Component
- * Progress bar with chapter markers - Page-based display
+ * Smooth continuous progress bar with page-based display
  */
 
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { DocLocation, TocItem, BookSection } from '@/types';
-import { flattenToc } from '@/lib/toc';
+import { DocLocation } from '@/types';
 
 interface ReaderProgressBarProps {
     location: DocLocation | null;
-    toc?: TocItem[];
-    sectionFractions?: number[];
-    sections?: BookSection[];
-    visible?: boolean;
     onSeek: (fraction: number) => void;
     className?: string;
     // Saved page progress for instant correct display on reopen
@@ -27,23 +22,11 @@ interface ReaderProgressBarProps {
     layout?: 'single' | 'double' | 'auto';
 }
 
-interface SectionData {
-    index: number;
-    fraction: number;
-    nextFraction: number;
-    width: number;
-    label: string;
-    href: string;
-}
-
 // Fast stabilization for responsive feel
 const SEEK_STABILIZE_DELAY = 50;
 
 export function ReaderProgressBar({
     location,
-    toc,
-    sections: sectionsProp,
-    sectionFractions,
     onSeek,
     className,
     savedPageProgress,
@@ -105,68 +88,6 @@ export function ReaderProgressBar({
     const displayFraction = userControlledFraction !== null
         ? userControlledFraction
         : pageFraction;
-
-    // Build sections - use shared flattenToc utility
-    const sections = useMemo<SectionData[]>(() => {
-        const flatToc = toc ? flattenToc(toc) : [];
-
-        if (sectionsProp && sectionsProp.length > 0) {
-            return sectionsProp.map((section, index) => {
-                const tocItem = flatToc[index];
-                const label = tocItem?.label || section.label || `Section ${index + 1}`;
-                const href = tocItem?.href || section.href || '';
-                const nextSection = sectionsProp[index + 1];
-                const nextFraction = nextSection?.fraction ?? 1;
-
-                return {
-                    index: section.index,
-                    fraction: section.fraction,
-                    nextFraction,
-                    width: nextFraction - section.fraction,
-                    label,
-                    href,
-                };
-            });
-        }
-
-        if (flatToc.length > 0 && sectionFractions && sectionFractions.length > 0) {
-            const count = Math.min(flatToc.length, sectionFractions.length);
-            return flatToc.slice(0, count).map((item, index) => {
-                const fraction = sectionFractions[index];
-                const nextFraction = sectionFractions[index + 1] ?? 1;
-
-                return {
-                    index,
-                    fraction,
-                    nextFraction,
-                    width: nextFraction - fraction,
-                    label: item.label,
-                    href: item.href,
-                };
-            });
-        }
-
-        if (flatToc.length > 0) {
-            const count = flatToc.length;
-            return flatToc.map((item, index) => ({
-                index,
-                fraction: index / count,
-                nextFraction: (index + 1) / count,
-                width: 1 / count,
-                label: item.label,
-                href: item.href,
-            }));
-        }
-
-        return [{
-            index: 0,
-            fraction: 0,
-            nextFraction: 1,
-            width: 1,
-            label: 'Book',
-            href: '',
-        }];
-    }, [toc, sectionsProp, sectionFractions]);
 
     // Clear userControlledFraction when location changes from external navigation
     // This ensures progress bar updates immediately when using keyboard/click zones
@@ -309,20 +230,9 @@ export function ReaderProgressBar({
                     />
                 )}
 
-                {/* Progress track */}
-                <div className="relative w-full h-1.5 bg-[var(--color-border)]/30 rounded-full overflow-hidden">
-                    {/* Chapter markers */}
-                    {sections.length > 1 && sections.map((section, index) => (
-                        index > 0 && (
-                            <div
-                                key={`marker-${index}`}
-                                className="absolute top-0 bottom-0 w-px bg-[var(--color-border)]/60 pointer-events-none"
-                                style={{ left: `${section.fraction * 100}%` }}
-                            />
-                        )
-                    ))}
-
-                    {/* Progress fill - based on page position */}
+                {/* Smooth progress track */}
+                <div className="relative w-full h-2 bg-[var(--color-border)]/30 rounded-full overflow-hidden">
+                    {/* Progress fill - smooth continuous bar */}
                     <div
                         className="absolute left-0 top-0 bottom-0 bg-[var(--color-accent)] rounded-full pointer-events-none"
                         style={{
