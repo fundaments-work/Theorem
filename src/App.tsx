@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { AppTitlebar } from "@/components/AppTitlebar";
 import { Sidebar, TopNav } from "@/components/layout";
 import {
@@ -9,11 +10,18 @@ import {
   SettingsPage,
   ProfilePage,
 } from "@/pages";
-import { useUIStore } from "@/store";
+import { useUIStore, useSettingsStore } from "@/store";
 import { cn } from "@/lib/utils";
+import { initReaderStyles } from "@/lib/reader-styles";
 
 function App() {
   const { currentRoute, sidebarOpen, toggleSidebar } = useUIStore();
+  const { settings } = useSettingsStore();
+  
+  // Initialize reader styles on app load
+  useEffect(() => {
+    initReaderStyles(settings.readerSettings);
+  }, []); // Only on mount - the store's onRehydrate will handle persisted settings
 
   // Check if we're in reader mode (full screen, no sidebar)
   const isReaderMode = currentRoute === "reader";

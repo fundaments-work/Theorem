@@ -1,6 +1,10 @@
 /**
- * ReaderViewport Component
- * Optimized reading area with smooth performance
+ * ReaderViewport Component - Optimized
+ * 
+ * Key optimizations:
+ * - CSS variable-based instant theme/setting changes
+ * - Batched engine updates using requestAnimationFrame
+ * - Minimal re-renders through efficient change detection
  */
 
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useMemo, useState } from 'react';
@@ -8,6 +12,7 @@ import { useDocumentReader } from '@/hooks';
 import type { DocLocation, DocMetadata, TocItem } from '@/types';
 import type { ReaderSettings } from '@/types';
 import { cn } from '@/lib/utils';
+import { getSettingsChanges } from '@/lib/reader-styles';
 
 export interface ReaderViewportHandle {
     next: () => void;
@@ -31,13 +36,6 @@ interface ReaderViewportProps {
     savedLocations?: string;
 }
 
-// Memoized theme color mapping
-const themeColors: Record<string, { bg: string; fg: string }> = {
-    light: { bg: '#ffffff', fg: '#1a1a1a' },
-    sepia: { bg: '#f4ecd8', fg: '#5f4b32' },
-    dark: { bg: '#1a1a1a', fg: '#e0e0e0' },
-};
-
 export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportProps>(({
     file,
     settings,
@@ -53,8 +51,11 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     // Navigation feedback state
     const [navDirection, setNavDirection] = useState<'next' | 'prev' | null>(null);
     const navTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    
+    // Engine update batching
+    const pendingEngineUpdateRef = useRef<number | null>(null);
+    const lastAppliedSettingsRef = useRef<ReaderSettings | null>(null);
 
-    // Helper to show navigation feedback
     const showNavFeedback = useCallback((direction: 'next' | 'prev') => {
         setNavDirection(direction);
         if (navTimeoutRef.current) {
@@ -86,9 +87,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         applyTheme,
     } = useDocumentReader({
         onReady,
-        onLocationsGenerated: () => {
-            // Locations generated callback
-        },
+        onLocationsGenerated: () => {},
         onLocationChange,
         onError,
         onTextSelected: onTextSelected ? (cfi, text, _range) => {
@@ -96,9 +95,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         } : undefined,
         onLocationsSaved,
     });
-
-    // Track previous settings for comparison
-    const prevSettingsRef = useRef<ReaderSettings | null>(null);
 
     // Expose methods via ref
     useImperativeHandle(ref, () => ({
@@ -113,19 +109,19 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            console.log('[ReaderViewport] Cleaning up...');
             close();
-            // Clear nav feedback timeout
             if (navTimeoutRef.current) {
                 clearTimeout(navTimeoutRef.current);
+            }
+            if (pendingEngineUpdateRef.current) {
+                cancelAnimationFrame(pendingEngineUpdateRef.current);
             }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Open file when it changes (only when engine is initialized)
+    // Open file when it changes
     useEffect(() => {
-        // Only open if we have a file and engine is initialized
         if (!file || !isInitialized) {
             return;
         }
@@ -135,7 +131,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         const openFile = async () => {
             try {
                 const filename = file instanceof File ? file.name : 'document.epub';
-                console.log('[ReaderViewport] Opening file:', filename);
                 await open(
                     file,
                     filename,
@@ -146,8 +141,9 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                     settings.zoom,
                     settings.margins
                 );
+                
                 if (!cancelled) {
-                    console.log('[ReaderViewport] File opened successfully');
+                    lastAppliedSettingsRef.current = { ...settings };
                 }
             } catch (err) {
                 if (!cancelled) {
@@ -158,94 +154,107 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
 
         openFile();
 
-        // Cleanup: cancel any ongoing operations when file changes or unmounts
         return () => {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [file, initialLocation, isInitialized, savedLocations !== undefined]);
 
-    // Memoize theme settings to prevent unnecessary re-renders
-    const themeSettings = useMemo(() => {
-        const colors = themeColors[settings.theme] || themeColors.light;
-        return {
-            fontSize: settings.fontSize,
-            lineHeight: settings.lineHeight,
-            fontFamily: settings.fontFamily,
-            letterSpacing: settings.letterSpacing,
-            wordSpacing: settings.wordSpacing,
-            paragraphSpacing: settings.paragraphSpacing,
-            textAlign: settings.textAlign,
-            hyphenation: settings.hyphenation,
-            flow: settings.flow,
-            layout: settings.layout,
-            margins: settings.margins,
-            zoom: settings.zoom,
-            backgroundColor: colors.bg,
-            textColor: colors.fg,
-            forcePublisherStyles: settings.forcePublisherStyles,
-        };
-    }, [
-        settings.theme,
-        settings.fontSize,
-        settings.lineHeight,
-        settings.fontFamily,
-        settings.letterSpacing,
-        settings.wordSpacing,
-        settings.paragraphSpacing,
-        settings.textAlign,
-        settings.hyphenation,
-        settings.flow,
-        settings.layout,
-        settings.margins,
-        settings.zoom,
-        settings.forcePublisherStyles,
-    ]);
-
-    // Apply individual settings when they change
+    // Apply settings changes - optimized with batching
     useEffect(() => {
-        const prev = prevSettingsRef.current;
         const engine = getEngine();
-        if (!engine) return;
-
-        // Apply theme for font/color related changes
-        if (!prev ||
-            prev.fontSize !== settings.fontSize ||
-            prev.fontFamily !== settings.fontFamily ||
-            prev.lineHeight !== settings.lineHeight ||
-            prev.letterSpacing !== settings.letterSpacing ||
-            prev.wordSpacing !== settings.wordSpacing ||
-            prev.paragraphSpacing !== settings.paragraphSpacing ||
-            prev.textAlign !== settings.textAlign ||
-            prev.hyphenation !== settings.hyphenation ||
-            prev.theme !== settings.theme ||
-            prev.forcePublisherStyles !== settings.forcePublisherStyles) {
-            applyTheme(themeSettings);
+        if (!engine || !lastAppliedSettingsRef.current) {
+            // First load, settings will be applied during open
+            lastAppliedSettingsRef.current = { ...settings };
+            return;
         }
 
-        // Apply layout changes
-        if (!prev || prev.layout !== settings.layout) {
-            setLayout(settings.layout);
+        const { cssChanged, engineChanged, changedKeys } = getSettingsChanges(
+            lastAppliedSettingsRef.current,
+            settings
+        );
+
+        if (!cssChanged && !engineChanged) return;
+
+        // CSS changes are already applied instantly via the store's applyReaderStyles
+        // We only need to sync settings that affect the rendering engine
+
+        if (engineChanged) {
+            // Cancel any pending update
+            if (pendingEngineUpdateRef.current) {
+                cancelAnimationFrame(pendingEngineUpdateRef.current);
+            }
+
+            // Batch engine updates
+            pendingEngineUpdateRef.current = requestAnimationFrame(async () => {
+                pendingEngineUpdateRef.current = null;
+
+                // Apply settings that need engine coordination
+                if (changedKeys.includes('layout')) {
+                    setLayout(settings.layout);
+                }
+
+                if (changedKeys.includes('flow')) {
+                    setFlow(settings.flow);
+                }
+
+                if (changedKeys.includes('zoom')) {
+                    setZoom(settings.zoom);
+                }
+
+                if (changedKeys.includes('margins')) {
+                    setMargins(settings.margins);
+                }
+
+                // Apply theme changes that need CSS regeneration
+                const needsThemeUpdate = 
+                    changedKeys.includes('fontSize') ||
+                    changedKeys.includes('lineHeight') ||
+                    changedKeys.includes('fontFamily') ||
+                    changedKeys.includes('textAlign') ||
+                    changedKeys.includes('hyphenation') ||
+                    changedKeys.includes('theme') ||
+                    changedKeys.includes('forcePublisherStyles');
+
+                if (needsThemeUpdate) {
+                    const { getThemeColors } = await import('@/lib/reader-styles');
+                    const themeColors = getThemeColors(settings.theme);
+
+                    applyTheme({
+                        fontSize: settings.fontSize,
+                        lineHeight: settings.lineHeight,
+                        fontFamily: settings.fontFamily,
+                        letterSpacing: settings.letterSpacing,
+                        wordSpacing: settings.wordSpacing,
+                        paragraphSpacing: settings.paragraphSpacing,
+                        textAlign: settings.textAlign,
+                        hyphenation: settings.hyphenation,
+                        flow: settings.flow,
+                        layout: settings.layout,
+                        margins: settings.margins,
+                        zoom: settings.zoom,
+                        backgroundColor: themeColors.bg,
+                        textColor: themeColors.fg,
+                        linkColor: themeColors.link,
+                        forcePublisherStyles: settings.forcePublisherStyles,
+                    });
+                }
+
+                lastAppliedSettingsRef.current = { ...settings };
+            });
         }
 
-        // Apply flow changes
-        if (!prev || prev.flow !== settings.flow) {
-            setFlow(settings.flow);
+        // Always update the ref for CSS changes
+        if (cssChanged && !engineChanged) {
+            lastAppliedSettingsRef.current = { ...settings };
         }
 
-        // Apply zoom changes
-        if (!prev || prev.zoom !== settings.zoom) {
-            setZoom(settings.zoom);
-        }
-
-        // Apply margin changes
-        if (!prev || prev.margins !== settings.margins) {
-            setMargins(settings.margins);
-        }
-
-        // Update ref for next comparison
-        prevSettingsRef.current = { ...settings };
-    }, [themeSettings, settings, applyTheme, setLayout, setFlow, setZoom, setMargins, getEngine]);
+        return () => {
+            if (pendingEngineUpdateRef.current) {
+                cancelAnimationFrame(pendingEngineUpdateRef.current);
+            }
+        };
+    }, [settings, getEngine, setLayout, setFlow, setZoom, setMargins, applyTheme]);
 
     // Keyboard navigation
     useEffect(() => {
@@ -292,16 +301,14 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
 
         window.addEventListener('keydown', handleKeyDown, { passive: false });
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [next, prev, goToFraction]);
+    }, [next, prev, goToFraction, showNavFeedback]);
 
     // Scroll wheel navigation
     useEffect(() => {
-        // In scroll mode, let the browser/foliate-js handle scrolling naturally
         if (settings.flow === 'scroll') {
             return;
         }
 
-        // In paginated mode, navigate pages with wheel
         const container = containerRef.current;
         if (!container) return;
 
@@ -309,7 +316,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         let accumulatedDelta = 0;
         const WHEEL_THRESHOLD = 30;
         let lastNavTime = 0;
-        const NAV_COOLDOWN = 300; // ms between navigations
+        const NAV_COOLDOWN = 300;
 
         const doNavigate = (direction: 'next' | 'prev') => {
             const now = Date.now();
@@ -326,22 +333,16 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         };
 
         const handleWheel = (e: WheelEvent) => {
-            // Don't intercept if user is holding modifier keys (for zooming etc)
             if (e.ctrlKey || e.metaKey) return;
-
-            // In paginated mode: prevent default and navigate pages
             e.preventDefault();
             e.stopPropagation();
 
-            // Accumulate delta for smooth trackpads
             accumulatedDelta += e.deltaY;
 
-            // Clear previous timeout
             if (wheelTimeout) {
                 clearTimeout(wheelTimeout);
             }
 
-            // Check if we've accumulated enough scroll
             if (Math.abs(accumulatedDelta) >= WHEEL_THRESHOLD) {
                 if (accumulatedDelta > 0) {
                     doNavigate('next');
@@ -351,29 +352,27 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 accumulatedDelta = 0;
             }
 
-            // Reset accumulated delta after a short delay
             wheelTimeout = setTimeout(() => {
                 accumulatedDelta = 0;
             }, 150);
         };
 
-        // Single handler attached to window - catches everything
         window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
         
         return () => {
             window.removeEventListener('wheel', handleWheel, { capture: true });
             if (wheelTimeout) clearTimeout(wheelTimeout);
         };
-    }, [settings.flow, next, prev]);
+    }, [settings.flow, next, prev, showNavFeedback]);
 
-    // Touch/Swipe navigation for mobile
+    // Touch/Swipe navigation
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
 
         let touchStartX = 0;
         let touchStartY = 0;
-        const SWIPE_THRESHOLD = 50; // Minimum pixels to count as swipe
+        const SWIPE_THRESHOLD = 50;
 
         const handleTouchStart = (e: TouchEvent) => {
             touchStartX = e.touches[0].clientX;
@@ -387,23 +386,18 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
             const deltaX = touchEndX - touchStartX;
             const deltaY = touchEndY - touchStartY;
             
-            // Check if it's a horizontal swipe
             if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > SWIPE_THRESHOLD) {
                 e.preventDefault();
                 if (deltaX > 0) {
-                    // Swipe right - go previous
                     showNavFeedback('prev');
                     prev();
                 } else {
-                    // Swipe left - go next
                     showNavFeedback('next');
                     next();
                 }
             }
-            // Tap navigation is handled by the click zone buttons
         };
 
-        // Attach to container's parent (the outer relative container)
         const parent = container.parentElement;
         if (parent) {
             parent.addEventListener('touchstart', handleTouchStart, { passive: true });
@@ -416,7 +410,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 parent.removeEventListener('touchend', handleTouchEnd);
             }
         };
-    }, [next, prev]);
+    }, [next, prev, showNavFeedback]);
 
     const displayError = error?.message;
 
@@ -436,8 +430,8 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
             {displayError && !isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-background)] z-30">
                     <div className="flex flex-col items-center gap-4 p-8 text-center max-w-md">
-                        <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
-                            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <div className="w-16 h-16 rounded-full bg-[var(--color-error)]/10 flex items-center justify-center">
+                            <svg className="w-8 h-8 text-[var(--color-error)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                         </div>
@@ -457,23 +451,23 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 </div>
             )}
 
-            {/* Container with padding - EPUB.js renders here */}
+            {/* Container with brightness filter applied via CSS variable */}
             <div
                 ref={containerRef}
                 className={cn(
-                    'absolute inset-2 transition-opacity duration-300 z-0',
+                    'absolute inset-2 transition-opacity duration-300 z-0 reader-viewport',
                     isLoading ? 'opacity-0' : 'opacity-100',
                 )}
                 style={{ 
                     touchAction: settings.flow === 'scroll' ? 'auto' : 'none',
                     overflow: settings.flow === 'scroll' ? 'auto' : 'hidden',
+                    filter: `brightness(${settings.brightness}%)`,
                 }}
             />
             
-            {/* Click zones overlaid on top - only in paginated mode */}
+            {/* Click zones - only in paginated mode */}
             {!isLoading && !error && settings.flow !== 'scroll' && (
                 <>
-                    {/* Left Click Zone - Previous Page */}
                     <button
                         className="absolute inset-y-2 left-2 w-10 md:w-12 lg:w-16 z-20 opacity-0 hover:opacity-100 transition-opacity cursor-w-resize bg-transparent border-0 p-0"
                         onClick={(e) => {
@@ -485,7 +479,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                         aria-label="Previous page"
                         type="button"
                     />
-                    {/* Right Click Zone - Next Page */}
                     <button
                         className="absolute inset-y-2 right-2 w-10 md:w-12 lg:w-16 z-20 opacity-0 hover:opacity-100 transition-opacity cursor-e-resize bg-transparent border-0 p-0"
                         onClick={(e) => {
@@ -500,7 +493,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 </>
             )}
 
-            {/* Navigation Feedback Overlay - for keyboard navigation only */}
+            {/* Navigation Feedback Overlay */}
             {navDirection && (
                 <div
                     className={cn(

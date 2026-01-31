@@ -1,7 +1,11 @@
 /**
- * Foliate Engine
- * Main engine for rendering EPUBs using foliate-js
- * Replaces epubjs-engine.ts completely
+ * Foliate Engine - Optimized Version
+ * 
+ * Key optimizations based on Foliate GTK research:
+ * 1. CSS variables for instant visual feedback (no async/debounce needed)
+ * 2. Batched engine updates using requestAnimationFrame
+ * 3. Synchronous zoom application
+ * 4. Minimal re-renders through efficient change detection
  */
 
 import type {
@@ -15,8 +19,16 @@ import type {
     PageLayout,
     ThemeSettings,
     ReaderTheme,
+    ReaderSettings,
 } from '@/types';
 import { getTheme } from '@/foliate/themes';
+import { 
+    getEngineSettings, 
+    createReaderCSS, 
+    registerEngineStyleCallback,
+    getCurrentReaderSettings,
+    getThemeColors,
+} from '@/lib/reader-styles';
 
 export interface FoliateEngineOptions {
     onLocationChange?: (location: DocLocation) => void;
@@ -34,15 +46,22 @@ export class FoliateEngine {
     private currentLocation: DocLocation | null = null;
     private sectionFractions: number[] = [];
 
-    // Settings - matching Foliate GTK implementation
+    // Settings cache
     private layout: PageLayout = 'single';
     private flow: ReadingFlow = 'paged';
-    private zoom_level = 1; // Foliate GTK: 0.2 to 4.0, default 1.0, step 0.1
+    private zoom_level = 1;
     private _marginValue = 10;
     private theme: ReaderTheme = 'light';
     private settings: ThemeSettings = {};
+    
+    // Batch update mechanism
+    private pendingUpdateFrame: number | null = null;
+    private pendingSettingsUpdate = false;
+    
+    // Style update unsubscribe
+    private unsubscribeFromStyles: (() => void) | null = null;
 
-    // History tracking for navigation
+    // History tracking
     private _navigationHistory: string[] = [];
     private _currentHistoryIndex = -1;
 
@@ -52,13 +71,18 @@ export class FoliateEngine {
 
     async init(container: HTMLElement): Promise<void> {
         this.container = container;
+        
+        // Register for style updates from the main app
+        this.unsubscribeFromStyles = registerEngineStyleCallback(() => {
+            this.handleExternalStyleChange();
+        });
     }
 
     async open(
         source: File | Blob | ArrayBuffer | string,
         _filename: string = 'document.epub',
         initialLocation?: string,
-        layout: PageLayout = 'single',
+        layout: PageLayout = 'double',
         _savedLocations?: string,
         flow: ReadingFlow = 'paged',
         zoom: number = 100,
@@ -77,56 +101,51 @@ export class FoliateEngine {
             if (source instanceof File) {
                 file = source;
             } else if (source instanceof Blob) {
-                // Convert Blob to File with proper name
                 file = new File([source], _filename, { type: source.type || 'application/epub+zip' });
             } else {
-                // ArrayBuffer or string
                 const buffer = typeof source === 'string' ? new TextEncoder().encode(source) : source;
                 file = new File([buffer], _filename, { type: 'application/epub+zip' });
             }
             
-            // Create the book first
             this.book = await makeBook(file);
 
             // Create foliate-view element
             this.view = document.createElement('foliate-view');
-            // Ensure foliate-view fills container
             this.view.style.width = '100%';
             this.view.style.height = '100%';
             this.view.style.display = 'block';
             this.container.appendChild(this.view);
-            console.log('[FoliateEngine] Created foliate-view element');
 
-            // Set up event listeners on the view
+            // Set up event listeners
             this.setupEventListeners();
 
-            // Open the book in the view - this creates the renderer
-            console.log('[FoliateEngine] Opening book in view...');
+            // Open the book in the view
             await this.view.open(this.book);
-            console.log('[FoliateEngine] Book opened, renderer:', this.view.renderer);
 
             // Get section fractions for progress calculation
             this.sectionFractions = this.view.getSectionFractions();
-            console.log('[FoliateEngine] Section fractions:', this.sectionFractions.length);
 
             // Apply initial settings
             this.layout = layout;
             this.flow = flow;
-            // Convert percentage zoom (100) to Foliate GTK zoom_level (1.0)
             this.zoom_level = Math.max(0.2, Math.min(4.0, zoom / 100));
             this._marginValue = margins;
 
-            await this.applySettings();
+            // Apply settings synchronously where possible
+            this.applySettingsSync();
+            
+            // Apply CSS with current settings to all iframes
+            this.applyCSSToAllIframes();
+            
+            // Async settings application
+            await this.applySettingsAsync();
 
-            // Navigate to initial location or start of book
-            console.log('[FoliateEngine] Navigating to location...');
+            // Navigate to initial location
             if (initialLocation) {
                 await this.view.goTo(initialLocation);
             } else {
-                // Go to start of book
                 await this.view.goTo({ index: 0, fraction: 0 });
             }
-            console.log('[FoliateEngine] Navigation complete');
 
             // Extract metadata and TOC
             const metadata = this.extractMetadata();
@@ -143,12 +162,15 @@ export class FoliateEngine {
     private setupEventListeners(): void {
         if (!this.view) return;
 
-        // Load event - apply zoom to newly loaded sections
+        // Load event - apply styles to newly loaded sections
         this.view.addEventListener('load', (e: any) => {
-            // Apply current zoom level to newly loaded content
             const detail = e.detail;
             if (detail?.doc?.documentElement) {
+                // Apply zoom immediately
                 detail.doc.documentElement.style.zoom = String(this.zoom_level);
+                
+                // Inject CSS with current settings
+                this.injectCSSIntoIframe(detail.doc);
             }
         });
 
@@ -176,6 +198,61 @@ export class FoliateEngine {
             this._navigationHistory = this.view?.history?.items || [];
             this._currentHistoryIndex = this.view?.history?.index || -1;
         });
+    }
+
+    /**
+     * Handle style changes from the main app (when CSS variables are updated)
+     */
+    private handleExternalStyleChange(): void {
+        // Get current settings from the main app
+        const currentSettings = getCurrentReaderSettings();
+        if (!currentSettings) return;
+        
+        // Update internal theme reference
+        this.theme = currentSettings.theme;
+        
+        // Apply CSS to all iframes
+        this.applyCSSToAllIframes();
+        
+        // Schedule async settings update for things that need foliate's renderer
+        this.scheduleSettingsUpdate();
+    }
+
+    /**
+     * Apply CSS with current settings to all iframes
+     */
+    private applyCSSToAllIframes(): void {
+        if (!this.view?.renderer) return;
+        
+        const currentSettings = getCurrentReaderSettings();
+        if (!currentSettings) return;
+        
+        const contents = this.view.renderer.getContents?.() || [];
+        for (const content of contents) {
+            const doc = content.doc;
+            if (doc) {
+                this.injectCSSIntoIframe(doc, currentSettings);
+            }
+        }
+    }
+
+    /**
+     * Inject CSS with current settings into an iframe document
+     */
+    private injectCSSIntoIframe(doc: Document, settings?: ReaderSettings | null): void {
+        const s = settings || getCurrentReaderSettings();
+        if (!s) return;
+        
+        // Find or create the style element
+        let style = doc.getElementById('lion-reader-styles') as HTMLStyleElement;
+        if (!style) {
+            style = doc.createElement('style');
+            style.id = 'lion-reader-styles';
+            doc.head?.appendChild(style);
+        }
+        
+        // Update the CSS content with current values
+        style.textContent = createReaderCSS(s);
     }
 
     private extractMetadata(): DocMetadata {
@@ -218,47 +295,120 @@ export class FoliateEngine {
         return x[keys[0]] || '';
     }
 
-    private async applySettings(): Promise<void> {
+    /**
+     * Synchronous settings application - for instant feedback
+     */
+    private applySettingsSync(): void {
         if (!this.view?.renderer) return;
+
+        const renderer = this.view.renderer;
+        
+        // These can be applied synchronously
+        renderer.setAttribute('flow', this.flow === 'scroll' ? 'scrolled' : 'paginated');
+        renderer.setAttribute('gap', '5%');
+        // Auto layout: use double columns for paged mode on larger screens, single for scroll or small screens
+        const columnCount = this.layout === 'single' ? 1 : 
+                           this.layout === 'double' ? 2 :
+                           this.flow === 'scroll' ? 1 : 2; // auto: 2 columns for paged, 1 for scroll
+        renderer.setAttribute('max-column-count', columnCount);
+        
+        // Apply zoom synchronously to existing contents
+        this.applyZoomSync();
+    }
+
+    /**
+     * Asynchronous settings application - for CSS that needs compilation
+     */
+    private async applySettingsAsync(): Promise<void> {
+        if (!this.view?.renderer) return;
+
+        const currentSettings = getCurrentReaderSettings();
+        if (!currentSettings) return;
 
         const theme = getTheme(this.theme);
         const { getCSS } = await import('../foliate/reader.js');
 
         const readerStyle = {
-            spacing: this.settings.lineHeight || 1.4,
-            justify: this.settings.textAlign === 'justify',
-            hyphenate: this.settings.hyphenation || false,
+            spacing: currentSettings.lineHeight,
+            justify: currentSettings.textAlign === 'justify',
+            hyphenate: currentSettings.hyphenation,
             invert: false,
             theme,
-            overrideFont: this.settings.forcePublisherStyles || false,
+            overrideFont: currentSettings.forcePublisherStyles,
         };
 
-        const layoutSettings = {
-            flow: this.flow === 'scroll' ? 'scrolled' : 'paginated',
-            animated: false,
-            gap: 0.05,
-            maxInlineSize: this.settings.fontSize ? this.settings.fontSize * 40 : 720,
-            maxBlockSize: 800,
-            maxColumnCount: this.layout === 'double' ? 2 : 1,
-        };
-
-        // Apply to view
         const renderer = this.view.renderer;
-        renderer.setAttribute('flow', layoutSettings.flow);
-        renderer.setAttribute('gap', (layoutSettings.gap * 100) + '%');
-        renderer.setAttribute('max-inline-size', layoutSettings.maxInlineSize + 'px');
-        renderer.setAttribute('max-block-size', layoutSettings.maxBlockSize + 'px');
-        renderer.setAttribute('max-column-count', layoutSettings.maxColumnCount);
-
-        if (layoutSettings.animated) {
-            renderer.setAttribute('animated', '');
-        } else {
-            renderer.removeAttribute('animated');
-        }
-
+        
         if (renderer.setStyles) {
-            renderer.setStyles(getCSS(readerStyle));
+            // Create CSS with current actual values, not CSS variables
+            const colors = getThemeColors(this.theme);
+            const customCSS = `
+                @namespace epub "http://www.idpf.org/2007/ops";
+                
+                :root {
+                    --reader-bg: ${colors.bg};
+                    --reader-fg: ${colors.fg};
+                    --reader-link: ${colors.link};
+                }
+                
+                    @media screen {
+                    html {
+                        font-size: ${currentSettings.fontSize}px !important;
+                        line-height: ${currentSettings.lineHeight} !important;
+                        color: ${colors.fg} !important;
+                        background: ${colors.bg} !important;
+                        letter-spacing: ${currentSettings.letterSpacing}em !important;
+                        word-spacing: ${currentSettings.wordSpacing}em !important;
+                    }
+                    
+                    body {
+                        font-size: inherit !important;
+                        line-height: inherit !important;
+                        color: inherit !important;
+                        background: ${colors.bg} !important;
+                        letter-spacing: inherit !important;
+                        word-spacing: inherit !important;
+                        text-align: ${currentSettings.textAlign} !important;
+                        font-family: ${currentSettings.fontFamily === 'original' ? 'inherit' : currentSettings.fontFamily === 'serif' ? 'Georgia, serif' : currentSettings.fontFamily === 'sans' ? 'system-ui, sans-serif' : currentSettings.fontFamily === 'mono' ? 'monospace' : 'inherit'} !important;
+                    }
+                    
+                    a:any-link {
+                        color: ${colors.link} !important;
+                    }
+                    
+                    p, li, blockquote, dd {
+                        line-height: ${currentSettings.lineHeight} !important;
+                        text-align: ${currentSettings.textAlign === 'justify' ? 'justify' : 'start'} !important;
+                        hyphens: ${currentSettings.hyphenation ? 'auto' : 'none'} !important;
+                    }
+                    
+                    ::selection {
+                        background: color-mix(in srgb, ${colors.fg} 20%, transparent) !important;
+                        color: ${colors.fg} !important;
+                    }
+                }
+            `;
+            
+            const foliateCSS = getCSS(readerStyle);
+            renderer.setStyles([customCSS, ...foliateCSS]);
         }
+    }
+
+    /**
+     * Batched settings update - schedules update for next frame
+     */
+    private scheduleSettingsUpdate(): void {
+        if (this.pendingUpdateFrame) {
+            cancelAnimationFrame(this.pendingUpdateFrame);
+        }
+        
+        this.pendingSettingsUpdate = true;
+        this.pendingUpdateFrame = requestAnimationFrame(() => {
+            this.pendingSettingsUpdate = false;
+            this.pendingUpdateFrame = null;
+            this.applySettingsSync();
+            this.applySettingsAsync().catch(console.error);
+        });
     }
 
     // Navigation methods
@@ -275,10 +425,7 @@ export class FoliateEngine {
     }
 
     async next(): Promise<void> {
-        if (!this.view?.renderer) {
-            console.warn('[FoliateEngine] next() called but renderer not ready');
-            return;
-        }
+        if (!this.view?.renderer) return;
         try {
             await this.view.next();
         } catch (e) {
@@ -287,10 +434,7 @@ export class FoliateEngine {
     }
 
     async prev(): Promise<void> {
-        if (!this.view?.renderer) {
-            console.warn('[FoliateEngine] prev() called but renderer not ready');
-            return;
-        }
+        if (!this.view?.renderer) return;
         try {
             await this.view.prev();
         } catch (e) {
@@ -324,26 +468,26 @@ export class FoliateEngine {
         return this.view?.history?.canGoForward || false;
     }
 
-    // Settings methods
-    async setLayout(layout: PageLayout): Promise<void> {
+    // Settings methods - optimized for speed
+    setLayout(layout: PageLayout): void {
+        if (this.layout === layout) return;
         this.layout = layout;
-        await this.applySettings();
+        this.scheduleSettingsUpdate();
     }
 
-    async setFlow(flow: ReadingFlow): Promise<void> {
+    setFlow(flow: ReadingFlow): void {
+        if (this.flow === flow) return;
         this.flow = flow;
-        await this.applySettings();
+        this.scheduleSettingsUpdate();
     }
 
-    // Zoom methods - matching Foliate GTK exactly
+    // Zoom methods - synchronous for instant feedback
     zoomIn(): void {
-        const newZoom = Math.min(4.0, this.zoom_level + 0.1);
-        this.setZoomLevel(newZoom);
+        this.setZoomLevel(Math.min(4.0, this.zoom_level + 0.1));
     }
 
     zoomOut(): void {
-        const newZoom = Math.max(0.2, this.zoom_level - 0.1);
-        this.setZoomLevel(newZoom);
+        this.setZoomLevel(Math.max(0.2, this.zoom_level - 0.1));
     }
 
     zoomRestore(): void {
@@ -351,12 +495,13 @@ export class FoliateEngine {
     }
 
     setZoomLevel(level: number): void {
-        // Clamp to Foliate GTK range: 0.2 to 4.0
-        this.zoom_level = Math.max(0.2, Math.min(4.0, level));
-        this.applyZoom();
+        const newLevel = Math.max(0.2, Math.min(4.0, level));
+        if (this.zoom_level === newLevel) return;
+        
+        this.zoom_level = newLevel;
+        this.applyZoomSync();
     }
 
-    // Legacy method for compatibility - converts percentage to zoom_level
     setZoom(zoom: number): void {
         this.setZoomLevel(zoom / 100);
     }
@@ -365,40 +510,60 @@ export class FoliateEngine {
         return this.zoom_level;
     }
 
-    private applyZoom(): void {
-        // Apply zoom to the view's iframe contents
-        // This matches how Foliate GTK's webView.zoom_level works
+    /**
+     * Synchronous zoom application - instant visual feedback
+     */
+    private applyZoomSync(): void {
         if (!this.view?.renderer) return;
 
-        // Get all iframe documents from the renderer
         const contents = this.view.renderer.getContents?.() || [];
         for (const content of contents) {
             const doc = content.doc;
-            if (doc && doc.documentElement) {
-                // Apply CSS zoom to match WebKit's zoom_level behavior
+            if (doc?.documentElement) {
                 doc.documentElement.style.zoom = String(this.zoom_level);
             }
         }
-
-        // Also apply to any future iframes by storing the zoom level
-        // The view will apply it when new sections load
     }
 
     setMargins(margins: number): void {
         this._marginValue = margins;
-        // Apply margins to container
     }
 
-    async applyTheme(settings: ThemeSettings): Promise<void> {
+    /**
+     * Apply theme/settings - optimized with batching
+     */
+    applyTheme(settings: ThemeSettings): void {
+        const currentSettings = getCurrentReaderSettings();
+        const hadChanges = 
+            currentSettings?.fontSize !== settings.fontSize ||
+            currentSettings?.lineHeight !== settings.lineHeight ||
+            currentSettings?.textAlign !== settings.textAlign ||
+            currentSettings?.hyphenation !== settings.hyphenation ||
+            currentSettings?.forcePublisherStyles !== settings.forcePublisherStyles;
+        
         this.settings = settings;
+        
         if (settings.flow) this.flow = settings.flow;
         if (settings.layout) this.layout = settings.layout;
-        await this.applySettings();
+        if (settings.zoom) this.zoom_level = settings.zoom / 100;
+        
+        if (hadChanges) {
+            this.scheduleSettingsUpdate();
+        }
+        
+        // Apply zoom immediately if changed
+        if (settings.zoom) {
+            this.applyZoomSync();
+        }
+        
+        // Apply CSS to all iframes with new settings
+        this.applyCSSToAllIframes();
     }
 
-    async setTheme(theme: ReaderTheme): Promise<void> {
+    setTheme(theme: ReaderTheme): void {
+        if (this.theme === theme) return;
         this.theme = theme;
-        await this.applySettings();
+        this.scheduleSettingsUpdate();
     }
 
     // Annotation methods
@@ -414,8 +579,6 @@ export class FoliateEngine {
         };
 
         this.annotations.set(annotation.id, annotation);
-
-        // Add to view
         this.view?.addAnnotation?.({
             value: cfi,
             color: color,
@@ -437,7 +600,6 @@ export class FoliateEngine {
     async *search(query: string): AsyncGenerator<SearchResult | { progress: number } | 'done'> {
         if (!this.book) return;
 
-        // Search through sections
         const sections = this.book.sections || [];
         const totalSections = sections.length;
 
@@ -446,7 +608,6 @@ export class FoliateEngine {
             try {
                 const doc = await section.createDocument?.();
                 if (doc) {
-                    // Simple text search
                     const textContent = doc.body?.textContent || '';
                     const index = textContent.toLowerCase().indexOf(query.toLowerCase());
                     if (index !== -1) {
@@ -470,7 +631,6 @@ export class FoliateEngine {
         this.view?.clearSearch?.();
     }
 
-    // Utility methods
     getCurrentLocation(): DocLocation | null {
         return this.currentLocation;
     }
@@ -498,6 +658,18 @@ export class FoliateEngine {
     }
 
     destroy(): void {
+        // Cancel pending updates
+        if (this.pendingUpdateFrame) {
+            cancelAnimationFrame(this.pendingUpdateFrame);
+            this.pendingUpdateFrame = null;
+        }
+        
+        // Unsubscribe from style updates
+        if (this.unsubscribeFromStyles) {
+            this.unsubscribeFromStyles();
+            this.unsubscribeFromStyles = null;
+        }
+        
         if (this.view) {
             this.view.close?.();
             this.view.remove?.();

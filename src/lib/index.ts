@@ -36,3 +36,14 @@ export {
 } from "./import";
 
 export { flattenToc, findSectionAtFraction, buildSections } from "./toc";
+
+export {
+    applyReaderStyles,
+    getEngineSettings,
+    getSettingsChanges,
+    createReaderCSS,
+    initReaderStyles,
+    getCurrentReaderSettings,
+    getThemeColors,
+    registerEngineStyleCallback,
+} from "./reader-styles";

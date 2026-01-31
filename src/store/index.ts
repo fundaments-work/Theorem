@@ -10,6 +10,7 @@ import type {
     UIState,
     AppRoute,
 } from "@/types";
+import { applyReaderStyles, initReaderStyles } from "@/lib/reader-styles";
 
 // Default reader settings - optimized for performance
 const defaultReaderSettings: ReaderSettings = {
@@ -365,7 +366,7 @@ interface SettingsStore {
 
 export const useSettingsStore = create<SettingsStore>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             settings: defaultAppSettings,
             stats: defaultReadingStats,
 
@@ -374,13 +375,20 @@ export const useSettingsStore = create<SettingsStore>()(
                     settings: { ...state.settings, ...updates },
                 })),
 
-            updateReaderSettings: (updates) =>
+            updateReaderSettings: (updates) => {
+                const newSettings = { ...get().settings.readerSettings, ...updates };
+                
+                // Apply CSS variables immediately for instant visual feedback
+                // This is synchronous and extremely fast
+                applyReaderStyles(newSettings);
+                
                 set((state) => ({
                     settings: {
                         ...state.settings,
-                        readerSettings: { ...state.settings.readerSettings, ...updates },
+                        readerSettings: newSettings,
                     },
-                })),
+                }));
+            },
 
             updateStats: (updates) =>
                 set((state) => ({
@@ -392,16 +400,26 @@ export const useSettingsStore = create<SettingsStore>()(
                     settings: defaultAppSettings,
                 }),
 
-            resetReaderSettings: () =>
+            resetReaderSettings: () => {
+                // Apply default styles immediately
+                applyReaderStyles(defaultReaderSettings);
+                
                 set((state) => ({
                     settings: {
                         ...state.settings,
                         readerSettings: defaultReaderSettings,
                     },
-                })),
+                }));
+            },
         }),
         {
             name: "lion-reader-settings",
+            onRehydrateStorage: () => (state) => {
+                // Apply saved reader settings when store is rehydrated
+                if (state?.settings.readerSettings) {
+                    initReaderStyles(state.settings.readerSettings);
+                }
+            },
         }
     )
 );

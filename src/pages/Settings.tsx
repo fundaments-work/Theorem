@@ -442,18 +442,17 @@ export function SettingsPage() {
                                 >
                                     <div
                                         className={cn(
-                                            "w-12 h-12 rounded-full flex items-center justify-center",
-                                            theme.id === "light" && "bg-white border border-[var(--color-border)]",
-                                            theme.id === "sepia" && "bg-[#f4ecd8]",
-                                            theme.id === "dark" && "bg-[#1a1a1a]"
+                                            "w-12 h-12 rounded-full flex items-center justify-center theme-preview",
+                                            theme.id === "light" && "bg-[var(--reader-bg)] border border-[var(--color-border)]",
+                                            theme.id === "sepia" && "bg-[var(--reader-bg)]",
+                                            theme.id === "dark" && "bg-[var(--reader-bg)]"
                                         )}
+                                        data-theme={theme.id}
                                     >
                                         <theme.icon
                                             className={cn(
                                                 "w-6 h-6",
-                                                theme.id === "light" && "text-[var(--color-text-primary)]",
-                                                theme.id === "sepia" && "text-[#5f4b32]",
-                                                theme.id === "dark" && "text-white"
+                                                "text-[var(--reader-fg)]"
                                             )}
                                         />
                                     </div>

@@ -1,288 +1,481 @@
 @import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
 @import "tailwindcss";
 
-/* Lion Reader Design System - Minimal & Professional */
+/* Lion Reader Design System - CSS Variable Based */
 
 @theme {
-  /* Colors - Monochrome Base */
-  --color-background: #ffffff;
-  --color-surface: #ffffff;
-  --color-surface-elevated: #ffffff;
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #666666;
-  --color-text-muted: #999999;
-
-  /* Borders - Subtle & Crisp */
-  --color-border: #e5e5e5;
-  --color-border-subtle: #f5f5f5;
-
-  /* Accent - Single Color (Deep Blue/Black) */
-  --color-accent: #000000;
-  --color-accent-hover: #333333;
-  --color-accent-light: #f5f5f5;
-
-  /* Brand Colors - Mapped to Mono/Accent */
-  --color-brand: #000000;
-  --color-brand-hover: #333333;
-  --color-brand-light: #f5f5f5;
-
-  /* Semantic Colors - Muted */
-  --color-success: #1a1a1a;
-  --color-warning: #1a1a1a;
-  --color-error: #cc0000;
-  --color-info: #1a1a1a;
-
-  /* Spacing */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
-
-  /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 16px;
-  --radius-full: 9999px;
-
-  /* Shadows - Minimal/None */
-  --shadow-sm: none;
-  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-
-  /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-serif: "New York", "Georgia", serif;
-  --font-mono: "Menlo", "Monaco", "Courier New", monospace;
-  --font-playfair: "Playfair Display", serif;
-  --font-merriweather: "Merriweather", serif;
-
-  --reader-font-size: 18px;
-  --reader-line-height: 1.6;
-  --reader-margin-x: 10%;
-
-  /* Transitions */
-  --transition-fast: 100ms ease;
-  --transition-normal: 200ms ease;
-  --transition-slow: 300ms ease;
-
-  /* Z-Index Scale */
-  --z-dropdown: 50;
-  --z-sticky: 100;
-  --z-modal: 200;
-  --z-popover: 300;
-  --z-tooltip: 400;
+    /* Core CSS Variables - These are the source of truth */
+    --color-background: var(--app-bg, #ffffff);
+    --color-surface: var(--app-surface, #ffffff);
+    --color-surface-elevated: var(--app-surface-elevated, #ffffff);
+    --color-text-primary: var(--app-text-primary, #1a1a1a);
+    --color-text-secondary: var(--app-text-secondary, #666666);
+    --color-text-muted: var(--app-text-muted, #999999);
+    
+    /* Borders */
+    --color-border: var(--app-border, #e5e5e5);
+    --color-border-subtle: var(--app-border-subtle, #f5f5f5);
+    
+    /* Accent */
+    --color-accent: var(--app-accent, #000000);
+    --color-accent-hover: var(--app-accent-hover, #333333);
+    --color-accent-light: var(--app-accent-light, #f5f5f5);
+    
+    /* Semantic */
+    --color-success: var(--app-success, #1a1a1a);
+    --color-warning: var(--app-warning, #f59e0b);
+    --color-error: var(--app-error, #cc0000);
+    --color-info: var(--app-info, #1a1a1a);
+    
+    /* Reader-specific variables */
+    --reader-bg: var(--reader-bg-override, #ffffff);
+    --reader-fg: var(--reader-fg-override, #1a1a1a);
+    --reader-link: var(--reader-link-override, #0066cc);
+    --reader-font-size: 18px;
+    --reader-line-height: 1.6;
+    --reader-margin-x: 10%;
+    --reader-margin-y: 2%;
+    --reader-brightness: 100%;
+    --reader-zoom: 1;
+    
+    /* Spacing */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
+    
+    /* Border Radius */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --radius-2xl: 16px;
+    --radius-full: 9999px;
+    
+    /* Shadows */
+    --shadow-sm: none;
+    --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.05);
+    --shadow-lg: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    
+    /* Typography */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "New York", "Georgia", serif;
+    --font-mono: "Menlo", "Monaco", "Courier New", monospace;
+    --font-playfair: "Playfair Display", serif;
+    --font-merriweather: "Merriweather", serif;
+    
+    /* Transitions */
+    --transition-fast: 100ms ease;
+    --transition-normal: 200ms ease;
+    --transition-slow: 300ms ease;
+    
+    /* Z-Index Scale */
+    --z-dropdown: 50;
+    --z-sticky: 100;
+    --z-modal: 200;
+    --z-popover: 300;
+    --z-tooltip: 400;
 }
 
 /* Base styles */
 html {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: var(--color-background);
-  color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
 }
 
 html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  overflow: hidden;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
 }
 
 #root {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
-/* Minimal Scrollbar */
+/* Scrollbar Styling - Uses CSS Variables */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+    width: 10px;
+    height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+    background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #e5e5e5;
-  border: 3px solid var(--color-background);
-  border-radius: var(--radius-full);
+    background: var(--color-border);
+    border: 3px solid var(--color-background);
+    border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #d4d4d4;
+    background: var(--color-text-muted);
 }
 
-/* Selection */
+/* Selection - Uses CSS Variables */
 ::selection {
-  background-color: #eeeeee;
-  color: #000000;
+    background-color: var(--color-accent-light);
+    color: var(--color-text-primary);
 }
 
-/* Focus ring - Keyboard only usually, but simplified here */
+/* Focus ring */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
 }
 
-/* Reader Themes */
-.theme-light {
+/* ===============================
+   THEME SYSTEM
+   =============================== */
+
+/* Light Theme (default) */
+.theme-light,
+:root {
+    --app-bg: #ffffff;
+    --app-surface: #ffffff;
+    --app-surface-elevated: #ffffff;
+    --app-text-primary: #1a1a1a;
+    --app-text-secondary: #666666;
+    --app-text-muted: #999999;
+    --app-border: #e5e5e5;
+    --app-border-subtle: #f5f5f5;
+    --app-accent: #000000;
+    --app-accent-hover: #333333;
+    --app-accent-light: #f5f5f5;
+    --app-success: #1a1a1a;
+    --app-warning: #f59e0b;
+    --app-error: #cc0000;
+    --app-info: #1a1a1a;
+    
+    /* Reader colors */
+    --reader-bg-override: #ffffff;
+    --reader-fg-override: #1a1a1a;
+    --reader-link-override: #0066cc;
 }
 
+/* Sepia Theme */
 .theme-sepia {
-  --reader-bg: #f4ecd8;
-  --reader-text: #5f4b32;
-  --color-text: #5f4b32;
-  --color-surface: #f4ecd8;
-  --color-background: #e8e1cf;
-  --color-text-primary: #5f4b32;
-  --color-text-secondary: #7a634a;
-  --color-border: #dcd3bd;
-  --color-accent: #a67c52;
+    --app-bg: #e8e1cf;
+    --app-surface: #f4ecd8;
+    --app-surface-elevated: #f4ecd8;
+    --app-text-primary: #5f4b32;
+    --app-text-secondary: #7a634a;
+    --app-text-muted: #a08b6d;
+    --app-border: #dcd3bd;
+    --app-border-subtle: #e8e1cf;
+    --app-accent: #8b6914;
+    --app-accent-hover: #6b5110;
+    --app-accent-light: #f0e6d0;
+    --app-success: #5f4b32;
+    --app-warning: #b8860b;
+    --app-error: #a0522d;
+    --app-info: #5f4b32;
+    
+    /* Reader colors */
+    --reader-bg-override: #f4ecd8;
+    --reader-fg-override: #5f4b32;
+    --reader-link-override: #8b4513;
 }
 
+/* Dark Theme */
 .theme-dark {
-  --reader-bg: #000000;
-  --reader-text: #ffffff;
-  --color-text: #ffffff;
-  --color-surface: #1a1a1a;
-  --color-background: #000000;
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #cccccc;
-  --color-text-muted: #888888;
-  --color-border: #333333;
-  --color-border-subtle: #222222;
-  --color-accent: #ffffff;
+    --app-bg: #000000;
+    --app-surface: #1a1a1a;
+    --app-surface-elevated: #2a2a2a;
+    --app-text-primary: #e0e0e0;
+    --app-text-secondary: #cccccc;
+    --app-text-muted: #888888;
+    --app-border: #333333;
+    --app-border-subtle: #222222;
+    --app-accent: #ffffff;
+    --app-accent-hover: #e0e0e0;
+    --app-accent-light: #2a2a2a;
+    --app-success: #4ade80;
+    --app-warning: #fbbf24;
+    --app-error: #f87171;
+    --app-info: #60a5fa;
+    
+    /* Reader colors */
+    --reader-bg-override: #1a1a1a;
+    --reader-fg-override: #e0e0e0;
+    --reader-link-override: #77bbee;
+}
+
+/* Dark theme scrollbar */
+.theme-dark ::-webkit-scrollbar-thumb {
+    background: var(--app-border);
+}
+
+.theme-dark ::-webkit-scrollbar-thumb:hover {
+    background: var(--app-text-muted);
+}
+
+/* Sepia theme scrollbar */
+.theme-sepia ::-webkit-scrollbar-thumb {
+    background: #d4c9a8;
+}
+
+.theme-sepia ::-webkit-scrollbar-thumb:hover {
+    background: #c4b998;
 }
 
 /* Animations */
 @keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .animate-fade-in {
-  animation: fade-in var(--transition-normal) ease-out;
+    animation: fade-in var(--transition-normal) ease-out;
 }
 
 /* Book Cover Placeholder */
 .book-cover-placeholder {
-  background-color: var(--color-border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  text-align: center;
-  padding: 1rem;
-  border: 1px solid var(--color-border);
+    background-color: var(--color-border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    text-align: center;
+    padding: 1rem;
+    border: 1px solid var(--color-border);
 }
 
-/* Input Range Reset & Styling */
+/* ===============================
+   INPUT RANGE STYLING
+   =============================== */
+
 input[type=range] {
-  -webkit-appearance: none;
-  background: transparent;
-  height: 20px;
-  cursor: pointer;
+    -webkit-appearance: none;
+    background: transparent;
+    height: 20px;
+    cursor: pointer;
 }
 
 input[type=range]:focus {
-  outline: none;
+    outline: none;
 }
 
 input[type=range]::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 4px;
-  background: var(--color-border);
-  border-radius: var(--radius-full);
-  border: none;
+    width: 100%;
+    height: 4px;
+    background: var(--color-border);
+    border-radius: var(--radius-full);
+    border: none;
 }
 
 input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  height: 16px;
-  width: 16px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  margin-top: -6px;
-  /* (trackHeight / 2) - (thumbHeight / 2) */
-  box-shadow: 0 0 0 2px var(--color-background);
-  transition: transform 0.1s;
+    -webkit-appearance: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    margin-top: -6px;
+    box-shadow: 0 0 0 2px var(--color-background);
+    transition: transform 0.1s;
 }
 
 input[type=range]::-webkit-slider-thumb:active {
-  transform: scale(1.1);
+    transform: scale(1.1);
 }
 
-/* Foliate View Styling - Critical for rendering */
+/* ===============================
+   FOLIATE VIEW STYLING
+   =============================== */
+
 foliate-view {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  position: relative;
-  background: var(--color-background, #ffffff);
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    background: var(--reader-bg);
 }
 
 foliate-view foliate-paginator,
 foliate-view foliate-fxl {
-  display: block;
-  width: 100%;
-  height: 100%;
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 foliate-view iframe {
-  border: none;
-  width: 100%;
-  height: 100%;
+    border: none;
+    width: 100%;
+    height: 100%;
 }
 
 /* Ensure proper sizing in flex containers */
 foliate-paginator,
 foliate-fxl {
-  display: block;
-  width: 100%;
-  height: 100%;
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 /* Performance optimization */
 foliate-view * {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* Reader Viewport - Strict no-scroll policy */
-/* EPUB.js iframe container */
 .epub-container {
-  overflow: hidden !important;
-  touch-action: none !important;
+    overflow: hidden !important;
+    touch-action: none !important;
 }
 
 .epub-container iframe {
-  overflow: hidden !important;
-  touch-action: none !important;
-  overscroll-behavior: none !important;
+    overflow: hidden !important;
+    touch-action: none !important;
+    overscroll-behavior: none !important;
 }
 
 /* Prevent all scrolling in reader context */
 [data-reading-mode="paged"] {
-  overflow: hidden !important;
+    overflow: hidden !important;
 }
 
-/* Disable text selection during navigation to prevent accidental highlights */
+/* Disable text selection during navigation */
 .navigating {
-  user-select: none !important;
+    user-select: none !important;
 }
+
+/* ===============================
+   READER VIEWPORT STYLES
+   =============================== */
+
+.reader-viewport {
+    filter: brightness(var(--reader-brightness, 100%));
+    transition: filter 0.05s ease;
+}
+
+/* Brightness applied to whole reader screen - instant */
+.reader-screen {
+    filter: brightness(var(--reader-brightness, 100%));
+}
+
+/* Theme transition for smooth color changes */
+.theme-transition {
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* Reader container uses CSS variables for instant updates */
+.reader-container {
+    background-color: var(--reader-bg);
+    color: var(--reader-fg);
+}
+
+/* ===============================
+   FULL READER THEME APPLICATION
+   =============================== */
+
+/* When theme is applied to reader wrapper, override app colors */
+.theme-light,
+.theme-sepia,
+.theme-dark {
+    /* Ensure the theme bg fills the entire screen */
+    background-color: var(--reader-bg);
+}
+
+/* Reader mode - override all app colors with theme colors */
+[data-reading-mode] {
+    background-color: var(--reader-bg);
+    color: var(--reader-fg);
+}
+
+/* Override app colors in reader context */
+[data-reading-mode] .bg-\[var\(--color-background\)\] {
+    background-color: var(--reader-bg) !important;
+}
+
+[data-reading-mode] .bg-\[var\(--color-surface\)\] {
+    background-color: var(--reader-bg) !important;
+}
+
+[data-reading-mode] .text-\[var\(--color-text-primary\)\] {
+    color: var(--reader-fg) !important;
+}
+
+[data-reading-mode] .text-\[var\(--color-text-secondary\)\] {
+    color: var(--reader-fg) !important;
+    opacity: 0.7;
+}
+
+[data-reading-mode] .text-\[var\(--color-text-muted\)\] {
+    color: var(--reader-fg) !important;
+    opacity: 0.5;
+}
+
+[data-reading-mode] .border-\[var\(--color-border\)\] {
+    border-color: color-mix(in srgb, var(--reader-fg) 15%, transparent) !important;
+}
+
+[data-reading-mode] .border-\[var\(--color-border-subtle\)\] {
+    border-color: color-mix(in srgb, var(--reader-fg) 10%, transparent) !important;
+}
+
+/* Panels in reader mode */
+[data-reading-mode] .reader-panel {
+    background-color: var(--reader-bg);
+    color: var(--reader-fg);
+    border-color: color-mix(in srgb, var(--reader-fg) 15%, transparent);
+}
+
+/* Toolbar in reader mode */
+[data-reading-mode] .reader-toolbar {
+    background-color: var(--reader-bg);
+    border-bottom-color: color-mix(in srgb, var(--reader-fg) 15%, transparent);
+}
+
+/* ===============================
+   THEME PREVIEW (Settings Page)
+   =============================== */
+
+.theme-preview[data-theme="light"] {
+    --reader-bg: #ffffff;
+    --reader-fg: #1a1a1a;
+}
+
+.theme-preview[data-theme="sepia"] {
+    --reader-bg: #f4ecd8;
+    --reader-fg: #5f4b32;
+}
+
+.theme-preview[data-theme="dark"] {
+    --reader-bg: #1a1a1a;
+    --reader-fg: #e0e0e0;
+}
+
+/* ===============================
+   UTILITY CLASSES
+   =============================== */
+
+/* Text colors using CSS variables */
+.text-theme-primary { color: var(--color-text-primary); }
+.text-theme-secondary { color: var(--color-text-secondary); }
+.text-theme-muted { color: var(--color-text-muted); }
+.text-theme-accent { color: var(--color-accent); }
+
+/* Background colors using CSS variables */
+.bg-theme { background-color: var(--color-background); }
+.bg-theme-surface { background-color: var(--color-surface); }
+.bg-theme-elevated { background-color: var(--color-surface-elevated); }
+.bg-theme-accent { background-color: var(--color-accent); }
+
+/* Border colors using CSS variables */
+.border-theme { border-color: var(--color-border); }
+.border-theme-subtle { border-color: var(--color-border-subtle); }

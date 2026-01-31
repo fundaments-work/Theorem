@@ -1,6 +1,7 @@
 /**
  * Panel Component
  * Reusable sliding panel with consistent animations
+ * Theme-aware - adapts to reader theme colors
  */
 
 import { cn } from '@/lib/utils';
@@ -30,9 +31,7 @@ export function Panel({
     return (
         <div
             className={cn(
-                'fixed top-0 h-full max-w-[85vw] z-50',
-                'bg-[var(--color-surface)] flex flex-col',
-                'border-[var(--color-border)]',
+                'fixed top-0 h-full max-w-[85vw] z-50 flex flex-col',
                 'transform transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]',
                 isLeft ? 'left-0 border-r' : 'right-0 border-l',
                 visible
@@ -41,9 +40,16 @@ export function Panel({
                 width,
                 className
             )}
+            style={{
+                backgroundColor: 'var(--reader-bg, var(--color-surface))',
+                borderColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)',
+            }}
         >
             {header && (
-                <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
+                <div 
+                    className="flex items-center justify-between p-5 border-b"
+                    style={{ borderColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)' }}
+                >
                     {header}
                 </div>
             )}
@@ -68,9 +74,7 @@ export function FloatingPanel({
     return (
         <div
             className={cn(
-                'fixed z-50 w-80 max-w-[calc(100vw-3rem)]',
-                'bg-[var(--color-surface)] rounded-2xl shadow-2xl flex flex-col',
-                'border border-[var(--color-border)]',
+                'fixed z-50 w-80 max-w-[calc(100vw-3rem)] rounded-2xl shadow-2xl flex flex-col',
                 'transform transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
                 anchor === 'top-right' && 'top-16 right-6 origin-top-right',
                 anchor === 'top-left' && 'top-16 left-6 origin-top-left',
@@ -79,6 +83,12 @@ export function FloatingPanel({
                     : 'opacity-0 scale-95 -translate-y-2 pointer-events-none',
                 className
             )}
+            style={{
+                backgroundColor: 'var(--reader-bg, var(--color-surface))',
+                borderColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)',
+                borderWidth: '1px',
+                borderStyle: 'solid',
+            }}
         >
             {children}
         </div>
