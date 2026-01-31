@@ -325,6 +325,10 @@ export class FoliateEngine {
         const currentSettings = getCurrentReaderSettings();
         if (!currentSettings) return;
 
+        // Compute text alignment value for CSS
+        const alignValue = currentSettings.textAlign === 'justify' ? 'justify' :
+                          currentSettings.textAlign === 'center' ? 'center' : 'left';
+
         const theme = getTheme(this.theme);
         const { getCSS } = await import('../foliate/reader.js');
 
@@ -342,6 +346,63 @@ export class FoliateEngine {
         if (renderer.setStyles) {
             // Create CSS with current actual values, not CSS variables
             const colors = getThemeColors(this.theme);
+            
+            // Build font-family CSS only if not using original book font
+            const fontFamilyCSS = currentSettings.fontFamily === 'original' ? '' : `
+                /* Font family override - applies to ALL elements with !important */
+                html, body, 
+                p, div, span, 
+                h1, h2, h3, h4, h5, h6,
+                li, ul, ol,
+                blockquote, q,
+                td, th, tr, table,
+                dd, dt, dl,
+                pre, code, samp, kbd,
+                em, strong, b, i, u,
+                small, sub, sup,
+                label, figcaption,
+                a, abbr, cite,
+                input, textarea, button,
+                ::before, ::after {
+                    font-family: ${currentSettings.fontFamily === 'serif' ? 'Georgia, "Times New Roman", serif' : currentSettings.fontFamily === 'sans' ? '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif' : currentSettings.fontFamily === 'mono' ? '"SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace' : 'inherit'} !important;
+                }
+                
+                /* Override inline styles that specify font-family */
+                [style*="font-family"] {
+                    font-family: ${currentSettings.fontFamily === 'serif' ? 'Georgia, "Times New Roman", serif' : currentSettings.fontFamily === 'sans' ? '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif' : currentSettings.fontFamily === 'mono' ? '"SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace' : 'inherit'} !important;
+                }
+            `;
+            
+            // Build text alignment CSS
+            const textAlignCSS = `
+                /* Text alignment - comprehensive selector coverage */
+                body, p, div, 
+                h1, h2, h3, h4, h5, h6,
+                li, 
+                blockquote, q,
+                td, th,
+                dd, dt,
+                figcaption {
+                    text-align: ${alignValue} !important;
+                }
+                
+                /* Don't justify headers and captions */
+                h1, h2, h3, h4, h5, h6, figcaption {
+                    text-align: ${currentSettings.textAlign === 'justify' || currentSettings.textAlign === 'left' ? 'left' : currentSettings.textAlign} !important;
+                }
+                
+                /* Override align attributes */
+                [align="left"] { text-align: left !important; }
+                [align="right"] { text-align: right !important; }
+                [align="center"] { text-align: center !important; }
+                [align="justify"] { text-align: justify !important; }
+                
+                /* Override inline text-align styles */
+                [style*="text-align"] {
+                    text-align: ${alignValue} !important;
+                }
+            `;
+            
             const customCSS = `
                 @namespace epub "http://www.idpf.org/2007/ops";
                 
@@ -351,7 +412,7 @@ export class FoliateEngine {
                     --reader-link: ${colors.link};
                 }
                 
-                    @media screen {
+                @media screen {
                     html {
                         font-size: ${currentSettings.fontSize}px !important;
                         line-height: ${currentSettings.lineHeight} !important;
@@ -368,21 +429,19 @@ export class FoliateEngine {
                         background: ${colors.bg} !important;
                         letter-spacing: inherit !important;
                         word-spacing: inherit !important;
-                        text-align: ${currentSettings.textAlign} !important;
-                        font-family: ${currentSettings.fontFamily === 'original' ? 'inherit' : currentSettings.fontFamily === 'serif' ? 'Georgia, serif' : currentSettings.fontFamily === 'sans' ? 'system-ui, sans-serif' : currentSettings.fontFamily === 'mono' ? 'monospace' : 'inherit'} !important;
                     }
                     
-                    *, *::before, *::after {
-                        font-family: ${currentSettings.fontFamily === 'original' ? 'inherit' : currentSettings.fontFamily === 'serif' ? 'Georgia, serif' : currentSettings.fontFamily === 'sans' ? 'system-ui, sans-serif' : currentSettings.fontFamily === 'mono' ? 'monospace' : 'inherit'} !important;
-                    }
+                    ${fontFamilyCSS}
+                    
+                    ${textAlignCSS}
                     
                     a:any-link {
                         color: ${colors.link} !important;
                     }
                     
+                    /* Typography elements */
                     p, li, blockquote, dd {
                         line-height: ${currentSettings.lineHeight} !important;
-                        text-align: ${currentSettings.textAlign === 'justify' ? 'justify' : 'start'} !important;
                         hyphens: ${currentSettings.hyphenation ? 'auto' : 'none'} !important;
                     }
                     
