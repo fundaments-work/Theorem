@@ -473,58 +473,59 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 }}
             />
 
-            {/* Left Navigation Zone */}
+            {/* Google Play Books Style Navigation Zones */}
+            {/* Left 25% Margin - Previous Page */}
             <div
                 onClick={(e) => {
                     e.stopPropagation();
-                    console.debug('[ReaderViewport] Left zone clicked');
+                    console.debug('[ReaderViewport] Left margin clicked');
                     showNavFeedback('prev');
                     prev();
-                    // Note: Location update happens automatically via EPUB.js 'relocated' event
                 }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={(e) => {
-                    // Handle touch swipe
                     handleTouchEnd(e);
                 }}
-                className="absolute left-0 top-14 bottom-12 w-1/3 z-10 cursor-w-resize"
+                className="absolute left-0 top-14 bottom-12 w-[25%] z-10"
                 style={{ 
                     background: 'transparent',
-                    touchAction: 'pan-y'
+                    touchAction: 'pan-y',
+                    cursor: 'w-resize'
                 }}
             />
 
-            {/* Right Navigation Zone */}
+            {/* Right 75% - Next Page (including center) */}
             <div
                 onClick={(e) => {
                     e.stopPropagation();
-                    console.debug('[ReaderViewport] Right zone clicked');
+                    console.debug('[ReaderViewport] Right/Center zone clicked');
                     showNavFeedback('next');
                     next();
-                    // Note: Location update happens automatically via EPUB.js 'relocated' event
                 }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={(e) => {
                     handleTouchEnd(e);
                 }}
-                className="absolute right-0 top-14 bottom-12 w-1/3 z-10 cursor-e-resize"
+                className="absolute left-[25%] right-0 top-14 bottom-12 z-10"
                 style={{ 
                     background: 'transparent',
-                    touchAction: 'pan-y'
+                    touchAction: 'pan-y',
+                    cursor: 'e-resize'
                 }}
             />
 
-            {/* Center Zone - Toggle Chrome */}
+            {/* Top Edge Zone - Toggle Chrome (toolbar/progress bar) */}
             <div
-                onClick={() => {
+                onClick={(e) => {
+                    e.stopPropagation();
+                    console.debug('[ReaderViewport] Top edge clicked');
                     if (onToggleChrome) {
-                        console.debug('[ReaderViewport] Center zone clicked');
                         onToggleChrome();
                     }
                 }}
-                className="absolute left-1/3 right-1/3 top-14 bottom-12 z-10 cursor-pointer"
+                className="absolute left-[25%] right-0 top-14 h-16 z-20"
                 style={{ background: 'transparent' }}
             />
 
