@@ -198,6 +198,9 @@ export class EpubjsEngine {
             if (this.rendition.hooks?.content) {
                 this.rendition.hooks.content.register((contents: any) => {
                     try {
+                        // Inject CSS stylesheet for dynamic theming
+                        this.injectStylesheet(contents);
+
                         // Apply zoom transform to content
                         this.applyZoomToContent(contents, zoomFactor);
 
@@ -363,6 +366,77 @@ export class EpubjsEngine {
         } catch (e) {
             console.warn('[EpubjsEngine] Failed to apply margins:', e);
         }
+    }
+
+    /**
+     * Inject CSS stylesheet into iframe for dynamic theming
+     * Uses CSS custom properties (variables) for real-time updates
+     */
+    private injectStylesheet(contents: any): void {
+        try {
+            const doc = contents?.document;
+            if (!doc) return;
+
+            // Check if stylesheet already injected
+            if (doc.getElementById('lion-reader-styles')) return;
+
+            // Create link element to load external CSS
+            const link = doc.createElement('link');
+            link.id = 'lion-reader-styles';
+            link.rel = 'stylesheet';
+            link.type = 'text/css';
+            link.href = '/reader-theme.css';
+
+            // Insert into head
+            const head = doc.head || doc.querySelector('head');
+            if (head) {
+                head.appendChild(link);
+                console.log('[EpubjsEngine] Injected stylesheet into iframe');
+            }
+
+            // Apply initial CSS variables
+            this.applyCSSVariables(doc);
+        } catch (e) {
+            console.warn('[EpubjsEngine] Failed to inject stylesheet:', e);
+        }
+    }
+
+    /**
+     * Apply CSS custom properties (variables) to document
+     * This enables real-time theme updates without re-rendering
+     */
+    private applyCSSVariables(doc: Document): void {
+        if (!this.currentThemeSettings || !doc.documentElement) return;
+
+        const settings = this.currentThemeSettings;
+        const root = doc.documentElement;
+
+        // Resolve font family
+        const fontFamily = settings.fontFamily === 'serif' ? 'Georgia, serif' :
+            settings.fontFamily === 'sans' ? 'system-ui, sans-serif' :
+                settings.fontFamily === 'mono' ? 'monospace' :
+                    settings.fontFamily === 'original' ? 'inherit' : 'Georgia, serif';
+
+        // Apply core CSS variables
+        root.style.setProperty('--USER__backgroundColor', settings.backgroundColor || '#ffffff');
+        root.style.setProperty('--USER__textColor', settings.textColor || '#1a1a1a');
+        root.style.setProperty('--USER__fontFamily', fontFamily);
+        root.style.setProperty('--USER__fontSize', settings.fontSize ? `${settings.fontSize}px` : '100%');
+        root.style.setProperty('--USER__lineHeight', settings.lineHeight?.toString() || '1.6');
+        root.style.setProperty('--USER__textAlign', settings.textAlign || 'left');
+        root.style.setProperty('--USER__wordSpacing', settings.wordSpacing?.toString() || '0');
+        root.style.setProperty('--USER__letterSpacing', settings.letterSpacing?.toString() || '0');
+        root.style.setProperty('--USER__paraSpacing', settings.paragraphSpacing?.toString() || '1');
+        root.style.setProperty('--USER__pageMargins', (this.currentMargins / 10).toString());
+
+        // Apply feature flags
+        const shouldOverrideFont = settings.fontFamily !== 'original';
+        root.style.setProperty('--USER__fontOverride', shouldOverrideFont ? 'font-on' : 'font-off');
+
+        const hasAdvanced = (settings.wordSpacing && settings.wordSpacing > 0) ||
+            (settings.letterSpacing && settings.letterSpacing > 0) ||
+            (settings.paragraphSpacing && settings.paragraphSpacing !== 1);
+        root.style.setProperty('--USER__advancedSettings', hasAdvanced ? 'advanced-on' : '');
     }
 
     /**
@@ -815,14 +889,17 @@ export class EpubjsEngine {
         return [spineIndex, Math.max(0, Math.min(1, fraction))];
     }
 
-    // Theme - Enhanced with full settings support
+    // Theme - CSS Custom Properties approach (Industry Standard)
+    // Uses CSS variables for real-time updates without re-rendering
     applyTheme(settings: ThemeSettings): void {
         if (!this.rendition) return;
 
+        // Debounce rapid updates
         if (this.themeUpdateTimeout) {
             clearTimeout(this.themeUpdateTimeout);
         }
 
+        // Skip if settings unchanged
         const settingsHash = JSON.stringify(settings);
         if (settingsHash === JSON.stringify(this.currentThemeSettings)) {
             return;
@@ -830,96 +907,33 @@ export class EpubjsEngine {
 
         this.currentThemeSettings = { ...settings };
 
+        // Apply immediately for real-time updates (Option A)
         this.themeUpdateTimeout = setTimeout(() => {
-            if (!this.rendition?.themes) return;
-
             try {
-                // Resolve font family
-                const fontFamily = settings.fontFamily === 'serif' ? 'Georgia, serif' :
-                    settings.fontFamily === 'sans' ? 'system-ui, sans-serif' :
-                        settings.fontFamily === 'mono' ? 'monospace' :
-                            settings.fontFamily === 'original' ? 'inherit' : 'Georgia, serif';
+                // Get all content documents
+                const contents = this.rendition?.getContents?.();
+                if (!contents?.length) return;
 
-                const bg = settings.backgroundColor || '#ffffff';
-                const fg = settings.textColor || '#1a1a1a';
-
-                // Build CSS rules object
-                const bodyRules: Record<string, string> = {
-                    background: bg,
-                    color: fg,
-                    'font-family': fontFamily,
-                    transition: 'none',
-                };
-
-                // Font size - only apply if not using original font
-                if (settings.fontSize && settings.fontFamily !== 'original') {
-                    bodyRules['font-size'] = `${settings.fontSize}px`;
-                }
-
-                // Line height - use unit-less value for better inheritance
-                if (settings.lineHeight) {
-                    bodyRules['line-height'] = settings.lineHeight.toString();
-                }
-
-                // Word spacing
-                if (settings.wordSpacing !== undefined && settings.wordSpacing !== 0) {
-                    bodyRules['word-spacing'] = `${settings.wordSpacing}em`;
-                }
-
-                // Letter spacing
-                if (settings.letterSpacing !== undefined && settings.letterSpacing !== 0) {
-                    bodyRules['letter-spacing'] = `${settings.letterSpacing}em`;
-                }
-
-                // Text alignment
-                if (settings.textAlign) {
-                    bodyRules['text-align'] = settings.textAlign;
-                }
-
-                // Hyphenation
-                if (settings.hyphenation !== undefined) {
-                    bodyRules['hyphens'] = settings.hyphenation ? 'auto' : 'none';
-                    bodyRules['-webkit-hyphens'] = settings.hyphenation ? 'auto' : 'none';
-                    bodyRules['-moz-hyphens'] = settings.hyphenation ? 'auto' : 'none';
-                }
-
-                // Paragraph spacing
-                const paragraphRules: Record<string, string> = {};
-                if (settings.paragraphSpacing !== undefined && settings.paragraphSpacing !== 1) {
-                    paragraphRules['margin-bottom'] = `${settings.paragraphSpacing}em`;
-                }
-
-                // Register theme with body rules
-                this.rendition.themes.register('lion-reader-theme', {
-                    body: bodyRules,
-                    p: paragraphRules,
-                    '::selection': {
-                        background: 'highlight',
-                        color: 'highlighttext',
-                    },
+                // Apply CSS variables to each content document
+                contents.forEach((content: any) => {
+                    const doc = content?.document;
+                    if (doc) {
+                        this.applyCSSVariables(doc);
+                    }
                 });
 
-                this.rendition.themes.select('lion-reader-theme');
-
-                // Apply force publisher styles override if requested
-                if (settings.forcePublisherStyles) {
-                    this.rendition.themes.override('font-family', fontFamily, true);
-                    if (settings.fontSize && settings.fontFamily !== 'original') {
-                        this.rendition.themes.override('font-size', `${settings.fontSize}px`, true);
-                    }
-                }
-
                 // Re-apply zoom and margins after theme change
-                const contents = this.rendition?.getContents?.()[0];
-                if (contents) {
-                    this.applyZoomToContent(contents, this.currentZoom / 100);
+                const firstContent = contents[0];
+                if (firstContent) {
+                    this.applyZoomToContent(firstContent, this.currentZoom / 100);
                     const marginPx = (this.currentMargins / 100) * Math.min(
                         this.container?.getBoundingClientRect().width || 800,
                         this.container?.getBoundingClientRect().height || 600
                     );
-                    this.applyMarginsToContent(contents, marginPx);
+                    this.applyMarginsToContent(firstContent, marginPx);
                 }
 
+                console.log('[EpubjsEngine] Theme applied via CSS variables');
             } catch (e) {
                 console.warn('[EpubjsEngine] Theme application failed:', e);
             }

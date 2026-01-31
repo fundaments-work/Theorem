@@ -26,7 +26,6 @@ interface ReaderViewportProps {
     onLocationChange?: (location: DocLocation) => void;
     onError?: (error: Error) => void;
     onTextSelected?: (cfi: string, text: string) => void;
-    onToggleChrome?: () => void;
     onLocationsSaved?: (locations: string) => void;
     initialLocation?: string;
     savedLocations?: string;
@@ -47,7 +46,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     onLocationChange,
     onError,
     onTextSelected,
-    onToggleChrome,
     onLocationsSaved,
     initialLocation,
     savedLocations,
@@ -118,8 +116,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         return () => {
             console.log('[ReaderViewport] Cleaning up...');
             close();
-            // Clear touch start ref to prevent memory leaks
-            touchStartRef.current = null;
             // Clear nav feedback timeout
             if (navTimeoutRef.current) {
                 clearTimeout(navTimeoutRef.current);
@@ -353,74 +349,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
 
     // Note: Click navigation is now handled by overlay divs below
 
-    // Touch swipe handling with improved gesture detection
-    const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
-    const isSwipingRef = useRef(false);
-
-    const handleTouchStart = useCallback((e: React.TouchEvent) => {
-        const touch = e.touches[0];
-        touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
-        isSwipingRef.current = false;
-    }, []);
-
-    const handleTouchMove = useCallback((e: React.TouchEvent) => {
-        if (!touchStartRef.current) return;
-
-        const touch = e.touches[0];
-        const start = touchStartRef.current;
-        const diffX = start.x - touch.clientX;
-        const diffY = start.y - touch.clientY;
-
-        // If horizontal movement dominates, prevent default to stop page scroll
-        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 10) {
-            isSwipingRef.current = true;
-            // Don't prevent default here - let the browser handle it for smooth scrolling
-            // We'll detect the swipe on touch end
-        }
-    }, []);
-
-    const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-        if (!touchStartRef.current) return;
-
-        const touch = e.changedTouches[0];
-        const start = touchStartRef.current;
-        const diffX = start.x - touch.clientX;
-        const diffY = start.y - touch.clientY;
-        const duration = Date.now() - start.time;
-
-        touchStartRef.current = null;
-
-        // Require minimum horizontal movement and be primarily horizontal
-        const minSwipeDistance = 50;
-        const isHorizontal = Math.abs(diffX) > Math.abs(diffY);
-
-        if (!isHorizontal || Math.abs(diffX) < minSwipeDistance) {
-            isSwipingRef.current = false;
-            return;
-        }
-
-        // Calculate velocity for flick detection
-        const velocity = Math.abs(diffX) / duration;
-        const isFlick = velocity > 0.5; // Fast swipe
-
-        // Lower threshold for flicks
-        const threshold = isFlick ? 30 : minSwipeDistance;
-
-        if (Math.abs(diffX) >= threshold) {
-            if (diffX > 0) {
-                // Swipe left = next page
-                showNavFeedback('next');
-                next();
-            } else {
-                // Swipe right = previous page
-                showNavFeedback('prev');
-                prev();
-            }
-        }
-
-        isSwipingRef.current = false;
-    }, [next, prev, forceLocationUpdate, showNavFeedback]);
-
     const displayError = error?.message;
 
     return (
@@ -473,63 +401,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 }}
             />
 
-            {/* Google Play Books Style Navigation Zones */}
-            {/* Left 25% Margin - Previous Page */}
-            <div
-                onClick={(e) => {
-                    e.stopPropagation();
-                    console.debug('[ReaderViewport] Left margin clicked');
-                    showNavFeedback('prev');
-                    prev();
-                }}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={(e) => {
-                    handleTouchEnd(e);
-                }}
-                className="absolute left-0 top-14 bottom-12 w-[25%] z-10"
-                style={{ 
-                    background: 'transparent',
-                    touchAction: 'pan-y',
-                    cursor: 'w-resize'
-                }}
-            />
-
-            {/* Right 75% - Next Page (including center) */}
-            <div
-                onClick={(e) => {
-                    e.stopPropagation();
-                    console.debug('[ReaderViewport] Right/Center zone clicked');
-                    showNavFeedback('next');
-                    next();
-                }}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={(e) => {
-                    handleTouchEnd(e);
-                }}
-                className="absolute left-[25%] right-0 top-14 bottom-12 z-10"
-                style={{ 
-                    background: 'transparent',
-                    touchAction: 'pan-y',
-                    cursor: 'e-resize'
-                }}
-            />
-
-            {/* Top Edge Zone - Toggle Chrome (toolbar/progress bar) */}
-            <div
-                onClick={(e) => {
-                    e.stopPropagation();
-                    console.debug('[ReaderViewport] Top edge clicked');
-                    if (onToggleChrome) {
-                        onToggleChrome();
-                    }
-                }}
-                className="absolute left-[25%] right-0 top-14 h-16 z-20"
-                style={{ background: 'transparent' }}
-            />
-
-            {/* Navigation Feedback Overlay */}
+            {/* Navigation Feedback Overlay - for keyboard navigation only */}
             {navDirection && (
                 <div
                     className={cn(

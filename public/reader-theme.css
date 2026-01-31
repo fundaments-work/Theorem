@@ -1,0 +1,329 @@
+/**
+ * LionReader Theme CSS
+ * Dynamic EPUB styling using CSS Custom Properties
+ * 
+ * This stylesheet implements a standard approach using CSS variables
+ * for dynamic theming and user preference application.
+ */
+
+/* ==========================================================================
+   CSS Custom Properties (Variables)
+   These are set via JavaScript and cascade to all content
+   ========================================================================== */
+
+:root {
+  /* Core User Settings - Set by Reader Engine */
+  --USER__backgroundColor: #ffffff;
+  --USER__textColor: #1a1a1a;
+  --USER__fontFamily: Georgia, serif;
+  --USER__fontSize: 100%;
+  --USER__lineHeight: 1.6;
+  --USER__textAlign: left;
+  --USER__wordSpacing: 0;
+  --USER__letterSpacing: 0;
+  --USER__paraSpacing: 1;
+  --USER__paraIndent: 1.5em;
+  --USER__pageMargins: 1;
+  
+  /* Feature Flags - Control which settings are applied */
+  --USER__fontOverride: font-off;  /* font-on | font-off */
+  --USER__advancedSettings: '';    /* advanced-on | '' */
+  
+  /* System Variables - Internal use */
+  --LR__defaultFont: Georgia, serif;
+  --LR__backgroundColor: var(--USER__backgroundColor);
+  --LR__textColor: var(--USER__textColor);
+}
+
+/* ==========================================================================
+   Base Styles - Applied to all content
+   These respect publisher styles unless user overrides are enabled
+   ========================================================================== */
+
+/* Base HTML element - Root container */
+html {
+  background-color: var(--USER__backgroundColor) !important;
+  color: var(--USER__textColor) !important;
+  font-family: var(--LR__defaultFont);
+  font-size: var(--USER__fontSize);
+  line-height: var(--USER__lineHeight);
+  text-align: var(--USER__textAlign);
+  word-spacing: var(--USER__wordSpacing);
+  letter-spacing: var(--USER__letterSpacing);
+  /* Prevent transitions during theme changes for performance */
+  transition: none !important;
+}
+
+/* Body element - Main content container */
+body {
+  background-color: var(--USER__backgroundColor) !important;
+  color: var(--USER__textColor) !important;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  word-spacing: inherit;
+  letter-spacing: inherit;
+  /* Apply page margins */
+  margin: calc(var(--USER__pageMargins) * 1rem) !important;
+  padding: 0 !important;
+  transition: none !important;
+}
+
+/* ==========================================================================
+   Font Override Mode
+   When user selects a non-original font, force their font choice
+   ========================================================================== */
+
+/* Font override flag is ON - force user font family */
+:root[style*="--USER__fontOverride: font-on"] html,
+:root[style*="--USER__fontOverride: font-on"] body,
+:root[style*="--USER__fontOverride: font-on"] * {
+  font-family: var(--USER__fontFamily) !important;
+}
+
+/* ==========================================================================
+   Typography - Paragraphs
+   ========================================================================== */
+
+p {
+  /* Paragraph spacing (margin-bottom) */
+  margin-bottom: calc(var(--USER__paraSpacing) * 1em) !important;
+  /* Text alignment inheritance */
+  text-align: inherit;
+  /* Indentation for paragraphs (except first in section) */
+  text-indent: var(--USER__paraIndent);
+}
+
+/* Remove indentation from first paragraph in sections */
+h1 + p, h2 + p, h3 + p, h4 + p, h5 + p, h6 + p,
+section > p:first-of-type,
+article > p:first-of-type {
+  text-indent: 0 !important;
+}
+
+/* ==========================================================================
+   Typography - Headings
+   Headings should stand out but inherit color and alignment
+   ========================================================================== */
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--USER__textColor) !important;
+  text-align: inherit;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  line-height: 1.2;
+  font-weight: bold;
+}
+
+h1 { font-size: 1.8em; }
+h2 { font-size: 1.5em; }
+h3 { font-size: 1.3em; }
+h4 { font-size: 1.1em; }
+h5 { font-size: 1em; }
+h6 { font-size: 0.9em; }
+
+/* ==========================================================================
+   Links
+   ========================================================================== */
+
+a {
+  color: var(--USER__textColor) !important;
+  text-decoration: underline;
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
+/* ==========================================================================
+   Lists
+   ========================================================================== */
+
+ul, ol {
+  margin-bottom: calc(var(--USER__paraSpacing) * 1em) !important;
+  padding-left: 2em;
+}
+
+li {
+  margin-bottom: 0.25em;
+}
+
+/* ==========================================================================
+   Blockquotes
+   ========================================================================== */
+
+blockquote {
+  margin: 1em 0;
+  padding: 0 1em;
+  border-left: 3px solid var(--USER__textColor);
+  opacity: 0.9;
+}
+
+blockquote p {
+  text-indent: 0 !important;
+}
+
+/* ==========================================================================
+   Code and Preformatted Text
+   ========================================================================== */
+
+code, pre {
+  font-family: monospace !important;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+code {
+  padding: 0.2em 0.4em;
+  font-size: 0.9em;
+}
+
+pre {
+  padding: 1em;
+  overflow-x: auto;
+  margin-bottom: calc(var(--USER__paraSpacing) * 1em) !important;
+}
+
+pre code {
+  padding: 0;
+  background: none;
+}
+
+/* ==========================================================================
+   Images and Figures
+   ========================================================================== */
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1em auto;
+}
+
+figure {
+  margin: 1em 0;
+  text-align: center;
+}
+
+figcaption {
+  font-size: 0.9em;
+  opacity: 0.8;
+  margin-top: 0.5em;
+}
+
+/* ==========================================================================
+   Tables
+   ========================================================================== */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: calc(var(--USER__paraSpacing) * 1em) !important;
+}
+
+th, td {
+  padding: 0.5em;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  text-align: left;
+}
+
+th {
+  font-weight: bold;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* ==========================================================================
+   Text Selection
+   ========================================================================== */
+
+::selection {
+  background: var(--USER__textColor) !important;
+  color: var(--USER__backgroundColor) !important;
+  opacity: 0.3;
+}
+
+/* ==========================================================================
+   Advanced Settings Mode
+   Only apply word/letter spacing when explicitly enabled
+   ========================================================================== */
+
+/* Advanced settings flag is ON */
+:root[style*="--USER__advancedSettings: advanced-on"] body {
+  word-spacing: var(--USER__wordSpacing) !important;
+  letter-spacing: var(--USER__letterSpacing) !important;
+}
+
+/* ==========================================================================
+   Hyphenation Control
+   ========================================================================== */
+
+/* Default: no hyphenation for better readability */
+body {
+  hyphens: none;
+  -webkit-hyphens: none;
+  -moz-hyphens: none;
+}
+
+/* Enable hyphenation when requested by user settings */
+:root[style*="hyphenation: auto"],
+:root[style*="hyphens: auto"] {
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  -moz-hyphens: auto;
+}
+
+/* ==========================================================================
+   Night/Dark Mode Adjustments
+   ========================================================================== */
+
+/* Reduce brightness of images in dark mode */
+:root[style*="--USER__backgroundColor: #1a1a1a"] img,
+:root[style*="--USER__backgroundColor: #000000"] img {
+  opacity: 0.9;
+}
+
+/* ==========================================================================
+   Performance Optimizations
+   ========================================================================== */
+
+/* CSS containment for better rendering performance */
+body {
+  contain: layout style;
+}
+
+/* Prevent text size adjustment on mobile */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Hardware acceleration for smooth scrolling */
+body {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ==========================================================================
+   Accessibility
+   ========================================================================== */
+
+/* Focus styles for keyboard navigation */
+a:focus, button:focus {
+  outline: 2px solid var(--USER__textColor);
+  outline-offset: 2px;
+}
+
+/* High contrast support */
+@media (prefers-contrast: high) {
+  body {
+    border: 1px solid var(--USER__textColor);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

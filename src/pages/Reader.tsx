@@ -207,11 +207,6 @@ export function ReaderPage() {
         setActivePanel(null);
     }, []);
 
-    // Toggle toolbar visibility
-    const handleToggleChrome = useCallback(() => {
-        setShowToolbar(prev => !prev);
-    }, []);
-
     const handleSeek = useCallback((fraction: number) => {
         console.log(`[Reader] handleSeek called with fraction: ${fraction}`);
 
@@ -313,7 +308,6 @@ export function ReaderPage() {
                     onLocationChange={handleLocationChange}
                     onLocationsSaved={handleLocationsSaved}
                     onTextSelected={handleTextSelected}
-                    onToggleChrome={handleToggleChrome}
                     className="w-full h-full"
                 />
             </div>
