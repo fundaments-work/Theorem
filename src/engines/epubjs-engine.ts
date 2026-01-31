@@ -417,8 +417,39 @@ export class EpubjsEngine {
                 settings.fontFamily === 'mono' ? 'monospace' :
                     settings.fontFamily === 'original' ? 'inherit' : 'Georgia, serif';
 
+        // Get background color to determine theme mode
+        const bg = settings.backgroundColor || '#ffffff';
+        const isDarkMode = bg === '#1a1a1a' || bg === '#000000' || bg.toLowerCase() === '#1a1a1a';
+        const isSepia = bg === '#F4ECD8' || bg.toLowerCase() === '#f4ecd8';
+
+        // Calculate derived colors for proper contrast
+        let borderColor: string;
+        let codeBackground: string;
+        let mutedTextColor: string;
+        let accentColor: string;
+
+        if (isDarkMode) {
+            // Dark mode: lighter borders and backgrounds for contrast against dark bg
+            borderColor = 'rgba(255, 255, 255, 0.2)';
+            codeBackground = 'rgba(255, 255, 255, 0.1)';
+            mutedTextColor = 'rgba(255, 255, 255, 0.6)';
+            accentColor = settings.textColor || '#e0e0e0';
+        } else if (isSepia) {
+            // Sepia mode: warm-toned borders
+            borderColor = 'rgba(95, 75, 50, 0.2)';
+            codeBackground = 'rgba(95, 75, 50, 0.08)';
+            mutedTextColor = 'rgba(95, 75, 50, 0.7)';
+            accentColor = settings.textColor || '#5F4B32';
+        } else {
+            // Light mode: standard dark borders
+            borderColor = 'rgba(128, 128, 128, 0.3)';
+            codeBackground = 'rgba(128, 128, 128, 0.1)';
+            mutedTextColor = 'rgba(128, 128, 128, 0.8)';
+            accentColor = settings.textColor || '#1a1a1a';
+        }
+
         // Apply core CSS variables
-        root.style.setProperty('--USER__backgroundColor', settings.backgroundColor || '#ffffff');
+        root.style.setProperty('--USER__backgroundColor', bg);
         root.style.setProperty('--USER__textColor', settings.textColor || '#1a1a1a');
         root.style.setProperty('--USER__fontFamily', fontFamily);
         root.style.setProperty('--USER__fontSize', settings.fontSize ? `${settings.fontSize}px` : '100%');
@@ -429,6 +460,12 @@ export class EpubjsEngine {
         root.style.setProperty('--USER__paraSpacing', settings.paragraphSpacing?.toString() || '1');
         root.style.setProperty('--USER__pageMargins', (this.currentMargins / 10).toString());
 
+        // Apply derived colors for proper contrast
+        root.style.setProperty('--USER__borderColor', borderColor);
+        root.style.setProperty('--USER__codeBackground', codeBackground);
+        root.style.setProperty('--USER__accentColor', accentColor);
+        root.style.setProperty('--USER__mutedTextColor', mutedTextColor);
+
         // Apply feature flags
         const shouldOverrideFont = settings.fontFamily !== 'original';
         root.style.setProperty('--USER__fontOverride', shouldOverrideFont ? 'font-on' : 'font-off');
@@ -437,6 +474,8 @@ export class EpubjsEngine {
             (settings.letterSpacing && settings.letterSpacing > 0) ||
             (settings.paragraphSpacing && settings.paragraphSpacing !== 1);
         root.style.setProperty('--USER__advancedSettings', hasAdvanced ? 'advanced-on' : '');
+
+        console.log('[EpubjsEngine] Applied theme:', { bg, isDarkMode, isSepia, borderColor });
     }
 
     /**
