@@ -341,7 +341,6 @@ export function ReaderPage() {
                         sectionFractions={sectionFractions}
                         visible={true}
                         onSeek={handleSeek}
-                        onNavigate={goTo}
                         savedPageProgress={getBook(currentBookId || '')?.pageProgress}
                         layout={settings.readerSettings.layout}
                     />

@@ -1126,150 +1126,54 @@ export class EpubjsEngine {
         return items.map((_: any, i: number) => i / items.length);
     }
 
-    // Navigation methods - SIMPLIFIED and ACCURATE
+    // Navigation methods - FAST and ACCURATE
     async goToFraction(fraction: number): Promise<void> {
-        console.log(`[EpubjsEngine] goToFraction called with ${fraction}`);
-
         if (!this.rendition || !this.book) {
-            console.warn('[EpubjsEngine] Cannot navigate - rendition or book not available');
+            console.warn('[EpubjsEngine] Cannot navigate - not ready');
             return;
         }
 
         const validFraction = Math.max(0, Math.min(1, fraction));
 
-        // Handle edge case: go to end of book
+        // Fast path: handle edge cases
+        if (validFraction <= 0.005) {
+            const firstSection = this.book.spine.get(0);
+            if (firstSection?.cfi) {
+                await this.rendition.display(firstSection.cfi);
+            }
+            return;
+        }
+
         if (validFraction >= 0.995) {
-            const lastIndex = this.book.spine?.items?.length - 1;
-            if (lastIndex >= 0) {
-                const lastSection = this.book.spine.get(lastIndex);
+            const items = this.book.spine?.items;
+            if (items?.length) {
+                const lastSection = this.book.spine.get(items.length - 1);
                 if (lastSection?.cfi) {
-                    console.log(`[EpubjsEngine] Navigating to end of book at section ${lastIndex}`);
                     await this.rendition.display(lastSection.cfi);
                 }
             }
             return;
         }
 
-        // Convert fraction to section using byte-based calculation
-        const [sectionIndex, sectionFraction] = this.getSectionFromFraction(validFraction);
+        // Convert fraction to spine section using byte-based binary search (O(log n))
+        const [sectionIndex] = this.getSectionFromFraction(validFraction);
         const section = this.book.spine.get(sectionIndex);
 
-        const targetBytes = Math.floor(validFraction * this.totalBytes);
-        console.log(`[EpubjsEngine] Navigation:`, {
-            fraction: validFraction,
-            targetBytes,
-            totalBytes: this.totalBytes,
-            sectionIndex,
-            sectionFraction: sectionFraction.toFixed(3),
-            sectionHref: section?.href,
-            sectionCfi: section?.cfi?.substring(0, 50)
-        });
-
         if (!section) {
-            console.warn('[EpubjsEngine] Section not found for index:', sectionIndex);
+            console.warn('[EpubjsEngine] Section not found:', sectionIndex);
             return;
         }
 
-        // Navigate using section CFI for most reliable results
-        if (section.cfi) {
+        // Navigate to section CFI - fast and reliable
+        // Note: This takes you to the section containing the target position
+        // Within-section precision can be added later via scroll adjustment
+        const targetCfi = section.cfi || section.href || section.idref;
+        if (targetCfi) {
             try {
-                // For section start, just use the CFI directly
-                if (sectionFraction < 0.01) {
-                    console.log(`[EpubjsEngine] Navigating to section start: ${section.cfi.substring(0, 50)}`);
-                    await this.rendition.display(section.cfi);
-                    return;
-                }
-
-                // For within-section navigation, try to create an offset CFI
-                // First navigate to section to load it
-                await this.rendition.display(section.cfi);
-                
-                // Then try to advance within the section
-                if (sectionFraction > 0.05) {
-                    // Wait for content to load
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                    
-                    // Try to calculate a more precise CFI
-                    try {
-                        const preciseCfi = await this.calculatePreciseCfi(section, sectionFraction);
-                        if (preciseCfi && preciseCfi !== section.cfi) {
-                            console.log(`[EpubjsEngine] Using precise CFI`);
-                            await this.rendition.display(preciseCfi);
-                            return;
-                        }
-                    } catch (e) {
-                        // Ignore precision errors, we already loaded the section
-                    }
-                }
-                
-                console.log(`[EpubjsEngine] Navigated to section`);
-                return;
+                await this.rendition.display(targetCfi);
             } catch (err) {
-                console.warn('[EpubjsEngine] CFI navigation failed:', err);
+                console.warn('[EpubjsEngine] Navigation failed:', err);
             }
-        }
-
-        // Fallback to href
-        if (section.href) {
-            console.log(`[EpubjsEngine] Falling back to href: ${section.href}`);
-            await this.rendition.display(section.href);
-            return;
-        }
-
-        // Last resort: use idref
-        if (section.idref) {
-            console.log(`[EpubjsEngine] Navigating using idref: ${section.idref}`);
-            await this.rendition.display(section.idref);
-            return;
-        }
-
-        console.warn(`[EpubjsEngine] Section ${sectionIndex} has no navigable property`);
-    }
-
-    /**
-     * Calculate a more precise CFI within a section using EPUB.js APIs
-     */
-    private async calculatePreciseCfi(section: any, fraction: number): Promise<string | null> {
-        try {
-            // Render the section temporarily to access its content
-            const doc = section.document;
-            if (!doc) return null;
-
-            // Get all text nodes
-            const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-            const textNodes: Text[] = [];
-            let node: Node | null;
-            while ((node = walker.nextNode())) {
-                if (node.textContent && node.textContent.trim().length > 0) {
-                    textNodes.push(node as Text);
-                }
-            }
-
-            if (textNodes.length === 0) return null;
-
-            // Calculate target character position
-            const totalText = textNodes.reduce((sum, node) => sum + node.textContent!.length, 0);
-            const targetChar = Math.floor(fraction * totalText);
-
-            // Find the text node containing the target character
-            let charCount = 0;
-            for (const textNode of textNodes) {
-                const nodeLength = textNode.textContent!.length;
-                if (charCount + nodeLength >= targetChar) {
-                    const offset = targetChar - charCount;
-                    // Use section's CFI generation if available
-                    if (section.cfiFromElement) {
-                        return section.cfiFromElement(textNode, { offset });
-                    }
-                    break;
-                }
-                charCount += nodeLength;
-            }
-
-            return null;
-        } catch (err) {
-            console.warn('[EpubjsEngine] calculatePreciseCfi failed:', err);
-            return null;
         }
     }
 

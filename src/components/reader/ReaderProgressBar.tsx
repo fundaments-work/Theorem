@@ -15,7 +15,6 @@ interface ReaderProgressBarProps {
     sections?: BookSection[];
     visible?: boolean;
     onSeek: (fraction: number) => void;
-    onNavigate?: (target: string) => void;
     className?: string;
     // Saved page progress for instant correct display on reopen
     savedPageProgress?: {
@@ -43,10 +42,9 @@ const SEEK_STABILIZE_DELAY = 50;
 export function ReaderProgressBar({
     location,
     toc,
-    sectionFractions,
     sections: sectionsProp,
+    sectionFractions,
     onSeek,
-    onNavigate,
     className,
     savedPageProgress,
     layout = 'single',
@@ -220,7 +218,9 @@ export function ReaderProgressBar({
         hoverFractionRef.current = null;
     }, []);
 
-    // Handle click - navigate to exact fraction clicked (not chapter start)
+    // Handle click - navigate to exact fraction clicked
+    // Uses fraction-based navigation (spine-based) for accuracy
+    // TOC is display-only, not used for navigation calculations
     const handleClick = useCallback((e: React.MouseEvent) => {
         const targetFraction = hoverFractionRef.current ?? getFractionAtMouse(e.clientX);
 
@@ -229,26 +229,13 @@ export function ReaderProgressBar({
             stabilizeTimeoutRef.current = null;
         }
 
-        // Find the section at this fraction for navigation
-        const sectionMatch = findSectionAtFraction(sections, targetFraction);
-        
-        // Navigate using section href if available for accuracy
-        if (sectionMatch) {
-            const sectionData = sections[sectionMatch.index];
-            if (sectionData?.href && onNavigate) {
-                console.log(`[ReaderProgressBar] Clicked fraction ${targetFraction.toFixed(3)}, navigating to: ${sectionData.label}`);
-                onNavigate(sectionData.href);
-                setUserControlledFraction(targetFraction);
-                lastSeekFractionRef.current = targetFraction;
-                return;
-            }
-        }
-        
-        // Fallback to fraction-based navigation
+        // ALWAYS use fraction-based navigation for accuracy
+        // This correctly maps the fraction to spine sections via goToFraction
+        console.log(`[ReaderProgressBar] Clicked fraction ${targetFraction.toFixed(3)}`);
         onSeek(targetFraction);
         setUserControlledFraction(targetFraction);
         lastSeekFractionRef.current = targetFraction;
-    }, [getFractionAtMouse, onSeek, onNavigate, sections]);
+    }, [getFractionAtMouse, onSeek]);
 
     // Cleanup on unmount
     useEffect(() => {
