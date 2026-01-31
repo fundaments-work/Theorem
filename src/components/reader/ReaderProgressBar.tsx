@@ -6,7 +6,7 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { DocLocation, TocItem, BookSection } from '@/types';
-import { findSectionAtFraction, flattenToc } from '@/lib/toc';
+import { flattenToc } from '@/lib/toc';
 
 interface ReaderProgressBarProps {
     location: DocLocation | null;
@@ -246,14 +246,12 @@ export function ReaderProgressBar({
         };
     }, []);
 
-    // Get section at hover position for tooltip
-    const hoverSection = hoverFraction !== null
-        ? findSectionAtFraction(sections, hoverFraction)
-        : null;
-
-    // Calculate hover page number for tooltip
+    // Calculate hover page number and percentage for tooltip
     const hoverPageNumber = hoverFraction !== null && totalPages > 0
         ? Math.max(1, Math.min(totalPages, Math.floor(hoverFraction * totalPages) + 1))
+        : null;
+    const hoverPercentage = hoverFraction !== null
+        ? Math.round(hoverFraction * 100)
         : null;
 
     return (
@@ -265,8 +263,8 @@ export function ReaderProgressBar({
                 onClick={handleClick}
                 className="relative flex-1 cursor-pointer h-10 flex items-center"
             >
-                {/* Enhanced Tooltip with arrow */}
-                {hoverSection && hoverFraction !== null && (
+                {/* Tooltip: Page number + Percentage (spatial navigation) */}
+                {hoverFraction !== null && (
                     <div
                         className="absolute bottom-full mb-3 pointer-events-none z-50"
                         style={{
@@ -274,16 +272,18 @@ export function ReaderProgressBar({
                             transform: 'translateX(-50%)',
                         }}
                     >
-                        <div className="relative bg-[var(--color-accent)] text-white px-4 py-2 rounded-lg shadow-xl">
-                            <div className="text-[10px] uppercase tracking-wider opacity-80 mb-0.5 font-medium">
+                        <div className="relative bg-[var(--color-accent)] text-white px-3 py-2 rounded-lg shadow-xl min-w-[120px] text-center">
+                            {/* Primary: Page number */}
+                            <div className="text-sm font-semibold">
                                 {hoverPageNumber !== null && totalPages > 0
-                                    ? `Page ${hoverPageNumber} of ${totalPages}`
-                                    : sections.length > 1
-                                        ? `Chapter ${hoverSection.index + 1} of ${sections.length}`
-                                        : 'Location'}
+                                    ? `Page ${hoverPageNumber}`
+                                    : `${hoverPercentage}%`}
                             </div>
-                            <div className="text-sm font-semibold whitespace-nowrap max-w-[280px] truncate">
-                                {'label' in hoverSection ? String(hoverSection.label) : 'Section'}
+                            {/* Secondary: Total pages or percentage */}
+                            <div className="text-[10px] opacity-80">
+                                {hoverPageNumber !== null && totalPages > 0
+                                    ? `of ${totalPages} (${hoverPercentage}%)`
+                                    : 'through book'}
                             </div>
 
                             <div
