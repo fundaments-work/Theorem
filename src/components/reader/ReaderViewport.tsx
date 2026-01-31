@@ -303,67 +303,14 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [next, prev, goToFraction, showNavFeedback]);
 
-    // Scroll wheel navigation
+    // Scroll wheel navigation - DISABLED in paged mode per user request
+    // User wants to use keyboard/touch only for navigation in paged mode
+    // Wheel scrolling allowed only in scroll mode
     useEffect(() => {
-        if (settings.flow === 'scroll') {
-            return;
-        }
-
-        const container = containerRef.current;
-        if (!container) return;
-
-        let wheelTimeout: ReturnType<typeof setTimeout> | null = null;
-        let accumulatedDelta = 0;
-        const WHEEL_THRESHOLD = 30;
-        let lastNavTime = 0;
-        const NAV_COOLDOWN = 300;
-
-        const doNavigate = (direction: 'next' | 'prev') => {
-            const now = Date.now();
-            if (now - lastNavTime < NAV_COOLDOWN) return;
-            lastNavTime = now;
-            
-            if (direction === 'next') {
-                showNavFeedback('next');
-                next();
-            } else {
-                showNavFeedback('prev');
-                prev();
-            }
-        };
-
-        const handleWheel = (e: WheelEvent) => {
-            if (e.ctrlKey || e.metaKey) return;
-            e.preventDefault();
-            e.stopPropagation();
-
-            accumulatedDelta += e.deltaY;
-
-            if (wheelTimeout) {
-                clearTimeout(wheelTimeout);
-            }
-
-            if (Math.abs(accumulatedDelta) >= WHEEL_THRESHOLD) {
-                if (accumulatedDelta > 0) {
-                    doNavigate('next');
-                } else {
-                    doNavigate('prev');
-                }
-                accumulatedDelta = 0;
-            }
-
-            wheelTimeout = setTimeout(() => {
-                accumulatedDelta = 0;
-            }, 150);
-        };
-
-        window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
-        
-        return () => {
-            window.removeEventListener('wheel', handleWheel, { capture: true });
-            if (wheelTimeout) clearTimeout(wheelTimeout);
-        };
-    }, [settings.flow, next, prev, showNavFeedback]);
+        // Wheel navigation is disabled - foliate-js handles scrolling internally
+        // This allows TOC and other panels to scroll with wheel
+        return;
+    }, []);
 
     // Touch/Swipe navigation
     useEffect(() => {

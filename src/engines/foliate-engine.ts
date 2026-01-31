@@ -372,6 +372,10 @@ export class FoliateEngine {
                         font-family: ${currentSettings.fontFamily === 'original' ? 'inherit' : currentSettings.fontFamily === 'serif' ? 'Georgia, serif' : currentSettings.fontFamily === 'sans' ? 'system-ui, sans-serif' : currentSettings.fontFamily === 'mono' ? 'monospace' : 'inherit'} !important;
                     }
                     
+                    *, *::before, *::after {
+                        font-family: ${currentSettings.fontFamily === 'original' ? 'inherit' : currentSettings.fontFamily === 'serif' ? 'Georgia, serif' : currentSettings.fontFamily === 'sans' ? 'system-ui, sans-serif' : currentSettings.fontFamily === 'mono' ? 'monospace' : 'inherit'} !important;
+                    }
+                    
                     a:any-link {
                         color: ${colors.link} !important;
                     }
