@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     X, Sun, Moon, Sunrise, ChevronDown, Plus, Minus,
-    Layers, ArrowUpDown, Square, BookOpen, Monitor,
+    Layers, ArrowUpDown,
     AlignLeft, AlignJustify, AlignCenter, Type,
     Palette, Maximize2, Zap, Settings2
 } from 'lucide-react';
@@ -41,12 +41,6 @@ const FONTS: Array<{ id: FontFamily; label: string; family: string }> = [
 const FLOW_OPTIONS = [
     { id: 'paged', label: 'Paged', icon: Layers },
     { id: 'scroll', label: 'Scroll', icon: ArrowUpDown },
-] as const;
-
-const LAYOUT_OPTIONS = [
-    { id: 'single', label: 'Single', icon: Square },
-    { id: 'double', label: 'Double', icon: BookOpen },
-    { id: 'auto', label: 'Auto', icon: Monitor },
 ] as const;
 
 const ALIGN_OPTIONS = [
@@ -426,70 +420,6 @@ export function ReaderSettings({
                                             <span className="text-xs font-medium">{label}</span>
                                         </button>
                                     ))}
-                                </div>
-                            </div>
-
-                            {/* Page Layout */}
-                            <div className="space-y-3">
-                                <label className="text-xs font-medium text-[var(--color-text-secondary)]">Page Layout</label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {LAYOUT_OPTIONS.map(({ id, label, icon: Icon }) => (
-                                        <button
-                                            key={id}
-                                            onClick={() => onUpdate({ layout: id })}
-                                            className={cn(
-                                                'py-3 rounded-lg flex flex-col items-center gap-1.5 transition-all border',
-                                                settings.layout === id
-                                                    ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
-                                                    : 'bg-[var(--color-background)] text-[var(--color-text-primary)] border-[var(--color-border-subtle)]'
-                                            )}
-                                        >
-                                            <Icon className="w-4 h-4" />
-                                            <span className="text-[10px] font-medium">{label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Margins */}
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-xs font-medium text-[var(--color-text-secondary)]">Margins</label>
-                                    <span className="text-xs font-mono text-[var(--color-accent)]">{localMargins}%</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => {
-                                            const val = Math.max(0, localMargins - 1);
-                                            setLocalMargins(val);
-                                            debouncedUpdate({ margins: val });
-                                        }}
-                                        className="p-1.5 rounded-lg hover:bg-[var(--color-border-subtle)]"
-                                    >
-                                        <Minus className="w-4 h-4" />
-                                    </button>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="35"
-                                        value={localMargins}
-                                        onChange={(e) => {
-                                            const val = parseInt(e.target.value);
-                                            setLocalMargins(val);
-                                            debouncedUpdate({ margins: val });
-                                        }}
-                                        className="flex-1 h-1.5 bg-[var(--color-border-subtle)] rounded-full accent-[var(--color-accent)]"
-                                    />
-                                    <button
-                                        onClick={() => {
-                                            const val = Math.min(35, localMargins + 1);
-                                            setLocalMargins(val);
-                                            debouncedUpdate({ margins: val });
-                                        }}
-                                        className="p-1.5 rounded-lg hover:bg-[var(--color-border-subtle)]"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                    </button>
                                 </div>
                             </div>
 

@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { EpubjsEngine } from '@/engines';
+import { FoliateEngine } from '@/engines';
 import type {
     DocLocation,
     DocMetadata,
@@ -14,6 +14,7 @@ import type {
     SearchResult,
     ReadingFlow,
     PageLayout,
+    ThemeSettings,
 } from '@/types';
 
 export interface UseDocumentReaderOptions {
@@ -23,25 +24,6 @@ export interface UseDocumentReaderOptions {
     onError?: (error: Error) => void;
     onTextSelected?: (cfi: string, text: string, range: Range) => void;
     onLocationsSaved?: (locations: string) => void;
-}
-
-export interface ThemeSettings {
-    fontFamily?: string;
-    fontSize?: number;
-    lineHeight?: number;
-    letterSpacing?: number;
-    wordSpacing?: number;
-    paragraphSpacing?: number;
-    textAlign?: 'left' | 'justify' | 'center';
-    textColor?: string;
-    backgroundColor?: string;
-    linkColor?: string;
-    flow?: ReadingFlow;
-    layout?: PageLayout;
-    margins?: number;
-    zoom?: number;
-    hyphenation?: boolean;
-    forcePublisherStyles?: boolean;
 }
 
 export interface UseDocumentReaderReturn {
@@ -88,7 +70,7 @@ export interface UseDocumentReaderReturn {
     close: () => void;
 
     // Get engine instance for advanced usage
-    getEngine: () => EpubjsEngine | null;
+    getEngine: () => FoliateEngine | null;
 
     // Force location update - useful for keyboard navigation
     forceLocationUpdate: () => void;
@@ -108,9 +90,13 @@ const EMPTY_FRACTIONS: number[] = [];
  * - Automatic cleanup
  * - Minimal re-renders through stable references
  */
+/**
+ * React hook for document reading.
+ * Provides a React-friendly interface for the document engine with performance optimizations.
+ */
 export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDocumentReaderReturn {
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const engineRef = useRef<EpubjsEngine | null>(null);
+    const engineRef = useRef<FoliateEngine | null>(null);
 
     // Store callbacks in ref to avoid re-renders when options change
     const callbacksRef = useRef(options);
@@ -162,70 +148,46 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         if ((container as any)[containerKey]) return;
         (container as any)[containerKey] = true;
 
-        const engine = new EpubjsEngine();
+        const engine = new FoliateEngine({
+            onLocationChange: (loc: DocLocation) => {
+                if (!mountedRef.current) return;
+                pendingLocationRef.current = loc;
+                if (!locationUpdatePendingRef.current) {
+                    locationUpdatePendingRef.current = true;
+                    requestAnimationFrame(() => {
+                        locationUpdatePendingRef.current = false;
+                        const locToUpdate = pendingLocationRef.current;
+                        if (locToUpdate && mountedRef.current) {
+                            setLocationState(prev => ({
+                                ...prev,
+                                location: locToUpdate,
+                                canGoBack: engine.canGoBack(),
+                                canGoForward: engine.canGoForward(),
+                            }));
+                            callbacksRef.current.onLocationChange?.(locToUpdate);
+                        }
+                    });
+                }
+            },
+            onReady: (meta: DocMetadata, tocItems: TocItem[]) => {
+                if (!mountedRef.current) return;
+                setInitState(prev => ({ ...prev, isReady: true, isLoading: false }));
+                setDataState({ metadata: meta, toc: tocItems, annotations: engine.getAnnotations() });
+                setLocationState(prev => ({
+                    ...prev,
+                    sectionFractions: engine.getSectionFractions(),
+                }));
+                callbacksRef.current.onReady?.(meta, tocItems);
+            },
+            onError: (err: Error) => {
+                if (!mountedRef.current) return;
+                setError(err);
+                setInitState(prev => ({ ...prev, isLoading: false }));
+                callbacksRef.current.onError?.(err);
+            },
+        });
+
         let isCancelled = false;
-
-        // Setup callbacks - throttled for performance
-        engine.onLocationChange = (loc) => {
-            if (!mountedRef.current || isCancelled) return;
-
-            // Batch location updates using RAF for smoother UI
-            pendingLocationRef.current = loc;
-            if (!locationUpdatePendingRef.current) {
-                locationUpdatePendingRef.current = true;
-                requestAnimationFrame(() => {
-                    locationUpdatePendingRef.current = false;
-                    const locToUpdate = pendingLocationRef.current;
-                    if (locToUpdate && mountedRef.current) {
-                        setLocationState(prev => ({
-                            ...prev,
-                            location: locToUpdate,
-                            canGoBack: engine.canGoBack(),
-                            canGoForward: engine.canGoForward(),
-                        }));
-                        callbacksRef.current.onLocationChange?.(locToUpdate);
-                    }
-                });
-            }
-        };
-
-        engine.onReady = (meta, tocItems) => {
-            if (!mountedRef.current || isCancelled) return;
-            setInitState(prev => ({ ...prev, isReady: true, isLoading: false }));
-            setDataState({ metadata: meta, toc: tocItems, annotations: engine.getAnnotations() });
-            setLocationState(prev => ({
-                ...prev,
-                sectionFractions: engine.getSectionFractions(),
-            }));
-            callbacksRef.current.onReady?.(meta, tocItems);
-        };
-
-        engine.onLocationsGenerated = () => {
-            if (!mountedRef.current || isCancelled) return;
-            const fractions = engine.getSectionFractions();
-            setLocationState(prev => ({
-                ...prev,
-                sectionFractions: fractions,
-            }));
-            callbacksRef.current.onLocationsGenerated?.();
-        };
-
-        engine.onError = (err) => {
-            if (!mountedRef.current || isCancelled) return;
-            setError(err);
-            setInitState(prev => ({ ...prev, isLoading: false }));
-            callbacksRef.current.onError?.(err);
-        };
-
-        engine.onTextSelected = (cfi, text, range) => {
-            if (!mountedRef.current || isCancelled) return;
-            callbacksRef.current.onTextSelected?.(cfi, text, range);
-        };
-
-        engine.onLocationsSaved = (locations) => {
-            if (!mountedRef.current || isCancelled) return;
-            callbacksRef.current.onLocationsSaved?.(locations);
-        };
 
         // Initialize
         engine.init(container)
@@ -237,7 +199,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
                     engine.destroy();
                 }
             })
-            .catch((err) => {
+            .catch((err: Error) => {
                 if (mountedRef.current && !isCancelled) {
                     setError(err);
                     setInitState(prev => ({ ...prev, isLoading: false }));

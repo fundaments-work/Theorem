@@ -1,16 +1,10 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-/**
- * Merge class names with Tailwind CSS conflict resolution
- */
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
-/**
- * Format reading time from minutes to human-readable string
- */
 export function formatReadingTime(minutes: number): string {
     if (minutes < 60) {
         return `${minutes}m`;
@@ -20,31 +14,15 @@ export function formatReadingTime(minutes: number): string {
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
-/**
- * Format progress percentage
- */
 export function formatProgress(progress: number): string {
     return `${Math.round(progress * 100)}%`;
 }
 
-/**
- * Truncate text with ellipsis
- */
 export function truncate(text: string, maxLength: number): string {
     if (text.length <= maxLength) return text;
     return text.slice(0, maxLength - 3) + "...";
 }
 
-/**
- * Generate a unique ID
- */
-export function generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substring(2);
-}
-
-/**
- * Debounce function
- */
 export function debounce<T extends (...args: unknown[]) => unknown>(
     func: T,
     wait: number
@@ -56,9 +34,6 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
     };
 }
 
-/**
- * Format file size
- */
 export function formatFileSize(bytes: number): string {
     const units = ["B", "KB", "MB", "GB"];
     let size = bytes;
@@ -70,9 +45,6 @@ export function formatFileSize(bytes: number): string {
     return `${size.toFixed(1)} ${units[unitIndex]}`;
 }
 
-/**
- * Format date relative to now
- */
 export function formatRelativeDate(date: Date): string {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();

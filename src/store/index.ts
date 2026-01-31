@@ -126,6 +126,19 @@ interface CachedBookMetadata {
     lastReadAt: Date;
 }
 
+// Helper to create cache entry from book
+const createCacheEntry = (book: Book): CachedBookMetadata => ({
+    id: book.id,
+    title: book.title,
+    author: book.author,
+    coverPath: book.coverPath,
+    currentLocation: book.currentLocation,
+    progress: book.progress,
+    lastClickFraction: book.lastClickFraction,
+    pageProgress: book.pageProgress,
+    lastReadAt: book.lastReadAt || new Date(),
+});
+
 // Library Store
 interface LibraryStore {
     books: Book[];
@@ -167,8 +180,7 @@ interface LibraryStore {
 
     // Scanning
     setLastScannedAt: (date: Date) => void;
-    // Cache management
-    updateRecentCache: (book: Book) => void;
+
 }
 
 export const useLibraryStore = create<LibraryStore>()(
@@ -219,18 +231,7 @@ export const useLibraryStore = create<LibraryStore>()(
                     const book = updatedBooks.find(b => b.id === bookId);
                     if (book) {
                         const existingCache = state.recentBooksCache.filter(b => b.id !== bookId);
-                        const newCache = [{
-                            id: book.id,
-                            title: book.title,
-                            author: book.author,
-                            coverPath: book.coverPath,
-                            currentLocation: location,
-                            progress,
-                            lastClickFraction,
-                            pageProgress: pageProgress || book.pageProgress,
-                            lastReadAt: new Date(),
-                        }, ...existingCache].slice(0, 20); // Keep last 20
-
+                        const newCache = [createCacheEntry(book), ...existingCache].slice(0, 20);
                         return { books: updatedBooks, recentBooksCache: newCache };
                     }
 
@@ -336,25 +337,6 @@ export const useLibraryStore = create<LibraryStore>()(
 
             setLastScannedAt: (date) => set({ lastScannedAt: date }),
 
-            // Cache management
-            updateRecentCache: (book) => {
-                set((state) => {
-                    const existing = state.recentBooksCache.filter(b => b.id !== book.id);
-                    const newEntry: CachedBookMetadata = {
-                        id: book.id,
-                        title: book.title,
-                        author: book.author,
-                        coverPath: book.coverPath,
-                        currentLocation: book.currentLocation,
-                        progress: book.progress,
-                        lastClickFraction: book.lastClickFraction,
-                        lastReadAt: book.lastReadAt || new Date(),
-                    };
-                    return {
-                        recentBooksCache: [newEntry, ...existing].slice(0, 20),
-                    };
-                });
-            },
         }),
         {
             name: "lion-reader-library",

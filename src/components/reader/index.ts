@@ -4,6 +4,7 @@
 
 export { ReaderViewport, type ReaderViewportHandle } from './ReaderViewport';
 export { ReaderToolbar } from './ReaderToolbar';
+export { WindowTitlebar } from './WindowTitlebar';
 export { ReaderProgressBar } from './ReaderProgressBar';
 export { TableOfContents } from './TableOfContents';
 export { ReaderSettings } from './ReaderSettings';

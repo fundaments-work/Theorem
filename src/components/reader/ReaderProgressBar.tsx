@@ -254,6 +254,4 @@ export function ReaderProgressBar({
     );
 }
 
-
-
 export default ReaderProgressBar;

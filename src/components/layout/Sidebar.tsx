@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useUIStore, useSettingsStore } from "@/store";
 import type { AppRoute } from "@/types";
+import { LionLogo } from "@/components/LionLogo";
 import {
     Library,
     Bookmark,
@@ -41,15 +42,15 @@ export function Sidebar() {
                 sidebarOpen ? "w-56" : "w-16"
             )}
         >
-            {/* Logo */}
-            <div className="flex items-center h-14 px-4 border-b border-[var(--color-border)]">
-                <div className="flex items-center gap-2">
-                    <span className="text-2xl">🦁</span>
-                    {sidebarOpen && (
-                        <span className="font-semibold text-lg text-[var(--color-text-primary)] animate-fade-in">
-                            Lion Reader
-                        </span>
-                    )}
+            {/* Logo - hidden on mobile, visible on md and up */}
+            <div className="hidden md:flex items-center h-14 px-4 border-b border-[var(--color-border)]">
+                <div className="flex items-center gap-2 overflow-hidden">
+                    <LionLogo size={28} className="flex-shrink-0" />
+                    <span className={cn(
+                        "font-semibold text-lg text-[var(--color-text-primary)] whitespace-nowrap",
+                        sidebarOpen ? "opacity-100" : "opacity-0 w-0"
+                    )}>
+                    </span>
                 </div>
             </div>
 

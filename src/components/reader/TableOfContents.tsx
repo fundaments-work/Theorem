@@ -6,7 +6,7 @@
 import { useState, useCallback } from 'react';
 import { ChevronDown, ChevronRight, X, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { TocItem } from '@/engines';
+import type { TocItem } from '@/types';
 import { Backdrop } from '@/components/ui';
 
 interface TableOfContentsProps {
@@ -72,7 +72,7 @@ const TocItemComponent = ({ item, depth, onNavigate, currentHref }: TocItemCompo
 
             {hasChildren && isExpanded && (
                 <div className="animate-fade-in">
-                    {item.subitems!.map((child, index) => (
+                    {item.subitems!.map((child: TocItem, index: number) => (
                         <TocItemComponent
                             key={index}
                             item={child}

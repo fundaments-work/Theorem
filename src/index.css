@@ -234,6 +234,14 @@ foliate-view {
   height: 100%;
   overflow: hidden;
   position: relative;
+  background: var(--color-background, #ffffff);
+}
+
+foliate-view foliate-paginator,
+foliate-view foliate-fxl {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 foliate-view iframe {
@@ -254,4 +262,27 @@ foliate-fxl {
 foliate-view * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Reader Viewport - Strict no-scroll policy */
+/* EPUB.js iframe container */
+.epub-container {
+  overflow: hidden !important;
+  touch-action: none !important;
+}
+
+.epub-container iframe {
+  overflow: hidden !important;
+  touch-action: none !important;
+  overscroll-behavior: none !important;
+}
+
+/* Prevent all scrolling in reader context */
+[data-reading-mode="paged"] {
+  overflow: hidden !important;
+}
+
+/* Disable text selection during navigation to prevent accidental highlights */
+.navigating {
+  user-select: none !important;
 }

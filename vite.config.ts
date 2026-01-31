@@ -14,6 +14,16 @@ export default defineConfig(async () => ({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  
+  // Exclude foliate-js PDF module (we only need EPUB support)
+  optimizeDeps: {
+    exclude: ['src/foliate-js/pdf.js', 'src/foliate-js/vendor'],
+  },
+  build: {
+    rollupOptions: {
+      external: [/src\/foliate-js\/pdf\.js/, /src\/foliate-js\/vendor/],
+    },
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

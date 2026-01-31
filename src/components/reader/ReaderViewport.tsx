@@ -84,7 +84,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         setZoom,
         setMargins,
         applyTheme,
-        forceLocationUpdate,
     } = useDocumentReader({
         onReady,
         onLocationsGenerated: () => {
@@ -293,26 +292,46 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
 
         window.addEventListener('keydown', handleKeyDown, { passive: false });
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [next, prev, goToFraction, forceLocationUpdate]);
+    }, [next, prev, goToFraction]);
 
-    // Scroll wheel navigation (for paginated mode)
+    // Scroll wheel navigation
     useEffect(() => {
+        // In scroll mode, let the browser/foliate-js handle scrolling naturally
+        if (settings.flow === 'scroll') {
+            return;
+        }
+
+        // In paginated mode, navigate pages with wheel
         const container = containerRef.current;
         if (!container) return;
 
         let wheelTimeout: ReturnType<typeof setTimeout> | null = null;
         let accumulatedDelta = 0;
-        const WHEEL_THRESHOLD = 50; // Minimum scroll to trigger page change
+        const WHEEL_THRESHOLD = 30;
+        let lastNavTime = 0;
+        const NAV_COOLDOWN = 300; // ms between navigations
+
+        const doNavigate = (direction: 'next' | 'prev') => {
+            const now = Date.now();
+            if (now - lastNavTime < NAV_COOLDOWN) return;
+            lastNavTime = now;
+            
+            if (direction === 'next') {
+                showNavFeedback('next');
+                next();
+            } else {
+                showNavFeedback('prev');
+                prev();
+            }
+        };
 
         const handleWheel = (e: WheelEvent) => {
-            // Only handle wheel in paged mode, let scroll mode handle naturally
-            if (settings.flow === 'scroll') return;
-
             // Don't intercept if user is holding modifier keys (for zooming etc)
             if (e.ctrlKey || e.metaKey) return;
 
-            // Prevent default to stop page scrolling
+            // In paginated mode: prevent default and navigate pages
             e.preventDefault();
+            e.stopPropagation();
 
             // Accumulate delta for smooth trackpads
             accumulatedDelta += e.deltaY;
@@ -325,11 +344,9 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
             // Check if we've accumulated enough scroll
             if (Math.abs(accumulatedDelta) >= WHEEL_THRESHOLD) {
                 if (accumulatedDelta > 0) {
-                    showNavFeedback('next');
-                    next();
+                    doNavigate('next');
                 } else {
-                    showNavFeedback('prev');
-                    prev();
+                    doNavigate('prev');
                 }
                 accumulatedDelta = 0;
             }
@@ -340,14 +357,66 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
             }, 150);
         };
 
-        container.addEventListener('wheel', handleWheel, { passive: false });
+        // Single handler attached to window - catches everything
+        window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+        
         return () => {
-            container.removeEventListener('wheel', handleWheel);
+            window.removeEventListener('wheel', handleWheel, { capture: true });
             if (wheelTimeout) clearTimeout(wheelTimeout);
         };
-    }, [settings.flow, next, prev, forceLocationUpdate]);
+    }, [settings.flow, next, prev]);
 
-    // Note: Click navigation is now handled by overlay divs below
+    // Touch/Swipe navigation for mobile
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const SWIPE_THRESHOLD = 50; // Minimum pixels to count as swipe
+
+        const handleTouchStart = (e: TouchEvent) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        };
+
+        const handleTouchEnd = (e: TouchEvent) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            
+            // Check if it's a horizontal swipe
+            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > SWIPE_THRESHOLD) {
+                e.preventDefault();
+                if (deltaX > 0) {
+                    // Swipe right - go previous
+                    showNavFeedback('prev');
+                    prev();
+                } else {
+                    // Swipe left - go next
+                    showNavFeedback('next');
+                    next();
+                }
+            }
+            // Tap navigation is handled by the click zone buttons
+        };
+
+        // Attach to container's parent (the outer relative container)
+        const parent = container.parentElement;
+        if (parent) {
+            parent.addEventListener('touchstart', handleTouchStart, { passive: true });
+            parent.addEventListener('touchend', handleTouchEnd, { passive: false });
+        }
+        
+        return () => {
+            if (parent) {
+                parent.removeEventListener('touchstart', handleTouchStart);
+                parent.removeEventListener('touchend', handleTouchEnd);
+            }
+        };
+    }, [next, prev]);
 
     const displayError = error?.message;
 
@@ -388,24 +457,54 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 </div>
             )}
 
-            {/* Document Container - EPUB.js renders iframe here */}
+            {/* Container with padding - EPUB.js renders here */}
             <div
                 ref={containerRef}
                 className={cn(
-                    'absolute inset-0 transition-opacity duration-300',
+                    'absolute inset-2 transition-opacity duration-300 z-0',
                     isLoading ? 'opacity-0' : 'opacity-100',
-                    '[&>iframe]:w-full [&>iframe]:h-full [&>iframe]:border-0',
                 )}
                 style={{ 
-                    touchAction: 'pan-y pinch-zoom',
+                    touchAction: settings.flow === 'scroll' ? 'auto' : 'none',
+                    overflow: settings.flow === 'scroll' ? 'auto' : 'hidden',
                 }}
             />
+            
+            {/* Click zones overlaid on top - only in paginated mode */}
+            {!isLoading && !error && settings.flow !== 'scroll' && (
+                <>
+                    {/* Left Click Zone - Previous Page */}
+                    <button
+                        className="absolute inset-y-2 left-2 w-10 md:w-12 lg:w-16 z-20 opacity-0 hover:opacity-100 transition-opacity cursor-w-resize bg-transparent border-0 p-0"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            showNavFeedback('prev');
+                            prev();
+                        }}
+                        aria-label="Previous page"
+                        type="button"
+                    />
+                    {/* Right Click Zone - Next Page */}
+                    <button
+                        className="absolute inset-y-2 right-2 w-10 md:w-12 lg:w-16 z-20 opacity-0 hover:opacity-100 transition-opacity cursor-e-resize bg-transparent border-0 p-0"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            showNavFeedback('next');
+                            next();
+                        }}
+                        aria-label="Next page"
+                        type="button"
+                    />
+                </>
+            )}
 
             {/* Navigation Feedback Overlay - for keyboard navigation only */}
             {navDirection && (
                 <div
                     className={cn(
-                        'absolute inset-y-0 w-16 pointer-events-none z-20 transition-opacity duration-150',
+                        'absolute inset-y-0 w-16 pointer-events-none z-30 transition-opacity duration-150',
                         navDirection === 'next' ? 'right-0' : 'left-0',
                     )}
                     style={{

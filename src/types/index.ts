@@ -231,3 +231,6 @@ export interface ThemeSettings {
     hyphenation?: boolean;
     forcePublisherStyles?: boolean;
 }
+
+// Re-export for backward compatibility
+export type { ThemeSettings as ReaderThemeSettings };

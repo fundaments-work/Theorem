@@ -8,8 +8,7 @@ import { cn } from '@/lib/utils';
 import { useUIStore, useLibraryStore, useSettingsStore } from '@/store';
 import {
     ReaderViewport,
-    ReaderToolbar,
-    ReaderProgressBar,
+    WindowTitlebar,
     TableOfContents,
     ReaderSettings,
     ReaderBookmarks,
@@ -263,14 +262,17 @@ export function ReaderPage() {
     return (
         <div
             className={cn(
-                "fixed inset-0 flex flex-col",
+                "fixed inset-0 flex flex-col overflow-hidden",
                 "bg-[var(--reader-bg,var(--color-background))]",
                 `theme-${settings.readerSettings.theme}`
             )}
             style={{
                 // Ensure proper background in fullscreen
                 backgroundColor: 'var(--reader-bg, var(--color-background, #fff))',
+                // Prevent all scrolling at container level
+                overscrollBehavior: 'none',
             }}
+            data-reading-mode={settings.readerSettings.flow}
         >
             {/* Toolbar - Absolutely positioned */}
             <div
@@ -279,10 +281,9 @@ export function ReaderPage() {
                     showToolbar ? "translate-y-0" : "-translate-y-full"
                 )}
             >
-                <ReaderToolbar
+                <WindowTitlebar
                     metadata={metadata}
                     location={location}
-                    visible={true}
                     onBack={handleBack}
                     onToggleToc={() => togglePanel('toc')}
                     onToggleSettings={() => togglePanel('settings')}
@@ -310,18 +311,6 @@ export function ReaderPage() {
                     onTextSelected={handleTextSelected}
                     className="w-full h-full"
                 />
-            </div>
-
-            {/* Progress Bar - Full width like top toolbar */}
-            <div className="fixed bottom-0 left-0 right-0 z-[100] pointer-events-none overflow-visible">
-                <div className="pointer-events-auto bg-[var(--color-surface)]/95 backdrop-blur-lg border-t border-[var(--color-border)] px-4 py-2 overflow-visible">
-                    <ReaderProgressBar
-                        location={location}
-                        onSeek={handleSeek}
-                        savedPageProgress={getBook(currentBookId || '')?.pageProgress}
-                        layout={settings.readerSettings.layout}
-                    />
-                </div>
             </div>
 
             {/* Panels */}

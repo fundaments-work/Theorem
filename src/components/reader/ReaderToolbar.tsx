@@ -13,12 +13,11 @@ import {
     Minimize2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { DocMetadata, DocLocation } from '@/engines';
+import type { DocMetadata, DocLocation } from '@/types';
 
 interface ReaderToolbarProps {
     metadata: DocMetadata | null;
     location?: DocLocation | null;
-    visible?: boolean;
     onBack: () => void;
     onToggleToc: () => void;
     onToggleSettings: () => void;
@@ -34,7 +33,6 @@ interface ReaderToolbarProps {
 export function ReaderToolbar({
     metadata,
     location,
-    visible: _visible,
     onBack,
     onToggleToc,
     onToggleSettings,
@@ -48,6 +46,24 @@ export function ReaderToolbar({
 }: ReaderToolbarProps) {
     // Get current chapter title from location
     const currentChapter = location?.tocItem?.label || location?.pageItem?.label;
+    
+    // Format location display (e.g., "Page 42 / 300" or "Loc. 123 / 500")
+    const formatLocation = () => {
+        if (!location) return null;
+        
+        if (location.pageInfo) {
+            return `Page ${location.pageInfo.currentPage}${location.pageInfo.totalPages ? ` / ${location.pageInfo.totalPages}` : ''}`;
+        }
+        
+        if (location.pageItem?.label) {
+            return location.pageItem.label;
+        }
+        
+        // Fallback to percentage
+        const percentage = Math.round((location.percentage || 0) * 100);
+        return `${percentage}%`;
+    };
+
     return (
         <div
             className={cn(
@@ -58,7 +74,8 @@ export function ReaderToolbar({
                 className
             )}
         >
-            <div className="flex items-center gap-2">
+            {/* Left Section: Back + Navigation */}
+            <div className="flex items-center gap-1.5">
                 {/* Back to Library */}
                 <button
                     onClick={onBack}
@@ -67,22 +84,30 @@ export function ReaderToolbar({
                 >
                     <ArrowLeft className="w-5 h-5 text-[var(--color-text)]" />
                 </button>
+
             </div>
 
-            {/* Center: Book Title & Current Chapter */}
+            {/* Center: Book Title, Chapter & Location */}
             <div className="flex-1 mx-4 text-center overflow-hidden">
                 <h1 className="text-sm font-medium text-[var(--color-text)] truncate">
                     {metadata?.title || 'Loading...'}
                 </h1>
-                {currentChapter ? (
-                    <p className="text-xs text-[var(--color-accent)] font-medium truncate">
-                        {currentChapter}
-                    </p>
-                ) : metadata?.author ? (
-                    <p className="text-xs text-[var(--color-text-muted)] truncate">
-                        {metadata.author}
-                    </p>
-                ) : null}
+                <div className="flex items-center justify-center gap-2 text-xs">
+                    {currentChapter ? (
+                        <span className="text-[var(--color-accent)] font-medium truncate">
+                            {currentChapter}
+                        </span>
+                    ) : metadata?.author ? (
+                        <span className="text-[var(--color-text-muted)] truncate">
+                            {metadata.author}
+                        </span>
+                    ) : null}
+                    {formatLocation() && (
+                        <span className="text-[var(--color-text-muted)]">
+                            • {formatLocation()}
+                        </span>
+                    )}
+                </div>
             </div>
 
             {/* Right Section */}

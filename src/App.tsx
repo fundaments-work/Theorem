@@ -1,3 +1,4 @@
+import { AppTitlebar } from "@/components/AppTitlebar";
 import { Sidebar, TopNav } from "@/components/layout";
 import {
   LibraryPage,
@@ -48,23 +49,23 @@ function App() {
 
   return (
     <div className="flex h-screen bg-[var(--color-background)]">
-      {/* Sidebar - Hidden on mobile */}
-      <div className="hidden lg:block">
+      {/* Sidebar - Shows on md screens and up (tablets and laptops) */}
+      <div className="hidden md:block">
         <Sidebar />
       </div>
 
-      {/* Mobile sidebar overlay - only on mobile screens */}
+      {/* Mobile sidebar overlay - only on small screens */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
           onClick={toggleSidebar}
         />
       )}
 
-      {/* Mobile sidebar - only on mobile screens */}
+      {/* Mobile sidebar - only on small screens */}
       <div
         className={cn(
-          "fixed left-0 top-0 h-full z-50 lg:hidden",
+          "fixed left-0 top-0 h-full z-50 md:hidden",
           "transform transition-transform duration-300",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
@@ -74,7 +75,7 @@ function App() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <TopNav onMenuClick={toggleSidebar} />
+        <AppTitlebar title="Lion Reader" onMenuClick={toggleSidebar} />
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto">

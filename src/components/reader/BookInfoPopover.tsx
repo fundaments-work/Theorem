@@ -4,7 +4,7 @@
  */
 
 import { X, Info, Calendar, Hash, Globe, FileText, User } from 'lucide-react';
-import { DocMetadata } from '@/engines';
+import type { DocMetadata } from '@/types';
 import { Backdrop, FloatingPanel } from '@/components/ui';
 
 interface BookInfoPopoverProps {
