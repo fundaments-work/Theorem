@@ -69,6 +69,30 @@ export function NoteEditor({
         }
     }, [isOpen]);
 
+    // Handle click outside - use capture phase for iframe compatibility
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handleClickOutside = (e: MouseEvent) => {
+            if (editorRef.current && !editorRef.current.contains(e.target as Node)) {
+                onClose();
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside, true);
+        document.addEventListener('click', handleClickOutside, true);
+        
+        // Also close on scroll
+        const handleScroll = () => onClose();
+        window.addEventListener('scroll', handleScroll, true);
+        
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside, true);
+            document.removeEventListener('click', handleClickOutside, true);
+            window.removeEventListener('scroll', handleScroll, true);
+        };
+    }, [isOpen, onClose]);
+
     // Handle escape key
     useEffect(() => {
         if (!isOpen) return;

@@ -6,13 +6,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, useLibraryStore, useSettingsStore } from '@/store';
-import { HighlightColorPicker, HighlightMenu, NoteEditor } from '@/components/reader';
+import { HighlightColorPicker, NoteEditor } from '@/components/reader';
 import {
     ReaderViewport,
     WindowTitlebar,
     TableOfContents,
     ReaderSettings,
-    ReaderBookmarks,
+    ReaderAnnotationsPanel,
     ReaderSearch,
     BookInfoPopover,
     ReaderViewportHandle,
@@ -202,11 +202,10 @@ export function ReaderPage() {
     const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
     const [selectedText, setSelectedText] = useState('');
     const [selectedCfi, setSelectedCfi] = useState('');
-    const [showHighlightMenu, setShowHighlightMenu] = useState(false);
-    const [highlightMenuPosition, setHighlightMenuPosition] = useState({ x: 0, y: 0 });
     const [activeAnnotation, setActiveAnnotation] = useState<Annotation | null>(null);
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
-    
+    const [editingHighlightId, setEditingHighlightId] = useState<string | null>(null);
+
     // Note editor state
     const [showNoteEditor, setShowNoteEditor] = useState(false);
     const [noteEditorPosition, setNoteEditorPosition] = useState({ x: 0, y: 0 });
@@ -217,6 +216,11 @@ export function ReaderPage() {
 
     // Track when book is ready
     const [isBookReady, setIsBookReady] = useState(false);
+
+    // Check if current page is bookmarked
+    const isCurrentPageBookmarked = annotations.some(
+        a => a.type === 'bookmark' && a.location === location?.cfi
+    );
 
     // Load annotations when book changes and is ready
     useEffect(() => {
@@ -235,98 +239,313 @@ export function ReaderPage() {
 
     const handleTextSelected = useCallback((cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => {
         console.debug('[Reader] Text selected:', { cfi: cfi.substring(0, 50), text: text.substring(0, 50) });
-        
-        if (!cfi || !text.trim()) {
-            console.debug('[Reader] Empty selection, ignoring');
+        console.debug('[Reader] Current annotations count:', annotations.length);
+        console.debug('[Reader] Available highlight/note annotations:', annotations.filter(a => a.type === 'highlight' || a.type === 'note').map(a => ({ id: a.id.substring(0, 8), loc: a.location?.substring(0, 40), text: a.selectedText?.substring(0, 30) })));
+
+        if (!cfi) {
+            console.debug('[Reader] Empty CFI, ignoring');
             return;
         }
-        
-        setSelectedCfi(cfi);
-        setSelectedText(text);
-        
-        // Position color picker near selection
-        if (rangeOrEvent && 'clientX' in rangeOrEvent) {
-            // It's a MouseEvent
-            setColorPickerPosition({ x: rangeOrEvent.clientX, y: rangeOrEvent.clientY - 60 });
-        } else if (rangeOrEvent && 'getBoundingClientRect' in rangeOrEvent) {
-            // It's a Range - use the rect for positioning
-            const rect = rangeOrEvent.getBoundingClientRect();
-            setColorPickerPosition({ x: rect.left + rect.width / 2, y: rect.top - 60 });
-        } else {
-            // Fallback to center of screen
-            setColorPickerPosition({ x: window.innerWidth / 2 - 100, y: 100 });
-        }
-        
-        console.debug('[Reader] Showing color picker at:', colorPickerPosition);
-        setShowColorPicker(true);
-    }, []);
 
-    const handleColorSelect = useCallback((color: HighlightColor) => {
+        // Robust duplicate detection: check CFI (exact or partial), then text content
+        // This prevents duplicates when CFIs vary slightly for the same text
+        let existingAnnotation = annotations.find(a => {
+            // Match by exact CFI for highlights/notes
+            if (a.location === cfi && (a.type === 'highlight' || a.type === 'note')) {
+                console.debug('[Reader] Matched annotation by exact CFI:', a.id);
+                return true;
+            }
+            // Partial CFI match: one is prefix of the other (handles CFI variations)
+            if (a.location && cfi && (a.type === 'highlight' || a.type === 'note')) {
+                const isPrefixMatch = cfi.startsWith(a.location) || a.location.startsWith(cfi);
+                if (isPrefixMatch) {
+                    console.debug('[Reader] Matched annotation by partial CFI:', a.id, { cfi: cfi.substring(0, 40), stored: a.location.substring(0, 40) });
+                    return true;
+                }
+            }
+            // Fallback: match by text content if text is provided and long enough
+            // This handles cases where CFIs differ slightly for the same selection
+            if (text && text.length > 3 && a.selectedText && 
+                a.type !== 'bookmark' &&
+                a.selectedText.trim() === text.trim()) {
+                console.debug('[Reader] Matched annotation by text content:', a.id);
+                return true;
+            }
+            return false;
+        });
+
+        // If no highlight/note found, check for bookmark at exact location
+        if (!existingAnnotation) {
+            existingAnnotation = annotations.find(a => a.location === cfi);
+        }
+
+        if (existingAnnotation) {
+            // Show color picker for existing annotation
+            console.debug('[Reader] ✓ Found existing annotation:', existingAnnotation.id, existingAnnotation.type, '- setting editingHighlightId');
+            setActiveAnnotation(existingAnnotation);
+            setEditingHighlightId(existingAnnotation.id);
+            console.debug('[Reader] editingHighlightId set to:', existingAnnotation.id);
+            setSelectedCfi(existingAnnotation.location); // Use stored location for consistency
+            setSelectedText(existingAnnotation.selectedText || text || '');
+
+            // Position color picker - improved positioning logic
+            if (rangeOrEvent && 'clientX' in rangeOrEvent) {
+                // Mouse event - position near click
+                const mouseEvent = rangeOrEvent as MouseEvent;
+                console.debug('[Reader] Positioning color picker from mouse event:', mouseEvent.clientX, mouseEvent.clientY);
+                setColorPickerPosition({ x: mouseEvent.clientX, y: mouseEvent.clientY });
+            } else if (rangeOrEvent && 'getBoundingClientRect' in rangeOrEvent) {
+                // Range object - position at top-center of range
+                const rect = rangeOrEvent.getBoundingClientRect();
+                console.debug('[Reader] Positioning color picker from range rect:', rect.left, rect.top, rect.width, rect.height);
+                setColorPickerPosition({ x: rect.left + rect.width / 2, y: rect.top });
+            } else {
+                // Fallback to center of screen
+                console.debug('[Reader] Positioning color picker at screen center (fallback)');
+                setColorPickerPosition({ x: window.innerWidth / 2, y: window.innerHeight / 3 });
+            }
+
+            setShowColorPicker(true);
+        } else {
+            // Show color picker for new text selection
+            console.debug('[Reader] ✗ No existing annotation found - treating as new selection');
+            if (!text.trim()) {
+                console.debug('[Reader] Empty text selection, ignoring');
+                return;
+            }
+            
+            // Clear any previous editing state for new selections
+            setEditingHighlightId(null);
+            setActiveAnnotation(null);
+            setSelectedCfi(cfi);
+            setSelectedText(text);
+            
+            // Position color picker near selection - improved positioning logic
+            if (rangeOrEvent && 'clientX' in rangeOrEvent) {
+                const mouseEvent = rangeOrEvent as MouseEvent;
+                console.debug('[Reader] Positioning color picker for new selection from mouse:', mouseEvent.clientX, mouseEvent.clientY);
+                setColorPickerPosition({ x: mouseEvent.clientX, y: mouseEvent.clientY });
+            } else if (rangeOrEvent && 'getBoundingClientRect' in rangeOrEvent) {
+                const rect = rangeOrEvent.getBoundingClientRect();
+                console.debug('[Reader] Positioning color picker for new selection from range:', rect.left, rect.top);
+                setColorPickerPosition({ x: rect.left + rect.width / 2, y: rect.top });
+            } else {
+                console.debug('[Reader] Positioning color picker at screen center (fallback)');
+                setColorPickerPosition({ x: window.innerWidth / 2, y: window.innerHeight / 3 });
+            }
+            
+            console.debug('[Reader] Showing color picker at calculated position');
+            setShowColorPicker(true);
+        }
+    }, [annotations, colorPickerPosition]);
+
+    const handleColorSelect = useCallback(async (color: HighlightColor) => {
         if (!selectedCfi || !currentBookId) return;
 
-        const annotation: Annotation = {
-            id: crypto.randomUUID(),
-            bookId: currentBookId,
-            type: 'highlight',
-            location: selectedCfi,
-            selectedText,
-            color,
-            createdAt: new Date(),
-        };
+        // If editing an existing highlight, update it
+        if (editingHighlightId) {
+            const existingAnnotation = annotations.find(a => a.id === editingHighlightId);
+            if (existingAnnotation) {
+                // Update the annotation color in store
+                updateAnnotation(editingHighlightId, { color });
+                setAnnotations(prev => prev.map(a =>
+                    a.id === editingHighlightId ? { ...a, color, updatedAt: new Date() } : a
+                ));
 
-        addAnnotation(annotation);
-        setAnnotations(prev => [...prev, annotation]);
-        
-        // Add to viewport
-        readerRef.current?.addHighlight?.(selectedCfi, selectedText, color);
-        
+                // Update in viewport - remove and re-add with new color (preserve ID)
+                // Must await to ensure operations complete in order
+                try {
+                    await readerRef.current?.removeHighlight?.(editingHighlightId);
+                    const updatedAnnotation: Annotation = { ...existingAnnotation, color, updatedAt: new Date() };
+                    await readerRef.current?.addAnnotation?.(updatedAnnotation);
+                    console.debug('[Reader] Updated existing highlight color:', editingHighlightId, color);
+                } catch (err) {
+                    console.warn('[Reader] Failed to update highlight in viewport:', err);
+                }
+            }
+
+            setShowColorPicker(false);
+            setEditingHighlightId(null);
+            setActiveAnnotation(null);
+            setSelectedText('');
+            setSelectedCfi('');
+            // Clear selection
+            readerRef.current?.clearSelection?.();
+            return;
+        }
+
+        // Check for existing highlight at this location/text before creating new
+        // This is a safety net in case handleTextSelected missed it
+        const existingHighlight = annotations.find(a => 
+            (a.type === 'highlight' || a.type === 'note') &&
+            (a.location === selectedCfi || (a.selectedText && a.selectedText.trim() === selectedText.trim()))
+        );
+
+        if (existingHighlight) {
+            // Update existing highlight with new color instead of creating duplicate
+            console.debug('[Reader] Found existing highlight, updating color instead of creating duplicate:', existingHighlight.id);
+            updateAnnotation(existingHighlight.id, { color });
+            setAnnotations(prev => prev.map(a =>
+                a.id === existingHighlight.id ? { ...a, color, updatedAt: new Date() } : a
+            ));
+
+            // Update in viewport - must await
+            try {
+                await readerRef.current?.removeHighlight?.(existingHighlight.id);
+                const updatedAnnotation: Annotation = { ...existingHighlight, color, updatedAt: new Date() };
+                await readerRef.current?.addAnnotation?.(updatedAnnotation);
+            } catch (err) {
+                console.warn('[Reader] Failed to update highlight in viewport:', err);
+            }
+        } else {
+            // Create new highlight
+            const annotation: Annotation = {
+                id: crypto.randomUUID(),
+                bookId: currentBookId,
+                type: 'highlight',
+                location: selectedCfi,
+                selectedText,
+                color,
+                createdAt: new Date(),
+            };
+
+            addAnnotation(annotation);
+            setAnnotations(prev => [...prev, annotation]);
+
+            // Add to viewport
+            try {
+                await readerRef.current?.addHighlight?.(selectedCfi, selectedText, color);
+            } catch (err) {
+                console.warn('[Reader] Failed to add highlight to viewport:', err);
+            }
+            
+            console.debug('[Reader] Created new highlight:', annotation.id);
+        }
+
         setShowColorPicker(false);
+        setEditingHighlightId(null);
+        setActiveAnnotation(null);
         setSelectedText('');
         setSelectedCfi('');
-        
+
         // Clear selection
         readerRef.current?.clearSelection?.();
-    }, [selectedCfi, selectedText, currentBookId, addAnnotation]);
+    }, [selectedCfi, selectedText, currentBookId, addAnnotation, editingHighlightId, annotations, updateAnnotation]);
 
     const handleAddNote = useCallback(() => {
         if (!selectedCfi || !currentBookId) return;
 
+        console.debug('[Reader] Opening note editor, editingHighlightId:', editingHighlightId, 'activeAnnotation:', activeAnnotation?.id);
+
         // Close color picker and open note editor
         setShowColorPicker(false);
         setNoteEditorPosition(colorPickerPosition);
-        setEditingNote('');
-        setPendingHighlightColor('yellow');
-        setShowNoteEditor(true);
-    }, [selectedCfi, currentBookId, colorPickerPosition]);
 
-    const handleSaveNote = useCallback((noteContent: string) => {
+        // If editing existing highlight, use its note content and color
+        // Preserve editingHighlightId for handleSaveNote to use
+        if (editingHighlightId && activeAnnotation) {
+            setEditingNote(activeAnnotation.noteContent || '');
+            setPendingHighlightColor(activeAnnotation.color || 'yellow');
+            console.debug('[Reader] Editing existing highlight, preserving ID:', editingHighlightId);
+        } else {
+            setEditingNote('');
+            setPendingHighlightColor('yellow');
+            console.debug('[Reader] Creating new highlight with note');
+        }
+
+        setShowNoteEditor(true);
+    }, [selectedCfi, currentBookId, colorPickerPosition, editingHighlightId, activeAnnotation]);
+
+    const handleSaveNote = useCallback(async (noteContent: string) => {
         if (!selectedCfi || !currentBookId) return;
 
-        const annotation: Annotation = {
-            id: crypto.randomUUID(),
-            bookId: currentBookId,
-            type: noteContent ? 'note' : 'highlight',
-            location: selectedCfi,
-            selectedText,
-            color: pendingHighlightColor,
-            noteContent: noteContent || undefined,
-            createdAt: new Date(),
-        };
+        // PRIORITY 1: Use editingHighlightId if available (most reliable)
+        let existingHighlight = editingHighlightId
+            ? annotations.find(a => a.id === editingHighlightId)
+            : null;
 
-        addAnnotation(annotation);
-        setAnnotations(prev => [...prev, annotation]);
-        
-        // Add highlight to viewport
-        readerRef.current?.addHighlight?.(selectedCfi, selectedText, pendingHighlightColor);
-        
+        // PRIORITY 2: Fallback to CFI match
+        if (!existingHighlight) {
+            existingHighlight = annotations.find(a => 
+                (a.type === 'highlight' || a.type === 'note') && 
+                a.location === selectedCfi
+            );
+        }
+
+        // PRIORITY 3: Text content match as last resort
+        if (!existingHighlight && selectedText) {
+            existingHighlight = annotations.find(a => 
+                (a.type === 'highlight' || a.type === 'note') &&
+                a.selectedText?.trim() === selectedText.trim()
+            );
+        }
+
+        if (existingHighlight) {
+            // Update existing highlight with note using updateAnnotation to preserve ID
+            console.debug('[Reader] Adding note to existing highlight:', existingHighlight.id);
+            updateAnnotation(existingHighlight.id, {
+                type: noteContent ? 'note' : 'highlight',
+                noteContent: noteContent || undefined,
+            });
+
+            // Update local state to reflect changes immediately
+            setAnnotations(prev => prev.map(a =>
+                a.id === existingHighlight!.id
+                    ? { ...a, type: noteContent ? 'note' : 'highlight', noteContent: noteContent || undefined, updatedAt: new Date() }
+                    : a
+            ));
+
+            // Re-render in viewport to show note indicator
+            // Must await to ensure remove completes before add
+            try {
+                await readerRef.current?.removeHighlight?.(existingHighlight.id);
+                const updatedAnnotation: Annotation = { 
+                    ...existingHighlight, 
+                    type: noteContent ? 'note' : 'highlight',
+                    noteContent: noteContent || undefined, 
+                    updatedAt: new Date() 
+                };
+                await readerRef.current?.addAnnotation?.(updatedAnnotation);
+                console.debug('[Reader] Re-rendered highlight with note in viewport');
+            } catch (err) {
+                console.warn('[Reader] Failed to re-render highlight with note:', err);
+            }
+        } else {
+            // Create new highlight with note
+            console.debug('[Reader] Creating new highlight with note');
+            const annotation: Annotation = {
+                id: crypto.randomUUID(),
+                bookId: currentBookId,
+                type: noteContent ? 'note' : 'highlight',
+                location: selectedCfi,
+                selectedText,
+                color: pendingHighlightColor,
+                noteContent: noteContent || undefined,
+                createdAt: new Date(),
+            };
+
+            addAnnotation(annotation);
+            setAnnotations(prev => [...prev, annotation]);
+
+            // Add highlight to viewport
+            try {
+                await readerRef.current?.addHighlight?.(selectedCfi, selectedText, pendingHighlightColor);
+            } catch (err) {
+                console.warn('[Reader] Failed to add highlight with note to viewport:', err);
+            }
+        }
+
         setShowNoteEditor(false);
+        setEditingHighlightId(null);
+        setActiveAnnotation(null);
         setSelectedText('');
         setSelectedCfi('');
         setEditingNote('');
-        
+        setPendingHighlightColor('yellow');
+
         // Clear selection
         readerRef.current?.clearSelection?.();
-    }, [selectedCfi, selectedText, currentBookId, addAnnotation, pendingHighlightColor]);
+    }, [selectedCfi, selectedText, currentBookId, annotations, addAnnotation, updateAnnotation, editingHighlightId, pendingHighlightColor]);
 
     const handleBookmarkFromSelection = useCallback(() => {
         if (!selectedCfi || !currentBookId) return;
@@ -350,25 +569,65 @@ export function ReaderPage() {
         readerRef.current?.clearSelection?.();
     }, [selectedCfi, selectedText, currentBookId, addAnnotation]);
 
-    const handleDeleteAnnotation = useCallback(() => {
-        if (!activeAnnotation) return;
-        
-        removeAnnotation(activeAnnotation.id);
-        setAnnotations(prev => prev.filter(a => a.id !== activeAnnotation.id));
-        
-        // Remove from viewport
-        readerRef.current?.removeHighlight?.(activeAnnotation.id);
-        
-        setShowHighlightMenu(false);
-        setActiveAnnotation(null);
-    }, [activeAnnotation, removeAnnotation]);
+    const handleAddPageBookmark = useCallback(() => {
+        if (!currentBookId || !location) return;
 
-    const handleCopyText = useCallback(() => {
-        if (activeAnnotation?.selectedText) {
-            navigator.clipboard.writeText(activeAnnotation.selectedText);
+        // Check if bookmark already exists for this location
+        const existingBookmark = annotations.find(
+            a => a.type === 'bookmark' && a.location === location.cfi
+        );
+
+        if (existingBookmark) {
+            // Remove existing bookmark (toggle off)
+            removeAnnotation(existingBookmark.id);
+            setAnnotations(prev => prev.filter(a => a.id !== existingBookmark.id));
+        } else {
+            // Add new bookmark
+            const annotation: Annotation = {
+                id: crypto.randomUUID(),
+                bookId: currentBookId,
+                type: 'bookmark',
+                location: location.cfi || '',
+                selectedText: location.tocItem?.label || `Page ${location.pageInfo?.currentPage || 0}`,
+                createdAt: new Date(),
+            };
+
+            addAnnotation(annotation);
+            setAnnotations(prev => [...prev, annotation]);
         }
-        setShowHighlightMenu(false);
-    }, [activeAnnotation]);
+    }, [currentBookId, location, annotations, addAnnotation, removeAnnotation]);
+
+    const handleDeleteFromColorPicker = useCallback(async () => {
+        if (!editingHighlightId) {
+            console.warn('[Reader] Delete called but no editingHighlightId set');
+            return;
+        }
+
+        console.debug('[Reader] Deleting highlight:', editingHighlightId);
+
+        // Remove from store
+        removeAnnotation(editingHighlightId);
+        
+        // Update local state
+        setAnnotations(prev => prev.filter(a => a.id !== editingHighlightId));
+
+        // Remove from viewport
+        try {
+            await readerRef.current?.removeHighlight?.(editingHighlightId);
+        } catch (err) {
+            console.warn('[Reader] Failed to remove highlight from viewport:', err);
+        }
+
+        // Clear all related state
+        setShowColorPicker(false);
+        setEditingHighlightId(null);
+        setActiveAnnotation(null);
+        setSelectedText('');
+        setSelectedCfi('');
+        
+        // Clear selection
+        readerRef.current?.clearSelection?.();
+    }, [editingHighlightId, removeAnnotation]);
 
     const handleLocationsSaved = useCallback((locations: string) => {
         if (currentBookId) {
@@ -431,6 +690,8 @@ export function ReaderPage() {
                     onToggleBookmarks={() => togglePanel('bookmarks')}
                     onToggleSearch={() => togglePanel('search')}
                     onToggleInfo={() => togglePanel('info')}
+                    onAddBookmark={handleAddPageBookmark}
+                    isCurrentPageBookmarked={isCurrentPageBookmarked}
                     activePanel={activePanel}
                     fullscreen={settings.readerSettings.fullscreen}
                     onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
@@ -470,11 +731,12 @@ export function ReaderPage() {
                 onUpdate={updateReaderSettings}
             />
 
-            <ReaderBookmarks
+            <ReaderAnnotationsPanel
                 bookId={currentBookId || ''}
                 visible={activePanel === 'bookmarks'}
                 onClose={() => setActivePanel(null)}
                 onNavigate={goTo}
+                onDelete={(id) => readerRef.current?.removeHighlight?.(id)}
             />
 
             <ReaderSearch
@@ -496,36 +758,17 @@ export function ReaderPage() {
                 isOpen={showColorPicker}
                 position={colorPickerPosition}
                 selectedText={selectedText}
+                currentColor={activeAnnotation?.color}
                 onSelectColor={handleColorSelect}
                 onAddNote={handleAddNote}
                 onBookmark={handleBookmarkFromSelection}
+                onDelete={editingHighlightId ? handleDeleteFromColorPicker : undefined}
                 onClose={() => {
+                    console.debug('[Reader] Color picker closing, clearing state');
                     setShowColorPicker(false);
-                    readerRef.current?.clearSelection?.();
-                }}
-            />
-
-            {/* Highlight Menu (for existing highlights) */}
-            <HighlightMenu
-                isOpen={showHighlightMenu}
-                position={highlightMenuPosition}
-                annotation={activeAnnotation}
-                onEditNote={() => {
-                    if (activeAnnotation) {
-                        setNoteEditorPosition(highlightMenuPosition);
-                        setEditingNote(activeAnnotation.noteContent || '');
-                        setSelectedCfi(activeAnnotation.location);
-                        setSelectedText(activeAnnotation.selectedText || '');
-                        setPendingHighlightColor(activeAnnotation.color || 'yellow');
-                        setShowNoteEditor(true);
-                        setShowHighlightMenu(false);
-                    }
-                }}
-                onDelete={handleDeleteAnnotation}
-                onCopyText={handleCopyText}
-                onClose={() => {
-                    setShowHighlightMenu(false);
+                    setEditingHighlightId(null);
                     setActiveAnnotation(null);
+                    readerRef.current?.clearSelection?.();
                 }}
             />
 
@@ -539,7 +782,12 @@ export function ReaderPage() {
                 onClose={() => {
                     setShowNoteEditor(false);
                     setEditingNote('');
-                    readerRef.current?.clearSelection?.();
+                    // Don't clear editingHighlightId here - let handleSaveNote do it
+                    // This allows canceling without losing editing state
+                    if (!editingHighlightId) {
+                        // Only clear selection if not editing an existing highlight
+                        readerRef.current?.clearSelection?.();
+                    }
                 }}
             />
         </div>

@@ -23,6 +23,7 @@ export interface ReaderViewportHandle {
     clearSearch: () => void;
     // Highlight methods
     addHighlight: (cfi: string, text: string, color: HighlightColor) => Promise<Annotation>;
+    addAnnotation: (annotation: Annotation) => Promise<void>;
     removeHighlight: (id: string) => Promise<void>;
     loadAnnotations: (annotations: Annotation[]) => Promise<void>;
     clearSelection: () => void;
@@ -91,6 +92,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         setMargins,
         applyTheme,
         addHighlight,
+        addAnnotation,
         removeHighlight,
         loadAnnotations,
         clearSelection,
@@ -116,10 +118,11 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         search: (query: string) => search(query) as AsyncGenerator<any>,
         clearSearch: () => clearSearch(),
         addHighlight: (cfi: string, text: string, color: HighlightColor) => addHighlight(cfi, text, color),
+        addAnnotation: (annotation: Annotation) => addAnnotation(annotation),
         removeHighlight: (id: string) => removeHighlight(id),
         loadAnnotations: (annotations: Annotation[]) => loadAnnotations(annotations),
         clearSelection: () => clearSelection(),
-    }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, removeHighlight, loadAnnotations, clearSelection]);
+    }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection]);
 
     // Cleanup on unmount
     useEffect(() => {

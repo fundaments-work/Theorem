@@ -24,6 +24,7 @@ interface ReaderToolbarProps {
     onToggleBookmarks: () => void;
     onToggleSearch: () => void;
     onToggleInfo: () => void;
+    onAddBookmark?: () => void;
     activePanel: string | null;
     fullscreen?: boolean;
     onToggleFullscreen?: () => void;
@@ -39,6 +40,7 @@ export function ReaderToolbar({
     onToggleBookmarks,
     onToggleSearch,
     onToggleInfo,
+    onAddBookmark,
     activePanel,
     fullscreen,
     onToggleFullscreen,
@@ -140,7 +142,21 @@ export function ReaderToolbar({
                     <Search className="w-5 h-5" />
                 </button>
 
-                {/* Bookmarks */}
+                {/* Add Bookmark - Quick add current page */}
+                {onAddBookmark && (
+                    <button
+                        onClick={onAddBookmark}
+                        className={cn(
+                            "p-2 rounded-xl transition-all duration-200",
+                            "hover:bg-[var(--color-background)] text-[var(--color-text)]"
+                        )}
+                        title="Bookmark current page (Ctrl+D)"
+                    >
+                        <BookmarkIcon className="w-5 h-5" />
+                    </button>
+                )}
+
+                {/* Bookmarks Panel Toggle */}
                 <button
                     onClick={onToggleBookmarks}
                     className={cn(
@@ -149,9 +165,9 @@ export function ReaderToolbar({
                             ? "bg-[var(--color-accent)] text-[var(--color-background)] shadow-lg shadow-[var(--color-accent)]/10"
                             : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
                     )}
-                    title="Bookmarks"
+                    title="View Bookmarks & Highlights"
                 >
-                    <BookmarkIcon className="w-5 h-5" />
+                    <BookmarkIcon className="w-5 h-5 fill-current" />
                 </button>
 
                 {/* Settings (Aa) */}

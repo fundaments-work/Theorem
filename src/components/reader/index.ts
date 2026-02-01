@@ -12,5 +12,8 @@ export { ReaderBookmarks } from './ReaderBookmarks';
 export { ReaderSearch } from './ReaderSearch';
 export { BookInfoPopover } from './BookInfoPopover';
 
+// Annotations panel (bookmarks + highlights)
+export { ReaderAnnotationsPanel } from './ReaderAnnotationsPanel';
+
 // Highlight components
-export { HighlightColorPicker, HighlightMenu, NoteEditor } from './highlights';
+export { HighlightColorPicker, NoteEditor } from './highlights';

@@ -53,6 +53,7 @@ export interface UseDocumentReaderReturn {
 
     // Annotations
     addHighlight: (cfi: string, text: string, color: HighlightColor) => Promise<Annotation>;
+    addAnnotation: (annotation: Annotation) => Promise<void>;
     removeHighlight: (id: string) => Promise<void>;
     loadAnnotations: (annotations: Annotation[]) => Promise<void>;
     goToAnnotation: (annotation: Annotation) => Promise<void>;
@@ -329,6 +330,14 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         return annotation;
     }, []);
 
+    const addAnnotation = useCallback(async (annotation: Annotation) => {
+        const engine = engineRef.current;
+        if (!engine) throw new Error('Engine not initialized');
+
+        await engine.addAnnotation(annotation);
+        setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
+    }, []);
+
     const removeHighlight = useCallback(async (id: string) => {
         const engine = engineRef.current;
         if (!engine) return;
@@ -454,6 +463,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         goBack,
         goForward,
         addHighlight,
+        addAnnotation,
         removeHighlight,
         loadAnnotations,
         goToAnnotation,
@@ -491,6 +501,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         goBack,
         goForward,
         addHighlight,
+        addAnnotation,
         removeHighlight,
         loadAnnotations,
         goToAnnotation,

@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MessageSquare, Bookmark, X, Check } from 'lucide-react';
+import { MessageSquare, X, Check, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HighlightColor } from '@/types';
 
@@ -12,9 +12,11 @@ interface HighlightColorPickerProps {
     isOpen: boolean;
     position: { x: number; y: number };
     selectedText: string;
+    currentColor?: HighlightColor | null;
     onSelectColor: (color: HighlightColor) => void;
     onAddNote: () => void;
     onBookmark: () => void;
+    onDelete?: () => void;
     onClose: () => void;
 }
 
@@ -99,21 +101,29 @@ const ANIMATION_STYLES = `
 export function HighlightColorPicker({
     isOpen,
     position,
+    currentColor,
     onSelectColor,
     onAddNote,
     onBookmark,
+    onDelete,
     onClose,
 }: HighlightColorPickerProps) {
     const popupRef = useRef<HTMLDivElement>(null);
     const [adjustedPosition, setAdjustedPosition] = useState(position);
     const [isClosing, setIsClosing] = useState(false);
-    const [selectedColor, setSelectedColor] = useState<HighlightColor | null>(null);
+    const [selectedColor, setSelectedColor] = useState<HighlightColor | null>(currentColor || null);
+
+    // Sync selectedColor with currentColor when picker opens
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedColor(currentColor || null);
+        }
+    }, [isOpen, currentColor]);
 
     // Position calculation with viewport boundary detection
     useEffect(() => {
         if (!isOpen) {
             setIsClosing(false);
-            setSelectedColor(null);
             return;
         }
 
@@ -201,23 +211,38 @@ export function HighlightColorPicker({
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, handleClose, handleColorClick]);
 
-    // Click outside handler
+    // Click outside handler - also handles clicks in iframe
     useEffect(() => {
         if (!isOpen) return;
 
         const handleClickOutside = (e: MouseEvent) => {
             if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+                console.debug('[HighlightColorPicker] Click outside detected, closing');
                 handleClose();
             }
         };
 
+        // Use capture phase to catch clicks before they reach iframe
         const timer = setTimeout(() => {
-            document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('mousedown', handleClickOutside, true);
+            document.addEventListener('click', handleClickOutside, true);
         }, 50);
+
+        // Also close on scroll or resize
+        const handleScrollOrResize = () => {
+            console.debug('[HighlightColorPicker] Scroll/resize detected, closing');
+            handleClose();
+        };
+        
+        window.addEventListener('scroll', handleScrollOrResize, true);
+        window.addEventListener('resize', handleScrollOrResize);
 
         return () => {
             clearTimeout(timer);
-            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('mousedown', handleClickOutside, true);
+            document.removeEventListener('click', handleClickOutside, true);
+            window.removeEventListener('scroll', handleScrollOrResize, true);
+            window.removeEventListener('resize', handleScrollOrResize);
         };
     }, [isOpen, handleClose]);
 
@@ -289,7 +314,7 @@ export function HighlightColorPicker({
                     ))}
                 </div>
 
-                {/* Action buttons - more compact and modern */}
+                {/* Action buttons */}
                 <div className="flex gap-1">
                     <button
                         onClick={() => {
@@ -309,29 +334,36 @@ export function HighlightColorPicker({
                         )}
                     >
                         <MessageSquare className="w-3 h-3" />
-                        Note
-                    </button>
-                    <button
-                        onClick={() => {
-                            onBookmark();
-                            handleClose();
-                        }}
-                        className={cn(
-                            "flex-1 flex items-center justify-center gap-1.5",
-                            "px-2 py-1.5 text-[11px] font-medium",
-                            "rounded-lg",
-                            "bg-[var(--color-surface-variant)]",
-                            "text-[var(--color-text-secondary)]",
-                            "hover:bg-[var(--color-surface-hover)]",
-                            "hover:text-[var(--color-text-primary)]",
-                            "transition-all duration-150",
-                            "active:scale-95"
-                        )}
-                    >
-                        <Bookmark className="w-3 h-3" />
-                        Bookmark
+                        Add Note
                     </button>
                 </div>
+
+                {/* Delete button - only shown when onDelete is provided */}
+                {onDelete && (
+                    <>
+                        <div className="my-2 border-t border-[var(--color-border)]" />
+                        <button
+                            onClick={() => {
+                                if (confirm('Delete this highlight and any associated notes?')) {
+                                    onDelete();
+                                    handleClose();
+                                }
+                            }}
+                            className={cn(
+                                "w-full flex items-center justify-center gap-1.5",
+                                "px-2 py-1.5 text-[11px] font-medium",
+                                "rounded-lg",
+                                "text-red-500",
+                                "hover:bg-red-500/10",
+                                "transition-all duration-150",
+                                "active:scale-95"
+                            )}
+                        >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                        </button>
+                    </>
+                )}
             </div>
         </>
     );

@@ -4,7 +4,6 @@
  */
 
 export { HighlightColorPicker } from './HighlightColorPicker';
-export { HighlightMenu } from './HighlightMenu';
 export { NoteEditor } from './NoteEditor';
 
 // Re-export service for external use

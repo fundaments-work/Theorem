@@ -9,6 +9,7 @@ import {
     ArrowLeft,
     List,
     Bookmark as BookmarkIcon,
+    Highlighter,
     Search,
     MoreVertical,
     Maximize2,
@@ -16,6 +17,7 @@ import {
     Minus,
     Square,
     X,
+    LineSquiggle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DocMetadata, DocLocation } from "@/types";
@@ -29,6 +31,8 @@ interface WindowTitlebarProps {
     onToggleBookmarks: () => void;
     onToggleSearch: () => void;
     onToggleInfo: () => void;
+    onAddBookmark?: () => void;
+    isCurrentPageBookmarked?: boolean;
     activePanel: string | null;
     fullscreen?: boolean;
     onToggleFullscreen?: () => void;
@@ -60,6 +64,8 @@ export function WindowTitlebar({
     onToggleBookmarks,
     onToggleSearch,
     onToggleInfo,
+    onAddBookmark,
+    isCurrentPageBookmarked,
     activePanel,
     fullscreen,
     onToggleFullscreen,
@@ -203,12 +209,25 @@ export function WindowTitlebar({
                     <Search className="w-4 h-4" />
                 </ToolbarButton>
 
+                {/* Add Bookmark - Quick add/remove current page */}
+                {onAddBookmark && (
+                    <ToolbarButton
+                        onClick={onAddBookmark}
+                        title={isCurrentPageBookmarked ? "Remove bookmark (Ctrl+D)" : "Bookmark current page (Ctrl+D)"}
+                    >
+                        <BookmarkIcon 
+                            className={cn("w-4 h-4", isCurrentPageBookmarked && "fill-current")} 
+                        />
+                    </ToolbarButton>
+                )}
+
+                {/* View Annotations (Bookmarks & Highlights) */}
                 <ToolbarButton
                     onClick={onToggleBookmarks}
                     active={activePanel === "bookmarks"}
-                    title="Bookmarks"
+                    title="View Annotations"
                 >
-                    <BookmarkIcon className="w-4 h-4" />
+                    <LineSquiggle className="w-4 h-4" />
                 </ToolbarButton>
 
                 <ToolbarButton

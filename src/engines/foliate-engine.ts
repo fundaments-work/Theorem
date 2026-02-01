@@ -258,12 +258,18 @@ export class FoliateEngine {
             
             // Draw the highlight using the overlayer
             try {
+                // Store annotation value for click handler
+                const annotationValue = annotation.value;
+                
                 draw((rects: DOMRectList) => {
                     console.debug('[FoliateEngine] Drawing', rects.length, 'rects');
                     const g = doc.createElementNS('http://www.w3.org/2000/svg', 'g');
                     g.setAttribute('fill', color);
                     g.style.opacity = '0.4';
                     g.style.mixBlendMode = 'multiply';
+                    // Enable pointer events so the highlight is clickable
+                    g.style.pointerEvents = 'all';
+                    g.style.cursor = 'pointer';
                     
                     for (const rect of rects) {
                         const el = doc.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -274,6 +280,33 @@ export class FoliateEngine {
                         el.setAttribute('rx', '2');
                         g.appendChild(el);
                     }
+                    
+                    // Add click handler directly to the highlight group
+                    // This ensures clicks on highlights are properly detected
+                    g.addEventListener('click', (e: Event) => {
+                        const mouseEvent = e as MouseEvent;
+                        console.debug('[FoliateEngine] Highlight clicked:', annotationValue);
+                        e.stopPropagation();
+                        e.preventDefault();
+                        
+                        // Find the annotation
+                        const clickedAnnotation = Array.from(this.annotations.values())
+                            .find(a => a.location === annotationValue);
+                        
+                        if (clickedAnnotation && this.options.onTextSelected) {
+                            // Get bounding rect for positioning
+                            const firstRect = rects[0];
+                            const syntheticEvent = new MouseEvent('click', {
+                                clientX: firstRect ? firstRect.left + firstRect.width / 2 : mouseEvent.clientX,
+                                clientY: firstRect ? firstRect.top : mouseEvent.clientY,
+                                bubbles: true
+                            });
+                            
+                            console.debug('[FoliateEngine] Triggering onTextSelected for clicked highlight:', clickedAnnotation.id);
+                            this.options.onTextSelected(clickedAnnotation.location, clickedAnnotation.selectedText || '', syntheticEvent);
+                        }
+                    });
+                    
                     console.debug('[FoliateEngine] Created SVG group with', g.childElementCount, 'rects');
                     return g;
                 }, annotation);
@@ -286,14 +319,36 @@ export class FoliateEngine {
         // Handle annotation click
         this.view.addEventListener('show-annotation', (e: any) => {
             const { value, index, range } = e.detail;
+            console.debug('[FoliateEngine] show-annotation event:', { value: value?.substring(0, 50), index, hasRange: !!range });
+            
             // Find the annotation by CFI
-            const annotation = Array.from(this.annotations.values())
+            let annotation = Array.from(this.annotations.values())
                 .find(a => a.location === value);
             
-            if (annotation && this.options.onTextSelected) {
-                // Re-use the selection callback for now
-                // TODO: Add dedicated onAnnotationClick callback
-                console.debug('[FoliateEngine] Annotation clicked:', annotation);
+            // Fallback: find by partial CFI match (in case of slight variations)
+            if (!annotation && value) {
+                annotation = Array.from(this.annotations.values())
+                    .find(a => a.location && value.startsWith(a.location));
+            }
+            
+            if (annotation) {
+                console.debug('[FoliateEngine] Found annotation for click:', annotation.id, annotation.type);
+                // Create synthetic event for positioning
+                const rect = range?.getBoundingClientRect();
+                console.debug('[FoliateEngine] Annotation click rect:', rect);
+                const syntheticEvent = new MouseEvent('click', {
+                    clientX: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+                    clientY: rect ? rect.top + rect.height / 2 : window.innerHeight / 2,
+                    bubbles: true
+                });
+                
+                // Call the callback with annotation data
+                if (this.options.onTextSelected) {
+                    this.options.onTextSelected(annotation.location, annotation.selectedText || '', syntheticEvent);
+                }
+            } else {
+                console.warn('[FoliateEngine] No annotation found for CFI:', value?.substring(0, 50));
+                console.debug('[FoliateEngine] Available annotations:', Array.from(this.annotations.values()).map(a => ({ id: a.id, loc: a.location?.substring(0, 50) })));
             }
         });
     }
@@ -817,7 +872,9 @@ export class FoliateEngine {
     async addAnnotation(annotation: Annotation): Promise<void> {
         this.annotations.set(annotation.id, annotation);
         
-        if (annotation.type === 'highlight' && annotation.location) {
+        // Render highlights for both 'highlight' and 'note' types
+        // Notes should still show the highlighted text with a note indicator
+        if ((annotation.type === 'highlight' || annotation.type === 'note') && annotation.location) {
             try {
                 await this.view?.addAnnotation?.({
                     value: annotation.location,
@@ -873,7 +930,8 @@ export class FoliateEngine {
         // Since we don't have an easy way to check, we'll try to render all
         // and let foliate-js handle the ones that don't match
         for (const annotation of allAnnotations) {
-            if (annotation.type === 'highlight' && annotation.location) {
+            // Render highlights for both 'highlight' and 'note' types
+            if ((annotation.type === 'highlight' || annotation.type === 'note') && annotation.location) {
                 try {
                     console.debug('[FoliateEngine] Re-rendering annotation for section', sectionIndex, ':', annotation.location.substring(0, 30));
                     await this.view?.addAnnotation?.({
@@ -914,7 +972,9 @@ export class FoliateEngine {
         for (const annotation of annotations) {
             this.annotations.set(annotation.id, annotation);
             
-            if (annotation.location && annotation.type === 'highlight') {
+            // Render highlights for both 'highlight' and 'note' types
+            // Notes should still show the highlighted text
+            if (annotation.location && (annotation.type === 'highlight' || annotation.type === 'note')) {
                 try {
                     await this.view?.addAnnotation?.({
                         value: annotation.location,
