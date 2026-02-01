@@ -127,7 +127,21 @@ export class FoliateEngine {
             await this.view.open(this.book);
 
             // Get section fractions for progress calculation
-            this.sectionFractions = this.view.getSectionFractions();
+            // Add delay to ensure view is fully ready
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            this.sectionFractions = this.view.getSectionFractions() || [];
+            
+            console.debug('[FoliateEngine] Section fractions:', {
+                count: this.sectionFractions.length,
+                fractions: this.sectionFractions.slice(0, 3), // Show first 3 fractions
+            });
+            
+            if (this.sectionFractions.length === 0) {
+                console.warn('[FoliateEngine] No section fractions found, using fallback');
+                // Fallback: assume single section
+                this.sectionFractions = [0, 1];
+            }
 
             // Apply initial settings
             this.layout = layout;
@@ -149,12 +163,38 @@ export class FoliateEngine {
             const toc = this.extractToc();
 
             // Navigate to initial location or beginning
+            console.debug('[FoliateEngine] Initial navigation:', {
+                hasInitialLocation: !!initialLocation,
+                initialLocation: initialLocation?.substring(0, 50),
+            });
+            
             if (initialLocation) {
-                await this.view.goTo(initialLocation);
+                console.debug('[FoliateEngine] Navigating to initial CFI location:', initialLocation.substring(0, 50));
+                try {
+                    const result = await this.view.goTo(initialLocation);
+                    console.debug('[FoliateEngine] goTo result:', result ? 'success' : 'undefined/null');
+                    if (!result) {
+                        console.warn('[FoliateEngine] Initial CFI navigation returned undefined, CFI may be invalid');
+                        // Fall back to beginning if CFI is invalid
+                        await this.view.goTo({ index: 0, fraction: 0 });
+                    } else {
+                        console.debug('[FoliateEngine] Successfully navigated to initial location');
+                    }
+            } catch (err) {
+                console.warn('<FoliateEngine> Initial CFI navigation failed:', err);
+                // Fall back to beginning if CFI navigation throws
+                await this.view.goTo({ index: 0, fraction: 0 });
+                // Clear invalid CFI by navigating to beginning
+                if (this.options.onLocationChange) {
+                    this.options.onLocationChange({ cfi: '', percentage: 0, tocItem: undefined, pageItem: undefined, pageInfo: undefined });
+                }
+            }
             } else {
+                console.debug('[FoliateEngine] No initial location, starting at beginning');
                 await this.view.goTo({ index: 0, fraction: 0 });
             }
 
+            console.debug('[FoliateEngine] Signaling book ready');
             // Signal that book is ready
             this.options.onReady?.(metadata, toc);
 
@@ -180,23 +220,47 @@ export class FoliateEngine {
         });
 
         // Relocate event - location changed
+        // The view.js already calculates and provides CFI in the event detail
+        // See foliate-js view.js #onRelocate: this.lastLocation = { ...progress, tocItem, pageItem, cfi, range }
         this.view.addEventListener('relocate', (e: any) => {
             const detail = e.detail;
             
-            // Validate index before calling getCFI - index can be -1 during initial render
-            let cfi = '';
-            if (detail.index != null && detail.index >= 0 && this.view?.getCFI) {
+            // Use CFI directly from event detail (already calculated by view.js)
+            // The view.js getCFI is called in #onRelocate and included in lastLocation
+            let cfi = detail.cfi || '';
+            
+            // Fallback: if CFI is empty but we have section info, try to regenerate
+            // detail.section.current contains the section index (from progress.js getProgress)
+            if (!cfi && detail.section?.current != null && detail.section.current >= 0 && this.view?.getCFI) {
                 try {
-                    cfi = this.view.getCFI(detail.index, detail.range) || '';
+                    cfi = this.view.getCFI(detail.section.current, detail.range) || '';
+                    if (!cfi) {
+                        console.debug('[FoliateEngine] getCFI returned empty, using section fallback');
+                        cfi = `section-${detail.section.current}`;
+                    }
                 } catch (err) {
-                    // Silently ignore getCFI errors during initial render
-                    console.debug('[FoliateEngine] getCFI failed, likely during initial render:', err);
+                    console.debug('[FoliateEngine] getCFI fallback failed:', err);
+                    cfi = `section-${detail.section.current}`;
                 }
             }
             
+            // Clamp fraction to valid range [0, 1] to prevent invalid progress values
+            // The fraction from view.js is the global book fraction (not section fraction)
+            const rawFraction = detail.fraction;
+            const fraction = typeof rawFraction === 'number' && isFinite(rawFraction)
+                ? Math.max(0, Math.min(1, rawFraction))
+                : 0;
+            
+            console.debug('[FoliateEngine] Relocate event:', {
+                section: detail.section?.current,
+                rawFraction,
+                fraction,
+                cfi: cfi?.substring(0, 50),
+            });
+            
             const location: DocLocation = {
                 cfi,
-                percentage: detail.fraction || 0,
+                percentage: fraction,
                 tocItem: detail.tocItem,
                 pageItem: detail.pageItem,
                 pageInfo: detail.location ? {
@@ -647,8 +711,28 @@ export class FoliateEngine {
 
     async goToFraction(fraction: number): Promise<void> {
         if (!this.view) return;
+        
+        // Safety check: ensure sectionFractions is valid
+        if (this.sectionFractions.length === 0) {
+            console.warn('[FoliateEngine] goToFraction called but sectionFractions is empty, using fallback');
+            await this.view.goTo({ index: 0, fraction: fraction });
+            return;
+        }
+        
         const index = this.findSectionIndex(fraction);
+        console.debug('[FoliateEngine] goToFraction:', {
+            requestedFraction: fraction,
+            sectionIndex: index,
+            sectionCount: this.sectionFractions.length,
+        });
+        
         const sectionFraction = this.calculateSectionFraction(fraction, index);
+        console.debug('[FoliateEngine] goToFraction calculated:', {
+            sectionFraction,
+            sectionStart: index > 0 ? this.sectionFractions[index - 1] : 0,
+            sectionEnd: this.sectionFractions[index] || 1,
+        });
+        
         await this.view.goTo({ index, fraction: sectionFraction });
     }
 
@@ -911,7 +995,13 @@ export class FoliateEngine {
                 await this.view.deleteAnnotation({ value: annotation.location });
                 console.debug('[FoliateEngine] Successfully called view.deleteAnnotation');
             } else {
-                console.warn('[FoliateEngine] view.deleteAnnotation is not available');
+                console.warn('<FoliateEngine> Initial CFI navigation returned undefined, CFI may be invalid');
+                // Fall back to beginning if CFI is invalid
+                await this.view.goTo({ index: 0, fraction: 0 });
+                // Clear invalid CFI by navigating to beginning
+                if (this.options.onLocationChange) {
+                    this.options.onLocationChange({ cfi: '', percentage: 0, tocItem: undefined, pageItem: undefined, pageInfo: undefined });
+                }
             }
         } catch (e) {
             console.error('[FoliateEngine] Failed to remove annotation from view:', e);
@@ -1493,11 +1583,31 @@ export class FoliateEngine {
     }
 
     private findSectionIndex(fraction: number): number {
-        for (let i = 0; i < this.sectionFractions.length; i++) {
-            if (this.sectionFractions[i] > fraction) {
-                return Math.max(0, i - 1);
+        // Handle edge cases
+        if (this.sectionFractions.length === 0) {
+            return 0;
+        }
+        
+        if (fraction <= 0) {
+            return 0;
+        }
+        
+        if (fraction >= 1) {
+            return this.sectionFractions.length - 1;
+        }
+        
+        // Find the correct section - the section where fraction falls within [start, end)
+        for (let i = 0; i < this.sectionFractions.length - 1; i++) {
+            const start = this.sectionFractions[i];
+            const end = this.sectionFractions[i + 1];
+            
+            // Check if fraction falls within this section
+            if (fraction >= start && fraction < end) {
+                return i;
             }
         }
+        
+        // If we get here, fraction is beyond the last section boundary - return last section
         return this.sectionFractions.length - 1;
     }
 
