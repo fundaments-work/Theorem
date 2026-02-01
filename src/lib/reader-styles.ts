@@ -247,7 +247,6 @@ export function createReaderCSS(settings?: ReaderSettings): string {
                 font-family: ${fontFamily} !important;
             }
             ` : 'body * { font-family: inherit; }'}
-            }
             
             a:any-link {
                 color: ${link} !important;
