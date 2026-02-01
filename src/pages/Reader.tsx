@@ -38,6 +38,11 @@ export function ReaderPage() {
     const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [initialLocation, setInitialLocation] = useState<string | undefined>(undefined);
+    const [initialFraction, setInitialFraction] = useState<number | undefined>(undefined);
+    const suppressProgressRef = useRef(false);
+    const resumeTargetRef = useRef<string | null>(null);
+    const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hasAppliedInitialLocationRef = useRef(false);
 
     const togglePanel = useCallback((panel: ReaderPanel) => {
         setActivePanel(current => current === panel ? null : panel);
@@ -69,7 +74,25 @@ export function ReaderPage() {
             setToc([]);
             setLocation(null);
             setIsBookReady(false);
-            setInitialLocation(book.currentLocation);
+            const nextLocation = book.currentLocation || undefined;
+            setInitialLocation(nextLocation);
+            // Use lastClickFraction if available, otherwise use progress but NOT if book is nearly complete
+            // This prevents jumping to the end when reopening a completed book
+            const progressFallback = book.progress !== undefined && book.progress < 0.95 ? book.progress : undefined;
+            const fractionToUse = book.lastClickFraction ?? progressFallback;
+            setInitialFraction(fractionToUse);
+            console.debug('[Reader] Resume state:', {
+                currentLocation: nextLocation?.substring(0, 50),
+                lastClickFraction: book.lastClickFraction,
+                progress: book.progress,
+                usingFraction: fractionToUse,
+            });
+            suppressProgressRef.current = !!nextLocation || fractionToUse !== undefined;
+            resumeTargetRef.current = nextLocation || null;
+            hasAppliedInitialLocationRef.current = false;
+            if (resumeTimeoutRef.current) {
+                clearTimeout(resumeTimeoutRef.current);
+            }
             setLoadError(null);
 
             try {
@@ -92,6 +115,14 @@ export function ReaderPage() {
         loadBook();
         return () => { isCancelled = true; };
     }, [currentBookId]);
+
+    useEffect(() => {
+        return () => {
+            if (resumeTimeoutRef.current) {
+                clearTimeout(resumeTimeoutRef.current);
+            }
+        };
+    }, []);
 
     // Auto-hide toolbar
     useEffect(() => {
@@ -161,7 +192,68 @@ export function ReaderPage() {
 
     const handleLocationChange = useCallback((loc: DocLocation) => {
         setLocation(loc);
+        
+        // Suppress the first few location updates to avoid overwriting saved progress
+        // The engine navigates to the saved location, which triggers relocate events
+        if (suppressProgressRef.current) {
+            const target = resumeTargetRef.current;
+            
+            console.debug('[Reader] Location change while suppressed:', {
+                hasTarget: !!target,
+                targetCfi: target?.substring(0, 50),
+                currentCfi: loc.cfi?.substring(0, 50),
+                percentage: loc.percentage,
+            });
+            
+            // If we have a target CFI and current location matches it, we've arrived
+            if (target && loc.cfi && loc.cfi.startsWith(target)) {
+                console.debug('[Reader] ✓ Arrived at resume target, clearing suppression');
+                suppressProgressRef.current = false;
+                resumeTargetRef.current = null;
+                hasAppliedInitialLocationRef.current = true;
+                if (resumeTimeoutRef.current) {
+                    clearTimeout(resumeTimeoutRef.current);
+                    resumeTimeoutRef.current = null;
+                }
+                return; // Don't save this location change
+            }
+            
+            // If we have a target CFI but current location doesn't match, CFI is invalid
+            if (target && loc.cfi && !loc.cfi.startsWith(target)) {
+                console.warn('[Reader] ✗ Invalid CFI target, clearing saved location');
+                if (currentBookId) {
+                    updateProgress(currentBookId, 0, '', undefined);
+                }
+                suppressProgressRef.current = false;
+                resumeTargetRef.current = null;
+                hasAppliedInitialLocationRef.current = true;
+                if (resumeTimeoutRef.current) {
+                    clearTimeout(resumeTimeoutRef.current);
+                    resumeTimeoutRef.current = null;
+                }
+                return; // Don't save this location change
+            }
+            
+            // If no target (using fraction) or first location update, clear suppression after a timeout
+            if (!resumeTimeoutRef.current) {
+                console.debug('[Reader] Starting suppression timeout (1000ms)');
+                resumeTimeoutRef.current = setTimeout(() => {
+                    console.debug('[Reader] Suppression timeout expired');
+                    suppressProgressRef.current = false;
+                    resumeTargetRef.current = null;
+                    resumeTimeoutRef.current = null;
+                }, 1000);
+            }
+            
+            return; // Don't save while suppressed
+        }
+        
         if (currentBookId) {
+            console.debug('[Reader] Saving location update:', {
+                cfi: loc.cfi?.substring(0, 50),
+                percentage: loc.percentage,
+            });
+            
             const safePercentage = Math.max(0, Math.min(1, loc.percentage || 0));
             const safeCfi = loc.cfi || '';
             const lastClickFraction = lastClickFractionRef.current ?? undefined;
@@ -192,6 +284,7 @@ export function ReaderPage() {
             readerRef.current.goToFraction(fraction);
         }
     }, []);
+
 
     const handleBack = useCallback(() => {
         setRoute('library');
@@ -236,6 +329,27 @@ export function ReaderPage() {
             return () => clearTimeout(timer);
         }
     }, [currentBookId, getBookAnnotations, isBookReady]);
+
+    useEffect(() => {
+        if (!isBookReady || !readerRef.current || hasAppliedInitialLocationRef.current) return;
+        
+        // If we have a CFI location, the engine should have handled it during open()
+        // We only need to use fraction fallback if there's no CFI
+        if (initialLocation) {
+            console.debug('[Reader] CFI was provided, engine should have navigated');
+            hasAppliedInitialLocationRef.current = true;
+            return;
+        }
+        
+        if (typeof initialFraction === 'number') {
+            console.debug('[Reader] No CFI, using fraction fallback:', initialFraction);
+            hasAppliedInitialLocationRef.current = true;
+            // Small delay to ensure view is fully ready
+            setTimeout(() => {
+                readerRef.current?.goToFraction(initialFraction);
+            }, 100);
+        }
+    }, [isBookReady, initialLocation, initialFraction]);
 
     const handleTextSelected = useCallback((cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => {
         console.debug('[Reader] Text selected:', { cfi: cfi.substring(0, 50), text: text.substring(0, 50) });

@@ -35,7 +35,7 @@ export interface Book {
     addedAt: Date;
     lastReadAt?: Date;
     progress: number; // 0-1
-    currentLocation?: string; // CFI for EPUB, page number for PDF
+    currentLocation?: string; // EPUB CFI or pdf:page=<n>&offset=<0-1>
     lastClickFraction?: number; // 0-1 - last position clicked on progress bar for visual consistency
     // Page-based progress (stored for instant correct display on reopen)
     pageProgress?: {
