@@ -5,7 +5,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquare, X, Check, Trash2 } from 'lucide-react';
+import { ask } from '@tauri-apps/plugin-dialog';
 import { cn } from '@/lib/utils';
+import { isTauri } from '@/lib/env';
 import type { HighlightColor } from '@/types';
 
 interface HighlightColorPickerProps {
@@ -113,11 +115,13 @@ export function HighlightColorPicker({
     const [adjustedPosition, setAdjustedPosition] = useState(position);
     const [isClosing, setIsClosing] = useState(false);
     const [selectedColor, setSelectedColor] = useState<HighlightColor | null>(currentColor || null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     // Sync selectedColor with currentColor when picker opens
     useEffect(() => {
         if (isOpen) {
             setSelectedColor(currentColor || null);
+            setShowDeleteConfirm(false);
         }
     }, [isOpen, currentColor]);
 
@@ -190,6 +194,35 @@ export function HighlightColorPicker({
         });
     }, [onSelectColor]);
 
+    // Handle delete with confirmation
+    const handleDeleteClick = useCallback(async () => {
+        if (isTauri()) {
+            // Tauri uses its own native dialog
+            // Use empty title to avoid duplication
+            const confirmed = await ask('Delete this highlight and any associated notes?', {
+                title: '',
+                kind: 'warning',
+            });
+            if (confirmed) {
+                onDelete?.();
+                handleClose();
+            }
+        } else {
+            // Web: use inline confirm UI to avoid native confirm() duplication
+            setShowDeleteConfirm(true);
+        }
+    }, [onDelete, handleClose]);
+
+    const handleDeleteConfirmed = useCallback(() => {
+        setShowDeleteConfirm(false);
+        onDelete?.();
+        handleClose();
+    }, [onDelete, handleClose]);
+
+    const handleDeleteCancelled = useCallback(() => {
+        setShowDeleteConfirm(false);
+    }, []);
+
     // Keyboard shortcuts
     useEffect(() => {
         if (!isOpen) return;
@@ -197,20 +230,26 @@ export function HighlightColorPicker({
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 e.preventDefault();
-                handleClose();
+                if (showDeleteConfirm) {
+                    setShowDeleteConfirm(false);
+                } else {
+                    handleClose();
+                }
             }
             
-            // Number keys 1-6 for quick color selection
-            const num = parseInt(e.key);
-            if (num >= 1 && num <= 6) {
-                e.preventDefault();
-                handleColorClick(COLOR_OPTIONS[num - 1].color);
+            // Number keys 1-6 for quick color selection (only when not confirming delete)
+            if (!showDeleteConfirm) {
+                const num = parseInt(e.key);
+                if (num >= 1 && num <= 6) {
+                    e.preventDefault();
+                    handleColorClick(COLOR_OPTIONS[num - 1].color);
+                }
             }
         };
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, handleClose, handleColorClick]);
+    }, [isOpen, showDeleteConfirm, handleClose, handleColorClick]);
 
     // Click outside handler - also handles clicks in iframe
     useEffect(() => {
@@ -287,82 +326,119 @@ export function HighlightColorPicker({
                     </button>
                 </div>
 
-                {/* Color grid - more compact */}
-                <div className="flex gap-1 px-1 mb-3">
-                    {COLOR_OPTIONS.map(({ color, bg, activeBg, label }) => (
-                        <button
-                            key={color}
-                            onClick={() => handleColorClick(color)}
-                            className={cn(
-                                "w-7 h-7 rounded-lg",
-                                "flex items-center justify-center",
-                                selectedColor === color ? activeBg : bg,
-                                "border border-black/10",
-                                "shadow-sm",
-                                "hover:scale-110",
-                                "hover:shadow-md",
-                                "active:scale-95",
-                                "transition-all duration-150",
-                                "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-1"
-                            )}
-                            title={`${label} (Shortcut: ${COLOR_OPTIONS.findIndex(c => c.color === color) + 1})`}
-                            aria-label={`Select ${label} highlight color`}
-                        >
-                            {selectedColor === color && (
-                                <Check className="w-3.5 h-3.5 text-black/60" strokeWidth={3} />
-                            )}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex gap-1">
-                    <button
-                        onClick={() => {
-                            onAddNote();
-                            handleClose();
-                        }}
-                        className={cn(
-                            "flex-1 flex items-center justify-center gap-1.5",
-                            "px-2 py-1.5 text-[11px] font-medium",
-                            "rounded-lg",
-                            "bg-[var(--color-surface-variant)]",
-                            "text-[var(--color-text-secondary)]",
-                            "hover:bg-[var(--color-surface-hover)]",
-                            "hover:text-[var(--color-text-primary)]",
-                            "transition-all duration-150",
-                            "active:scale-95"
-                        )}
-                    >
-                        <MessageSquare className="w-3 h-3" />
-                        Add Note
-                    </button>
-                </div>
-
-                {/* Delete button - only shown when onDelete is provided */}
-                {onDelete && (
+                {/* Inline delete confirmation */}
+                {showDeleteConfirm ? (
+                    <div className="px-1 py-2">
+                        <p className="text-xs text-[var(--color-text-secondary)] text-center mb-2">
+                            Delete this highlight and any associated notes?
+                        </p>
+                        <div className="flex gap-1.5">
+                            <button
+                                onClick={handleDeleteCancelled}
+                                className={cn(
+                                    "flex-1 px-2 py-1.5 text-[11px] font-medium",
+                                    "rounded-lg",
+                                    "bg-[var(--color-surface-variant)]",
+                                    "text-[var(--color-text-secondary)]",
+                                    "hover:bg-[var(--color-surface-hover)]",
+                                    "hover:text-[var(--color-text-primary)]",
+                                    "transition-all duration-150",
+                                    "active:scale-95"
+                                )}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteConfirmed}
+                                className={cn(
+                                    "flex-1 px-2 py-1.5 text-[11px] font-medium",
+                                    "rounded-lg",
+                                    "bg-red-500/10",
+                                    "text-red-500",
+                                    "hover:bg-red-500/20",
+                                    "transition-all duration-150",
+                                    "active:scale-95"
+                                )}
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                ) : (
                     <>
-                        <div className="my-2 border-t border-[var(--color-border)]" />
-                        <button
-                            onClick={() => {
-                                if (confirm('Delete this highlight and any associated notes?')) {
-                                    onDelete();
+                        {/* Color grid */}
+                        <div className="flex gap-1 px-1 mb-3">
+                            {COLOR_OPTIONS.map(({ color, bg, activeBg, label }) => (
+                                <button
+                                    key={color}
+                                    onClick={() => handleColorClick(color)}
+                                    className={cn(
+                                        "w-7 h-7 rounded-lg",
+                                        "flex items-center justify-center",
+                                        selectedColor === color ? activeBg : bg,
+                                        "border border-black/10",
+                                        "shadow-sm",
+                                        "hover:scale-110",
+                                        "hover:shadow-md",
+                                        "active:scale-95",
+                                        "transition-all duration-150",
+                                        "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-1"
+                                    )}
+                                    title={`${label} (Shortcut: ${COLOR_OPTIONS.findIndex(c => c.color === color) + 1})`}
+                                    aria-label={`Select ${label} highlight color`}
+                                >
+                                    {selectedColor === color && (
+                                        <Check className="w-3.5 h-3.5 text-black/60" strokeWidth={3} />
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-1">
+                            <button
+                                onClick={() => {
+                                    onAddNote();
                                     handleClose();
-                                }
-                            }}
-                            className={cn(
-                                "w-full flex items-center justify-center gap-1.5",
-                                "px-2 py-1.5 text-[11px] font-medium",
-                                "rounded-lg",
-                                "text-red-500",
-                                "hover:bg-red-500/10",
-                                "transition-all duration-150",
-                                "active:scale-95"
-                            )}
-                        >
-                            <Trash2 className="w-3 h-3" />
-                            Delete
-                        </button>
+                                }}
+                                className={cn(
+                                    "flex-1 flex items-center justify-center gap-1.5",
+                                    "px-2 py-1.5 text-[11px] font-medium",
+                                    "rounded-lg",
+                                    "bg-[var(--color-surface-variant)]",
+                                    "text-[var(--color-text-secondary)]",
+                                    "hover:bg-[var(--color-surface-hover)]",
+                                    "hover:text-[var(--color-text-primary)]",
+                                    "transition-all duration-150",
+                                    "active:scale-95"
+                                )}
+                            >
+                                <MessageSquare className="w-3 h-3" />
+                                Add Note
+                            </button>
+                        </div>
+
+                        {/* Delete button - only shown when onDelete is provided */}
+                        {onDelete && (
+                            <>
+                                <div className="my-2 border-t border-[var(--color-border)]" />
+                                <button
+                                    onClick={handleDeleteClick}
+                                    className={cn(
+                                        "w-full flex items-center justify-center gap-1.5",
+                                        "px-2 py-1.5 text-[11px] font-medium",
+                                        "rounded-lg",
+                                        "text-red-500",
+                                        "hover:bg-red-500/10",
+                                        "transition-all duration-150",
+                                        "active:scale-95"
+                                    )}
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                    Delete
+                                </button>
+                            </>
+                        )}
                     </>
                 )}
             </div>

@@ -887,14 +887,34 @@ export class FoliateEngine {
     }
 
     async removeHighlight(id: string): Promise<void> {
+        console.debug('[FoliateEngine] removeHighlight called with id:', id);
         const annotation = this.annotations.get(id);
-        if (annotation) {
-            this.annotations.delete(id);
-            try {
-                await this.view?.deleteAnnotation?.({ value: annotation.location });
-            } catch (e) {
-                console.warn('[FoliateEngine] Failed to remove annotation from view:', e);
+        if (!annotation) {
+            console.warn('[FoliateEngine] Annotation not found for id:', id);
+            return;
+        }
+        
+        console.debug('[FoliateEngine] Found annotation to delete:', {
+            id: annotation.id,
+            type: annotation.type,
+            location: annotation.location?.substring(0, 50),
+        });
+        
+        // Delete from internal map first
+        this.annotations.delete(id);
+        console.debug('[FoliateEngine] Deleted from annotations map, remaining:', this.annotations.size);
+        
+        // Remove from foliate view
+        try {
+            if (this.view?.deleteAnnotation) {
+                console.debug('[FoliateEngine] Calling view.deleteAnnotation with location:', annotation.location?.substring(0, 50));
+                await this.view.deleteAnnotation({ value: annotation.location });
+                console.debug('[FoliateEngine] Successfully called view.deleteAnnotation');
+            } else {
+                console.warn('[FoliateEngine] view.deleteAnnotation is not available');
             }
+        } catch (e) {
+            console.error('[FoliateEngine] Failed to remove annotation from view:', e);
         }
     }
 

@@ -239,8 +239,11 @@ export function ReaderPage() {
 
     const handleTextSelected = useCallback((cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => {
         console.debug('[Reader] Text selected:', { cfi: cfi.substring(0, 50), text: text.substring(0, 50) });
-        console.debug('[Reader] Current annotations count:', annotations.length);
-        console.debug('[Reader] Available highlight/note annotations:', annotations.filter(a => a.type === 'highlight' || a.type === 'note').map(a => ({ id: a.id.substring(0, 8), loc: a.location?.substring(0, 40), text: a.selectedText?.substring(0, 30) })));
+        
+        // Always fetch fresh annotations from store to avoid stale state
+        const freshAnnotations = currentBookId ? getBookAnnotations(currentBookId) : [];
+        console.debug('[Reader] Fresh annotations from store:', freshAnnotations.length);
+        console.debug('[Reader] Available highlight/note annotations:', freshAnnotations.filter(a => a.type === 'highlight' || a.type === 'note').map(a => ({ id: a.id.substring(0, 8), loc: a.location?.substring(0, 40), text: a.selectedText?.substring(0, 30) })));
 
         if (!cfi) {
             console.debug('[Reader] Empty CFI, ignoring');
@@ -249,7 +252,7 @@ export function ReaderPage() {
 
         // Robust duplicate detection: check CFI (exact or partial), then text content
         // This prevents duplicates when CFIs vary slightly for the same text
-        let existingAnnotation = annotations.find(a => {
+        let existingAnnotation = freshAnnotations.find(a => {
             // Match by exact CFI for highlights/notes
             if (a.location === cfi && (a.type === 'highlight' || a.type === 'note')) {
                 console.debug('[Reader] Matched annotation by exact CFI:', a.id);
@@ -276,7 +279,7 @@ export function ReaderPage() {
 
         // If no highlight/note found, check for bookmark at exact location
         if (!existingAnnotation) {
-            existingAnnotation = annotations.find(a => a.location === cfi);
+            existingAnnotation = freshAnnotations.find(a => a.location === cfi);
         }
 
         if (existingAnnotation) {
@@ -337,14 +340,17 @@ export function ReaderPage() {
             console.debug('[Reader] Showing color picker at calculated position');
             setShowColorPicker(true);
         }
-    }, [annotations, colorPickerPosition]);
+    }, [currentBookId, getBookAnnotations, colorPickerPosition]);
 
     const handleColorSelect = useCallback(async (color: HighlightColor) => {
         if (!selectedCfi || !currentBookId) return;
 
+        // Get fresh annotations from store
+        const freshAnnotations = getBookAnnotations(currentBookId);
+
         // If editing an existing highlight, update it
         if (editingHighlightId) {
-            const existingAnnotation = annotations.find(a => a.id === editingHighlightId);
+            const existingAnnotation = freshAnnotations.find(a => a.id === editingHighlightId);
             if (existingAnnotation) {
                 // Update the annotation color in store
                 updateAnnotation(editingHighlightId, { color });
@@ -376,7 +382,7 @@ export function ReaderPage() {
 
         // Check for existing highlight at this location/text before creating new
         // This is a safety net in case handleTextSelected missed it
-        const existingHighlight = annotations.find(a => 
+        const existingHighlight = freshAnnotations.find(a => 
             (a.type === 'highlight' || a.type === 'note') &&
             (a.location === selectedCfi || (a.selectedText && a.selectedText.trim() === selectedText.trim()))
         );
@@ -398,28 +404,22 @@ export function ReaderPage() {
                 console.warn('[Reader] Failed to update highlight in viewport:', err);
             }
         } else {
-            // Create new highlight
-            const annotation: Annotation = {
-                id: crypto.randomUUID(),
-                bookId: currentBookId,
-                type: 'highlight',
-                location: selectedCfi,
-                selectedText,
-                color,
-                createdAt: new Date(),
-            };
-
-            addAnnotation(annotation);
-            setAnnotations(prev => [...prev, annotation]);
-
-            // Add to viewport
+            // Create new highlight - get annotation from engine with its ID
             try {
-                await readerRef.current?.addHighlight?.(selectedCfi, selectedText, color);
+                const annotation = await readerRef.current?.addHighlight?.(selectedCfi, selectedText, color);
+                if (annotation) {
+                    // Ensure the annotation has the correct bookId
+                    const annotationWithBookId = { ...annotation, bookId: currentBookId };
+                    // Use the annotation from the engine (which has the correct ID)
+                    addAnnotation(annotationWithBookId);
+                    setAnnotations(prev => [...prev, annotationWithBookId]);
+                    console.debug('[Reader] Created new highlight:', annotationWithBookId.id);
+                } else {
+                    console.warn('[Reader] addHighlight returned null/undefined');
+                }
             } catch (err) {
                 console.warn('[Reader] Failed to add highlight to viewport:', err);
             }
-            
-            console.debug('[Reader] Created new highlight:', annotation.id);
         }
 
         setShowColorPicker(false);
@@ -605,18 +605,20 @@ export function ReaderPage() {
 
         console.debug('[Reader] Deleting highlight:', editingHighlightId);
 
-        // Remove from store
+        // Remove from viewport FIRST (before removing from store)
+        // This is important because the engine needs to find the annotation in its internal map
+        try {
+            await readerRef.current?.removeHighlight?.(editingHighlightId);
+            console.debug('[Reader] Successfully removed highlight from viewport');
+        } catch (err) {
+            console.warn('[Reader] Failed to remove highlight from viewport:', err);
+        }
+
+        // Then remove from store
         removeAnnotation(editingHighlightId);
         
         // Update local state
         setAnnotations(prev => prev.filter(a => a.id !== editingHighlightId));
-
-        // Remove from viewport
-        try {
-            await readerRef.current?.removeHighlight?.(editingHighlightId);
-        } catch (err) {
-            console.warn('[Reader] Failed to remove highlight from viewport:', err);
-        }
 
         // Clear all related state
         setShowColorPicker(false);
