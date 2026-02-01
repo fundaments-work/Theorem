@@ -14,3 +14,6 @@ export { BookInfoPopover } from './BookInfoPopover';
 
 // Highlight components
 export { HighlightColorPicker, HighlightMenu, NoteEditor } from './highlights';
+
+// Resume reading dialog
+export { ResumeReadingDialog } from './ResumeReadingDialog';

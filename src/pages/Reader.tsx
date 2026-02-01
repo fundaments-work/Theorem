@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, useLibraryStore, useSettingsStore } from '@/store';
-import { HighlightColorPicker, HighlightMenu, NoteEditor } from '@/components/reader';
+import { HighlightColorPicker, HighlightMenu, NoteEditor, ResumeReadingDialog } from '@/components/reader';
 import {
     ReaderViewport,
     WindowTitlebar,
@@ -71,6 +71,14 @@ export function ReaderPage() {
             setIsBookReady(false);
             setInitialLocation(book.currentLocation);
             setLoadError(null);
+            
+            // Check if we should show resume dialog
+            if (book.progress && book.progress > 0.05 && book.progress < 0.99) {
+                setSavedProgress(book.progress);
+                setShowResumeDialog(true);
+            } else {
+                setShowResumeDialog(false);
+            }
 
             try {
                 const blob = await getBookBlob(book.id, book.storagePath || book.filePath);
@@ -212,6 +220,10 @@ export function ReaderPage() {
     const [noteEditorPosition, setNoteEditorPosition] = useState({ x: 0, y: 0 });
     const [editingNote, setEditingNote] = useState('');
     const [pendingHighlightColor, setPendingHighlightColor] = useState<HighlightColor>('yellow');
+    
+    // Resume reading state
+    const [showResumeDialog, setShowResumeDialog] = useState(false);
+    const [savedProgress, setSavedProgress] = useState(0);
 
     const { addAnnotation, removeAnnotation, getBookAnnotations, updateAnnotation } = useLibraryStore();
 
@@ -489,6 +501,18 @@ export function ReaderPage() {
                 metadata={metadata}
                 visible={activePanel === 'info'}
                 onClose={() => setActivePanel(null)}
+            />
+
+            {/* Resume Reading Dialog */}
+            <ResumeReadingDialog
+                isVisible={showResumeDialog}
+                progress={savedProgress}
+                onDismiss={() => setShowResumeDialog(false)}
+                onRestart={() => {
+                    // Go to beginning of book
+                    readerRef.current?.goToFraction?.(0);
+                    setShowResumeDialog(false);
+                }}
             />
 
             {/* Highlight Color Picker Popup */}

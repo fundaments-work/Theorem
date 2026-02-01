@@ -144,18 +144,36 @@ export class FoliateEngine {
             // Async settings application
             await this.applySettingsAsync();
 
-            // Navigate to initial location
-            if (initialLocation) {
-                await this.view.goTo(initialLocation);
-            } else {
-                await this.view.goTo({ index: 0, fraction: 0 });
-            }
-
-            // Extract metadata and TOC
+            // Extract metadata and TOC first
             const metadata = this.extractMetadata();
             const toc = this.extractToc();
 
+            // Signal that book is ready
             this.options.onReady?.(metadata, toc);
+
+            // Navigate to initial location after a short delay to ensure everything is ready
+            // Use requestAnimationFrame for better timing
+            requestAnimationFrame(() => {
+                setTimeout(async () => {
+                    try {
+                        if (initialLocation) {
+                            // Try to navigate to saved location
+                            await this.view.goTo(initialLocation);
+                        } else {
+                            // No saved location, start from beginning
+                            await this.view.goTo({ index: 0, fraction: 0 });
+                        }
+                    } catch (error) {
+                        // If CFI navigation fails, try percentage-based fallback
+                        console.warn('[FoliateEngine] Failed to navigate to saved location, trying fallback:', error);
+                        try {
+                            await this.view.goTo({ index: 0, fraction: 0 });
+                        } catch (fallbackError) {
+                            console.error('[FoliateEngine] Fallback navigation also failed:', fallbackError);
+                        }
+                    }
+                }, 100);
+            });
 
         } catch (error) {
             this.options.onError?.(error as Error);
