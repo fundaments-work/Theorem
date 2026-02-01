@@ -712,28 +712,14 @@ export class FoliateEngine {
     async goToFraction(fraction: number): Promise<void> {
         if (!this.view) return;
         
-        // Safety check: ensure sectionFractions is valid
-        if (this.sectionFractions.length === 0) {
-            console.warn('[FoliateEngine] goToFraction called but sectionFractions is empty, using fallback');
-            await this.view.goTo({ index: 0, fraction: fraction });
-            return;
-        }
+        // Clamp fraction to valid range
+        const clampedFraction = Math.max(0, Math.min(1, fraction));
         
-        const index = this.findSectionIndex(fraction);
-        console.debug('[FoliateEngine] goToFraction:', {
-            requestedFraction: fraction,
-            sectionIndex: index,
-            sectionCount: this.sectionFractions.length,
-        });
+        console.debug('[FoliateEngine] goToFraction:', { fraction: clampedFraction });
         
-        const sectionFraction = this.calculateSectionFraction(fraction, index);
-        console.debug('[FoliateEngine] goToFraction calculated:', {
-            sectionFraction,
-            sectionStart: this.sectionFractions[index] ?? 0,
-            sectionEnd: this.sectionFractions[index + 1] ?? 1,
-        });
-        
-        await this.view.goTo({ index, fraction: sectionFraction });
+        // Use foliate-js's built-in goToFraction which correctly calculates
+        // section index and anchor fraction internally using its sectionProgress
+        await this.view.goToFraction(clampedFraction);
     }
 
     async next(distance?: number): Promise<void> {
