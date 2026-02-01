@@ -108,6 +108,7 @@ export function HighlightColorPicker({
     onDelete,
     onClose,
 }: HighlightColorPickerProps) {
+    console.debug('[HighlightColorPicker] RENDER: isOpen=', isOpen, 'onDelete=', typeof onDelete, 'currentColor=', currentColor);
     const popupRef = useRef<HTMLDivElement>(null);
     const [adjustedPosition, setAdjustedPosition] = useState(position);
     const [isClosing, setIsClosing] = useState(false);

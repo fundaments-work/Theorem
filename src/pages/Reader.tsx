@@ -754,6 +754,10 @@ export function ReaderPage() {
             />
 
             {/* Highlight Color Picker Popup */}
+            {(() => {
+                console.debug('[Reader] RENDER: showColorPicker=', showColorPicker, 'editingHighlightId=', editingHighlightId, 'onDelete=', editingHighlightId ? 'SET' : 'UNDEFINED');
+                return null;
+            })()}
             <HighlightColorPicker
                 isOpen={showColorPicker}
                 position={colorPickerPosition}
