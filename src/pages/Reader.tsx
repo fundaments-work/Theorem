@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, useLibraryStore, useSettingsStore } from '@/store';
+import { HighlightColorPicker, HighlightMenu, NoteEditor } from '@/components/reader';
 import {
     ReaderViewport,
     WindowTitlebar,
@@ -16,7 +17,7 @@ import {
     BookInfoPopover,
     ReaderViewportHandle,
 } from '@/components/reader';
-import { DocLocation, DocMetadata, TocItem } from '@/types';
+import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation } from '@/types';
 import { getBookBlob } from '@/lib/storage';
 
 export function ReaderPage() {
@@ -67,6 +68,7 @@ export function ReaderPage() {
             setMetadata(null);
             setToc([]);
             setLocation(null);
+            setIsBookReady(false);
             setInitialLocation(book.currentLocation);
             setLoadError(null);
 
@@ -152,6 +154,7 @@ export function ReaderPage() {
     const handleReady = useCallback((meta: DocMetadata, tocItems: TocItem[]) => {
         setMetadata(meta);
         setToc(tocItems);
+        setIsBookReady(true);
     }, []);
 
     const lastClickFractionRef = useRef<number | null>(null);
@@ -194,7 +197,178 @@ export function ReaderPage() {
         setRoute('library');
     }, [setRoute]);
 
-    const handleTextSelected = useCallback((_cfi: string, _text: string) => {}, []);
+    // Highlight state
+    const [showColorPicker, setShowColorPicker] = useState(false);
+    const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
+    const [selectedText, setSelectedText] = useState('');
+    const [selectedCfi, setSelectedCfi] = useState('');
+    const [showHighlightMenu, setShowHighlightMenu] = useState(false);
+    const [highlightMenuPosition, setHighlightMenuPosition] = useState({ x: 0, y: 0 });
+    const [activeAnnotation, setActiveAnnotation] = useState<Annotation | null>(null);
+    const [annotations, setAnnotations] = useState<Annotation[]>([]);
+    
+    // Note editor state
+    const [showNoteEditor, setShowNoteEditor] = useState(false);
+    const [noteEditorPosition, setNoteEditorPosition] = useState({ x: 0, y: 0 });
+    const [editingNote, setEditingNote] = useState('');
+    const [pendingHighlightColor, setPendingHighlightColor] = useState<HighlightColor>('yellow');
+
+    const { addAnnotation, removeAnnotation, getBookAnnotations, updateAnnotation } = useLibraryStore();
+
+    // Track when book is ready
+    const [isBookReady, setIsBookReady] = useState(false);
+
+    // Load annotations when book changes and is ready
+    useEffect(() => {
+        if (currentBookId && isBookReady) {
+            const bookAnnotations = getBookAnnotations(currentBookId);
+            setAnnotations(bookAnnotations);
+            // Load annotations into viewport (with delay to ensure foliate is ready)
+            const timer = setTimeout(() => {
+                readerRef.current?.loadAnnotations?.(bookAnnotations).catch((err: Error) => {
+                    console.warn('[Reader] Failed to load annotations:', err);
+                });
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [currentBookId, getBookAnnotations, isBookReady]);
+
+    const handleTextSelected = useCallback((cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => {
+        console.debug('[Reader] Text selected:', { cfi: cfi.substring(0, 50), text: text.substring(0, 50) });
+        
+        if (!cfi || !text.trim()) {
+            console.debug('[Reader] Empty selection, ignoring');
+            return;
+        }
+        
+        setSelectedCfi(cfi);
+        setSelectedText(text);
+        
+        // Position color picker near selection
+        if (rangeOrEvent && 'clientX' in rangeOrEvent) {
+            // It's a MouseEvent
+            setColorPickerPosition({ x: rangeOrEvent.clientX, y: rangeOrEvent.clientY - 60 });
+        } else if (rangeOrEvent && 'getBoundingClientRect' in rangeOrEvent) {
+            // It's a Range - use the rect for positioning
+            const rect = rangeOrEvent.getBoundingClientRect();
+            setColorPickerPosition({ x: rect.left + rect.width / 2, y: rect.top - 60 });
+        } else {
+            // Fallback to center of screen
+            setColorPickerPosition({ x: window.innerWidth / 2 - 100, y: 100 });
+        }
+        
+        console.debug('[Reader] Showing color picker at:', colorPickerPosition);
+        setShowColorPicker(true);
+    }, []);
+
+    const handleColorSelect = useCallback((color: HighlightColor) => {
+        if (!selectedCfi || !currentBookId) return;
+
+        const annotation: Annotation = {
+            id: crypto.randomUUID(),
+            bookId: currentBookId,
+            type: 'highlight',
+            location: selectedCfi,
+            selectedText,
+            color,
+            createdAt: new Date(),
+        };
+
+        addAnnotation(annotation);
+        setAnnotations(prev => [...prev, annotation]);
+        
+        // Add to viewport
+        readerRef.current?.addHighlight?.(selectedCfi, selectedText, color);
+        
+        setShowColorPicker(false);
+        setSelectedText('');
+        setSelectedCfi('');
+        
+        // Clear selection
+        readerRef.current?.clearSelection?.();
+    }, [selectedCfi, selectedText, currentBookId, addAnnotation]);
+
+    const handleAddNote = useCallback(() => {
+        if (!selectedCfi || !currentBookId) return;
+
+        // Close color picker and open note editor
+        setShowColorPicker(false);
+        setNoteEditorPosition(colorPickerPosition);
+        setEditingNote('');
+        setPendingHighlightColor('yellow');
+        setShowNoteEditor(true);
+    }, [selectedCfi, currentBookId, colorPickerPosition]);
+
+    const handleSaveNote = useCallback((noteContent: string) => {
+        if (!selectedCfi || !currentBookId) return;
+
+        const annotation: Annotation = {
+            id: crypto.randomUUID(),
+            bookId: currentBookId,
+            type: noteContent ? 'note' : 'highlight',
+            location: selectedCfi,
+            selectedText,
+            color: pendingHighlightColor,
+            noteContent: noteContent || undefined,
+            createdAt: new Date(),
+        };
+
+        addAnnotation(annotation);
+        setAnnotations(prev => [...prev, annotation]);
+        
+        // Add highlight to viewport
+        readerRef.current?.addHighlight?.(selectedCfi, selectedText, pendingHighlightColor);
+        
+        setShowNoteEditor(false);
+        setSelectedText('');
+        setSelectedCfi('');
+        setEditingNote('');
+        
+        // Clear selection
+        readerRef.current?.clearSelection?.();
+    }, [selectedCfi, selectedText, currentBookId, addAnnotation, pendingHighlightColor]);
+
+    const handleBookmarkFromSelection = useCallback(() => {
+        if (!selectedCfi || !currentBookId) return;
+
+        const annotation: Annotation = {
+            id: crypto.randomUUID(),
+            bookId: currentBookId,
+            type: 'bookmark',
+            location: selectedCfi,
+            selectedText,
+            createdAt: new Date(),
+        };
+
+        addAnnotation(annotation);
+        setAnnotations(prev => [...prev, annotation]);
+        
+        setShowColorPicker(false);
+        setSelectedText('');
+        setSelectedCfi('');
+        
+        readerRef.current?.clearSelection?.();
+    }, [selectedCfi, selectedText, currentBookId, addAnnotation]);
+
+    const handleDeleteAnnotation = useCallback(() => {
+        if (!activeAnnotation) return;
+        
+        removeAnnotation(activeAnnotation.id);
+        setAnnotations(prev => prev.filter(a => a.id !== activeAnnotation.id));
+        
+        // Remove from viewport
+        readerRef.current?.removeHighlight?.(activeAnnotation.id);
+        
+        setShowHighlightMenu(false);
+        setActiveAnnotation(null);
+    }, [activeAnnotation, removeAnnotation]);
+
+    const handleCopyText = useCallback(() => {
+        if (activeAnnotation?.selectedText) {
+            navigator.clipboard.writeText(activeAnnotation.selectedText);
+        }
+        setShowHighlightMenu(false);
+    }, [activeAnnotation]);
 
     const handleLocationsSaved = useCallback((locations: string) => {
         if (currentBookId) {
@@ -315,6 +489,58 @@ export function ReaderPage() {
                 metadata={metadata}
                 visible={activePanel === 'info'}
                 onClose={() => setActivePanel(null)}
+            />
+
+            {/* Highlight Color Picker Popup */}
+            <HighlightColorPicker
+                isOpen={showColorPicker}
+                position={colorPickerPosition}
+                selectedText={selectedText}
+                onSelectColor={handleColorSelect}
+                onAddNote={handleAddNote}
+                onBookmark={handleBookmarkFromSelection}
+                onClose={() => {
+                    setShowColorPicker(false);
+                    readerRef.current?.clearSelection?.();
+                }}
+            />
+
+            {/* Highlight Menu (for existing highlights) */}
+            <HighlightMenu
+                isOpen={showHighlightMenu}
+                position={highlightMenuPosition}
+                annotation={activeAnnotation}
+                onEditNote={() => {
+                    if (activeAnnotation) {
+                        setNoteEditorPosition(highlightMenuPosition);
+                        setEditingNote(activeAnnotation.noteContent || '');
+                        setSelectedCfi(activeAnnotation.location);
+                        setSelectedText(activeAnnotation.selectedText || '');
+                        setPendingHighlightColor(activeAnnotation.color || 'yellow');
+                        setShowNoteEditor(true);
+                        setShowHighlightMenu(false);
+                    }
+                }}
+                onDelete={handleDeleteAnnotation}
+                onCopyText={handleCopyText}
+                onClose={() => {
+                    setShowHighlightMenu(false);
+                    setActiveAnnotation(null);
+                }}
+            />
+
+            {/* Note Editor */}
+            <NoteEditor
+                isOpen={showNoteEditor}
+                position={noteEditorPosition}
+                initialNote={editingNote}
+                selectedText={selectedText}
+                onSave={handleSaveNote}
+                onClose={() => {
+                    setShowNoteEditor(false);
+                    setEditingNote('');
+                    readerRef.current?.clearSelection?.();
+                }}
             />
         </div>
     );

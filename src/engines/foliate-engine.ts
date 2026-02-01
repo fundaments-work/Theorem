@@ -34,7 +34,7 @@ export interface FoliateEngineOptions {
     onLocationChange?: (location: DocLocation) => void;
     onReady?: (metadata: DocMetadata, toc: TocItem[]) => void;
     onError?: (error: Error) => void;
-    onTextSelected?: (cfi: string, text: string, range: Range) => void;
+    onTextSelected?: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void;
 }
 
 export class FoliateEngine {
@@ -210,6 +210,99 @@ export class FoliateEngine {
             this._navigationHistory = this.view?.history?.items || [];
             this._currentHistoryIndex = this.view?.history?.index || -1;
         });
+
+        // Handle section load - re-attach selection listeners for new sections
+        this.view.addEventListener('load', (e: any) => {
+            const detail = e.detail;
+            console.debug('[FoliateEngine] Section loaded:', detail?.index);
+            
+            // Clear the attached listeners set for new sections
+            if (detail?.doc) {
+                this.iframeListenersAttached.delete(detail.doc);
+            }
+            
+            // Re-setup selection listeners and re-render highlights after a short delay
+            setTimeout(() => {
+                console.debug('[FoliateEngine] Section load timeout fired, onTextSelected:', !!this.options.onTextSelected);
+                if (this.options.onTextSelected) {
+                    console.debug('[FoliateEngine] Re-attaching selection listeners after section load for section', detail?.index);
+                    this.setupIframeSelectionListener(this.options.onTextSelected);
+                } else {
+                    console.warn('[FoliateEngine] onTextSelected callback not set!');
+                }
+                
+                // Re-render all annotations for this section
+                console.debug('[FoliateEngine] Re-rendering annotations for section', detail?.index, 'total annotations:', this.annotations.size);
+                this.renderAnnotationsForSection(detail?.index);
+            }, 500);
+        });
+
+        // Handle annotation drawing
+        this.view.addEventListener('draw-annotation', (e: any) => {
+            const { draw, annotation, doc, range } = e.detail;
+            console.debug('[FoliateEngine] draw-annotation event:', { color: annotation?.color, hasDraw: !!draw, hasDoc: !!doc, hasRange: !!range });
+            
+            if (!draw || !annotation) {
+                console.warn('[FoliateEngine] draw-annotation missing draw or annotation');
+                return;
+            }
+
+            // Get the color for the highlight
+            const color = this.getHighlightColor(annotation.color || 'yellow');
+            console.debug('[FoliateEngine] Drawing highlight with color:', color);
+            
+            // Draw the highlight using the overlayer
+            try {
+                draw((rects: DOMRectList) => {
+                    console.debug('[FoliateEngine] Drawing', rects.length, 'rects');
+                    const g = doc.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    g.setAttribute('fill', color);
+                    g.style.opacity = '0.4';
+                    g.style.mixBlendMode = 'multiply';
+                    
+                    for (const rect of rects) {
+                        const el = doc.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                        el.setAttribute('x', String(rect.left));
+                        el.setAttribute('y', String(rect.top));
+                        el.setAttribute('width', String(rect.width));
+                        el.setAttribute('height', String(rect.height));
+                        el.setAttribute('rx', '2');
+                        g.appendChild(el);
+                    }
+                    console.debug('[FoliateEngine] Created SVG group with', g.childElementCount, 'rects');
+                    return g;
+                }, annotation);
+                console.debug('[FoliateEngine] draw() completed successfully');
+            } catch (err) {
+                console.error('[FoliateEngine] Error in draw-annotation:', err);
+            }
+        });
+
+        // Handle annotation click
+        this.view.addEventListener('show-annotation', (e: any) => {
+            const { value, index, range } = e.detail;
+            // Find the annotation by CFI
+            const annotation = Array.from(this.annotations.values())
+                .find(a => a.location === value);
+            
+            if (annotation && this.options.onTextSelected) {
+                // Re-use the selection callback for now
+                // TODO: Add dedicated onAnnotationClick callback
+                console.debug('[FoliateEngine] Annotation clicked:', annotation);
+            }
+        });
+    }
+
+    private getHighlightColor(colorName: string): string {
+        const colorMap: Record<string, string> = {
+            yellow: 'rgba(255, 235, 59, 1)',
+            green: 'rgba(76, 175, 80, 1)',
+            blue: 'rgba(33, 150, 243, 1)',
+            red: 'rgba(244, 67, 54, 1)',
+            orange: 'rgba(255, 152, 0, 1)',
+            purple: 'rgba(156, 39, 176, 1)',
+        };
+        return colorMap[colorName] || colorMap.yellow;
     }
 
     /**
@@ -685,10 +778,12 @@ export class FoliateEngine {
     }
 
     // Annotation methods
-    async addHighlight(cfi: string, text: string, color: HighlightColor): Promise<Annotation> {
+    async addHighlight(cfi: string, text: string, color: HighlightColor, bookId?: string): Promise<Annotation> {
+        console.debug('[FoliateEngine] addHighlight called:', { cfi: cfi.substring(0, 30), text: text.substring(0, 30), color });
+        
         const annotation: Annotation = {
             id: crypto.randomUUID(),
-            bookId: '',
+            bookId: bookId || '',
             type: 'highlight',
             location: cfi,
             selectedText: text,
@@ -697,21 +792,145 @@ export class FoliateEngine {
         };
 
         this.annotations.set(annotation.id, annotation);
-        this.view?.addAnnotation?.({
-            value: cfi,
-            color: color,
-        });
+        console.debug('[FoliateEngine] Annotation stored, total annotations:', this.annotations.size);
+        
+        // Add to view for rendering
+        try {
+            console.debug('[FoliateEngine] Calling view.addAnnotation with cfi:', cfi.substring(0, 30));
+            await this.view?.addAnnotation?.({
+                value: cfi,
+                color: color,
+            });
+            console.debug('[FoliateEngine] view.addAnnotation completed');
+        } catch (e) {
+            console.warn('[FoliateEngine] Failed to add annotation to view:', e);
+        }
 
         return annotation;
     }
 
+    async addAnnotation(annotation: Annotation): Promise<void> {
+        this.annotations.set(annotation.id, annotation);
+        
+        if (annotation.type === 'highlight' && annotation.location) {
+            try {
+                await this.view?.addAnnotation?.({
+                    value: annotation.location,
+                    color: annotation.color,
+                });
+            } catch (e) {
+                console.warn('[FoliateEngine] Failed to add annotation to view:', e);
+            }
+        }
+    }
+
     async removeHighlight(id: string): Promise<void> {
-        this.annotations.delete(id);
-        this.view?.removeAnnotation?.(id);
+        const annotation = this.annotations.get(id);
+        if (annotation) {
+            this.annotations.delete(id);
+            try {
+                await this.view?.deleteAnnotation?.({ value: annotation.location });
+            } catch (e) {
+                console.warn('[FoliateEngine] Failed to remove annotation from view:', e);
+            }
+        }
+    }
+
+    async removeAnnotation(id: string): Promise<void> {
+        await this.removeHighlight(id);
     }
 
     getAnnotations(): Annotation[] {
         return Array.from(this.annotations.values());
+    }
+
+    getAnnotationsByBookId(bookId: string): Annotation[] {
+        return Array.from(this.annotations.values()).filter(a => a.bookId === bookId);
+    }
+
+    /**
+     * Re-render all annotations for a specific section
+     * Called when a section reloads (e.g., when navigating back to a previous page)
+     */
+    async renderAnnotationsForSection(sectionIndex: number): Promise<void> {
+        if (!this.view || !this.book) {
+            console.warn('[FoliateEngine] Cannot render annotations - view not ready');
+            return;
+        }
+
+        console.debug('[FoliateEngine] Rendering annotations for section', sectionIndex);
+        
+        // Get all annotations and filter by section
+        const allAnnotations = Array.from(this.annotations.values());
+        console.debug('[FoliateEngine] Total annotations to check:', allAnnotations.length);
+        
+        // We need to determine which annotations belong to this section
+        // Since we don't have an easy way to check, we'll try to render all
+        // and let foliate-js handle the ones that don't match
+        for (const annotation of allAnnotations) {
+            if (annotation.type === 'highlight' && annotation.location) {
+                try {
+                    console.debug('[FoliateEngine] Re-rendering annotation for section', sectionIndex, ':', annotation.location.substring(0, 30));
+                    await this.view?.addAnnotation?.({
+                        value: annotation.location,
+                        color: annotation.color,
+                    });
+                } catch (e) {
+                    // Silently ignore errors for annotations that don't belong to this section
+                    console.debug('[FoliateEngine] Annotation not in section', sectionIndex, ':', e);
+                }
+            }
+        }
+        
+        console.debug('[FoliateEngine] Finished rendering annotations for section', sectionIndex);
+    }
+
+    /**
+     * Load and render all annotations for a book
+     */
+    async loadAnnotations(annotations: Annotation[]): Promise<void> {
+        // Wait for view to be ready
+        if (!this.view || !this.book) {
+            console.warn('[FoliateEngine] Cannot load annotations - view not ready');
+            return;
+        }
+
+        // Clear existing
+        for (const annotation of this.annotations.values()) {
+            try {
+                await this.view?.deleteAnnotation?.({ value: annotation.location });
+            } catch (e) {
+                // Ignore errors for non-existent annotations
+            }
+        }
+        this.annotations.clear();
+
+        // Add new annotations with delay between each to avoid overwhelming the renderer
+        for (const annotation of annotations) {
+            this.annotations.set(annotation.id, annotation);
+            
+            if (annotation.location && annotation.type === 'highlight') {
+                try {
+                    await this.view?.addAnnotation?.({
+                        value: annotation.location,
+                        color: annotation.color,
+                    });
+                    // Small delay to allow renderer to process
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                } catch (e) {
+                    console.warn('[FoliateEngine] Failed to load annotation:', annotation.id, e);
+                }
+            }
+        }
+    }
+
+    /**
+     * Go to an annotation's location
+     */
+    async goToAnnotation(annotation: Annotation): Promise<void> {
+        if (annotation.location) {
+            await this.goTo(annotation.location);
+        }
     }
 
     // Search
@@ -755,6 +974,515 @@ export class FoliateEngine {
 
     getSectionFractions(): number[] {
         return this.sectionFractions;
+    }
+
+    /**
+     * Get CFI from a range in the current document
+     */
+    getCFIFromRange(index: number, range: Range): string {
+        if (!this.view?.getCFI) return '';
+        try {
+            return this.view.getCFI(index, range);
+        } catch (e) {
+            console.warn('[FoliateEngine] Failed to get CFI from range:', e);
+            return '';
+        }
+    }
+
+    /**
+     * Get the currently selected text and its CFI from the active document
+     */
+    getSelectionFromDocument(): { text: string; cfi: string; range: Range } | null {
+        // Guard against accessing view during transitions
+        if (!this.view || !this.book) {
+            return null;
+        }
+
+        try {
+            const contents = this.view.renderer?.getContents?.() || [];
+            
+            for (const content of contents) {
+                // Check if content is valid
+                if (!content || typeof content.index !== 'number') continue;
+                
+                const doc = content.doc;
+                if (!doc) continue;
+
+                const selection = doc.getSelection();
+                if (selection && !selection.isCollapsed) {
+                    const text = selection.toString().trim();
+                    if (text) {
+                        const range = selection.getRangeAt(0);
+                        const cfi = this.getCFIFromRange(content.index, range);
+                        if (cfi) {
+                            console.debug('[FoliateEngine] Selection found:', { text: text.substring(0, 50), cfi });
+                            return { text, cfi, range };
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            // Silently ignore errors during transitions
+            console.debug('[FoliateEngine] getSelectionFromDocument error:', e);
+        }
+        return null;
+    }
+
+    private iframeListenersAttached = new WeakSet<Document>();
+    private selectionCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+    private postMessageHandler: ((event: MessageEvent) => void) | null = null;
+
+    /**
+     * Setup selection listeners inside iframe documents
+     * This is needed because selectionchange doesn't bubble from iframes
+     */
+    setupIframeSelectionListener(callback: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void): void {
+        if (!this.view?.renderer) return;
+
+        // Setup postMessage listener for iframe selections (Tauri WebView compatible)
+        if (!this.postMessageHandler) {
+            this.postMessageHandler = (event: MessageEvent) => {
+                if (event.data?.type === 'foliate-selection') {
+                    console.debug('[FoliateEngine] Received selection from iframe via postMessage:', event.data);
+                    
+                    const { sectionIndex, text, clientX, clientY, rect } = event.data;
+                    
+                    // Get the document for this section
+                    const contents = this.view?.renderer?.getContents?.() || [];
+                    const content = contents.find((c: any) => c.index === sectionIndex);
+                    
+                    if (content?.doc) {
+                        // Try to find the range for CFI generation
+                        const doc = content.doc;
+                        const selection = doc.getSelection();
+                        
+                        if (selection && !selection.isCollapsed) {
+                            try {
+                                const range = selection.getRangeAt(0);
+                                const cfi = this.getCFIFromRange(sectionIndex, range);
+                                
+                                if (cfi) {
+                                    // Create synthetic mouse event
+                                    const syntheticEvent = new MouseEvent('mouseup', {
+                                        clientX: clientX || (rect?.left + rect?.width / 2) || 0,
+                                        clientY: clientY || (rect?.top) || 0,
+                                        bubbles: true
+                                    });
+                                    
+                                    console.debug('[FoliateEngine] Calling callback with CFI:', cfi);
+                                    callback(cfi, text, syntheticEvent);
+                                }
+                            } catch (err) {
+                                console.warn('[FoliateEngine] Error getting CFI from postMessage selection:', err);
+                            }
+                        }
+                    }
+                }
+            };
+            
+            window.addEventListener('message', this.postMessageHandler);
+            console.debug('[FoliateEngine] Setup postMessage listener for iframe selections');
+        }
+
+        const contents = this.view.renderer.getContents?.() || [];
+        
+        console.debug('[FoliateEngine] Setting up listeners for', contents.length, 'sections');
+        
+        for (const content of contents) {
+            const doc = content.doc;
+            const win = doc?.defaultView;
+            if (!doc || !win) {
+                console.debug('[FoliateEngine] No doc or window for section', content.index);
+                continue;
+            }
+
+            // Skip if already has listeners
+            if (this.iframeListenersAttached.has(doc)) {
+                console.debug('[FoliateEngine] Already has listeners for section', content.index);
+                continue;
+            }
+
+            console.debug('[FoliateEngine] Attaching selection listener to iframe:', content.index);
+
+            // Mark as having listeners
+            this.iframeListenersAttached.add(doc);
+
+            // Log document info for debugging
+            console.debug('[FoliateEngine] Document info for section', content.index, {
+                url: doc.URL,
+                title: doc.title,
+                bodyExists: !!doc.body,
+                windowExists: !!win,
+            });
+
+            // Try to access iframe element directly and add load listener
+            // This is more reliable than injected scripts in sandboxed iframes
+            const iframeElement = doc.defaultView?.frameElement as HTMLIFrameElement;
+            if (iframeElement) {
+                console.debug('[FoliateEngine] Found iframe element for section', content.index);
+                
+                // Listen for iframe load to re-attach listeners
+                iframeElement.addEventListener('load', () => {
+                    console.debug('[FoliateEngine] Iframe reloaded for section', content.index);
+                    this.attachSelectionListenersToIframe(iframeElement, content.index, callback);
+                });
+                
+                // Attach listeners now
+                this.attachSelectionListenersToIframe(iframeElement, content.index, callback);
+            } else {
+                console.debug('[FoliateEngine] No iframe element found for section', content.index, 'using script injection');
+                // Fallback to script injection
+                this.injectSelectionScript(doc, content.index, callback);
+            }
+
+            // Simple click test on window (capturing phase)
+            win.addEventListener('click', (e: MouseEvent) => {
+                const target = e.target as HTMLElement;
+                console.debug('[FoliateEngine] CLICK on window in section', content.index, { 
+                    target: target?.nodeName,
+                    x: e.clientX, 
+                    y: e.clientY,
+                    button: e.button
+                });
+            }, true);
+
+            // Track selection on window with capturing
+            win.addEventListener('pointerdown', (e: PointerEvent) => {
+                const target = e.target as HTMLElement;
+                console.debug('[FoliateEngine] POINTER DOWN in section', content.index, { 
+                    target: target?.nodeName,
+                    isPrimary: e.isPrimary
+                });
+            }, true);
+
+            win.addEventListener('pointerup', (e: PointerEvent) => {
+                console.debug('[FoliateEngine] POINTER UP in section', content.index);
+                
+                // Small delay to let selection finalize
+                setTimeout(() => {
+                    const selection = doc.getSelection();
+                    console.debug('[FoliateEngine] Checking selection after pointerup in section', content.index, {
+                        rangeCount: selection?.rangeCount,
+                        isCollapsed: selection?.isCollapsed,
+                    });
+                    
+                    if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+                        const text = selection.toString().trim();
+                        console.debug('[FoliateEngine] FOUND TEXT in section', content.index, ':', text.substring(0, 50));
+                        
+                        if (text.length > 0) {
+                            try {
+                                const range = selection.getRangeAt(0);
+                                const cfi = this.getCFIFromRange(content.index, range);
+                                if (cfi) {
+                                    console.debug('[FoliateEngine] CALLING CALLBACK with:', { text: text.substring(0, 30), cfi: cfi.substring(0, 30) });
+                                    callback(cfi, text, e as MouseEvent);
+                                }
+                            } catch (err) {
+                                console.warn('[FoliateEngine] Error:', err);
+                            }
+                        }
+                    }
+                }, 100);
+            }, true);
+
+            // Also try on document as backup
+            doc.addEventListener('selectionchange', () => {
+                const selection = doc.getSelection();
+                if (selection && !selection.isCollapsed) {
+                    console.debug('[FoliateEngine] DOC selectionchange in section', content.index);
+                }
+            });
+        }
+
+        // Setup polling as fallback
+        this.setupSelectionPolling(callback);
+    }
+
+    /**
+     * Attach selection listeners directly to an iframe element
+     * This tries to access the iframe's contentDocument and attach listeners
+     */
+    private attachSelectionListenersToIframe(
+        iframe: HTMLIFrameElement,
+        index: number,
+        callback: (cfi: string, text: string, event: MouseEvent) => void
+    ): void {
+        try {
+            const doc = iframe.contentDocument;
+            const win = iframe.contentWindow;
+            
+            if (!doc || !win) {
+                console.warn('[FoliateEngine] Cannot access iframe content for section', index);
+                return;
+            }
+            
+            console.debug('[FoliateEngine] Attaching listeners to iframe element for section', index);
+            
+            // Track last selection to avoid duplicates
+            let lastSelection = '';
+            
+            // Listen for mouseup on the iframe window
+            win.addEventListener('mouseup', (e: MouseEvent) => {
+                console.debug('[FoliateEngine] IFRAME MOUSEUP in section', index);
+                
+                setTimeout(() => {
+                    try {
+                        const selection = doc.getSelection();
+                        console.debug('[FoliateEngine] Checking selection in iframe', index, {
+                            rangeCount: selection?.rangeCount,
+                            isCollapsed: selection?.isCollapsed
+                        });
+                        
+                        if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+                            const text = selection.toString().trim();
+                            
+                            if (text && text !== lastSelection && text.length > 0) {
+                                lastSelection = text;
+                                console.debug('[FoliateEngine] TEXT SELECTED in iframe', index, ':', text.substring(0, 50));
+                                
+                                const range = selection.getRangeAt(0);
+                                const cfi = this.getCFIFromRange(index, range);
+                                
+                                if (cfi) {
+                                    console.debug('[FoliateEngine] Calling callback from iframe listener');
+                                    callback(cfi, text, e);
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.warn('[FoliateEngine] Error in iframe mouseup handler:', err);
+                    }
+                }, 100);
+            });
+            
+            console.debug('[FoliateEngine] Successfully attached iframe listeners for section', index);
+        } catch (err) {
+            console.warn('[FoliateEngine] Failed to attach iframe listeners:', err);
+        }
+    }
+
+    /**
+     * Inject a script into the iframe to detect selection and send via postMessage
+     * This is necessary for Tauri WebView which restricts cross-frame access
+     */
+    private injectSelectionScript(
+        doc: Document, 
+        index: number, 
+        callback: (cfi: string, text: string, event: MouseEvent) => void
+    ): void {
+        const script = doc.createElement('script');
+        script.textContent = `
+            (function() {
+                console.debug('[Iframe Script] Initializing selection detection for section ${index}');
+                
+                // Check if body has user-select restrictions
+                var bodyStyle = window.getComputedStyle(document.body);
+                console.debug('[Iframe Script] Body user-select:', bodyStyle.userSelect, 'webkitUserSelect:', bodyStyle.webkitUserSelect);
+                
+                let isSelecting = false;
+                let selectionStartTime = 0;
+                
+                // Test if ANY click works - use alert to bypass console issues
+                document.addEventListener('click', function(e) {
+                    console.debug('[Iframe Script] CLICK detected!', e.target.tagName);
+                    alert('CLICK detected on: ' + e.target.tagName);
+                });
+                
+                document.addEventListener('pointerdown', function(e) {
+                    isSelecting = true;
+                    selectionStartTime = Date.now();
+                    var target = e.target;
+                    var tagName = target.tagName;
+                    var textContent = target.textContent ? target.textContent.substring(0, 50) : 'no text';
+                    console.debug('[Iframe Script] Pointer down on', tagName, 'text:', textContent);
+                });
+                
+                document.addEventListener('pointerup', function(e) {
+                    var selectionDuration = Date.now() - selectionStartTime;
+                    isSelecting = false;
+                    console.debug('[Iframe Script] Pointer up after', selectionDuration, 'ms, checking selection...');
+                    
+                    // Multiple checks with increasing delays
+                    [50, 150, 300].forEach(function(delay) {
+                        setTimeout(function() {
+                            var selection = document.getSelection();
+                            console.debug('[Iframe Script] Selection check at', delay, 'ms:', {
+                                rangeCount: selection ? selection.rangeCount : 0,
+                                isCollapsed: selection ? selection.isCollapsed : true,
+                                type: selection ? selection.type : 'None'
+                            });
+                            
+                            if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+                                var text = selection.toString().trim();
+                                console.debug('[Iframe Script] Found text at', delay, 'ms:', text.substring(0, 50));
+                                
+                                if (text.length > 0) {
+                                    // Get range info for CFI generation
+                                    var range = selection.getRangeAt(0);
+                                    var rect = range.getBoundingClientRect();
+                                    
+                                    // Send to parent via postMessage
+                                    window.parent.postMessage({
+                                        type: 'foliate-selection',
+                                        sectionIndex: ${index},
+                                        text: text,
+                                        clientX: e.clientX,
+                                        clientY: e.clientY,
+                                        rect: {
+                                            left: rect.left,
+                                            top: rect.top,
+                                            width: rect.width,
+                                            height: rect.height
+                                        }
+                                    }, '*');
+                                    
+                                    console.debug('[Iframe Script] Sent selection to parent at', delay, 'ms');
+                                }
+                            }
+                        }, delay);
+                    });
+                });
+                
+                console.debug('[Iframe Script] Selection listeners attached');
+            })();
+        `;
+        
+        // Append to head or body
+        if (doc.head) {
+            doc.head.appendChild(script);
+            console.debug('[FoliateEngine] Injected selection script into section', index);
+        } else if (doc.body) {
+            doc.body.appendChild(script);
+            console.debug('[FoliateEngine] Injected selection script into body of section', index);
+        } else {
+            console.warn('[FoliateEngine] Cannot inject script - no head or body in section', index);
+        }
+    }
+
+    private checkAndReportSelection(
+        index: number, 
+        doc: Document, 
+        callback: (cfi: string, text: string, event: MouseEvent) => void,
+        event: MouseEvent
+    ): void {
+        const selection = doc.getSelection();
+        console.debug('[FoliateEngine] Checking selection in section', index, {
+            rangeCount: selection?.rangeCount,
+            isCollapsed: selection?.isCollapsed,
+            type: selection?.type
+        });
+        
+        if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+            const text = selection.toString().trim();
+            console.debug('[FoliateEngine] Found text in section', index, ':', text.substring(0, 50));
+            
+            if (text && text.length > 0) {
+                try {
+                    const range = selection.getRangeAt(0);
+                    const cfi = this.getCFIFromRange(index, range);
+                    if (cfi) {
+                        console.debug('[FoliateEngine] Selection detected - calling callback:', { text: text.substring(0, 50), cfi });
+                        callback(cfi, text, event);
+                    } else {
+                        console.warn('[FoliateEngine] Failed to get CFI from selection in section', index);
+                    }
+                } catch (err) {
+                    console.warn('[FoliateEngine] Error getting selection in section', index, ':', err);
+                }
+            }
+        }
+    }
+
+    private setupSelectionPolling(callback: (cfi: string, text: string, event: MouseEvent) => void): void {
+        // Clear existing interval
+        if (this.selectionCheckInterval) {
+            clearInterval(this.selectionCheckInterval);
+        }
+
+        let lastKnownSelection = '';
+
+        // Poll every 200ms as a fallback
+        this.selectionCheckInterval = setInterval(() => {
+            if (!this.view?.renderer) return;
+
+            const contents = this.view.renderer.getContents?.() || [];
+            
+            for (const content of contents) {
+                const doc = content.doc;
+                if (!doc || !this.iframeListenersAttached.has(doc)) continue;
+
+                const selection = doc.getSelection();
+                if (selection && !selection.isCollapsed) {
+                    const text = selection.toString().trim();
+                    const selectionKey = `${content.index}:${text}`;
+                    
+                    // Only report if selection is new and substantial
+                    if (text.length > 3 && selectionKey !== lastKnownSelection) {
+                        lastKnownSelection = selectionKey;
+                        console.debug('[FoliateEngine] Polling detected selection in section', content.index);
+                        
+                        try {
+                            const range = selection.getRangeAt(0);
+                            const cfi = this.getCFIFromRange(content.index, range);
+                            if (cfi) {
+                                // Create synthetic event
+                                const rect = range.getBoundingClientRect();
+                                const syntheticEvent = new MouseEvent('mouseup', {
+                                    clientX: rect.left + rect.width / 2,
+                                    clientY: rect.top,
+                                    bubbles: true
+                                });
+                                callback(cfi, text, syntheticEvent);
+                            }
+                        } catch (err) {
+                            console.warn('[FoliateEngine] Polling error:', err);
+                        }
+                    }
+                }
+            }
+        }, 200);
+    }
+
+    /**
+     * Clear any text selection in all documents
+     */
+    clearSelection(): void {
+        if (!this.view) return;
+        
+        try {
+            const contents = this.view.renderer?.getContents?.() || [];
+            for (const content of contents) {
+                const doc = content.doc;
+                if (doc) {
+                    doc.getSelection()?.removeAllRanges();
+                }
+            }
+        } catch (e) {
+            // Silently ignore errors during transitions
+            console.debug('[FoliateEngine] clearSelection error:', e);
+        }
+    }
+
+    /**
+     * Get the current section index being displayed
+     */
+    getCurrentSectionIndex(): number {
+        const contents = this.view?.renderer?.getContents?.() || [];
+        if (contents.length > 0) {
+            return contents[0].index;
+        }
+        return -1;
+    }
+
+    /**
+     * Get the document for a specific section index
+     */
+    getDocumentForSection(index: number): Document | null {
+        const contents = this.view?.renderer?.getContents?.() || [];
+        const content = contents.find((c: { index: number }) => c.index === index);
+        return content?.doc || null;
     }
 
     private findSectionIndex(fraction: number): number {

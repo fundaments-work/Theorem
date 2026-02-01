@@ -9,6 +9,7 @@ import type {
     ReadingStats,
     UIState,
     AppRoute,
+    HighlightColor,
 } from "@/types";
 import { applyReaderStyles, initReaderStyles } from "@/lib/reader-styles";
 
@@ -148,6 +149,8 @@ interface LibraryStore {
     lastScannedAt?: Date;
     // Cache for quick access to recently opened books
     recentBooksCache: CachedBookMetadata[];
+    // Currently active book for annotations
+    currentBookId?: string;
 
     // Book actions
     addBook: (book: Book) => void;
@@ -167,9 +170,13 @@ interface LibraryStore {
 
     // Annotation actions
     addAnnotation: (annotation: Annotation) => void;
+    addHighlightWithNote: (cfi: string, text: string, color: HighlightColor, note?: string) => Annotation;
     updateAnnotation: (annotationId: string, updates: Partial<Annotation>) => void;
     removeAnnotation: (annotationId: string) => void;
     getBookAnnotations: (bookId: string) => Annotation[];
+    getHighlights: (bookId: string) => Annotation[];
+    getBookmarks: (bookId: string) => Annotation[];
+    exportAnnotationsToMarkdown: (bookId: string) => string;
 
     // Getters
     getBook: (bookId: string) => Book | undefined;
@@ -181,6 +188,9 @@ interface LibraryStore {
 
     // Scanning
     setLastScannedAt: (date: Date) => void;
+
+    // Current book tracking
+    setCurrentBookId: (bookId: string | undefined) => void;
 
 }
 
@@ -291,6 +301,23 @@ export const useLibraryStore = create<LibraryStore>()(
             addAnnotation: (annotation) =>
                 set((state) => ({ annotations: [...state.annotations, annotation] })),
 
+            addHighlightWithNote: (cfi, text, color, note) => {
+                const annotation: Annotation = {
+                    id: crypto.randomUUID(),
+                    bookId: get().currentBookId || '',
+                    type: note ? 'note' : 'highlight',
+                    location: cfi,
+                    selectedText: text,
+                    color,
+                    noteContent: note,
+                    createdAt: new Date(),
+                };
+                set((state) => ({ annotations: [...state.annotations, annotation] }));
+                return annotation;
+            },
+
+            setCurrentBookId: (bookId) => set({ currentBookId: bookId }),
+
             updateAnnotation: (annotationId, updates) =>
                 set((state) => ({
                     annotations: state.annotations.map((a) =>
@@ -305,6 +332,52 @@ export const useLibraryStore = create<LibraryStore>()(
 
             getBookAnnotations: (bookId) =>
                 get().annotations.filter((a) => a.bookId === bookId),
+
+            getHighlights: (bookId) =>
+                get().annotations.filter((a) => a.bookId === bookId && (a.type === 'highlight' || a.type === 'note')),
+
+            getBookmarks: (bookId) =>
+                get().annotations.filter((a) => a.bookId === bookId && a.type === 'bookmark'),
+
+            exportAnnotationsToMarkdown: (bookId: string) => {
+                const book = get().getBook(bookId);
+                if (!book) return '';
+
+                const annotations = get().getBookAnnotations(bookId);
+                const highlights = annotations.filter(a => a.type === 'highlight' || a.type === 'note');
+                const bookmarks = annotations.filter(a => a.type === 'bookmark');
+
+                let markdown = `# Highlights for "${book.title}"\n\n`;
+                markdown += `by ${book.author}\n\n`;
+                markdown += `---\n\n`;
+
+                if (highlights.length > 0) {
+                    markdown += `## Highlights (${highlights.length})\n\n`;
+                    
+                    highlights.forEach((annotation, index) => {
+                        markdown += `### ${index + 1}. ${annotation.color || 'Highlight'}\n\n`;
+                        markdown += `> ${annotation.selectedText?.replace(/\n/g, ' ') || ''}\n\n`;
+                        
+                        if (annotation.noteContent) {
+                            markdown += `**Note:** ${annotation.noteContent}\n\n`;
+                        }
+                        
+                        markdown += `\`\`\`\nLocation: ${annotation.location}\n\`\`\`\n\n`;
+                        markdown += `---\n\n`;
+                    });
+                }
+
+                if (bookmarks.length > 0) {
+                    markdown += `## Bookmarks (${bookmarks.length})\n\n`;
+                    
+                    bookmarks.forEach((bookmark, index) => {
+                        markdown += `${index + 1}. ${bookmark.selectedText || 'Bookmark'}\n`;
+                        markdown += `   - Location: ${bookmark.location}\n\n`;
+                    });
+                }
+
+                return markdown;
+            },
 
             // Getters
             getBook: (bookId) => get().books.find((b) => b.id === bookId),

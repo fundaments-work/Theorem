@@ -22,7 +22,7 @@ export interface UseDocumentReaderOptions {
     onReady?: (metadata: DocMetadata, toc: TocItem[]) => void;
     onLocationsGenerated?: () => void;
     onError?: (error: Error) => void;
-    onTextSelected?: (cfi: string, text: string, range: Range) => void;
+    onTextSelected?: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void;
     onLocationsSaved?: (locations: string) => void;
 }
 
@@ -54,6 +54,12 @@ export interface UseDocumentReaderReturn {
     // Annotations
     addHighlight: (cfi: string, text: string, color: HighlightColor) => Promise<Annotation>;
     removeHighlight: (id: string) => Promise<void>;
+    loadAnnotations: (annotations: Annotation[]) => Promise<void>;
+    goToAnnotation: (annotation: Annotation) => Promise<void>;
+    
+    // Text selection
+    getSelection: () => { text: string; cfi: string } | null;
+    clearSelection: () => void;
 
     // Search
     search: (query: string) => AsyncGenerator<SearchResult | { progress: number } | 'done'>;
@@ -185,6 +191,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
                 setInitState(prev => ({ ...prev, isLoading: false }));
                 callbacksRef.current.onError?.(err);
             },
+            onTextSelected: callbacksRef.current.onTextSelected,
         });
 
         let isCancelled = false;
@@ -330,6 +337,27 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
     }, []);
 
+    const loadAnnotations = useCallback(async (annotations: Annotation[]) => {
+        const engine = engineRef.current;
+        if (!engine) return;
+
+        await engine.loadAnnotations(annotations);
+        setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
+    }, []);
+
+    const goToAnnotation = useCallback(async (annotation: Annotation) => {
+        await engineRef.current?.goToAnnotation(annotation);
+    }, []);
+
+    // Text selection
+    const getSelection = useCallback(() => {
+        return engineRef.current?.getSelectionFromDocument() || null;
+    }, []);
+
+    const clearSelection = useCallback(() => {
+        engineRef.current?.clearSelection();
+    }, []);
+
     // Search
     const search = useCallback(async function* (query: string) {
         const engine = engineRef.current;
@@ -427,6 +455,10 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         goForward,
         addHighlight,
         removeHighlight,
+        loadAnnotations,
+        goToAnnotation,
+        getSelection,
+        clearSelection,
         search,
         clearSearch,
         close,
@@ -460,6 +492,10 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         goForward,
         addHighlight,
         removeHighlight,
+        loadAnnotations,
+        goToAnnotation,
+        getSelection,
+        clearSelection,
         search,
         clearSearch,
         close,

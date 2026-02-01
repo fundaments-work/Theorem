@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useMemo, useState } from 'react';
 import { useDocumentReader } from '@/hooks';
-import type { DocLocation, DocMetadata, TocItem } from '@/types';
+import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation } from '@/types';
 import type { ReaderSettings } from '@/types';
 import { cn } from '@/lib/utils';
 import { getSettingsChanges } from '@/lib/reader-styles';
@@ -21,6 +21,11 @@ export interface ReaderViewportHandle {
     goTo: (location: string) => Promise<void>;
     search: (query: string) => AsyncGenerator<any>;
     clearSearch: () => void;
+    // Highlight methods
+    addHighlight: (cfi: string, text: string, color: HighlightColor) => Promise<Annotation>;
+    removeHighlight: (id: string) => Promise<void>;
+    loadAnnotations: (annotations: Annotation[]) => Promise<void>;
+    clearSelection: () => void;
 }
 
 interface ReaderViewportProps {
@@ -30,7 +35,7 @@ interface ReaderViewportProps {
     onReady?: (metadata: DocMetadata, toc: TocItem[]) => void;
     onLocationChange?: (location: DocLocation) => void;
     onError?: (error: Error) => void;
-    onTextSelected?: (cfi: string, text: string) => void;
+    onTextSelected?: (cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => void;
     onLocationsSaved?: (locations: string) => void;
     initialLocation?: string;
     savedLocations?: string;
@@ -85,12 +90,18 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         setZoom,
         setMargins,
         applyTheme,
+        addHighlight,
+        removeHighlight,
+        loadAnnotations,
+        clearSelection,
+        getSelection,
     } = useDocumentReader({
         onReady,
         onLocationsGenerated: () => {},
         onLocationChange,
         onError,
         onTextSelected: onTextSelected ? (cfi, text, _range) => {
+            // We need to capture the mouse event separately
             onTextSelected(cfi, text);
         } : undefined,
         onLocationsSaved,
@@ -104,7 +115,11 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         goTo: async (location) => { await goTo(location); },
         search: (query: string) => search(query) as AsyncGenerator<any>,
         clearSearch: () => clearSearch(),
-    }), [next, prev, goToFraction, goTo, search, clearSearch]);
+        addHighlight: (cfi: string, text: string, color: HighlightColor) => addHighlight(cfi, text, color),
+        removeHighlight: (id: string) => removeHighlight(id),
+        loadAnnotations: (annotations: Annotation[]) => loadAnnotations(annotations),
+        clearSelection: () => clearSelection(),
+    }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, removeHighlight, loadAnnotations, clearSelection]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -144,6 +159,20 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 
                 if (!cancelled) {
                     lastAppliedSettingsRef.current = { ...settings };
+                    
+                    // Setup iframe selection listeners after book is loaded
+                    if (onTextSelected) {
+                        setTimeout(() => {
+                            const engine = getEngine();
+                            if (engine) {
+                                console.debug('[ReaderViewport] Setting up iframe listeners after open');
+                                engine.setupIframeSelectionListener((cfi, text, event) => {
+                                    console.debug('[ReaderViewport] Selection from iframe:', { cfi: cfi.substring(0, 30), text: text.substring(0, 30) });
+                                    onTextSelected(cfi, text, event);
+                                });
+                            }
+                        }, 500);
+                    }
                 }
             } catch (err) {
                 if (!cancelled) {
@@ -311,6 +340,43 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         // This allows TOC and other panels to scroll with wheel
         return;
     }, []);
+
+    // Text selection handling - Fixed version with iframe support
+    useEffect(() => {
+        if (!onTextSelected || !isInitialized) return;
+
+        const engine = getEngine();
+        if (!engine) return;
+
+        console.debug('[ReaderViewport] Setting up selection handlers');
+
+        // Set up iframe selection listener - this is crucial!
+        engine.setupIframeSelectionListener((cfi, text, event) => {
+            console.debug('[ReaderViewport] Iframe selection detected:', { cfi: cfi.substring(0, 30), text: text.substring(0, 30) });
+            onTextSelected(cfi, text, event);
+        });
+
+        // Also handle load events to set up listeners on new sections
+        const handleLoad = () => {
+            console.debug('[ReaderViewport] Section loaded, setting up selection listeners');
+            engine.setupIframeSelectionListener((cfi, text, event) => {
+                console.debug('[ReaderViewport] Iframe selection detected (after load):', { cfi: cfi.substring(0, 30), text: text.substring(0, 30) });
+                onTextSelected(cfi, text, event);
+            });
+        };
+
+        // Listen for section load events
+        const engineInstance = engine as any;
+        if (engineInstance.view) {
+            engineInstance.view.addEventListener('load', handleLoad);
+        }
+        
+        return () => {
+            if (engineInstance.view) {
+                engineInstance.view.removeEventListener('load', handleLoad);
+            }
+        };
+    }, [onTextSelected, getEngine, isInitialized]);
 
     // Touch/Swipe navigation
     useEffect(() => {
