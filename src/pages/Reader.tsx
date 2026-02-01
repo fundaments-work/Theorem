@@ -16,6 +16,7 @@ import {
     ReaderSearch,
     BookInfoPopover,
     ReaderViewportHandle,
+    ReaderNavbar,
 } from '@/components/reader';
 import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation } from '@/types';
 import { getBookBlob } from '@/lib/storage';
@@ -32,6 +33,7 @@ export function ReaderPage() {
     const [metadata, setMetadata] = useState<DocMetadata | null>(null);
     const [toc, setToc] = useState<TocItem[]>([]);
     const [location, setLocation] = useState<DocLocation | null>(null);
+    const [sectionFractions, setSectionFractions] = useState<number[]>([]);
     // UI state
     const [showToolbar, setShowToolbar] = useState(true);
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | null;
@@ -186,6 +188,12 @@ export function ReaderPage() {
         setMetadata(meta);
         setToc(tocItems);
         setIsBookReady(true);
+        // Get section fractions from the reader after it's ready
+        // Use a small delay to ensure the engine has processed the book
+        setTimeout(() => {
+            const fractions = readerRef.current?.getSectionFractions() ?? [];
+            setSectionFractions(fractions);
+        }, 100);
     }, []);
 
     const lastClickFractionRef = useRef<number | null>(null);
@@ -830,6 +838,18 @@ export function ReaderPage() {
                     className="w-full h-full"
                 />
             </div>
+
+            {/* Bottom Progress Navbar */}
+            {isBookReady && (
+                <ReaderNavbar
+                    location={location}
+                    toc={toc}
+                    sectionFractions={sectionFractions}
+                    onSeek={handleSeek}
+                    totalPages={location?.pageInfo?.totalPages}
+                    className="fixed bottom-0 left-0 right-0 z-40"
+                />
+            )}
 
             {/* Panels - All affected by brightness filter */}
             <TableOfContents
