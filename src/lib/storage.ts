@@ -8,6 +8,7 @@ import { isTauri } from './env';
 
 const STORE_NAME = 'lion-reader-books';
 const METADATA_STORE = 'lion-reader-metadata';
+const COVERS_STORE = 'lion-reader-covers';
 
 // Dynamically import Tauri FS
 async function getTauriFs() {
@@ -207,4 +208,61 @@ export async function getBookMetadata<T>(id: string): Promise<T | null> {
 export async function getStorageStats(): Promise<{ used: number; total: number }> {
     // Simplified - in production, use Tauri FS to calculate actual usage
     return { used: 0, total: 1024 * 1024 * 1024 }; // 1GB default
+}
+
+/**
+ * Convert Blob to data URL
+ */
+async function blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+/**
+ * Save cover image as data URL
+ * @param bookId - The book ID
+ * @param blob - Cover image blob (JPEG/PNG)
+ * @returns Data URL of the saved cover
+ */
+export async function saveCoverImage(bookId: string, blob: Blob): Promise<string> {
+    try {
+        const dataUrl = await blobToDataUrl(blob);
+        await set(`${COVERS_STORE}-${bookId}`, dataUrl);
+        console.log('[Storage] Saved cover for book:', bookId, 'size:', dataUrl.length);
+        return dataUrl;
+    } catch (error) {
+        console.error('[Storage] Failed to save cover image:', error);
+        throw error;
+    }
+}
+
+/**
+ * Get cover image data URL
+ * @param bookId - The book ID
+ * @returns Data URL of the cover or null if not found
+ */
+export async function getCoverImage(bookId: string): Promise<string | null> {
+    try {
+        const dataUrl = await get<string>(`${COVERS_STORE}-${bookId}`);
+        return dataUrl ?? null;
+    } catch (error) {
+        console.error('[Storage] Failed to get cover image:', error);
+        return null;
+    }
+}
+
+/**
+ * Delete cover image
+ * @param bookId - The book ID
+ */
+export async function deleteCoverImage(bookId: string): Promise<void> {
+    try {
+        await del(`${COVERS_STORE}-${bookId}`);
+    } catch (error) {
+        console.error('[Storage] Failed to delete cover image:', error);
+    }
 }

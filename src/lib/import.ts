@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { isTauri } from './env';
 import { saveBookData, getBookData } from './storage';
 import { formatFileSize } from './utils';
+import { extractBookMetadata } from './cover-extractor';
 
 // Dynamically import Tauri plugins
 let tauriDialog: typeof import('@tauri-apps/plugin-dialog') | null = null;
@@ -109,6 +110,7 @@ export function extractFilenameMetadata(filePath: string): { title: string; auth
 
 /**
  * Create a book entry from a file path
+ * Extracts metadata and cover image using foliate-js
  */
 export async function createBookEntry(filePath: string): Promise<Book | null> {
     const format = getBookFormat(filePath);
@@ -143,15 +145,28 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
 
     const id = uuidv4();
 
-    // Save to app storage
+    // Save to app storage first
     const storagePath = await saveBookData(id, buffer);
 
-    const { title, author } = extractFilenameMetadata(filePath);
+    // Get filename for fallback metadata
+    const filename = filePath.split(/[/\\]/).pop() || 'Unknown.epub';
+    const filenameMetadata = extractFilenameMetadata(filePath);
 
+    // Extract metadata and cover from the book file
+    console.log('[Import] Extracting metadata and cover for:', filename);
+    let metadata;
+    try {
+        metadata = await extractBookMetadata(buffer, filename, id);
+    } catch (error) {
+        console.warn('[Import] Metadata extraction failed, using filename:', error);
+        metadata = null;
+    }
+
+    // Build book object with extracted metadata (with filename fallbacks)
     const book: Book = {
         id,
-        title,
-        author,
+        title: metadata?.title || filenameMetadata.title,
+        author: metadata?.author || filenameMetadata.author,
         filePath,
         storagePath,
         format,
@@ -160,7 +175,20 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         progress: 0,
         isFavorite: false,
         tags: [],
+        // Additional metadata from extraction
+        coverPath: metadata?.coverDataUrl,
+        description: metadata?.description,
+        publisher: metadata?.publisher,
+        publishedDate: metadata?.publishedDate,
+        language: metadata?.language,
     };
+
+    console.log('[Import] Book created:', {
+        id: book.id,
+        title: book.title,
+        author: book.author,
+        hasCover: !!book.coverPath,
+    });
 
     return book;
 }
