@@ -729,8 +729,8 @@ export class FoliateEngine {
         const sectionFraction = this.calculateSectionFraction(fraction, index);
         console.debug('[FoliateEngine] goToFraction calculated:', {
             sectionFraction,
-            sectionStart: index > 0 ? this.sectionFractions[index - 1] : 0,
-            sectionEnd: this.sectionFractions[index] || 1,
+            sectionStart: this.sectionFractions[index] ?? 0,
+            sectionEnd: this.sectionFractions[index + 1] ?? 1,
         });
         
         await this.view.goTo({ index, fraction: sectionFraction });
@@ -1612,12 +1612,17 @@ export class FoliateEngine {
     }
 
     private calculateSectionFraction(totalFraction: number, sectionIndex: number): number {
-        const sectionStart = sectionIndex > 0 ? this.sectionFractions[sectionIndex - 1] : 0;
-        const sectionEnd = this.sectionFractions[sectionIndex] || 1;
+        // sectionFractions is structured as: [0, end_of_0, end_of_1, ..., 1]
+        // So for section i: start = sectionFractions[i], end = sectionFractions[i+1]
+        const sectionStart = this.sectionFractions[sectionIndex] ?? 0;
+        const sectionEnd = this.sectionFractions[sectionIndex + 1] ?? 1;
         const sectionSize = sectionEnd - sectionStart;
         
-        if (sectionSize === 0) return 0;
-        return (totalFraction - sectionStart) / sectionSize;
+        if (sectionSize <= 0) return 0;
+        
+        // Calculate the fraction within this section and clamp to [0, 1]
+        const result = (totalFraction - sectionStart) / sectionSize;
+        return Math.max(0, Math.min(1, result));
     }
 
     destroy(): void {
