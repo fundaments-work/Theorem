@@ -1,10 +1,10 @@
 /**
- * HighlightColorPicker Component
- * Popup for selecting highlight color when text is selected
+ * HighlightColorPicker Component - Optimized & Redesigned
+ * Modern, sleek popup for selecting highlight color with smooth animations
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Highlighter, MessageSquare, Bookmark, X } from 'lucide-react';
+import { MessageSquare, Bookmark, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HighlightColor } from '@/types';
 
@@ -18,49 +18,87 @@ interface HighlightColorPickerProps {
     onClose: () => void;
 }
 
-const COLOR_OPTIONS: { color: HighlightColor; bg: string; border: string; label: string }[] = [
+// Color configurations with proper highlight styling
+const COLOR_OPTIONS: { 
+    color: HighlightColor; 
+    bg: string; 
+    activeBg: string;
+    label: string;
+}[] = [
     { 
         color: 'yellow', 
-        bg: 'bg-yellow-400', 
-        border: 'border-yellow-500',
+        bg: 'bg-[#FFE082]', 
+        activeBg: 'bg-[#FFD54F]',
         label: 'Yellow'
     },
     { 
         color: 'green', 
-        bg: 'bg-green-500', 
-        border: 'border-green-600',
+        bg: 'bg-[#A5D6A7]', 
+        activeBg: 'bg-[#81C784]',
         label: 'Green'
     },
     { 
         color: 'blue', 
-        bg: 'bg-blue-500', 
-        border: 'border-blue-600',
+        bg: 'bg-[#90CAF9]', 
+        activeBg: 'bg-[#64B5F6]',
         label: 'Blue'
     },
     { 
         color: 'red', 
-        bg: 'bg-red-500', 
-        border: 'border-red-600',
+        bg: 'bg-[#EF9A9A]', 
+        activeBg: 'bg-[#E57373]',
         label: 'Red'
     },
     { 
         color: 'orange', 
-        bg: 'bg-orange-500', 
-        border: 'border-orange-600',
+        bg: 'bg-[#FFCC80]', 
+        activeBg: 'bg-[#FFB74D]',
         label: 'Orange'
     },
     { 
         color: 'purple', 
-        bg: 'bg-purple-500', 
-        border: 'border-purple-600',
+        bg: 'bg-[#CE93D8]', 
+        activeBg: 'bg-[#BA68C8]',
         label: 'Purple'
     },
 ];
 
+// Animation keyframes
+const ANIMATION_STYLES = `
+    @keyframes picker-appear {
+        from {
+            opacity: 0;
+            transform: translateY(8px) scale(0.96);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+    
+    @keyframes picker-disappear {
+        from {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        to {
+            opacity: 0;
+            transform: translateY(8px) scale(0.96);
+        }
+    }
+    
+    .picker-animate-in {
+        animation: picker-appear 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    
+    .picker-animate-out {
+        animation: picker-disappear 150ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+`;
+
 export function HighlightColorPicker({
     isOpen,
     position,
-    selectedText,
     onSelectColor,
     onAddNote,
     onBookmark,
@@ -68,176 +106,234 @@ export function HighlightColorPicker({
 }: HighlightColorPickerProps) {
     const popupRef = useRef<HTMLDivElement>(null);
     const [adjustedPosition, setAdjustedPosition] = useState(position);
+    const [isClosing, setIsClosing] = useState(false);
+    const [selectedColor, setSelectedColor] = useState<HighlightColor | null>(null);
 
-    // Adjust position to keep popup on screen
+    // Position calculation with viewport boundary detection
     useEffect(() => {
-        if (!isOpen) return;
-
-        const popup = popupRef.current;
-        if (!popup) return;
-
-        const rect = popup.getBoundingClientRect();
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
-        let { x, y } = position;
-
-        // Adjust horizontal position
-        if (x + rect.width > viewportWidth) {
-            x = viewportWidth - rect.width - 16;
-        }
-        if (x < 16) {
-            x = 16;
+        if (!isOpen) {
+            setIsClosing(false);
+            setSelectedColor(null);
+            return;
         }
 
-        // Adjust vertical position (show above or below selection)
-        if (y + rect.height > viewportHeight) {
-            y = y - rect.height - 40; // Show above
-        }
-        if (y < 16) {
-            y = 16;
-        }
+        const calculatePosition = () => {
+            const popup = popupRef.current;
+            if (!popup) return;
 
-        setAdjustedPosition({ x, y });
+            const rect = popup.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const padding = 12;
+
+            let { x, y } = position;
+
+            // Center horizontally relative to click position
+            x = x - rect.width / 2;
+
+            // Adjust horizontal bounds
+            if (x + rect.width > viewportWidth - padding) {
+                x = viewportWidth - rect.width - padding;
+            }
+            if (x < padding) {
+                x = padding;
+            }
+
+            // Position above or below based on available space
+            const spaceAbove = position.y;
+            const spaceBelow = viewportHeight - position.y;
+            
+            if (spaceBelow < rect.height + padding && spaceAbove > rect.height) {
+                y = position.y - rect.height - 12; // Show above
+            } else {
+                y = position.y + 12; // Show below
+            }
+
+            // Ensure vertical bounds
+            if (y + rect.height > viewportHeight - padding) {
+                y = viewportHeight - rect.height - padding;
+            }
+            if (y < padding) {
+                y = padding;
+            }
+
+            setAdjustedPosition({ x, y });
+        };
+
+        // Small delay to ensure popup is rendered for measurement
+        requestAnimationFrame(calculatePosition);
     }, [isOpen, position]);
 
-    // Handle click outside
-    useEffect(() => {
-        if (!isOpen) return;
+    // Close handlers with animation
+    const handleClose = useCallback(() => {
+        setIsClosing(true);
+        setTimeout(onClose, 150);
+    }, [onClose]);
 
-        const handleClickOutside = (e: MouseEvent) => {
-            if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-                onClose();
-            }
-        };
+    // Color selection with animation feedback
+    const handleColorClick = useCallback((color: HighlightColor) => {
+        setSelectedColor(color);
+        // Small delay for visual feedback before closing
+        requestAnimationFrame(() => {
+            onSelectColor(color);
+        });
+    }, [onSelectColor]);
 
-        // Delay to avoid immediate close from selection click
-        const timer = setTimeout(() => {
-            document.addEventListener('mousedown', handleClickOutside);
-        }, 100);
-
-        return () => {
-            clearTimeout(timer);
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [isOpen, onClose]);
-
-    // Handle escape key
+    // Keyboard shortcuts
     useEffect(() => {
         if (!isOpen) return;
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                onClose();
+                e.preventDefault();
+                handleClose();
+            }
+            
+            // Number keys 1-6 for quick color selection
+            const num = parseInt(e.key);
+            if (num >= 1 && num <= 6) {
+                e.preventDefault();
+                handleColorClick(COLOR_OPTIONS[num - 1].color);
             }
         };
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, onClose]);
+    }, [isOpen, handleClose, handleColorClick]);
 
-    const handleColorClick = useCallback((color: HighlightColor) => {
-        onSelectColor(color);
-    }, [onSelectColor]);
+    // Click outside handler
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handleClickOutside = (e: MouseEvent) => {
+            if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+                handleClose();
+            }
+        };
+
+        const timer = setTimeout(() => {
+            document.addEventListener('mousedown', handleClickOutside);
+        }, 50);
+
+        return () => {
+            clearTimeout(timer);
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen, handleClose]);
 
     if (!isOpen) return null;
 
     return (
-        <div
-            ref={popupRef}
-            className={cn(
-                "fixed z-[100] animate-fade-in",
-                "bg-[var(--color-surface)]",
-                "border border-[var(--color-border)]",
-                "rounded-lg shadow-lg",
-                "p-3 min-w-[240px]"
-            )}
-            style={{
-                left: adjustedPosition.x,
-                top: adjustedPosition.y,
-            }}
-        >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-[var(--color-text-primary)]">
-                    Highlight
-                </span>
-                <button
-                    onClick={onClose}
-                    className={cn(
-                        "p-1 rounded-md",
-                        "text-[var(--color-text-muted)]",
-                        "hover:bg-[var(--color-surface-hover)]",
-                        "transition-colors"
-                    )}
-                >
-                    <X className="w-4 h-4" />
-                </button>
-            </div>
-
-            {/* Selected text preview */}
-            {selectedText && (
-                <div className="mb-3 px-2 py-1.5 bg-[var(--color-surface-variant)] rounded text-xs text-[var(--color-text-secondary)] truncate">
-                    &ldquo;{selectedText.slice(0, 60)}{selectedText.length > 60 ? '...' : ''}&rdquo;
-                </div>
-            )}
-
-            {/* Color options */}
-            <div className="flex gap-1.5 mb-3">
-                {COLOR_OPTIONS.map(({ color, bg, border, label }) => (
+        <>
+            <style>{ANIMATION_STYLES}</style>
+            <div
+                ref={popupRef}
+                className={cn(
+                    "fixed z-[100]",
+                    "bg-[var(--color-surface)]",
+                    "border border-[var(--color-border)]",
+                    "rounded-xl shadow-xl",
+                    "p-2",
+                    isClosing ? "picker-animate-out" : "picker-animate-in"
+                )}
+                style={{
+                    left: adjustedPosition.x,
+                    top: adjustedPosition.y,
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)',
+                }}
+            >
+                {/* Header with close button */}
+                <div className="flex items-center justify-between px-1 mb-2">
+                    <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide">
+                        Highlight
+                    </span>
                     <button
-                        key={color}
-                        onClick={() => handleColorClick(color)}
+                        onClick={handleClose}
                         className={cn(
-                            "w-8 h-8 rounded-md",
-                            bg,
-                            "border-2",
-                            border,
-                            "hover:scale-110",
-                            "active:scale-95",
-                            "transition-transform",
-                            "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-1"
+                            "p-1 rounded-md",
+                            "text-[var(--color-text-muted)]",
+                            "hover:bg-[var(--color-surface-hover)]",
+                            "hover:text-[var(--color-text-primary)]",
+                            "transition-all duration-150"
                         )}
-                        title={label}
-                        aria-label={`Select ${label} highlight color`}
-                    />
-                ))}
-            </div>
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </div>
 
-            {/* Action buttons */}
-            <div className="flex gap-2 pt-2 border-t border-[var(--color-border)]">
-                <button
-                    onClick={onAddNote}
-                    className={cn(
-                        "flex-1 flex items-center justify-center gap-1.5",
-                        "px-3 py-1.5 text-xs font-medium",
-                        "rounded-md",
-                        "text-[var(--color-text-secondary)]",
-                        "hover:bg-[var(--color-surface-hover)]",
-                        "hover:text-[var(--color-text-primary)]",
-                        "transition-colors"
-                    )}
-                >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    Add Note
-                </button>
-                <button
-                    onClick={onBookmark}
-                    className={cn(
-                        "flex-1 flex items-center justify-center gap-1.5",
-                        "px-3 py-1.5 text-xs font-medium",
-                        "rounded-md",
-                        "text-[var(--color-text-secondary)]",
-                        "hover:bg-[var(--color-surface-hover)]",
-                        "hover:text-[var(--color-text-primary)]",
-                        "transition-colors"
-                    )}
-                >
-                    <Bookmark className="w-3.5 h-3.5" />
-                    Bookmark
-                </button>
+                {/* Color grid - more compact */}
+                <div className="flex gap-1 px-1 mb-3">
+                    {COLOR_OPTIONS.map(({ color, bg, activeBg, label }) => (
+                        <button
+                            key={color}
+                            onClick={() => handleColorClick(color)}
+                            className={cn(
+                                "w-7 h-7 rounded-lg",
+                                "flex items-center justify-center",
+                                selectedColor === color ? activeBg : bg,
+                                "border border-black/10",
+                                "shadow-sm",
+                                "hover:scale-110",
+                                "hover:shadow-md",
+                                "active:scale-95",
+                                "transition-all duration-150",
+                                "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-1"
+                            )}
+                            title={`${label} (Shortcut: ${COLOR_OPTIONS.findIndex(c => c.color === color) + 1})`}
+                            aria-label={`Select ${label} highlight color`}
+                        >
+                            {selectedColor === color && (
+                                <Check className="w-3.5 h-3.5 text-black/60" strokeWidth={3} />
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Action buttons - more compact and modern */}
+                <div className="flex gap-1">
+                    <button
+                        onClick={() => {
+                            onAddNote();
+                            handleClose();
+                        }}
+                        className={cn(
+                            "flex-1 flex items-center justify-center gap-1.5",
+                            "px-2 py-1.5 text-[11px] font-medium",
+                            "rounded-lg",
+                            "bg-[var(--color-surface-variant)]",
+                            "text-[var(--color-text-secondary)]",
+                            "hover:bg-[var(--color-surface-hover)]",
+                            "hover:text-[var(--color-text-primary)]",
+                            "transition-all duration-150",
+                            "active:scale-95"
+                        )}
+                    >
+                        <MessageSquare className="w-3 h-3" />
+                        Note
+                    </button>
+                    <button
+                        onClick={() => {
+                            onBookmark();
+                            handleClose();
+                        }}
+                        className={cn(
+                            "flex-1 flex items-center justify-center gap-1.5",
+                            "px-2 py-1.5 text-[11px] font-medium",
+                            "rounded-lg",
+                            "bg-[var(--color-surface-variant)]",
+                            "text-[var(--color-text-secondary)]",
+                            "hover:bg-[var(--color-surface-hover)]",
+                            "hover:text-[var(--color-text-primary)]",
+                            "transition-all duration-150",
+                            "active:scale-95"
+                        )}
+                    >
+                        <Bookmark className="w-3 h-3" />
+                        Bookmark
+                    </button>
+                </div>
             </div>
-        </div>
+        </>
     );
 }
 

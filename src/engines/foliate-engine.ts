@@ -65,6 +65,10 @@ export class FoliateEngine {
     private _navigationHistory: string[] = [];
     private _currentHistoryIndex = -1;
 
+    // CFI cache to avoid re-parsing
+    private cfiCache = new Map<string, string>();
+    private cfiCacheMaxSize = 100;
+
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
     }
@@ -1270,94 +1274,61 @@ export class FoliateEngine {
     private injectSelectionScript(
         doc: Document, 
         index: number, 
-        callback: (cfi: string, text: string, event: MouseEvent) => void
+        _callback: (cfi: string, text: string, event: MouseEvent) => void
     ): void {
         const script = doc.createElement('script');
         script.textContent = `
             (function() {
-                console.debug('[Iframe Script] Initializing selection detection for section ${index}');
-                
-                // Check if body has user-select restrictions
-                var bodyStyle = window.getComputedStyle(document.body);
-                console.debug('[Iframe Script] Body user-select:', bodyStyle.userSelect, 'webkitUserSelect:', bodyStyle.webkitUserSelect);
-                
                 let isSelecting = false;
                 let selectionStartTime = 0;
-                
-                // Test if ANY click works - use alert to bypass console issues
-                document.addEventListener('click', function(e) {
-                    console.debug('[Iframe Script] CLICK detected!', e.target.tagName);
-                    alert('CLICK detected on: ' + e.target.tagName);
-                });
+                let lastSelection = '';
                 
                 document.addEventListener('pointerdown', function(e) {
                     isSelecting = true;
                     selectionStartTime = Date.now();
-                    var target = e.target;
-                    var tagName = target.tagName;
-                    var textContent = target.textContent ? target.textContent.substring(0, 50) : 'no text';
-                    console.debug('[Iframe Script] Pointer down on', tagName, 'text:', textContent);
                 });
                 
                 document.addEventListener('pointerup', function(e) {
-                    var selectionDuration = Date.now() - selectionStartTime;
                     isSelecting = false;
-                    console.debug('[Iframe Script] Pointer up after', selectionDuration, 'ms, checking selection...');
                     
-                    // Multiple checks with increasing delays
-                    [50, 150, 300].forEach(function(delay) {
-                        setTimeout(function() {
-                            var selection = document.getSelection();
-                            console.debug('[Iframe Script] Selection check at', delay, 'ms:', {
-                                rangeCount: selection ? selection.rangeCount : 0,
-                                isCollapsed: selection ? selection.isCollapsed : true,
-                                type: selection ? selection.type : 'None'
-                            });
+                    // Check selection after a short delay
+                    setTimeout(function() {
+                        var selection = document.getSelection();
+                        
+                        if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+                            var text = selection.toString().trim();
                             
-                            if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
-                                var text = selection.toString().trim();
-                                console.debug('[Iframe Script] Found text at', delay, 'ms:', text.substring(0, 50));
+                            // Prevent duplicate selections
+                            if (text && text !== lastSelection && text.length > 0) {
+                                lastSelection = text;
                                 
-                                if (text.length > 0) {
-                                    // Get range info for CFI generation
-                                    var range = selection.getRangeAt(0);
-                                    var rect = range.getBoundingClientRect();
-                                    
-                                    // Send to parent via postMessage
-                                    window.parent.postMessage({
-                                        type: 'foliate-selection',
-                                        sectionIndex: ${index},
-                                        text: text,
-                                        clientX: e.clientX,
-                                        clientY: e.clientY,
-                                        rect: {
-                                            left: rect.left,
-                                            top: rect.top,
-                                            width: rect.width,
-                                            height: rect.height
-                                        }
-                                    }, '*');
-                                    
-                                    console.debug('[Iframe Script] Sent selection to parent at', delay, 'ms');
-                                }
+                                var range = selection.getRangeAt(0);
+                                var rect = range.getBoundingClientRect();
+                                
+                                window.parent.postMessage({
+                                    type: 'foliate-selection',
+                                    sectionIndex: ${index},
+                                    text: text,
+                                    clientX: e.clientX,
+                                    clientY: e.clientY,
+                                    rect: {
+                                        left: rect.left,
+                                        top: rect.top,
+                                        width: rect.width,
+                                        height: rect.height
+                                    }
+                                }, '*');
                             }
-                        }, delay);
-                    });
+                        }
+                    }, 100);
                 });
-                
-                console.debug('[Iframe Script] Selection listeners attached');
             })();
         `;
         
-        // Append to head or body
         if (doc.head) {
             doc.head.appendChild(script);
-            console.debug('[FoliateEngine] Injected selection script into section', index);
         } else if (doc.body) {
             doc.body.appendChild(script);
-            console.debug('[FoliateEngine] Injected selection script into body of section', index);
-        } else {
-            console.warn('[FoliateEngine] Cannot inject script - no head or body in section', index);
         }
     }
 
@@ -1395,54 +1366,9 @@ export class FoliateEngine {
         }
     }
 
-    private setupSelectionPolling(callback: (cfi: string, text: string, event: MouseEvent) => void): void {
-        // Clear existing interval
-        if (this.selectionCheckInterval) {
-            clearInterval(this.selectionCheckInterval);
-        }
-
-        let lastKnownSelection = '';
-
-        // Poll every 200ms as a fallback
-        this.selectionCheckInterval = setInterval(() => {
-            if (!this.view?.renderer) return;
-
-            const contents = this.view.renderer.getContents?.() || [];
-            
-            for (const content of contents) {
-                const doc = content.doc;
-                if (!doc || !this.iframeListenersAttached.has(doc)) continue;
-
-                const selection = doc.getSelection();
-                if (selection && !selection.isCollapsed) {
-                    const text = selection.toString().trim();
-                    const selectionKey = `${content.index}:${text}`;
-                    
-                    // Only report if selection is new and substantial
-                    if (text.length > 3 && selectionKey !== lastKnownSelection) {
-                        lastKnownSelection = selectionKey;
-                        console.debug('[FoliateEngine] Polling detected selection in section', content.index);
-                        
-                        try {
-                            const range = selection.getRangeAt(0);
-                            const cfi = this.getCFIFromRange(content.index, range);
-                            if (cfi) {
-                                // Create synthetic event
-                                const rect = range.getBoundingClientRect();
-                                const syntheticEvent = new MouseEvent('mouseup', {
-                                    clientX: rect.left + rect.width / 2,
-                                    clientY: rect.top,
-                                    bubbles: true
-                                });
-                                callback(cfi, text, syntheticEvent);
-                            }
-                        } catch (err) {
-                            console.warn('[FoliateEngine] Polling error:', err);
-                        }
-                    }
-                }
-            }
-        }, 200);
+    private setupSelectionPolling(_callback: (cfi: string, text: string, event: MouseEvent) => void): void {
+        // NOTE: Polling removed for performance. Event-based detection is sufficient.
+        // This method is kept for API compatibility but does nothing.
     }
 
     /**
