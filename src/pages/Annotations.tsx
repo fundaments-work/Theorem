@@ -11,13 +11,10 @@ import { EditNoteModal } from "@/components/modals";
 import {
     Highlighter,
     StickyNote,
-    Bookmark,
-    Search,
     Trash2,
     Edit3,
     BookOpen,
     MoreVertical,
-    X,
     ChevronDown,
 } from "lucide-react";
 
@@ -32,24 +29,21 @@ function ColorBadge({ color }: { color: HighlightColor }) {
 }
 
 // Empty state component
-function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" | "bookmarks" }) {
+function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" }) {
     const icons = {
         all: Highlighter,
         highlights: Highlighter,
         notes: StickyNote,
-        bookmarks: Bookmark,
     };
     const titles = {
         all: "No Annotations Yet",
         highlights: "No Highlights Yet",
         notes: "No Notes Yet",
-        bookmarks: "No Bookmarks Yet",
     };
     const descriptions = {
         all: "Start reading and highlight text or add notes to see them here.",
         highlights: "Highlight important passages while reading to see them here.",
         notes: "Add notes to your books while reading to see them here.",
-        bookmarks: "Bookmark pages while reading to see them here.",
     };
 
     const Icon = icons[type];
@@ -107,7 +101,7 @@ function AnnotationCard({
             case "note":
                 return <StickyNote className="w-4 h-4" />;
             case "bookmark":
-                return <Bookmark className="w-4 h-4" />;
+                return <span className="w-4 h-4" />;
         }
     };
 
@@ -203,40 +197,37 @@ function AnnotationCard({
     );
 }
 
-// Filter tabs
+// Filter tabs - removed bookmarks tab
 const filterTabs = [
     { id: "all" as const, label: "All", icon: Highlighter },
     { id: "highlights" as const, label: "Highlights", icon: Highlighter },
     { id: "notes" as const, label: "Notes", icon: StickyNote },
-    { id: "bookmarks" as const, label: "Bookmarks", icon: Bookmark },
 ];
 
 // Main page component
 export function AnnotationsPage() {
     const { annotations, books, removeAnnotation, updateAnnotation } = useLibraryStore();
-    const { setRoute } = useUIStore();
-    const [searchQuery, setSearchQuery] = useState("");
-    const [activeFilter, setActiveFilter] = useState<"all" | "highlights" | "notes" | "bookmarks">("all");
+    const { setRoute, searchQuery } = useUIStore();
+    const [activeFilter, setActiveFilter] = useState<"all" | "highlights" | "notes">("all");
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
 
-    // Filter and sort annotations
+    // Filter annotations (excluding bookmarks - they have their own page)
     const filteredAnnotations = useMemo(() => {
-        let filtered = [...annotations];
+        let filtered = annotations.filter((a) => a.type !== "bookmark");
 
         // Apply type filter
         if (activeFilter !== "all") {
             const typeMap = {
                 highlights: "highlight",
                 notes: "note",
-                bookmarks: "bookmark",
                 all: undefined,
             };
             filtered = filtered.filter((a) => a.type === typeMap[activeFilter]);
         }
 
-        // Apply search filter
+        // Apply search filter from global search
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
             filtered = filtered.filter(
@@ -294,27 +285,30 @@ export function AnnotationsPage() {
         return books.find((b) => b.id === bookId);
     };
 
-    if (annotations.length === 0) {
+    // Filter out bookmarks for the count
+    const annotationCount = annotations.filter((a) => a.type !== "bookmark").length;
+
+    if (annotationCount === 0) {
         return <EmptyAnnotations type="all" />;
     }
 
     return (
-        <div className="p-8 max-w-5xl mx-auto animate-fade-in min-h-screen">
+        <div className="p-8 max-w-7xl mx-auto animate-fade-in min-h-screen">
             {/* Header */}
-            <div className="flex items-start justify-between mb-8">
+            <div className="flex items-start justify-between mb-10">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
                         Highlights & Notes
                     </h1>
                     <p className="text-sm text-[var(--color-text-muted)] mt-1">
-                        {annotations.length} {annotations.length === 1 ? "annotation" : "annotations"} across{" "}
-                        {new Set(annotations.map((a) => a.bookId)).size} books
+                        {filteredAnnotations.length} {filteredAnnotations.length === 1 ? "annotation" : "annotations"} across{" "}
+                        {new Set(filteredAnnotations.map((a) => a.bookId)).size} books
                     </p>
                 </div>
             </div>
 
-            {/* Filters and Search */}
-            <div className="flex flex-col gap-4 mb-8">
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                 {/* Filter Tabs */}
                 <div className="flex items-center gap-1 p-1 bg-[var(--color-border-subtle)] rounded-lg w-fit">
                     {filterTabs.map((tab) => (
@@ -334,51 +328,24 @@ export function AnnotationsPage() {
                     ))}
                 </div>
 
-                {/* Search and Sort */}
-                <div className="flex items-center gap-4">
-                    <div className="relative flex-1 max-w-md">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-                        <input
-                            type="text"
-                            placeholder="Search annotations..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className={cn(
-                                "w-full pl-10 pr-4 py-2.5 rounded-lg",
-                                "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                                "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
-                                "focus:outline-none focus:border-[var(--color-accent)]",
-                                "transition-colors duration-200"
-                            )}
-                        />
-                        {searchQuery && (
-                            <button
-                                onClick={() => setSearchQuery("")}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
+                {/* Sort Dropdown */}
+                <div className="relative">
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                        className={cn(
+                            "appearance-none pl-4 pr-10 py-2.5 rounded-lg",
+                            "bg-[var(--color-surface)] border border-[var(--color-border)]",
+                            "text-sm text-[var(--color-text-primary)]",
+                            "focus:outline-none focus:border-[var(--color-accent)]",
+                            "cursor-pointer"
                         )}
-                    </div>
-
-                    <div className="relative">
-                        <select
-                            value={sortBy}
-                            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                            className={cn(
-                                "appearance-none pl-4 pr-10 py-2.5 rounded-lg",
-                                "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                                "text-sm text-[var(--color-text-primary)]",
-                                "focus:outline-none focus:border-[var(--color-accent)]",
-                                "cursor-pointer"
-                            )}
-                        >
-                            <option value="newest">Newest First</option>
-                            <option value="oldest">Oldest First</option>
-                            <option value="book">By Book</option>
-                        </select>
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)] pointer-events-none" />
-                    </div>
+                    >
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="book">By Book</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)] pointer-events-none" />
                 </div>
             </div>
 
@@ -421,4 +388,3 @@ export function AnnotationsPage() {
         </div>
     );
 }
-

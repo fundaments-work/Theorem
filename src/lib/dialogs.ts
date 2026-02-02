@@ -221,3 +221,16 @@ export async function confirmDeleteShelf(shelfName: string): Promise<boolean> {
         kind: "warning",
     });
 }
+
+/**
+ * Confirmation for deleting a bookmark
+ */
+export async function confirmDeleteBookmark(): Promise<boolean> {
+    return showConfirm({
+        title: "Delete Bookmark",
+        message: "Are you sure you want to delete this bookmark?",
+        okLabel: "Delete",
+        cancelLabel: "Keep",
+        kind: "warning",
+    });
+}

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useUIStore, useSettingsStore } from "@/store";
 import type { AppRoute } from "@/types";
@@ -11,6 +11,7 @@ import {
     ChevronRight,
     Highlighter,
     FolderOpen,
+    X,
 } from "lucide-react";
 
 interface SidebarItem {
@@ -25,33 +26,85 @@ const mainNavItems: SidebarItem[] = [
     { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="w-5 h-5" /> },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+    isMobile?: boolean;
+    onClose?: () => void;
+}
+
+export function Sidebar({ isMobile, onClose }: SidebarProps) {
     const { currentRoute, setRoute, sidebarOpen, toggleSidebar } = useUIStore();
     const { settings, updateSettings } = useSettingsStore();
+    const sidebarRef = useRef<HTMLElement>(null);
+    const touchStartX = useRef<number>(0);
 
     const handleToggle = useCallback(() => {
         toggleSidebar();
         updateSettings({ sidebarCollapsed: !settings.sidebarCollapsed });
     }, [toggleSidebar, updateSettings, settings.sidebarCollapsed]);
 
+    // Swipe to close handler for mobile
+    useEffect(() => {
+        if (!isMobile) return;
+
+        const sidebar = sidebarRef.current;
+        if (!sidebar) return;
+
+        const handleTouchStart = (e: TouchEvent) => {
+            touchStartX.current = e.touches[0].clientX;
+        };
+
+        const handleTouchEnd = (e: TouchEvent) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const diff = touchStartX.current - touchEndX;
+
+            // Swipe left more than 50px to close
+            if (diff > 50 && onClose) {
+                onClose();
+            }
+        };
+
+        sidebar.addEventListener("touchstart", handleTouchStart, { passive: true });
+        sidebar.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+        return () => {
+            sidebar.removeEventListener("touchstart", handleTouchStart);
+            sidebar.removeEventListener("touchend", handleTouchEnd);
+        };
+    }, [isMobile, onClose]);
+
     return (
         <aside
+            ref={sidebarRef}
             className={cn(
                 "flex flex-col h-full bg-[var(--color-surface)] border-r border-[var(--color-border)]",
                 "transition-all duration-300 ease-in-out",
                 sidebarOpen ? "w-56" : "w-16"
             )}
         >
-            {/* Logo - hidden on mobile, visible on md and up */}
-            <div className="hidden md:flex items-center h-14 px-4 border-b border-[var(--color-border)]">
-                <div className="flex items-center gap-2 overflow-hidden">
+            {/* Header - Logo + App Name (visible on all screens) */}
+            <div className={cn(
+                "flex items-center justify-between px-4 border-b border-[var(--color-border)]",
+                isMobile ? "h-14" : "h-14"
+            )}>
+                <div className="flex items-center gap-3 overflow-hidden">
                     <LionLogo size={28} className="flex-shrink-0" />
                     <span className={cn(
                         "font-semibold text-lg text-[var(--color-text-primary)] whitespace-nowrap",
-                        sidebarOpen ? "opacity-100" : "opacity-0 w-0"
+                        !isMobile && !sidebarOpen ? "opacity-0 w-0" : "opacity-100"
                     )}>
+                        Lion Reader
                     </span>
                 </div>
+                {/* Close button - only on mobile */}
+                {isMobile && onClose && (
+                    <button
+                        onClick={onClose}
+                        className="p-2 rounded-lg hover:bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] transition-colors"
+                        aria-label="Close sidebar"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                )}
             </div>
 
             {/* Navigation Items */}
@@ -67,6 +120,10 @@ export function Sidebar() {
                                     if (item.id !== "library") {
                                         sessionStorage.removeItem("lion-reader-selected-shelf");
                                     }
+                                    // Close mobile sidebar on navigation
+                                    if (isMobile && onClose) {
+                                        onClose();
+                                    }
                                 }}
                                 className={cn(
                                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
@@ -79,7 +136,7 @@ export function Sidebar() {
                                 title={!sidebarOpen ? item.label : undefined}
                             >
                                 <span className="flex-shrink-0">{item.icon}</span>
-                                {sidebarOpen && (
+                                {(sidebarOpen || isMobile) && (
                                     <span className="font-medium text-sm animate-fade-in">
                                         {item.label}
                                     </span>
@@ -91,7 +148,12 @@ export function Sidebar() {
                     {/* Shelves Link - navigates to dedicated shelves page */}
                     <li>
                         <button
-                            onClick={() => setRoute("shelves")}
+                            onClick={() => {
+                                setRoute("shelves");
+                                if (isMobile && onClose) {
+                                    onClose();
+                                }
+                            }}
                             className={cn(
                                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
                                 "transition-colors duration-200",
@@ -105,7 +167,7 @@ export function Sidebar() {
                             <span className="flex-shrink-0">
                                 <FolderOpen className="w-5 h-5" />
                             </span>
-                            {sidebarOpen && (
+                            {(sidebarOpen || isMobile) && (
                                 <span className="font-medium text-sm animate-fade-in flex-1 text-left">
                                     Shelves
                                 </span>
@@ -122,7 +184,12 @@ export function Sidebar() {
             )}>
                 {/* Settings */}
                 <button
-                    onClick={() => setRoute("settings")}
+                    onClick={() => {
+                        setRoute("settings");
+                        if (isMobile && onClose) {
+                            onClose();
+                        }
+                    }}
                     className={cn(
                         "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors duration-200 hover:bg-[var(--color-border-subtle)]",
                         sidebarOpen ? "flex-1" : "w-full justify-center",
@@ -133,30 +200,32 @@ export function Sidebar() {
                     title={!sidebarOpen ? "Settings" : undefined}
                 >
                     <span className="flex-shrink-0"><Settings className="w-5 h-5" /></span>
-                    {sidebarOpen && (
+                    {(sidebarOpen || isMobile) && (
                         <span className="font-medium text-sm animate-fade-in">
                             Settings
                         </span>
                     )}
                 </button>
 
-                {/* Collapse Toggle */}
-                <button
-                    onClick={handleToggle}
-                    className={cn(
-                        "flex items-center justify-center p-2.5 rounded-lg",
-                        "text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)]",
-                        "transition-colors duration-200",
-                        sidebarOpen ? "w-10" : "w-full"
-                    )}
-                    title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-                >
-                    {sidebarOpen ? (
-                        <ChevronLeft className="w-5 h-5" />
-                    ) : (
-                        <ChevronRight className="w-5 h-5" />
-                    )}
-                </button>
+                {/* Collapse Toggle - desktop only */}
+                {!isMobile && (
+                    <button
+                        onClick={handleToggle}
+                        className={cn(
+                            "flex items-center justify-center p-2.5 rounded-lg",
+                            "text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)]",
+                            "transition-colors duration-200",
+                            sidebarOpen ? "w-10" : "w-full"
+                        )}
+                        title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                    >
+                        {sidebarOpen ? (
+                            <ChevronLeft className="w-5 h-5" />
+                        ) : (
+                            <ChevronRight className="w-5 h-5" />
+                        )}
+                    </button>
+                )}
             </div>
 
         </aside>

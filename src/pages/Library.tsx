@@ -11,7 +11,7 @@ import { pickAndImportBooks, scanFolderForBooks } from "@/lib/import";
 import { 
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw, 
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3,
-    ChevronDown, Star, X
+    ChevronDown, Star, X, ArrowUpDown
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "@/types";
 import { isTauri } from "@/lib/env";
@@ -50,6 +50,31 @@ function BookCard({
     onAddToShelf: (bookId: string) => void;
     collections: Collection[];
 }) {
+    const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const clickCountRef = useRef(0);
+
+    const handleCardClick = () => {
+        clickCountRef.current += 1;
+
+        if (clickCountRef.current === 1) {
+            // First click - wait to see if it's a double click
+            clickTimeoutRef.current = setTimeout(() => {
+                if (clickCountRef.current === 1) {
+                    // Single click - open book
+                    onOpenBook(book);
+                }
+                clickCountRef.current = 0;
+            }, 250);
+        } else if (clickCountRef.current === 2) {
+            // Double click - toggle favorite
+            if (clickTimeoutRef.current) {
+                clearTimeout(clickTimeoutRef.current);
+            }
+            onToggleFavorite(book.id);
+            clickCountRef.current = 0;
+        }
+    };
+
     // Build context menu items
     const contextMenuItems: ContextMenuItem[] = [
         {
@@ -102,16 +127,18 @@ function BookCard({
     if (viewMode === "grid") {
         return (
             <ContextMenu items={contextMenuItems}>
-                <button
-                    onClick={() => onOpenBook(book)}
-                    className="group flex flex-col text-left focus:outline-none w-full"
+                <div 
+                    className="group flex flex-col text-left w-full select-none"
+                    onClick={handleCardClick}
                 >
                     {/* Cover Image */}
-                    <div className={cn(
-                        "relative aspect-[2/3] bg-[var(--color-border-subtle)] mb-3 overflow-hidden rounded-lg",
-                        "border border-[var(--color-border)]",
-                        "transition-all duration-200 group-hover:shadow-lg"
-                    )}>
+                    <div 
+                        className={cn(
+                            "relative aspect-[2/3] bg-[var(--color-border-subtle)] mb-3 overflow-hidden rounded-lg",
+                            "border border-[var(--color-border)]",
+                            "transition-all duration-200 group-hover:shadow-lg cursor-pointer"
+                        )}
+                    >
                         {book.coverPath ? (
                             <img
                                 src={book.coverPath}
@@ -136,11 +163,16 @@ function BookCard({
                         )}
 
                         {/* Favorite Badge */}
-                        {book.isFavorite && (
-                            <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center">
-                                <Heart className="w-3 h-3 fill-current" />
-                            </div>
-                        )}
+                        <div
+                            className={cn(
+                                "absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-colors pointer-events-none",
+                                book.isFavorite 
+                                    ? "bg-[var(--color-accent)] text-white" 
+                                    : "opacity-0"
+                            )}
+                        >
+                            <Heart className={cn("w-3 h-3 fill-current")} />
+                        </div>
                     </div>
 
                     {/* Book Info */}
@@ -157,7 +189,7 @@ function BookCard({
                             </p>
                         )}
                     </div>
-                </button>
+                </div>
             </ContextMenu>
         );
     }
@@ -166,9 +198,9 @@ function BookCard({
     if (viewMode === "list") {
         return (
             <ContextMenu items={contextMenuItems}>
-                <button
-                    onClick={() => onOpenBook(book)}
-                    className="group flex items-center gap-4 p-3 text-left focus:outline-none w-full rounded-lg hover:bg-[var(--color-border-subtle)] transition-colors"
+                <div 
+                    className="group flex items-center gap-4 p-3 w-full rounded-lg hover:bg-[var(--color-border-subtle)] transition-colors cursor-pointer select-none"
+                    onClick={handleCardClick}
                 >
                     {/* Cover Image */}
                     <div className={cn(
@@ -198,9 +230,16 @@ function BookCard({
                             {book.author}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
-                            {book.isFavorite && (
-                                <Heart className="w-3 h-3 text-[var(--color-accent)] fill-current" />
-                            )}
+                            <div
+                                className={cn(
+                                    "transition-colors pointer-events-none",
+                                    book.isFavorite 
+                                        ? "text-[var(--color-accent)]" 
+                                        : "opacity-0"
+                                )}
+                            >
+                                <Heart className={cn("w-3 h-3 fill-current")} />
+                            </div>
                             {book.rating && (
                                 <div className="flex items-center gap-0.5">
                                     <Star className="w-3 h-3 text-yellow-500 fill-current" />
@@ -221,7 +260,7 @@ function BookCard({
                             <p className="text-xs text-[var(--color-text-muted)]">Not started</p>
                         )}
                     </div>
-                </button>
+                </div>
             </ContextMenu>
         );
     }
@@ -229,9 +268,9 @@ function BookCard({
     // Compact view
     return (
         <ContextMenu items={contextMenuItems}>
-            <button
-                onClick={() => onOpenBook(book)}
-                className="group relative aspect-[2/3] bg-[var(--color-border-subtle)] overflow-hidden rounded-lg border border-[var(--color-border)] hover:shadow-lg transition-all duration-200 w-full"
+            <div
+                onClick={handleCardClick}
+                className="group relative aspect-[2/3] bg-[var(--color-border-subtle)] overflow-hidden rounded-lg border border-[var(--color-border)] hover:shadow-lg transition-all duration-200 w-full cursor-pointer select-none"
             >
                 {book.coverPath ? (
                     <img
@@ -257,12 +296,17 @@ function BookCard({
                 )}
 
                 {/* Favorite Badge */}
-                {book.isFavorite && (
-                    <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center">
-                        <Heart className="w-2.5 h-2.5 fill-current" />
-                    </div>
-                )}
-            </button>
+                <div
+                    className={cn(
+                        "absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center transition-colors pointer-events-none",
+                        book.isFavorite 
+                            ? "bg-[var(--color-accent)] text-white" 
+                            : "opacity-0"
+                    )}
+                >
+                    <Heart className={cn("w-2.5 h-2.5 fill-current")} />
+                </div>
+            </div>
         </ContextMenu>
     );
 }
@@ -595,9 +639,7 @@ export function LibraryPage() {
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
     const filterDropdownRef = useRef<HTMLDivElement>(null);
     
-    // Shelves dropdown state
-    const [showShelfDropdown, setShowShelfDropdown] = useState(false);
-    const shelfDropdownRef = useRef<HTMLDivElement>(null);
+
     
     // Modal states
     const [infoModalBook, setInfoModalBook] = useState<Book | null>(null);
@@ -611,6 +653,9 @@ export function LibraryPage() {
     // Selected shelf state (safely initialized from session storage)
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
     
+    // Favorites filter state
+    const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+    
     // Initialize selected shelf from session storage on mount
     useEffect(() => {
         const shelfId = sessionStorage.getItem("lion-reader-selected-shelf");
@@ -621,13 +666,18 @@ export function LibraryPage() {
     
     const selectedShelf = selectedShelfId ? collections.find(c => c.id === selectedShelfId) : null;
 
-    // Filter books based on search query and selected shelf
+    // Filter books based on search query, selected shelf, and favorites
     const filteredBooks = useMemo(() => {
         let result = books;
         
         // Filter by shelf if selected
         if (selectedShelf) {
             result = result.filter(b => selectedShelf.bookIds.includes(b.id));
+        }
+        
+        // Filter by favorites
+        if (showFavoritesOnly) {
+            result = result.filter(b => b.isFavorite);
         }
         
         // Filter by search query
@@ -782,22 +832,7 @@ export function LibraryPage() {
         };
     }, [showFilterDropdown]);
     
-    // Close shelf dropdown when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (shelfDropdownRef.current && !shelfDropdownRef.current.contains(e.target as Node)) {
-                setShowShelfDropdown(false);
-            }
-        };
 
-        if (showShelfDropdown) {
-            document.addEventListener("mousedown", handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [showShelfDropdown]);
 
     // Handle importing books
     const handleAddBooks = useCallback(async () => {
@@ -909,36 +944,29 @@ export function LibraryPage() {
 
     return (
         <div className="p-8 max-w-7xl mx-auto animate-fade-in min-h-screen">
-            {/* Toolbar */}
+            {/* Header */}
             <div className="flex items-center justify-between mb-10">
                 <div>
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
-                            {selectedShelf ? selectedShelf.name : "Library"}
-                        </h1>
-                        {selectedShelf && (
+                    <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
+                        {selectedShelf ? selectedShelf.name : showFavoritesOnly ? "Favorites" : "Library"}
+                    </h1>
+                    <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                        {sortedBooks.length} {sortedBooks.length === 1 ? 'book' : 'books'}
+                        {(selectedShelf || showFavoritesOnly) && (
                             <button
                                 onClick={() => {
                                     sessionStorage.removeItem("lion-reader-selected-shelf");
                                     setSelectedShelfId(null);
+                                    setShowFavoritesOnly(false);
                                 }}
-                                className={cn(
-                                    "flex items-center gap-1 px-2 py-1 rounded-full text-xs",
-                                    "bg-[var(--color-accent-light)] text-[var(--color-accent)]",
-                                    "hover:bg-[var(--color-accent)] hover:text-white transition-colors"
-                                )}
+                                className="ml-2 text-[var(--color-accent)] hover:underline"
                             >
-                                <X className="w-3 h-3" />
-                                <span>Clear filter</span>
+                                Clear filter
                             </button>
                         )}
-                    </div>
-                    <p className="text-sm text-[var(--color-text-muted)] mt-1">
-                        {sortedBooks.length} {sortedBooks.length === 1 ? 'book' : 'books'}
-                        {searchQuery && ` matching "${searchQuery}"`}
                         {isExtractingCovers && (
                             <span className="ml-2 text-[var(--color-accent)]">
-                                Extracting covers ({extractionProgress.current}/{extractionProgress.total})
+                                • Extracting covers ({extractionProgress.current}/{extractionProgress.total})
                             </span>
                         )}
                     </p>
@@ -958,122 +986,6 @@ export function LibraryPage() {
                     >
                         {viewModeIcons[settings.libraryViewMode]}
                     </button>
-
-                    {/* Shelves Dropdown */}
-                    {collections.length > 0 && (
-                        <div className="relative" ref={shelfDropdownRef}>
-                            <button
-                                onClick={() => setShowShelfDropdown(!showShelfDropdown)}
-                                className={cn(
-                                    "flex items-center gap-2 px-3 py-2 rounded-lg",
-                                    "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                                    "text-[var(--color-text-secondary)] text-sm",
-                                    "hover:bg-[var(--color-border-subtle)] transition-colors",
-                                    selectedShelf && "border-[var(--color-accent)] text-[var(--color-accent)]"
-                                )}
-                            >
-                                {selectedShelf ? (
-                                    <>
-                                        <div
-                                            className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-semibold"
-                                            style={{
-                                                backgroundColor: getShelfColor(selectedShelf.id, selectedShelf.name).bg,
-                                                color: getShelfColor(selectedShelf.id, selectedShelf.name).text,
-                                            }}
-                                        >
-                                            {getShelfInitials(selectedShelf.name)}
-                                        </div>
-                                        <span className="hidden sm:inline max-w-[100px] truncate">{selectedShelf.name}</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <FolderOpen className="w-4 h-4" />
-                                        <span className="hidden sm:inline">Shelves</span>
-                                    </>
-                                )}
-                                <ChevronDown className={cn("w-4 h-4 transition-transform", showShelfDropdown && "rotate-180")} />
-                            </button>
-
-                            {/* Shelves Dropdown Menu */}
-                            {showShelfDropdown && (
-                                <div className="absolute right-0 top-full mt-1 w-56 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg z-50 py-1 max-h-[300px] overflow-y-auto">
-                                    <button
-                                        onClick={() => {
-                                            sessionStorage.removeItem("lion-reader-selected-shelf");
-                                            setSelectedShelfId(null);
-                                            setShowShelfDropdown(false);
-                                        }}
-                                        className={cn(
-                                            "w-full flex items-center gap-2 px-3 py-2 text-sm text-left",
-                                            "hover:bg-[var(--color-border-subtle)] transition-colors",
-                                            !selectedShelf && "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                        )}
-                                    >
-                                        <BookOpen className="w-4 h-4" />
-                                        <span>All Books</span>
-                                    </button>
-                                    
-                                    <div className="border-t border-[var(--color-border)] my-1" />
-                                    
-                                    {collections.map((shelf) => {
-                                        const colors = getShelfColor(shelf.id, shelf.name);
-                                        const isSelected = selectedShelfId === shelf.id;
-                                        
-                                        return (
-                                            <button
-                                                key={shelf.id}
-                                                onClick={() => {
-                                                    setSelectedShelfId(shelf.id);
-                                                    sessionStorage.setItem("lion-reader-selected-shelf", shelf.id);
-                                                    setShowShelfDropdown(false);
-                                                }}
-                                                className={cn(
-                                                    "w-full flex items-center gap-2 px-3 py-2 text-sm text-left",
-                                                    "hover:bg-[var(--color-border-subtle)] transition-colors",
-                                                    isSelected && "bg-[var(--color-accent-light)]"
-                                                )}
-                                            >
-                                                <div
-                                                    className={cn(
-                                                        "w-5 h-5 rounded flex items-center justify-center text-[10px] font-semibold",
-                                                        isSelected && "ring-2 ring-offset-1 ring-[var(--color-accent)]"
-                                                    )}
-                                                    style={{
-                                                        backgroundColor: colors.bg,
-                                                        color: colors.text,
-                                                    }}
-                                                >
-                                                    {getShelfInitials(shelf.name)}
-                                                </div>
-                                                <span className={cn("flex-1 truncate", isSelected && "text-[var(--color-accent)] font-medium")}>
-                                                    {shelf.name}
-                                                </span>
-                                                <span className={cn(
-                                                    "text-[10px] px-1.5 py-0.5 rounded-full",
-                                                    isSelected ? "bg-[var(--color-accent)] text-white" : "bg-[var(--color-border-subtle)] text-[var(--color-text-muted)]"
-                                                )}>
-                                                    {shelf.bookIds.length}
-                                                </span>
-                                            </button>
-                                        );
-                                    })}
-                                    
-                                    <div className="border-t border-[var(--color-border)] my-1" />
-                                    
-                                    <button
-                                        onClick={() => {
-                                            setRoute("shelves");
-                                            setShowShelfDropdown(false);
-                                        }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-border-subtle)] transition-colors"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                        <span>Manage Shelves...</span>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
 
                     <ImportButton onImport={handleAddBooks} isLoading={isImporting} />
 
@@ -1183,26 +1095,111 @@ export function LibraryPage() {
                                         </div>
                                     </div>
 
-                                    {/* Filter by */}
-                                    <div className="px-3 py-2">
-                                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Show</p>
+                                    {/* Filter by Favorites */}
+                                    <div className="px-3 py-2 border-b border-[var(--color-border)]">
+                                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Filter</p>
                                         <div className="space-y-1">
-                                            <button className="w-full text-left px-2 py-1.5 rounded text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]">
+                                            <button
+                                                onClick={() => {
+                                                    setShowFavoritesOnly(false);
+                                                    setShowFilterDropdown(false);
+                                                }}
+                                                className={cn(
+                                                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
+                                                    !showFavoritesOnly
+                                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                                                )}
+                                            >
+                                                <BookOpen className="w-4 h-4" />
                                                 All Books
                                             </button>
-                                            <button className="w-full text-left px-2 py-1.5 rounded text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]">
-                                                Favorites
-                                            </button>
-                                            <button className="w-full text-left px-2 py-1.5 rounded text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]">
-                                                Currently Reading
-                                            </button>
-                                            <button className="w-full text-left px-2 py-1.5 rounded text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]">
-                                                Completed
-                                            </button>
-                                            <button className="w-full text-left px-2 py-1.5 rounded text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]">
-                                                Not Started
+                                            <button
+                                                onClick={() => {
+                                                    setShowFavoritesOnly(true);
+                                                    setShowFilterDropdown(false);
+                                                }}
+                                                className={cn(
+                                                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
+                                                    showFavoritesOnly
+                                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                                                )}
+                                            >
+                                                <Heart className={cn("w-4 h-4", showFavoritesOnly && "fill-current")} />
+                                                Favorites Only
                                             </button>
                                         </div>
+                                    </div>
+
+                                    {/* Filter by Shelf */}
+                                    {collections.length > 0 && (
+                                        <div className="px-3 py-2 border-b border-[var(--color-border)]">
+                                            <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Filter by Shelf</p>
+                                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                                <button
+                                                    onClick={() => {
+                                                        sessionStorage.removeItem("lion-reader-selected-shelf");
+                                                        setSelectedShelfId(null);
+                                                        setShowFilterDropdown(false);
+                                                    }}
+                                                    className={cn(
+                                                        "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
+                                                        !selectedShelf
+                                                            ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                                                    )}
+                                                >
+                                                    <BookOpen className="w-4 h-4" />
+                                                    All Books
+                                                </button>
+                                                {collections.map((shelf) => {
+                                                    const colors = getShelfColor(shelf.id, shelf.name);
+                                                    const isSelected = selectedShelfId === shelf.id;
+                                                    return (
+                                                        <button
+                                                            key={shelf.id}
+                                                            onClick={() => {
+                                                                setSelectedShelfId(shelf.id);
+                                                                sessionStorage.setItem("lion-reader-selected-shelf", shelf.id);
+                                                                setShowFilterDropdown(false);
+                                                            }}
+                                                            className={cn(
+                                                                "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
+                                                                isSelected
+                                                                    ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                                                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                                                            )}
+                                                        >
+                                                            <div
+                                                                className="w-4 h-4 rounded flex items-center justify-center text-[8px] font-semibold"
+                                                                style={{
+                                                                    backgroundColor: colors.bg,
+                                                                    color: colors.text,
+                                                                }}
+                                                            >
+                                                                {getShelfInitials(shelf.name)}
+                                                            </div>
+                                                            <span className="flex-1 truncate">{shelf.name}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Manage Shelves Link */}
+                                    <div className="px-3 py-2">
+                                        <button
+                                            onClick={() => {
+                                                setRoute("shelves");
+                                                setShowFilterDropdown(false);
+                                            }}
+                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-border-subtle)] transition-colors"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                            Manage Shelves...
+                                        </button>
                                     </div>
                                 </div>
                             </>

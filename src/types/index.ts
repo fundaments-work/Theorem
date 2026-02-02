@@ -152,7 +152,7 @@ export interface ReadingStats {
 }
 
 // Navigation
-export type AppRoute = "library" | "reader" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "profile";
+export type AppRoute = "library" | "reader" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks";
 
 // UI State
 export interface UIState {

@@ -6,14 +6,13 @@
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useLibraryStore, useUIStore } from "@/store";
+import { confirmDeleteBookmark } from "@/lib/dialogs";
 import {
     Bookmark,
-    Search,
     Trash2,
     BookOpen,
     Clock,
     ExternalLink,
-    X,
     ChevronDown,
     LayoutGrid,
     List,
@@ -41,6 +40,7 @@ interface BookmarkCardProps {
     bookmark: {
         id: string;
         bookId: string;
+        location: string;
         selectedText?: string;
         noteContent?: string;
         createdAt: Date;
@@ -51,19 +51,19 @@ interface BookmarkCardProps {
         coverPath?: string;
     } | undefined;
     viewMode: "grid" | "list";
-    onDelete: (id: string) => void;
-    onGoToBook: (bookId: string) => void;
+    onDelete: (id: string) => Promise<void>;
+    onGoToBookmark: (bookId: string, location: string) => void;
 }
 
-function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBook }: BookmarkCardProps) {
+function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: BookmarkCardProps) {
     if (viewMode === "list") {
         return (
-            <div className="group flex items-center gap-4 p-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-text-muted)] transition-colors">
+            <div 
+                onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
+                className="group flex items-center gap-4 p-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-text-muted)] transition-colors cursor-pointer"
+            >
                 {/* Cover */}
-                <button
-                    onClick={() => book && onGoToBook(bookmark.bookId)}
-                    className="flex-shrink-0"
-                >
+                <div className="flex-shrink-0">
                     {book?.coverPath ? (
                         <img
                             src={book.coverPath}
@@ -75,21 +75,16 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBook }: Bookma
                             <BookOpen className="w-4 h-4 text-[var(--color-text-muted)]" />
                         </div>
                     )}
-                </button>
+                </div>
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                    <button
-                        onClick={() => book && onGoToBook(bookmark.bookId)}
-                        className="text-left"
-                    >
-                        <h3 className="font-medium text-sm text-[var(--color-text-primary)] truncate hover:text-[var(--color-accent)] transition-colors">
-                            {book?.title || "Unknown Book"}
-                        </h3>
-                        <p className="text-xs text-[var(--color-text-secondary)] truncate">
-                            {book?.author || "Unknown Author"}
-                        </p>
-                    </button>
+                    <h3 className="font-medium text-sm text-[var(--color-text-primary)] truncate hover:text-[var(--color-accent)] transition-colors">
+                        {book?.title || "Unknown Book"}
+                    </h3>
+                    <p className="text-xs text-[var(--color-text-secondary)] truncate">
+                        {book?.author || "Unknown Author"}
+                    </p>
                 </div>
 
                 {/* Date */}
@@ -101,14 +96,20 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBook }: Bookma
                 {/* Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                        onClick={() => book && onGoToBook(bookmark.bookId)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            book && onGoToBookmark(bookmark.bookId, bookmark.location);
+                        }}
                         className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]"
                         title="Go to bookmark"
                     >
                         <ExternalLink className="w-4 h-4" />
                     </button>
                     <button
-                        onClick={() => onDelete(bookmark.id)}
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            await onDelete(bookmark.id);
+                        }}
                         className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-error)]"
                         title="Delete bookmark"
                     >
@@ -122,9 +123,9 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBook }: Bookma
     return (
         <div className="group bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
             {/* Book Cover Section */}
-            <button
-                onClick={() => book && onGoToBook(bookmark.bookId)}
-                className="block w-full aspect-[3/2] bg-[var(--color-border-subtle)] relative overflow-hidden"
+            <div
+                onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
+                className="block w-full aspect-[3/2] bg-[var(--color-border-subtle)] relative overflow-hidden cursor-pointer"
             >
                 {book?.coverPath ? (
                     <>
@@ -158,7 +159,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBook }: Bookma
                         <Bookmark className="w-4 h-4 text-white fill-white" />
                     </div>
                 </div>
-            </button>
+            </div>
 
             {/* Content */}
             <div className="p-4">
@@ -174,14 +175,16 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBook }: Bookma
                     </span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                            onClick={() => book && onGoToBook(bookmark.bookId)}
+                            onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
                             className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)]"
+                            title="Go to bookmark"
                         >
                             <ExternalLink className="w-4 h-4" />
                         </button>
                         <button
-                            onClick={() => onDelete(bookmark.id)}
+                            onClick={async () => await onDelete(bookmark.id)}
                             className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-error)]"
+                            title="Delete bookmark"
                         >
                             <Trash2 className="w-4 h-4" />
                         </button>
@@ -195,8 +198,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBook }: Bookma
 // Main page component
 export function BookmarksPage() {
     const { annotations, books, removeAnnotation } = useLibraryStore();
-    const { setRoute } = useUIStore();
-    const [searchQuery, setSearchQuery] = useState("");
+    const { setRoute, searchQuery } = useUIStore();
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
 
@@ -209,7 +211,7 @@ export function BookmarksPage() {
     const filteredBookmarks = useMemo(() => {
         let filtered = [...bookmarks];
 
-        // Apply search filter
+        // Apply search filter from global search
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
             filtered = filtered.filter(
@@ -245,13 +247,16 @@ export function BookmarksPage() {
         return filtered;
     }, [bookmarks, searchQuery, sortBy, books]);
 
-    const handleDelete = (id: string) => {
-        if (confirm("Are you sure you want to delete this bookmark?")) {
+    const handleDelete = async (id: string) => {
+        const confirmed = await confirmDeleteBookmark();
+        if (confirmed) {
             removeAnnotation(id);
         }
     };
 
-    const handleGoToBook = (bookId: string) => {
+    const handleGoToBookmark = (bookId: string, location: string) => {
+        // Store the bookmark location in sessionStorage so the reader can navigate to it
+        sessionStorage.setItem("lion-reader-goto-location", location);
         setRoute("reader", bookId);
     };
 
@@ -264,97 +269,68 @@ export function BookmarksPage() {
     }
 
     return (
-        <div className="p-8 max-w-6xl mx-auto animate-fade-in min-h-screen">
+        <div className="p-8 max-w-7xl mx-auto animate-fade-in min-h-screen">
             {/* Header */}
-            <div className="flex items-start justify-between mb-8">
+            <div className="flex items-start justify-between mb-10">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
                         Bookmarks
                     </h1>
                     <p className="text-sm text-[var(--color-text-muted)] mt-1">
-                        {bookmarks.length} {bookmarks.length === 1 ? "bookmark" : "bookmarks"} across{" "}
-                        {new Set(bookmarks.map((b) => b.bookId)).size} books
+                        {filteredBookmarks.length} {filteredBookmarks.length === 1 ? "bookmark" : "bookmarks"} across{" "}
+                        {new Set(filteredBookmarks.map((b) => b.bookId)).size} books
                     </p>
                 </div>
             </div>
 
             {/* Toolbar */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-                {/* Search */}
-                <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-                    <input
-                        type="text"
-                        placeholder="Search bookmarks..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+            <div className="flex items-center justify-between gap-4 mb-8">
+                {/* Sort Dropdown */}
+                <div className="relative">
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
                         className={cn(
-                            "w-full pl-10 pr-10 py-2.5 rounded-lg",
+                            "appearance-none pl-4 pr-10 py-2.5 rounded-lg",
                             "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                            "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
+                            "text-sm text-[var(--color-text-primary)]",
                             "focus:outline-none focus:border-[var(--color-accent)]",
-                            "transition-colors duration-200"
+                            "cursor-pointer"
                         )}
-                    />
-                    {searchQuery && (
-                        <button
-                            onClick={() => setSearchQuery("")}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    )}
+                    >
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="book">By Book</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)] pointer-events-none" />
                 </div>
 
-                {/* View Controls */}
-                <div className="flex items-center gap-3">
-                    {/* Sort Dropdown */}
-                    <div className="relative">
-                        <select
-                            value={sortBy}
-                            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                            className={cn(
-                                "appearance-none pl-4 pr-10 py-2 rounded-lg",
-                                "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                                "text-sm text-[var(--color-text-primary)]",
-                                "focus:outline-none focus:border-[var(--color-accent)]",
-                                "cursor-pointer"
-                            )}
-                        >
-                            <option value="newest">Newest First</option>
-                            <option value="oldest">Oldest First</option>
-                            <option value="book">By Book</option>
-                        </select>
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)] pointer-events-none" />
-                    </div>
-
-                    {/* View Mode Toggle */}
-                    <div className="flex items-center bg-[var(--color-border-subtle)] rounded-lg p-1">
-                        <button
-                            onClick={() => setViewMode("grid")}
-                            className={cn(
-                                "p-2 rounded-md transition-colors",
-                                viewMode === "grid"
-                                    ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
-                                    : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-                            )}
-                            title="Grid view"
-                        >
-                            <LayoutGrid className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={() => setViewMode("list")}
-                            className={cn(
-                                "p-2 rounded-md transition-colors",
-                                viewMode === "list"
-                                    ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
-                                    : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-                            )}
-                            title="List view"
-                        >
-                            <List className="w-4 h-4" />
-                        </button>
-                    </div>
+                {/* View Mode Toggle */}
+                <div className="flex items-center bg-[var(--color-border-subtle)] rounded-lg p-1">
+                    <button
+                        onClick={() => setViewMode("grid")}
+                        className={cn(
+                            "p-2 rounded-md transition-colors",
+                            viewMode === "grid"
+                                ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
+                                : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+                        )}
+                        title="Grid view"
+                    >
+                        <LayoutGrid className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => setViewMode("list")}
+                        className={cn(
+                            "p-2 rounded-md transition-colors",
+                            viewMode === "list"
+                                ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
+                                : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+                        )}
+                        title="List view"
+                    >
+                        <List className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
 
@@ -374,7 +350,7 @@ export function BookmarksPage() {
                             book={getBookInfo(bookmark.bookId)}
                             viewMode={viewMode}
                             onDelete={handleDelete}
-                            onGoToBook={handleGoToBook}
+                            onGoToBookmark={handleGoToBookmark}
                         />
                     ))}
                 </div>
@@ -387,7 +363,7 @@ export function BookmarksPage() {
                             book={getBookInfo(bookmark.bookId)}
                             viewMode={viewMode}
                             onDelete={handleDelete}
-                            onGoToBook={handleGoToBook}
+                            onGoToBookmark={handleGoToBookmark}
                         />
                     ))}
                 </div>
@@ -395,4 +371,3 @@ export function BookmarksPage() {
         </div>
     );
 }
-

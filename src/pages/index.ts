@@ -4,4 +4,4 @@ export * from "./Shelves";
 export * from "./Annotations";
 export * from "./Bookmarks";
 export * from "./Settings";
-export * from "./Profile";
+export * from "./Statistics";

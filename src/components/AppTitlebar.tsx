@@ -1,7 +1,6 @@
 /**
  * AppTitlebar Component
- * Generic title bar for app screens (Library, Settings, etc.)
- * Frameless window title bar with navigation
+ * Frameless window title bar with navigation, search, and window controls
  */
 
 import { useState, useEffect } from "react";
@@ -10,9 +9,12 @@ import {
     Square,
     X,
     Menu,
+    Search,
+    BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { LionLogo } from "./LionLogo";
+
+import { useUIStore } from "@/store";
 
 interface AppTitlebarProps {
     title: string;
@@ -26,6 +28,7 @@ export function AppTitlebar({
     className,
 }: AppTitlebarProps) {
     const [isMaximized, setIsMaximized] = useState(false);
+    const { currentRoute, searchQuery, setSearchQuery, setRoute } = useUIStore();
 
     useEffect(() => {
         const handleResize = () => {
@@ -69,39 +72,94 @@ export function AppTitlebar({
         }
     };
 
+    const getPageTitle = () => {
+        switch (currentRoute) {
+            case "library":
+                return "Library";
+            case "reader":
+                return "Books";
+            case "settings":
+                return "Settings";
+            case "statistics":
+                return "Statistics";
+            case "annotations":
+                return "Highlights & Notes";
+            case "bookmarks":
+                return "Bookmarks";
+            case "shelves":
+                return "Shelves";
+            case "bookDetails":
+                return "Book Details";
+            default:
+                return title;
+        }
+    };
+
     return (
         <div
             className={cn(
                 "w-full z-50 select-none bg-[var(--color-surface)] border-b border-[var(--color-border)]",
-                "h-11 flex items-center justify-between px-3",
+                "h-14 flex items-center justify-between px-3 gap-3",
                 className
             )}
             data-tauri-drag-region
         >
-            {/* Left side - Logo (mobile only) + Menu (mobile only) + Title (draggable) */}
-            <div className="flex-1 flex items-center min-w-0" data-tauri-drag-region>
-                {/* Logo - only on mobile/tablet where sidebar is hidden */}
-                <LionLogo size={24} className="md:hidden flex-shrink-0 mr-2" />
-                
+            {/* Left side - Menu (mobile only) + Title */}
+            <div className="flex items-center gap-2 shrink-0" data-tauri-drag-region>
                 {onMenuClick && (
                     <button
                         onClick={onMenuClick}
-                        className="md:hidden p-1.5 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text)] transition-colors mr-2"
+                        className="md:hidden p-2 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text)] transition-colors"
                         title="Toggle Sidebar"
                     >
-                        <Menu className="w-4 h-4" />
+                        <Menu className="w-5 h-5" />
                     </button>
                 )}
+
                 <h1 className="text-sm font-semibold text-[var(--color-text)] truncate">
-                    {title}
+                    {getPageTitle()}
                 </h1>
             </div>
 
-            {/* Center - Spacer for dragging */}
-            <div className="flex-1 h-full" data-tauri-drag-region />
+            {/* Center - Search */}
+            <div className="flex-1 max-w-3xl" data-tauri-drag-region>
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                    <input
+                        type="text"
+                        placeholder="Search books, authors, or highlights..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className={cn(
+                            "w-full pl-9 pr-4 py-1.5 rounded-lg",
+                            "bg-[var(--color-background)] border border-[var(--color-border)]",
+                            "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
+                            "focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent-light)]",
+                            "transition-colors duration-200"
+                        )}
+                    />
+                </div>
+            </div>
 
-            {/* Right side - Window controls */}
-            <div className="flex items-center gap-0.5 shrink-0">
+            {/* Right side - Stats button + Window controls */}
+            <div className="flex items-center gap-1 shrink-0">
+                {/* Statistics Button */}
+                <button
+                    onClick={() => setRoute("statistics")}
+                    className={cn(
+                        "p-2 rounded-lg transition-colors",
+                        currentRoute === "statistics"
+                            ? "bg-[var(--color-accent)] text-white"
+                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-primary)]"
+                    )}
+                    title="Statistics"
+                >
+                    <BarChart3 className="w-5 h-5" />
+                </button>
+
+                <div className="w-px h-5 bg-[var(--color-border)] mx-1" />
+
+                {/* Window controls */}
                 <button
                     onClick={handleMinimize}
                     className="p-1.5 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text)] transition-colors"

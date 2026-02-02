@@ -162,15 +162,17 @@ export function SettingsPage() {
     ];
 
     return (
-        <div className="p-8 max-w-4xl mx-auto animate-fade-in min-h-screen">
+        <div className="p-8 max-w-7xl mx-auto animate-fade-in min-h-screen">
             {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
-                    Settings
-                </h1>
-                <p className="text-sm text-[var(--color-text-muted)] mt-1">
-                    Customize your reading experience
-                </p>
+            <div className="flex items-center justify-between mb-10">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
+                        Settings
+                    </h1>
+                    <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                        Customize your reading experience
+                    </p>
+                </div>
             </div>
 
             {/* Tabs */}

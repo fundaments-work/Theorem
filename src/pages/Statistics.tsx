@@ -1,5 +1,5 @@
 /**
- * Profile Page
+ * Statistics Page
  * User statistics, reading progress, and achievements
  */
 
@@ -198,7 +198,7 @@ function ActivityHeatmap() {
 }
 
 // Main page component
-export function ProfilePage() {
+export function StatisticsPage() {
     const { books, annotations } = useLibraryStore();
     const { stats } = useSettingsStore();
     const { setRoute } = useUIStore();
@@ -229,8 +229,18 @@ export function ProfilePage() {
     };
 
     return (
-        <div className="p-8 max-w-6xl mx-auto animate-fade-in min-h-screen">
-
+        <div className="p-8 max-w-7xl mx-auto animate-fade-in min-h-screen">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-10">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
+                        Statistics
+                    </h1>
+                    <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                        Track your reading progress and achievements
+                    </p>
+                </div>
+            </div>
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
