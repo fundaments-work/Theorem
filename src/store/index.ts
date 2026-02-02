@@ -214,6 +214,11 @@ export const useLibraryStore = create<LibraryStore>()(
                     books: state.books.filter((b) => b.id !== bookId),
                     annotations: state.annotations.filter((a) => a.bookId !== bookId),
                     recentBooksCache: state.recentBooksCache.filter((b) => b.id !== bookId),
+                    // Remove book from all collections to keep counts accurate
+                    collections: state.collections.map((c) => ({
+                        ...c,
+                        bookIds: c.bookIds.filter((id) => id !== bookId),
+                    })),
                 })),
 
             updateBook: (bookId, updates) =>
@@ -385,9 +390,11 @@ export const useLibraryStore = create<LibraryStore>()(
             getRecentBooks: (limit = 10) =>
                 [...get().books]
                     .filter((b) => b.lastReadAt)
-                    .sort((a, b) =>
-                        (b.lastReadAt?.getTime() || 0) - (a.lastReadAt?.getTime() || 0)
-                    )
+                    .sort((a, b) => {
+                        const aDate = a.lastReadAt instanceof Date ? a.lastReadAt : new Date(a.lastReadAt!);
+                        const bDate = b.lastReadAt instanceof Date ? b.lastReadAt : new Date(b.lastReadAt!);
+                        return (bDate.getTime() || 0) - (aDate.getTime() || 0);
+                    })
                     .slice(0, limit),
 
             getFavoriteBooks: () => get().books.filter((b) => b.isFavorite),

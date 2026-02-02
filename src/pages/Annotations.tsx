@@ -7,12 +7,12 @@ import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useLibraryStore, useUIStore } from "@/store";
 import { HIGHLIGHT_COLORS, type HighlightColor } from "@/types";
+import { EditNoteModal } from "@/components/modals";
 import {
     Highlighter,
     StickyNote,
     Bookmark,
     Search,
-
     Trash2,
     Edit3,
     BookOpen,
@@ -250,10 +250,16 @@ export function AnnotationsPage() {
         // Sort
         filtered.sort((a, b) => {
             switch (sortBy) {
-                case "newest":
-                    return b.createdAt.getTime() - a.createdAt.getTime();
-                case "oldest":
-                    return a.createdAt.getTime() - b.createdAt.getTime();
+                case "newest": {
+                    const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+                    const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+                    return dateB.getTime() - dateA.getTime();
+                }
+                case "oldest": {
+                    const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+                    const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+                    return dateA.getTime() - dateB.getTime();
+                }
                 case "book":
                     const bookA = books.find((book) => book.id === a.bookId)?.title || "";
                     const bookB = books.find((book) => book.id === b.bookId)?.title || "";
@@ -277,14 +283,6 @@ export function AnnotationsPage() {
         if (annotation) {
             setEditingId(id);
             setEditContent(annotation.noteContent || "");
-        }
-    };
-
-    const handleSaveEdit = () => {
-        if (editingId) {
-            updateAnnotation(editingId, { noteContent: editContent });
-            setEditingId(null);
-            setEditContent("");
         }
     };
 
@@ -385,44 +383,18 @@ export function AnnotationsPage() {
             </div>
 
             {/* Edit Modal */}
-            {editingId && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-                    <div className="bg-[var(--color-surface)] rounded-xl shadow-xl max-w-lg w-full p-6">
-                        <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">
-                            Edit Note
-                        </h3>
-                        <textarea
-                            value={editContent}
-                            onChange={(e) => setEditContent(e.target.value)}
-                            className={cn(
-                                "w-full h-32 p-3 rounded-lg resize-none",
-                                "bg-[var(--color-background)] border border-[var(--color-border)]",
-                                "text-sm text-[var(--color-text-primary)]",
-                                "focus:outline-none focus:border-[var(--color-accent)]"
-                            )}
-                            placeholder="Add your note..."
-                        />
-                        <div className="flex items-center justify-end gap-3 mt-4">
-                            <button
-                                onClick={() => setEditingId(null)}
-                                className="px-4 py-2 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSaveEdit}
-                                className={cn(
-                                    "px-4 py-2 rounded-lg text-sm font-medium",
-                                    "bg-[var(--color-accent)] text-white",
-                                    "hover:opacity-90 transition-opacity"
-                                )}
-                            >
-                                Save
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <EditNoteModal
+                isOpen={!!editingId}
+                content={editContent}
+                onClose={() => setEditingId(null)}
+                onSave={(content) => {
+                    if (editingId) {
+                        updateAnnotation(editingId, { noteContent: content });
+                        setEditingId(null);
+                        setEditContent("");
+                    }
+                }}
+            />
 
             {/* Annotations Grid */}
             {filteredAnnotations.length === 0 ? (
@@ -450,4 +422,3 @@ export function AnnotationsPage() {
     );
 }
 
-export default AnnotationsPage;

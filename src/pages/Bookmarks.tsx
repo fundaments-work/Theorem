@@ -223,10 +223,16 @@ export function BookmarksPage() {
         // Sort
         filtered.sort((a, b) => {
             switch (sortBy) {
-                case "newest":
-                    return b.createdAt.getTime() - a.createdAt.getTime();
-                case "oldest":
-                    return a.createdAt.getTime() - b.createdAt.getTime();
+                case "newest": {
+                    const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+                    const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+                    return dateB.getTime() - dateA.getTime();
+                }
+                case "oldest": {
+                    const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+                    const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+                    return dateA.getTime() - dateB.getTime();
+                }
                 case "book":
                     const bookA = books.find((book) => book.id === a.bookId)?.title || "";
                     const bookB = books.find((book) => book.id === b.bookId)?.title || "";
@@ -390,4 +396,3 @@ export function BookmarksPage() {
     );
 }
 
-export default BookmarksPage;

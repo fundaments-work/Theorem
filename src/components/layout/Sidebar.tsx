@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { useUIStore, useSettingsStore } from "@/store";
 import type { AppRoute } from "@/types";
@@ -18,21 +19,20 @@ interface SidebarItem {
     icon: React.ReactNode;
 }
 
-const sidebarItems: SidebarItem[] = [
+const mainNavItems: SidebarItem[] = [
     { id: "library", label: "Library", icon: <Library className="w-5 h-5" /> },
     { id: "annotations", label: "Highlights", icon: <Highlighter className="w-5 h-5" /> },
     { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="w-5 h-5" /> },
-    { id: "shelves", label: "Shelves", icon: <FolderOpen className="w-5 h-5" /> },
 ];
 
 export function Sidebar() {
     const { currentRoute, setRoute, sidebarOpen, toggleSidebar } = useUIStore();
     const { settings, updateSettings } = useSettingsStore();
 
-    const handleToggle = () => {
+    const handleToggle = useCallback(() => {
         toggleSidebar();
         updateSettings({ sidebarCollapsed: !settings.sidebarCollapsed });
-    };
+    }, [toggleSidebar, updateSettings, settings.sidebarCollapsed]);
 
     return (
         <aside
@@ -57,10 +57,17 @@ export function Sidebar() {
             {/* Navigation Items */}
             <nav className="flex-1 py-4 overflow-y-auto scrollbar-hide">
                 <ul className="space-y-1 px-2">
-                    {sidebarItems.map((item) => (
+                    {/* Main Navigation */}
+                    {mainNavItems.map((item) => (
                         <li key={item.id}>
                             <button
-                                onClick={() => setRoute(item.id)}
+                                onClick={() => {
+                                    setRoute(item.id);
+                                    // Clear shelf filter when navigating away from library
+                                    if (item.id !== "library") {
+                                        sessionStorage.removeItem("lion-reader-selected-shelf");
+                                    }
+                                }}
                                 className={cn(
                                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
                                     "transition-colors duration-200",
@@ -80,6 +87,31 @@ export function Sidebar() {
                             </button>
                         </li>
                     ))}
+
+                    {/* Shelves Link - navigates to dedicated shelves page */}
+                    <li>
+                        <button
+                            onClick={() => setRoute("shelves")}
+                            className={cn(
+                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
+                                "transition-colors duration-200",
+                                "hover:bg-[var(--color-border-subtle)]",
+                                currentRoute === "shelves"
+                                    ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                    : "text-[var(--color-text-secondary)]"
+                            )}
+                            title={!sidebarOpen ? "Shelves" : undefined}
+                        >
+                            <span className="flex-shrink-0">
+                                <FolderOpen className="w-5 h-5" />
+                            </span>
+                            {sidebarOpen && (
+                                <span className="font-medium text-sm animate-fade-in flex-1 text-left">
+                                    Shelves
+                                </span>
+                            )}
+                        </button>
+                    </li>
                 </ul>
             </nav>
 
@@ -126,6 +158,7 @@ export function Sidebar() {
                     )}
                 </button>
             </div>
+
         </aside>
     );
 }

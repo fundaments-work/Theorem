@@ -123,12 +123,17 @@ export interface ReaderSettings {
     virtualScrolling: boolean; // For very long documents
 }
 
+// Library Settings Types
+export type LibraryViewMode = "grid" | "list" | "compact";
+export type LibrarySortBy = "title" | "author" | "dateAdded" | "lastRead" | "progress" | "rating";
+export type LibrarySortOrder = "asc" | "desc";
+
 // App Settings
 export interface AppSettings {
     sidebarCollapsed: boolean;
-    libraryViewMode: "grid" | "list" | "compact";
-    librarySortBy: "title" | "author" | "dateAdded" | "lastRead" | "progress" | "rating";
-    librarySortOrder: "asc" | "desc";
+    libraryViewMode: LibraryViewMode;
+    librarySortBy: LibrarySortBy;
+    librarySortOrder: LibrarySortOrder;
     scanFolders: string[];
     cacheSize: number; // MB
     readerSettings: ReaderSettings;

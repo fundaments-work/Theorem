@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useSettingsStore, useLibraryStore } from "@/store";
 import { formatFileSize } from "@/lib/utils";
 import type { ReaderTheme, FontFamily, ReadingFlow, PageLayout, PageAnimation } from "@/types";
+import { confirmClearAllData } from "@/lib/dialogs";
 import {
     Settings,
     Type,
@@ -143,13 +144,15 @@ export function SettingsPage() {
     const { settings, updateSettings, updateReaderSettings, resetSettings, resetReaderSettings } = useSettingsStore();
     const { books, annotations } = useLibraryStore();
     const [activeTab, setActiveTab] = useState<"general" | "reader" | "storage">("general");
-    const [showClearConfirm, setShowClearConfirm] = useState(false);
 
     const totalStorage = books.reduce((acc, b) => acc + b.fileSize, 0);
 
-    const handleClearData = () => {
-        localStorage.clear();
-        window.location.reload();
+    const handleClearData = async () => {
+        const confirmed = await confirmClearAllData();
+        if (confirmed) {
+            localStorage.clear();
+            window.location.reload();
+        }
     };
 
     const tabButtons = [
@@ -622,7 +625,7 @@ export function SettingsPage() {
                     >
                         <div className="space-y-3">
                             <button
-                                onClick={() => setShowClearConfirm(true)}
+                                onClick={handleClearData}
                                 className={cn(
                                     "w-full flex items-center gap-3 p-4 rounded-lg",
                                     "border border-[var(--color-error)]/20",
@@ -643,49 +646,7 @@ export function SettingsPage() {
                     </Section>
                 </div>
             )}
-
-            {/* Clear Data Confirmation Modal */}
-            {showClearConfirm && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-[var(--color-surface)] rounded-2xl shadow-2xl max-w-sm w-full p-8 flex flex-col gap-6">
-                        <div className="flex flex-col items-center text-center gap-4">
-                            <div className="p-3 rounded-full bg-[var(--color-error)]/10 text-[var(--color-error)]">
-                                <AlertTriangle className="w-8 h-8" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-[var(--color-text-primary)]">
-                                    Clear All Data?
-                                </h3>
-                                <p className="text-sm text-[var(--color-text-secondary)] mt-2">
-                                    This will permanently delete all your books, highlights, notes, shelves, and settings.
-                                    This action cannot be undone.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                            <button
-                                onClick={() => setShowClearConfirm(false)}
-                                className="w-full sm:w-auto px-6 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-border-subtle)] rounded-xl transition-all"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleClearData}
-                                className={cn(
-                                    "w-full sm:w-auto px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-[var(--color-error)]/20",
-                                    "bg-[var(--color-error)] text-white",
-                                    "hover:opacity-90 transition-all active:scale-95"
-                                )}
-                            >
-                                Clear Everything
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
 
-export default SettingsPage;

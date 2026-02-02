@@ -1,18 +1,28 @@
 import { useEffect } from "react";
 import { AppTitlebar } from "@/components/AppTitlebar";
 import { Sidebar, TopNav } from "@/components/layout";
-import {
-  LibraryPage,
-  ReaderPage,
-  ShelvesPage,
-  AnnotationsPage,
-  BookmarksPage,
-  SettingsPage,
-  ProfilePage,
-} from "@/pages";
+// Direct imports to avoid barrel export issues
+import { LibraryPage } from "@/pages/Library";
+import { ReaderPage } from "@/pages/Reader";
+import { ShelvesPage } from "@/pages/Shelves";
+import { AnnotationsPage } from "@/pages/Annotations";
+import { BookmarksPage } from "@/pages/Bookmarks";
+import { SettingsPage } from "@/pages/Settings";
+import { ProfilePage } from "@/pages/Profile";
 import { useUIStore, useSettingsStore } from "@/store";
 import { cn } from "@/lib/utils";
 import { initReaderStyles } from "@/lib/reader-styles";
+
+// Debug: Log imported components
+console.log("[App] Imported components (direct):", {
+  LibraryPage: typeof LibraryPage,
+  ReaderPage: typeof ReaderPage,
+  ShelvesPage: typeof ShelvesPage,
+  AnnotationsPage: typeof AnnotationsPage,
+  BookmarksPage: typeof BookmarksPage,
+  SettingsPage: typeof SettingsPage,
+  ProfilePage: typeof ProfilePage,
+});
 
 function App() {
   const { currentRoute, sidebarOpen, toggleSidebar } = useUIStore();
@@ -20,33 +30,54 @@ function App() {
   
   // Initialize reader styles on app load
   useEffect(() => {
+    console.log("[App] Initializing reader styles", settings.readerSettings);
     initReaderStyles(settings.readerSettings);
   }, []); // Only on mount - the store's onRehydrate will handle persisted settings
 
   // Check if we're in reader mode (full screen, no sidebar)
   const isReaderMode = currentRoute === "reader";
+  
+  console.log("[App] Current route:", currentRoute, "isReaderMode:", isReaderMode);
 
   // Render current page based on route
   const renderPage = () => {
-    switch (currentRoute) {
-      case "library":
-        return <LibraryPage />;
-      case "reader":
-        return <ReaderPage />;
-      case "shelves":
-        return <ShelvesPage />;
-      case "annotations":
-        return <AnnotationsPage />;
-      case "bookmarks":
-        return <BookmarksPage />;
-      case "settings":
-        return <SettingsPage />;
-      case "statistics":
-        return <ProfilePage />;
-      case "profile":
-        return <ProfilePage />;
-      default:
-        return <LibraryPage />;
+    console.log("[App] Rendering page for route:", currentRoute);
+    try {
+      switch (currentRoute) {
+        case "library":
+          console.log("[App] Attempting to render LibraryPage, type:", typeof LibraryPage);
+          if (typeof LibraryPage !== 'function') {
+            console.error("[App] LibraryPage is not a function! Value:", LibraryPage);
+            return <div>Error: LibraryPage is not properly imported</div>;
+          }
+          return <LibraryPage />;
+        case "reader":
+          return <ReaderPage />;
+        case "shelves":
+          return <ShelvesPage />;
+        case "annotations":
+          return <AnnotationsPage />;
+        case "bookmarks":
+          return <BookmarksPage />;
+        case "settings":
+          return <SettingsPage />;
+        case "statistics":
+          return <ProfilePage />;
+        case "profile":
+          return <ProfilePage />;
+        default:
+          console.log("[App] Rendering default LibraryPage");
+          return <LibraryPage />;
+      }
+    } catch (error) {
+      console.error("[App] Error rendering page:", error);
+      return (
+        <div style={{ padding: "2rem", color: "red" }}>
+          <h2>Error rendering page</h2>
+          <pre>{error instanceof Error ? error.message : String(error)}</pre>
+          <pre>{error instanceof Error ? error.stack : 'No stack trace'}</pre>
+        </div>
+      );
     }
   };
 

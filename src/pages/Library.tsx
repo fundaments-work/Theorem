@@ -1,34 +1,238 @@
 /**
  * Library Page
- * Book management and import
+ * Book management and import with right-click context menu, filtering, and sorting
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { useLibraryStore, useUIStore } from "@/store";
-import { formatProgress } from "@/lib/utils";
+import { useLibraryStore, useUIStore, useSettingsStore } from "@/store";
+import { formatProgress, formatFileSize, formatRelativeDate } from "@/lib/utils";
 import { pickAndImportBooks, scanFolderForBooks } from "@/lib/import";
-import { Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw } from "lucide-react";
-import type { Book } from "@/types";
+import { 
+    Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw, 
+    Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3,
+    ChevronDown, Star, X
+} from "lucide-react";
+import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "@/types";
 import { isTauri } from "@/lib/env";
 import { getBookData } from "@/lib/storage";
 import { extractBookMetadata } from "@/lib/cover-extractor";
+import { ContextMenu } from "@/components/ui/ContextMenu";
+import type { ContextMenuItem } from "@/components/ui/ContextMenu";
+import { Modal, ModalBody, ModalFooter } from "@/components/ui/Modal";
+import { confirmDeleteBook } from "@/lib/dialogs";
+import { getShelfColor, getShelfInitials } from "@/lib/shelf-colors";
 
-// Book Card Component
-function BookCard({ book }: { book: Book }) {
-    const { setRoute } = useUIStore();
+// View mode icons
+const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
+    grid: <LayoutGrid className="w-4 h-4" />,
+    list: <List className="w-4 h-4" />,
+    compact: <Grid3X3 className="w-4 h-4" />,
+};
 
+// Book Card Component with Context Menu
+function BookCard({ 
+    book, 
+    viewMode, 
+    onOpenBook,
+    onToggleFavorite,
+    onDeleteBook,
+    onShowInfo,
+    onAddToShelf,
+    collections
+}: { 
+    book: Book; 
+    viewMode: LibraryViewMode;
+    onOpenBook: (book: Book) => void;
+    onToggleFavorite: (bookId: string) => void;
+    onDeleteBook: (bookId: string) => void;
+    onShowInfo: (book: Book) => void;
+    onAddToShelf: (bookId: string) => void;
+    collections: Collection[];
+}) {
+    // Build context menu items
+    const contextMenuItems: ContextMenuItem[] = [
+        {
+            id: "open",
+            label: "Open Book",
+            icon: <BookOpen className="w-4 h-4" />,
+            shortcut: "Enter",
+            onClick: () => onOpenBook(book),
+        },
+        {
+            id: "favorite",
+            label: book.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+            icon: <Heart className={cn("w-4 h-4", book.isFavorite && "fill-current")} />,
+            onClick: () => onToggleFavorite(book.id),
+        },
+        {
+            id: "add-to-shelf",
+            label: "Add to Shelf...",
+            icon: <BookMarked className="w-4 h-4" />,
+            onClick: () => onAddToShelf(book.id),
+        },
+        {
+            id: "separator1",
+            label: "",
+            separator: true,
+            onClick: () => {},
+        },
+        {
+            id: "info",
+            label: "Book Info",
+            icon: <Info className="w-4 h-4" />,
+            onClick: () => onShowInfo(book),
+        },
+        {
+            id: "separator2",
+            label: "",
+            separator: true,
+            onClick: () => {},
+        },
+        {
+            id: "delete",
+            label: "Delete from Library",
+            icon: <Trash2 className="w-4 h-4" />,
+            danger: true,
+            onClick: () => onDeleteBook(book.id),
+        },
+    ];
+
+    // Grid view
+    if (viewMode === "grid") {
+        return (
+            <ContextMenu items={contextMenuItems}>
+                <button
+                    onClick={() => onOpenBook(book)}
+                    className="group flex flex-col text-left focus:outline-none w-full"
+                >
+                    {/* Cover Image */}
+                    <div className={cn(
+                        "relative aspect-[2/3] bg-[var(--color-border-subtle)] mb-3 overflow-hidden rounded-lg",
+                        "border border-[var(--color-border)]",
+                        "transition-all duration-200 group-hover:shadow-lg"
+                    )}>
+                        {book.coverPath ? (
+                            <img
+                                src={book.coverPath}
+                                alt={book.title}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                            />
+                        ) : (
+                            <div className="book-cover-placeholder w-full h-full text-xs p-2 flex items-center justify-center">
+                                <span className="line-clamp-3 text-center">{book.title}</span>
+                            </div>
+                        )}
+
+                        {/* Progress Bar */}
+                        {book.progress > 0 && (
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
+                                <div
+                                    className="h-full bg-[var(--color-accent)]"
+                                    style={{ width: `${book.progress * 100}%` }}
+                                />
+                            </div>
+                        )}
+
+                        {/* Favorite Badge */}
+                        {book.isFavorite && (
+                            <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center">
+                                <Heart className="w-3 h-3 fill-current" />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Book Info */}
+                    <div>
+                        <h3 className="font-medium text-sm text-[var(--color-text-primary)] line-clamp-1 mb-0.5">
+                            {book.title}
+                        </h3>
+                        <p className="text-xs text-[var(--color-text-secondary)] line-clamp-1">
+                            {book.author}
+                        </p>
+                        {book.progress > 0 && (
+                            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+                                {formatProgress(book.progress)}
+                            </p>
+                        )}
+                    </div>
+                </button>
+            </ContextMenu>
+        );
+    }
+
+    // List view
+    if (viewMode === "list") {
+        return (
+            <ContextMenu items={contextMenuItems}>
+                <button
+                    onClick={() => onOpenBook(book)}
+                    className="group flex items-center gap-4 p-3 text-left focus:outline-none w-full rounded-lg hover:bg-[var(--color-border-subtle)] transition-colors"
+                >
+                    {/* Cover Image */}
+                    <div className={cn(
+                        "relative w-12 h-16 flex-shrink-0 bg-[var(--color-border-subtle)] overflow-hidden rounded",
+                        "border border-[var(--color-border)]"
+                    )}>
+                        {book.coverPath ? (
+                            <img
+                                src={book.coverPath}
+                                alt={book.title}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                            />
+                        ) : (
+                            <div className="book-cover-placeholder w-full h-full text-[8px] p-1 flex items-center justify-center">
+                                <span className="line-clamp-2 text-center">{book.title}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Book Info */}
+                    <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-sm text-[var(--color-text-primary)] truncate">
+                            {book.title}
+                        </h3>
+                        <p className="text-xs text-[var(--color-text-secondary)] truncate">
+                            {book.author}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                            {book.isFavorite && (
+                                <Heart className="w-3 h-3 text-[var(--color-accent)] fill-current" />
+                            )}
+                            {book.rating && (
+                                <div className="flex items-center gap-0.5">
+                                    <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                                    <span className="text-[10px] text-[var(--color-text-muted)]">{book.rating}</span>
+                                </div>
+                            )}
+                            <span className="text-[10px] text-[var(--color-text-muted)] uppercase">{book.format}</span>
+                        </div>
+                    </div>
+
+                    {/* Progress */}
+                    <div className="text-right">
+                        {book.progress > 0 ? (
+                            <p className="text-sm text-[var(--color-text-secondary)]">
+                                {formatProgress(book.progress)}
+                            </p>
+                        ) : (
+                            <p className="text-xs text-[var(--color-text-muted)]">Not started</p>
+                        )}
+                    </div>
+                </button>
+            </ContextMenu>
+        );
+    }
+
+    // Compact view
     return (
-        <button
-            onClick={() => setRoute("reader", book.id)}
-            className="group flex flex-col text-left focus:outline-none"
-        >
-            {/* Cover Image */}
-            <div className={cn(
-                "relative aspect-[2/3] bg-[var(--color-border-subtle)] mb-3 overflow-hidden rounded-lg",
-                "border border-[var(--color-border)]",
-                "transition-all duration-200 group-hover:shadow-lg"
-            )}>
+        <ContextMenu items={contextMenuItems}>
+            <button
+                onClick={() => onOpenBook(book)}
+                className="group relative aspect-[2/3] bg-[var(--color-border-subtle)] overflow-hidden rounded-lg border border-[var(--color-border)] hover:shadow-lg transition-all duration-200 w-full"
+            >
                 {book.coverPath ? (
                     <img
                         src={book.coverPath}
@@ -37,8 +241,8 @@ function BookCard({ book }: { book: Book }) {
                         loading="lazy"
                     />
                 ) : (
-                    <div className="book-cover-placeholder w-full h-full text-xs p-2">
-                        <span className="line-clamp-3">{book.title}</span>
+                    <div className="book-cover-placeholder w-full h-full text-[10px] p-2 flex items-center justify-center">
+                        <span className="line-clamp-3 text-center">{book.title}</span>
                     </div>
                 )}
 
@@ -51,23 +255,15 @@ function BookCard({ book }: { book: Book }) {
                         />
                     </div>
                 )}
-            </div>
 
-            {/* Book Info */}
-            <div>
-                <h3 className="font-medium text-sm text-[var(--color-text-primary)] line-clamp-1 mb-0.5">
-                    {book.title}
-                </h3>
-                <p className="text-xs text-[var(--color-text-secondary)] line-clamp-1">
-                    {book.author}
-                </p>
-                {book.progress > 0 && (
-                    <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
-                        {formatProgress(book.progress)}
-                    </p>
+                {/* Favorite Badge */}
+                {book.isFavorite && (
+                    <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center">
+                        <Heart className="w-2.5 h-2.5 fill-current" />
+                    </div>
                 )}
-            </div>
-        </button>
+            </button>
+        </ContextMenu>
     );
 }
 
@@ -134,25 +330,368 @@ function ImportButton({
     );
 }
 
+// Book Info Modal using Portal
+function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: boolean; onClose: () => void }) {
+    if (!book) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} size="md" showCloseButton={true}>
+            <ModalBody className="p-0">
+                <div className="p-6">
+                    <div className="flex items-start gap-4">
+                        {book.coverPath ? (
+                            <img
+                                src={book.coverPath}
+                                alt={book.title}
+                                className="w-24 h-36 object-cover rounded-lg shadow-md"
+                            />
+                        ) : (
+                            <div className="w-24 h-36 bg-[var(--color-border-subtle)] rounded-lg flex items-center justify-center">
+                                <BookOpen className="w-8 h-8 text-[var(--color-text-muted)]" />
+                            </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] line-clamp-2">
+                                {book.title}
+                            </h2>
+                            <p className="text-sm text-[var(--color-text-secondary)] mt-1">
+                                {book.author}
+                            </p>
+                            {book.rating && (
+                                <div className="flex items-center gap-1 mt-2">
+                                    {[...Array(5)].map((_, i) => (
+                                        <Star
+                                            key={i}
+                                            className={cn(
+                                                "w-4 h-4",
+                                                i < book.rating! ? "text-yellow-500 fill-current" : "text-[var(--color-border)]"
+                                            )}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-6 space-y-3">
+                        {book.description && (
+                            <div>
+                                <p className="text-xs text-[var(--color-text-muted)] uppercase">Description</p>
+                                <p className="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-4">
+                                    {book.description}
+                                </p>
+                            </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-3">
+                            {book.publisher && (
+                                <div>
+                                    <p className="text-xs text-[var(--color-text-muted)] uppercase">Publisher</p>
+                                    <p className="text-sm text-[var(--color-text-secondary)]">{book.publisher}</p>
+                                </div>
+                            )}
+                            {book.publishedDate && (
+                                <div>
+                                    <p className="text-xs text-[var(--color-text-muted)] uppercase">Published</p>
+                                    <p className="text-sm text-[var(--color-text-secondary)]">{book.publishedDate}</p>
+                                </div>
+                            )}
+                            {book.language && (
+                                <div>
+                                    <p className="text-xs text-[var(--color-text-muted)] uppercase">Language</p>
+                                    <p className="text-sm text-[var(--color-text-secondary)]">{book.language}</p>
+                                </div>
+                            )}
+                            {book.isbn && (
+                                <div>
+                                    <p className="text-xs text-[var(--color-text-muted)] uppercase">ISBN</p>
+                                    <p className="text-sm text-[var(--color-text-secondary)]">{book.isbn}</p>
+                                </div>
+                            )}
+                            <div>
+                                <p className="text-xs text-[var(--color-text-muted)] uppercase">Format</p>
+                                <p className="text-sm text-[var(--color-text-secondary)] uppercase">{book.format}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-[var(--color-text-muted)] uppercase">Size</p>
+                                <p className="text-sm text-[var(--color-text-secondary)]">{formatFileSize(book.fileSize)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-[var(--color-text-muted)] uppercase">Added</p>
+                                <p className="text-sm text-[var(--color-text-secondary)]">{formatRelativeDate(book.addedAt instanceof Date ? book.addedAt : new Date(book.addedAt))}</p>
+                            </div>
+                            {book.lastReadAt && (
+                                <div>
+                                    <p className="text-xs text-[var(--color-text-muted)] uppercase">Last Read</p>
+                                    <p className="text-sm text-[var(--color-text-secondary)]">{book.lastReadAt ? formatRelativeDate(book.lastReadAt instanceof Date ? book.lastReadAt : new Date(book.lastReadAt)) : "Never"}</p>
+                                </div>
+                            )}
+                        </div>
+                        {book.progress > 0 && (
+                            <div>
+                                <p className="text-xs text-[var(--color-text-muted)] uppercase">Progress</p>
+                                <p className="text-sm text-[var(--color-text-secondary)]">{formatProgress(book.progress)}</p>
+                            </div>
+                        )}
+                        {book.tags.length > 0 && (
+                            <div>
+                                <p className="text-xs text-[var(--color-text-muted)] uppercase mb-1">Tags</p>
+                                <div className="flex flex-wrap gap-1">
+                                    {book.tags.map((tag: string) => (
+                                        <span
+                                            key={tag}
+                                            className="px-2 py-0.5 text-xs rounded-full bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)]"
+                                        >
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </ModalBody>
+            <ModalFooter>
+                <button
+                    onClick={onClose}
+                    className="px-4 py-2 rounded-lg bg-[var(--color-border-subtle)] text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors"
+                >
+                    Close
+                </button>
+            </ModalFooter>
+        </Modal>
+    );
+}
+
+// Add to Shelf Modal using Portal
+function AddToShelfModal({ 
+    isOpen, 
+    onClose, 
+    bookId, 
+    collections,
+    onAddToShelf,
+    onCreateShelf
+}: { 
+    isOpen: boolean; 
+    onClose: () => void; 
+    bookId: string | null;
+    collections: Collection[];
+    onAddToShelf: (bookId: string, shelfId: string) => void;
+    onCreateShelf: (name: string) => void;
+}) {
+    const [newShelfName, setNewShelfName] = useState("");
+
+    const handleCreateShelf = () => {
+        if (newShelfName.trim()) {
+            onCreateShelf(newShelfName.trim());
+            setNewShelfName("");
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} size="sm" showCloseButton={true}>
+            <ModalBody className="p-0">
+                <div className="p-6">
+                    <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">
+                        Add to Shelf
+                    </h2>
+                    
+                    {collections.length > 0 ? (
+                        <div className="space-y-2">
+                            {collections.map(shelf => (
+                                <button
+                                    key={shelf.id}
+                                    onClick={() => {
+                                        if (bookId) {
+                                            onAddToShelf(bookId, shelf.id);
+                                            onClose();
+                                        }
+                                    }}
+                                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--color-border-subtle)] transition-colors text-left"
+                                >
+                                    <FolderOpen className="w-5 h-5 text-[var(--color-text-muted)]" />
+                                    <div className="flex-1">
+                                        <p className="text-sm font-medium text-[var(--color-text-primary)]">
+                                            {shelf.name}
+                                        </p>
+                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                            {shelf.bookIds.length} {shelf.bookIds.length === 1 ? "book" : "books"}
+                                        </p>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-[var(--color-text-muted)] text-center py-4">
+                            No shelves yet. Create one below.
+                        </p>
+                    )}
+
+                    <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Create New Shelf</p>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={newShelfName}
+                                onChange={(e) => setNewShelfName(e.target.value)}
+                                placeholder="Shelf name..."
+                                className={cn(
+                                    "flex-1 px-3 py-2 rounded-lg",
+                                    "bg-[var(--color-background)] border border-[var(--color-border)]",
+                                    "text-sm text-[var(--color-text-primary)]",
+                                    "focus:outline-none focus:border-[var(--color-accent)]"
+                                )}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleCreateShelf();
+                                }}
+                            />
+                            <button
+                                onClick={handleCreateShelf}
+                                disabled={!newShelfName.trim()}
+                                className={cn(
+                                    "px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium",
+                                    "hover:opacity-90 transition-opacity",
+                                    "disabled:opacity-50 disabled:cursor-not-allowed"
+                                )}
+                            >
+                                Create
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </ModalBody>
+            <ModalFooter>
+                <button
+                    onClick={onClose}
+                    className="px-4 py-2 rounded-lg text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+                >
+                    Cancel
+                </button>
+            </ModalFooter>
+        </Modal>
+    );
+}
+
 // Main Library Page
 export function LibraryPage() {
+    console.log("[LibraryPage] Component rendering");
     const books = useLibraryStore((state) => state.books);
+    const collections = useLibraryStore((state) => state.collections);
     const addBooks = useLibraryStore((state) => state.addBooks);
+    const removeBook = useLibraryStore((state) => state.removeBook);
     const updateBook = useLibraryStore((state) => state.updateBook);
+    const toggleFavorite = useLibraryStore((state) => state.toggleFavorite);
+    const addBookToCollection = useLibraryStore((state) => state.addBookToCollection);
+    const addCollection = useLibraryStore((state) => state.addCollection);
+    
+    const { setRoute, searchQuery } = useUIStore();
+    const { settings, updateSettings } = useSettingsStore();
+    
     const [isImporting, setIsImporting] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [isExtractingCovers, setIsExtractingCovers] = useState(false);
     const [extractionProgress, setExtractionProgress] = useState({ current: 0, total: 0 });
     
+    // Filter dropdown state
+    const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+    const filterDropdownRef = useRef<HTMLDivElement>(null);
+    
+    // Shelves dropdown state
+    const [showShelfDropdown, setShowShelfDropdown] = useState(false);
+    const shelfDropdownRef = useRef<HTMLDivElement>(null);
+    
+    // Modal states
+    const [infoModalBook, setInfoModalBook] = useState<Book | null>(null);
+    const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+    const [addToShelfBookId, setAddToShelfBookId] = useState<string | null>(null);
+    const [isAddToShelfModalOpen, setIsAddToShelfModalOpen] = useState(false);
+    
     // Track if we've already started extraction to avoid duplicate runs
     const extractionStartedRef = useRef(false);
+    
+    // Selected shelf state (safely initialized from session storage)
+    const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
+    
+    // Initialize selected shelf from session storage on mount
+    useEffect(() => {
+        const shelfId = sessionStorage.getItem("lion-reader-selected-shelf");
+        if (shelfId) {
+            setSelectedShelfId(shelfId);
+        }
+    }, []);
+    
+    const selectedShelf = selectedShelfId ? collections.find(c => c.id === selectedShelfId) : null;
+
+    // Filter books based on search query and selected shelf
+    const filteredBooks = useMemo(() => {
+        let result = books;
+        
+        // Filter by shelf if selected
+        if (selectedShelf) {
+            result = result.filter(b => selectedShelf.bookIds.includes(b.id));
+        }
+        
+        // Filter by search query
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            result = result.filter(
+                (b) =>
+                    b.title.toLowerCase().includes(q) ||
+                    b.author.toLowerCase().includes(q) ||
+                    b.tags.some((t) => t.toLowerCase().includes(q))
+            );
+        }
+        
+        return result;
+    }, [books, searchQuery, selectedShelf]);
+
+    // Sort books
+    const sortedBooks = useMemo(() => {
+        const sorted = [...filteredBooks];
+        const sortBy = settings.librarySortBy;
+        const sortOrder = settings.librarySortOrder;
+
+        sorted.sort((a, b) => {
+            let comparison = 0;
+            
+            switch (sortBy) {
+                case "title":
+                    comparison = a.title.localeCompare(b.title);
+                    break;
+                case "author":
+                    comparison = a.author.localeCompare(b.author);
+                    break;
+                case "dateAdded":
+                    const aAdded = a.addedAt instanceof Date ? a.addedAt : new Date(a.addedAt);
+                    const bAdded = b.addedAt instanceof Date ? b.addedAt : new Date(b.addedAt);
+                    comparison = aAdded.getTime() - bAdded.getTime();
+                    break;
+                case "lastRead":
+                    const aLastRead = a.lastReadAt ? (a.lastReadAt instanceof Date ? a.lastReadAt : new Date(a.lastReadAt)) : null;
+                    const bLastRead = b.lastReadAt ? (b.lastReadAt instanceof Date ? b.lastReadAt : new Date(b.lastReadAt)) : null;
+                    const aTime = aLastRead?.getTime() || 0;
+                    const bTime = bLastRead?.getTime() || 0;
+                    comparison = aTime - bTime;
+                    break;
+                case "progress":
+                    comparison = a.progress - b.progress;
+                    break;
+                case "rating":
+                    const aRating = a.rating || 0;
+                    const bRating = b.rating || 0;
+                    comparison = aRating - bRating;
+                    break;
+            }
+            
+            return sortOrder === "asc" ? comparison : -comparison;
+        });
+
+        return sorted;
+    }, [filteredBooks, settings.librarySortBy, settings.librarySortOrder]);
 
     // Auto-extract covers for books that don't have them
     useEffect(() => {
-        // Only run once per session and if there are books
         if (extractionStartedRef.current || books.length === 0) return;
         
-        // Find books without covers
         const booksWithoutCovers = books.filter(book => !book.coverPath);
         
         if (booksWithoutCovers.length === 0) return;
@@ -169,7 +708,6 @@ export function LibraryPage() {
                 setExtractionProgress({ current: i + 1, total: booksWithoutCovers.length });
                 
                 try {
-                    // Get book data from storage
                     const storagePath = book.storagePath || book.filePath;
                     const data = await getBookData(book.id, storagePath);
                     
@@ -178,18 +716,15 @@ export function LibraryPage() {
                         continue;
                     }
                     
-                    // Extract metadata and cover
                     const filename = book.filePath.split(/[/\\]/).pop() || 'book.epub';
                     const metadata = await extractBookMetadata(data, filename, book.id);
                     
-                    // Update book with extracted data
                     const updates: Partial<Book> = {};
                     
                     if (metadata.coverDataUrl) {
                         updates.coverPath = metadata.coverDataUrl;
                     }
                     
-                    // Only update title/author if current ones look like fallbacks
                     if (metadata.title && (book.title === 'Unknown' || book.title.includes('.'))) {
                         updates.title = metadata.title;
                     }
@@ -197,7 +732,6 @@ export function LibraryPage() {
                         updates.author = metadata.author;
                     }
                     
-                    // Update other metadata if available
                     if (metadata.description && !book.description) {
                         updates.description = metadata.description;
                     }
@@ -219,7 +753,6 @@ export function LibraryPage() {
                     console.error('[Library] Failed to extract cover for book:', book.id, error);
                 }
                 
-                // Small delay to avoid overwhelming the system
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
             
@@ -227,11 +760,44 @@ export function LibraryPage() {
             console.log('[Library] Cover extraction complete');
         };
         
-        // Start extraction with a small delay to let the UI render first
         const timeoutId = setTimeout(extractCovers, 500);
         
         return () => clearTimeout(timeoutId);
     }, [books, updateBook]);
+
+    // Close filter dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
+                setShowFilterDropdown(false);
+            }
+        };
+
+        if (showFilterDropdown) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [showFilterDropdown]);
+    
+    // Close shelf dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (shelfDropdownRef.current && !shelfDropdownRef.current.contains(e.target as Node)) {
+                setShowShelfDropdown(false);
+            }
+        };
+
+        if (showShelfDropdown) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [showShelfDropdown]);
 
     // Handle importing books
     const handleAddBooks = useCallback(async () => {
@@ -271,7 +837,6 @@ export function LibraryPage() {
             if (folder && typeof folder === 'string') {
                 const bookPaths = await scanFolderForBooks(folder);
                 
-                // Import found books
                 const { importBooks } = await import('@/lib/import');
                 const importedBooks = await importBooks(bookPaths);
                 
@@ -286,14 +851,57 @@ export function LibraryPage() {
         }
     }, [addBooks]);
 
-    // Auto-scan on first load if Tauri
-    useEffect(() => {
-        const hasScanned = sessionStorage.getItem('lion-reader-initial-scan');
-        if (!hasScanned && isTauri() && books.length === 0) {
-            sessionStorage.setItem('lion-reader-initial-scan', 'true');
-            // Could trigger initial scan here
+    // Book actions
+    const handleOpenBook = useCallback((book: Book) => {
+        setRoute("reader", book.id);
+    }, [setRoute]);
+
+    const handleToggleFavorite = useCallback((bookId: string) => {
+        toggleFavorite(bookId);
+    }, [toggleFavorite]);
+
+    const handleDeleteBook = useCallback(async (bookId: string) => {
+        const book = books.find(b => b.id === bookId);
+        const confirmed = await confirmDeleteBook(book?.title || "this book");
+        if (confirmed) {
+            removeBook(bookId);
         }
-    }, [books.length]);
+    }, [removeBook, books]);
+
+    const handleShowInfo = useCallback((book: Book) => {
+        setInfoModalBook(book);
+        setIsInfoModalOpen(true);
+    }, []);
+
+    const handleAddToShelf = useCallback((bookId: string) => {
+        setAddToShelfBookId(bookId);
+        setIsAddToShelfModalOpen(true);
+    }, []);
+
+    const handleAddBookToShelf = useCallback((bookId: string, shelfId: string) => {
+        addBookToCollection(bookId, shelfId);
+    }, [addBookToCollection]);
+
+    const handleCreateShelf = useCallback((name: string) => {
+        const newShelf: Collection = {
+            id: crypto.randomUUID(),
+            name,
+            bookIds: addToShelfBookId ? [addToShelfBookId] : [],
+            createdAt: new Date(),
+            isSmartCollection: false,
+        };
+        addCollection(newShelf);
+        setIsAddToShelfModalOpen(false);
+        setAddToShelfBookId(null);
+    }, [addCollection, addToShelfBookId]);
+
+    // Toggle view mode
+    const toggleViewMode = () => {
+        const modes: LibraryViewMode[] = ["grid", "list", "compact"];
+        const currentIndex = modes.indexOf(settings.libraryViewMode);
+        const nextMode = modes[(currentIndex + 1) % modes.length];
+        updateSettings({ libraryViewMode: nextMode });
+    };
 
     if (books.length === 0) {
         return <EmptyLibrary onAddBooks={handleAddBooks} isLoading={isImporting} />;
@@ -304,11 +912,30 @@ export function LibraryPage() {
             {/* Toolbar */}
             <div className="flex items-center justify-between mb-10">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
-                        Library
-                    </h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
+                            {selectedShelf ? selectedShelf.name : "Library"}
+                        </h1>
+                        {selectedShelf && (
+                            <button
+                                onClick={() => {
+                                    sessionStorage.removeItem("lion-reader-selected-shelf");
+                                    setSelectedShelfId(null);
+                                }}
+                                className={cn(
+                                    "flex items-center gap-1 px-2 py-1 rounded-full text-xs",
+                                    "bg-[var(--color-accent-light)] text-[var(--color-accent)]",
+                                    "hover:bg-[var(--color-accent)] hover:text-white transition-colors"
+                                )}
+                            >
+                                <X className="w-3 h-3" />
+                                <span>Clear filter</span>
+                            </button>
+                        )}
+                    </div>
                     <p className="text-sm text-[var(--color-text-muted)] mt-1">
-                        {books.length} {books.length === 1 ? 'book' : 'books'}
+                        {sortedBooks.length} {sortedBooks.length === 1 ? 'book' : 'books'}
+                        {searchQuery && ` matching "${searchQuery}"`}
                         {isExtractingCovers && (
                             <span className="ml-2 text-[var(--color-accent)]">
                                 Extracting covers ({extractionProgress.current}/{extractionProgress.total})
@@ -318,6 +945,136 @@ export function LibraryPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    {/* View Mode Toggle */}
+                    <button
+                        onClick={toggleViewMode}
+                        className={cn(
+                            "flex items-center justify-center w-10 h-10 rounded-lg",
+                            "border border-[var(--color-border)] bg-[var(--color-surface)]",
+                            "text-[var(--color-text-secondary)]",
+                            "hover:bg-[var(--color-border-subtle)] transition-colors"
+                        )}
+                        title={`View: ${settings.libraryViewMode}`}
+                    >
+                        {viewModeIcons[settings.libraryViewMode]}
+                    </button>
+
+                    {/* Shelves Dropdown */}
+                    {collections.length > 0 && (
+                        <div className="relative" ref={shelfDropdownRef}>
+                            <button
+                                onClick={() => setShowShelfDropdown(!showShelfDropdown)}
+                                className={cn(
+                                    "flex items-center gap-2 px-3 py-2 rounded-lg",
+                                    "border border-[var(--color-border)] bg-[var(--color-surface)]",
+                                    "text-[var(--color-text-secondary)] text-sm",
+                                    "hover:bg-[var(--color-border-subtle)] transition-colors",
+                                    selectedShelf && "border-[var(--color-accent)] text-[var(--color-accent)]"
+                                )}
+                            >
+                                {selectedShelf ? (
+                                    <>
+                                        <div
+                                            className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-semibold"
+                                            style={{
+                                                backgroundColor: getShelfColor(selectedShelf.id, selectedShelf.name).bg,
+                                                color: getShelfColor(selectedShelf.id, selectedShelf.name).text,
+                                            }}
+                                        >
+                                            {getShelfInitials(selectedShelf.name)}
+                                        </div>
+                                        <span className="hidden sm:inline max-w-[100px] truncate">{selectedShelf.name}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <FolderOpen className="w-4 h-4" />
+                                        <span className="hidden sm:inline">Shelves</span>
+                                    </>
+                                )}
+                                <ChevronDown className={cn("w-4 h-4 transition-transform", showShelfDropdown && "rotate-180")} />
+                            </button>
+
+                            {/* Shelves Dropdown Menu */}
+                            {showShelfDropdown && (
+                                <div className="absolute right-0 top-full mt-1 w-56 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg z-50 py-1 max-h-[300px] overflow-y-auto">
+                                    <button
+                                        onClick={() => {
+                                            sessionStorage.removeItem("lion-reader-selected-shelf");
+                                            setSelectedShelfId(null);
+                                            setShowShelfDropdown(false);
+                                        }}
+                                        className={cn(
+                                            "w-full flex items-center gap-2 px-3 py-2 text-sm text-left",
+                                            "hover:bg-[var(--color-border-subtle)] transition-colors",
+                                            !selectedShelf && "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                        )}
+                                    >
+                                        <BookOpen className="w-4 h-4" />
+                                        <span>All Books</span>
+                                    </button>
+                                    
+                                    <div className="border-t border-[var(--color-border)] my-1" />
+                                    
+                                    {collections.map((shelf) => {
+                                        const colors = getShelfColor(shelf.id, shelf.name);
+                                        const isSelected = selectedShelfId === shelf.id;
+                                        
+                                        return (
+                                            <button
+                                                key={shelf.id}
+                                                onClick={() => {
+                                                    setSelectedShelfId(shelf.id);
+                                                    sessionStorage.setItem("lion-reader-selected-shelf", shelf.id);
+                                                    setShowShelfDropdown(false);
+                                                }}
+                                                className={cn(
+                                                    "w-full flex items-center gap-2 px-3 py-2 text-sm text-left",
+                                                    "hover:bg-[var(--color-border-subtle)] transition-colors",
+                                                    isSelected && "bg-[var(--color-accent-light)]"
+                                                )}
+                                            >
+                                                <div
+                                                    className={cn(
+                                                        "w-5 h-5 rounded flex items-center justify-center text-[10px] font-semibold",
+                                                        isSelected && "ring-2 ring-offset-1 ring-[var(--color-accent)]"
+                                                    )}
+                                                    style={{
+                                                        backgroundColor: colors.bg,
+                                                        color: colors.text,
+                                                    }}
+                                                >
+                                                    {getShelfInitials(shelf.name)}
+                                                </div>
+                                                <span className={cn("flex-1 truncate", isSelected && "text-[var(--color-accent)] font-medium")}>
+                                                    {shelf.name}
+                                                </span>
+                                                <span className={cn(
+                                                    "text-[10px] px-1.5 py-0.5 rounded-full",
+                                                    isSelected ? "bg-[var(--color-accent)] text-white" : "bg-[var(--color-border-subtle)] text-[var(--color-text-muted)]"
+                                                )}>
+                                                    {shelf.bookIds.length}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                    
+                                    <div className="border-t border-[var(--color-border)] my-1" />
+                                    
+                                    <button
+                                        onClick={() => {
+                                            setRoute("shelves");
+                                            setShowShelfDropdown(false);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-border-subtle)] transition-colors"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        <span>Manage Shelves...</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <ImportButton onImport={handleAddBooks} isLoading={isImporting} />
 
                     {isTauri() && (
@@ -342,30 +1099,208 @@ export function LibraryPage() {
                         </button>
                     )}
 
-                    <button
-                        className={cn(
-                            "flex items-center gap-2 px-4 py-2 rounded-lg",
-                            "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                            "text-[var(--color-text-secondary)] text-sm",
-                            "hover:bg-[var(--color-border-subtle)] transition-colors"
+                    {/* Filter Button with Dropdown */}
+                    <div className="relative" ref={filterDropdownRef}>
+                        <button
+                            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                            className={cn(
+                                "flex items-center gap-2 px-4 py-2 rounded-lg",
+                                "border border-[var(--color-border)] bg-[var(--color-surface)]",
+                                "text-[var(--color-text-secondary)] text-sm",
+                                "hover:bg-[var(--color-border-subtle)] transition-colors",
+                                showFilterDropdown && "bg-[var(--color-border-subtle)]"
+                            )}
+                        >
+                            <Filter className="w-4 h-4" />
+                            <span className="hidden sm:inline">Filter</span>
+                            <ChevronDown className={cn("w-3 h-3 transition-transform", showFilterDropdown && "rotate-180")} />
+                        </button>
+
+                        {showFilterDropdown && (
+                            <>
+                                <div 
+                                    className="fixed inset-0 z-10"
+                                    onClick={() => setShowFilterDropdown(false)}
+                                />
+                                <div className="absolute right-0 top-full mt-2 w-56 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg z-20 py-2">
+                                    {/* Sort By */}
+                                    <div className="px-3 py-2 border-b border-[var(--color-border)]">
+                                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Sort By</p>
+                                        <div className="space-y-1">
+                                            {[
+                                                { id: "title", label: "Title" },
+                                                { id: "author", label: "Author" },
+                                                { id: "dateAdded", label: "Date Added" },
+                                                { id: "lastRead", label: "Last Read" },
+                                                { id: "progress", label: "Progress" },
+                                                { id: "rating", label: "Rating" },
+                                            ].map((option) => (
+                                                <button
+                                                    key={option.id}
+                                                    onClick={() => updateSettings({ librarySortBy: option.id as LibrarySortBy })}
+                                                    className={cn(
+                                                        "w-full flex items-center justify-between px-2 py-1.5 rounded text-sm",
+                                                        settings.librarySortBy === option.id
+                                                            ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                                                    )}
+                                                >
+                                                    {option.label}
+                                                    {settings.librarySortBy === option.id && (
+                                                        <ChevronDown className="w-3 h-3" />
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Sort Order */}
+                                    <div className="px-3 py-2 border-b border-[var(--color-border)]">
+                                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Order</p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => updateSettings({ librarySortOrder: "asc" })}
+                                                className={cn(
+                                                    "flex-1 px-3 py-1.5 rounded text-sm",
+                                                    settings.librarySortOrder === "asc"
+                                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                                        : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)]"
+                                                )}
+                                            >
+                                                Ascending
+                                            </button>
+                                            <button
+                                                onClick={() => updateSettings({ librarySortOrder: "desc" })}
+                                                className={cn(
+                                                    "flex-1 px-3 py-1.5 rounded text-sm",
+                                                    settings.librarySortOrder === "desc"
+                                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                                        : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)]"
+                                                )}
+                                            >
+                                                Descending
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Filter by */}
+                                    <div className="px-3 py-2">
+                                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Show</p>
+                                        <div className="space-y-1">
+                                            <button className="w-full text-left px-2 py-1.5 rounded text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]">
+                                                All Books
+                                            </button>
+                                            <button className="w-full text-left px-2 py-1.5 rounded text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]">
+                                                Favorites
+                                            </button>
+                                            <button className="w-full text-left px-2 py-1.5 rounded text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]">
+                                                Currently Reading
+                                            </button>
+                                            <button className="w-full text-left px-2 py-1.5 rounded text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]">
+                                                Completed
+                                            </button>
+                                            <button className="w-full text-left px-2 py-1.5 rounded text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]">
+                                                Not Started
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
                         )}
-                    >
-                        <Filter className="w-4 h-4" />
-                        <span className="hidden sm:inline">Filter</span>
-                    </button>
+                    </div>
                 </div>
             </div>
 
-            {/* Books Grid */}
+            {/* Books Grid/List/Compact */}
             <section>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
-                    {books.map((book) => (
-                        <BookCard key={book.id} book={book} />
-                    ))}
-                </div>
+                {sortedBooks.length === 0 ? (
+                    <div className="text-center py-16">
+                        <p className="text-[var(--color-text-muted)]">
+                            No books match your search.
+                        </p>
+                        {searchQuery && (
+                            <button
+                                onClick={() => useUIStore.getState().setSearchQuery("")}
+                                className="mt-2 text-sm text-[var(--color-accent)] hover:underline"
+                            >
+                                Clear search
+                            </button>
+                        )}
+                    </div>
+                ) : settings.libraryViewMode === "list" ? (
+                    <div className="space-y-1">
+                        {sortedBooks.map((book) => (
+                            <BookCard
+                                key={book.id}
+                                book={book}
+                                viewMode={settings.libraryViewMode}
+                                onOpenBook={handleOpenBook}
+                                onToggleFavorite={handleToggleFavorite}
+                                onDeleteBook={handleDeleteBook}
+                                onShowInfo={handleShowInfo}
+                                onAddToShelf={handleAddToShelf}
+                                collections={collections}
+                            />
+                        ))}
+                    </div>
+                ) : settings.libraryViewMode === "compact" ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                        {sortedBooks.map((book) => (
+                            <BookCard
+                                key={book.id}
+                                book={book}
+                                viewMode={settings.libraryViewMode}
+                                onOpenBook={handleOpenBook}
+                                onToggleFavorite={handleToggleFavorite}
+                                onDeleteBook={handleDeleteBook}
+                                onShowInfo={handleShowInfo}
+                                onAddToShelf={handleAddToShelf}
+                                collections={collections}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
+                        {sortedBooks.map((book) => (
+                            <BookCard
+                                key={book.id}
+                                book={book}
+                                viewMode={settings.libraryViewMode}
+                                onOpenBook={handleOpenBook}
+                                onToggleFavorite={handleToggleFavorite}
+                                onDeleteBook={handleDeleteBook}
+                                onShowInfo={handleShowInfo}
+                                onAddToShelf={handleAddToShelf}
+                                collections={collections}
+                            />
+                        ))}
+                    </div>
+                )}
             </section>
+
+            {/* Book Info Modal */}
+            <BookInfoModal
+                book={infoModalBook}
+                isOpen={isInfoModalOpen}
+                onClose={() => {
+                    setIsInfoModalOpen(false);
+                    setInfoModalBook(null);
+                }}
+            />
+
+            {/* Add to Shelf Modal */}
+            <AddToShelfModal
+                isOpen={isAddToShelfModalOpen}
+                onClose={() => {
+                    setIsAddToShelfModalOpen(false);
+                    setAddToShelfBookId(null);
+                }}
+                bookId={addToShelfBookId}
+                collections={collections}
+                onAddToShelf={handleAddBookToShelf}
+                onCreateShelf={handleCreateShelf}
+            />
         </div>
     );
 }
 
-export default LibraryPage;

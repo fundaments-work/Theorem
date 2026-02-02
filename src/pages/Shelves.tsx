@@ -6,6 +6,8 @@
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useLibraryStore, useUIStore } from "@/store";
+import { ShelfModal } from "@/components/modals";
+import { getShelfColor, getShelfInitials } from "@/lib/shelf-colors";
 import {
     FolderOpen,
     Plus,
@@ -148,7 +150,18 @@ function ShelfCard({ shelf, books, onClick, onEdit, onDelete }: ShelfCardProps) 
 
             {/* Info */}
             <div className="p-4">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start gap-3">
+                    {/* Colored Shelf Avatar */}
+                    <div
+                        className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-semibold flex-shrink-0 shadow-sm"
+                        style={{
+                            backgroundColor: getShelfColor(shelf.id, shelf.name).bg,
+                            color: getShelfColor(shelf.id, shelf.name).text,
+                        }}
+                    >
+                        {getShelfInitials(shelf.name)}
+                    </div>
+                    
                     <div className="flex-1 min-w-0">
                         <button onClick={onClick} className="text-left w-full">
                             <h3 className="font-semibold text-[var(--color-text-primary)] truncate group-hover:text-[var(--color-accent)] transition-colors">
@@ -256,6 +269,16 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
+                    {/* Colored Shelf Avatar */}
+                    <div
+                        className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-semibold flex-shrink-0 shadow-sm"
+                        style={{
+                            backgroundColor: getShelfColor(shelf.id, shelf.name).bg,
+                            color: getShelfColor(shelf.id, shelf.name).text,
+                        }}
+                    >
+                        {getShelfInitials(shelf.name)}
+                    </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
                             {shelf.name}
@@ -380,100 +403,6 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                     )}
                 </div>
             )}
-        </div>
-    );
-}
-
-// Create/Edit Shelf Modal
-interface ShelfModalProps {
-    shelf?: {
-        id: string;
-        name: string;
-        description?: string;
-    };
-    onClose: () => void;
-    onSave: (name: string, description: string) => void;
-}
-
-function ShelfModal({ shelf, onClose, onSave }: ShelfModalProps) {
-    const [name, setName] = useState(shelf?.name || "");
-    const [description, setDescription] = useState(shelf?.description || "");
-    const isEditing = !!shelf;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (name.trim()) {
-            onSave(name.trim(), description.trim());
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-[var(--color-surface)] rounded-xl shadow-xl max-w-md w-full p-6">
-                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">
-                    {isEditing ? "Edit Shelf" : "Create New Shelf"}
-                </h3>
-                <form onSubmit={handleSubmit}>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1.5">
-                                Name
-                            </label>
-                            <input
-                                type="text"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="e.g., To Read, Favorites, Sci-Fi"
-                                className={cn(
-                                    "w-full px-3 py-2.5 rounded-lg",
-                                    "bg-[var(--color-background)] border border-[var(--color-border)]",
-                                    "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
-                                    "focus:outline-none focus:border-[var(--color-accent)]"
-                                )}
-                                autoFocus
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1.5">
-                                Description <span className="text-[var(--color-text-muted)] font-normal">(optional)</span>
-                            </label>
-                            <textarea
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Add a description for this shelf..."
-                                className={cn(
-                                    "w-full px-3 py-2.5 rounded-lg resize-none",
-                                    "bg-[var(--color-background)] border border-[var(--color-border)]",
-                                    "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
-                                    "focus:outline-none focus:border-[var(--color-accent)]"
-                                )}
-                                rows={3}
-                            />
-                        </div>
-                    </div>
-                    <div className="flex items-center justify-end gap-3 mt-6">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={!name.trim()}
-                            className={cn(
-                                "px-4 py-2 rounded-lg text-sm font-medium",
-                                "bg-[var(--color-accent)] text-white",
-                                "hover:opacity-90 transition-opacity",
-                                "disabled:opacity-50 disabled:cursor-not-allowed"
-                            )}
-                        >
-                            {isEditing ? "Save Changes" : "Create Shelf"}
-                        </button>
-                    </div>
-                </form>
-            </div>
         </div>
     );
 }
@@ -638,15 +567,13 @@ export function ShelvesPage() {
             )}
 
             {/* Modal */}
-            {isModalOpen && (
-                <ShelfModal
-                    shelf={editingShelf}
-                    onClose={() => setIsModalOpen(false)}
-                    onSave={handleSaveShelf}
-                />
-            )}
+            <ShelfModal
+                isOpen={isModalOpen}
+                shelf={editingShelf}
+                onClose={() => setIsModalOpen(false)}
+                onSave={handleSaveShelf}
+            />
         </div>
     );
 }
 
-export default ShelvesPage;
