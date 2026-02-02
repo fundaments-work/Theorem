@@ -1,31 +1,44 @@
 /**
  * Settings Page
- * App and reader configuration
+ * App configuration with all planned features
  */
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useSettingsStore, useLibraryStore } from "@/store";
 import { formatFileSize } from "@/lib/utils";
-import type { ReaderTheme, FontFamily, ReadingFlow, PageLayout, PageAnimation } from "@/types";
 import { confirmClearAllData } from "@/lib/dialogs";
 import {
     Settings,
-    Type,
-    Palette,
     Layout,
-    BookOpen,
     Database,
-    Moon,
-    Sun,
-
     RotateCcw,
     Trash2,
     AlertTriangle,
     ChevronRight,
     FolderOpen,
-
-    Check,
+    BookOpen,
+    FileText,
+    Languages,
+    Rss,
+    Puzzle,
+    Volume2,
+    Cloud,
+    Download,
+    Globe,
+    Wifi,
+    WifiOff,
+    Key,
+    ExternalLink,
+    Copy,
+    RefreshCw,
+    Smartphone,
+    Laptop,
+    Moon,
+    Sun,
+    BookOpenCheck,
+    BrainCircuit,
+    Mail,
 } from "lucide-react";
 
 // Section component
@@ -104,46 +117,67 @@ function Toggle({
     );
 }
 
-// Theme selector
-const themes: { id: ReaderTheme; label: string; icon: typeof Sun }[] = [
-    { id: "light", label: "Light", icon: Sun },
-    { id: "sepia", label: "Sepia", icon: BookOpen },
-    { id: "dark", label: "Dark", icon: Moon },
-];
-
-// Font selector
-const fonts: { id: FontFamily; label: string; sample: string }[] = [
-    { id: "original", label: "Original", sample: "Aa" },
-    { id: "serif", label: "Serif", sample: "Aa" },
-    { id: "sans", label: "Sans", sample: "Aa" },
-    { id: "mono", label: "Mono", sample: "Aa" },
-];
-
-// Flow selector
-const flows: { id: ReadingFlow; label: string; description: string }[] = [
-    { id: "paged", label: "Paged", description: "Page by page" },
-    { id: "scroll", label: "Scroll", description: "Continuous scroll" },
-    { id: "auto", label: "Auto", description: "Automatic" },
-];
-
-// Layout selector
-const layouts: { id: PageLayout; label: string }[] = [
-    { id: "single", label: "Single" },
-    { id: "double", label: "Double" },
-];
-
-// Animation selector
-const animations: { id: PageAnimation; label: string }[] = [
-    { id: "slide", label: "Slide" },
-    { id: "fade", label: "Fade" },
-    { id: "instant", label: "Instant" },
-];
+// Button select component
+function ButtonSelect<T extends string>({
+    options,
+    value,
+    onChange,
+}: {
+    options: { value: T; label: string }[];
+    value: T;
+    onChange: (value: T) => void;
+}) {
+    return (
+        <div className="flex items-center gap-2">
+            {options.map((opt) => (
+                <button
+                    key={opt.value}
+                    onClick={() => onChange(opt.value)}
+                    className={cn(
+                        "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                        value === opt.value
+                            ? "bg-[var(--color-accent)] text-white"
+                            : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                    )}
+                >
+                    {opt.label}
+                </button>
+            ))}
+        </div>
+    );
+}
 
 // Main page component
 export function SettingsPage() {
-    const { settings, updateSettings, updateReaderSettings, resetSettings, resetReaderSettings } = useSettingsStore();
+    const { settings, updateSettings, resetSettings } = useSettingsStore();
     const { books, annotations } = useLibraryStore();
-    const [activeTab, setActiveTab] = useState<"general" | "reader" | "storage">("general");
+    const [activeTab, setActiveTab] = useState<
+        "general" | "pdf" | "dictionary" | "rss" | "integrations" | "tts" | "sync" | "storage"
+    >("general");
+
+    // Dummy states for planned features
+    const [pdfOptimization, setPdfOptimization] = useState(true);
+    const [pdfRangeRequests, setPdfRangeRequests] = useState(true);
+    const [pdfVirtualScroll, setPdfVirtualScroll] = useState(true);
+    const [pdfThumbnailCache, setPdfThumbnailCache] = useState(true);
+    const [dictionaryMode, setDictionaryMode] = useState<"online" | "offline" | "auto">("auto");
+    const [offlineDictInstalled, setOfflineDictInstalled] = useState(false);
+    const [rssAutoSync, setRssAutoSync] = useState(true);
+    const [rssSyncInterval, setRssSyncInterval] = useState(30);
+    const [clipperEnabled, setClipperEnabled] = useState(false);
+    const [obsidianVaultPath, setObsidianVaultPath] = useState("");
+    const [obsidianAutoExport, setObsidianAutoExport] = useState(false);
+    const [apiEnabled, setApiEnabled] = useState(false);
+    const [apiKey, setApiKey] = useState("");
+    const [ttsEnabled, setTtsEnabled] = useState(false);
+    const [ttsSpeed, setTtsSpeed] = useState(1.0);
+    const [ttsVoice, setTtsVoice] = useState<"native" | "elevenlabs" | "azure">("native");
+    const [ttsHighlightWords, setTtsHighlightWords] = useState(true);
+    const [syncMode, setSyncMode] = useState<"off" | "cloud" | "selfhosted">("off");
+    const [syncEncryption, setSyncEncryption] = useState(true);
+    const [newsletterEmail, setNewsletterEmail] = useState("your-name@read.lionreader.app");
+    const [vocabularyEnabled, setVocabularyEnabled] = useState(true);
+    const [dailyReviewTime, setDailyReviewTime] = useState("09:00");
 
     const totalStorage = books.reduce((acc, b) => acc + b.fileSize, 0);
 
@@ -155,9 +189,25 @@ export function SettingsPage() {
         }
     };
 
+    const generateApiKey = () => {
+        const key = "lr_" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
+            .map(b => b.toString(16).padStart(2, "0"))
+            .join("");
+        setApiKey(key);
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+    };
+
     const tabButtons = [
         { id: "general" as const, label: "General", icon: Settings },
-        { id: "reader" as const, label: "Reader", icon: BookOpen },
+        { id: "pdf" as const, label: "PDF", icon: FileText },
+        { id: "dictionary" as const, label: "Dictionary", icon: Languages },
+        { id: "rss" as const, label: "RSS & Web", icon: Rss },
+        { id: "integrations" as const, label: "Integrations", icon: Puzzle },
+        { id: "tts" as const, label: "TTS", icon: Volume2 },
+        { id: "sync" as const, label: "Sync", icon: Cloud },
         { id: "storage" as const, label: "Storage", icon: Database },
     ];
 
@@ -176,7 +226,7 @@ export function SettingsPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex items-center gap-1 p-1 bg-[var(--color-border-subtle)] rounded-lg w-fit mb-8">
+            <div className="flex items-center gap-1 p-1 bg-[var(--color-border-subtle)] rounded-lg w-fit mb-8 flex-wrap">
                 {tabButtons.map((tab) => (
                     <button
                         key={tab.id}
@@ -206,22 +256,15 @@ export function SettingsPage() {
                             label="Library View"
                             description="Choose how books are displayed"
                         >
-                            <div className="flex items-center gap-2">
-                                {(["grid", "list", "compact"] as const).map((view) => (
-                                    <button
-                                        key={view}
-                                        onClick={() => updateSettings({ libraryViewMode: view })}
-                                        className={cn(
-                                            "px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-colors",
-                                            settings.libraryViewMode === view
-                                                ? "bg-[var(--color-accent)] text-white"
-                                                : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                                        )}
-                                    >
-                                        {view}
-                                    </button>
-                                ))}
-                            </div>
+                            <ButtonSelect
+                                options={[
+                                    { value: "grid", label: "Grid" },
+                                    { value: "list", label: "List" },
+                                    { value: "compact", label: "Compact" },
+                                ]}
+                                value={settings.libraryViewMode}
+                                onChange={(v) => updateSettings({ libraryViewMode: v })}
+                            />
                         </SettingRow>
 
                         <SettingRow
@@ -253,29 +296,21 @@ export function SettingsPage() {
                             label="Sort Order"
                             description="Ascending or descending order"
                         >
-                            <div className="flex items-center gap-2">
-                                {(["asc", "desc"] as const).map((order) => (
-                                    <button
-                                        key={order}
-                                        onClick={() => updateSettings({ librarySortOrder: order })}
-                                        className={cn(
-                                            "px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-colors",
-                                            settings.librarySortOrder === order
-                                                ? "bg-[var(--color-accent)] text-white"
-                                                : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                                        )}
-                                    >
-                                        {order === "asc" ? "Ascending" : "Descending"}
-                                    </button>
-                                ))}
-                            </div>
+                            <ButtonSelect
+                                options={[
+                                    { value: "asc", label: "Ascending" },
+                                    { value: "desc", label: "Descending" },
+                                ]}
+                                value={settings.librarySortOrder}
+                                onChange={(v) => updateSettings({ librarySortOrder: v })}
+                            />
                         </SettingRow>
                     </Section>
 
                     <Section
                         title="Appearance"
                         description="Customize the look and feel"
-                        icon={<Palette className="w-5 h-5" />}
+                        icon={<Sun className="w-5 h-5" />}
                     >
                         <SettingRow
                             label="Sidebar Collapsed"
@@ -286,12 +321,63 @@ export function SettingsPage() {
                                 onChange={(checked) => updateSettings({ sidebarCollapsed: checked })}
                             />
                         </SettingRow>
+
+                        <SettingRow
+                            label="Dark Mode"
+                            description="Use dark theme throughout the app"
+                        >
+                            <ButtonSelect
+                                options={[
+                                    { value: "light", label: "Light" },
+                                    { value: "dark", label: "Dark" },
+                                    { value: "system", label: "System" },
+                                ]}
+                                value={settings.theme || "system"}
+                                onChange={(v) => updateSettings({ theme: v })}
+                            />
+                        </SettingRow>
+                    </Section>
+
+                    <Section
+                        title="Vocabulary & Learning"
+                        description="Spaced repetition and daily review settings"
+                        icon={<BrainCircuit className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Enable Vocabulary Builder"
+                            description="Track and review words you look up"
+                        >
+                            <Toggle checked={vocabularyEnabled} onChange={setVocabularyEnabled} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Daily Review Time"
+                            description="When to show your daily vocabulary review"
+                        >
+                            <input
+                                type="time"
+                                value={dailyReviewTime}
+                                onChange={(e) => setDailyReviewTime(e.target.value)}
+                                className={cn(
+                                    "px-3 py-1.5 rounded-md text-sm",
+                                    "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
+                                    "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                )}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Highlight Resurfacing"
+                            description="Resurface old highlights for memory reinforcement"
+                        >
+                            <Toggle checked={true} onChange={() => {}} />
+                        </SettingRow>
                     </Section>
 
                     <div className="flex items-center justify-end">
                         <button
                             onClick={() => {
-                                if (confirm("Reset all general settings to default?")) {
+                                if (confirm("Reset all settings to default?")) {
                                     resetSettings();
                                 }
                             }}
@@ -304,232 +390,415 @@ export function SettingsPage() {
                 </div>
             )}
 
-            {/* Reader Settings */}
-            {activeTab === "reader" && (
+            {/* PDF Settings */}
+            {activeTab === "pdf" && (
                 <div className="space-y-6">
                     <Section
-                        title="Typography"
-                        description="Text appearance settings"
-                        icon={<Type className="w-5 h-5" />}
+                        title="PDF Rendering"
+                        description="PDF.js rendering options"
+                        icon={<FileText className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="Font Family"
-                            description="Choose your preferred font"
+                            label="Enable PDF Support"
+                            description="Read PDF documents in Lion Reader"
                         >
-                            <div className="flex items-center gap-2">
-                                {fonts.map((font) => (
-                                    <button
-                                        key={font.id}
-                                        onClick={() => updateReaderSettings({ fontFamily: font.id })}
-                                        className={cn(
-                                            "px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                                            settings.readerSettings.fontFamily === font.id
-                                                ? "bg-[var(--color-accent)] text-white"
-                                                : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                                        )}
-                                    >
-                                        {font.label}
-                                    </button>
-                                ))}
-                            </div>
+                            <Toggle checked={true} onChange={() => {}} />
                         </SettingRow>
 
                         <SettingRow
-                            label="Font Size"
-                            description={`Current: ${settings.readerSettings.fontSize}px`}
+                            label="Renderer"
+                            description="PDF rendering engine"
                         >
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs text-[var(--color-text-muted)]">12</span>
-                                <input
-                                    type="range"
-                                    min={12}
-                                    max={32}
-                                    value={settings.readerSettings.fontSize}
-                                    onChange={(e) =>
-                                        updateReaderSettings({ fontSize: parseInt(e.target.value) })
-                                    }
-                                    className="w-32"
-                                />
-                                <span className="text-xs text-[var(--color-text-muted)]">32</span>
-                            </div>
+                            <span className="text-sm text-[var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-border-subtle)] rounded-md">
+                                PDF.js (react-pdf)
+                            </span>
                         </SettingRow>
 
                         <SettingRow
-                            label="Line Height"
-                            description={`Current: ${settings.readerSettings.lineHeight}`}
+                            label="Default Zoom"
+                            description="Initial zoom level when opening PDFs"
                         >
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs text-[var(--color-text-muted)]">1.2</span>
-                                <input
-                                    type="range"
-                                    min={1.2}
-                                    max={2}
-                                    step={0.1}
-                                    value={settings.readerSettings.lineHeight}
-                                    onChange={(e) =>
-                                        updateReaderSettings({ lineHeight: parseFloat(e.target.value) })
-                                    }
-                                    className="w-32"
-                                />
-                                <span className="text-xs text-[var(--color-text-muted)]">2.0</span>
-                            </div>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Margins"
-                            description={`Current: ${settings.readerSettings.margins}%`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs text-[var(--color-text-muted)]">0%</span>
-                                <input
-                                    type="range"
-                                    min={0}
-                                    max={25}
-                                    value={settings.readerSettings.margins}
-                                    onChange={(e) =>
-                                        updateReaderSettings({ margins: parseInt(e.target.value) })
-                                    }
-                                    className="w-32"
-                                />
-                                <span className="text-xs text-[var(--color-text-muted)]">25%</span>
-                            </div>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Text Alignment"
-                            description="How text is aligned on the page"
-                        >
-                            <div className="flex items-center gap-2">
-                                {(["left", "justify"] as const).map((align) => (
-                                    <button
-                                        key={align}
-                                        onClick={() => updateReaderSettings({ textAlign: align })}
-                                        className={cn(
-                                            "px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-colors",
-                                            settings.readerSettings.textAlign === align
-                                                ? "bg-[var(--color-accent)] text-white"
-                                                : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                                        )}
-                                    >
-                                        {align}
-                                    </button>
-                                ))}
-                            </div>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Hyphenation"
-                            description="Enable word hyphenation"
-                        >
-                            <Toggle
-                                checked={settings.readerSettings.hyphenation}
-                                onChange={(checked) => updateReaderSettings({ hyphenation: checked })}
+                            <ButtonSelect
+                                options={[
+                                    { value: "fit-width", label: "Fit Width" },
+                                    { value: "fit-page", label: "Fit Page" },
+                                    { value: "100", label: "100%" },
+                                ]}
+                                value="fit-width"
+                                onChange={() => {}}
                             />
                         </SettingRow>
                     </Section>
 
                     <Section
-                        title="Theme"
-                        description="Reading color theme"
-                        icon={<Palette className="w-5 h-5" />}
+                        title="Performance"
+                        description="Optimization for large PDFs"
+                        icon={<RefreshCw className="w-5 h-5" />}
                     >
-                        <div className="grid grid-cols-3 gap-4">
-                            {themes.map((theme) => (
-                                <button
-                                    key={theme.id}
-                                    onClick={() => updateReaderSettings({ theme: theme.id })}
-                                    className={cn(
-                                        "flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all",
-                                        settings.readerSettings.theme === theme.id
-                                            ? "border-[var(--color-accent)] bg-[var(--color-accent-light)]"
-                                            : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
-                                    )}
-                                >
-                                    <div
-                                        className={cn(
-                                            "w-12 h-12 rounded-full flex items-center justify-center theme-preview",
-                                            theme.id === "light" && "bg-[var(--reader-bg)] border border-[var(--color-border)]",
-                                            theme.id === "sepia" && "bg-[var(--reader-bg)]",
-                                            theme.id === "dark" && "bg-[var(--reader-bg)]"
-                                        )}
-                                        data-theme={theme.id}
-                                    >
-                                        <theme.icon
-                                            className={cn(
-                                                "w-6 h-6",
-                                                "text-[var(--reader-fg)]"
-                                            )}
-                                        />
-                                    </div>
-                                    <span className="font-medium text-sm text-[var(--color-text-primary)]">
-                                        {theme.label}
-                                    </span>
-                                    {settings.readerSettings.theme === theme.id && (
-                                        <Check className="w-4 h-4 text-[var(--color-accent)]" />
-                                    )}
-                                </button>
-                            ))}
-                        </div>
+                        <SettingRow
+                            label="Large PDF Optimization"
+                            description="Enable optimizations for files over 50MB"
+                        >
+                            <Toggle checked={pdfOptimization} onChange={setPdfOptimization} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Range Requests"
+                            description="Load PDF pages on demand (saves memory)"
+                        >
+                            <Toggle checked={pdfRangeRequests} onChange={setPdfRangeRequests} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Virtual Scrolling"
+                            description="Only render visible pages"
+                        >
+                            <Toggle checked={pdfVirtualScroll} onChange={setPdfVirtualScroll} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Thumbnail Cache"
+                            description="Cache page thumbnails for faster navigation"
+                        >
+                            <Toggle checked={pdfThumbnailCache} onChange={setPdfThumbnailCache} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Canvas Recycling"
+                            description="Reuse canvas elements to reduce memory usage"
+                        >
+                            <Toggle checked={true} onChange={() => {}} />
+                        </SettingRow>
                     </Section>
 
                     <Section
-                        title="Layout"
-                        description="Page layout and navigation"
-                        icon={<Layout className="w-5 h-5" />}
+                        title="Annotations"
+                        description="PDF annotation settings"
+                        icon={<BookOpenCheck className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="Reading Flow"
-                            description="How pages are displayed"
+                            label="Default Highlight Color"
+                            description="Color for new highlights"
                         >
                             <div className="flex items-center gap-2">
-                                {flows.map((flow) => (
+                                {["#FFD700", "#90EE90", "#87CEEB", "#FFB6C1", "#DDA0DD"].map((color) => (
                                     <button
-                                        key={flow.id}
-                                        onClick={() => updateReaderSettings({ flow: flow.id })}
-                                        className={cn(
-                                            "flex flex-col items-center px-4 py-2 rounded-md text-sm transition-colors",
-                                            settings.readerSettings.flow === flow.id
-                                                ? "bg-[var(--color-accent)] text-white"
-                                                : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                                        )}
-                                    >
-                                        <span className="font-medium">{flow.label}</span>
-                                    </button>
+                                        key={color}
+                                        className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
+                                        style={{ backgroundColor: color }}
+                                    />
                                 ))}
                             </div>
                         </SettingRow>
 
                         <SettingRow
-                            label="Page Layout"
-                            description="Single or double page view"
+                            label="Auto-save Annotations"
+                            description="Save annotations immediately"
                         >
-                            <div className="flex items-center gap-2">
-                                {layouts.map((layout) => (
-                                    <button
-                                        key={layout.id}
-                                        onClick={() => updateReaderSettings({ layout: layout.id })}
-                                        className={cn(
-                                            "px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-colors",
-                                            settings.readerSettings.layout === layout.id
-                                                ? "bg-[var(--color-accent)] text-white"
-                                                : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                                        )}
-                                    >
-                                        {layout.label}
-                                    </button>
-                                ))}
+                            <Toggle checked={true} onChange={() => {}} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Export Format"
+                            description="Format for exporting annotations"
+                        >
+                            <ButtonSelect
+                                options={[
+                                    { value: "json", label: "JSON" },
+                                    { value: "pdf", label: "Embedded PDF" },
+                                ]}
+                                value="json"
+                                onChange={() => {}}
+                            />
+                        </SettingRow>
+                    </Section>
+                </div>
+            )}
+
+            {/* Dictionary Settings */}
+            {activeTab === "dictionary" && (
+                <div className="space-y-6">
+                    <Section
+                        title="Dictionary Source"
+                        description="Choose how word lookups are handled"
+                        icon={<Globe className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Dictionary Mode"
+                            description="How to fetch word definitions"
+                        >
+                            <ButtonSelect
+                                options={[
+                                    { value: "online", label: "Online" },
+                                    { value: "offline", label: "Offline" },
+                                    { value: "auto", label: "Auto" },
+                                ]}
+                                value={dictionaryMode}
+                                onChange={setDictionaryMode}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Primary API"
+                            description="Online dictionary service"
+                        >
+                            <span className="text-sm text-[var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-border-subtle)] rounded-md">
+                                Free Dictionary API
+                            </span>
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Fallback"
+                            description="Secondary dictionary source"
+                        >
+                            <span className="text-sm text-[var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-border-subtle)] rounded-md">
+                                Wiktionary
+                            </span>
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Show Pronunciation"
+                            description="Display phonetic pronunciation"
+                        >
+                            <Toggle checked={true} onChange={() => {}} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Play Audio"
+                            description="Auto-play pronunciation audio"
+                        >
+                            <Toggle checked={false} onChange={() => {}} />
+                        </SettingRow>
+                    </Section>
+
+                    <Section
+                        title="Offline Dictionaries"
+                        description="Download dictionaries for offline use"
+                        icon={<WifiOff className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="English (US)"
+                            description="StarDict format • 45 MB"
+                        >
+                            {offlineDictInstalled ? (
+                                <span className="text-sm text-[var(--color-success)] flex items-center gap-1">
+                                    <BookOpenCheck className="w-4 h-4" /> Installed
+                                </span>
+                            ) : (
+                                <button
+                                    onClick={() => setOfflineDictInstalled(true)}
+                                    className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity"
+                                >
+                                    <Download className="w-4 h-4" /> Download
+                                </button>
+                            )}
+                        </SettingRow>
+
+                        <SettingRow
+                            label="English (UK)"
+                            description="StarDict format • 42 MB"
+                        >
+                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors">
+                                <Download className="w-4 h-4" /> Download
+                            </button>
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Spanish"
+                            description="StarDict format • 38 MB"
+                        >
+                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors">
+                                <Download className="w-4 h-4" /> Download
+                            </button>
+                        </SettingRow>
+
+                        <SettingRow
+                            label="French"
+                            description="StarDict format • 35 MB"
+                        >
+                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors">
+                                <Download className="w-4 h-4" /> Download
+                            </button>
+                        </SettingRow>
+                    </Section>
+                </div>
+            )}
+
+            {/* RSS & Web Settings */}
+            {activeTab === "rss" && (
+                <div className="space-y-6">
+                    <Section
+                        title="RSS Feeds"
+                        description="Feed reader configuration"
+                        icon={<Rss className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Auto-sync Feeds"
+                            description="Automatically refresh feeds in background"
+                        >
+                            <Toggle checked={rssAutoSync} onChange={setRssAutoSync} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Sync Interval"
+                            description={`Check for new articles every ${rssSyncInterval} minutes`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs text-[var(--color-text-muted)]">15m</span>
+                                <input
+                                    type="range"
+                                    min={15}
+                                    max={240}
+                                    step={15}
+                                    value={rssSyncInterval}
+                                    onChange={(e) => setRssSyncInterval(parseInt(e.target.value))}
+                                    className="w-32"
+                                />
+                                <span className="text-xs text-[var(--color-text-muted)]">4h</span>
                             </div>
                         </SettingRow>
 
                         <SettingRow
-                            label="Page Animation"
-                            description="Transition between pages"
+                            label="Article Extraction"
+                            description="Use Mozilla Readability for cleaner articles"
+                        >
+                            <Toggle checked={true} onChange={() => {}} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Offline Reading"
+                            description="Download articles for offline access"
+                        >
+                            <Toggle checked={true} onChange={() => {}} />
+                        </SettingRow>
+                    </Section>
+
+                    <Section
+                        title="Web Clipper"
+                        description="Browser extension settings"
+                        icon={<ExternalLink className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Enable Web Clipper"
+                            description="Browser extension integration"
+                        >
+                            <Toggle checked={clipperEnabled} onChange={setClipperEnabled} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Default Tags"
+                            description="Auto-apply tags to clipped content"
+                        >
+                            <input
+                                type="text"
+                                placeholder="reading, later, web"
+                                className={cn(
+                                    "px-3 py-1.5 rounded-md text-sm w-48",
+                                    "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
+                                    "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                )}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Download Images"
+                            description="Save images from clipped articles"
+                        >
+                            <Toggle checked={false} onChange={() => {}} />
+                        </SettingRow>
+                    </Section>
+
+                    <Section
+                        title="Newsletter Inbox"
+                        description="Email-to-reader settings"
+                        icon={<Mail className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Your Newsletter Email"
+                            description="Subscribe to newsletters with this address"
+                        >
+                            <div className="flex items-center gap-2">
+                                <code className="px-3 py-1.5 bg-[var(--color-border-subtle)] rounded-md text-sm text-[var(--color-text-secondary)]">
+                                    {newsletterEmail}
+                                </code>
+                                <button
+                                    onClick={() => copyToClipboard(newsletterEmail)}
+                                    className="p-1.5 rounded-md hover:bg-[var(--color-border-subtle)] transition-colors"
+                                    title="Copy to clipboard"
+                                >
+                                    <Copy className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Auto-archive Newsletters"
+                            description="Move old newsletters to archive after 30 days"
+                        >
+                            <Toggle checked={true} onChange={() => {}} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Sender Filtering"
+                            description="Block unwanted newsletter senders"
+                        >
+                            <button className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-border-subtle)] text-[var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors">
+                                Manage Senders
+                            </button>
+                        </SettingRow>
+                    </Section>
+                </div>
+            )}
+
+            {/* Integrations Settings */}
+            {activeTab === "integrations" && (
+                <div className="space-y-6">
+                    <Section
+                        title="Obsidian Export"
+                        description="Export highlights to Obsidian vault"
+                        icon={<BookOpen className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Enable Obsidian Export"
+                            description="Sync highlights to your Obsidian vault"
+                        >
+                            <Toggle checked={!!obsidianVaultPath} onChange={() => setObsidianVaultPath(obsidianVaultPath ? "" : "/path/to/vault")} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Vault Path"
+                            description="Path to your Obsidian vault"
+                        >
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={obsidianVaultPath}
+                                    onChange={(e) => setObsidianVaultPath(e.target.value)}
+                                    placeholder="/path/to/vault"
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-md text-sm w-48",
+                                        "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
+                                        "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                    )}
+                                />
+                                <button className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-border-subtle)] text-[var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors">
+                                    Browse
+                                </button>
+                            </div>
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Auto-export on Highlight"
+                            description="Automatically export new highlights"
+                        >
+                            <Toggle checked={obsidianAutoExport} onChange={setObsidianAutoExport} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Export Template"
+                            description="Markdown template for exported highlights"
                         >
                             <select
-                                value={settings.readerSettings.pageAnimation}
-                                onChange={(e) =>
-                                    updateReaderSettings({ pageAnimation: e.target.value as PageAnimation })
-                                }
                                 className={cn(
                                     "px-3 py-1.5 rounded-md text-sm",
                                     "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
@@ -537,48 +806,386 @@ export function SettingsPage() {
                                     "cursor-pointer"
                                 )}
                             >
-                                {animations.map((anim) => (
-                                    <option key={anim.id} value={anim.id}>
-                                        {anim.label}
-                                    </option>
-                                ))}
+                                <option>Default (with YAML frontmatter)</option>
+                                <option>Minimal (text only)</option>
+                                <option>Custom template</option>
                             </select>
                         </SettingRow>
 
                         <SettingRow
-                            label="Fullscreen"
-                            description="Start reader in fullscreen mode"
+                            label="Sync Tags"
+                            description="Include highlight tags in export"
                         >
-                            <Toggle
-                                checked={settings.readerSettings.fullscreen}
-                                onChange={(checked) => updateReaderSettings({ fullscreen: checked })}
+                            <Toggle checked={true} onChange={() => {}} />
+                        </SettingRow>
+                    </Section>
+
+                    <Section
+                        title="Public API"
+                        description="Access your data programmatically"
+                        icon={<Key className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Enable API"
+                            description="Allow external applications to access your data"
+                        >
+                            <Toggle checked={apiEnabled} onChange={setApiEnabled} />
+                        </SettingRow>
+
+                        {apiEnabled && (
+                            <>
+                                <SettingRow
+                                    label="API Key"
+                                    description="Keep this secret!"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <code className="px-3 py-1.5 bg-[var(--color-border-subtle)] rounded-md text-sm text-[var(--color-text-secondary)] max-w-[200px] truncate">
+                                            {apiKey || "No key generated"}
+                                        </code>
+                                        {apiKey ? (
+                                            <button
+                                                onClick={() => copyToClipboard(apiKey)}
+                                                className="p-1.5 rounded-md hover:bg-[var(--color-border-subtle)] transition-colors"
+                                            >
+                                                <Copy className="w-4 h-4" />
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={generateApiKey}
+                                                className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity"
+                                            >
+                                                Generate
+                                            </button>
+                                        )}
+                                    </div>
+                                </SettingRow>
+
+                                <SettingRow
+                                    label="Webhook URL"
+                                    description="Receive real-time updates"
+                                >
+                                    <input
+                                        type="text"
+                                        placeholder="https://your-app.com/webhook"
+                                        className={cn(
+                                            "px-3 py-1.5 rounded-md text-sm w-56",
+                                            "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
+                                            "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                        )}
+                                    />
+                                </SettingRow>
+
+                                <div className="mt-4 p-4 bg-[var(--color-border-subtle)] rounded-lg">
+                                    <p className="text-sm font-medium text-[var(--color-text-primary)] mb-2">API Documentation</p>
+                                    <p className="text-xs text-[var(--color-text-muted)] mb-3">
+                                        Access your library, highlights, and vocabulary programmatically.
+                                    </p>
+                                    <a
+                                        href="#"
+                                        className="text-xs text-[var(--color-accent)] hover:underline flex items-center gap-1"
+                                    >
+                                        View OpenAPI docs <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                </div>
+                            </>
+                        )}
+                    </Section>
+                </div>
+            )}
+
+            {/* TTS Settings */}
+            {activeTab === "tts" && (
+                <div className="space-y-6">
+                    <Section
+                        title="Text-to-Speech"
+                        description="Voice reading settings"
+                        icon={<Volume2 className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Enable TTS"
+                            description="Read content aloud"
+                        >
+                            <Toggle checked={ttsEnabled} onChange={setTtsEnabled} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Voice Source"
+                            description="Choose TTS engine"
+                        >
+                            <ButtonSelect
+                                options={[
+                                    { value: "native", label: "Native" },
+                                    { value: "elevenlabs", label: "ElevenLabs" },
+                                    { value: "azure", label: "Azure" },
+                                ]}
+                                value={ttsVoice}
+                                onChange={setTtsVoice}
                             />
                         </SettingRow>
 
                         <SettingRow
-                            label="Toolbar Auto-hide"
-                            description="Hide toolbar when reading"
+                            label="Speaking Speed"
+                            description={`${ttsSpeed.toFixed(1)}x`}
                         >
-                            <Toggle
-                                checked={settings.readerSettings.toolbarAutoHide}
-                                onChange={(checked) => updateReaderSettings({ toolbarAutoHide: checked })}
-                            />
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs text-[var(--color-text-muted)]">0.5x</span>
+                                <input
+                                    type="range"
+                                    min={0.5}
+                                    max={3}
+                                    step={0.1}
+                                    value={ttsSpeed}
+                                    onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
+                                    className="w-32"
+                                />
+                                <span className="text-xs text-[var(--color-text-muted)]">3x</span>
+                            </div>
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Highlight Words"
+                            description="Highlight words as they are spoken"
+                        >
+                            <Toggle checked={ttsHighlightWords} onChange={setTtsHighlightWords} />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Sleep Timer"
+                            description="Automatically stop after"
+                        >
+                            <select
+                                className={cn(
+                                    "px-3 py-1.5 rounded-md text-sm",
+                                    "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
+                                    "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
+                                    "cursor-pointer"
+                                )}
+                            >
+                                <option>Off</option>
+                                <option>15 minutes</option>
+                                <option>30 minutes</option>
+                                <option>45 minutes</option>
+                                <option>60 minutes</option>
+                            </select>
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Background Playback"
+                            description="Continue reading when app is in background"
+                        >
+                            <Toggle checked={true} onChange={() => {}} />
                         </SettingRow>
                     </Section>
 
-                    <div className="flex items-center justify-end">
-                        <button
-                            onClick={() => {
-                                if (confirm("Reset all reader settings to default?")) {
-                                    resetReaderSettings();
-                                }
-                            }}
-                            className="flex items-center gap-2 px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
+                    {ttsVoice !== "native" && (
+                        <Section
+                            title="Premium Voice Settings"
+                            description={`${ttsVoice === "elevenlabs" ? "ElevenLabs" : "Azure"} configuration`}
+                            icon={<Key className="w-5 h-5" />}
                         >
-                            <RotateCcw className="w-4 h-4" />
-                            Reset Reader Settings
-                        </button>
-                    </div>
+                            <SettingRow
+                                label="API Key"
+                                description={`Your ${ttsVoice === "elevenlabs" ? "ElevenLabs" : "Azure"} API key`}
+                            >
+                                <input
+                                    type="password"
+                                    placeholder="sk-..."
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-md text-sm w-48",
+                                        "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
+                                        "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                    )}
+                                />
+                            </SettingRow>
+
+                            <SettingRow
+                                label="Voice Quality"
+                                description="Higher quality uses more credits"
+                            >
+                                <ButtonSelect
+                                    options={[
+                                        { value: "standard", label: "Standard" },
+                                        { value: "high", label: "High" },
+                                        { value: "ultra", label: "Ultra" },
+                                    ]}
+                                    value="high"
+                                    onChange={() => {}}
+                                />
+                            </SettingRow>
+                        </Section>
+                    )}
+                </div>
+            )}
+
+            {/* Sync Settings */}
+            {activeTab === "sync" && (
+                <div className="space-y-6">
+                    <Section
+                        title="Sync Mode"
+                        description="Choose how to sync your data"
+                        icon={<Cloud className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Sync Provider"
+                            description="Where to sync your data"
+                        >
+                            <ButtonSelect
+                                options={[
+                                    { value: "off", label: "Off" },
+                                    { value: "cloud", label: "Cloud" },
+                                    { value: "selfhosted", label: "Self-hosted" },
+                                ]}
+                                value={syncMode}
+                                onChange={setSyncMode}
+                            />
+                        </SettingRow>
+
+                        {syncMode === "cloud" && (
+                            <>
+                                <SettingRow
+                                    label="Account"
+                                    description="Signed in as"
+                                >
+                                    <span className="text-sm text-[var(--color-text-muted)]">
+                                        Not signed in
+                                    </span>
+                                </SettingRow>
+
+                                <div className="mt-4 p-4 bg-[var(--color-accent)]/10 rounded-lg border border-[var(--color-accent)]/20">
+                                    <p className="text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                                        Lion Reader Cloud
+                                    </p>
+                                    <p className="text-xs text-[var(--color-text-muted)] mb-3">
+                                        Sync your library, highlights, and vocabulary across all devices.
+                                        End-to-end encryption included.
+                                    </p>
+                                    <button className="px-4 py-2 rounded-md text-sm bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity">
+                                        Sign In / Create Account
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {syncMode === "selfhosted" && (
+                            <>
+                                <SettingRow
+                                    label="Server URL"
+                                    description="Your self-hosted sync server"
+                                >
+                                    <input
+                                        type="text"
+                                        placeholder="https://sync.your-domain.com"
+                                        className={cn(
+                                            "px-3 py-1.5 rounded-md text-sm w-56",
+                                            "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
+                                            "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                        )}
+                                    />
+                                </SettingRow>
+
+                                <SettingRow
+                                    label="Server Status"
+                                    description="Connection health"
+                                >
+                                    <span className="text-sm text-[var(--color-text-muted)] flex items-center gap-1">
+                                        <span className="w-2 h-2 rounded-full bg-[var(--color-error)]" />
+                                        Disconnected
+                                    </span>
+                                </SettingRow>
+
+                                <div className="mt-4 p-4 bg-[var(--color-border-subtle)] rounded-lg">
+                                    <p className="text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                                        Self-hosted Server
+                                    </p>
+                                    <p className="text-xs text-[var(--color-text-muted)] mb-3">
+                                        Run your own sync server for complete privacy.
+                                        Docker image available.
+                                    </p>
+                                    <a
+                                        href="#"
+                                        className="text-xs text-[var(--color-accent)] hover:underline flex items-center gap-1"
+                                    >
+                                        Setup Guide <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                </div>
+                            </>
+                        )}
+                    </Section>
+
+                    {syncMode !== "off" && (
+                        <Section
+                            title="Sync Options"
+                            description="Configure what gets synced"
+                            icon={<RefreshCw className="w-5 h-5" />}
+                        >
+                            <SettingRow
+                                label="End-to-end Encryption"
+                                description="Encrypt data before syncing"
+                            >
+                                <Toggle checked={syncEncryption} onChange={setSyncEncryption} />
+                            </SettingRow>
+
+                            <SettingRow
+                                label="Sync Library"
+                                description="Book files and metadata"
+                            >
+                                <Toggle checked={true} onChange={() => {}} />
+                            </SettingRow>
+
+                            <SettingRow
+                                label="Sync Highlights"
+                                description="Annotations and notes"
+                            >
+                                <Toggle checked={true} onChange={() => {}} />
+                            </SettingRow>
+
+                            <SettingRow
+                                label="Sync Vocabulary"
+                                description="Saved words and review progress"
+                            >
+                                <Toggle checked={true} onChange={() => {}} />
+                            </SettingRow>
+
+                            <SettingRow
+                                label="Sync RSS Feeds"
+                                description="Feed subscriptions and articles"
+                            >
+                                <Toggle checked={false} onChange={() => {}} />
+                            </SettingRow>
+
+                            <SettingRow
+                                label="Background Sync"
+                                description="Sync when app is in background"
+                            >
+                                <Toggle checked={true} onChange={() => {}} />
+                            </SettingRow>
+                        </Section>
+                    )}
+
+                    <Section
+                        title="Devices"
+                        description="Manage connected devices"
+                        icon={<Smartphone className="w-5 h-5" />}
+                    >
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between p-3 bg-[var(--color-border-subtle)] rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <Laptop className="w-5 h-5 text-[var(--color-text-muted)]" />
+                                    <div>
+                                        <p className="font-medium text-sm text-[var(--color-text-primary)]">
+                                            This Device
+                                        </p>
+                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                            Last synced: Never
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className="text-xs px-2 py-1 bg-[var(--color-success)]/10 text-[var(--color-success)] rounded-full">
+                                    Online
+                                </span>
+                            </div>
+                        </div>
+                    </Section>
                 </div>
             )}
 
@@ -617,6 +1224,36 @@ export function SettingsPage() {
                                     </div>
                                 </div>
                             </div>
+
+                            <div className="flex items-center justify-between p-4 bg-[var(--color-border-subtle)] rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <Rss className="w-5 h-5 text-[var(--color-text-muted)]" />
+                                    <div>
+                                        <p className="font-medium text-sm text-[var(--color-text-primary)]">RSS Articles</p>
+                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                            0 articles cached
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                                    0 MB
+                                </span>
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 bg-[var(--color-border-subtle)] rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <Languages className="w-5 h-5 text-[var(--color-text-muted)]" />
+                                    <div>
+                                        <p className="font-medium text-sm text-[var(--color-text-primary)]">Offline Dictionaries</p>
+                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                            {offlineDictInstalled ? "1 installed" : "None installed"}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                                    {offlineDictInstalled ? "45 MB" : "0 MB"}
+                                </span>
+                            </div>
                         </div>
                     </Section>
 
@@ -644,6 +1281,24 @@ export function SettingsPage() {
                                 </div>
                                 <ChevronRight className="w-4 h-4" />
                             </button>
+
+                            <button
+                                className={cn(
+                                    "w-full flex items-center gap-3 p-4 rounded-lg",
+                                    "border border-[var(--color-border)]",
+                                    "text-[var(--color-text-primary)] hover:bg-[var(--color-border-subtle)]",
+                                    "transition-colors text-left"
+                                )}
+                            >
+                                <Download className="w-5 h-5" />
+                                <div className="flex-1">
+                                    <p className="font-medium text-sm">Export Data</p>
+                                    <p className="text-xs text-[var(--color-text-muted)]">
+                                        Download all your data as JSON
+                                    </p>
+                                </div>
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
                         </div>
                     </Section>
                 </div>
@@ -651,4 +1306,3 @@ export function SettingsPage() {
         </div>
     );
 }
-

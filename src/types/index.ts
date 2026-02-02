@@ -136,6 +136,7 @@ export interface AppSettings {
     librarySortOrder: LibrarySortOrder;
     scanFolders: string[];
     cacheSize: number; // MB
+    theme: "light" | "dark" | "system";
     readerSettings: ReaderSettings;
 }
 

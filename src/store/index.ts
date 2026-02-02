@@ -48,6 +48,7 @@ const defaultAppSettings: AppSettings = {
     librarySortOrder: "desc",
     scanFolders: [],
     cacheSize: 500, // MB
+    theme: "system",
     readerSettings: defaultReaderSettings,
 };
 
