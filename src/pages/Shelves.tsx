@@ -5,7 +5,7 @@
 
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { useLibraryStore, useUIStore } from "@/store";
+import { useLibraryStore, useUIStore, useSettingsStore } from "@/store";
 import { ShelfModal } from "@/components/modals";
 import { getShelfColor, getShelfInitials } from "@/lib/shelf-colors";
 import {
@@ -20,7 +20,17 @@ import {
     Grid3X3,
     List,
     ArrowLeft,
+    LayoutGrid,
 } from "lucide-react";
+import type { Book, Collection, LibraryViewMode } from "@/types";
+import { confirmDeleteBook, confirmRemoveFromShelf } from "@/lib/dialogs";
+
+// View mode icons
+const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
+    grid: <LayoutGrid className="w-4 h-4" />,
+    list: <List className="w-4 h-4" />,
+    compact: <Grid3X3 className="w-4 h-4" />,
+};
 
 // Empty state component
 function EmptyShelves({ onCreate }: { onCreate: () => void }) {
@@ -51,9 +61,7 @@ function EmptyShelves({ onCreate }: { onCreate: () => void }) {
 }
 
 // Empty shelf detail state
-function EmptyShelfDetail({ shelfName }: { shelfName: string }) {
-    const { setRoute } = useUIStore();
-
+function EmptyShelfDetail({ shelfName, onAddBooks }: { shelfName: string; onAddBooks: () => void }) {
     return (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-border-subtle)] flex items-center justify-center mb-6">
@@ -66,7 +74,7 @@ function EmptyShelfDetail({ shelfName }: { shelfName: string }) {
                 Add books from your library to this shelf.
             </p>
             <button
-                onClick={() => setRoute("library")}
+                onClick={onAddBooks}
                 className={cn(
                     "flex items-center gap-2 px-6 py-2.5 rounded-full",
                     "bg-[var(--color-accent)] text-white text-sm font-medium",
@@ -80,26 +88,173 @@ function EmptyShelfDetail({ shelfName }: { shelfName: string }) {
     );
 }
 
+// Book Card Component (reused from Library)
+function BookCard({
+    book,
+    viewMode,
+    onOpenBook,
+    onRemoveFromShelf,
+}: {
+    book: Book;
+    viewMode: LibraryViewMode;
+    onOpenBook: (book: Book) => void;
+    onRemoveFromShelf: (bookId: string) => void | Promise<void>;
+}) {
+    // Grid view
+    if (viewMode === "grid") {
+        return (
+            <div className="group relative">
+                <button
+                    onClick={() => onOpenBook(book)}
+                    className="block w-full text-left"
+                >
+                    <div className="relative aspect-[2/3] bg-[var(--color-border-subtle)] mb-3 overflow-hidden rounded-lg border border-[var(--color-border)] transition-all duration-200 group-hover:shadow-lg">
+                        {book.coverPath ? (
+                            <img
+                                src={book.coverPath}
+                                alt={book.title}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                            />
+                        ) : (
+                            <div className="book-cover-placeholder w-full h-full text-xs p-2 flex items-center justify-center">
+                                <span className="line-clamp-3 text-center">{book.title}</span>
+                            </div>
+                        )}
+
+                        {/* Progress Bar */}
+                        {book.progress > 0 && (
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
+                                <div
+                                    className="h-full bg-[var(--color-accent)]"
+                                    style={{ width: `${book.progress * 100}%` }}
+                                />
+                            </div>
+                        )}
+                    </div>
+                    <h3 className="font-medium text-sm text-[var(--color-text-primary)] line-clamp-1 mb-0.5">
+                        {book.title}
+                    </h3>
+                    <p className="text-xs text-[var(--color-text-secondary)] line-clamp-1">
+                        {book.author}
+                    </p>
+                </button>
+                {/* Remove button */}
+                <button
+                    onClick={async (e) => {
+                        e.stopPropagation();
+                        await onRemoveFromShelf(book.id);
+                    }}
+                    className="absolute top-2 right-2 p-1.5 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                    title="Remove from shelf"
+                >
+                    <X className="w-3.5 h-3.5" />
+                </button>
+            </div>
+        );
+    }
+
+    // List view
+    if (viewMode === "list") {
+        return (
+            <div className="group flex items-center gap-4 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-text-muted)] transition-colors">
+                <button
+                    onClick={() => onOpenBook(book)}
+                    className="flex-shrink-0"
+                >
+                    {book.coverPath ? (
+                        <img
+                            src={book.coverPath}
+                            alt={book.title}
+                            className="w-12 h-16 object-cover rounded shadow-sm"
+                            loading="lazy"
+                        />
+                    ) : (
+                        <div className="w-12 h-16 bg-[var(--color-border-subtle)] rounded flex items-center justify-center">
+                            <BookOpen className="w-5 h-5 text-[var(--color-text-muted)]" />
+                        </div>
+                    )}
+                </button>
+                <div className="flex-1 min-w-0">
+                    <button onClick={() => onOpenBook(book)} className="text-left w-full">
+                        <h3 className="font-medium text-sm text-[var(--color-text-primary)] truncate hover:text-[var(--color-accent)] transition-colors">
+                            {book.title}
+                        </h3>
+                    </button>
+                    <p className="text-xs text-[var(--color-text-secondary)] truncate">
+                        {book.author}
+                    </p>
+                </div>
+                <button
+                    onClick={async (e) => {
+                        e.stopPropagation();
+                        await onRemoveFromShelf(book.id);
+                    }}
+                    className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-error)] opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Remove from shelf"
+                >
+                    <X className="w-4 h-4" />
+                </button>
+            </div>
+        );
+    }
+
+    // Compact view
+    return (
+        <div className="group relative">
+            <button
+                onClick={() => onOpenBook(book)}
+                className="block w-full relative aspect-[2/3] bg-[var(--color-border-subtle)] overflow-hidden rounded-lg border border-[var(--color-border)] hover:shadow-lg transition-all duration-200"
+            >
+                {book.coverPath ? (
+                    <img
+                        src={book.coverPath}
+                        alt={book.title}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                    />
+                ) : (
+                    <div className="book-cover-placeholder w-full h-full text-[10px] p-2 flex items-center justify-center">
+                        <span className="line-clamp-3 text-center">{book.title}</span>
+                    </div>
+                )}
+
+                {/* Progress Bar */}
+                {book.progress > 0 && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
+                        <div
+                            className="h-full bg-[var(--color-accent)]"
+                            style={{ width: `${book.progress * 100}%` }}
+                        />
+                    </div>
+                )}
+            </button>
+            {/* Remove button */}
+            <button
+                onClick={async (e) => {
+                    e.stopPropagation();
+                    await onRemoveFromShelf(book.id);
+                }}
+                className="absolute top-1 right-1 p-1 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                title="Remove from shelf"
+            >
+                <X className="w-3 h-3" />
+            </button>
+        </div>
+    );
+}
+
 // Shelf card component
 interface ShelfCardProps {
-    shelf: {
-        id: string;
-        name: string;
-        description?: string;
-        bookIds: string[];
-        createdAt: Date;
-    };
-    books: {
-        id: string;
-        coverPath?: string;
-        title: string;
-    }[];
+    shelf: Collection;
+    books: Book[];
+    actualBookCount: number;
     onClick: () => void;
     onEdit: () => void;
     onDelete: () => void;
 }
 
-function ShelfCard({ shelf, books, onClick, onEdit, onDelete }: ShelfCardProps) {
+function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }: ShelfCardProps) {
     const [showMenu, setShowMenu] = useState(false);
     const displayBooks = books.slice(0, 4);
 
@@ -150,7 +305,7 @@ function ShelfCard({ shelf, books, onClick, onEdit, onDelete }: ShelfCardProps) 
 
             {/* Info */}
             <div className="p-4">
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                     {/* Colored Shelf Avatar */}
                     <div
                         className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-semibold flex-shrink-0 shadow-sm"
@@ -162,25 +317,25 @@ function ShelfCard({ shelf, books, onClick, onEdit, onDelete }: ShelfCardProps) 
                         {getShelfInitials(shelf.name)}
                     </div>
                     
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 overflow-hidden">
                         <button onClick={onClick} className="text-left w-full">
                             <h3 className="font-semibold text-[var(--color-text-primary)] truncate group-hover:text-[var(--color-accent)] transition-colors">
                                 {shelf.name}
                             </h3>
                         </button>
                         <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-                            {shelf.bookIds.length} {shelf.bookIds.length === 1 ? "book" : "books"}
+                            {actualBookCount} {actualBookCount === 1 ? "book" : "books"}
                         </p>
                     </div>
 
-                    {/* Menu */}
-                    <div className="relative ml-2">
+                    {/* Menu - Always visible on mobile, hover on desktop */}
+                    <div className="relative flex-shrink-0">
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setShowMenu(!showMenu);
                             }}
-                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         >
                             <MoreVertical className="w-4 h-4" />
                         </button>
@@ -223,39 +378,59 @@ function ShelfCard({ shelf, books, onClick, onEdit, onDelete }: ShelfCardProps) 
 
 // Shelf Detail View
 interface ShelfDetailProps {
-    shelf: {
-        id: string;
-        name: string;
-        description?: string;
-        bookIds: string[];
-        createdAt: Date;
-    };
+    shelf: Collection;
     onBack: () => void;
 }
 
 function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
-    const { books, removeBookFromCollection } = useLibraryStore();
+    const { books, removeBookFromCollection, removeBook } = useLibraryStore();
     const { setRoute } = useUIStore();
-    const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+    const { settings, updateSettings } = useSettingsStore();
+    const [viewMode, setViewMode] = useState<LibraryViewMode>("grid");
 
+    // Get actual books that exist in the library
     const shelfBooks = useMemo(() => {
         return shelf.bookIds
             .map((id) => books.find((b) => b.id === id))
-            .filter(Boolean);
+            .filter((book): book is Book => book !== undefined);
     }, [shelf.bookIds, books]);
 
-    const handleRemoveBook = (bookId: string) => {
-        if (confirm("Remove this book from the shelf?")) {
+    const handleRemoveBook = async (bookId: string) => {
+        const book = books.find(b => b.id === bookId);
+        const confirmed = await confirmRemoveFromShelf(book?.title || "this book", shelf.name);
+        if (confirmed) {
             removeBookFromCollection(bookId, shelf.id);
         }
     };
 
-    const handleBookClick = (bookId: string) => {
-        setRoute("reader", bookId);
+    const handleDeleteBook = async (bookId: string) => {
+        const book = books.find(b => b.id === bookId);
+        const confirmed = await confirmDeleteBook(book?.title || "this book");
+        if (confirmed) {
+            removeBook(bookId);
+        }
+    };
+
+    const handleOpenBook = (book: Book) => {
+        setRoute("reader", book.id);
+    };
+
+    const handleGoToLibrary = () => {
+        // Store the shelf ID in session storage so Library page can filter by it
+        sessionStorage.setItem("lion-reader-selected-shelf", shelf.id);
+        setRoute("library");
+    };
+
+    // Cycle through view modes
+    const cycleViewMode = () => {
+        const modes: LibraryViewMode[] = ["grid", "list", "compact"];
+        const currentIndex = modes.indexOf(viewMode);
+        const nextMode = modes[(currentIndex + 1) % modes.length];
+        setViewMode(nextMode);
     };
 
     if (shelfBooks.length === 0) {
-        return <EmptyShelfDetail shelfName={shelf.name} />;
+        return <EmptyShelfDetail shelfName={shelf.name} onAddBooks={handleGoToLibrary} />;
     }
 
     return (
@@ -290,117 +465,58 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                 </div>
 
                 {/* View Toggle */}
-                <div className="flex items-center bg-[var(--color-border-subtle)] rounded-lg p-1">
-                    <button
-                        onClick={() => setViewMode("grid")}
-                        className={cn(
-                            "p-2 rounded-md transition-colors",
-                            viewMode === "grid"
-                                ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
-                                : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-                        )}
-                    >
-                        <Grid3X3 className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => setViewMode("list")}
-                        className={cn(
-                            "p-2 rounded-md transition-colors",
-                            viewMode === "list"
-                                ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
-                                : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-                        )}
-                    >
-                        <List className="w-4 h-4" />
-                    </button>
-                </div>
+                <button
+                    onClick={cycleViewMode}
+                    className={cn(
+                        "flex items-center justify-center w-10 h-10 rounded-lg",
+                        "border border-[var(--color-border)] bg-[var(--color-surface)]",
+                        "text-[var(--color-text-secondary)]",
+                        "hover:bg-[var(--color-border-subtle)] transition-colors"
+                    )}
+                    title={`View: ${viewMode}`}
+                >
+                    {viewModeIcons[viewMode]}
+                </button>
             </div>
 
             {/* Books Display */}
-            {viewMode === "grid" ? (
+            {viewMode === "grid" && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
-                    {shelfBooks.map((book) =>
-                        book ? (
-                            <div key={book.id} className="group relative">
-                                <button
-                                    onClick={() => handleBookClick(book.id)}
-                                    className="block w-full text-left"
-                                >
-                                    <div className="relative aspect-[2/3] bg-[var(--color-border-subtle)] mb-3 overflow-hidden rounded-lg border border-[var(--color-border)] transition-all duration-200 group-hover:shadow-lg">
-                                        {book.coverPath ? (
-                                            <img
-                                                src={book.coverPath}
-                                                alt={book.title}
-                                                className="w-full h-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className="book-cover-placeholder w-full h-full text-xs p-2">
-                                                <span className="line-clamp-3">{book.title}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <h3 className="font-medium text-sm text-[var(--color-text-primary)] line-clamp-1 mb-0.5">
-                                        {book.title}
-                                    </h3>
-                                    <p className="text-xs text-[var(--color-text-secondary)] line-clamp-1">
-                                        {book.author}
-                                    </p>
-                                </button>
-                                <button
-                                    onClick={() => handleRemoveBook(book.id)}
-                                    className="absolute top-2 right-2 p-1.5 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
-                                    title="Remove from shelf"
-                                >
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        ) : null
-                    )}
+                    {shelfBooks.map((book) => (
+                        <BookCard
+                            key={book.id}
+                            book={book}
+                            viewMode={viewMode}
+                            onOpenBook={handleOpenBook}
+                            onRemoveFromShelf={handleRemoveBook}
+                        />
+                    ))}
                 </div>
-            ) : (
+            )}
+            {viewMode === "list" && (
                 <div className="space-y-2">
-                    {shelfBooks.map((book) =>
-                        book ? (
-                            <div
-                                key={book.id}
-                                className="group flex items-center gap-4 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-text-muted)] transition-colors"
-                            >
-                                <button
-                                    onClick={() => handleBookClick(book.id)}
-                                    className="flex-shrink-0"
-                                >
-                                    {book.coverPath ? (
-                                        <img
-                                            src={book.coverPath}
-                                            alt={book.title}
-                                            className="w-12 h-16 object-cover rounded shadow-sm"
-                                        />
-                                    ) : (
-                                        <div className="w-12 h-16 bg-[var(--color-border-subtle)] rounded flex items-center justify-center">
-                                            <BookOpen className="w-5 h-5 text-[var(--color-text-muted)]" />
-                                        </div>
-                                    )}
-                                </button>
-                                <div className="flex-1 min-w-0">
-                                    <button onClick={() => handleBookClick(book.id)}>
-                                        <h3 className="font-medium text-sm text-[var(--color-text-primary)] truncate hover:text-[var(--color-accent)] transition-colors text-left">
-                                            {book.title}
-                                        </h3>
-                                    </button>
-                                    <p className="text-xs text-[var(--color-text-secondary)] truncate">
-                                        {book.author}
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={() => handleRemoveBook(book.id)}
-                                    className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-error)] opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Remove from shelf"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ) : null
-                    )}
+                    {shelfBooks.map((book) => (
+                        <BookCard
+                            key={book.id}
+                            book={book}
+                            viewMode={viewMode}
+                            onOpenBook={handleOpenBook}
+                            onRemoveFromShelf={handleRemoveBook}
+                        />
+                    ))}
+                </div>
+            )}
+            {viewMode === "compact" && (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                    {shelfBooks.map((book) => (
+                        <BookCard
+                            key={book.id}
+                            book={book}
+                            viewMode={viewMode}
+                            onOpenBook={handleOpenBook}
+                            onRemoveFromShelf={handleRemoveBook}
+                        />
+                    ))}
                 </div>
             )}
         </div>
@@ -409,7 +525,15 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
 
 // Main page component
 export function ShelvesPage() {
-    const { collections, books, addCollection, removeCollection, updateBookMetadata } = useLibraryStore();
+    const { 
+        collections, 
+        books, 
+        addCollection, 
+        removeCollection, 
+        updateCollection,
+        removeBook 
+    } = useLibraryStore();
+    const { setRoute } = useUIStore();
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -426,6 +550,18 @@ export function ShelvesPage() {
         );
     }, [collections, searchQuery]);
 
+    // Helper to get actual books count (excluding deleted books)
+    const getActualBookCount = (bookIds: string[]) => {
+        return bookIds.filter((id) => books.some((b) => b.id === id)).length;
+    };
+
+    // Helper to get actual books for display
+    const getShelfBooks = (bookIds: string[]): Book[] => {
+        return bookIds
+            .map((id) => books.find((b) => b.id === id))
+            .filter((book): book is Book => book !== undefined);
+    };
+
     const handleCreateShelf = () => {
         setEditingShelf(undefined);
         setIsModalOpen(true);
@@ -438,10 +574,8 @@ export function ShelvesPage() {
 
     const handleSaveShelf = (name: string, description: string) => {
         if (editingShelf) {
-            // Update existing
-            updateBookMetadata(editingShelf.id, { title: name }); // This is a hack - we need a proper updateCollection
+            updateCollection(editingShelf.id, { name, description });
         } else {
-            // Create new
             addCollection({
                 id: crypto.randomUUID(),
                 name,
@@ -458,10 +592,6 @@ export function ShelvesPage() {
         if (confirm(`Are you sure you want to delete "${shelfName}"?`)) {
             removeCollection(shelfId);
         }
-    };
-
-    const getShelfBooks = (bookIds: string[]) => {
-        return bookIds.map((id) => books.find((b) => b.id === id)).filter(Boolean) as typeof books;
     };
 
     // Show shelf detail view
@@ -495,7 +625,7 @@ export function ShelvesPage() {
                     </h1>
                     <p className="text-sm text-[var(--color-text-muted)] mt-1">
                         {collections.length} {collections.length === 1 ? "shelf" : "shelves"} •{" "}
-                        {collections.reduce((acc, s) => acc + s.bookIds.length, 0)} books
+                        {collections.reduce((acc, s) => acc + getActualBookCount(s.bookIds), 0)} books
                     </p>
                 </div>
 
@@ -552,6 +682,7 @@ export function ShelvesPage() {
                             key={shelf.id}
                             shelf={shelf}
                             books={getShelfBooks(shelf.bookIds)}
+                            actualBookCount={getActualBookCount(shelf.bookIds)}
                             onClick={() => setSelectedShelfId(shelf.id)}
                             onEdit={() =>
                                 handleEditShelf({
@@ -576,4 +707,3 @@ export function ShelvesPage() {
         </div>
     );
 }
-

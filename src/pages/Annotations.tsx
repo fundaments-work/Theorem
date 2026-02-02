@@ -196,7 +196,7 @@ function AnnotationCard({
                     <span className="truncate max-w-[150px]">{book?.title || "Unknown Book"}</span>
                 </button>
                 <span className="text-xs text-[var(--color-text-muted)]">
-                    {annotation.createdAt.toLocaleDateString()}
+                    {new Date(annotation.createdAt).toLocaleDateString()}
                 </span>
             </div>
         </div>

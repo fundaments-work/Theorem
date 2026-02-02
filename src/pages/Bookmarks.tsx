@@ -95,7 +95,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBook }: Bookma
                 {/* Date */}
                 <div className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
                     <Clock className="w-3.5 h-3.5" />
-                    {bookmark.createdAt.toLocaleDateString()}
+                    {new Date(bookmark.createdAt).toLocaleDateString()}
                 </div>
 
                 {/* Actions */}
@@ -170,7 +170,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBook }: Bookma
 
                 <div className="flex items-center justify-between">
                     <span className="text-xs text-[var(--color-text-muted)]">
-                        {bookmark.createdAt.toLocaleDateString()}
+                        {new Date(bookmark.createdAt).toLocaleDateString()}
                     </span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button

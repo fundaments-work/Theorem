@@ -165,6 +165,7 @@ interface LibraryStore {
     // Collection actions
     addCollection: (collection: Collection) => void;
     removeCollection: (collectionId: string) => void;
+    updateCollection: (collectionId: string, updates: Partial<Omit<Collection, 'id'>>) => void;
     addBookToCollection: (bookId: string, collectionId: string) => void;
     removeBookFromCollection: (bookId: string, collectionId: string) => void;
 
@@ -284,14 +285,25 @@ export const useLibraryStore = create<LibraryStore>()(
                     collections: state.collections.filter((c) => c.id !== collectionId),
                 })),
 
-            addBookToCollection: (bookId, collectionId) =>
+            updateCollection: (collectionId, updates) =>
                 set((state) => ({
                     collections: state.collections.map((c) =>
-                        c.id === collectionId && !c.bookIds.includes(bookId)
-                            ? { ...c, bookIds: [...c.bookIds, bookId] }
-                            : c
+                        c.id === collectionId ? { ...c, ...updates } : c
                     ),
                 })),
+
+            addBookToCollection: (bookId, collectionId) =>
+                set((state) => {
+                    const bookExists = state.books.some((b) => b.id === bookId);
+                    if (!bookExists) return state;
+                    return {
+                        collections: state.collections.map((c) =>
+                            c.id === collectionId && !c.bookIds.includes(bookId)
+                                ? { ...c, bookIds: [...c.bookIds, bookId] }
+                                : c
+                        ),
+                    };
+                }),
 
             removeBookFromCollection: (bookId, collectionId) =>
                 set((state) => ({
