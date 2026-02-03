@@ -13,6 +13,7 @@ import React, {
 } from "react";
 import { cn } from "@/lib/utils";
 import { usePDF } from "@/hooks/usePDF";
+import { VirtualScroller, type ViewportState } from "@/engines/pdf/virtual-scroller";
 import type { DocMetadata, DocLocation, TocItem } from "@/types";
 import type { TextLayerItem } from "@/engines/pdf";
 

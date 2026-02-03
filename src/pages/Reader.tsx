@@ -3,7 +3,7 @@
  * Full-screen reading experience with document viewer and controls
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, useLibraryStore, useSettingsStore } from '@/store';
 import { HighlightColorPicker, NoteEditor } from '@/components/reader';
@@ -18,8 +18,11 @@ import {
     ReaderViewportHandle,
     ReaderNavbar,
     PDFViewer,
+    PDFViewerHandle,
+    PDFTitlebar,
 } from '@/components/reader';
 import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, isFixedLayout, BookFormat } from '@/types';
+import type { PDFViewerProps } from '@/components/reader';
 import { getBookBlob } from '@/lib/storage';
 
 export function ReaderPage() {
@@ -27,6 +30,7 @@ export function ReaderPage() {
     const { getBook, updateProgress, saveBookLocations, addReadingTime, markBookCompleted } = useLibraryStore();
     const { settings, updateReaderSettings, stats, updateStats } = useSettingsStore();
     const readerRef = useRef<ReaderViewportHandle>(null);
+    const pdfViewerRef = useRef<PDFViewerHandle>(null);
     
     // Get current book format
     const currentFormat = currentBookId ? getBook(currentBookId)?.format : undefined;
@@ -46,10 +50,6 @@ export function ReaderPage() {
     const [toc, setToc] = useState<TocItem[]>([]);
     const [location, setLocation] = useState<DocLocation | null>(null);
     const [sectionFractions, setSectionFractions] = useState<number[]>([]);
-    
-    // PDF-specific state
-    const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
-    const [pdfScale, setPdfScale] = useState(1.0);
     // UI state
     const [showToolbar, setShowToolbar] = useState(true);
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | null;
@@ -412,18 +412,22 @@ export function ReaderPage() {
     }, [currentBookId, updateProgress, markBookCompleted, updateStats]);
 
     const goTo = useCallback(async (target: string) => {
-        if (readerRef.current) {
+        if (isPDFFormat && pdfViewerRef.current) {
+            await pdfViewerRef.current.goTo(target);
+        } else if (readerRef.current) {
             await readerRef.current.goTo(target);
         }
         setActivePanel(null);
-    }, []);
+    }, [isPDFFormat]);
 
     const handleSeek = useCallback((fraction: number) => {
         lastClickFractionRef.current = fraction;
-        if (readerRef.current) {
+        if (isPDFFormat && pdfViewerRef.current) {
+            pdfViewerRef.current.goToFraction(fraction);
+        } else if (readerRef.current) {
             readerRef.current.goToFraction(fraction);
         }
-    }, []);
+    }, [isPDFFormat]);
 
 
     const handleBack = useCallback(() => {
@@ -904,7 +908,33 @@ export function ReaderPage() {
         }
     }, [currentBookId, saveBookLocations]);
 
+    // PDF-specific state
+    const [pdfZoom, setPdfZoom] = useState(1.0);
+    const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
+    const [pdfTotalPages, setPdfTotalPages] = useState(0);
+    const [pdfMetadata, setPdfMetadata] = useState<DocMetadata | null>(null);
 
+    // Memoized PDF callbacks to prevent unnecessary re-renders
+    const handlePDFReady = useCallback((meta: DocMetadata, tocItems: TocItem[]) => {
+        setPdfMetadata(meta);
+        handleReady(meta, tocItems);
+    }, [handleReady]);
+
+    const handlePDFLocationChange = useCallback((loc: DocLocation) => {
+        handleLocationChange(loc);
+        // Update total pages from location if available
+        if (loc.pageInfo?.totalPages && loc.pageInfo.totalPages > pdfTotalPages) {
+            setPdfTotalPages(loc.pageInfo.totalPages);
+        }
+    }, [handleLocationChange, pdfTotalPages]);
+
+    const handlePDFPageChange = useCallback((page: number) => {
+        setPdfCurrentPage(page);
+    }, []);
+
+    const handlePDFZoomChange = useCallback((zoom: number) => {
+        setPdfZoom(zoom);
+    }, []);
 
     // Error state
     if (loadError) {
@@ -945,45 +975,70 @@ export function ReaderPage() {
             }}
             data-reading-mode={settings.readerSettings.flow}
         >
-            {/* Toolbar */}
+            {/* Toolbar - Different for PDF vs EPUB */}
             <div
                 className={cn(
                     "absolute top-0 left-0 right-0 z-50 transition-transform duration-300",
                     showToolbar ? "translate-y-0" : "-translate-y-full"
                 )}
             >
-                <WindowTitlebar
-                    metadata={metadata}
-                    location={location}
-                    onBack={handleBack}
-                    onToggleToc={() => togglePanel('toc')}
-                    onToggleSettings={() => togglePanel('settings')}
-                    onToggleBookmarks={() => togglePanel('bookmarks')}
-                    onToggleSearch={() => togglePanel('search')}
-                    onToggleInfo={() => togglePanel('info')}
-                    onAddBookmark={handleAddPageBookmark}
-                    isCurrentPageBookmarked={isCurrentPageBookmarked}
-                    activePanel={activePanel}
-                    fullscreen={settings.readerSettings.fullscreen}
-                    onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
-                />
+                {isPDFFormat ? (
+                    <PDFTitlebar
+                        metadata={pdfMetadata || metadata}
+                        currentPage={pdfCurrentPage}
+                        totalPages={pdfTotalPages > 0 ? pdfTotalPages : (location?.pageInfo?.totalPages || 0)}
+                        zoom={pdfZoom}
+                        onBack={handleBack}
+                        onPageChange={(page) => {
+                            pdfViewerRef.current?.goToPage(page);
+                            setPdfCurrentPage(page);
+                        }}
+                        onZoomIn={() => pdfViewerRef.current?.zoomIn()}
+                        onZoomOut={() => pdfViewerRef.current?.zoomOut()}
+                        onZoomChange={(zoom) => {
+                            pdfViewerRef.current?.setZoom(zoom);
+                            setPdfZoom(zoom);
+                        }}
+                        onFitPage={() => pdfViewerRef.current?.fitPage()}
+                        onFitWidth={() => pdfViewerRef.current?.fitWidth()}
+                        onRotate={() => pdfViewerRef.current?.rotate()}
+                        onSearch={() => togglePanel('search')}
+                        isSearchOpen={activePanel === 'search'}
+                    />
+                ) : (
+                    <WindowTitlebar
+                        metadata={metadata}
+                        location={location}
+                        onBack={handleBack}
+                        onToggleToc={() => togglePanel('toc')}
+                        onToggleSettings={() => togglePanel('settings')}
+                        onToggleBookmarks={() => togglePanel('bookmarks')}
+                        onToggleSearch={() => togglePanel('search')}
+                        onToggleInfo={() => togglePanel('info')}
+                        onAddBookmark={handleAddPageBookmark}
+                        isCurrentPageBookmarked={isCurrentPageBookmarked}
+                        activePanel={activePanel}
+                        fullscreen={settings.readerSettings.fullscreen}
+                        onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
+                    />
+                )}
             </div>
 
             {/* Reader Viewport */}
             <div className="flex-1 min-h-0 pt-14 pb-12 overflow-hidden">
-                {isPDFFormat && file ? (
-                    <PDFViewer
+                {isPDFFormat ? (
+                    <MemoizedPDFViewer
+                        key={currentBookId || 'no-book'}
+                        ref={pdfViewerRef}
                         file={file}
-                        initialPage={1}
-                        onPageChange={(page) => {
-                            setPdfCurrentPage(page);
-                        }}
-                        onZoomChange={(newScale) => {
-                            setPdfScale(newScale);
-                        }}
-                        onReady={(meta, toc) => {
-                            handleReady(meta, toc);
-                        }}
+                        scale={pdfZoom}
+                        initialLocation={initialLocation}
+                        onReady={handlePDFReady}
+                        onLocationChange={handlePDFLocationChange}
+                        onPageChange={handlePDFPageChange}
+                        onZoomChange={handlePDFZoomChange}
+                        onError={handleError}
+                        className="w-full h-full"
                     />
                 ) : (
                     <ReaderViewport
@@ -1003,8 +1058,8 @@ export function ReaderPage() {
                 )}
             </div>
 
-            {/* Bottom Progress Navbar */}
-            {isBookReady && (
+            {/* Bottom Progress Navbar - Only for EPUBs, not PDFs */}
+            {isBookReady && !isPDFFormat && (
                 <ReaderNavbar
                     location={location}
                     toc={toc}
@@ -1096,4 +1151,9 @@ export function ReaderPage() {
     );
 }
 
+// Memoized PDF viewer to prevent scroll position reset on parent re-renders
+const MemoizedPDFViewer = memo(forwardRef<PDFViewerHandle, PDFViewerProps>(
+    (props, ref) => <PDFViewer {...props} ref={ref} />
+));
+MemoizedPDFViewer.displayName = 'MemoizedPDFViewer';
 

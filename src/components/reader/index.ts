@@ -11,7 +11,6 @@ export { ReaderSettings } from './ReaderSettings';
 export { ReaderBookmarks } from './ReaderBookmarks';
 export { ReaderSearch } from './ReaderSearch';
 export { BookInfoPopover } from './BookInfoPopover';
-export { PDFViewer, type PDFViewerProps, type PDFViewerHandle } from './PDFViewer';
 
 // Annotations panel (bookmarks + highlights)
 export { ReaderAnnotationsPanel } from './ReaderAnnotationsPanel';
@@ -19,4 +18,6 @@ export { ReaderAnnotationsPanel } from './ReaderAnnotationsPanel';
 // Highlight components
 export { HighlightColorPicker, NoteEditor } from './highlights';
 
-
+// PDF Viewer
+export { PDFViewer, type PDFViewerHandle, type PDFViewerProps } from './PDFViewer';
+export { PDFTitlebar, type PDFTitlebarProps } from './PDFTitlebar';
