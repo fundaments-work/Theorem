@@ -560,6 +560,11 @@ export const useSettingsStore = create<SettingsStore>()(
                 if (state?.settings.readerSettings) {
                     initReaderStyles(state.settings.readerSettings);
                 }
+                
+                // Migration: Ensure dailyActivity exists for old stored data
+                if (state && !state.stats.dailyActivity) {
+                    state.stats.dailyActivity = [];
+                }
             },
         }
     )

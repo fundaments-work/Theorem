@@ -132,15 +132,15 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
 }
 
 // Activity heatmap with real data
-function ActivityHeatmap({ dailyActivity }: { dailyActivity: import('@/types').DailyReadingActivity[] }) {
+function ActivityHeatmap({ dailyActivity }: { dailyActivity: import('@/types').DailyReadingActivity[] | undefined }) {
     // Generate last 12 weeks of data
     const weeks = useMemo(() => {
         const data: number[][] = [];
         const today = new Date();
         
-        // Create a map of date to minutes read
+        // Create a map of date to minutes read (handle undefined case)
         const activityMap = new Map<string, number>();
-        dailyActivity.forEach(activity => {
+        (dailyActivity || []).forEach(activity => {
             activityMap.set(activity.date, activity.minutes);
         });
         
@@ -186,7 +186,7 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: import('@/types').D
 
     // Calculate today's reading
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayMinutes = dailyActivity.find(a => a.date === todayStr)?.minutes || 0;
+    const todayMinutes = (dailyActivity || []).find(a => a.date === todayStr)?.minutes || 0;
 
     return (
         <div className="space-y-3">
