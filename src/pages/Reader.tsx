@@ -17,6 +17,8 @@ import {
     BookInfoPopover,
     ReaderViewportHandle,
     ReaderNavbar,
+    PDFViewer,
+    type PdfInfo,
 } from '@/components/reader';
 import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, isFixedLayout, BookFormat } from '@/types';
 import { getBookBlob } from '@/lib/storage';
@@ -29,6 +31,7 @@ export function ReaderPage() {
     
     // Get current book format
     const currentFormat = currentBookId ? getBook(currentBookId)?.format : undefined;
+    const isPDFFormat = currentFormat === 'pdf';
     const loadedBookIdRef = useRef<string | null>(null);
 
     // Reading time tracking
@@ -44,6 +47,11 @@ export function ReaderPage() {
     const [toc, setToc] = useState<TocItem[]>([]);
     const [location, setLocation] = useState<DocLocation | null>(null);
     const [sectionFractions, setSectionFractions] = useState<number[]>([]);
+    
+    // PDF-specific state
+    const [pdfInfo, setPdfInfo] = useState<PdfInfo | null>(null);
+    const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
+    const [pdfError, setPdfError] = useState<string | null>(null);
     // UI state
     const [showToolbar, setShowToolbar] = useState(true);
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | null;
@@ -965,20 +973,37 @@ export function ReaderPage() {
 
             {/* Reader Viewport */}
             <div className="flex-1 min-h-0 pt-14 pb-12 overflow-hidden">
-                <ReaderViewport
-                    key={currentBookId || 'no-book'}
-                    ref={readerRef}
-                    file={file}
-                    format={currentFormat}
-                    settings={settings.readerSettings}
-                    initialLocation={initialLocation}
-                    savedLocations={getBook(currentBookId || '')?.locations}
-                    onReady={handleReady}
-                    onLocationChange={handleLocationChange}
-                    onLocationsSaved={handleLocationsSaved}
-                    onTextSelected={handleTextSelected}
-                    className="w-full h-full"
-                />
+                {isPDFFormat && file ? (
+                    <PDFViewer
+                        file={file}
+                        initialPage={1}
+                        onPageChange={(page) => {
+                            setPdfCurrentPage(page);
+                        }}
+                        onReady={(info) => {
+                            setPdfInfo(info);
+                            handleReady({
+                                title: info.metadata?.title || '',
+                                author: info.metadata?.author || '',
+                            }, []);
+                        }}
+                    />
+                ) : (
+                    <ReaderViewport
+                        key={currentBookId || 'no-book'}
+                        ref={readerRef}
+                        file={file}
+                        format={currentFormat}
+                        settings={settings.readerSettings}
+                        initialLocation={initialLocation}
+                        savedLocations={getBook(currentBookId || '')?.locations}
+                        onReady={handleReady}
+                        onLocationChange={handleLocationChange}
+                        onLocationsSaved={handleLocationsSaved}
+                        onTextSelected={handleTextSelected}
+                        className="w-full h-full"
+                    />
+                )}
             </div>
 
             {/* Bottom Progress Navbar */}

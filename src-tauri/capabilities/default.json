@@ -47,6 +47,48 @@
         }
       ]
     },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-create",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        }
+      ]
+    },
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-ask",

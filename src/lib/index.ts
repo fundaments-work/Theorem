@@ -47,3 +47,11 @@ export {
     getThemeColors,
     registerEngineStyleCallback,
 } from "./reader-styles";
+
+export {
+    pdfApi,
+    usePDF,
+    type PdfInfo,
+    type RenderOptions,
+    type UsePDFReturn,
+} from "./pdf-api";
