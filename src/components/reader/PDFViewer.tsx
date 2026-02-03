@@ -618,21 +618,28 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
             },
         }), [scrollToPage, setZoomSmooth, setZoomImmediate, getPageDimensions, commitZoom]);
 
-        // Wheel zoom with smooth scaling
+        // Wheel zoom with smooth scaling - attached to window for global capture
         useEffect(() => {
-            const container = containerRef.current;
-            if (!container) return;
-
             const handleWheel = (e: WheelEvent) => {
                 if (e.ctrlKey || e.metaKey) {
+                    // Only handle if we're in the PDF viewer
+                    const container = containerRef.current;
+                    if (!container) return;
+                    
+                    // Check if the event target is inside our container
+                    if (!container.contains(e.target as Node)) return;
+                    
                     e.preventDefault();
+                    e.stopPropagation();
+                    
                     const delta = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP;
                     setZoomSmooth(scaleRef.current + delta);
                 }
             };
 
-            container.addEventListener("wheel", handleWheel, { passive: false });
-            return () => container.removeEventListener("wheel", handleWheel);
+            // Use window to capture all wheel events, then check target
+            window.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+            return () => window.removeEventListener("wheel", handleWheel, true);
         }, [setZoomSmooth]);
 
         // Cleanup on unmount
@@ -708,7 +715,7 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
                 >
                     {Array.from({ length: document.numPages }, (_, i) => i + 1).map((pageNumber) => (
                         <PDFPage
-                            key={`${pageNumber}-${scale}`}
+                            key={pageNumber}
                             pageNumber={pageNumber}
                             scale={scale}
                             cssScale={cssScale}

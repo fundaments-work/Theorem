@@ -133,33 +133,51 @@ export class PDFEngine {
      */
     async getTextContent(pageNumber: number): Promise<TextLayerItem[]> {
         if (!this.pdfDocument || this.destroyed) {
-            throw new Error("Engine not ready");
+            return [];
         }
 
         try {
-            const page = await this.getPage(pageNumber);
+            // Don't cache for text content - get fresh page to avoid cleanup issues
+            const page = await this.pdfDocument.getPage(pageNumber);
             const textContent = await page.getTextContent();
             const viewport = page.getViewport({ scale: 1 });
 
             return textContent.items.map((item: any) => {
-                const tx = pdfjsLib.Util.transform(
-                    viewport.transform,
-                    item.transform
-                );
+                try {
+                    const tx = pdfjsLib.Util.transform(
+                        viewport.transform,
+                        item.transform
+                    );
 
-                const fontHeight = Math.hypot(tx[0], tx[1]);
-                const fontWidth = Math.hypot(tx[2], tx[3]);
+                    const fontHeight = Math.hypot(tx[0], tx[1]);
+                    const fontWidth = Math.hypot(tx[2], tx[3]);
 
-                return {
-                    text: item.str,
-                    left: tx[4],
-                    top: tx[5] - fontHeight, // Adjust baseline
-                    width: item.width * (fontWidth / item.width || 1),
-                    height: fontHeight,
-                    fontSize: fontHeight,
-                    fontFamily: item.fontName || 'sans-serif',
-                    transform: item.transform,
-                };
+                    // Safe width calculation - avoid division by zero
+                    const itemWidth = item.width || fontWidth || 0;
+                    
+                    return {
+                        text: item.str || '',
+                        left: tx[4] || 0,
+                        top: (tx[5] || 0) - fontHeight, // Adjust baseline
+                        width: itemWidth,
+                        height: fontHeight || 12,
+                        fontSize: fontHeight || 12,
+                        fontFamily: item.fontName || 'sans-serif',
+                        transform: item.transform,
+                    };
+                } catch (err) {
+                    // Return fallback item if transform fails
+                    return {
+                        text: item.str || '',
+                        left: 0,
+                        top: 0,
+                        width: item.width || 0,
+                        height: 12,
+                        fontSize: 12,
+                        fontFamily: 'sans-serif',
+                        transform: item.transform || [1, 0, 0, 1, 0, 0],
+                    };
+                }
             });
         } catch (error) {
             console.warn(`Failed to get text content for page ${pageNumber}:`, error);
