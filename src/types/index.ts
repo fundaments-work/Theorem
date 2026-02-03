@@ -49,6 +49,9 @@ export interface Book {
     tags: string[];
     rating?: number; // 1-5
     isFavorite: boolean;
+    // Statistics
+    readingTime: number; // in minutes
+    completedAt?: Date; // When the book was finished (progress >= 0.99)
 }
 
 // Reading Progress
@@ -140,6 +143,13 @@ export interface AppSettings {
     readerSettings: ReaderSettings;
 }
 
+// Daily reading activity entry
+export interface DailyReadingActivity {
+    date: string; // ISO date string YYYY-MM-DD
+    minutes: number;
+    booksRead: string[]; // book IDs read that day
+}
+
 // Reading Statistics
 export interface ReadingStats {
     totalReadingTime: number; // minutes
@@ -150,6 +160,8 @@ export interface ReadingStats {
     dailyGoal: number; // minutes
     yearlyBookGoal: number;
     booksReadThisYear: number;
+    dailyActivity: DailyReadingActivity[]; // Last 84 days (12 weeks) for heatmap
+    lastReadDate?: string; // ISO date of last reading session
 }
 
 // Navigation

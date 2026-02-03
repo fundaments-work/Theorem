@@ -62,6 +62,7 @@ const defaultReadingStats: ReadingStats = {
     dailyGoal: 30,
     yearlyBookGoal: 24,
     booksReadThisYear: 0,
+    dailyActivity: [],
 };
 
 // UI State Store
@@ -162,6 +163,12 @@ interface LibraryStore {
     toggleFavorite: (bookId: string) => void;
     updateBookMetadata: (bookId: string, metadata: Partial<Book>) => void;
     saveBookLocations: (bookId: string, locations: string) => void;
+    
+    // Reading time tracking
+    addReadingTime: (bookId: string, minutes: number) => void;
+    
+    // Book completion
+    markBookCompleted: (bookId: string) => { wasAlreadyCompleted: boolean; completedYear: number } | null;
 
     // Collection actions
     addCollection: (collection: Collection) => void;
@@ -276,6 +283,47 @@ export const useLibraryStore = create<LibraryStore>()(
                         b.id === bookId ? { ...b, locations } : b
                     ),
                 })),
+
+            // Reading time tracking
+            addReadingTime: (bookId, minutes) =>
+                set((state) => ({
+                    books: state.books.map((b) =>
+                        b.id === bookId
+                            ? { ...b, readingTime: (b.readingTime || 0) + minutes }
+                            : b
+                    ),
+                })),
+
+            // Book completion
+            markBookCompleted: (bookId) => {
+                const book = get().books.find((b) => b.id === bookId);
+                if (!book) return null;
+
+                const now = new Date();
+                const currentYear = now.getFullYear();
+                const wasAlreadyCompleted = !!book.completedAt;
+                let completedYear = currentYear;
+
+                if (wasAlreadyCompleted && book.completedAt) {
+                    const completedDate = book.completedAt instanceof Date
+                        ? book.completedAt
+                        : new Date(book.completedAt);
+                    completedYear = completedDate.getFullYear();
+                }
+
+                // Only update if not already completed
+                if (!wasAlreadyCompleted) {
+                    set((state) => ({
+                        books: state.books.map((b) =>
+                            b.id === bookId
+                                ? { ...b, progress: 1.0, completedAt: now }
+                                : b
+                        ),
+                    }));
+                }
+
+                return { wasAlreadyCompleted, completedYear };
+            },
 
             // Collection actions
             addCollection: (collection) =>

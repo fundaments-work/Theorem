@@ -131,21 +131,41 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
     );
 }
 
-// Activity heatmap (simplified)
-function ActivityHeatmap() {
-    // Generate mock data for the last 12 weeks
+// Activity heatmap with real data
+function ActivityHeatmap({ dailyActivity }: { dailyActivity: import('@/types').DailyReadingActivity[] }) {
+    // Generate last 12 weeks of data
     const weeks = useMemo(() => {
-        const data = [];
-        for (let i = 0; i < 12; i++) {
-            const days = [];
-            for (let j = 0; j < 7; j++) {
-                // Random activity level 0-4
-                days.push(Math.floor(Math.random() * 5));
+        const data: number[][] = [];
+        const today = new Date();
+        
+        // Create a map of date to minutes read
+        const activityMap = new Map<string, number>();
+        dailyActivity.forEach(activity => {
+            activityMap.set(activity.date, activity.minutes);
+        });
+        
+        // Generate 12 weeks (84 days) of data, ending with today
+        for (let weekIndex = 0; weekIndex < 12; weekIndex++) {
+            const week: number[] = [];
+            for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+                const dayOffset = (11 - weekIndex) * 7 + (6 - dayIndex);
+                const date = new Date(today);
+                date.setDate(date.getDate() - dayOffset);
+                const dateStr = date.toISOString().split('T')[0];
+                
+                const minutes = activityMap.get(dateStr) || 0;
+                // Convert minutes to activity level 0-4
+                let level = 0;
+                if (minutes > 0) level = 1;
+                if (minutes >= 15) level = 2;
+                if (minutes >= 30) level = 3;
+                if (minutes >= 60) level = 4;
+                week.push(level);
             }
-            data.push(days);
+            data.push(week.reverse()); // Reverse to get Sunday to Saturday
         }
         return data;
-    }, []);
+    }, [dailyActivity]);
 
     const getColor = (level: number) => {
         switch (level) {
@@ -164,8 +184,12 @@ function ActivityHeatmap() {
         }
     };
 
+    // Calculate today's reading
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayMinutes = dailyActivity.find(a => a.date === todayStr)?.minutes || 0;
+
     return (
-        <div className="space-y-2">
+        <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-[var(--color-text-primary)]">Reading Activity</span>
                 <span className="text-xs text-[var(--color-text-muted)]">Last 12 weeks</span>
@@ -180,7 +204,7 @@ function ActivityHeatmap() {
                                     "w-3 h-3 rounded-sm",
                                     getColor(day)
                                 )}
-                                title={`${day} hours read`}
+                                title={`Activity level: ${day}`}
                             />
                         ))}
                     </div>
@@ -193,6 +217,11 @@ function ActivityHeatmap() {
                 ))}
                 <span>More</span>
             </div>
+            {todayMinutes > 0 && (
+                <p className="text-xs text-[var(--color-text-muted)]">
+                    Today: {todayMinutes} minutes read
+                </p>
+            )}
         </div>
     );
 }
@@ -298,7 +327,7 @@ export function StatisticsPage() {
 
                     {/* Activity Heatmap */}
                     <section className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
-                        <ActivityHeatmap />
+                        <ActivityHeatmap dailyActivity={stats.dailyActivity} />
                     </section>
 
                     {/* Recently Read */}

@@ -23,10 +23,14 @@ import { getBookBlob } from '@/lib/storage';
 
 export function ReaderPage() {
     const { currentBookId, setRoute } = useUIStore();
-    const { getBook, updateProgress, saveBookLocations } = useLibraryStore();
-    const { settings, updateReaderSettings } = useSettingsStore();
+    const { getBook, updateProgress, saveBookLocations, addReadingTime, markBookCompleted } = useLibraryStore();
+    const { settings, updateReaderSettings, stats, updateStats } = useSettingsStore();
     const readerRef = useRef<ReaderViewportHandle>(null);
     const loadedBookIdRef = useRef<string | null>(null);
+
+    // Reading time tracking
+    const readingStartTimeRef = useRef<number | null>(null);
+    const readingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // File state
     const [file, setFile] = useState<File | Blob | null>(null);
@@ -117,6 +121,99 @@ export function ReaderPage() {
         loadBook();
         return () => { isCancelled = true; };
     }, [currentBookId]);
+
+    // Track reading time
+    useEffect(() => {
+        if (!currentBookId) return;
+
+        // Start tracking when book is loaded
+        readingStartTimeRef.current = Date.now();
+        
+        // Update every minute
+        readingIntervalRef.current = setInterval(() => {
+            if (currentBookId && readingStartTimeRef.current) {
+                const elapsedMinutes = Math.floor((Date.now() - readingStartTimeRef.current) / 60000);
+                if (elapsedMinutes > 0) {
+                    // Add reading time to book
+                    addReadingTime(currentBookId, 1);
+                    
+                    // Update global stats
+                    const today = new Date().toISOString().split('T')[0];
+                    const existingActivity = stats.dailyActivity.find(a => a.date === today);
+                    
+                    let newDailyActivity;
+                    if (existingActivity) {
+                        newDailyActivity = stats.dailyActivity.map(a => 
+                            a.date === today 
+                                ? { ...a, minutes: a.minutes + 1, booksRead: [...new Set([...a.booksRead, currentBookId])] }
+                                : a
+                        );
+                    } else {
+                        newDailyActivity = [...stats.dailyActivity, {
+                            date: today,
+                            minutes: 1,
+                            booksRead: [currentBookId]
+                        }];
+                    }
+                    
+                    // Keep only last 84 days (12 weeks)
+                    if (newDailyActivity.length > 84) {
+                        newDailyActivity = newDailyActivity.slice(-84);
+                    }
+                    
+                    // Calculate streak
+                    const sortedActivity = [...newDailyActivity].sort((a, b) => 
+                        new Date(b.date).getTime() - new Date(a.date).getTime()
+                    );
+                    
+                    let currentStreak = 0;
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+                    
+                    // Check if read today or yesterday to maintain streak
+                    const lastReadDate = sortedActivity[0]?.date;
+                    if (lastReadDate === todayStr || lastReadDate === yesterdayStr) {
+                        currentStreak = 1;
+                        for (let i = 1; i < sortedActivity.length; i++) {
+                            const prevDate = new Date(sortedActivity[i - 1].date);
+                            const currDate = new Date(sortedActivity[i].date);
+                            const diffDays = (prevDate.getTime() - currDate.getTime()) / 86400000;
+                            if (diffDays === 1) {
+                                currentStreak++;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    
+                    updateStats({
+                        totalReadingTime: stats.totalReadingTime + 1,
+                        dailyActivity: newDailyActivity,
+                        currentStreak,
+                        longestStreak: Math.max(stats.longestStreak, currentStreak),
+                        lastReadDate: today,
+                    });
+                    
+                    // Reset start time for next minute
+                    readingStartTimeRef.current = Date.now();
+                }
+            }
+        }, 60000); // Every minute
+
+        return () => {
+            if (readingIntervalRef.current) {
+                clearInterval(readingIntervalRef.current);
+            }
+            
+            // Save any remaining partial minute on unmount
+            if (currentBookId && readingStartTimeRef.current) {
+                const elapsedMinutes = Math.floor((Date.now() - readingStartTimeRef.current) / 60000);
+                if (elapsedMinutes > 0) {
+                    addReadingTime(currentBookId, elapsedMinutes);
+                }
+            }
+        };
+    }, [currentBookId, addReadingTime, updateStats, stats]);
 
     useEffect(() => {
         return () => {
@@ -274,10 +371,24 @@ export function ReaderPage() {
 
             queueMicrotask(() => {
                 updateProgress(currentBookId, safePercentage, safeCfi, lastClickFraction, pageProgress);
+                
+                // Check if book is completed (>= 99% progress)
+                if (safePercentage >= 0.99 && currentBookId) {
+                    const result = markBookCompleted(currentBookId);
+                    if (result && !result.wasAlreadyCompleted) {
+                        const currentYear = new Date().getFullYear();
+                        updateStats({
+                            booksCompleted: stats.booksCompleted + 1,
+                            booksReadThisYear: result.completedYear === currentYear 
+                                ? stats.booksReadThisYear + 1 
+                                : stats.booksReadThisYear
+                        });
+                    }
+                }
             });
             lastClickFractionRef.current = null;
         }
-    }, [currentBookId, updateProgress]);
+    }, [currentBookId, updateProgress, markBookCompleted, updateStats, stats]);
 
     const goTo = useCallback(async (target: string) => {
         if (readerRef.current) {

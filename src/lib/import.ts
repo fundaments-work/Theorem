@@ -175,6 +175,7 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         progress: 0,
         isFavorite: false,
         tags: [],
+        readingTime: 0,
         // Additional metadata from extraction
         coverPath: metadata?.coverDataUrl,
         description: metadata?.description,

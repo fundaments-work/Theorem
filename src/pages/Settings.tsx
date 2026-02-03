@@ -40,6 +40,7 @@ import {
     BookOpenCheck,
     BrainCircuit,
     Mail,
+    Target,
 } from "lucide-react";
 
 // Section component
@@ -150,7 +151,7 @@ function ButtonSelect<T extends string>({
 
 // Main page component
 export function SettingsPage() {
-    const { settings, updateSettings, resetSettings } = useSettingsStore();
+    const { settings, updateSettings, resetSettings, stats, updateStats } = useSettingsStore();
     const { books, annotations } = useLibraryStore();
     const [activeTab, setActiveTab] = useState<
         "general" | "pdf" | "dictionary" | "rss" | "integrations" | "tts" | "sync" | "storage"
@@ -303,6 +304,71 @@ export function SettingsPage() {
                                 onChange={(v) => updateSettings({ librarySortOrder: v })}
                             />
                         </SettingRow>
+                    </Section>
+
+                    <Section
+                        title="Reading Goals"
+                        description="Set your daily and yearly reading targets"
+                        icon={<Target className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Daily Reading Goal"
+                            description="Minutes to read each day"
+                        >
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="number"
+                                    value={stats.dailyGoal}
+                                    onChange={(e) => updateStats({ dailyGoal: Math.max(1, Math.min(180, parseInt(e.target.value) || 0)) })}
+                                    min={1}
+                                    max={180}
+                                    className={cn(
+                                        "w-20 px-3 py-1.5 rounded-lg text-sm",
+                                        "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
+                                        "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
+                                        "text-center"
+                                    )}
+                                />
+                                <span className="text-sm text-[var(--color-text-secondary)]">min/day</span>
+                            </div>
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Yearly Book Goal"
+                            description="Books to complete this year"
+                        >
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="number"
+                                    value={stats.yearlyBookGoal}
+                                    onChange={(e) => updateStats({ yearlyBookGoal: Math.max(1, Math.min(100, parseInt(e.target.value) || 0)) })}
+                                    min={1}
+                                    max={100}
+                                    className={cn(
+                                        "w-20 px-3 py-1.5 rounded-lg text-sm",
+                                        "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
+                                        "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
+                                        "text-center"
+                                    )}
+                                />
+                                <span className="text-sm text-[var(--color-text-secondary)]">books/year</span>
+                            </div>
+                        </SettingRow>
+
+                        <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-[var(--color-text-secondary)]">Current Progress</span>
+                                <span className="text-[var(--color-text-primary)] font-medium">
+                                    {stats.booksReadThisYear} / {stats.yearlyBookGoal} books
+                                </span>
+                            </div>
+                            <div className="mt-2 h-2 bg-[var(--color-border-subtle)] rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-500"
+                                    style={{ width: `${Math.min(100, (stats.booksReadThisYear / Math.max(1, stats.yearlyBookGoal)) * 100)}%` }}
+                                />
+                            </div>
+                        </div>
                     </Section>
 
                     <Section
