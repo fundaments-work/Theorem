@@ -25,6 +25,9 @@ pub fn run() {
             pdf_commands::pdf_render_page,
             pdf_commands::pdf_get_info,
             pdf_commands::pdf_close,
+            // Stateless PDF commands (for cover extraction and metadata)
+            pdf_commands::pdf_extract_cover,
+            pdf_commands::pdf_extract_metadata,
             // Legacy PDF commands (for backward compatibility)
             pdf_commands::initialize_pdfium,
             pdf_commands::render_pdf_page,

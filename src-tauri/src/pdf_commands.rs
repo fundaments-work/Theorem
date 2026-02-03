@@ -339,6 +339,75 @@ pub async fn pdf_close(state: State<'_, PdfState>, id: String) -> Result<(), ()>
     Ok(())
 }
 
+/// Extract PDF cover (first page as thumbnail) from raw bytes
+/// Used for library thumbnails without loading the full document into state
+#[tauri::command]
+pub async fn pdf_extract_cover(bytes: Vec<u8>, target_width: Option<u32>) -> Result<String, PdfError> {
+    // Create PDFium instance
+    let pdfium = create_pdfium()?;
+
+    // Load PDF from bytes
+    let document = pdfium
+        .load_pdf_from_byte_slice(&bytes, None)
+        .map_err(|e| PdfError::LoadError(e.to_string()))?;
+
+    // Get first page
+    let page = document
+        .pages()
+        .get(0)
+        .map_err(|e| PdfError::PageNotFound(e.to_string()))?;
+
+    // Render at thumbnail size (default 400px width for covers)
+    let width: i32 = target_width.unwrap_or(400) as i32;
+    let render_config = PdfRenderConfig::new()
+        .set_target_width(width)
+        .set_maximum_height(800);
+
+    let bitmap = page
+        .render_with_config(&render_config)
+        .map_err(|e| PdfError::RenderError(e.to_string()))?;
+
+    let dynamic_image = bitmap.as_image();
+
+    // Use JPEG for smaller file sizes (covers don't need lossless)
+    let encoded = image_encoder::encode_to_jpeg_base64(dynamic_image, image_encoder::JpegQuality::Medium)
+        .map_err(|e| PdfError::EncodeError(e))?;
+
+    Ok(encoded.data_url)
+}
+
+/// Extract PDF metadata without loading into state
+#[tauri::command]
+pub async fn pdf_extract_metadata(bytes: Vec<u8>) -> Result<PdfInfo, PdfError> {
+    let pdfium = create_pdfium()?;
+
+    let document = pdfium
+        .load_pdf_from_byte_slice(&bytes, None)
+        .map_err(|e| PdfError::LoadError(e.to_string()))?;
+
+    let pages = document.pages();
+    let page_count = pages.len() as usize;
+    let first_page = pages
+        .get(0)
+        .map_err(|e| PdfError::LoadError(e.to_string()))?;
+
+    let doc_metadata = document.metadata();
+    let title = doc_metadata
+        .get(PdfDocumentMetadataTagType::Title)
+        .map(|tag| tag.value().to_string());
+    let author = doc_metadata
+        .get(PdfDocumentMetadataTagType::Author)
+        .map(|tag| tag.value().to_string());
+
+    Ok(PdfInfo {
+        id: String::new(), // No ID for stateless extraction
+        page_count,
+        metadata: PdfMetadata { title, author },
+        page_width: first_page.width().value as f64,
+        page_height: first_page.height().value as f64,
+    })
+}
+
 // =============================================================================
 // Legacy Commands (for backward compatibility)
 // =============================================================================

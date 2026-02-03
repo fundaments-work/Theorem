@@ -139,6 +139,47 @@ export const pdfApi = {
             throw new Error(`Failed to close PDF: ${message}`);
         }
     },
+
+    /**
+     * Extract cover image (first page thumbnail) from PDF bytes
+     * Stateless - does not load document into state
+     * @param bytes - Raw PDF bytes as Uint8Array
+     * @param targetWidth - Optional width for the thumbnail (default: 400)
+     * @returns Promise resolving to base64 data URL
+     */
+    extractCover: async (bytes: Uint8Array, targetWidth?: number): Promise<string> => {
+        try {
+            const bytesArray = Array.from(bytes);
+            const result = await invoke<string>("pdf_extract_cover", {
+                bytes: bytesArray,
+                targetWidth: targetWidth ?? 400,
+            });
+            return result;
+        } catch (error) {
+            const message = extractErrorMessage(error);
+            console.error("[pdfApi] Failed to extract cover:", message);
+            throw new Error(`Failed to extract PDF cover: ${message}`);
+        }
+    },
+
+    /**
+     * Extract metadata from PDF bytes without loading into state
+     * @param bytes - Raw PDF bytes as Uint8Array
+     * @returns Promise resolving to PdfInfo
+     */
+    extractMetadata: async (bytes: Uint8Array): Promise<PdfInfo> => {
+        try {
+            const bytesArray = Array.from(bytes);
+            const result = await invoke<PdfInfo>("pdf_extract_metadata", {
+                bytes: bytesArray,
+            });
+            return result;
+        } catch (error) {
+            const message = extractErrorMessage(error);
+            console.error("[pdfApi] Failed to extract metadata:", message);
+            throw new Error(`Failed to extract PDF metadata: ${message}`);
+        }
+    },
 };
 
 /**
