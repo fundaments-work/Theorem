@@ -20,7 +20,9 @@ import type {
     ThemeSettings,
     ReaderTheme,
     ReaderSettings,
+    BookFormat,
 } from '@/types';
+import { isFixedLayout, isReflowable } from '@/types';
 import { getTheme } from '@/foliate/themes';
 import { 
     getEngineSettings, 
@@ -45,6 +47,10 @@ export class FoliateEngine {
     private annotations: Map<string, Annotation> = new Map();
     private currentLocation: DocLocation | null = null;
     private sectionFractions: number[] = [];
+
+    // Format tracking for format-specific behavior
+    private format: BookFormat = 'epub';
+    private isFixedLayoutFormat = false;
 
     // Settings cache
     private layout: PageLayout = 'single';
@@ -90,8 +96,12 @@ export class FoliateEngine {
         _savedLocations?: string,
         flow: ReadingFlow = 'paged',
         zoom: number = 100,
-        margins: number = 10
+        margins: number = 10,
+        format: BookFormat = 'epub'
     ): Promise<void> {
+        // Store format for format-specific behavior
+        this.format = format;
+        this.isFixedLayoutFormat = isFixedLayout(format);
         if (!this.container) {
             throw new Error('Engine not initialized');
         }
@@ -1609,6 +1619,29 @@ export class FoliateEngine {
         // Calculate the fraction within this section and clamp to [0, 1]
         const result = (totalFraction - sectionStart) / sectionSize;
         return Math.max(0, Math.min(1, result));
+    }
+
+    /**
+     * Get the current document format
+     */
+    getFormat(): BookFormat {
+        return this.format;
+    }
+
+    /**
+     * Check if current document has fixed layout (PDF, CBZ, CBR)
+     * Fixed layouts use zoom instead of font settings
+     */
+    isFixedLayout(): boolean {
+        return this.isFixedLayoutFormat;
+    }
+
+    /**
+     * Check if current document is reflowable (EPUB, MOBI, FB2)
+     * Reflowable documents support font/size controls
+     */
+    isReflowable(): boolean {
+        return !this.isFixedLayoutFormat;
     }
 
     destroy(): void {

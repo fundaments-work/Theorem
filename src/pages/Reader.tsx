@@ -3,7 +3,7 @@
  * Full-screen reading experience with document viewer and controls
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, useLibraryStore, useSettingsStore } from '@/store';
 import { HighlightColorPicker, NoteEditor } from '@/components/reader';
@@ -17,8 +17,12 @@ import {
     BookInfoPopover,
     ReaderViewportHandle,
     ReaderNavbar,
+    PDFViewer,
+    PDFViewerHandle,
+    PDFTitlebar,
 } from '@/components/reader';
-import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation } from '@/types';
+import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, isFixedLayout, BookFormat } from '@/types';
+import type { PDFViewerProps } from '@/components/reader';
 import { getBookBlob } from '@/lib/storage';
 
 export function ReaderPage() {
@@ -26,11 +30,19 @@ export function ReaderPage() {
     const { getBook, updateProgress, saveBookLocations, addReadingTime, markBookCompleted } = useLibraryStore();
     const { settings, updateReaderSettings, stats, updateStats } = useSettingsStore();
     const readerRef = useRef<ReaderViewportHandle>(null);
+    const pdfViewerRef = useRef<PDFViewerHandle>(null);
+    
+    // Get current book format
+    const currentFormat = currentBookId ? getBook(currentBookId)?.format : undefined;
+    const isPDFFormat = currentFormat === 'pdf';
     const loadedBookIdRef = useRef<string | null>(null);
 
     // Reading time tracking
     const readingStartTimeRef = useRef<number | null>(null);
     const readingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // Use ref to access latest stats without causing re-renders
+    const statsRef = useRef(stats);
+    statsRef.current = stats;
 
     // File state
     const [file, setFile] = useState<File | Blob | null>(null);
@@ -56,19 +68,23 @@ export function ReaderPage() {
 
     // Load book file
     useEffect(() => {
+        // Guard: already loaded this book
         if (currentBookId && loadedBookIdRef.current === currentBookId) {
             return;
         }
 
-        if (!currentBookId || loadedBookIdRef.current !== currentBookId) {
+        // Guard: no book ID
+        if (!currentBookId) {
             loadedBookIdRef.current = null;
+            return;
         }
+
+        // Set immediately to prevent duplicate loads during async operations
+        loadedBookIdRef.current = currentBookId;
 
         let isCancelled = false;
 
         const loadBook = async () => {
-            if (!currentBookId) return;
-
             const book = getBook(currentBookId);
             if (!book) {
                 setLoadError('Book not found in library');
@@ -108,12 +124,13 @@ export function ReaderPage() {
                     throw new Error('Could not read book file from storage.');
                 }
                 if (!isCancelled) {
-                    loadedBookIdRef.current = book.id;
                     setFile(blob);
                 }
             } catch (err) {
                 if (!isCancelled) {
                     setLoadError(err instanceof Error ? err.message : 'Unknown error loading book');
+                    // Reset loaded book ID on error so user can retry
+                    loadedBookIdRef.current = null;
                 }
             }
         };
@@ -137,19 +154,20 @@ export function ReaderPage() {
                     // Add reading time to book
                     addReadingTime(currentBookId, 1);
                     
-                    // Update global stats
+                    // Update global stats - use ref to access latest stats without dependency issues
+                    const currentStats = statsRef.current;
                     const today = new Date().toISOString().split('T')[0];
-                    const existingActivity = stats.dailyActivity.find(a => a.date === today);
+                    const existingActivity = currentStats.dailyActivity.find(a => a.date === today);
                     
                     let newDailyActivity;
                     if (existingActivity) {
-                        newDailyActivity = stats.dailyActivity.map(a => 
+                        newDailyActivity = currentStats.dailyActivity.map(a => 
                             a.date === today 
                                 ? { ...a, minutes: a.minutes + 1, booksRead: [...new Set([...a.booksRead, currentBookId])] }
                                 : a
                         );
                     } else {
-                        newDailyActivity = [...stats.dailyActivity, {
+                        newDailyActivity = [...currentStats.dailyActivity, {
                             date: today,
                             minutes: 1,
                             booksRead: [currentBookId]
@@ -187,10 +205,10 @@ export function ReaderPage() {
                     }
                     
                     updateStats({
-                        totalReadingTime: stats.totalReadingTime + 1,
+                        totalReadingTime: currentStats.totalReadingTime + 1,
                         dailyActivity: newDailyActivity,
                         currentStreak,
-                        longestStreak: Math.max(stats.longestStreak, currentStreak),
+                        longestStreak: Math.max(currentStats.longestStreak, currentStreak),
                         lastReadDate: today,
                     });
                     
@@ -213,7 +231,8 @@ export function ReaderPage() {
                 }
             }
         };
-    }, [currentBookId, addReadingTime, updateStats, stats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentBookId, addReadingTime, updateStats]);
 
     useEffect(() => {
         return () => {
@@ -377,37 +396,47 @@ export function ReaderPage() {
                     const result = markBookCompleted(currentBookId);
                     if (result && !result.wasAlreadyCompleted) {
                         const currentYear = new Date().getFullYear();
+                        const currentStats = statsRef.current;
                         updateStats({
-                            booksCompleted: stats.booksCompleted + 1,
+                            booksCompleted: currentStats.booksCompleted + 1,
                             booksReadThisYear: result.completedYear === currentYear 
-                                ? stats.booksReadThisYear + 1 
-                                : stats.booksReadThisYear
+                                ? currentStats.booksReadThisYear + 1 
+                                : currentStats.booksReadThisYear
                         });
                     }
                 }
             });
             lastClickFractionRef.current = null;
         }
-    }, [currentBookId, updateProgress, markBookCompleted, updateStats, stats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentBookId, updateProgress, markBookCompleted, updateStats]);
 
     const goTo = useCallback(async (target: string) => {
-        if (readerRef.current) {
+        if (isPDFFormat && pdfViewerRef.current) {
+            await pdfViewerRef.current.goTo(target);
+        } else if (readerRef.current) {
             await readerRef.current.goTo(target);
         }
         setActivePanel(null);
-    }, []);
+    }, [isPDFFormat]);
 
     const handleSeek = useCallback((fraction: number) => {
         lastClickFractionRef.current = fraction;
-        if (readerRef.current) {
+        if (isPDFFormat && pdfViewerRef.current) {
+            pdfViewerRef.current.goToFraction(fraction);
+        } else if (readerRef.current) {
             readerRef.current.goToFraction(fraction);
         }
-    }, []);
+    }, [isPDFFormat]);
 
 
     const handleBack = useCallback(() => {
         setRoute('library');
     }, [setRoute]);
+
+    const handleError = useCallback((err: Error) => {
+        setLoadError(err.message);
+    }, []);
 
     // Highlight state
     const [showColorPicker, setShowColorPicker] = useState(false);
@@ -470,8 +499,12 @@ export function ReaderPage() {
         }
     }, [isBookReady, initialLocation, initialFraction]);
 
+    // Memoized highlight selection handler
     const handleTextSelected = useCallback((cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => {
-        console.debug('[Reader] Text selected:', { cfi: cfi.substring(0, 50), text: text.substring(0, 50) });
+        // Only log if debug mode
+        if (process.env.NODE_ENV === 'development') {
+             console.debug('[Reader] Text selected:', { cfi: cfi.substring(0, 50), text: text.substring(0, 50) });
+        }
         
         // Always fetch fresh annotations from store to avoid stale state
         const freshAnnotations = currentBookId ? getBookAnnotations(currentBookId) : [];
@@ -559,21 +592,26 @@ export function ReaderPage() {
             // Position color picker near selection - improved positioning logic
             if (rangeOrEvent && 'clientX' in rangeOrEvent) {
                 const mouseEvent = rangeOrEvent as MouseEvent;
-                console.debug('[Reader] Positioning color picker for new selection from mouse:', mouseEvent.clientX, mouseEvent.clientY);
+                if (process.env.NODE_ENV === 'development') {
+                     console.debug('[Reader] Positioning color picker for new selection from mouse:', mouseEvent.clientX, mouseEvent.clientY);
+                }
                 setColorPickerPosition({ x: mouseEvent.clientX, y: mouseEvent.clientY });
             } else if (rangeOrEvent && 'getBoundingClientRect' in rangeOrEvent) {
                 const rect = rangeOrEvent.getBoundingClientRect();
-                console.debug('[Reader] Positioning color picker for new selection from range:', rect.left, rect.top);
+                if (process.env.NODE_ENV === 'development') {
+                    console.debug('[Reader] Positioning color picker for new selection from range:', rect.left, rect.top);
+                }
                 setColorPickerPosition({ x: rect.left + rect.width / 2, y: rect.top });
             } else {
-                console.debug('[Reader] Positioning color picker at screen center (fallback)');
+                if (process.env.NODE_ENV === 'development') {
+                    console.debug('[Reader] Positioning color picker at screen center (fallback)');
+                }
                 setColorPickerPosition({ x: window.innerWidth / 2, y: window.innerHeight / 3 });
             }
             
-            console.debug('[Reader] Showing color picker at calculated position');
             setShowColorPicker(true);
         }
-    }, [currentBookId, getBookAnnotations, colorPickerPosition]);
+    }, [currentBookId, getBookAnnotations]); // Remove colorPickerPosition dependency
 
     const handleColorSelect = useCallback(async (color: HighlightColor) => {
         if (!selectedCfi || !currentBookId) return;
@@ -870,6 +908,34 @@ export function ReaderPage() {
         }
     }, [currentBookId, saveBookLocations]);
 
+    // PDF-specific state
+    const [pdfZoom, setPdfZoom] = useState(1.0);
+    const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
+    const [pdfTotalPages, setPdfTotalPages] = useState(0);
+    const [pdfMetadata, setPdfMetadata] = useState<DocMetadata | null>(null);
+
+    // Memoized PDF callbacks to prevent unnecessary re-renders
+    const handlePDFReady = useCallback((meta: DocMetadata, tocItems: TocItem[]) => {
+        setPdfMetadata(meta);
+        handleReady(meta, tocItems);
+    }, [handleReady]);
+
+    const handlePDFLocationChange = useCallback((loc: DocLocation) => {
+        handleLocationChange(loc);
+        // Update total pages from location if available
+        if (loc.pageInfo?.totalPages && loc.pageInfo.totalPages > pdfTotalPages) {
+            setPdfTotalPages(loc.pageInfo.totalPages);
+        }
+    }, [handleLocationChange, pdfTotalPages]);
+
+    const handlePDFPageChange = useCallback((page: number) => {
+        setPdfCurrentPage(page);
+    }, []);
+
+    const handlePDFZoomChange = useCallback((zoom: number) => {
+        setPdfZoom(zoom);
+    }, []);
+
     // Error state
     if (loadError) {
         return (
@@ -909,49 +975,91 @@ export function ReaderPage() {
             }}
             data-reading-mode={settings.readerSettings.flow}
         >
-            {/* Toolbar */}
+            {/* Toolbar - Different for PDF vs EPUB */}
             <div
                 className={cn(
                     "absolute top-0 left-0 right-0 z-50 transition-transform duration-300",
                     showToolbar ? "translate-y-0" : "-translate-y-full"
                 )}
             >
-                <WindowTitlebar
-                    metadata={metadata}
-                    location={location}
-                    onBack={handleBack}
-                    onToggleToc={() => togglePanel('toc')}
-                    onToggleSettings={() => togglePanel('settings')}
-                    onToggleBookmarks={() => togglePanel('bookmarks')}
-                    onToggleSearch={() => togglePanel('search')}
-                    onToggleInfo={() => togglePanel('info')}
-                    onAddBookmark={handleAddPageBookmark}
-                    isCurrentPageBookmarked={isCurrentPageBookmarked}
-                    activePanel={activePanel}
-                    fullscreen={settings.readerSettings.fullscreen}
-                    onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
-                />
+                {isPDFFormat ? (
+                    <PDFTitlebar
+                        metadata={pdfMetadata || metadata}
+                        currentPage={pdfCurrentPage}
+                        totalPages={pdfTotalPages > 0 ? pdfTotalPages : (location?.pageInfo?.totalPages || 0)}
+                        zoom={pdfZoom}
+                        onBack={handleBack}
+                        onPageChange={(page) => {
+                            pdfViewerRef.current?.goToPage(page);
+                            setPdfCurrentPage(page);
+                        }}
+                        onZoomIn={() => pdfViewerRef.current?.zoomIn()}
+                        onZoomOut={() => pdfViewerRef.current?.zoomOut()}
+                        onZoomChange={(zoom) => {
+                            pdfViewerRef.current?.setZoom(zoom);
+                            setPdfZoom(zoom);
+                        }}
+                        onFitPage={() => pdfViewerRef.current?.fitPage()}
+                        onFitWidth={() => pdfViewerRef.current?.fitWidth()}
+                        onRotate={() => pdfViewerRef.current?.rotate()}
+                        onSearch={() => togglePanel('search')}
+                        isSearchOpen={activePanel === 'search'}
+                    />
+                ) : (
+                    <WindowTitlebar
+                        metadata={metadata}
+                        location={location}
+                        onBack={handleBack}
+                        onToggleToc={() => togglePanel('toc')}
+                        onToggleSettings={() => togglePanel('settings')}
+                        onToggleBookmarks={() => togglePanel('bookmarks')}
+                        onToggleSearch={() => togglePanel('search')}
+                        onToggleInfo={() => togglePanel('info')}
+                        onAddBookmark={handleAddPageBookmark}
+                        isCurrentPageBookmarked={isCurrentPageBookmarked}
+                        activePanel={activePanel}
+                        fullscreen={settings.readerSettings.fullscreen}
+                        onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
+                    />
+                )}
             </div>
 
             {/* Reader Viewport */}
-            <div className="flex-1 min-h-0 pt-14 pb-12">
-                <ReaderViewport
-                    key={currentBookId || 'no-book'}
-                    ref={readerRef}
-                    file={file}
-                    settings={settings.readerSettings}
-                    initialLocation={initialLocation}
-                    savedLocations={getBook(currentBookId || '')?.locations}
-                    onReady={handleReady}
-                    onLocationChange={handleLocationChange}
-                    onLocationsSaved={handleLocationsSaved}
-                    onTextSelected={handleTextSelected}
-                    className="w-full h-full"
-                />
+            <div className="flex-1 min-h-0 pt-14 pb-12 overflow-hidden">
+                {isPDFFormat ? (
+                    <MemoizedPDFViewer
+                        key={currentBookId || 'no-book'}
+                        ref={pdfViewerRef}
+                        file={file}
+                        scale={pdfZoom}
+                        initialLocation={initialLocation}
+                        onReady={handlePDFReady}
+                        onLocationChange={handlePDFLocationChange}
+                        onPageChange={handlePDFPageChange}
+                        onZoomChange={handlePDFZoomChange}
+                        onError={handleError}
+                        className="w-full h-full"
+                    />
+                ) : (
+                    <ReaderViewport
+                        key={currentBookId || 'no-book'}
+                        ref={readerRef}
+                        file={file}
+                        format={currentFormat}
+                        settings={settings.readerSettings}
+                        initialLocation={initialLocation}
+                        savedLocations={getBook(currentBookId || '')?.locations}
+                        onReady={handleReady}
+                        onLocationChange={handleLocationChange}
+                        onLocationsSaved={handleLocationsSaved}
+                        onTextSelected={handleTextSelected}
+                        className="w-full h-full"
+                    />
+                )}
             </div>
 
-            {/* Bottom Progress Navbar */}
-            {isBookReady && (
+            {/* Bottom Progress Navbar - Only for EPUBs, not PDFs */}
+            {isBookReady && !isPDFFormat && (
                 <ReaderNavbar
                     location={location}
                     toc={toc}
@@ -976,6 +1084,7 @@ export function ReaderPage() {
                 visible={activePanel === 'settings'}
                 onClose={() => setActivePanel(null)}
                 onUpdate={updateReaderSettings}
+                format={getBook(currentBookId || '')?.format}
             />
 
             <ReaderAnnotationsPanel
@@ -1001,10 +1110,7 @@ export function ReaderPage() {
             />
 
             {/* Highlight Color Picker Popup */}
-            {(() => {
-                console.debug('[Reader] RENDER: showColorPicker=', showColorPicker, 'editingHighlightId=', editingHighlightId, 'onDelete=', editingHighlightId ? 'SET' : 'UNDEFINED');
-                return null;
-            })()}
+            {/* Debug log removed for performance */}
             <HighlightColorPicker
                 isOpen={showColorPicker}
                 position={colorPickerPosition}
@@ -1044,4 +1150,10 @@ export function ReaderPage() {
         </div>
     );
 }
+
+// Memoized PDF viewer to prevent scroll position reset on parent re-renders
+const MemoizedPDFViewer = memo(forwardRef<PDFViewerHandle, PDFViewerProps>(
+    (props, ref) => <PDFViewer {...props} ref={ref} />
+));
+MemoizedPDFViewer.displayName = 'MemoizedPDFViewer';
 

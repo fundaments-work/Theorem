@@ -2,8 +2,44 @@
  * Lion Reader Type Definitions
  */
 
-// Book Format Types
-export type BookFormat = "epub" | "pdf" | "mobi" | "fb2" | "cbz";
+// Book Format Types - All formats supported by foliate-js
+export type BookFormat = "epub" | "pdf" | "mobi" | "azw" | "azw3" | "fb2" | "cbz" | "cbr";
+
+// Format categories for UI behavior
+export const FIXED_LAYOUT_FORMATS: BookFormat[] = ["pdf", "cbz", "cbr"];
+export const REFLOWABLE_FORMATS: BookFormat[] = ["epub", "mobi", "azw", "azw3", "fb2"];
+
+// Helper to check if format has fixed layout (no font/size controls, uses zoom instead)
+export const isFixedLayout = (format: BookFormat): boolean => 
+    FIXED_LAYOUT_FORMATS.includes(format);
+
+// Helper to check if format is reflowable (supports font/size controls)
+export const isReflowable = (format: BookFormat): boolean => 
+    REFLOWABLE_FORMATS.includes(format);
+
+// Format display names
+export const FORMAT_DISPLAY_NAMES: Record<BookFormat, string> = {
+    epub: 'EPUB',
+    pdf: 'PDF',
+    mobi: 'MOBI',
+    azw: 'AZW',
+    azw3: 'AZW3',
+    fb2: 'FB2',
+    cbz: 'CBZ',
+    cbr: 'CBR',
+};
+
+// Format icons or colors could be added here
+export const FORMAT_COLORS: Record<BookFormat, string> = {
+    epub: '#3498db',  // Blue
+    pdf: '#e74c3c',   // Red
+    mobi: '#f39c12',  // Orange
+    azw: '#f39c12',   // Orange
+    azw3: '#f39c12',  // Orange
+    fb2: '#9b59b6',   // Purple
+    cbz: '#2ecc71',   // Green
+    cbr: '#2ecc71',   // Green
+};
 
 // Highlight Colors - single source of truth
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'red' | 'orange' | 'purple';

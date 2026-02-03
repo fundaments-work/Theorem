@@ -30,18 +30,21 @@ async function initTauriPlugins() {
 
 /**
  * Determine book format from file extension
+ * Supports all foliate-js formats: EPUB, PDF, MOBI/AZW, FB2, CBZ/CBR
  */
 export function getBookFormat(filePath: string): BookFormat | null {
     const ext = filePath.toLowerCase().split('.').pop();
     switch (ext) {
         case 'epub': return 'epub';
         case 'pdf': return 'pdf';
-        case 'mobi':
-        case 'azw':
-        case 'azw3': return 'mobi';
+        case 'mobi': return 'mobi';
+        case 'azw': return 'azw';
+        case 'azw3': return 'azw3';
         case 'fb2': return 'fb2';
-        case 'cbz':
-        case 'cbr': return 'cbz';
+        case 'fbz':
+        case 'fb2.zip': return 'fb2';
+        case 'cbz': return 'cbz';
+        case 'cbr': return 'cbr';
         default: return null;
     }
 }
@@ -56,10 +59,12 @@ export async function pickBookFiles(): Promise<string[]> {
     const selected = await dialog.open({
         multiple: true,
         filters: [
-            { name: 'eBooks', extensions: ['epub', 'pdf', 'mobi', 'azw', 'azw3', 'fb2', 'cbz'] },
+            { name: 'All eBooks', extensions: ['epub', 'pdf', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'cbz', 'cbr'] },
             { name: 'EPUB', extensions: ['epub'] },
             { name: 'PDF', extensions: ['pdf'] },
-            { name: 'MOBI/AZW', extensions: ['mobi', 'azw', 'azw3'] },
+            { name: 'Kindle (MOBI/AZW)', extensions: ['mobi', 'azw', 'azw3'] },
+            { name: 'FictionBook (FB2)', extensions: ['fb2', 'fbz'] },
+            { name: 'Comics (CBZ/CBR)', extensions: ['cbz', 'cbr'] },
         ],
     });
 
@@ -234,7 +239,7 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
     const { fs } = await initTauriPlugins();
     if (!fs) throw new Error('FS plugin not available');
 
-    const bookExtensions = ['.epub', '.pdf', '.mobi', '.azw', '.azw3', '.fb2', '.cbz'];
+    const bookExtensions = ['.epub', '.pdf', '.mobi', '.azw', '.azw3', '.fb2', '.fbz', '.cbz', '.cbr'];
     const bookFiles: string[] = [];
 
     async function scanDir(dir: string) {

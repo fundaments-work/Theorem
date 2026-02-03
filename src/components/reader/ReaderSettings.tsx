@@ -12,10 +12,11 @@ import {
     X, Sun, Moon, Sunrise, Plus, Minus,
     Layers, ArrowUpDown,
     AlignLeft, AlignJustify, AlignCenter, Type,
-    Palette, Maximize2, Zap, Settings2
+    Palette, Maximize2, Zap, Settings2, ZoomIn
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ReaderSettings as ReaderSettingsType, ReaderTheme, FontFamily } from '@/types';
+import { ReaderSettings as ReaderSettingsType, ReaderTheme, FontFamily, BookFormat } from '@/types';
+import { isFixedLayout } from '@/types';
 import { Backdrop, FloatingPanel } from '@/components/ui';
 
 interface ReaderSettingsProps {
@@ -23,10 +24,11 @@ interface ReaderSettingsProps {
     visible: boolean;
     onClose: () => void;
     onUpdate: (updates: Partial<ReaderSettingsType>) => void;
+    format?: BookFormat;
     className?: string;
 }
 
-type TabId = 'themes' | 'typography' | 'layout';
+type TabId = 'themes' | 'typography' | 'zoom' | 'layout';
 
 const THEMES: Array<{ id: ReaderTheme; label: string; icon: React.ReactNode; previewBg: string; previewFg: string }> = [
     { id: 'light', label: 'Light', icon: <Sun className="w-5 h-5" />, previewBg: '#ffffff', previewFg: '#000000' },
@@ -102,10 +104,14 @@ export function ReaderSettings({
     visible,
     onClose,
     onUpdate,
+    format = 'epub',
     className,
 }: ReaderSettingsProps) {
     const [activeTab, setActiveTab] = useState<TabId>('themes');
     const [showAdvancedType, setShowAdvancedType] = useState(false);
+    
+    // Determine if current format is fixed layout (PDF, CBZ, CBR)
+    const isFixed = isFixedLayout(format);
 
     const brightnessSlider = useSmoothSlider(
         settings.brightness ?? 100,
@@ -152,7 +158,9 @@ export function ReaderSettings({
 
     const tabs = [
         { id: 'themes' as TabId, label: 'Theme', icon: <Palette className="w-4 h-4" /> },
-        { id: 'typography' as TabId, label: 'Type', icon: <Type className="w-4 h-4" /> },
+        isFixed 
+            ? { id: 'zoom' as TabId, label: 'Zoom', icon: <Zap className="w-4 h-4" /> }
+            : { id: 'typography' as TabId, label: 'Type', icon: <Type className="w-4 h-4" /> },
         { id: 'layout' as TabId, label: 'Layout', icon: <Maximize2 className="w-4 h-4" /> },
     ];
 
@@ -400,6 +408,79 @@ export function ReaderSettings({
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* ZOOM TAB - For fixed layouts (PDF, CBZ, CBR) */}
+                    {activeTab === 'zoom' && (
+                        <div className="space-y-5">
+                            {/* Zoom Level */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <ZoomIn className="w-4 h-4 opacity-50" style={textStyle} />
+                                        <label className="text-xs" style={textMutedStyle}>Zoom Level</label>
+                                    </div>
+                                    <span className="text-xs font-mono tabular-nums" style={textStyle}>{zoomSlider.value}%</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={zoomSlider.decrement} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
+                                        <Minus className="w-4 h-4" style={textStyle} />
+                                    </button>
+                                    <input
+                                        type="range" min="50" max="300" step="10"
+                                        value={zoomSlider.value}
+                                        onChange={zoomSlider.handleChange}
+                                        className="flex-1 h-1 rounded-full"
+                                        style={{ accentColor: 'var(--reader-fg)' }}
+                                    />
+                                    <button onClick={zoomSlider.increment} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
+                                        <Plus className="w-4 h-4" style={textStyle} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Quick Zoom Presets */}
+                            <div className="space-y-2">
+                                <label className="text-xs" style={textMutedStyle}>Presets</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[
+                                        { id: 'fit-width', label: 'Fit Width', value: 100 },
+                                        { id: 'fit-page', label: 'Fit Page', value: 100 },
+                                        { id: 'actual', label: '100%', value: 100 },
+                                        { id: '125', label: '125%', value: 125 },
+                                        { id: '150', label: '150%', value: 150 },
+                                        { id: '200', label: '200%', value: 200 },
+                                    ].map((preset) => (
+                                        <button
+                                            key={preset.id}
+                                            onClick={() => onUpdate({ zoom: preset.value })}
+                                            className={cn(
+                                                'py-2 rounded-lg text-xs transition-all border',
+                                                settings.zoom === preset.value
+                                                    ? 'opacity-100'
+                                                    : 'opacity-40 hover:opacity-70'
+                                            )}
+                                            style={{
+                                                backgroundColor: settings.zoom === preset.value
+                                                    ? 'color-mix(in srgb, var(--reader-fg) 15%, transparent)'
+                                                    : 'transparent',
+                                                borderColor: 'color-mix(in srgb, var(--reader-fg) 15%, transparent)',
+                                                color: 'var(--reader-fg)',
+                                            }}
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Note about fixed layout */}
+                            <div className="p-3 rounded-lg text-xs" style={surfaceStyle}>
+                                <p style={textMutedStyle}>
+                                    This document has a fixed layout. Zoom controls replace text size options for PDFs and comics.
+                                </p>
+                            </div>
                         </div>
                     )}
 

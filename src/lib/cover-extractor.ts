@@ -1,10 +1,11 @@
 /**
  * Cover & Metadata Extraction Utility
- * Extracts book cover images and metadata using foliate-js
+ * Extracts book cover images and metadata using foliate-js or PDFEngine
  */
 
 import type { BookFormat } from "@/types";
 import { saveCoverImage } from "./storage";
+import { PDFEngine } from "../engines/pdf/pdf-engine";
 
 /**
  * Extracted metadata from a book file
@@ -50,7 +51,7 @@ function formatLanguageMap(x: unknown): string {
 
 /**
  * Extract cover and metadata from a book file
- * Uses foliate-js to open the book and extract information
+ * Uses PDFEngine for PDFs, foliate-js for other formats
  * 
  * @param data - Book file as ArrayBuffer
  * @param filename - Original filename (used to detect format)
@@ -68,12 +69,64 @@ export async function extractBookMetadata(
     };
 
     try {
-        // Import foliate-js makeBook
+        const ext = filename.toLowerCase().split(".").pop() || "epub";
+        const mimeType = getMimeType(ext);
+
+        // Special handling for PDFs using our internal PDFEngine
+        if (mimeType === "application/pdf") {
+            const engine = new PDFEngine();
+            const file = new Blob([data], { type: mimeType });
+
+            try {
+                console.log("[CoverExtractor] Loading PDF with PDFEngine...");
+                const doc = await engine.loadDocument(file);
+                
+                // Extract metadata
+                if (doc.metadata) {
+                    result.title = doc.metadata.title || filename.replace(/\.[^/.]+$/, "");
+                    result.author = doc.metadata.author || "";
+                    result.description = doc.metadata.description || undefined;
+                    result.publisher = doc.metadata.publisher || undefined;
+                    result.language = doc.metadata.language || undefined;
+                    result.identifier = doc.metadata.identifier || undefined;
+                }
+
+                // Render first page as cover
+                try {
+                    console.log("[CoverExtractor] Rendering PDF page 1 as cover...");
+                    // Render page 1 at moderate scale for cover
+                    const coverBlob = await engine.renderToBlob(1, 1.0);
+                    
+                    if (coverBlob && coverBlob.size > 0) {
+                        console.log("[CoverExtractor] PDF Cover blob extracted, size:", coverBlob.size);
+                        
+                        if (bookId) {
+                            result.coverDataUrl = await saveCoverImage(bookId, coverBlob);
+                        } else {
+                            result.coverDataUrl = await blobToDataUrl(coverBlob);
+                        }
+                    }
+                } catch (coverError) {
+                    console.warn("[CoverExtractor] Failed to extract PDF cover:", coverError);
+                }
+
+            } finally {
+                await engine.destroy();
+            }
+
+            console.log("[CoverExtractor] Extracted PDF metadata:", {
+                title: result.title,
+                author: result.author,
+                hasCover: !!result.coverDataUrl,
+            });
+
+            return result;
+        }
+
+        // Import foliate-js makeBook for non-PDF formats
         const { makeBook } = await import("../foliate-js/view.js");
 
         // Create a File object from the ArrayBuffer
-        const ext = filename.toLowerCase().split(".").pop() || "epub";
-        const mimeType = getMimeType(ext);
         const file = new File([data], filename, { type: mimeType });
 
         // Open the book with foliate-js
@@ -144,10 +197,32 @@ export async function extractCoverOnly(
     bookId: string
 ): Promise<string | null> {
     try {
-        const { makeBook } = await import("../foliate-js/view.js");
-
         const ext = filename.toLowerCase().split(".").pop() || "epub";
         const mimeType = getMimeType(ext);
+
+        // Special handling for PDFs using our internal PDFEngine
+        if (mimeType === "application/pdf") {
+            const engine = new PDFEngine();
+            const file = new Blob([data], { type: mimeType });
+            let coverDataUrl: string | null = null;
+
+            try {
+                await engine.loadDocument(file);
+                
+                // Render first page as cover
+                const coverBlob = await engine.renderToBlob(1, 1.0);
+                
+                if (coverBlob && coverBlob.size > 0) {
+                    coverDataUrl = await saveCoverImage(bookId, coverBlob);
+                }
+            } finally {
+                await engine.destroy();
+            }
+
+            return coverDataUrl;
+        }
+
+        const { makeBook } = await import("../foliate-js/view.js");
         const file = new File([data], filename, { type: mimeType });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

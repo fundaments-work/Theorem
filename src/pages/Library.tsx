@@ -14,6 +14,7 @@ import {
     ChevronDown, Star, X, ArrowUpDown
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "@/types";
+import { FORMAT_DISPLAY_NAMES } from "@/types";
 import { isTauri } from "@/lib/env";
 import { getBookData } from "@/lib/storage";
 import { extractBookMetadata } from "@/lib/cover-extractor";
@@ -246,7 +247,7 @@ function BookCard({
                                     <span className="text-[10px] text-[var(--color-text-muted)]">{book.rating}</span>
                                 </div>
                             )}
-                            <span className="text-[10px] text-[var(--color-text-muted)] uppercase">{book.format}</span>
+                            <span className="text-[10px] text-[var(--color-text-muted)] uppercase">{FORMAT_DISPLAY_NAMES[book.format] || book.format}</span>
                         </div>
                     </div>
 
@@ -453,7 +454,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                             )}
                             <div>
                                 <p className="text-xs text-[var(--color-text-muted)] uppercase">Format</p>
-                                <p className="text-sm text-[var(--color-text-secondary)] uppercase">{book.format}</p>
+                                <p className="text-sm text-[var(--color-text-secondary)] uppercase">{FORMAT_DISPLAY_NAMES[book.format] || book.format}</p>
                             </div>
                             <div>
                                 <p className="text-xs text-[var(--color-text-muted)] uppercase">Size</p>

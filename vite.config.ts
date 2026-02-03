@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "url";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
@@ -14,22 +13,28 @@ export default defineConfig(async () => ({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
-  
-  // Exclude foliate-js PDF module (we only need EPUB support)
+
+  // Optimize dependencies for faster dev server startup
   optimizeDeps: {
-    exclude: ['src/foliate-js/pdf.js', 'src/foliate-js/vendor'],
-  },
-  build: {
-    rollupOptions: {
-      external: [/src\/foliate-js\/pdf\.js/, /src\/foliate-js\/vendor/],
-    },
+    exclude: [
+      // Foliate-js handles its own imports
+      'src/foliate-js/mobi.js',
+      'src/foliate-js/fb2.js',
+      'src/foliate-js/comic-book.js',
+      'src/foliate-js/view.js',
+    ],
+    include: [
+      // Include pdfjs-dist for pre-bundling
+      'pdfjs-dist',
+    ],
   },
 
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent Vite from obscuring rust errors
-  clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
+  // Build configuration
+  build: {
+    assetsInlineLimit: 0,
+  },
+
+  // Server configuration
   server: {
     port: 1420,
     strictPort: true,
@@ -42,8 +47,14 @@ export default defineConfig(async () => ({
       }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
+    // Allow serving files from node_modules for pdfjs-dist
+    fs: {
+      allow: ['..', './node_modules/pdfjs-dist'],
+    },
   },
+
+  // Prevent Vite from obscuring rust errors
+  clearScreen: false,
 }));

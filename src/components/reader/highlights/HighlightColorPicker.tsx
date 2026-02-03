@@ -110,7 +110,14 @@ export function HighlightColorPicker({
     onDelete,
     onClose,
 }: HighlightColorPickerProps) {
-    console.debug('[HighlightColorPicker] RENDER: isOpen=', isOpen, 'onDelete=', typeof onDelete, 'currentColor=', currentColor);
+    // Only render if open or closing animation is active
+    // This optimization prevents any DOM work when closed
+    if (!isOpen) return null;
+
+    if (process.env.NODE_ENV === 'development') {
+        console.debug('[HighlightColorPicker] RENDER: isOpen=', isOpen, 'onDelete=', typeof onDelete, 'currentColor=', currentColor);
+    }
+
     const popupRef = useRef<HTMLDivElement>(null);
     const [adjustedPosition, setAdjustedPosition] = useState(position);
     const [isClosing, setIsClosing] = useState(false);
@@ -127,6 +134,7 @@ export function HighlightColorPicker({
 
     // Position calculation with viewport boundary detection
     useEffect(() => {
+        // Skip calculation if not open
         if (!isOpen) {
             setIsClosing(false);
             return;
@@ -286,7 +294,8 @@ export function HighlightColorPicker({
         };
     }, [isOpen, handleClose]);
 
-    if (!isOpen) return null;
+    // Final safety check - redundant with early return but good for clarity
+
 
     return (
         <>

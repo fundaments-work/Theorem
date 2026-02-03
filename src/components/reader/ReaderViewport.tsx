@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useMemo, useState } from 'react';
 import { useDocumentReader } from '@/hooks';
-import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation } from '@/types';
+import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, BookFormat } from '@/types';
 import type { ReaderSettings } from '@/types';
 import { cn } from '@/lib/utils';
 import { getSettingsChanges } from '@/lib/reader-styles';
@@ -34,6 +34,7 @@ export interface ReaderViewportHandle {
 interface ReaderViewportProps {
     file: File | Blob | null;
     settings: ReaderSettings;
+    format?: BookFormat;
     className?: string;
     onReady?: (metadata: DocMetadata, toc: TocItem[]) => void;
     onLocationChange?: (location: DocLocation) => void;
@@ -47,6 +48,7 @@ interface ReaderViewportProps {
 export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportProps>(({
     file,
     settings,
+    format = 'epub',
     className,
     onReady,
     onLocationChange,
@@ -160,7 +162,8 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                     savedLocations,
                     settings.flow,
                     settings.zoom,
-                    settings.margins
+                    settings.margins,
+                    format
                 );
                 
                 if (!cancelled) {

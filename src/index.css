@@ -479,3 +479,347 @@ foliate-view * {
 /* Border colors using CSS variables */
 .border-theme { border-color: var(--color-border); }
 .border-theme-subtle { border-color: var(--color-border-subtle); }
+
+
+/* ===============================
+   PDF TEXT LAYER
+   =============================== */
+
+.textLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 1;
+    line-height: 1;
+    -webkit-text-size-adjust: none;
+    -moz-text-size-adjust: none;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    z-index: 2;
+}
+
+.textLayer span,
+.textLayer br {
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+    color: transparent;
+}
+
+/* Text selection highlight */
+.textLayer ::selection {
+    background: rgba(0, 132, 255, 0.4) !important;
+    color: transparent;
+}
+
+/* Search highlight */
+.textLayer .highlight {
+    background-color: rgba(255, 235, 59, 0.4);
+    border-radius: 2px;
+}
+
+.textLayer .highlight.selected {
+    background-color: rgba(255, 152, 0, 0.6);
+}
+
+/* End of content marker for text selection */
+.textLayer .endOfContent {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 100%;
+    right: 0;
+    bottom: 0;
+    z-index: -1;
+    cursor: default;
+    user-select: none;
+}
+
+.textLayer.selecting .endOfContent {
+    top: 0;
+}
+
+/* ===============================
+   PDF ANNOTATION LAYER
+   =============================== */
+
+.annotationLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: auto;
+    transform-origin: 0 0;
+    z-index: 3;
+}
+
+.annotationLayer section {
+    position: absolute;
+    text-align: initial;
+    pointer-events: auto;
+    box-sizing: border-box;
+    transform-origin: 0 0;
+}
+
+.annotationLayer canvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+/* Links */
+.annotationLayer a {
+    display: block;
+    height: 100%;
+    width: 100%;
+    text-decoration: none;
+    color: inherit;
+}
+
+.annotationLayer a:hover {
+    opacity: 0.8;
+}
+
+/* Form fields */
+.annotationLayer input,
+.annotationLayer textarea,
+.annotationLayer select {
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+    box-sizing: border-box;
+    font: message-box;
+    font-size: 12px;
+    padding: 2px 4px;
+    cursor: text;
+    outline: none;
+}
+
+.annotationLayer input:focus,
+.annotationLayer textarea:focus,
+.annotationLayer select:focus {
+    border-color: #0066cc;
+}
+
+.annotationLayer input[type="checkbox"],
+.annotationLayer input[type="radio"] {
+    width: auto;
+    height: auto;
+    cursor: pointer;
+}
+
+/* Button widget */
+.annotationLayer button {
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+    cursor: pointer;
+    font: message-box;
+    font-size: 12px;
+    padding: 4px 8px;
+}
+
+.annotationLayer button:hover {
+    background-color: rgba(255, 255, 255, 1);
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Popup annotation */
+.annotationLayer .popupAnnotation {
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    padding: 8px;
+    font: message-box;
+    font-size: 12px;
+    z-index: 100;
+    max-width: 300px;
+    pointer-events: auto;
+}
+
+.annotationLayer .popupAnnotation.hidden {
+    display: none;
+}
+
+/* Highlight annotation */
+.annotationLayer .highlightAnnotation {
+    background-color: rgba(255, 255, 0, 0.3);
+    cursor: pointer;
+}
+
+.annotationLayer .highlightAnnotation:hover {
+    background-color: rgba(255, 255, 0, 0.5);
+}
+
+/* Text annotation (sticky note) */
+.annotationLayer .textAnnotation {
+    background-color: rgba(255, 255, 0, 0.8);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.annotationLayer .textAnnotation:hover {
+    background-color: rgba(255, 255, 0, 1);
+}
+
+/* ===============================
+   PDF PAGE CONTAINER
+   =============================== */
+
+.pdf-page-canvas {
+    display: block;
+    margin: 0 auto;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background: white;
+}
+
+/* Dark theme PDF adjustments */
+.theme-dark .pdf-page-canvas {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ===============================
+   PROFESSIONAL PDF VIEWER STYLES
+   =============================== */
+
+/* Professional PDF Viewer Container */
+.pro-pdf-viewer {
+    contain: layout style paint;
+    will-change: scroll-position;
+}
+
+/* Page Container */
+.page-container {
+    position: relative;
+    background: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin: 1rem auto;
+}
+
+/* Text Layer - For text selection */
+.textLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 0.2;
+    line-height: 1;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+.textLayer span,
+.textLayer br {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+    user-select: text;
+}
+
+/* Improve text selection appearance */
+.textLayer ::selection {
+    background: rgba(0, 100, 200, 0.3);
+    color: transparent;
+}
+
+/* Text layer highlight for search */
+.textLayer .highlight {
+    background-color: rgba(255, 255, 0, 0.4);
+    border-radius: 2px;
+}
+
+.textLayer .highlight.selected {
+    background-color: rgba(255, 102, 0, 0.5);
+}
+
+/* Loading placeholder for pages */
+.page-placeholder {
+    background: linear-gradient(
+        135deg,
+        var(--color-surface) 0%,
+        var(--color-border-subtle) 50%,
+        var(--color-surface) 100%
+    );
+    background-size: 200% 200%;
+    animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Smooth page transitions */
+.pdf-page-wrapper {
+    transition: opacity 0.2s ease-out;
+}
+
+.pdf-page-wrapper.rendering {
+    opacity: 0.5;
+}
+
+.pdf-page-wrapper.rendered {
+    opacity: 1;
+}
+
+/* Canvas optimization */
+canvas.pdf-canvas {
+    display: block;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
+/* HiDPI Canvas scaling */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    canvas.pdf-canvas {
+        image-rendering: auto;
+    }
+}
+
+/* Dark theme PDF adjustments */
+.theme-dark .page-container {
+    background: #1a1a1a;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.theme-dark .textLayer {
+    opacity: 0.3;
+}
+
+/* Sepia theme PDF adjustments */
+.theme-sepia .page-container {
+    background: #f4ecd8;
+}
+
+/* Scrollbar optimization for PDF viewer */
+.pro-pdf-viewer::-webkit-scrollbar {
+    width: 8px;
+}
+
+.pro-pdf-viewer::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.pro-pdf-viewer::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 4px;
+}
+
+.pro-pdf-viewer::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-muted);
+}

@@ -15,6 +15,7 @@ import type {
     ReadingFlow,
     PageLayout,
     ThemeSettings,
+    BookFormat,
 } from '@/types';
 
 export interface UseDocumentReaderOptions {
@@ -41,7 +42,7 @@ export interface UseDocumentReaderReturn {
     canGoForward: boolean;
 
     // Actions
-    open: (source: File | Blob | ArrayBuffer | string, filename?: string, initialLocation?: string, layout?: PageLayout, savedLocations?: string, flow?: ReadingFlow, zoom?: number, margins?: number) => Promise<void>;
+    open: (source: File | Blob | ArrayBuffer | string, filename?: string, initialLocation?: string, layout?: PageLayout, savedLocations?: string, flow?: ReadingFlow, zoom?: number, margins?: number, format?: BookFormat) => Promise<void>;
     goTo: (target: string | number) => Promise<void>;
     goToFraction: (fraction: number) => Promise<void>;
     next: (distance?: number) => Promise<void>;
@@ -237,7 +238,8 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         savedLocations?: string,
         flow: ReadingFlow = 'paged',
         zoom: number = 100,
-        margins: number = 10
+        margins: number = 10,
+        format: BookFormat = 'epub'
     ) => {
         const engine = engineRef.current;
         if (!engine) {
@@ -262,7 +264,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         setError(null);
 
         try {
-            await engine.open(source, filename, initialLocation, layout, savedLocations, flow, zoom, margins);
+            await engine.open(source, filename, initialLocation, layout, savedLocations, flow, zoom, margins, format);
             if (!abortController.signal.aborted && mountedRef.current) {
                 setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
             }
