@@ -1,18 +1,19 @@
-# Lion Reader - Vision & Roadmap
+# Velocity - Vision & Roadmap
 
-> A powerful, unified reading platform for books, documents, articles, and web content with advanced annotation, learning, and knowledge management features.
+> A powerful, unified reading platform for books, documents, articles, academic papers, and web content with advanced annotation, learning, and speed reading features.
 
 ---
 
 ## Core Philosophy
 
-**"Read everything in one place, capture knowledge effortlessly, review and retain forever."**
+**"Read at the speed of thought. Absorb, retain, and master knowledge faster than ever before."**
 
-Lion Reader aims to be the ultimate reading companion that:
-- Unifies all reading formats (EPUB, PDF, RSS, Web)
+Velocity is the ultimate reading companion that:
+- Unifies all reading formats (EPUB, PDF, RSS, Web, Academic Papers)
+- Features revolutionary Velocity Mode for speed reading up to 2000 WPM
 - Makes annotation and knowledge capture seamless
 - Helps users learn and retain through spaced repetition and reviews
-- Integrates with existing knowledge management tools (Obsidian)
+- Integrates with existing knowledge management tools (Obsidian, Zotero)
 - Works across devices with sync capabilities
 
 ---
@@ -292,6 +293,110 @@ Lion Reader aims to be the ultimate reading companion that:
 
 ---
 
+## Phase 6.5: Velocity Mode 🚀 (Speed Reading) (Priority: HIGH)
+
+**"Read at the speed of thought"**
+
+Revolutionary RSVP (Rapid Serial Visual Presentation) speed reading mode allowing users to read at 50-2000 WPM.
+
+### 6.5.1 Core Velocity Engine
+- [ ] RSVP display: One word at a time, centered
+- [ ] Optimal Recognition Point (ORP) highlighting
+  - Words 1-3 chars: middle character highlighted
+  - Words 4+ chars: character at 35% position
+  - Red pivot character for eye fixation
+- [ ] Speed control: 50-2000 WPM adjustable
+- [ ] Smooth 60fps word transitions
+- [ ] Three-column layout: [left text] [red pivot] [right text]
+
+### 6.5.2 Velocity Controls
+- [ ] Play/Pause with spacebar
+- [ ] Progress slider with word count
+- [ ] Direct WPM input field
+- [ ] Skip forward/back ±10 words (arrow keys)
+- [ ] Speed adjustment ±50 WPM (up/down arrows)
+- [ ] Fullscreen mode (F key)
+- [ ] Time remaining display
+- [ ] Progress percentage
+
+### 6.5.3 Smart Reading Features
+- [ ] Auto-pause at paragraph breaks
+- [ ] Context preview: Show 3 words before/after
+- [ ] Chunking: Group short words ("in the", "of a")
+- [ ] Long word handling: Slight pause for >12 chars
+- [ ] Punctuation pauses: Longer delays for periods/commas
+
+### 6.5.4 AI Enhancement (Optional)
+- [ ] Summarize before reading (3-5 bullet points)
+- [ ] Simplify complex text mode
+- [ ] Highlight key terms in red
+- [ ] Smart chunking with AI
+
+### 6.5.5 Integration
+- [ ] Velocity button in reader toolbar
+- [ ] Works with EPUB, PDF, Web articles
+- [ ] Preserves highlights when switching modes
+- [ ] Reading stats tracking in Velocity mode
+- [ ] Cyberpunk/minimalist dark theme
+- [ ] Keyboard shortcuts: Space, Arrows, F, R, Esc
+
+---
+
+## Phase 8: Archive Support 📚 (Academic Papers) (Priority: MEDIUM-HIGH)
+
+**"Your personal research library"**
+
+Support for academic papers and research from arXiv, PubMed, IEEE, ACM, and other repositories.
+
+### 8.1 Archive Integration
+- [ ] arXiv API integration (search & download)
+- [ ] PubMed/PubMed Central integration
+- [ ] IEEE Xplore API support
+- [ ] ACM Digital Library support
+- [ ] DOI resolution (Crossref API)
+- [ ] Semantic Scholar API for metadata
+- [ ] PDF download from repositories
+- [ ] Batch import from BibTeX/RIS files
+
+### 8.2 Paper Metadata & Organization
+- [ ] Extended metadata: DOI, journal, conference, citations
+- [ ] Author affiliations and ORCID
+- [ ] Keywords and subject categories
+- [ ] Abstract extraction
+- [ ] Publication date and volume/issue
+- [ ] Citation count and impact metrics
+- [ ] Smart categorization by subject
+- [ ] Tag suggestions from keywords
+
+### 8.3 Paper-Specific Reader Features
+- [ ] Section navigation: Abstract, Intro, Methods, Results, Discussion
+- [ ] Figure and table navigation panel
+- [ ] Citation extraction and linking
+- [ ] Reference list with click-to-view
+- [ ] Equation rendering (MathJax)
+- [ ] Two-column layout optimization
+- [ ] Margin notes for side comments
+- [ ] Color-coded highlights by section
+
+### 8.4 Reference Management
+- [ ] Zotero integration (import/export)
+- [ ] Mendeley support
+- [ ] Citation export (BibTeX, RIS, EndNote)
+- [ ] Reference deduplication
+- [ ] Citation key generation
+- [ ] Bibliography export for papers
+
+### 8.5 Research Features
+- [ ] Paper recommendation engine
+- [ ] Related papers discovery
+- [ ] Citation network visualization
+- [ ] Reading list for research projects
+- [ ] Annotation summary by paper
+- [ ] Export notes for literature review
+- [ ] Collaboration features (shared annotations)
+
+---
+
 ## Phase 7: Sync & Cross-Platform (Priority: LAST)
 
 ### 7.1 Sync Infrastructure
@@ -420,7 +525,7 @@ The reader must be format-agnostic and consistent across all content types:
 interface Annotation {
   id: string;
   documentId: string;
-  documentType: 'epub' | 'pdf' | 'rss' | 'web' | 'newsletter';
+  documentType: 'epub' | 'pdf' | 'rss' | 'web' | 'newsletter' | 'paper';
   type: 'highlight' | 'note' | 'bookmark' | 'vocabulary';
   
   // Format-specific location
@@ -473,6 +578,8 @@ interface Annotation {
 - **Web Clipper:** Browser extension (Plasmo framework)
 - **Newsletter:** Mail parsing (mail-parser crate in Rust)
 - **TTS:** Web Speech API + optional cloud providers
+- **Velocity Mode:** RSVP algorithm with ORP calculation, setInterval timing, CSS Grid centering
+- **Archive Support:** arXiv API, Crossref API, Semantic Scholar API, MathJax for equations, BibTeX/RIS parsers
 - **Sync:** SQLite (local) + REST API + optional self-hosted server
 
 ---
@@ -513,13 +620,26 @@ interface Annotation {
 1. Web Speech API integration
 2. TTS controls in reader
 
-### Sprint 14-16: Sync (6 weeks)
+### Sprint 14-16: Velocity Mode (6 weeks)
+1. RSVP engine with ORP calculation
+2. Speed controls and keyboard shortcuts
+3. UI/UX polish and fullscreen mode
+4. AI enhancement (summarize/simplify)
+5. Integration with existing reader
+
+### Sprint 17-20: Archive Support (4 weeks)
+1. arXiv and PubMed API integration
+2. Paper metadata extraction
+3. Paper-specific reader UI
+4. Reference management integration
+
+### Sprint 21-23: Sync (6 weeks)
 1. User accounts
 2. Self-hosted server
 3. Cloud service
 4. Mobile apps preparation
 
-**Total: ~32 weeks (8 months) for full feature set**
+**Total: ~40 weeks (10 months) for full feature set**
 
 ---
 
@@ -531,14 +651,17 @@ interface Annotation {
 - Basic RSS reader
 - Web clipper (Chrome/Firefox)
 - Obsidian export
+- **Velocity Mode** (speed reading at 50-1000 WPM)
 
 **Nice to have for MVP:**
 - Offline dictionary
 - Vocabulary SRS
 - Newsletter support
+- Archive support (arXiv integration)
 
 **Post-MVP:**
 - TTS
+- Full Archive support (all repositories)
 - Sync
 - Mobile apps
 - Public API
@@ -554,6 +677,10 @@ interface Annotation {
 - [ ] RSS: Support 100+ feeds
 - [ ] Web Clipper: One-click save in <3 seconds
 - [ ] Vocabulary: Effective retention tracking
+- [ ] **Velocity: 60fps word display at 1000+ WPM**
+- [ ] **Velocity: <100ms response time for controls**
+- [ ] **Archive: <3 seconds paper metadata extraction**
+- [ ] **Archive: 90%+ accurate citation parsing**
 
 ---
 
@@ -580,4 +707,6 @@ interface Annotation {
 
 ---
 
-*Ready to start with Phase 1: PDF Support using react-pdf?*
+*"The future belongs to those who learn more skills and combine them in creative ways." - Velocity will be your creative reading companion.*
+
+**Ready to build the future of reading? Let's make it happen at Velocity! 🚀**
