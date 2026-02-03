@@ -1,5 +1,12 @@
 /**
- * PDFViewer - Optimized PDF rendering with text layer support
+ * PDFViewer - Optimized PDF rendering with smooth zoom and native-like text selection
+ * 
+ * Architecture based on research of Obsidian and Mozilla's PDF.js implementation:
+ * 1. Wrapper container holds both canvas and text layer
+ * 2. CSS transform scale applied to wrapper for smooth zoom (not canvas directly)
+ * 3. GPU-accelerated transforms during zoom gesture
+ * 4. Re-render after gesture completes
+ * 5. Improved text layer with proper CSS for native-like selection
  */
 
 import React, {
@@ -13,7 +20,6 @@ import React, {
 } from "react";
 import { cn } from "@/lib/utils";
 import { usePDF } from "@/hooks/usePDF";
-import { VirtualScroller, type ViewportState } from "@/engines/pdf/virtual-scroller";
 import type { DocMetadata, DocLocation, TocItem } from "@/types";
 import type { TextLayerItem } from "@/engines/pdf";
 
@@ -46,7 +52,7 @@ export interface PDFViewerHandle {
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 5.0;
 const SCALE_STEP = 0.25;
-const SCROLL_THROTTLE_MS = 250;
+const ZOOM_DEBOUNCE_MS = 150; // Time to wait before committing zoom
 
 function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
@@ -60,55 +66,84 @@ function parsePageFromLocation(location?: string): number | null {
     return isFinite(page) && page > 0 ? page : null;
 }
 
-// Text Layer Component - for text selection
+// ============================================
+// TEXT LAYER - Improved for native-like selection
+// ============================================
+
 interface TextLayerProps {
     textItems: TextLayerItem[];
     scale: number;
 }
 
+/**
+ * Improved TextLayer with better selection behavior
+ * Based on PDF.js best practices and Obsidian's approach
+ */
 const TextLayer = memo(function TextLayer({ textItems, scale }: TextLayerProps) {
     return (
         <div
             className="textLayer"
             style={{
                 position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
+                inset: 0,
                 overflow: "hidden",
-                pointerEvents: "none",
+                // Critical: opacity 0.2 for debugging, 0 for production
+                opacity: 1,
+                // CSS custom property for scale factor (used by child spans)
+                // @ts-ignore - CSS custom property
+                '--scale-factor': scale,
             }}
         >
-            {textItems.map((item, index) => (
-                <span
-                    key={index}
-                    style={{
-                        position: "absolute",
-                        left: `${item.left * scale}px`,
-                        top: `${item.top * scale}px`,
-                        fontSize: `${item.fontSize * scale}px`,
-                        fontFamily: item.fontFamily || 'sans-serif',
-                        lineHeight: 1,
-                        whiteSpace: "pre",
-                        color: "transparent",
-                        cursor: "text",
-                        pointerEvents: "auto",
-                        userSelect: "text",
-                        WebkitUserSelect: "text",
-                    }}
-                >
-                    {item.text}
-                </span>
-            ))}
+            {textItems.map((item, index) => {
+                // Apply transform for positioning (more accurate than left/top)
+                const transform = `scale(${scale}) translate(${item.left}px, ${item.top}px)`;
+                
+                return (
+                    <span
+                        key={index}
+                        style={{
+                            position: "absolute",
+                            left: 0,
+                            top: 0,
+                            // Use transform for positioning - GPU accelerated and more precise
+                            transform: `translate(${item.left * scale}px, ${item.top * scale}px)`,
+                            transformOrigin: "0 0",
+                            fontSize: `${item.fontSize * scale}px`,
+                            fontFamily: item.fontFamily || 'sans-serif',
+                            // Line height to match PDF
+                            lineHeight: 1,
+                            whiteSpace: "pre",
+                            // Transparent color but selectable
+                            color: "transparent",
+                            // Ensure text is selectable
+                            cursor: "text",
+                            userSelect: "text",
+                            WebkitUserSelect: "text",
+                            // Pointer events must be auto for selection to work
+                            pointerEvents: "auto",
+                            // Extend height slightly to cover gaps between lines
+                            // This prevents selection from jumping
+                            paddingBottom: "0.1em",
+                            // Ensure proper z-index
+                            zIndex: 1,
+                        }}
+                    >
+                        {item.text}
+                    </span>
+                );
+            })}
         </div>
     );
 });
 
-// Single page component with text layer
+// ============================================
+// PAGE COMPONENT - Wrapper architecture for smooth zoom
+// ============================================
+
 interface PDFPageProps {
     pageNumber: number;
     scale: number;
+    cssScale: number; // For CSS transform during zoom gesture
     rotation: number;
     document: any;
     renderPage: (pageNumber: number, canvas: HTMLCanvasElement, scale: number, rotation: number) => Promise<{ width: number; height: number }>;
@@ -116,9 +151,21 @@ interface PDFPageProps {
     cancelRender: (pageNumber: number) => void;
 }
 
+/**
+ * PDFPage with wrapper architecture for smooth zoom
+ * 
+ * Structure:
+ * ┌─ pageWrapper (fixed size, no transform) ─┐
+ * │  ┌─ layerContainer (CSS transform here) ─┐│
+ * │  │  ┌─ canvas ─┐ ┌─ textLayer ─┐        ││
+ * │  │  └──────────┘ └─────────────┘        ││
+ * │  └───────────────────────────────────────┘│
+ * └───────────────────────────────────────────┘
+ */
 const PDFPage = memo(function PDFPage({
     pageNumber,
     scale,
+    cssScale,
     rotation,
     document,
     renderPage,
@@ -126,12 +173,14 @@ const PDFPage = memo(function PDFPage({
     cancelRender,
 }: PDFPageProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const wrapperRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [textItems, setTextItems] = useState<TextLayerItem[]>([]);
     const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
     const isRenderingRef = useRef(false);
+    const hasTextLoadedRef = useRef(false);
 
-    // Render canvas
+    // Render canvas at actual scale
     useEffect(() => {
         if (!document || !canvasRef.current || isRenderingRef.current) return;
 
@@ -149,11 +198,6 @@ const PDFPage = memo(function PDFPage({
                 
                 if (canvasRef.current) {
                     canvasRef.current.dataset.rendered = cacheKey;
-                    
-                    if (containerRef.current) {
-                        containerRef.current.style.width = `${result.width}px`;
-                        containerRef.current.style.height = `${result.height}px`;
-                    }
                     setDimensions(result);
                 }
             } catch (err) {
@@ -172,53 +216,88 @@ const PDFPage = memo(function PDFPage({
         };
     }, [pageNumber, scale, rotation, document, renderPage, cancelRender]);
 
-    // Load text content once
+    // Load text content once per page
     useEffect(() => {
-        if (!document) return;
+        if (!document || hasTextLoadedRef.current) return;
 
         getTextContent(pageNumber).then(items => {
             if (items.length > 0) {
                 setTextItems(items);
+                hasTextLoadedRef.current = true;
             }
         }).catch(err => {
             console.warn(`Failed to load text content for page ${pageNumber}:`, err);
         });
     }, [pageNumber, document, getTextContent]);
 
+    // Calculate CSS transform for smooth zoom
+    // When cssScale differs from 1, we're in a zoom gesture
+    const containerTransform = cssScale !== 1 
+        ? `scale(${cssScale})` 
+        : 'none';
+
     return (
         <div
-            ref={containerRef}
+            ref={wrapperRef}
             data-page-number={pageNumber}
-            className="page"
+            className="pdf-page-wrapper"
             style={{
                 position: "relative",
                 margin: "10px auto",
+                // Fixed dimensions based on rendered size
+                width: dimensions ? `${dimensions.width}px` : 'auto',
+                height: dimensions ? `${dimensions.height}px` : 'auto',
+                // Minimum dimensions while loading
+                minWidth: dimensions ? undefined : '200px',
+                minHeight: dimensions ? undefined : '200px',
                 backgroundColor: "white",
                 boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-                overflow: "hidden",
+                // Ensure wrapper doesn't transform
+                transform: 'none',
             }}
         >
-            <canvas
-                ref={canvasRef}
+            {/* Layer container - CSS transform applied here for smooth zoom */}
+            <div
+                ref={containerRef}
+                className="pdf-layer-container"
                 style={{
-                    display: "block",
-                    width: "100%",
-                    height: "100%",
+                    position: "absolute",
+                    inset: 0,
+                    transform: containerTransform,
+                    transformOrigin: "center center",
+                    // GPU acceleration
+                    willChange: cssScale !== 1 ? 'transform' : 'auto',
+                    transition: cssScale !== 1 ? 'none' : 'transform 0.1s ease-out',
                 }}
-            />
-            {dimensions && textItems.length > 0 && (
-                <TextLayer textItems={textItems} scale={scale} />
-            )}
+            >
+                <canvas
+                    ref={canvasRef}
+                    style={{
+                        display: "block",
+                        width: "100%",
+                        height: "100%",
+                    }}
+                />
+                {textItems.length > 0 && (
+                    <TextLayer textItems={textItems} scale={scale} />
+                )}
+            </div>
         </div>
     );
 }, (prevProps, nextProps) => {
+    // Custom comparison for memo
     return (
         prevProps.pageNumber === nextProps.pageNumber &&
         prevProps.scale === nextProps.scale &&
+        prevProps.cssScale === nextProps.cssScale &&
         prevProps.rotation === nextProps.rotation &&
         prevProps.document === nextProps.document
     );
 });
+
+// ============================================
+// MAIN VIEWER COMPONENT
+// ============================================
 
 export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
     ({
@@ -238,7 +317,6 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
         const mountedRef = useRef(true);
         const scrollTimeoutRef = useRef<number | null>(null);
         const lastPageRef = useRef<number>(1);
-        const isScrollingRef = useRef(false);
         const isProgrammaticScrollRef = useRef(false);
 
         const currentPageRef = useRef(clamp(initialPage, 1, 10000));
@@ -248,6 +326,12 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
 
         const [currentPage, setCurrentPage] = useState(currentPageRef.current);
         const [scale, setScale] = useState(scaleRef.current);
+        
+        // CSS scale for smooth zoom transitions
+        const [cssScale, setCssScale] = useState(1);
+        const isZoomingRef = useRef(false);
+        const zoomCommitTimeoutRef = useRef<number | null>(null);
+        const targetScaleRef = useRef(scale);
 
         const { isLoading, loadProgress, error, document, loadDocument, renderPage, getTextContent, getPageDimensions, cancelRender } = usePDF();
 
@@ -266,6 +350,7 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
             setCurrentPage(1);
             scaleRef.current = initialScale;
             setScale(initialScale);
+            setCssScale(1);
 
             loadDocument(file).catch((err) => {
                 if (mountedRef.current) {
@@ -287,9 +372,11 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
                 if (dims) {
                     const containerWidth = containerRef.current.clientWidth - 40;
                     if (dims.width > containerWidth) {
-                        scaleRef.current = clamp(containerWidth / dims.width, MIN_SCALE, MAX_SCALE);
-                        setScale(scaleRef.current);
-                        onZoomChange?.(scaleRef.current);
+                        const newScale = clamp(containerWidth / dims.width, MIN_SCALE, MAX_SCALE);
+                        scaleRef.current = newScale;
+                        targetScaleRef.current = newScale;
+                        setScale(newScale);
+                        onZoomChange?.(newScale);
                     }
                 }
 
@@ -382,11 +469,10 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
 
             let rafId: number | null = null;
             let lastUpdateTime = 0;
+            const SCROLL_THROTTLE_MS = 100;
 
             const handleScroll = () => {
                 if (isProgrammaticScrollRef.current) return;
-                
-                isScrollingRef.current = true;
                 
                 if (scrollTimeoutRef.current) {
                     window.clearTimeout(scrollTimeoutRef.current);
@@ -408,7 +494,7 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
                 }
 
                 scrollTimeoutRef.current = window.setTimeout(() => {
-                    isScrollingRef.current = false;
+                    // Scroll settled
                 }, SCROLL_THROTTLE_MS);
             };
 
@@ -424,42 +510,71 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
             };
         }, [updateCurrentPageFromScroll]);
 
-        const setZoomInternal = useCallback((newScale: number) => {
-            const safeScale = clamp(newScale, MIN_SCALE, MAX_SCALE);
-            if (Math.abs(safeScale - scaleRef.current) < 0.01) return;
+        /**
+         * SMOOTH ZOOM IMPLEMENTATION
+         * 
+         * Strategy:
+         * 1. Apply CSS transform to layer containers for immediate visual feedback
+         * 2. Debounce the actual re-render
+         * 3. Reset CSS transform and re-render at new scale after gesture completes
+         */
+        const commitZoom = useCallback(() => {
+            if (!isZoomingRef.current) return;
 
-            const container = containerRef.current;
-            const viewer = viewerRef.current;
-            let scrollRatio = 0;
+            const newScale = targetScaleRef.current;
             
-            if (container && viewer) {
-                const currentPageEl = viewer.querySelector(`[data-page-number="${currentPageRef.current}"]`) as HTMLElement;
-                if (currentPageEl) {
-                    const pageTop = currentPageEl.offsetTop;
-                    scrollRatio = (container.scrollTop - pageTop) / currentPageEl.offsetHeight;
-                }
-            }
-
-            scaleRef.current = safeScale;
-            setScale(safeScale);
-            onZoomChange?.(safeScale);
-
-            // Clear rendered cache to force re-render at new scale
-            setTimeout(() => {
-                if (!viewerRef.current) return;
+            // Reset CSS scale (removes the transform)
+            setCssScale(1);
+            
+            // Update actual scale (triggers re-render)
+            scaleRef.current = newScale;
+            setScale(newScale);
+            onZoomChange?.(newScale);
+            
+            // Clear canvas cache to force re-render at new scale
+            if (viewerRef.current) {
                 const canvases = viewerRef.current.querySelectorAll("canvas");
                 canvases.forEach((canvas) => {
                     canvas.dataset.rendered = "";
                 });
+            }
 
-                if (container && viewer) {
-                    const currentPageEl = viewer.querySelector(`[data-page-number="${currentPageRef.current}"]`) as HTMLElement;
-                    if (currentPageEl) {
-                        container.scrollTop = currentPageEl.offsetTop + (currentPageEl.offsetHeight * scrollRatio);
-                    }
-                }
-            }, 0);
+            isZoomingRef.current = false;
         }, [onZoomChange]);
+
+        const setZoomSmooth = useCallback((newScale: number) => {
+            const safeScale = clamp(newScale, MIN_SCALE, MAX_SCALE);
+            const currentScale = scaleRef.current;
+            
+            if (Math.abs(safeScale - currentScale) < 0.01) return;
+
+            isZoomingRef.current = true;
+            targetScaleRef.current = safeScale;
+
+            // Calculate CSS scale relative to current scale
+            const relativeScale = safeScale / currentScale;
+            setCssScale(relativeScale);
+
+            // Debounce the commit
+            if (zoomCommitTimeoutRef.current) {
+                clearTimeout(zoomCommitTimeoutRef.current);
+            }
+
+            zoomCommitTimeoutRef.current = window.setTimeout(() => {
+                commitZoom();
+            }, ZOOM_DEBOUNCE_MS);
+        }, [commitZoom]);
+
+        const setZoomImmediate = useCallback((newScale: number) => {
+            // Cancel any pending smooth zoom
+            if (zoomCommitTimeoutRef.current) {
+                clearTimeout(zoomCommitTimeoutRef.current);
+            }
+            
+            targetScaleRef.current = clamp(newScale, MIN_SCALE, MAX_SCALE);
+            setCssScale(1);
+            commitZoom();
+        }, [commitZoom]);
 
         useImperativeHandle(ref, () => ({
             goTo: (location: string) => {
@@ -474,15 +589,15 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
                 scrollToPage(page);
             },
             getCurrentPage: () => currentPageRef.current,
-            zoomIn: () => setZoomInternal(scaleRef.current + SCALE_STEP),
-            zoomOut: () => setZoomInternal(scaleRef.current - SCALE_STEP),
-            setZoom: (newScale: number) => setZoomInternal(newScale),
+            zoomIn: () => setZoomSmooth(scaleRef.current + SCALE_STEP),
+            zoomOut: () => setZoomSmooth(scaleRef.current - SCALE_STEP),
+            setZoom: (newScale: number) => setZoomImmediate(newScale),
             fitPage: () => {
                 if (!containerRef.current) return;
                 const containerHeight = containerRef.current.clientHeight - 40;
                 const dims = getPageDimensions(1);
                 if (dims) {
-                    setZoomInternal(clamp(containerHeight / dims.height, MIN_SCALE, MAX_SCALE));
+                    setZoomSmooth(clamp(containerHeight / dims.height, MIN_SCALE, MAX_SCALE));
                 }
             },
             fitWidth: () => {
@@ -490,7 +605,7 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
                 const containerWidth = containerRef.current.clientWidth - 40;
                 const dims = getPageDimensions(1);
                 if (dims) {
-                    setZoomInternal(clamp(containerWidth / dims.width, MIN_SCALE, MAX_SCALE));
+                    setZoomSmooth(clamp(containerWidth / dims.width, MIN_SCALE, MAX_SCALE));
                 }
             },
             rotate: () => {
@@ -501,8 +616,9 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
                     canvas.dataset.rendered = "";
                 });
             },
-        }), [scrollToPage, setZoomInternal, getPageDimensions]);
+        }), [scrollToPage, setZoomSmooth, setZoomImmediate, getPageDimensions, commitZoom]);
 
+        // Wheel zoom with smooth scaling
         useEffect(() => {
             const container = containerRef.current;
             if (!container) return;
@@ -511,13 +627,22 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
                 if (e.ctrlKey || e.metaKey) {
                     e.preventDefault();
                     const delta = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP;
-                    setZoomInternal(scaleRef.current + delta);
+                    setZoomSmooth(scaleRef.current + delta);
                 }
             };
 
             container.addEventListener("wheel", handleWheel, { passive: false });
             return () => container.removeEventListener("wheel", handleWheel);
-        }, [setZoomInternal]);
+        }, [setZoomSmooth]);
+
+        // Cleanup on unmount
+        useEffect(() => {
+            return () => {
+                if (zoomCommitTimeoutRef.current) {
+                    clearTimeout(zoomCommitTimeoutRef.current);
+                }
+            };
+        }, []);
 
         if (isLoading) {
             return (
@@ -583,9 +708,10 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
                 >
                     {Array.from({ length: document.numPages }, (_, i) => i + 1).map((pageNumber) => (
                         <PDFPage
-                            key={pageNumber}
+                            key={`${pageNumber}-${scale}`}
                             pageNumber={pageNumber}
                             scale={scale}
+                            cssScale={cssScale}
                             rotation={rotationRef.current}
                             document={document}
                             renderPage={renderPage}
