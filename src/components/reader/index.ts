@@ -11,7 +11,7 @@ export { ReaderSettings } from './ReaderSettings';
 export { ReaderBookmarks } from './ReaderBookmarks';
 export { ReaderSearch } from './ReaderSearch';
 export { BookInfoPopover } from './BookInfoPopover';
-export { PDFViewer, type PDFViewerProps, type PdfInfo } from './PDFViewer';
+export { PDFViewer, type PDFViewerProps, type PDFViewerHandle } from './PDFViewer';
 
 // Annotations panel (bookmarks + highlights)
 export { ReaderAnnotationsPanel } from './ReaderAnnotationsPanel';

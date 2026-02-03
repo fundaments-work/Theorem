@@ -1,12 +1,12 @@
 /**
  * Cover & Metadata Extraction Utility
- * Extracts book cover images and metadata using foliate-js or PDFium
+ * Extracts book cover images and metadata using foliate-js or PDF.js
  */
 
 import type { BookFormat } from "@/types";
 import { saveCoverImage } from "./storage";
 import { isTauri } from "./env";
-import { pdfApi } from "./pdf-api";
+import { PDFEngine } from "@/engines/pdf";
 
 /**
  * Extracted metadata from a book file
@@ -19,248 +19,13 @@ export interface ExtractedMetadata {
     language?: string;
     publishedDate?: string;
     identifier?: string;
-    coverDataUrl?: string;
+    coverDataUrl?: string | null;
 }
 
 /**
- * Format a language map (foliate-js returns objects for multi-language titles)
+ * Convert blob to data URL
  */
-function formatLanguageMap(x: unknown): string {
-    if (!x) return "";
-    if (typeof x === "string") return x;
-    if (Array.isArray(x)) {
-        // Handle array of authors/creators
-        return x
-            .map((item) => {
-                if (typeof item === "string") return item;
-                if (typeof item === "object" && item !== null) {
-                    // Handle author objects with name property
-                    const obj = item as Record<string, unknown>;
-                    return obj.name || obj.value || Object.values(obj)[0] || "";
-                }
-                return "";
-            })
-            .filter(Boolean)
-            .join(", ");
-    }
-    if (typeof x === "object" && x !== null) {
-        const keys = Object.keys(x);
-        return (x as Record<string, string>)[keys[0]] || "";
-    }
-    return String(x);
-}
-
-/**
- * Extract cover and metadata from a book file
- * Uses PDFEngine for PDFs, foliate-js for other formats
- * 
- * @param data - Book file as ArrayBuffer
- * @param filename - Original filename (used to detect format)
- * @param bookId - Book ID for saving cover to storage
- * @returns Extracted metadata including cover data URL
- */
-export async function extractBookMetadata(
-    data: ArrayBuffer,
-    filename: string,
-    bookId?: string
-): Promise<ExtractedMetadata> {
-    const result: ExtractedMetadata = {
-        title: "",
-        author: "",
-    };
-
-    try {
-        const ext = filename.toLowerCase().split(".").pop() || "epub";
-        const mimeType = getMimeType(ext);
-
-        // Handle PDFs using PDFium via Tauri
-        if (mimeType === "application/pdf") {
-            if (!isTauri()) {
-                console.log("[CoverExtractor] PDF requires Tauri environment, using filename as title");
-                result.title = filename.replace(/\.[^/.]+$/, "");
-                return result;
-            }
-
-            try {
-                const bytes = new Uint8Array(data);
-                
-                // Extract metadata
-                const pdfInfo = await pdfApi.extractMetadata(bytes);
-                result.title = pdfInfo.metadata?.title || filename.replace(/\.[^/.]+$/, "");
-                result.author = pdfInfo.metadata?.author || "";
-                
-                // Extract cover (first page thumbnail)
-                const coverDataUrl = await pdfApi.extractCover(bytes, 400);
-                
-                // Save cover if bookId is provided
-                if (bookId && coverDataUrl) {
-                    // Convert data URL to blob for storage
-                    const response = await fetch(coverDataUrl);
-                    const blob = await response.blob();
-                    result.coverDataUrl = await saveCoverImage(bookId, blob);
-                } else {
-                    result.coverDataUrl = coverDataUrl;
-                }
-                
-                console.log("[CoverExtractor] PDF metadata extracted:", {
-                    title: result.title,
-                    author: result.author,
-                    hasCover: !!result.coverDataUrl,
-                });
-                
-                return result;
-            } catch (pdfError) {
-                console.warn("[CoverExtractor] Failed to extract PDF metadata:", pdfError);
-                result.title = filename.replace(/\.[^/.]+$/, "");
-                return result;
-            }
-        }
-
-        // Import foliate-js makeBook for EPUB and other formats
-        const { makeBook } = await import("../foliate-js/view.js");
-
-        // Create a File object from the ArrayBuffer
-        const file = new File([data], filename, { type: mimeType });
-
-        // Open the book with foliate-js
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const book: any = await makeBook(file);
-
-        // Extract metadata
-        if (book.metadata) {
-            const meta = book.metadata;
-            result.title = formatLanguageMap(meta.title) || "";
-            result.author = formatLanguageMap(meta.author || meta.creator) || "";
-            result.description = formatLanguageMap(meta.description) || undefined;
-            result.publisher = formatLanguageMap(meta.publisher) || undefined;
-            result.language = formatLanguageMap(meta.language) || undefined;
-            result.publishedDate = formatLanguageMap(meta.published || meta.date) || undefined;
-            result.identifier = formatLanguageMap(meta.identifier) || undefined;
-        }
-
-        // Extract cover image
-        if (typeof book.getCover === "function") {
-            try {
-                const coverBlob = await book.getCover();
-                if (coverBlob && coverBlob.size > 0) {
-                    console.log("[CoverExtractor] Cover blob extracted, size:", coverBlob.size);
-
-                    // If we have a bookId, save to storage and return the data URL
-                    if (bookId) {
-                        result.coverDataUrl = await saveCoverImage(bookId, coverBlob);
-                    } else {
-                        // Just convert to data URL without saving
-                        result.coverDataUrl = await blobToDataUrl(coverBlob);
-                    }
-                }
-            } catch (coverError) {
-                console.warn("[CoverExtractor] Failed to extract cover:", coverError);
-            }
-        }
-
-        // Clean up
-        if (typeof book.destroy === "function") {
-            book.destroy();
-        }
-
-        console.log("[CoverExtractor] Extracted metadata:", {
-            title: result.title,
-            author: result.author,
-            hasCover: !!result.coverDataUrl,
-        });
-
-        return result;
-    } catch (error) {
-        console.error("[CoverExtractor] Failed to extract metadata:", error);
-        return result;
-    }
-}
-
-/**
- * Extract cover only (faster, for updating existing books)
- * 
- * @param data - Book file as ArrayBuffer
- * @param filename - Original filename
- * @param bookId - Book ID for saving cover
- * @returns Cover data URL or null
- */
-export async function extractCoverOnly(
-    data: ArrayBuffer,
-    filename: string,
-    bookId: string
-): Promise<string | null> {
-    try {
-        const ext = filename.toLowerCase().split(".").pop() || "epub";
-        const mimeType = getMimeType(ext);
-
-        // Handle PDFs using PDFium via Tauri
-        if (mimeType === "application/pdf") {
-            if (!isTauri()) {
-                console.log("[CoverExtractor] PDF requires Tauri environment");
-                return null;
-            }
-
-            try {
-                const bytes = new Uint8Array(data);
-                const coverDataUrl = await pdfApi.extractCover(bytes, 400);
-                
-                // Convert data URL to blob for storage
-                const response = await fetch(coverDataUrl);
-                const blob = await response.blob();
-                return await saveCoverImage(bookId, blob);
-            } catch (pdfError) {
-                console.warn("[CoverExtractor] Failed to extract PDF cover:", pdfError);
-                return null;
-            }
-        }
-
-        const { makeBook } = await import("../foliate-js/view.js");
-        const file = new File([data], filename, { type: mimeType });
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const book: any = await makeBook(file);
-
-        let coverDataUrl: string | null = null;
-
-        if (typeof book.getCover === "function") {
-            const coverBlob = await book.getCover();
-            if (coverBlob && coverBlob.size > 0) {
-                coverDataUrl = await saveCoverImage(bookId, coverBlob);
-            }
-        }
-
-        if (typeof book.destroy === "function") {
-            book.destroy();
-        }
-
-        return coverDataUrl;
-    } catch (error) {
-        console.error("[CoverExtractor] Failed to extract cover:", error);
-        return null;
-    }
-}
-
-/**
- * Get MIME type from file extension
- */
-function getMimeType(ext: string): string {
-    const mimeTypes: Record<string, string> = {
-        epub: "application/epub+zip",
-        pdf: "application/pdf",
-        mobi: "application/x-mobipocket-ebook",
-        azw: "application/vnd.amazon.ebook",
-        azw3: "application/vnd.amazon.ebook",
-        fb2: "application/x-fictionbook+xml",
-        cbz: "application/vnd.comicbook+zip",
-        cbr: "application/vnd.comicbook-rar",
-    };
-    return mimeTypes[ext] || "application/octet-stream";
-}
-
-/**
- * Convert Blob to data URL
- */
-async function blobToDataUrl(blob: Blob): Promise<string> {
+function blobToDataUrl(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -270,25 +35,151 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /**
- * Get book format from filename
+ * Extract metadata and cover from a book file
  */
-export function getFormatFromFilename(filename: string): BookFormat | null {
-    const ext = filename.toLowerCase().split(".").pop();
-    switch (ext) {
-        case "epub":
-            return "epub";
-        case "pdf":
-            return "pdf";
-        case "mobi":
-        case "azw":
-        case "azw3":
-            return "mobi";
-        case "fb2":
-            return "fb2";
-        case "cbz":
-        case "cbr":
-            return "cbz";
-        default:
-            return null;
+export async function extractMetadata(
+    data: ArrayBuffer,
+    format: BookFormat,
+    filename: string,
+    bookId?: string
+): Promise<ExtractedMetadata> {
+    const result: ExtractedMetadata = {
+        title: "",
+        author: "",
+    };
+
+    console.log(`[CoverExtractor] Extracting metadata for ${format} file:`, filename);
+
+    // Handle PDF files using PDF.js
+    if (format === "pdf") {
+        const engine = new PDFEngine();
+        
+        try {
+            const blob = new Blob([data], { type: "application/pdf" });
+            const doc = await engine.loadDocument(blob);
+            
+            // Extract metadata
+            result.title = doc.metadata?.title || filename.replace(/\.[^/.]+$/, "");
+            result.author = doc.metadata?.author || "";
+            
+            // Render first page as cover
+            try {
+                const coverBlob = await engine.renderToBlob(1, 1.0);
+                
+                if (coverBlob && coverBlob.size > 0) {
+                    if (bookId) {
+                        result.coverDataUrl = await saveCoverImage(bookId, coverBlob);
+                    } else {
+                        result.coverDataUrl = await blobToDataUrl(coverBlob);
+                    }
+                }
+            } catch (coverError) {
+                console.warn("[CoverExtractor] Failed to render PDF cover:", coverError);
+            }
+            
+            console.log("[CoverExtractor] PDF metadata extracted:", {
+                title: result.title,
+                author: result.author,
+                hasCover: !!result.coverDataUrl,
+            });
+            
+        } catch (error) {
+            console.warn("[CoverExtractor] Failed to extract PDF metadata:", error);
+            result.title = filename.replace(/\.[^/.]+$/, "");
+        } finally {
+            await engine.destroy();
+        }
+        
+        return result;
     }
+
+    // Import foliate-js makeBook for EPUB and other formats
+    try {
+        const { makeBook } = await import("../foliate-js/view.js");
+        const file = new File([data], filename, { 
+            type: format === "epub" ? "application/epub+zip" : 
+                  format === "mobi" ? "application/x-mobipocket-ebook" :
+                  format === "fb2" ? "application/fb2+xml" :
+                  "application/octet-stream"
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const book: any = await makeBook(file);
+
+        // Extract metadata
+        if (book.metadata) {
+            result.title = book.metadata.title || filename.replace(/\.[^/.]+$/, "");
+            result.author = book.metadata.author || "";
+            result.description = book.metadata.description;
+            result.publisher = book.metadata.publisher;
+            result.language = book.metadata.language;
+            result.publishedDate = book.metadata.publishedDate;
+            result.identifier = book.metadata.identifier;
+        }
+
+        // Extract cover
+        if (book.getCover) {
+            try {
+                const coverBlob = await book.getCover();
+                if (coverBlob) {
+                    if (bookId) {
+                        result.coverDataUrl = await saveCoverImage(bookId, coverBlob);
+                    } else {
+                        result.coverDataUrl = await blobToDataUrl(coverBlob);
+                    }
+                }
+            } catch (coverError) {
+                console.warn("[CoverExtractor] Failed to extract cover:", coverError);
+            }
+        }
+
+        console.log("[CoverExtractor] Metadata extracted:", {
+            title: result.title,
+            author: result.author,
+            hasCover: !!result.coverDataUrl,
+        });
+
+        return result;
+    } catch (error) {
+        console.warn("[CoverExtractor] Failed to extract metadata:", error);
+        result.title = filename.replace(/\.[^/.]+$/, "");
+        return result;
+    }
+}
+
+/**
+ * Extract cover only from a book file (for batch processing)
+ */
+export async function extractCover(
+    data: ArrayBuffer,
+    format: BookFormat,
+    filename: string,
+    bookId: string
+): Promise<string | null> {
+    console.log(`[CoverExtractor] Extracting cover for ${format}:`, filename);
+
+    // Handle PDF files
+    if (format === "pdf") {
+        const engine = new PDFEngine();
+        
+        try {
+            const blob = new Blob([data], { type: "application/pdf" });
+            await engine.loadDocument(blob);
+            const coverBlob = await engine.renderToBlob(1, 1.0);
+            
+            if (coverBlob && coverBlob.size > 0) {
+                return await saveCoverImage(bookId, coverBlob);
+            }
+        } catch (error) {
+            console.warn("[CoverExtractor] Failed to extract PDF cover:", error);
+        } finally {
+            await engine.destroy();
+        }
+        
+        return null;
+    }
+
+    // For other formats, use full metadata extraction
+    const metadata = await extractMetadata(data, format, filename, bookId);
+    return metadata.coverDataUrl || null;
 }

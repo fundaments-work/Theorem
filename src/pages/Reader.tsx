@@ -18,7 +18,6 @@ import {
     ReaderViewportHandle,
     ReaderNavbar,
     PDFViewer,
-    type PdfInfo,
 } from '@/components/reader';
 import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, isFixedLayout, BookFormat } from '@/types';
 import { getBookBlob } from '@/lib/storage';
@@ -49,9 +48,8 @@ export function ReaderPage() {
     const [sectionFractions, setSectionFractions] = useState<number[]>([]);
     
     // PDF-specific state
-    const [pdfInfo, setPdfInfo] = useState<PdfInfo | null>(null);
     const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
-    const [pdfError, setPdfError] = useState<string | null>(null);
+    const [pdfScale, setPdfScale] = useState(1.0);
     // UI state
     const [showToolbar, setShowToolbar] = useState(true);
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | null;
@@ -980,12 +978,11 @@ export function ReaderPage() {
                         onPageChange={(page) => {
                             setPdfCurrentPage(page);
                         }}
-                        onReady={(info) => {
-                            setPdfInfo(info);
-                            handleReady({
-                                title: info.metadata?.title || '',
-                                author: info.metadata?.author || '',
-                            }, []);
+                        onZoomChange={(newScale) => {
+                            setPdfScale(newScale);
+                        }}
+                        onReady={(meta, toc) => {
+                            handleReady(meta, toc);
                         }}
                     />
                 ) : (

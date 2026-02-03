@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { isTauri } from './env';
 import { saveBookData, getBookData } from './storage';
 import { formatFileSize } from './utils';
-import { extractBookMetadata } from './cover-extractor';
+import { extractMetadata } from './cover-extractor';
 
 // Dynamically import Tauri plugins
 let tauriDialog: typeof import('@tauri-apps/plugin-dialog') | null = null;
@@ -161,7 +161,7 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     console.log('[Import] Extracting metadata and cover for:', filename);
     let metadata;
     try {
-        metadata = await extractBookMetadata(buffer, filename, id);
+        metadata = await extractMetadata(buffer, format, filename, id);
     } catch (error) {
         console.warn('[Import] Metadata extraction failed, using filename:', error);
         metadata = null;
@@ -182,7 +182,7 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         tags: [],
         readingTime: 0,
         // Additional metadata from extraction
-        coverPath: metadata?.coverDataUrl,
+        coverPath: metadata?.coverDataUrl || undefined,
         description: metadata?.description,
         publisher: metadata?.publisher,
         publishedDate: metadata?.publishedDate,

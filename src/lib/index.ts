@@ -1,19 +1,8 @@
 /**
- * Library Utilities Export
+ * Library Exports
  */
 
-export {
-    cn,
-    formatReadingTime,
-    formatProgress,
-    truncate,
-    debounce,
-    formatFileSize,
-    formatRelativeDate,
-} from "./utils";
-
-export { isTauri, isMobile, isTouchDevice } from "./env";
-
+// Storage utilities
 export {
     saveBookData,
     getBookData,
@@ -22,36 +11,25 @@ export {
     saveBookMetadata,
     getBookMetadata,
     getStorageStats,
+    saveCoverImage,
+    getCoverImage,
+    deleteCoverImage,
 } from "./storage";
 
-export {
-    getBookFormat,
-    pickBookFiles,
-    readBookFile,
-    extractFilenameMetadata,
-    createBookEntry,
-    importBooks,
-    pickAndImportBooks,
-    scanFolderForBooks,
-} from "./import";
+// Environment detection
+export { isTauri, isMobile } from "./env";
 
-export { flattenToc, findSectionAtFraction, buildSections } from "./toc";
-
+// Cover extraction
 export {
-    applyReaderStyles,
-    getEngineSettings,
-    getSettingsChanges,
-    createReaderCSS,
-    initReaderStyles,
-    getCurrentReaderSettings,
-    getThemeColors,
-    registerEngineStyleCallback,
-} from "./reader-styles";
+    extractMetadata,
+    extractCover,
+    type ExtractedMetadata,
+} from "./cover-extractor";
 
+// Dialog utilities
 export {
-    pdfApi,
-    usePDF,
-    type PdfInfo,
-    type RenderOptions,
-    type UsePDFReturn,
-} from "./pdf-api";
+    showOpenFileDialog,
+    showSaveFileDialog,
+    showMessage,
+    showConfirm,
+} from "./dialogs";

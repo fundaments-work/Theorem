@@ -17,7 +17,7 @@ import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder
 import { FORMAT_DISPLAY_NAMES } from "@/types";
 import { isTauri } from "@/lib/env";
 import { getBookData } from "@/lib/storage";
-import { extractBookMetadata } from "@/lib/cover-extractor";
+import { extractMetadata } from "@/lib/cover-extractor";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import type { ContextMenuItem } from "@/components/ui/ContextMenu";
 import { Modal, ModalBody, ModalFooter } from "@/components/ui/Modal";
@@ -768,7 +768,7 @@ export function LibraryPage() {
                     }
                     
                     const filename = book.filePath.split(/[/\\]/).pop() || 'book.epub';
-                    const metadata = await extractBookMetadata(data, filename, book.id);
+                    const metadata = await extractMetadata(data, book.format, filename, book.id);
                     
                     const updates: Partial<Book> = {};
                     

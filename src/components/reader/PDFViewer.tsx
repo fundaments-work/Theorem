@@ -1,521 +1,603 @@
 /**
- * PDFViewer Component
- *
- * A complete PDF viewer component with page navigation, zoom controls,
- * keyboard shortcuts, and rendered page caching.
+ * PDFViewer - Optimized PDF rendering with text layer support
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, {
+    useRef,
+    useEffect,
+    useState,
+    useCallback,
+    useImperativeHandle,
+    forwardRef,
+    memo,
+} from "react";
 import { cn } from "@/lib/utils";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import {
-    ChevronLeft,
-    ChevronRight,
-    ZoomIn,
-    ZoomOut,
-    RotateCcw,
-    Loader2,
-    AlertCircle,
-} from "lucide-react";
-
-// PDF API interface matching PDFium integration guide
-export interface PdfInfo extends PdfInfoType {}
+import { usePDF } from "@/hooks/usePDF";
+import type { DocMetadata, DocLocation, TocItem } from "@/types";
+import type { TextLayerItem } from "@/engines/pdf";
 
 export interface PDFViewerProps {
-    file: File | Blob;
+    file: File | Blob | null;
+    scale?: number;
     initialPage?: number;
+    initialLocation?: string;
+    onReady?: (meta: DocMetadata, toc: TocItem[]) => void;
+    onLocationChange?: (location: DocLocation) => void;
+    onError?: (error: Error) => void;
     onPageChange?: (page: number) => void;
-    onReady?: (info: PdfInfo) => void;
+    onZoomChange?: (zoom: number) => void;
+    className?: string;
 }
 
-// PDF API - now integrated with Tauri backend
-import { pdfApi, type PdfInfo as PdfInfoType } from "@/lib/pdf-api";
-import { v4 as uuidv4 } from "uuid";
+export interface PDFViewerHandle {
+    goTo: (location: string) => void;
+    goToPage: (pageNumber: number) => void;
+    goToFraction: (fraction: number) => void;
+    getCurrentPage: () => number;
+    zoomIn: () => void;
+    zoomOut: () => void;
+    setZoom: (scale: number) => void;
+    fitPage: () => void;
+    fitWidth: () => void;
+    rotate: () => void;
+}
 
-// Scale configuration
 const MIN_SCALE = 0.25;
-const MAX_SCALE = 4.0;
+const MAX_SCALE = 5.0;
 const SCALE_STEP = 0.25;
+const SCROLL_THROTTLE_MS = 250;
 
-/**
- * Inner PDF Viewer component
- */
-function PDFViewerInner({ file, initialPage = 1, onPageChange, onReady }: PDFViewerProps) {
-    // State management
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [currentPage, setCurrentPage] = useState(initialPage);
-    const [scale, setScale] = useState(1.0);
-    const [pdfInfo, setPdfInfo] = useState<PdfInfo | null>(null);
-    const [renderingPages, setRenderingPages] = useState<Set<number>>(new Set());
-    const [pageImages, setPageImages] = useState<Map<number, string>>(new Map());
+function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+}
 
-    // Document ID for backend communication - stable across renders
-    const docIdRef = useRef<string>("");
-    
-    // Store callbacks in refs to avoid re-triggering effects
-    const onReadyRef = useRef(onReady);
-    const onPageChangeRef = useRef(onPageChange);
-    useEffect(() => {
-        onReadyRef.current = onReady;
-        onPageChangeRef.current = onPageChange;
-    }, [onReady, onPageChange]);
+function parsePageFromLocation(location?: string): number | null {
+    if (!location) return null;
+    const match = location.match(/page=(\d+)/);
+    if (!match) return null;
+    const page = parseInt(match[1], 10);
+    return isFinite(page) && page > 0 ? page : null;
+}
 
-    // Track failed pages to prevent infinite retry loops
-    const failedPagesRef = useRef<Set<number>>(new Set());
-    
-    // Track if component is mounted
-    const mountedRef = useRef(true);
-    useEffect(() => {
-        mountedRef.current = true;
-        return () => {
-            mountedRef.current = false;
-        };
-    }, []);
+// Text Layer Component - for text selection
+interface TextLayerProps {
+    textItems: TextLayerItem[];
+    scale: number;
+}
 
-    // Container ref for calculating dimensions
-    const containerRef = useRef<HTMLDivElement>(null);
+const TextLayer = memo(function TextLayer({ textItems, scale }: TextLayerProps) {
+    return (
+        <div
+            className="textLayer"
+            style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                overflow: "hidden",
+                pointerEvents: "none",
+            }}
+        >
+            {textItems.map((item, index) => (
+                <span
+                    key={index}
+                    style={{
+                        position: "absolute",
+                        left: `${item.left * scale}px`,
+                        top: `${item.top * scale}px`,
+                        fontSize: `${item.fontSize * scale}px`,
+                        fontFamily: item.fontFamily || 'sans-serif',
+                        lineHeight: 1,
+                        whiteSpace: "pre",
+                        color: "transparent",
+                        cursor: "text",
+                        pointerEvents: "auto",
+                        userSelect: "text",
+                        WebkitUserSelect: "text",
+                    }}
+                >
+                    {item.text}
+                </span>
+            ))}
+        </div>
+    );
+});
+
+// Single page component with text layer
+interface PDFPageProps {
+    pageNumber: number;
+    scale: number;
+    rotation: number;
+    document: any;
+    renderPage: (pageNumber: number, canvas: HTMLCanvasElement, scale: number, rotation: number) => Promise<{ width: number; height: number }>;
+    getTextContent: (pageNumber: number) => Promise<TextLayerItem[]>;
+    cancelRender: (pageNumber: number) => void;
+}
+
+const PDFPage = memo(function PDFPage({
+    pageNumber,
+    scale,
+    rotation,
+    document,
+    renderPage,
+    getTextContent,
+    cancelRender,
+}: PDFPageProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [textItems, setTextItems] = useState<TextLayerItem[]>([]);
+    const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
+    const isRenderingRef = useRef(false);
 
-    // Load PDF on mount - only depends on file
+    // Render canvas
     useEffect(() => {
-        let cancelled = false;
+        if (!document || !canvasRef.current || isRenderingRef.current) return;
 
-        const loadPdf = async () => {
-            setIsLoading(true);
-            setError(null);
-            setPageImages(new Map());
+        const canvas = canvasRef.current;
+        const cacheKey = `${pageNumber}-${scale}-${rotation}`;
+        
+        // Skip if already rendered at this scale/rotation
+        if (canvas.dataset.rendered === cacheKey) return;
 
+        isRenderingRef.current = true;
+
+        const doRender = async () => {
             try {
-                // Generate document ID
-                const newDocId = uuidv4();
-                docIdRef.current = newDocId;
+                const result = await renderPage(pageNumber, canvas, scale, rotation);
                 
-                console.log("[PDFViewer] Loading document with ID:", newDocId);
-
-                // Convert file to bytes
-                const arrayBuffer = await file.arrayBuffer();
-                const bytes = new Uint8Array(arrayBuffer);
-
-                // Load document via API
-                const info = await pdfApi.loadDocument(newDocId, bytes);
-
-                if (cancelled) {
-                    // Clean up if cancelled
-                    pdfApi.close(newDocId).catch(() => {});
-                    return;
-                }
-
-                setPdfInfo(info);
-
-                // Validate initial page
-                const validPage = Math.max(1, Math.min(initialPage, info.pageCount));
-                setCurrentPage(validPage);
-
-                // Notify parent using ref
-                onReadyRef.current?.(info);
-
-                // Render initial page directly
-                console.log("[PDFViewer] Rendering initial page:", validPage, "with docId:", newDocId);
-                try {
-                    const base64Image = await pdfApi.renderPage(newDocId, validPage, 1.0);
-                    if (!cancelled && mountedRef.current) {
-                        setPageImages(prev => new Map(prev).set(validPage, base64Image));
+                if (canvasRef.current) {
+                    canvasRef.current.dataset.rendered = cacheKey;
+                    
+                    if (containerRef.current) {
+                        containerRef.current.style.width = `${result.width}px`;
+                        containerRef.current.style.height = `${result.height}px`;
                     }
-                } catch (renderErr) {
-                    console.error(`[PDFViewer] Failed to render initial page:`, renderErr);
-                    if (!cancelled) {
-                        failedPagesRef.current.add(validPage);
-                        setError(renderErr instanceof Error ? renderErr.message : `Failed to render page ${validPage}`);
-                    }
+                    setDimensions(result);
                 }
             } catch (err) {
-                if (cancelled) return;
-                console.error("[PDFViewer] Failed to load PDF:", err);
-                setError(err instanceof Error ? err.message : "Failed to load PDF");
-            } finally {
-                if (!cancelled && mountedRef.current) {
-                    setIsLoading(false);
+                if (err instanceof Error && !err.message.includes("cancelled")) {
+                    console.error(`Page ${pageNumber} render error:`, err);
                 }
+            } finally {
+                isRenderingRef.current = false;
             }
         };
 
-        // Reset state when file changes
-        failedPagesRef.current.clear();
-        setRenderingPages(new Set());
-        loadPdf();
+        doRender();
 
         return () => {
-            cancelled = true;
-            const docId = docIdRef.current;
-            if (docId) {
-                pdfApi.close(docId).catch(() => {});
-            }
+            cancelRender(pageNumber);
         };
-    }, [file]); // Only depend on file, not initialPage or callbacks
+    }, [pageNumber, scale, rotation, document, renderPage, cancelRender]);
 
-    // Render a specific page
-    const renderPage = useCallback(async (pageNumber: number): Promise<void> => {
-        const docId = docIdRef.current;
-        if (!docId || !pdfInfo || pageNumber < 1 || pageNumber > pdfInfo.pageCount) return;
-
-        // Check cache first
-        if (pageImages.has(pageNumber)) return;
-
-        // Don't retry failed pages
-        if (failedPagesRef.current.has(pageNumber)) return;
-
-        // Check if already rendering
-        if (renderingPages.has(pageNumber)) return;
-
-        console.log("[PDFViewer] Rendering page:", pageNumber, "with docId:", docId);
-
-        // Mark as rendering
-        setRenderingPages((prev) => new Set(prev).add(pageNumber));
-
-        try {
-            // Render page via API using the current docId
-            const base64Image = await pdfApi.renderPage(docId, pageNumber, scale);
-
-            if (mountedRef.current) {
-                // Store in state (not just ref) to trigger re-render
-                setPageImages(prev => new Map(prev).set(pageNumber, base64Image));
-            }
-        } catch (err) {
-            console.error(`[PDFViewer] Failed to render page ${pageNumber}:`, err);
-            // Mark as failed to prevent infinite retries
-            failedPagesRef.current.add(pageNumber);
-        } finally {
-            if (mountedRef.current) {
-                setRenderingPages((prev) => {
-                    const next = new Set(prev);
-                    next.delete(pageNumber);
-                    return next;
-                });
-            }
-        }
-    }, [pdfInfo, scale, pageImages, renderingPages]);
-
-    // Render adjacent pages when current page changes
+    // Load text content once
     useEffect(() => {
-        if (!pdfInfo || !docIdRef.current) return;
+        if (!document) return;
 
-        // Pre-render adjacent pages (but not in the main effect to avoid loops)
-        const preRenderAdjacent = async () => {
-            const pagesToRender: number[] = [];
-            
-            if (currentPage > 1 && !pageImages.has(currentPage - 1) && !failedPagesRef.current.has(currentPage - 1)) {
-                pagesToRender.push(currentPage - 1);
+        getTextContent(pageNumber).then(items => {
+            if (items.length > 0) {
+                setTextItems(items);
             }
-            if (currentPage < pdfInfo.pageCount && !pageImages.has(currentPage + 1) && !failedPagesRef.current.has(currentPage + 1)) {
-                pagesToRender.push(currentPage + 1);
-            }
-
-            for (const page of pagesToRender) {
-                if (!renderingPages.has(page)) {
-                    await renderPage(page);
-                }
-            }
-        };
-
-        // Delay pre-rendering to avoid blocking
-        const timer = setTimeout(preRenderAdjacent, 100);
-        return () => clearTimeout(timer);
-    }, [currentPage, pdfInfo]); // Only depend on currentPage and pdfInfo
-
-    // Navigation handlers
-    const goToPage = useCallback(
-        (page: number) => {
-            if (!pdfInfo) return;
-
-            const validPage = Math.max(1, Math.min(page, pdfInfo.pageCount));
-            setCurrentPage(validPage);
-            onPageChangeRef.current?.(validPage);
-        },
-        [pdfInfo]
-    );
-
-    const goToPrevious = useCallback(() => {
-        goToPage(currentPage - 1);
-    }, [currentPage, goToPage]);
-
-    const goToNext = useCallback(() => {
-        goToPage(currentPage + 1);
-    }, [currentPage, goToPage]);
-
-    // Zoom handlers
-    const zoomIn = useCallback(() => {
-        setScale((prev) => Math.min(MAX_SCALE, prev + SCALE_STEP));
-        // Clear cache and failed pages on zoom change to re-render at new scale
-        setPageImages(new Map());
-        failedPagesRef.current.clear();
-    }, []);
-
-    const zoomOut = useCallback(() => {
-        setScale((prev) => Math.max(MIN_SCALE, prev - SCALE_STEP));
-        // Clear cache and failed pages on zoom change to re-render at new scale
-        setPageImages(new Map());
-        failedPagesRef.current.clear();
-    }, []);
-
-    const zoomReset = useCallback(() => {
-        setScale(1.0);
-        setPageImages(new Map());
-        failedPagesRef.current.clear();
-    }, []);
-
-    // Keyboard navigation
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Ignore if user is typing in an input
-            if (
-                e.target instanceof HTMLInputElement ||
-                e.target instanceof HTMLTextAreaElement
-            ) {
-                return;
-            }
-
-            switch (e.key) {
-                case "ArrowLeft":
-                case "ArrowUp":
-                case "PageUp":
-                    e.preventDefault();
-                    goToPrevious();
-                    break;
-                case "ArrowRight":
-                case "ArrowDown":
-                case "PageDown":
-                case " ":
-                    e.preventDefault();
-                    goToNext();
-                    break;
-                case "Home":
-                    e.preventDefault();
-                    goToPage(1);
-                    break;
-                case "End":
-                    e.preventDefault();
-                    goToPage(pdfInfo?.pageCount || 1);
-                    break;
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyDown, { passive: false });
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [goToPrevious, goToNext, goToPage, pdfInfo]);
-
-    // Get current page image from cache
-    const currentPageImage = useMemo(() => {
-        return pageImages.get(currentPage);
-    }, [currentPage, pageImages]);
-
-    // Format scale as percentage
-    const scalePercent = Math.round(scale * 100);
-
-    // Loading state
-    if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full bg-[var(--color-background)]">
-                <Loader2 className="w-10 h-10 animate-spin text-[var(--color-accent)]" />
-                <p className="mt-4 text-sm text-[var(--color-text-muted)]">Loading PDF...</p>
-            </div>
-        );
-    }
-
-    // Error state
-    if (error) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full bg-[var(--color-background)] p-8">
-                <div className="flex flex-col items-center gap-4 text-center max-w-md">
-                    <div className="w-16 h-16 rounded-full bg-[var(--color-error)]/10 flex items-center justify-center">
-                        <AlertCircle className="w-8 h-8 text-[var(--color-error)]" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">
-                        Failed to load PDF
-                    </h3>
-                    <p className="text-sm text-[var(--color-text-muted)]">{error}</p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
-                    >
-                        Retry
-                    </button>
-                </div>
-            </div>
-        );
-    }
+        }).catch(err => {
+            console.warn(`Failed to load text content for page ${pageNumber}:`, err);
+        });
+    }, [pageNumber, document, getTextContent]);
 
     return (
         <div
             ref={containerRef}
-            className="flex flex-col h-full bg-[var(--color-background)] overflow-hidden"
+            data-page-number={pageNumber}
+            className="page"
+            style={{
+                position: "relative",
+                margin: "10px auto",
+                backgroundColor: "white",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+                overflow: "hidden",
+            }}
         >
-            {/* Toolbar */}
-            <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-                {/* Navigation controls */}
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={goToPrevious}
-                        disabled={currentPage <= 1}
-                        className={cn(
-                            "p-2 rounded-lg transition-colors",
-                            "hover:bg-[var(--color-accent-light)]",
-                            "disabled:opacity-40 disabled:cursor-not-allowed"
-                        )}
-                        aria-label="Previous page"
-                    >
-                        <ChevronLeft className="w-5 h-5 text-[var(--color-text-primary)]" />
-                    </button>
-
-                    {/* Page counter */}
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)]">
-                        <span className="text-sm font-medium text-[var(--color-text-primary)] min-w-[2ch] text-center">
-                            {currentPage}
-                        </span>
-                        <span className="text-sm text-[var(--color-text-muted)]">/</span>
-                        <span className="text-sm text-[var(--color-text-muted)] min-w-[2ch] text-center">
-                            {pdfInfo?.pageCount || 0}
-                        </span>
-                    </div>
-
-                    <button
-                        onClick={goToNext}
-                        disabled={!pdfInfo || currentPage >= pdfInfo.pageCount}
-                        className={cn(
-                            "p-2 rounded-lg transition-colors",
-                            "hover:bg-[var(--color-accent-light)]",
-                            "disabled:opacity-40 disabled:cursor-not-allowed"
-                        )}
-                        aria-label="Next page"
-                    >
-                        <ChevronRight className="w-5 h-5 text-[var(--color-text-primary)]" />
-                    </button>
-                </div>
-
-                {/* Zoom controls */}
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={zoomOut}
-                        disabled={scale <= MIN_SCALE}
-                        className={cn(
-                            "p-2 rounded-lg transition-colors",
-                            "hover:bg-[var(--color-accent-light)]",
-                            "disabled:opacity-40 disabled:cursor-not-allowed"
-                        )}
-                        aria-label="Zoom out"
-                    >
-                        <ZoomOut className="w-5 h-5 text-[var(--color-text-primary)]" />
-                    </button>
-
-                    <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)] min-w-[5rem] justify-center">
-                        <button
-                            onClick={zoomReset}
-                            className="text-sm font-medium text-[var(--color-text-primary)] hover:text-[var(--color-accent)] transition-colors"
-                            title="Reset zoom"
-                        >
-                            {scalePercent}%
-                        </button>
-                    </div>
-
-                    <button
-                        onClick={zoomIn}
-                        disabled={scale >= MAX_SCALE}
-                        className={cn(
-                            "p-2 rounded-lg transition-colors",
-                            "hover:bg-[var(--color-accent-light)]",
-                            "disabled:opacity-40 disabled:cursor-not-allowed"
-                        )}
-                        aria-label="Zoom in"
-                    >
-                        <ZoomIn className="w-5 h-5 text-[var(--color-text-primary)]" />
-                    </button>
-
-                    <button
-                        onClick={zoomReset}
-                        className="p-2 rounded-lg transition-colors hover:bg-[var(--color-accent-light)]"
-                        aria-label="Reset zoom"
-                        title="Reset zoom"
-                    >
-                        <RotateCcw className="w-4 h-4 text-[var(--color-text-muted)]" />
-                    </button>
-                </div>
-            </div>
-
-            {/* Page viewer */}
-            <div className="flex-1 overflow-auto bg-[var(--color-border-subtle)] relative">
-                <div
-                    className="min-h-full flex items-center justify-center p-8"
-                    style={{
-                        transform: `scale(${scale})`,
-                        transformOrigin: "center top",
-                        transition: "transform 0.15s ease-out",
-                    }}
-                >
-                    {/* Page container */}
-                    <div className="relative shadow-lg">
-                        {/* Loading state for page */}
-                        {(!currentPageImage || renderingPages.has(currentPage)) && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-surface)]">
-                                <Loader2 className="w-8 h-8 animate-spin text-[var(--color-accent)]" />
-                            </div>
-                        )}
-
-                        {/* Rendered page image */}
-                        {currentPageImage && (
-                            <img
-                                src={currentPageImage}
-                                alt={`Page ${currentPage}`}
-                                className={cn(
-                                    "block max-w-full h-auto bg-white",
-                                    "transition-opacity duration-200",
-                                    renderingPages.has(currentPage)
-                                        ? "opacity-50"
-                                        : "opacity-100"
-                                )}
-                                style={{
-                                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                                }}
-                            />
-                        )}
-
-                        {/* Canvas overlay for future annotations */}
-                        <canvas
-                            ref={canvasRef}
-                            className="absolute inset-0 pointer-events-auto"
-                            style={{
-                                width: "100%",
-                                height: "100%",
-                            }}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            {/* Bottom status bar */}
-            <div className="flex items-center justify-between px-4 py-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-text-muted)]">
-                <span>
-                    Page {currentPage} of {pdfInfo?.pageCount || 0}
-                </span>
-                {pdfInfo?.metadata?.title && (
-                    <span className="truncate max-w-md text-center">
-                        {pdfInfo.metadata.title}
-                    </span>
-                )}
-                <span>{scalePercent}%</span>
-            </div>
+            <canvas
+                ref={canvasRef}
+                style={{
+                    display: "block",
+                    width: "100%",
+                    height: "100%",
+                }}
+            />
+            {dimensions && textItems.length > 0 && (
+                <TextLayer textItems={textItems} scale={scale} />
+            )}
         </div>
     );
-}
-
-/**
- * PDFViewer component with error boundary
- */
-export function PDFViewer(props: PDFViewerProps) {
+}, (prevProps, nextProps) => {
     return (
-        <ErrorBoundary>
-            <PDFViewerInner {...props} />
-        </ErrorBoundary>
+        prevProps.pageNumber === nextProps.pageNumber &&
+        prevProps.scale === nextProps.scale &&
+        prevProps.rotation === nextProps.rotation &&
+        prevProps.document === nextProps.document
     );
-}
+});
+
+export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(
+    ({
+        file,
+        scale: initialScale = 1.0,
+        initialPage = 1,
+        initialLocation,
+        onReady,
+        onLocationChange,
+        onError,
+        onPageChange,
+        onZoomChange,
+        className,
+    }, ref) => {
+        const containerRef = useRef<HTMLDivElement>(null);
+        const viewerRef = useRef<HTMLDivElement>(null);
+        const mountedRef = useRef(true);
+        const scrollTimeoutRef = useRef<number | null>(null);
+        const lastPageRef = useRef<number>(1);
+        const isScrollingRef = useRef(false);
+        const isProgrammaticScrollRef = useRef(false);
+
+        const currentPageRef = useRef(clamp(initialPage, 1, 10000));
+        const totalPagesRef = useRef(0);
+        const scaleRef = useRef(clamp(initialScale, MIN_SCALE, MAX_SCALE));
+        const rotationRef = useRef(0);
+
+        const [currentPage, setCurrentPage] = useState(currentPageRef.current);
+        const [scale, setScale] = useState(scaleRef.current);
+
+        const { isLoading, loadProgress, error, document, loadDocument, renderPage, getTextContent, getPageDimensions, cancelRender } = usePDF();
+
+        useEffect(() => {
+            mountedRef.current = true;
+            return () => {
+                mountedRef.current = false;
+            };
+        }, []);
+
+        useEffect(() => {
+            if (!file) return;
+
+            currentPageRef.current = 1;
+            lastPageRef.current = 1;
+            setCurrentPage(1);
+            scaleRef.current = initialScale;
+            setScale(initialScale);
+
+            loadDocument(file).catch((err) => {
+                if (mountedRef.current) {
+                    onError?.(err instanceof Error ? err : new Error(String(err)));
+                }
+            });
+        }, [file, loadDocument, onError, initialScale]);
+
+        useEffect(() => {
+            if (!document) return;
+
+            totalPagesRef.current = document.numPages;
+            onReady?.(document.metadata, document.toc);
+
+            setTimeout(() => {
+                if (!mountedRef.current || !containerRef.current) return;
+                
+                const dims = getPageDimensions(1);
+                if (dims) {
+                    const containerWidth = containerRef.current.clientWidth - 40;
+                    if (dims.width > containerWidth) {
+                        scaleRef.current = clamp(containerWidth / dims.width, MIN_SCALE, MAX_SCALE);
+                        setScale(scaleRef.current);
+                        onZoomChange?.(scaleRef.current);
+                    }
+                }
+
+                let targetPage = clamp(initialPage, 1, document.numPages);
+                const locationPage = parsePageFromLocation(initialLocation);
+                if (locationPage !== null) {
+                    targetPage = clamp(locationPage, 1, document.numPages);
+                }
+                
+                scrollToPage(targetPage, false);
+                currentPageRef.current = targetPage;
+                lastPageRef.current = targetPage;
+                setCurrentPage(targetPage);
+            }, 100);
+        }, [document, initialPage, initialLocation, onReady, getPageDimensions, onZoomChange]);
+
+        const scrollToPage = useCallback((pageNumber: number, smooth = true) => {
+            const container = containerRef.current;
+            const viewer = viewerRef.current;
+            if (!container || !viewer) return;
+
+            const pageElement = viewer.querySelector(`[data-page-number="${pageNumber}"]`) as HTMLElement;
+            if (pageElement) {
+                isProgrammaticScrollRef.current = true;
+                
+                const containerRect = container.getBoundingClientRect();
+                const pageRect = pageElement.getBoundingClientRect();
+                const relativeTop = pageRect.top - containerRect.top + container.scrollTop;
+                
+                container.scrollTo({
+                    top: relativeTop - 10,
+                    behavior: smooth ? "smooth" : "auto"
+                });
+                
+                setTimeout(() => {
+                    isProgrammaticScrollRef.current = false;
+                }, smooth ? 300 : 50);
+            }
+        }, []);
+
+        const updateCurrentPageFromScroll = useCallback(() => {
+            if (!document || !containerRef.current || !viewerRef.current) return;
+
+            const container = containerRef.current;
+            const viewer = viewerRef.current;
+            const containerRect = container.getBoundingClientRect();
+            const containerCenter = containerRect.top + containerRect.height / 2;
+            
+            let closestPage = 1;
+            let closestDistance = Infinity;
+
+            for (let i = 1; i <= document.numPages; i++) {
+                const pageEl = viewer.querySelector(`[data-page-number="${i}"]`) as HTMLElement;
+                if (!pageEl) continue;
+
+                const pageRect = pageEl.getBoundingClientRect();
+                const pageCenter = pageRect.top + pageRect.height / 2;
+                const distance = Math.abs(pageCenter - containerCenter);
+
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestPage = i;
+                }
+            }
+
+            if (closestPage !== lastPageRef.current) {
+                lastPageRef.current = closestPage;
+                currentPageRef.current = closestPage;
+                setCurrentPage(closestPage);
+                onPageChange?.(closestPage);
+
+                const total = document.numPages;
+                const fraction = (closestPage - 1) / total;
+                onLocationChange?.({
+                    cfi: `pdf:page=${closestPage}`,
+                    percentage: fraction,
+                    pageInfo: {
+                        currentPage: closestPage,
+                        totalPages: total,
+                        endPage: total,
+                        range: `${closestPage}`,
+                    },
+                });
+            }
+        }, [document, onPageChange, onLocationChange]);
+
+        useEffect(() => {
+            const container = containerRef.current;
+            if (!container) return;
+
+            let rafId: number | null = null;
+            let lastUpdateTime = 0;
+
+            const handleScroll = () => {
+                if (isProgrammaticScrollRef.current) return;
+                
+                isScrollingRef.current = true;
+                
+                if (scrollTimeoutRef.current) {
+                    window.clearTimeout(scrollTimeoutRef.current);
+                }
+
+                if (rafId) {
+                    cancelAnimationFrame(rafId);
+                }
+
+                const now = Date.now();
+                if (now - lastUpdateTime >= SCROLL_THROTTLE_MS) {
+                    lastUpdateTime = now;
+                    updateCurrentPageFromScroll();
+                } else {
+                    rafId = requestAnimationFrame(() => {
+                        lastUpdateTime = Date.now();
+                        updateCurrentPageFromScroll();
+                    });
+                }
+
+                scrollTimeoutRef.current = window.setTimeout(() => {
+                    isScrollingRef.current = false;
+                }, SCROLL_THROTTLE_MS);
+            };
+
+            container.addEventListener("scroll", handleScroll, { passive: true });
+            return () => {
+                container.removeEventListener("scroll", handleScroll);
+                if (scrollTimeoutRef.current) {
+                    window.clearTimeout(scrollTimeoutRef.current);
+                }
+                if (rafId) {
+                    cancelAnimationFrame(rafId);
+                }
+            };
+        }, [updateCurrentPageFromScroll]);
+
+        const setZoomInternal = useCallback((newScale: number) => {
+            const safeScale = clamp(newScale, MIN_SCALE, MAX_SCALE);
+            if (Math.abs(safeScale - scaleRef.current) < 0.01) return;
+
+            const container = containerRef.current;
+            const viewer = viewerRef.current;
+            let scrollRatio = 0;
+            
+            if (container && viewer) {
+                const currentPageEl = viewer.querySelector(`[data-page-number="${currentPageRef.current}"]`) as HTMLElement;
+                if (currentPageEl) {
+                    const pageTop = currentPageEl.offsetTop;
+                    scrollRatio = (container.scrollTop - pageTop) / currentPageEl.offsetHeight;
+                }
+            }
+
+            scaleRef.current = safeScale;
+            setScale(safeScale);
+            onZoomChange?.(safeScale);
+
+            // Clear rendered cache to force re-render at new scale
+            setTimeout(() => {
+                if (!viewerRef.current) return;
+                const canvases = viewerRef.current.querySelectorAll("canvas");
+                canvases.forEach((canvas) => {
+                    canvas.dataset.rendered = "";
+                });
+
+                if (container && viewer) {
+                    const currentPageEl = viewer.querySelector(`[data-page-number="${currentPageRef.current}"]`) as HTMLElement;
+                    if (currentPageEl) {
+                        container.scrollTop = currentPageEl.offsetTop + (currentPageEl.offsetHeight * scrollRatio);
+                    }
+                }
+            }, 0);
+        }, [onZoomChange]);
+
+        useImperativeHandle(ref, () => ({
+            goTo: (location: string) => {
+                const page = parsePageFromLocation(location) || 1;
+                scrollToPage(clamp(page, 1, totalPagesRef.current || 1));
+            },
+            goToPage: (pageNumber: number) => {
+                scrollToPage(clamp(pageNumber, 1, totalPagesRef.current || 1));
+            },
+            goToFraction: (fraction: number) => {
+                const page = Math.max(1, Math.round(clamp(fraction, 0, 1) * (totalPagesRef.current || 1)));
+                scrollToPage(page);
+            },
+            getCurrentPage: () => currentPageRef.current,
+            zoomIn: () => setZoomInternal(scaleRef.current + SCALE_STEP),
+            zoomOut: () => setZoomInternal(scaleRef.current - SCALE_STEP),
+            setZoom: (newScale: number) => setZoomInternal(newScale),
+            fitPage: () => {
+                if (!containerRef.current) return;
+                const containerHeight = containerRef.current.clientHeight - 40;
+                const dims = getPageDimensions(1);
+                if (dims) {
+                    setZoomInternal(clamp(containerHeight / dims.height, MIN_SCALE, MAX_SCALE));
+                }
+            },
+            fitWidth: () => {
+                if (!containerRef.current) return;
+                const containerWidth = containerRef.current.clientWidth - 40;
+                const dims = getPageDimensions(1);
+                if (dims) {
+                    setZoomInternal(clamp(containerWidth / dims.width, MIN_SCALE, MAX_SCALE));
+                }
+            },
+            rotate: () => {
+                rotationRef.current = (rotationRef.current + 90) % 360;
+                if (!viewerRef.current) return;
+                const canvases = viewerRef.current.querySelectorAll("canvas");
+                canvases.forEach((canvas) => {
+                    canvas.dataset.rendered = "";
+                });
+            },
+        }), [scrollToPage, setZoomInternal, getPageDimensions]);
+
+        useEffect(() => {
+            const container = containerRef.current;
+            if (!container) return;
+
+            const handleWheel = (e: WheelEvent) => {
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    const delta = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP;
+                    setZoomInternal(scaleRef.current + delta);
+                }
+            };
+
+            container.addEventListener("wheel", handleWheel, { passive: false });
+            return () => container.removeEventListener("wheel", handleWheel);
+        }, [setZoomInternal]);
+
+        if (isLoading) {
+            return (
+                <div
+                    className={cn("flex flex-col items-center justify-center h-full", className)}
+                    style={{ backgroundColor: "var(--reader-bg)" }}
+                >
+                    <div className="space-y-4 w-64">
+                        <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: "var(--color-border)" }}>
+                            <div
+                                className="h-full transition-all duration-300"
+                                style={{
+                                    width: loadProgress?.total ? `${clamp((loadProgress.loaded / loadProgress.total) * 100, 0, 100)}%` : "0%",
+                                    backgroundColor: "var(--color-accent)",
+                                }}
+                            />
+                        </div>
+                        <p className="text-center text-sm" style={{ color: "var(--reader-fg)", opacity: 0.6 }}>
+                            Loading PDF... {loadProgress?.total ? `${Math.round((loadProgress.loaded / loadProgress.total) * 100)}%` : ""}
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
+        if (error) {
+            return (
+                <div className={cn("flex items-center justify-center h-full", className)} style={{ backgroundColor: "var(--reader-bg)" }}>
+                    <div className="text-center">
+                        <p style={{ color: "var(--color-error)" }} className="mb-2">Failed to load PDF</p>
+                        <p className="text-sm" style={{ color: "var(--reader-fg)", opacity: 0.6 }}>{error.message}</p>
+                    </div>
+                </div>
+            );
+        }
+
+        if (!document) {
+            return (
+                <div className={cn("flex items-center justify-center h-full", className)} style={{ backgroundColor: "var(--reader-bg)" }}>
+                    <p style={{ color: "var(--reader-fg)", opacity: 0.6 }}>No PDF loaded</p>
+                </div>
+            );
+        }
+
+        return (
+            <div
+                ref={containerRef}
+                className={cn("overflow-auto", className)}
+                style={{
+                    width: "100%",
+                    height: "100%",
+                    backgroundColor: "var(--reader-bg)",
+                    outline: "none",
+                }}
+            >
+                <div
+                    ref={viewerRef}
+                    className="pdfViewer"
+                    style={{
+                        padding: "20px",
+                        minHeight: "100%",
+                    }}
+                >
+                    {Array.from({ length: document.numPages }, (_, i) => i + 1).map((pageNumber) => (
+                        <PDFPage
+                            key={pageNumber}
+                            pageNumber={pageNumber}
+                            scale={scale}
+                            rotation={rotationRef.current}
+                            document={document}
+                            renderPage={renderPage}
+                            getTextContent={getTextContent}
+                            cancelRender={cancelRender}
+                        />
+                    ))}
+                </div>
+            </div>
+        );
+    }
+);
+
+PDFViewer.displayName = "PDFViewer";
 
 export default PDFViewer;
