@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useSettingsStore, useLibraryStore } from "@/store";
 import { formatFileSize } from "@/lib/utils";
 import { confirmClearAllData } from "@/lib/dialogs";
+import { Dropdown } from "@/components/ui";
 import {
     Settings,
     Layout,
@@ -51,7 +52,7 @@ interface SectionProps {
 
 function Section({ title, description, icon, children }: SectionProps) {
     return (
-        <section className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <section className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl">
             <div className="px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-border-subtle)]/50">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-[var(--color-surface)] text-[var(--color-text-primary)]">
@@ -271,25 +272,22 @@ export function SettingsPage() {
                             label="Sort By"
                             description="Default sorting for library"
                         >
-                            <select
+                            <Dropdown
                                 value={settings.librarySortBy}
-                                onChange={(e) =>
-                                    updateSettings({ librarySortBy: e.target.value as typeof settings.librarySortBy })
+                                onChange={(value) =>
+                                    updateSettings({ librarySortBy: value as typeof settings.librarySortBy })
                                 }
-                                className={cn(
-                                    "px-3 py-1.5 rounded-md text-sm",
-                                    "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
-                                    "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
-                                    "cursor-pointer"
-                                )}
-                            >
-                                <option value="lastRead">Last Read</option>
-                                <option value="title">Title</option>
-                                <option value="author">Author</option>
-                                <option value="dateAdded">Date Added</option>
-                                <option value="progress">Progress</option>
-                                <option value="rating">Rating</option>
-                            </select>
+                                options={[
+                                    { value: "lastRead", label: "Last Read" },
+                                    { value: "title", label: "Title" },
+                                    { value: "author", label: "Author" },
+                                    { value: "dateAdded", label: "Date Added" },
+                                    { value: "progress", label: "Progress" },
+                                    { value: "rating", label: "Rating" },
+                                ]}
+                                variant="filled"
+                                size="sm"
+                            />
                         </SettingRow>
 
                         <SettingRow
@@ -798,18 +796,15 @@ export function SettingsPage() {
                             label="Export Template"
                             description="Markdown template for exported highlights"
                         >
-                            <select
-                                className={cn(
-                                    "px-3 py-1.5 rounded-md text-sm",
-                                    "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
-                                    "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
-                                    "cursor-pointer"
-                                )}
-                            >
-                                <option>Default (with YAML frontmatter)</option>
-                                <option>Minimal (text only)</option>
-                                <option>Custom template</option>
-                            </select>
+                            <Dropdown
+                                options={[
+                                    { value: "default", label: "Default (with YAML frontmatter)" },
+                                    { value: "minimal", label: "Minimal (text only)" },
+                                    { value: "custom", label: "Custom template" },
+                                ]}
+                                variant="filled"
+                                size="sm"
+                            />
                         </SettingRow>
 
                         <SettingRow
@@ -953,20 +948,17 @@ export function SettingsPage() {
                             label="Sleep Timer"
                             description="Automatically stop after"
                         >
-                            <select
-                                className={cn(
-                                    "px-3 py-1.5 rounded-md text-sm",
-                                    "bg-[var(--color-border-subtle)] text-[var(--color-text-primary)]",
-                                    "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
-                                    "cursor-pointer"
-                                )}
-                            >
-                                <option>Off</option>
-                                <option>15 minutes</option>
-                                <option>30 minutes</option>
-                                <option>45 minutes</option>
-                                <option>60 minutes</option>
-                            </select>
+                            <Dropdown
+                                options={[
+                                    { value: "off", label: "Off" },
+                                    { value: "15", label: "15 minutes" },
+                                    { value: "30", label: "30 minutes" },
+                                    { value: "45", label: "45 minutes" },
+                                    { value: "60", label: "60 minutes" },
+                                ]}
+                                variant="filled"
+                                size="sm"
+                            />
                         </SettingRow>
 
                         <SettingRow

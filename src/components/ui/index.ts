@@ -5,3 +5,5 @@ export { ContextMenu } from "./ContextMenu";
 export type { ContextMenuItem } from "./ContextMenu";
 export { Modal, ModalHeader, ModalBody, ModalFooter } from "./Modal";
 export type { ModalProps } from "./Modal";
+export { Dropdown } from "./Dropdown";
+export type { DropdownOption, DropdownProps } from "./Dropdown";

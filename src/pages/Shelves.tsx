@@ -258,7 +258,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
     const displayBooks = books.slice(0, 4);
 
     return (
-        <div className="group relative bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+        <div className="group relative bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl hover:border-[var(--color-text-muted)] transition-colors">
             {/* Cover Grid Preview */}
             <button onClick={onClick} className="block w-full">
                 <div className="aspect-[16/10] bg-[var(--color-border-subtle)] p-4">

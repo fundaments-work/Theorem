@@ -692,7 +692,7 @@ export function LibraryPage() {
         }
         
         return result;
-    }, [books, searchQuery, selectedShelf]);
+    }, [books, searchQuery, selectedShelf, showFavoritesOnly]);
 
     // Sort books
     const sortedBooks = useMemo(() => {

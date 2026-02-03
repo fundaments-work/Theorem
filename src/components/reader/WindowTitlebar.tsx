@@ -20,6 +20,7 @@ import {
     LineSquiggle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { DocMetadata, DocLocation } from "@/types";
 
 interface WindowTitlebarProps {
@@ -76,14 +77,25 @@ export function WindowTitlebar({
 
     // Listen for window state changes
     useEffect(() => {
+        const updateMaximizedState = async () => {
+            try {
+                const win = getCurrentWebviewWindow();
+                const maximized = await win.isMaximized();
+                setIsMaximized(maximized);
+            } catch (err) {
+                // Fallback to window size detection if Tauri API fails
+                const isMax = window.innerWidth === window.screen.availWidth && 
+                             window.innerHeight === window.screen.availHeight;
+                setIsMaximized(isMax);
+            }
+        };
+
         const handleResize = () => {
-            const isMax = window.innerWidth === window.screen.availWidth && 
-                         window.innerHeight === window.screen.availHeight;
-            setIsMaximized(isMax);
+            updateMaximizedState();
         };
 
         window.addEventListener("resize", handleResize);
-        handleResize();
+        updateMaximizedState();
 
         return () => window.removeEventListener("resize", handleResize);
     }, []);
@@ -100,29 +112,34 @@ export function WindowTitlebar({
         return `${percentage}%`;
     };
 
-    const handleMinimize = () => {
-        const tauri = (window as any).__TAURI__;
-        if (tauri) {
-            tauri.window.getCurrentWindow().minimize();
+    const handleMinimize = async () => {
+        try {
+            const win = getCurrentWebviewWindow();
+            await win.minimize();
+        } catch (err) {
+            console.error("Failed to minimize window:", err);
         }
     };
 
-    const handleMaximize = () => {
-        const tauri = (window as any).__TAURI__;
-        if (tauri) {
-            const win = tauri.window.getCurrentWindow();
+    const handleMaximize = async () => {
+        try {
+            const win = getCurrentWebviewWindow();
             if (isMaximized) {
-                win.unmaximize();
+                await win.unmaximize();
             } else {
-                win.maximize();
+                await win.maximize();
             }
+        } catch (err) {
+            console.error("Failed to maximize window:", err);
         }
     };
 
-    const handleClose = () => {
-        const tauri = (window as any).__TAURI__;
-        if (tauri) {
-            tauri.window.getCurrentWindow().close();
+    const handleClose = async () => {
+        try {
+            const win = getCurrentWebviewWindow();
+            await win.close();
+        } catch (err) {
+            console.error("Failed to close window:", err);
         }
     };
 

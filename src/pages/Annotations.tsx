@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useLibraryStore, useUIStore } from "@/store";
 import { HIGHLIGHT_COLORS, type HighlightColor } from "@/types";
 import { EditNoteModal } from "@/components/modals";
+import { Dropdown } from "@/components/ui";
 import {
     Highlighter,
     StickyNote,
@@ -329,24 +330,15 @@ export function AnnotationsPage() {
                 </div>
 
                 {/* Sort Dropdown */}
-                <div className="relative">
-                    <select
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                        className={cn(
-                            "appearance-none pl-4 pr-10 py-2.5 rounded-lg",
-                            "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                            "text-sm text-[var(--color-text-primary)]",
-                            "focus:outline-none focus:border-[var(--color-accent)]",
-                            "cursor-pointer"
-                        )}
-                    >
-                        <option value="newest">Newest First</option>
-                        <option value="oldest">Oldest First</option>
-                        <option value="book">By Book</option>
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)] pointer-events-none" />
-                </div>
+                <Dropdown
+                    value={sortBy}
+                    onChange={(value) => setSortBy(value as typeof sortBy)}
+                    options={[
+                        { value: "newest", label: "Newest First" },
+                        { value: "oldest", label: "Oldest First" },
+                        { value: "book", label: "By Book" },
+                    ]}
+                />
             </div>
 
             {/* Edit Modal */}
