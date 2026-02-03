@@ -707,46 +707,6 @@ foliate-view * {
     margin: 1rem auto;
 }
 
-/* Text Layer - For text selection */
-.textLayer {
-    position: absolute;
-    left: 0;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    overflow: hidden;
-    opacity: 0.2;
-    line-height: 1;
-    pointer-events: auto;
-    z-index: 1;
-}
-
-.textLayer span,
-.textLayer br {
-    color: transparent;
-    position: absolute;
-    white-space: pre;
-    cursor: text;
-    transform-origin: 0% 0%;
-    user-select: text;
-}
-
-/* Improve text selection appearance */
-.textLayer ::selection {
-    background: rgba(0, 100, 200, 0.3);
-    color: transparent;
-}
-
-/* Text layer highlight for search */
-.textLayer .highlight {
-    background-color: rgba(255, 255, 0, 0.4);
-    border-radius: 2px;
-}
-
-.textLayer .highlight.selected {
-    background-color: rgba(255, 102, 0, 0.5);
-}
-
 /* Loading placeholder for pages */
 .page-placeholder {
     background: linear-gradient(

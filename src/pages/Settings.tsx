@@ -459,38 +459,25 @@ export function SettingsPage() {
                 <div className="space-y-6">
                     <Section
                         title="PDF Rendering"
-                        description="PDF.js rendering options"
+                        description="PDF rendering engine settings"
                         icon={<FileText className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="Enable PDF Support"
-                            description="Read PDF documents in Lion Reader"
-                        >
-                            <Toggle checked={true} onChange={() => {}} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Renderer"
-                            description="PDF rendering engine"
+                            label="PDF Support"
+                            description="PDF support is temporarily unavailable while we upgrade to a new rendering engine"
                         >
                             <span className="text-sm text-[var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-border-subtle)] rounded-md">
-                                PDF.js (react-pdf)
+                                Coming Soon
                             </span>
                         </SettingRow>
 
                         <SettingRow
-                            label="Default Zoom"
-                            description="Initial zoom level when opening PDFs"
+                            label="Renderer"
+                            description="New PDF rendering engine"
                         >
-                            <ButtonSelect
-                                options={[
-                                    { value: "fit-width", label: "Fit Width" },
-                                    { value: "fit-page", label: "Fit Page" },
-                                    { value: "100", label: "100%" },
-                                ]}
-                                value="fit-width"
-                                onChange={() => {}}
-                            />
+                            <span className="text-sm text-[var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-border-subtle)] rounded-md">
+                                PDFium (Native)
+                            </span>
                         </SettingRow>
                     </Section>
 

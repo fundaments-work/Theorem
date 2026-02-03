@@ -23,10 +23,7 @@ export default defineConfig(async () => ({
       'src/foliate-js/comic-book.js',
       'src/foliate-js/view.js',
     ],
-    include: [
-      // Include pdfjs-dist for pre-bundling
-      'pdfjs-dist',
-    ],
+
   },
 
   // Build configuration
@@ -49,10 +46,7 @@ export default defineConfig(async () => ({
     watch: {
       ignored: ["**/src-tauri/**"],
     },
-    // Allow serving files from node_modules for pdfjs-dist
-    fs: {
-      allow: ['..', './node_modules/pdfjs-dist'],
-    },
+
   },
 
   // Prevent Vite from obscuring rust errors

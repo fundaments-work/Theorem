@@ -143,7 +143,7 @@ export function ComponentName({ prop1, prop2 }: ComponentProps) {
 - **Icons:** Lucide React
 - **Styling:** Tailwind CSS v4 with CSS variables
 - **Routing:** React Router DOM (memory router for desktop)
-- **E-book Rendering:** Foliate-js (EPUB) + PDF.js (PDF)
+- **E-book Rendering:** Foliate-js (EPUB), PDFium (PDF - see PDFIUM_INTEGRATION_GUIDE.md)
 - **Storage:** IndexedDB via idb-keyval
 - **Date:** date-fns
 

@@ -5,7 +5,6 @@
 
 import type { BookFormat } from "@/types";
 import { saveCoverImage } from "./storage";
-import { PDFEngine } from "../engines/pdf/pdf-engine";
 
 /**
  * Extracted metadata from a book file
@@ -72,58 +71,14 @@ export async function extractBookMetadata(
         const ext = filename.toLowerCase().split(".").pop() || "epub";
         const mimeType = getMimeType(ext);
 
-        // Special handling for PDFs using our internal PDFEngine
+        // PDF support temporarily disabled - will be replaced with PDFium
         if (mimeType === "application/pdf") {
-            const engine = new PDFEngine();
-            const file = new Blob([data], { type: mimeType });
-
-            try {
-                console.log("[CoverExtractor] Loading PDF with PDFEngine...");
-                const doc = await engine.loadDocument(file);
-                
-                // Extract metadata
-                if (doc.metadata) {
-                    result.title = doc.metadata.title || filename.replace(/\.[^/.]+$/, "");
-                    result.author = doc.metadata.author || "";
-                    result.description = doc.metadata.description || undefined;
-                    result.publisher = doc.metadata.publisher || undefined;
-                    result.language = doc.metadata.language || undefined;
-                    result.identifier = doc.metadata.identifier || undefined;
-                }
-
-                // Render first page as cover
-                try {
-                    console.log("[CoverExtractor] Rendering PDF page 1 as cover...");
-                    // Render page 1 at moderate scale for cover
-                    const coverBlob = await engine.renderToBlob(1, 1.0);
-                    
-                    if (coverBlob && coverBlob.size > 0) {
-                        console.log("[CoverExtractor] PDF Cover blob extracted, size:", coverBlob.size);
-                        
-                        if (bookId) {
-                            result.coverDataUrl = await saveCoverImage(bookId, coverBlob);
-                        } else {
-                            result.coverDataUrl = await blobToDataUrl(coverBlob);
-                        }
-                    }
-                } catch (coverError) {
-                    console.warn("[CoverExtractor] Failed to extract PDF cover:", coverError);
-                }
-
-            } finally {
-                await engine.destroy();
-            }
-
-            console.log("[CoverExtractor] Extracted PDF metadata:", {
-                title: result.title,
-                author: result.author,
-                hasCover: !!result.coverDataUrl,
-            });
-
+            console.log("[CoverExtractor] PDF support temporarily disabled, using filename as title");
+            result.title = filename.replace(/\.[^/.]+$/, "");
             return result;
         }
 
-        // Import foliate-js makeBook for non-PDF formats
+        // Import foliate-js makeBook for EPUB and other formats
         const { makeBook } = await import("../foliate-js/view.js");
 
         // Create a File object from the ArrayBuffer
@@ -200,26 +155,10 @@ export async function extractCoverOnly(
         const ext = filename.toLowerCase().split(".").pop() || "epub";
         const mimeType = getMimeType(ext);
 
-        // Special handling for PDFs using our internal PDFEngine
+        // PDF support temporarily disabled
         if (mimeType === "application/pdf") {
-            const engine = new PDFEngine();
-            const file = new Blob([data], { type: mimeType });
-            let coverDataUrl: string | null = null;
-
-            try {
-                await engine.loadDocument(file);
-                
-                // Render first page as cover
-                const coverBlob = await engine.renderToBlob(1, 1.0);
-                
-                if (coverBlob && coverBlob.size > 0) {
-                    coverDataUrl = await saveCoverImage(bookId, coverBlob);
-                }
-            } finally {
-                await engine.destroy();
-            }
-
-            return coverDataUrl;
+            console.log("[CoverExtractor] PDF cover extraction temporarily disabled");
+            return null;
         }
 
         const { makeBook } = await import("../foliate-js/view.js");
