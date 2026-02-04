@@ -42,63 +42,59 @@
 }
 
 /* ============================================================================
-   Text Layer - Ghost Text Fix
+   Text Layer
    ============================================================================ */
 
-/* The text layer must be above the canvas for selection to work.
-   PDF.js sets z-index:0 by default, which is correct - the DOM order
-   (canvasWrapper before textLayer) creates the proper stacking */
+/* The text layer is positioned absolutely over the canvas.
+   PDF.js handles the z-index and positioning internally.
+   We just need to ensure it's selectable. */
 
-/* IMPORTANT: Text must be transparent but selectable.
-   Using !important to ensure this overrides any other styles.
-   Without this, text appears as "ghost text" over the PDF canvas. */
-.pdfViewer .textLayer span,
-.pdfViewer .textLayer br,
+/* Text layer spans MUST be transparent (color: transparent).
+   This prevents "ghost text" from appearing over the canvas.
+   The text is still selectable even though it's invisible.
+   
+   Using the same selector specificity as pdf_viewer.css:
+   .textLayer :is(span,br) { color:transparent; }
+*/
 .textLayer span,
 .textLayer br {
+    /* Ensure text is transparent - this is critical! */
     color: transparent !important;
-    /* Also disable text-shadow which can cause ghost outlines */
-    text-shadow: none !important;
-    /* Ensure opacity doesn't cause visibility issues */
-    opacity: 1 !important;
-}
-
-/* Ensure marked content inside spans is also transparent */
-.pdfViewer .textLayer .markedContent span,
-.textLayer .markedContent span {
-    color: transparent !important;
-    text-shadow: none !important;
+    /* Maintain selection capability */
+    cursor: text !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
 }
 
 /* ============================================================================
-   Selection Styling (EPUB-like smoothness)
+   Selection Styling
    ============================================================================ */
 
-/* Use accent color for selection to match system theme.
-   IMPORTANT: Do NOT set 'color' here - it would override the transparent
-   text and cause ghost text to appear when text is selected! */
-.pdfViewer .textLayer ::selection,
+/* Selection background color - using accent color from theme.
+   Note: We only change the BACKGROUND, never the COLOR.
+   Changing color would make ghost text appear when selecting. */
 .textLayer ::selection {
-    background: color-mix(in srgb, var(--color-accent, AccentColor), transparent 70%);
+    background: color-mix(in srgb, var(--color-accent, rgb(0, 100, 255)), transparent 70%) !important;
+    /* color is NOT set here - text remains transparent */
 }
 
-.pdfViewer .textLayer ::-moz-selection,
 .textLayer ::-moz-selection {
-    background: color-mix(in srgb, var(--color-accent, AccentColor), transparent 70%);
+    background: color-mix(in srgb, var(--color-accent, rgb(0, 100, 255)), transparent 70%) !important;
 }
 
 /* ============================================================================
    Search Highlights
    ============================================================================ */
 
-.pdfViewer .textLayer .highlight {
+.textLayer .highlight {
     background-color: rgba(255, 255, 0, 0.4);
     border-radius: 4px;
     margin: -1px;
     padding: 1px;
 }
 
-.pdfViewer .textLayer .highlight.selected {
+.textLayer .highlight.selected {
     background-color: rgba(255, 0, 0, 0.4);
 }
 
