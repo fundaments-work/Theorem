@@ -1,0 +1,122 @@
+/**
+ * PDF.js Text Layer Styling for Lion Reader
+ * 
+ * IMPORTANT: Modern PDF.js (v4.x) sets font sizes directly via inline styles.
+ * This CSS provides ONLY visual enhancements (colors, selection, positioning).
+ * 
+ * PDF.js handles natively:
+ * - font-size: Set per-span as inline style (minFontSize * fontHeight)px
+ * - transforms: Uses CSS variables --rotate and --scale-x per-span
+ * - positioning: Sets left/top as percentages
+ * 
+ * Our enhancements:
+ * - Make text layer transparent (for canvas underneath)
+ * - Style text selection highlights
+ * - Theme-aware colors (light/sepia/dark)
+ * - Positioning and overflow behavior
+ */
+
+/* ============================================================================
+   Text Layer Container - Positioning & Layout
+   ============================================================================ */
+
+.textLayer {
+    /* Position over the canvas layer */
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    
+    /* Visual styling */
+    opacity: 1;
+    line-height: 1;
+}
+
+/* ============================================================================
+   Text Spans - PDF.js sets font-size inline, we only style visuals
+   ============================================================================ */
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+    /* 
+       PDF.js applies transforms using CSS variables it sets per-span:
+       - var(--rotate): rotation angle in degrees
+       - var(--scale-x): horizontal stretch for non-uniform fonts
+    */
+    transform: rotate(var(--rotate, 0deg)) scaleX(var(--scale-x, 1));
+}
+
+/* ============================================================================
+   Text Span Positioning & Visual Style
+   
+   PDF.js sets positions as percentages per-span:
+   - left: (100 * x / pageWidth)%
+   - top: (100 * y / pageHeight)%
+   ============================================================================ */
+
+.textLayer span {
+    /* Make text transparent (canvas shows through) */
+    color: transparent;
+    
+    /* Positioning */
+    position: absolute;
+    transform-origin: 0% 0%;
+    
+    /* Text behavior */
+    white-space: pre;
+    cursor: text;
+}
+
+/* Selection color */
+.textLayer ::selection {
+    background: color-mix(in srgb, AccentColor, transparent 75%);
+}
+
+/* Theme support */
+.theme-dark .textLayer ::selection {
+    background: color-mix(in srgb, rgb(0 120 215), transparent 60%);
+}
+
+.theme-sepia .textLayer ::selection {
+    background: color-mix(in srgb, rgb(180 120 60), transparent 60%);
+}
+
+/* ============================================================================
+   Selection Management
+   ============================================================================ */
+
+.textLayer.selecting {
+    touch-action: none;
+}
+
+.textLayer .endOfContent {
+    display: block;
+    position: absolute;
+    inset: 100% 0 0;
+    z-index: 0;
+    cursor: default;
+    user-select: none;
+}
+
+.textLayer.selecting .endOfContent {
+    top: 0;
+    height: 100%;
+    width: 100%;
+}
+
+/* ============================================================================
+   Search Highlights
+   ============================================================================ */
+
+.textLayer .highlight {
+    --highlight-bg-color: rgb(180 0 170 / 0.25);
+    --highlight-selected-bg-color: rgb(0 100 0 / 0.25);
+    
+    margin: -1px;
+    padding: 1px;
+    background-color: var(--highlight-bg-color);
+    border-radius: 4px;
+}
+
+.textLayer .highlight.selected {
+    background-color: var(--highlight-selected-bg-color);
+}
