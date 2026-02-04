@@ -21,13 +21,22 @@ import {
 } from '@/components/reader';
 import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation } from '@/types';
 import { getBookBlob } from '@/lib/storage';
+import type { PDFJsEngineRef } from '@/engines/pdfjs-engine';
 
 export function ReaderPage() {
     const { currentBookId, setRoute } = useUIStore();
     const { getBook, updateProgress, saveBookLocations, addReadingTime, markBookCompleted } = useLibraryStore();
     const { settings, updateReaderSettings, stats, updateStats } = useSettingsStore();
     const readerRef = useRef<ReaderViewportHandle>(null);
+    const pdfReaderRef = useRef<PDFJsEngineRef>(null);
     const loadedBookIdRef = useRef<string | null>(null);
+
+    // PDF-specific state for titlebar controls
+    const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
+    const [pdfTotalPages, setPdfTotalPages] = useState(0);
+    const [pdfZoom, setPdfZoom] = useState(1);
+    const [pdfZoomMode, setPdfZoomMode] = useState<'custom' | 'page-fit' | 'width-fit'>('custom');
+    const [pdfAnnotationMode, setPdfAnnotationMode] = useState<'none' | 'highlight' | 'pen' | 'text' | 'erase'>('none');
 
     // Reading time tracking
     const readingStartTimeRef = useRef<number | null>(null);
@@ -81,8 +90,11 @@ export function ReaderPage() {
         setLoadError(err.message);
     }, []);
 
-    const handlePdfPageChange = useCallback((page: number, total: number) => {
-        console.log('[PDF] Page changed:', page, 'of', total);
+    const handlePdfPageChange = useCallback((page: number, total: number, scale: number) => {
+        console.log('[PDF] Page changed:', page, 'of', total, 'zoom:', scale);
+        setPdfCurrentPage(page);
+        setPdfTotalPages(total);
+        setPdfZoom(scale);
     }, []);
 
     // Load book file
@@ -983,13 +995,55 @@ export function ReaderPage() {
                     activePanel={activePanel}
                     fullscreen={settings.readerSettings.fullscreen}
                     onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
+                    hideReaderControls={isPdfFormat}
+                    pdfControls={isPdfFormat ? {
+                        currentPage: pdfCurrentPage,
+                        totalPages: pdfTotalPages,
+                        zoom: pdfZoom,
+                        zoomMode: pdfZoomMode,
+                        annotationMode: pdfAnnotationMode,
+                        onPrevPage: () => pdfReaderRef.current?.prevPage(),
+                        onNextPage: () => pdfReaderRef.current?.nextPage(),
+                        onZoomIn: () => {
+                            setPdfZoomMode('custom');
+                            pdfReaderRef.current?.zoomIn();
+                        },
+                        onZoomOut: () => {
+                            setPdfZoomMode('custom');
+                            pdfReaderRef.current?.zoomOut();
+                        },
+                        onZoomReset: () => {
+                            setPdfZoomMode('custom');
+                            pdfReaderRef.current?.zoomReset();
+                        },
+                        onZoomFitPage: () => {
+                            setPdfZoomMode('page-fit');
+                            // TODO: Implement fit-to-page in PDF engine
+                            console.log('[PDF] Fit to page - to be implemented');
+                        },
+                        onZoomFitWidth: () => {
+                            setPdfZoomMode('width-fit');
+                            // TODO: Implement fit-to-width in PDF engine
+                            console.log('[PDF] Fit to width - to be implemented');
+                        },
+                        onRotate: () => pdfReaderRef.current?.rotateClockwise(),
+                        onPageInput: (page: number) => pdfReaderRef.current?.goToPage(page),
+                        onAddBookmark: handleAddPageBookmark,
+                        onAnnotationModeChange: (mode) => {
+                            setPdfAnnotationMode(mode);
+                            // TODO: Implement annotation modes in PDF engine
+                            console.log('[PDF] Annotation mode:', mode);
+                        },
+                        isCurrentPageBookmarked: isCurrentPageBookmarked,
+                    } : undefined}
                 />
             </div>
 
             {/* Reader Viewport - Use PDFReader for PDF, ReaderViewport for others */}
-            <div className="flex-1 min-h-0 pt-14 pb-12 overflow-hidden">
+            <div className={cn("flex-1 min-h-0 pt-14 overflow-hidden", !isPdfFormat && "pb-12")}>
                 {isPdfFormat ? (
                     <PDFReader
+                        ref={pdfReaderRef}
                         pdfPath={currentBook?.storagePath || currentBook?.filePath || ''}
                         theme={settings.readerSettings.theme}
                         onPageChange={handlePdfPageChange}
@@ -1013,8 +1067,8 @@ export function ReaderPage() {
                 )}
             </div>
 
-            {/* Bottom Progress Navbar */}
-            {isBookReady && (
+            {/* Bottom Progress Navbar - only for non-PDF formats */}
+            {isBookReady && !isPdfFormat && (
                 <ReaderNavbar
                     location={location}
                     toc={toc}
@@ -1025,83 +1079,90 @@ export function ReaderPage() {
                 />
             )}
 
-            {/* Panels - All affected by brightness filter */}
-            <TableOfContents
-                toc={toc}
-                visible={activePanel === 'toc'}
-                onClose={() => setActivePanel(null)}
-                onNavigate={goTo}
-                currentHref={location?.tocItem?.href}
-            />
+            {/* Panels - All affected by brightness filter (hidden for PDFs) */}
+            {!isPdfFormat && (
+                <>
+                    <TableOfContents
+                        toc={toc}
+                        visible={activePanel === 'toc'}
+                        onClose={() => setActivePanel(null)}
+                        onNavigate={goTo}
+                        currentHref={location?.tocItem?.href}
+                    />
 
-            <ReaderSettings
-                settings={settings.readerSettings}
-                visible={activePanel === 'settings'}
-                onClose={() => setActivePanel(null)}
-                onUpdate={updateReaderSettings}
-                format={getBook(currentBookId || '')?.format}
-            />
+                    <ReaderSettings
+                        settings={settings.readerSettings}
+                        visible={activePanel === 'settings'}
+                        onClose={() => setActivePanel(null)}
+                        onUpdate={updateReaderSettings}
+                        format={getBook(currentBookId || '')?.format}
+                    />
 
-            <ReaderAnnotationsPanel
-                bookId={currentBookId || ''}
-                visible={activePanel === 'bookmarks'}
-                onClose={() => setActivePanel(null)}
-                onNavigate={goTo}
-                onDelete={(id) => readerRef.current?.removeHighlight?.(id)}
-            />
+                    <ReaderAnnotationsPanel
+                        bookId={currentBookId || ''}
+                        visible={activePanel === 'bookmarks'}
+                        onClose={() => setActivePanel(null)}
+                        onNavigate={goTo}
+                        onDelete={(id) => readerRef.current?.removeHighlight?.(id)}
+                    />
 
-            <ReaderSearch
-                visible={activePanel === 'search'}
-                onClose={() => setActivePanel(null)}
-                onNavigate={goTo}
-                onSearch={(q) => readerRef.current?.search(q) || (async function* () { })()}
-                onClearSearch={() => readerRef.current?.clearSearch()}
-            />
+                    <ReaderSearch
+                        visible={activePanel === 'search'}
+                        onClose={() => setActivePanel(null)}
+                        onNavigate={goTo}
+                        onSearch={(q) => readerRef.current?.search(q) || (async function* () { })()}
+                        onClearSearch={() => readerRef.current?.clearSearch()}
+                    />
 
-            <BookInfoPopover
-                metadata={metadata}
-                visible={activePanel === 'info'}
-                onClose={() => setActivePanel(null)}
-            />
+                    <BookInfoPopover
+                        metadata={metadata}
+                        visible={activePanel === 'info'}
+                        onClose={() => setActivePanel(null)}
+                    />
+                </>
+            )}
 
-            {/* Highlight Color Picker Popup */}
-            {/* Debug log removed for performance */}
-            <HighlightColorPicker
-                isOpen={showColorPicker}
-                position={colorPickerPosition}
-                selectedText={selectedText}
-                currentColor={activeAnnotation?.color}
-                onSelectColor={handleColorSelect}
-                onAddNote={handleAddNote}
-                onBookmark={handleBookmarkFromSelection}
-                onDelete={editingHighlightId ? handleDeleteFromColorPicker : undefined}
-                onClose={() => {
-                    console.debug('[Reader] Color picker closing, clearing state');
-                    setShowColorPicker(false);
-                    setEditingHighlightId(null);
-                    setActiveAnnotation(null);
-                    readerRef.current?.clearSelection?.();
-                }}
-            />
+            {/* Highlight Color Picker Popup - only for non-PDF formats */}
+            {!isPdfFormat && (
+                <>
+                    <HighlightColorPicker
+                        isOpen={showColorPicker}
+                        position={colorPickerPosition}
+                        selectedText={selectedText}
+                        currentColor={activeAnnotation?.color}
+                        onSelectColor={handleColorSelect}
+                        onAddNote={handleAddNote}
+                        onBookmark={handleBookmarkFromSelection}
+                        onDelete={editingHighlightId ? handleDeleteFromColorPicker : undefined}
+                        onClose={() => {
+                            console.debug('[Reader] Color picker closing, clearing state');
+                            setShowColorPicker(false);
+                            setEditingHighlightId(null);
+                            setActiveAnnotation(null);
+                            readerRef.current?.clearSelection?.();
+                        }}
+                    />
 
-            {/* Note Editor */}
-            <NoteEditor
-                isOpen={showNoteEditor}
-                position={noteEditorPosition}
-                initialNote={editingNote}
-                selectedText={selectedText}
-                onSave={handleSaveNote}
-                onClose={() => {
-                    setShowNoteEditor(false);
-                    setEditingNote('');
-                    // Don't clear editingHighlightId here - let handleSaveNote do it
-                    // This allows canceling without losing editing state
-                    if (!editingHighlightId) {
-                        // Only clear selection if not editing an existing highlight
-                        readerRef.current?.clearSelection?.();
-                    }
-                }}
-            />
+                    {/* Note Editor */}
+                    <NoteEditor
+                        isOpen={showNoteEditor}
+                        position={noteEditorPosition}
+                        initialNote={editingNote}
+                        selectedText={selectedText}
+                        onSave={handleSaveNote}
+                        onClose={() => {
+                            setShowNoteEditor(false);
+                            setEditingNote('');
+                            // Don't clear editingHighlightId here - let handleSaveNote do it
+                            // This allows canceling without losing editing state
+                            if (!editingHighlightId) {
+                                // Only clear selection if not editing an existing highlight
+                                readerRef.current?.clearSelection?.();
+                            }
+                        }}
+                    />
+                </>
+            )}
         </div>
     );
 }

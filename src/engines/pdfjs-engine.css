@@ -1,23 +1,21 @@
 /**
  * PDF.js Engine Styles
  * 
- * These styles complement the official pdf_viewer.css.
+ * Custom styles for the PDF.js viewer integration with Lion Reader.
  * 
- * IMPORTANT: PDF.js uses complex positioning for text layers.
- * - Do NOT override transform, position, or scale properties on .textLayer or spans
- * - Do NOT set opacity:0 on spans - it breaks text selection
- * - The text is invisible via color:transparent (set by pdf_viewer.css)
+ * NOTE: pdfjs-dist/web/pdf_viewer.css is imported first in the component,
+ * so these styles override/extend the defaults.
  */
+
+/* Import text layer font scaling (missing in pdfjs-dist v4.10.38) */
+@import url("./pdfjs-text-layer.css");
 
 /* ============================================================================
    PDF Viewer Container
    ============================================================================ */
 
 .pdfViewer {
-    /* Note: --scale-factor is set dynamically by PDF.js JavaScript.
-       We only set the page margin/border CSS variables here. */
-    --page-margin: 1px auto -8px;
-    --page-border: 9px solid transparent;
+    /* --scale-factor is set dynamically by PDF.js JavaScript on this element */
 }
 
 /* ============================================================================
@@ -37,69 +35,6 @@
 
 .pdfViewer .canvasWrapper {
     overflow: hidden;
-}
-
-/* ============================================================================
-   Text Layer - Selection Support
-   ============================================================================ */
-
-/*
- * The text layer is absolutely positioned over the canvas by PDF.js.
- * Text spans have inline transforms and positions set by JavaScript.
- * 
- * We only add minimal styling for selection behavior.
- * PDF.js CSS already sets: color:transparent, position:absolute, etc.
- */
-
-/* Stacking order: canvas (0) < textLayer (1) < annotationLayer (2) */
-.pdfViewer .textLayer {
-    z-index: 1;
-}
-
-/* 
- * CRITICAL: Ensure text is invisible (transparent) for the ghost text effect.
- * The text must be transparent so only the canvas rendering is visible,
- * but the spans are still selectable. Using !important to override any
- * inherited color from parent elements.
- * 
- * NOTE: -webkit-text-fill-color is required for Webkit/Chromium-based browsers
- * (including Tauri's WebView) to properly hide the text layer.
- */
-.pdfViewer .textLayer span,
-.pdfViewer .textLayer br {
-    color: transparent !important;
-    -webkit-text-fill-color: transparent !important;
-    pointer-events: auto;
-    cursor: text;
-}
-
-/* Don't select line breaks */
-.pdfViewer .textLayer br {
-    user-select: none;
-}
-
-/* Selection highlight color */
-.pdfViewer .textLayer ::selection {
-    background: color-mix(in srgb, var(--color-accent, rgb(0, 100, 255)), transparent 60%);
-}
-
-.pdfViewer .textLayer ::-moz-selection {
-    background: color-mix(in srgb, var(--color-accent, rgb(0, 100, 255)), transparent 60%);
-}
-
-/* ============================================================================
-   Search Highlights
-   ============================================================================ */
-
-.pdfViewer .textLayer .highlight {
-    background-color: rgba(255, 255, 0, 0.4);
-    border-radius: 4px;
-    margin: -1px;
-    padding: 1px;
-}
-
-.pdfViewer .textLayer .highlight.selected {
-    background-color: rgba(255, 0, 0, 0.4);
 }
 
 /* ============================================================================

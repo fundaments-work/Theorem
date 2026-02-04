@@ -2,7 +2,7 @@
  * PDF.js Engine Component
  *
  * A React component that renders PDF documents using PDF.js Components API.
- * Features text selection, annotations, links, zoom, navigation, and search.
+ * Features annotations, links, zoom, navigation, and search.
  */
 
 import {
@@ -110,6 +110,146 @@ const TEXT_LAYER_MODE = {
     ENABLE_PERMISSIONS: 2,
 } as const;
 
+/**
+ * Hook to manage text selection behavior across the PDF viewer.
+ * Implements the endOfContent technique from PDF.js for smooth selection.
+ */
+function useTextSelectionManager(containerRef: React.RefObject<HTMLDivElement | null>) {
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const textLayersRef = useRef<Map<HTMLElement, HTMLElement>>(new Map());
+    const prevRangeRef = useRef<Range | null>(null);
+    const isPointerDownRef = useRef(false);
+
+    const resetTextLayer = useCallback((endDiv: HTMLElement, textLayer: HTMLElement) => {
+        endDiv.style.width = "";
+        endDiv.style.height = "";
+        endDiv.style.userSelect = "";
+        textLayer.append(endDiv);
+        textLayer.classList.remove("selecting");
+    }, []);
+
+    const enableSelectionListener = useCallback(() => {
+        if (abortControllerRef.current) return;
+
+        const controller = new AbortController();
+        const { signal } = controller;
+        abortControllerRef.current = controller;
+
+        // Track pointer state
+        document.addEventListener("pointerdown", () => {
+            isPointerDownRef.current = true;
+        }, { signal });
+
+        document.addEventListener("pointerup", () => {
+            isPointerDownRef.current = false;
+            textLayersRef.current.forEach(resetTextLayer);
+        }, { signal });
+
+        window.addEventListener("blur", () => {
+            isPointerDownRef.current = false;
+            textLayersRef.current.forEach(resetTextLayer);
+        }, { signal });
+
+        document.addEventListener("keyup", () => {
+            if (!isPointerDownRef.current) {
+                textLayersRef.current.forEach(resetTextLayer);
+            }
+        }, { signal });
+
+        // Main selection change handler
+        document.addEventListener("selectionchange", () => {
+            const selection = document.getSelection();
+            if (!selection || selection.rangeCount === 0) {
+                textLayersRef.current.forEach(resetTextLayer);
+                return;
+            }
+
+            // Find active text layers
+            const activeTextLayers = new Set<HTMLElement>();
+            for (let i = 0; i < selection.rangeCount; i++) {
+                const range = selection.getRangeAt(i);
+                for (const textLayerDiv of textLayersRef.current.keys()) {
+                    if (!activeTextLayers.has(textLayerDiv) && range.intersectsNode(textLayerDiv)) {
+                        activeTextLayers.add(textLayerDiv);
+                    }
+                }
+            }
+
+            // Update selecting state on text layers
+            for (const [textLayerDiv, endDiv] of textLayersRef.current) {
+                if (activeTextLayers.has(textLayerDiv)) {
+                    textLayerDiv.classList.add("selecting");
+                } else {
+                    resetTextLayer(endDiv, textLayerDiv);
+                }
+            }
+
+            // Handle endOfContent positioning for smooth selection
+            const range = selection.getRangeAt(0);
+            const modifyStart = prevRangeRef.current &&
+                (range.compareBoundaryPoints(Range.END_TO_END, prevRangeRef.current) === 0 ||
+                 range.compareBoundaryPoints(Range.START_TO_END, prevRangeRef.current) === 0);
+
+            let anchor: Node = modifyStart ? range.startContainer : range.endContainer;
+            if (anchor.nodeType === Node.TEXT_NODE) {
+                anchor = anchor.parentNode!;
+            }
+
+            if (!modifyStart && range.endOffset === 0) {
+                do {
+                    while (!anchor.previousSibling) {
+                        anchor = anchor.parentNode!;
+                    }
+                    anchor = anchor.previousSibling!;
+                } while (!anchor.childNodes.length);
+            }
+
+            const parentTextLayer = (anchor as Element).closest?.(".textLayer") as HTMLElement | null;
+            const endDiv = parentTextLayer ? textLayersRef.current.get(parentTextLayer) : undefined;
+
+            if (endDiv && parentTextLayer) {
+                endDiv.style.width = parentTextLayer.style.width;
+                endDiv.style.height = parentTextLayer.style.height;
+                endDiv.style.userSelect = "text";
+                anchor.parentElement?.insertBefore(
+                    endDiv,
+                    modifyStart ? anchor : anchor.nextSibling
+                );
+            }
+
+            prevRangeRef.current = range.cloneRange();
+        }, { signal });
+    }, [resetTextLayer]);
+
+    const disableSelectionListener = useCallback(() => {
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
+        textLayersRef.current.clear();
+        prevRangeRef.current = null;
+    }, []);
+
+    const registerTextLayer = useCallback((textLayerDiv: HTMLElement, endDiv: HTMLElement) => {
+        textLayersRef.current.set(textLayerDiv, endDiv);
+        enableSelectionListener();
+    }, [enableSelectionListener]);
+
+    const unregisterTextLayer = useCallback((textLayerDiv: HTMLElement) => {
+        textLayersRef.current.delete(textLayerDiv);
+        if (textLayersRef.current.size === 0) {
+            disableSelectionListener();
+        }
+    }, [disableSelectionListener]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            disableSelectionListener();
+        };
+    }, [disableSelectionListener]);
+
+    return { registerTextLayer, unregisterTextLayer };
+}
+
 const ANNOTATION_MODE = {
     DISABLE: 0,
     ENABLE: 1,
@@ -143,7 +283,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const linkServiceRef = useRef<InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs").PDFLinkService> | null>(null);
         const findControllerRef = useRef<InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs").PDFFindController> | null>(null);
         const pdfViewerRef = useRef<InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs").PDFViewer> | null>(null);
-        const selectionCleanupRef = useRef<(() => void) | null>(null);
+
+        // Text selection manager
+        const { registerTextLayer, unregisterTextLayer } = useTextSelectionManager(containerRef);
 
         // Load PDF
         useEffect(() => {
@@ -233,7 +375,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         eventBus,
                         linkService,
                         findController,
-                        textLayerMode: TEXT_LAYER_MODE.ENABLE,
+                        textLayerMode: TEXT_LAYER_MODE.ENABLE, // Enable text selection
                         annotationMode: ANNOTATION_MODE.ENABLE_FORMS,
                         removePageBorders: false,
                         // Performance optimizations
@@ -261,44 +403,78 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                             }
                         });
                     });
+
+                    // Set initial --scale-factor on pages when they are created
+                    eventBus.on("pagerendered", (evt: { pageNumber: number; source: { scale: number; div: HTMLElement } }) => {
+                        const PDF_TO_CSS_UNITS = 96 / 72;
+                        const viewportScale = evt.source.scale * PDF_TO_CSS_UNITS;
+                        evt.source.div.style.setProperty("--scale-factor", viewportScale.toString());
+                    });
                     
                     eventBus.on("pagechanging", (evt: { pageNumber: number }) => {
                         setCurrentPage(evt.pageNumber);
                         callbacksRef.current.onPageChange?.(evt.pageNumber, info.totalPages);
                     });
-                    
-                    // Setup text selection support
-                    // PDF.js requires toggling 'selecting' class on textLayer for proper
-                    // cross-browser text selection (especially for the endOfContent element)
-                    const setupSelectionHandlers = () => {
-                        const container = containerRef.current;
-                        if (!container) return;
+
+                    // Listen for scale changes
+                    // NOTE: When NOT in standalone mode, PDF.js doesn't set --scale-factor automatically.
+                    // We need to set it manually for text layer font sizing to work correctly.
+                    eventBus.on("scalechanging", (evt: { scale: number; presetValue?: string }) => {
+                        setScale(evt.scale);
                         
-                        const handlePointerDown = () => {
-                            // Add 'selecting' class to all textLayer elements
-                            container.querySelectorAll('.textLayer').forEach(layer => {
-                                layer.classList.add('selecting');
+                        // PDF_TO_CSS_UNITS = 96/72 = 1.333...
+                        // The viewport scale includes this conversion factor
+                        const PDF_TO_CSS_UNITS = 96 / 72;
+                        const viewportScale = evt.scale * PDF_TO_CSS_UNITS;
+                        
+                        // Set --scale-factor on all pages (required for text layer font sizing)
+                        if (containerRef.current) {
+                            const pages = containerRef.current.querySelectorAll(".page");
+                            pages.forEach(page => {
+                                (page as HTMLElement).style.setProperty("--scale-factor", viewportScale.toString());
                             });
-                        };
-                        
-                        const handlePointerUp = () => {
-                            // Remove 'selecting' class from all textLayer elements
-                            container.querySelectorAll('.textLayer').forEach(layer => {
-                                layer.classList.remove('selecting');
-                            });
-                        };
-                        
-                        container.addEventListener('pointerdown', handlePointerDown);
-                        container.addEventListener('pointerup', handlePointerUp);
-                        
-                        // Store cleanup function in ref
-                        selectionCleanupRef.current = () => {
-                            container.removeEventListener('pointerdown', handlePointerDown);
-                            container.removeEventListener('pointerup', handlePointerUp);
-                        };
-                    };
-                    
-                    setupSelectionHandlers();
+                        }
+                    });
+
+                    // Register text layers for improved selection behavior
+                    eventBus.on("textlayerrendered", (evt: { pageNumber: number; source: { textLayerDiv: HTMLElement | null } }) => {
+                        const textLayerDiv = evt.source.textLayerDiv;
+                        if (!textLayerDiv) return;
+
+                        // Create endOfContent element for selection management
+                        let endOfContent = textLayerDiv.querySelector(".endOfContent") as HTMLElement | null;
+                        if (!endOfContent) {
+                            endOfContent = document.createElement("div");
+                            endOfContent.className = "endOfContent";
+                            textLayerDiv.append(endOfContent);
+                        }
+
+                        // Register with selection manager
+                        registerTextLayer(textLayerDiv, endOfContent);
+
+                        // Add mousedown handler for selecting class
+                        textLayerDiv.addEventListener("mousedown", () => {
+                            textLayerDiv.classList.add("selecting");
+                        });
+
+                        // Add copy handler
+                        textLayerDiv.addEventListener("copy", (event) => {
+                            const selection = document.getSelection();
+                            if (selection && selection.toString()) {
+                                event.clipboardData?.setData("text/plain", selection.toString());
+                                event.preventDefault();
+                            }
+                        });
+                    });
+
+                    // Clean up text layers when pages are destroyed
+                    eventBus.on("pageremoved", (evt: { pageNumber: number }) => {
+                        // Find and unregister any text layers for this page
+                        const textLayers = containerRef.current?.querySelectorAll(".textLayer");
+                        textLayers?.forEach(layer => {
+                            unregisterTextLayer(layer as HTMLElement);
+                        });
+                    });
                     
                     // Navigate to initial page (after a delay to ensure DOM is ready)
                     if (initialPage > 1 && initialPage <= info.totalPages) {
@@ -331,9 +507,6 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             
             return () => {
                 cancelled = true;
-                // Cleanup selection handlers
-                selectionCleanupRef.current?.();
-                selectionCleanupRef.current = null;
                 // Cleanup PDF.js instances
                 try {
                     pdfViewerRef.current?.setDocument(null as unknown as import("pdfjs-dist").PDFDocumentProxy);
