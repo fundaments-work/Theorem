@@ -50,14 +50,23 @@
     z-index: 2;
 }
 
+/* Text layer spans must be transparent (but selectable) */
+/* This is critical - removing this causes "ghost text" visible on canvas */
+.pdfViewer .textLayer span,
+.pdfViewer .textLayer br {
+    color: transparent;
+}
+
 /* ============================================================================
    Selection Styling (EPUB-like smoothness)
    ============================================================================ */
 
 /* Use accent color for selection to match system theme */
+/* Note: We don't override color:transparent here - the PDF.js native CSS handles it */
 .pdfViewer .textLayer ::selection {
     /* Use accent color for better integration with OS */
     background: color-mix(in srgb, var(--color-accent, AccentColor), transparent 70%);
+    /* The selection background is visible while the text remains transparent */
 }
 
 .pdfViewer .textLayer ::-moz-selection {
