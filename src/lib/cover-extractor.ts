@@ -33,6 +33,30 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /**
+ * Get MIME type for book format
+ */
+function getMimeType(format: BookFormat): string {
+    switch (format) {
+        case "epub":
+            return "application/epub+zip";
+        case "pdf":
+            return "application/pdf";
+        case "mobi":
+        case "azw":
+        case "azw3":
+            return "application/x-mobipocket-ebook";
+        case "fb2":
+            return "application/x-fictionbook+xml";
+        case "cbz":
+            return "application/vnd.comicbook+zip";
+        case "cbr":
+            return "application/vnd.comicbook-rar";
+        default:
+            return "application/octet-stream";
+    }
+}
+
+/**
  * Extract metadata and cover from a book file
  */
 export async function extractMetadata(
@@ -50,13 +74,9 @@ export async function extractMetadata(
 
     // Import foliate-js makeBook for EPUB and other formats
     try {
-        const { makeBook } = await import("../foliate-js/view.js");
-        const file = new File([data], filename, { 
-            type: format === "epub" ? "application/epub+zip" : 
-                  format === "mobi" ? "application/x-mobipocket-ebook" :
-                  format === "fb2" ? "application/fb2+xml" :
-                  "application/octet-stream"
-        });
+        const { makeBook } = await import("@/foliate-js/view.js");
+        const mimeType = getMimeType(format);
+        const file = new File([data], filename, { type: mimeType });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const book: any = await makeBook(file);
@@ -85,6 +105,15 @@ export async function extractMetadata(
                 }
             } catch (coverError) {
                 console.warn("[CoverExtractor] Failed to extract cover:", coverError);
+            }
+        }
+
+        // Clean up if book has destroy method
+        if (book.destroy) {
+            try {
+                book.destroy();
+            } catch {
+                // Ignore cleanup errors
             }
         }
 

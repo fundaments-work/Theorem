@@ -20,6 +20,44 @@
       "allow": [
         {
           "path": "$HOME/**"
+        },
+        {
+          "path": "$DATA/**"
+        },
+        {
+          "path": "$LOCALDATA/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$DATA/**"
+        },
+        {
+          "path": "$LOCALDATA/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
         }
       ]
     },
@@ -28,6 +66,15 @@
       "allow": [
         {
           "path": "$HOME/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
         }
       ]
     },
@@ -36,6 +83,15 @@
       "allow": [
         {
           "path": "$HOME/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
         }
       ]
     },
@@ -44,51 +100,20 @@
       "allow": [
         {
           "path": "$HOME/**"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-write-file",
-      "allow": [
+        },
         {
           "path": "$APPDATA/**"
         },
         {
-          "path": "$APPCONFIG/**"
-        },
-        {
           "path": "$APPLOCALDATA/**"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-create",
-      "allow": [
-        {
-          "path": "$APPDATA/**"
         },
         {
           "path": "$APPCONFIG/**"
-        },
-        {
-          "path": "$APPLOCALDATA/**"
         }
       ]
     },
-    {
-      "identifier": "fs:allow-mkdir",
-      "allow": [
-        {
-          "path": "$APPDATA/**"
-        },
-        {
-          "path": "$APPCONFIG/**"
-        },
-        {
-          "path": "$APPLOCALDATA/**"
-        }
-      ]
-    },
+    "fs:allow-mkdir",
+    "fs:allow-remove",
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-ask",

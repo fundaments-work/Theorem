@@ -17,6 +17,7 @@ import {
     BookInfoPopover,
     ReaderViewportHandle,
     ReaderNavbar,
+    PDFReader,
 } from '@/components/reader';
 import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation } from '@/types';
 import { getBookBlob } from '@/lib/storage';
@@ -55,6 +56,33 @@ export function ReaderPage() {
 
     const togglePanel = useCallback((panel: ReaderPanel) => {
         setActivePanel(current => current === panel ? null : panel);
+    }, []);
+
+    // Get current book format
+    const currentBook = currentBookId ? getBook(currentBookId) : null;
+    const isPdfFormat = currentBook?.format === 'pdf';
+
+    // PDF callbacks - memoized to prevent infinite re-renders
+    const handlePdfLoad = useCallback((info: import('@/engines/pdfjs-engine').PDFDocumentInfo) => {
+        console.log('[PDF] Loaded:', info);
+        setMetadata({
+            title: info.title || currentBook?.title || 'Untitled',
+            author: info.author || currentBook?.author || 'Unknown',
+            description: '',
+            language: '',
+            publisher: '',
+        });
+        setToc([]);
+        setIsBookReady(true);
+    }, [currentBook?.title, currentBook?.author]);
+
+    const handlePdfError = useCallback((err: Error) => {
+        console.error('[PDF] Error:', err);
+        setLoadError(err.message);
+    }, []);
+
+    const handlePdfPageChange = useCallback((page: number, total: number) => {
+        console.log('[PDF] Page changed:', page, 'of', total);
     }, []);
 
     // Load book file
@@ -958,21 +986,31 @@ export function ReaderPage() {
                 />
             </div>
 
-            {/* Reader Viewport */}
+            {/* Reader Viewport - Use PDFReader for PDF, ReaderViewport for others */}
             <div className="flex-1 min-h-0 pt-14 pb-12 overflow-hidden">
-                <ReaderViewport
-                    key={currentBookId || 'no-book'}
-                    ref={readerRef}
-                    file={file}
-                    settings={settings.readerSettings}
-                    initialLocation={initialLocation}
-                    savedLocations={getBook(currentBookId || '')?.locations}
-                    onReady={handleReady}
-                    onLocationChange={handleLocationChange}
-                    onLocationsSaved={handleLocationsSaved}
-                    onTextSelected={handleTextSelected}
-                    className="w-full h-full"
-                />
+                {isPdfFormat ? (
+                    <PDFReader
+                        pdfPath={currentBook?.storagePath || currentBook?.filePath || ''}
+                        theme={settings.readerSettings.theme}
+                        onPageChange={handlePdfPageChange}
+                        onLoad={handlePdfLoad}
+                        onError={handlePdfError}
+                    />
+                ) : (
+                    <ReaderViewport
+                        key={currentBookId || 'no-book'}
+                        ref={readerRef}
+                        file={file}
+                        settings={settings.readerSettings}
+                        initialLocation={initialLocation}
+                        savedLocations={getBook(currentBookId || '')?.locations}
+                        onReady={handleReady}
+                        onLocationChange={handleLocationChange}
+                        onLocationsSaved={handleLocationsSaved}
+                        onTextSelected={handleTextSelected}
+                        className="w-full h-full"
+                    />
+                )}
             </div>
 
             {/* Bottom Progress Navbar */}

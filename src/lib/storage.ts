@@ -10,11 +10,29 @@ const STORE_NAME = 'lion-reader-books';
 const METADATA_STORE = 'lion-reader-metadata';
 const COVERS_STORE = 'lion-reader-covers';
 
+// Cache for Tauri FS module
+let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
+let appDataDirPath: string | null = null;
+
 // Dynamically import Tauri FS
 async function getTauriFs() {
     if (!isTauri()) return null;
+    if (tauriFs) return tauriFs;
     try {
-        return await import('@tauri-apps/plugin-fs');
+        tauriFs = await import('@tauri-apps/plugin-fs');
+        return tauriFs;
+    } catch {
+        return null;
+    }
+}
+
+async function getAppDataPath(): Promise<string | null> {
+    if (!isTauri()) return null;
+    if (appDataDirPath) return appDataDirPath;
+    try {
+        const { appDataDir } = await import('@tauri-apps/api/path');
+        appDataDirPath = await appDataDir();
+        return appDataDirPath;
     } catch {
         return null;
     }
@@ -25,18 +43,21 @@ async function getAppDir() {
     if (!fs) return null;
     
     try {
-        const { appDataDir } = await import('@tauri-apps/api/path');
-        const dir = await appDataDir();
+        const dir = await getAppDataPath();
+        if (!dir) return null;
         
-        // Ensure books directory exists
-        const booksDir = `${dir}/books`;
+        // Ensure books directory exists using baseDir option
+        const booksDir = 'books';
         try {
-            await fs.mkdir(booksDir, { recursive: true });
+            await fs.mkdir(booksDir, { 
+                recursive: true, 
+                baseDir: fs.BaseDirectory.AppData 
+            });
         } catch {
             // Directory may already exist
         }
         
-        return booksDir;
+        return `${dir}/books`;
     } catch {
         return null;
     }
@@ -52,12 +73,15 @@ export async function saveBookData(id: string, data: ArrayBuffer): Promise<strin
     const appDir = await getAppDir();
     
     if (fs && appDir) {
-        const filePath = `${appDir}/${id}.book`;
+        const relativePath = `books/${id}.book`;
+        const fullPath = `${appDir}/${id}.book`;
         try {
-            await fs.writeFile(filePath, new Uint8Array(data));
-            return filePath;
+            await fs.writeFile(relativePath, new Uint8Array(data), {
+                baseDir: fs.BaseDirectory.AppData
+            });
+            return fullPath;
         } catch (error) {
-            console.error('Failed to save to Tauri FS:', error);
+            console.error('[Storage] Failed to save to Tauri FS:', error);
         }
     }
     
@@ -66,9 +90,28 @@ export async function saveBookData(id: string, data: ArrayBuffer): Promise<strin
         await set(`${STORE_NAME}-${id}`, data);
         return `idb://${id}`;
     } catch (error) {
-        console.error('Failed to save book data:', error);
+        console.error('[Storage] Failed to save book data:', error);
         throw error;
     }
+}
+
+/**
+ * Check if a path is an app storage path (ends with .book)
+ */
+function isAppStoragePath(filePath: string): boolean {
+    return filePath.endsWith('.book');
+}
+
+/**
+ * Get the relative path for app storage files
+ */
+function getRelativeStoragePath(filePath: string): string | null {
+    // Extract the book ID from the path (e.g., "books/uuid.book")
+    const match = filePath.match(/books\/([^/]+\.book)$/);
+    if (match) {
+        return `books/${match[1]}`;
+    }
+    return null;
 }
 
 /**
@@ -83,6 +126,20 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
     if (fs && filePath && !isIdbUrl) {
         try {
             console.log('[Storage] Reading from Tauri FS:', filePath);
+            
+            // Check if this is an app storage path - use baseDir for those
+            if (isAppStoragePath(filePath)) {
+                const relativePath = getRelativeStoragePath(filePath);
+                if (relativePath) {
+                    console.log('[Storage] Using baseDir for app storage path:', relativePath);
+                    const contents = await fs.readFile(relativePath, {
+                        baseDir: fs.BaseDirectory.AppData
+                    });
+                    return contents.buffer as ArrayBuffer;
+                }
+            }
+            
+            // For external files, read directly
             const contents = await fs.readFile(filePath);
             return contents.buffer as ArrayBuffer;
         } catch (error) {
@@ -123,10 +180,27 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
     if (fs && filePath && !isIdbUrl) {
         try {
             console.log('[Storage] Reading blob from Tauri FS:', filePath);
-            const contents = await fs.readFile(filePath);
+            
             // Detect MIME type from extension
             const ext = filePath.toLowerCase().split('.').pop();
-            const mimeType = ext === 'epub' ? 'application/epub+zip' : 'application/octet-stream';
+            const mimeType = ext === 'epub' ? 'application/epub+zip' : 
+                            ext === 'pdf' ? 'application/pdf' :
+                            'application/octet-stream';
+            
+            // Check if this is an app storage path - use baseDir for those
+            if (isAppStoragePath(filePath)) {
+                const relativePath = getRelativeStoragePath(filePath);
+                if (relativePath) {
+                    console.log('[Storage] Using baseDir for app storage path:', relativePath);
+                    const contents = await fs.readFile(relativePath, {
+                        baseDir: fs.BaseDirectory.AppData
+                    });
+                    return new Blob([contents], { type: mimeType });
+                }
+            }
+            
+            // For external files, read directly
+            const contents = await fs.readFile(filePath);
             return new Blob([contents], { type: mimeType });
         } catch (error) {
             console.error('[Storage] Error reading blob from Tauri FS:', error);
@@ -162,17 +236,27 @@ export async function deleteBookData(id: string, filePath?: string): Promise<voi
     
     if (fs && filePath && !filePath.startsWith('idb://')) {
         try {
+            // Check if this is an app storage path - use baseDir for those
+            if (isAppStoragePath(filePath)) {
+                const relativePath = getRelativeStoragePath(filePath);
+                if (relativePath) {
+                    await fs.remove(relativePath, {
+                        baseDir: fs.BaseDirectory.AppData
+                    });
+                    return;
+                }
+            }
             await fs.remove(filePath);
             return;
         } catch (error) {
-            console.error('Failed to delete from Tauri FS:', error);
+            console.error('[Storage] Failed to delete from Tauri FS:', error);
         }
     }
     
     try {
         await del(`${STORE_NAME}-${id}`);
     } catch (error) {
-        console.error('Failed to delete book data:', error);
+        console.error('[Storage] Failed to delete book data:', error);
     }
 }
 

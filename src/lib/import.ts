@@ -30,7 +30,7 @@ async function initTauriPlugins() {
 
 /**
  * Determine book format from file extension
- * Supports foliate-js formats: EPUB, MOBI/AZW, FB2, CBZ/CBR
+ * Supports: EPUB, MOBI/AZW, FB2, CBZ/CBR, PDF
  */
 export function getBookFormat(filePath: string): BookFormat | null {
     const ext = filePath.toLowerCase().split('.').pop();
@@ -44,6 +44,7 @@ export function getBookFormat(filePath: string): BookFormat | null {
         case 'fb2.zip': return 'fb2';
         case 'cbz': return 'cbz';
         case 'cbr': return 'cbr';
+        case 'pdf': return 'pdf';
         default: return null;
     }
 }
@@ -58,11 +59,12 @@ export async function pickBookFiles(): Promise<string[]> {
     const selected = await dialog.open({
         multiple: true,
         filters: [
-            { name: 'All eBooks', extensions: ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'cbz', 'cbr'] },
+            { name: 'All eBooks', extensions: ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'cbz', 'cbr', 'pdf'] },
             { name: 'EPUB', extensions: ['epub'] },
             { name: 'Kindle (MOBI/AZW)', extensions: ['mobi', 'azw', 'azw3'] },
             { name: 'FictionBook (FB2)', extensions: ['fb2', 'fbz'] },
             { name: 'Comics (CBZ/CBR)', extensions: ['cbz', 'cbr'] },
+            { name: 'PDF', extensions: ['pdf'] },
         ],
     });
 

@@ -3,10 +3,10 @@
  */
 
 // Book Format Types - All formats supported by foliate-js
-export type BookFormat = "epub" | "mobi" | "azw" | "azw3" | "fb2" | "cbz" | "cbr";
+export type BookFormat = "epub" | "mobi" | "azw" | "azw3" | "fb2" | "cbz" | "cbr" | "pdf";
 
 // Format categories for UI behavior
-export const FIXED_LAYOUT_FORMATS: BookFormat[] = ["cbz", "cbr"];
+export const FIXED_LAYOUT_FORMATS: BookFormat[] = ["cbz", "cbr", "pdf"];
 export const REFLOWABLE_FORMATS: BookFormat[] = ["epub", "mobi", "azw", "azw3", "fb2"];
 
 // Helper to check if format has fixed layout (no font/size controls, uses zoom instead)
@@ -26,6 +26,7 @@ export const FORMAT_DISPLAY_NAMES: Record<BookFormat, string> = {
     fb2: 'FB2',
     cbz: 'CBZ',
     cbr: 'CBR',
+    pdf: 'PDF',
 };
 
 // Format icons or colors could be added here
@@ -37,6 +38,7 @@ export const FORMAT_COLORS: Record<BookFormat, string> = {
     fb2: '#9b59b6',   // Purple
     cbz: '#2ecc71',   // Green
     cbr: '#2ecc71',   // Green
+    pdf: '#e74c3c',   // Red
 };
 
 // Highlight Colors - single source of truth
