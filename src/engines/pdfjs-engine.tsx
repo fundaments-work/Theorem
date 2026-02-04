@@ -17,7 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
 import { isTauri } from "@/lib/env";
 
-// Import PDF.js official CSS
+// Import PDF.js official CSS first, then our overrides
 import "pdfjs-dist/web/pdf_viewer.css";
 import "./pdfjs-engine.css";
 
@@ -143,6 +143,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const linkServiceRef = useRef<InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs").PDFLinkService> | null>(null);
         const findControllerRef = useRef<InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs").PDFFindController> | null>(null);
         const pdfViewerRef = useRef<InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs").PDFViewer> | null>(null);
+        const selectionCleanupRef = useRef<(() => void) | null>(null);
 
         // Load PDF
         useEffect(() => {
@@ -258,6 +259,39 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         callbacksRef.current.onPageChange?.(evt.pageNumber, info.totalPages);
                     });
                     
+                    // Setup text selection support
+                    // PDF.js requires toggling 'selecting' class on textLayer for proper
+                    // cross-browser text selection (especially for the endOfContent element)
+                    const setupSelectionHandlers = () => {
+                        const container = containerRef.current;
+                        if (!container) return;
+                        
+                        const handlePointerDown = () => {
+                            // Add 'selecting' class to all textLayer elements
+                            container.querySelectorAll('.textLayer').forEach(layer => {
+                                layer.classList.add('selecting');
+                            });
+                        };
+                        
+                        const handlePointerUp = () => {
+                            // Remove 'selecting' class from all textLayer elements
+                            container.querySelectorAll('.textLayer').forEach(layer => {
+                                layer.classList.remove('selecting');
+                            });
+                        };
+                        
+                        container.addEventListener('pointerdown', handlePointerDown);
+                        container.addEventListener('pointerup', handlePointerUp);
+                        
+                        // Store cleanup function in ref
+                        selectionCleanupRef.current = () => {
+                            container.removeEventListener('pointerdown', handlePointerDown);
+                            container.removeEventListener('pointerup', handlePointerUp);
+                        };
+                    };
+                    
+                    setupSelectionHandlers();
+                    
                     // Navigate to initial page (after a delay to ensure DOM is ready)
                     if (initialPage > 1 && initialPage <= info.totalPages) {
                         setTimeout(() => {
@@ -289,7 +323,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             
             return () => {
                 cancelled = true;
-                // Cleanup
+                // Cleanup selection handlers
+                selectionCleanupRef.current?.();
+                selectionCleanupRef.current = null;
+                // Cleanup PDF.js instances
                 try {
                     pdfViewerRef.current?.setDocument(null as unknown as import("pdfjs-dist").PDFDocumentProxy);
                     linkServiceRef.current?.setDocument(null as unknown as import("pdfjs-dist").PDFDocumentProxy, null);
@@ -433,11 +470,12 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 {/* PDF Viewer Container - must be absolutely positioned for PDF.js */}
                 <div
                     ref={containerRef}
-                    className="absolute inset-0 overflow-auto"
+                    className={cn(
+                        "absolute inset-0 overflow-auto",
+                        (isLoading || error) && "invisible"
+                    )}
                     style={{
                         backgroundColor: "var(--color-surface)",
-                        opacity: isLoading || error ? 0 : 1,
-                        pointerEvents: isLoading || error ? "none" : "auto",
                     }}
                 >
                     <div className="pdfViewer" />

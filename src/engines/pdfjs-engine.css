@@ -1,16 +1,14 @@
 /**
- * PDF.js Engine Styles
- * Custom styles for the PDF.js Components API viewer
+ * PDF.js Engine Styles - Clean & Minimal
  * 
- * NOTE: We import the official pdf_viewer.css first, so these styles
- * should complement, not override, the official styles.
+ * These styles complement the official pdf_viewer.css.
+ * IMPORTANT: Do NOT override opacity or z-index of textLayer spans - it breaks selection!
  */
 
 /* ============================================================================
-   PDF Viewer Container Structure
+   PDF Viewer Container
    ============================================================================ */
 
-/* Main container */
 .pdfViewer {
     position: relative;
     width: 100%;
@@ -19,90 +17,81 @@
 }
 
 /* ============================================================================
-   Individual Page
+   Page Wrapper
    ============================================================================ */
 
-/* Page wrapper */
 .pdfViewer .page {
     position: relative;
     margin: 10px auto;
     background: white;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     border: 1px solid #ddd;
-    /* Create stacking context for layers */
-    isolation: isolate;
 }
 
-/* Canvas - the actual rendered PDF */
 .pdfViewer .page canvas {
     display: block;
     margin: 0 auto;
-    position: relative;
-    z-index: 1;
 }
 
 /* ============================================================================
-   Text Layer
+   Text Layer - Selection Support
    ============================================================================ */
 
-/* The text layer is positioned absolutely over the canvas.
-   PDF.js handles the z-index and positioning internally.
-   We just need to ensure it's selectable. */
+/*
+ * PDF.js text layer uses transparent text positioned over the canvas.
+ * The official CSS sets: .textLayer :is(span,br) { color:transparent; ... }
+ * 
+ * CRITICAL: Do NOT set opacity:0 on spans - it breaks text selection!
+ * The text is already invisible via color:transparent in pdf_viewer.css.
+ * 
+ * We only need to ensure proper stacking and selection behavior.
+ */
 
-/* Text layer spans MUST be transparent (color: transparent).
-   This prevents "ghost text" from appearing over the canvas.
-   The text is still selectable even though it's invisible.
-   
-   Using the same selector specificity as pdf_viewer.css:
-   .textLayer :is(span,br) { color:transparent; }
-*/
-.textLayer span,
-.textLayer br {
-    /* Ensure text is transparent - this is critical! */
-    color: transparent !important;
-    /* Maintain selection capability */
-    cursor: text !important;
-    user-select: text !important;
-    -webkit-user-select: text !important;
-    -moz-user-select: text !important;
+/* Ensure textLayer is above canvas for mouse events */
+.pdfViewer .textLayer {
+    z-index: 2;
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
 }
 
-/* ============================================================================
-   Selection Styling
-   ============================================================================ */
-
-/* Selection background color - using accent color from theme.
-   Note: We only change the BACKGROUND, never the COLOR.
-   Changing color would make ghost text appear when selecting. */
-.textLayer ::selection {
-    background: color-mix(in srgb, var(--color-accent, rgb(0, 100, 255)), transparent 70%) !important;
-    /* color is NOT set here - text remains transparent */
+/* Ensure text spans receive pointer events */
+.pdfViewer .textLayer span {
+    pointer-events: auto;
+    cursor: text;
 }
 
-.textLayer ::-moz-selection {
-    background: color-mix(in srgb, var(--color-accent, rgb(0, 100, 255)), transparent 70%) !important;
+/* Selection highlight styling */
+.pdfViewer .textLayer ::selection {
+    background: color-mix(in srgb, var(--color-accent, rgb(0, 100, 255)), transparent 60%);
+}
+
+.pdfViewer .textLayer ::-moz-selection {
+    background: color-mix(in srgb, var(--color-accent, rgb(0, 100, 255)), transparent 60%);
 }
 
 /* ============================================================================
    Search Highlights
    ============================================================================ */
 
-.textLayer .highlight {
+.pdfViewer .textLayer .highlight {
     background-color: rgba(255, 255, 0, 0.4);
     border-radius: 4px;
     margin: -1px;
     padding: 1px;
 }
 
-.textLayer .highlight.selected {
+.pdfViewer .textLayer .highlight.selected {
     background-color: rgba(255, 0, 0, 0.4);
 }
 
 /* ============================================================================
-   Annotation Layer - Links and Forms
+   Annotation Layer
    ============================================================================ */
 
 .pdfViewer .annotationLayer {
+    position: absolute;
+    inset: 0;
     z-index: 3;
 }
 
@@ -110,63 +99,21 @@
     pointer-events: auto;
 }
 
-/* Links */
 .pdfViewer .annotationLayer a {
     color: inherit;
     text-decoration: none;
-}
-
-/* Form fields */
-.pdfViewer .annotationLayer input,
-.pdfViewer .annotationLayer textarea,
-.pdfViewer .annotationLayer select {
-    background: white;
-    border: 1px solid #ccc;
-    padding: 2px 4px;
-    font-size: inherit;
-}
-
-.pdfViewer .annotationLayer input:focus,
-.pdfViewer .annotationLayer textarea:focus {
-    outline: 2px solid var(--color-accent, #0066cc);
-    outline-offset: -1px;
-}
-
-/* ============================================================================
-   Loading State
-   ============================================================================ */
-
-.pdfViewer .page .loadingIcon {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 40px;
-    height: 40px;
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid var(--color-accent, #3498db);
-    border-radius: 50%;
-    animation: pdfjs-spin 1s linear infinite;
-    z-index: 5;
-}
-
-@keyframes pdfjs-spin {
-    0% { transform: translate(-50%, -50%) rotate(0deg); }
-    100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 /* ============================================================================
    Theme Support
    ============================================================================ */
 
-/* Dark mode */
 .theme-dark .pdfViewer .page {
     background: #1a1a1a;
     border-color: #333;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-/* Sepia mode */
 .theme-sepia .pdfViewer .page {
     background: #f4ecd8;
     border-color: #d4c5a9;
@@ -195,6 +142,29 @@
 .pdfViewerContainer::-webkit-scrollbar-thumb:hover {
     background: var(--color-text-muted, #999);
     background-clip: content-box;
+}
+
+/* ============================================================================
+   Loading State
+   ============================================================================ */
+
+.pdfViewer .page .loadingIcon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid var(--color-accent, #3498db);
+    border-radius: 50%;
+    animation: pdfjs-spin 1s linear infinite;
+    z-index: 5;
+}
+
+@keyframes pdfjs-spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 /* ============================================================================
