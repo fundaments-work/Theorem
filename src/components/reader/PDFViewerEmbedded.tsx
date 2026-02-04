@@ -73,8 +73,52 @@ async function getFileUrl(file: File | Blob | string): Promise<string> {
         throw new Error("Local file paths are only supported in Tauri mode");
     }
 
-    // For File or Blob, create an object URL
-    return URL.createObjectURL(file);
+    // For File or Blob in Tauri, save to temp file and use asset protocol
+    if (isTauri()) {
+        try {
+            const { writeFile, mkdir, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+            const { join, appDataDir } = await import('@tauri-apps/api/path');
+            
+            // Create temp directory if needed
+            const tempDir = await join(await appDataDir(), 'temp');
+            try {
+                await mkdir(tempDir, { recursive: true });
+            } catch {
+                // Dir might already exist
+            }
+            
+            // Generate unique filename
+            const filename = `pdf-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`;
+            const filepath = await join(tempDir, filename);
+            
+            // Write blob to file
+            const arrayBuffer = await file.arrayBuffer();
+            await writeFile(filepath, new Uint8Array(arrayBuffer));
+            
+            // Convert to Tauri asset URL
+            return convertFileSrc(filepath);
+        } catch (err) {
+            console.error('[PDFViewerEmbedded] Failed to save blob to temp file:', err);
+            // Fallback to data URL for small files
+            if (file.size < 5 * 1024 * 1024) { // < 5MB
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file instanceof File ? file : new File([file], 'document.pdf'));
+                });
+            }
+            throw new Error('Failed to prepare PDF for viewing. File may be too large.');
+        }
+    }
+
+    // For web mode (non-Tauri), use data URL since blob URLs don't work cross-frame
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file instanceof File ? file : new File([file], 'document.pdf'));
+    });
 }
 
 /**
