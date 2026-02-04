@@ -17,7 +17,7 @@ import {
     BookInfoPopover,
     ReaderViewportHandle,
     ReaderNavbar,
-    PDFViewer,
+    PDFViewerEmbeddedWrapper,
     PDFViewerHandle,
     PDFTitlebar,
 } from '@/components/reader';
@@ -1153,7 +1153,7 @@ export function ReaderPage() {
 
 // Memoized PDF viewer to prevent scroll position reset on parent re-renders
 const MemoizedPDFViewer = memo(forwardRef<PDFViewerHandle, PDFViewerProps>(
-    (props, ref) => <PDFViewer {...props} ref={ref} />
+    (props, ref) => <PDFViewerEmbeddedWrapper {...props} ref={ref} />
 ));
 MemoizedPDFViewer.displayName = 'MemoizedPDFViewer';
 
