@@ -42,34 +42,43 @@
 }
 
 /* ============================================================================
-   Text Layer
+   Text Layer - Ghost Text Fix
    ============================================================================ */
 
-/* Ensure text layer is properly positioned above canvas */
-.pdfViewer .textLayer {
-    z-index: 2;
+/* The text layer must be above the canvas for selection to work.
+   PDF.js sets z-index:0 by default, which is correct - the DOM order
+   (canvasWrapper before textLayer) creates the proper stacking */
+
+/* IMPORTANT: Text must be transparent but selectable.
+   Using !important to ensure this overrides any other styles.
+   Without this, text appears as "ghost text" over the PDF canvas. */
+.pdfViewer .textLayer span,
+.pdfViewer .textLayer br,
+.textLayer span,
+.textLayer br {
+    color: transparent !important;
 }
 
-/* Text layer spans must be transparent (but selectable) */
-/* This is critical - removing this causes "ghost text" visible on canvas */
-.pdfViewer .textLayer span,
-.pdfViewer .textLayer br {
-    color: transparent;
+/* Ensure marked content inside spans is also transparent */
+.pdfViewer .textLayer .markedContent span,
+.textLayer .markedContent span {
+    color: transparent !important;
 }
 
 /* ============================================================================
    Selection Styling (EPUB-like smoothness)
    ============================================================================ */
 
-/* Use accent color for selection to match system theme */
-/* Note: We don't override color:transparent here - the PDF.js native CSS handles it */
-.pdfViewer .textLayer ::selection {
-    /* Use accent color for better integration with OS */
+/* Use accent color for selection to match system theme.
+   IMPORTANT: Do NOT set 'color' here - it would override the transparent
+   text and cause ghost text to appear when text is selected! */
+.pdfViewer .textLayer ::selection,
+.textLayer ::selection {
     background: color-mix(in srgb, var(--color-accent, AccentColor), transparent 70%);
-    /* The selection background is visible while the text remains transparent */
 }
 
-.pdfViewer .textLayer ::-moz-selection {
+.pdfViewer .textLayer ::-moz-selection,
+.textLayer ::-moz-selection {
     background: color-mix(in srgb, var(--color-accent, AccentColor), transparent 70%);
 }
 
