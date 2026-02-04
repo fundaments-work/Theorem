@@ -17,8 +17,3 @@ export { ReaderAnnotationsPanel } from './ReaderAnnotationsPanel';
 
 // Highlight components
 export { HighlightColorPicker, NoteEditor } from './highlights';
-
-// PDF Viewer
-export { PDFViewer, type PDFViewerHandle, type PDFViewerProps } from './PDFViewer';
-export { PDFViewerEmbeddedWrapper } from './PDFViewerEmbeddedWrapper';
-export { PDFTitlebar, type PDFTitlebarProps } from './PDFTitlebar';

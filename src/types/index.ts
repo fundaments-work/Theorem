@@ -3,10 +3,10 @@
  */
 
 // Book Format Types - All formats supported by foliate-js
-export type BookFormat = "epub" | "pdf" | "mobi" | "azw" | "azw3" | "fb2" | "cbz" | "cbr";
+export type BookFormat = "epub" | "mobi" | "azw" | "azw3" | "fb2" | "cbz" | "cbr";
 
 // Format categories for UI behavior
-export const FIXED_LAYOUT_FORMATS: BookFormat[] = ["pdf", "cbz", "cbr"];
+export const FIXED_LAYOUT_FORMATS: BookFormat[] = ["cbz", "cbr"];
 export const REFLOWABLE_FORMATS: BookFormat[] = ["epub", "mobi", "azw", "azw3", "fb2"];
 
 // Helper to check if format has fixed layout (no font/size controls, uses zoom instead)
@@ -20,7 +20,6 @@ export const isReflowable = (format: BookFormat): boolean =>
 // Format display names
 export const FORMAT_DISPLAY_NAMES: Record<BookFormat, string> = {
     epub: 'EPUB',
-    pdf: 'PDF',
     mobi: 'MOBI',
     azw: 'AZW',
     azw3: 'AZW3',
@@ -32,7 +31,6 @@ export const FORMAT_DISPLAY_NAMES: Record<BookFormat, string> = {
 // Format icons or colors could be added here
 export const FORMAT_COLORS: Record<BookFormat, string> = {
     epub: '#3498db',  // Blue
-    pdf: '#e74c3c',   // Red
     mobi: '#f39c12',  // Orange
     azw: '#f39c12',   // Orange
     azw3: '#f39c12',  // Orange
@@ -71,7 +69,7 @@ export interface Book {
     addedAt: Date;
     lastReadAt?: Date;
     progress: number; // 0-1
-    currentLocation?: string; // EPUB CFI or pdf:page=<n>&offset=<0-1>
+    currentLocation?: string; // EPUB CFI
     lastClickFraction?: number; // 0-1 - last position clicked on progress bar for visual consistency
     // Page-based progress (stored for instant correct display on reopen)
     pageProgress?: {

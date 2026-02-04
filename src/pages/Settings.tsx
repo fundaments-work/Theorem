@@ -19,7 +19,6 @@ import {
     ChevronRight,
     FolderOpen,
     BookOpen,
-    FileText,
     Languages,
     Rss,
     Puzzle,
@@ -154,14 +153,10 @@ export function SettingsPage() {
     const { settings, updateSettings, resetSettings, stats, updateStats } = useSettingsStore();
     const { books, annotations } = useLibraryStore();
     const [activeTab, setActiveTab] = useState<
-        "general" | "pdf" | "dictionary" | "rss" | "integrations" | "tts" | "sync" | "storage"
+        "general" | "dictionary" | "rss" | "integrations" | "tts" | "sync" | "storage"
     >("general");
 
     // Dummy states for planned features
-    const [pdfOptimization, setPdfOptimization] = useState(true);
-    const [pdfRangeRequests, setPdfRangeRequests] = useState(true);
-    const [pdfVirtualScroll, setPdfVirtualScroll] = useState(true);
-    const [pdfThumbnailCache, setPdfThumbnailCache] = useState(true);
     const [dictionaryMode, setDictionaryMode] = useState<"online" | "offline" | "auto">("auto");
     const [offlineDictInstalled, setOfflineDictInstalled] = useState(false);
     const [rssAutoSync, setRssAutoSync] = useState(true);
@@ -204,7 +199,6 @@ export function SettingsPage() {
 
     const tabButtons = [
         { id: "general" as const, label: "General", icon: Settings },
-        { id: "pdf" as const, label: "PDF", icon: FileText },
         { id: "dictionary" as const, label: "Dictionary", icon: Languages },
         { id: "rss" as const, label: "RSS & Web", icon: Rss },
         { id: "integrations" as const, label: "Integrations", icon: Puzzle },
@@ -451,118 +445,6 @@ export function SettingsPage() {
                             Reset to Defaults
                         </button>
                     </div>
-                </div>
-            )}
-
-            {/* PDF Settings */}
-            {activeTab === "pdf" && (
-                <div className="space-y-6">
-                    <Section
-                        title="PDF Rendering"
-                        description="PDF rendering engine settings"
-                        icon={<FileText className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="PDF Support"
-                            description="PDF support is temporarily unavailable while we upgrade to a new rendering engine"
-                        >
-                            <span className="text-sm text-[var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-border-subtle)] rounded-md">
-                                Coming Soon
-                            </span>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Renderer"
-                            description="PDF rendering engine"
-                        >
-                            <span className="text-sm text-[var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-border-subtle)] rounded-md">
-                                PDF.js (Browser-based)
-                            </span>
-                        </SettingRow>
-                    </Section>
-
-                    <Section
-                        title="Performance"
-                        description="Optimization for large PDFs"
-                        icon={<RefreshCw className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Large PDF Optimization"
-                            description="Enable optimizations for files over 50MB"
-                        >
-                            <Toggle checked={pdfOptimization} onChange={setPdfOptimization} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Range Requests"
-                            description="Load PDF pages on demand (saves memory)"
-                        >
-                            <Toggle checked={pdfRangeRequests} onChange={setPdfRangeRequests} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Virtual Scrolling"
-                            description="Only render visible pages"
-                        >
-                            <Toggle checked={pdfVirtualScroll} onChange={setPdfVirtualScroll} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Thumbnail Cache"
-                            description="Cache page thumbnails for faster navigation"
-                        >
-                            <Toggle checked={pdfThumbnailCache} onChange={setPdfThumbnailCache} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Canvas Recycling"
-                            description="Reuse canvas elements to reduce memory usage"
-                        >
-                            <Toggle checked={true} onChange={() => {}} />
-                        </SettingRow>
-                    </Section>
-
-                    <Section
-                        title="Annotations"
-                        description="PDF annotation settings"
-                        icon={<BookOpenCheck className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Default Highlight Color"
-                            description="Color for new highlights"
-                        >
-                            <div className="flex items-center gap-2">
-                                {["#FFD700", "#90EE90", "#87CEEB", "#FFB6C1", "#DDA0DD"].map((color) => (
-                                    <button
-                                        key={color}
-                                        className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
-                                        style={{ backgroundColor: color }}
-                                    />
-                                ))}
-                            </div>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Auto-save Annotations"
-                            description="Save annotations immediately"
-                        >
-                            <Toggle checked={true} onChange={() => {}} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Export Format"
-                            description="Format for exporting annotations"
-                        >
-                            <ButtonSelect
-                                options={[
-                                    { value: "json", label: "JSON" },
-                                    { value: "pdf", label: "Embedded PDF" },
-                                ]}
-                                value="json"
-                                onChange={() => {}}
-                            />
-                        </SettingRow>
-                    </Section>
                 </div>
             )}
 

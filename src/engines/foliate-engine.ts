@@ -1629,7 +1629,7 @@ export class FoliateEngine {
     }
 
     /**
-     * Check if current document has fixed layout (PDF, CBZ, CBR)
+     * Check if current document has fixed layout (CBZ, CBR)
      * Fixed layouts use zoom instead of font settings
      */
     isFixedLayout(): boolean {

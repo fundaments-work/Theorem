@@ -126,9 +126,7 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
             const contents = await fs.readFile(filePath);
             // Detect MIME type from extension
             const ext = filePath.toLowerCase().split('.').pop();
-            const mimeType = ext === 'epub' ? 'application/epub+zip' :
-                ext === 'pdf' ? 'application/pdf' :
-                    'application/octet-stream';
+            const mimeType = ext === 'epub' ? 'application/epub+zip' : 'application/octet-stream';
             return new Blob([contents], { type: mimeType });
         } catch (error) {
             console.error('[Storage] Error reading blob from Tauri FS:', error);

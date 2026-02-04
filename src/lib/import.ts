@@ -30,13 +30,12 @@ async function initTauriPlugins() {
 
 /**
  * Determine book format from file extension
- * Supports all foliate-js formats: EPUB, PDF, MOBI/AZW, FB2, CBZ/CBR
+ * Supports foliate-js formats: EPUB, MOBI/AZW, FB2, CBZ/CBR
  */
 export function getBookFormat(filePath: string): BookFormat | null {
     const ext = filePath.toLowerCase().split('.').pop();
     switch (ext) {
         case 'epub': return 'epub';
-        case 'pdf': return 'pdf';
         case 'mobi': return 'mobi';
         case 'azw': return 'azw';
         case 'azw3': return 'azw3';
@@ -59,9 +58,8 @@ export async function pickBookFiles(): Promise<string[]> {
     const selected = await dialog.open({
         multiple: true,
         filters: [
-            { name: 'All eBooks', extensions: ['epub', 'pdf', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'cbz', 'cbr'] },
+            { name: 'All eBooks', extensions: ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'cbz', 'cbr'] },
             { name: 'EPUB', extensions: ['epub'] },
-            { name: 'PDF', extensions: ['pdf'] },
             { name: 'Kindle (MOBI/AZW)', extensions: ['mobi', 'azw', 'azw3'] },
             { name: 'FictionBook (FB2)', extensions: ['fb2', 'fbz'] },
             { name: 'Comics (CBZ/CBR)', extensions: ['cbz', 'cbr'] },
@@ -239,7 +237,7 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
     const { fs } = await initTauriPlugins();
     if (!fs) throw new Error('FS plugin not available');
 
-    const bookExtensions = ['.epub', '.pdf', '.mobi', '.azw', '.azw3', '.fb2', '.fbz', '.cbz', '.cbr'];
+    const bookExtensions = ['.epub', '.mobi', '.azw', '.azw3', '.fb2', '.fbz', '.cbz', '.cbr'];
     const bookFiles: string[] = [];
 
     async function scanDir(dir: string) {

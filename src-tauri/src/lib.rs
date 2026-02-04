@@ -1,10 +1,6 @@
 /**
  * Tauri Library Module
- *
- * Exports image encoding utilities for the Tauri application.
  */
-
-pub mod image_encoder;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,9 +13,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
-/// Re-exports for binary targets
-pub use image_encoder::{
-    encode_auto, encode_to_jpeg_base64, encode_to_jpeg_base64_with_quality,
-    encode_to_png_base64, encode_to_png_base64_with_settings, EncodedImage, JpegQuality,
-};

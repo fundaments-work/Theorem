@@ -110,7 +110,7 @@ export function ReaderSettings({
     const [activeTab, setActiveTab] = useState<TabId>('themes');
     const [showAdvancedType, setShowAdvancedType] = useState(false);
     
-    // Determine if current format is fixed layout (PDF, CBZ, CBR)
+    // Determine if current format is fixed layout (CBZ, CBR)
     const isFixed = isFixedLayout(format);
 
     const brightnessSlider = useSmoothSlider(
@@ -411,7 +411,7 @@ export function ReaderSettings({
                         </div>
                     )}
 
-                    {/* ZOOM TAB - For fixed layouts (PDF, CBZ, CBR) */}
+                    {/* ZOOM TAB - For fixed layouts (CBZ, CBR) */}
                     {activeTab === 'zoom' && (
                         <div className="space-y-5">
                             {/* Zoom Level */}
@@ -478,7 +478,7 @@ export function ReaderSettings({
                             {/* Note about fixed layout */}
                             <div className="p-3 rounded-lg text-xs" style={surfaceStyle}>
                                 <p style={textMutedStyle}>
-                                    This document has a fixed layout. Zoom controls replace text size options for PDFs and comics.
+                                    This document has a fixed layout. Zoom controls replace text size options for comics.
                                 </p>
                             </div>
                         </div>
