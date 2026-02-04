@@ -1,6 +1,9 @@
 /**
- * PDF.js Engine Styles - Optimized for Performance
+ * PDF.js Engine Styles
  * Custom styles for the PDF.js Components API viewer
+ * 
+ * NOTE: We import the official pdf_viewer.css first, so these styles
+ * should complement, not override, the official styles.
  */
 
 /* ============================================================================
@@ -15,17 +18,11 @@
     padding: 20px 0;
 }
 
-/* Remove default margin from pdfViewer root */
-.pdfViewer .viewer {
-    position: relative;
-    width: 100%;
-}
-
 /* ============================================================================
-   Individual Page - Optimized
+   Individual Page
    ============================================================================ */
 
-/* Page wrapper - optimized for rendering performance */
+/* Page wrapper */
 .pdfViewer .page {
     position: relative;
     margin: 10px auto;
@@ -34,123 +31,37 @@
     border: 1px solid #ddd;
     /* Create stacking context for layers */
     isolation: isolate;
-    /* Optimize rendering - only paint when visible */
-    contain: layout paint;
-    /* Hardware acceleration for smooth scrolling */
-    will-change: transform;
-    transform: translateZ(0);
-}
-
-/* Hide pages that are far from viewport for performance */
-.pdfViewer .page[data-loaded="false"] {
-    visibility: hidden;
 }
 
 /* Canvas - the actual rendered PDF */
 .pdfViewer .page canvas {
     display: block;
     margin: 0 auto;
-    /* Ensure canvas is below text layer */
     position: relative;
     z-index: 1;
-    /* Hardware acceleration */
-    will-change: transform;
 }
 
 /* ============================================================================
-   Text Layer - Optimized for Selection Performance
+   Text Layer
    ============================================================================ */
 
-/* Text layer container - optimized */
+/* Ensure text layer is properly positioned above canvas */
 .pdfViewer .textLayer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    line-height: 1;
-    /* Above canvas but below annotations */
     z-index: 2;
-    /* Text selection behavior */
-    user-select: text;
-    -webkit-user-select: text;
-    -moz-user-select: text;
-    cursor: text;
-    /* Transparent but interactive */
-    opacity: 1;
-    background: transparent;
-    /* Optimize rendering - text layer doesn't affect layout of other elements */
-    contain: layout paint style;
-    /* Reduce hit-testing overhead */
-    pointer-events: none;
 }
 
-/* Text layer captures events */
-.pdfViewer .textLayer {
-    pointer-events: auto;
-}
+/* ============================================================================
+   Selection Styling (EPUB-like smoothness)
+   ============================================================================ */
 
-/* Individual text elements - optimized */
-.pdfViewer .textLayer span,
-.pdfViewer .textLayer br {
-    position: absolute;
-    /* Text is transparent but selectable */
-    color: transparent;
-    white-space: pre;
-    cursor: text;
-    /* PDF coordinates use this origin */
-    transform-origin: 0 0;
-    /* Performance optimizations */
-    contain: layout paint style;
-    /* Faster hit testing - each span is a separate layer */
-    will-change: auto;
-    /* Ensure text is rendered as glyphs for faster selection */
-    text-rendering: optimizeLegibility;
-}
-
-/* Optimize selection performance */
-.pdfViewer .textLayer span {
-    /* Use simpler box model */
-    display: block;
-    box-sizing: border-box;
-    /* Prevent text from causing layout shifts */
-    overflow: hidden;
-}
-
-/* Selection styling - optimized */
+/* Use accent color for selection to match system theme */
 .pdfViewer .textLayer ::selection {
-    background: rgba(0, 100, 255, 0.3) !important;
-    color: transparent !important;
-    /* Faster selection rendering */
-    text-shadow: none !important;
+    /* Use accent color for better integration with OS */
+    background: color-mix(in srgb, var(--color-accent, AccentColor), transparent 70%);
 }
 
 .pdfViewer .textLayer ::-moz-selection {
-    background: rgba(0, 100, 255, 0.3) !important;
-    color: transparent !important;
-    text-shadow: none !important;
-}
-
-/* Firefox specific optimizations */
-@supports (-moz-appearance: none) {
-    .pdfViewer .textLayer {
-        -moz-user-select: text;
-    }
-    .pdfViewer .textLayer span {
-        /* Firefox benefits from explicit text rendering mode */
-        text-rendering: geometricPrecision;
-    }
-}
-
-/* Webkit specific optimizations */
-@supports (-webkit-appearance: none) {
-    .pdfViewer .textLayer {
-        /* Ensure text layer renders correctly in webkit */
-        -webkit-transform: translateZ(0);
-        transform: translateZ(0);
-        -webkit-font-smoothing: antialiased;
-    }
+    background: color-mix(in srgb, var(--color-accent, AccentColor), transparent 70%);
 }
 
 /* ============================================================================
@@ -159,11 +70,9 @@
 
 .pdfViewer .textLayer .highlight {
     background-color: rgba(255, 255, 0, 0.4);
-    border-radius: 2px;
+    border-radius: 4px;
     margin: -1px;
     padding: 1px;
-    /* Optimize paint during animations */
-    will-change: background-color;
 }
 
 .pdfViewer .textLayer .highlight.selected {
@@ -175,16 +84,7 @@
    ============================================================================ */
 
 .pdfViewer .annotationLayer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    /* Above text layer */
     z-index: 3;
-    pointer-events: none;
-    /* Optimize rendering */
-    contain: layout paint;
 }
 
 .pdfViewer .annotationLayer > * {
@@ -195,10 +95,6 @@
 .pdfViewer .annotationLayer a {
     color: inherit;
     text-decoration: none;
-}
-
-.pdfViewer .annotationLayer a:hover {
-    opacity: 0.8;
 }
 
 /* Form fields */
@@ -213,7 +109,7 @@
 
 .pdfViewer .annotationLayer input:focus,
 .pdfViewer .annotationLayer textarea:focus {
-    outline: 2px solid #0066cc;
+    outline: 2px solid var(--color-accent, #0066cc);
     outline-offset: -1px;
 }
 
@@ -229,7 +125,7 @@
     width: 40px;
     height: 40px;
     border: 3px solid #f3f3f3;
-    border-top: 3px solid #3498db;
+    border-top: 3px solid var(--color-accent, #3498db);
     border-radius: 50%;
     animation: pdfjs-spin 1s linear infinite;
     z-index: 5;
@@ -251,18 +147,10 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-.theme-dark .pdfViewer .textLayer {
-    opacity: 0.9;
-}
-
 /* Sepia mode */
 .theme-sepia .pdfViewer .page {
     background: #f4ecd8;
     border-color: #d4c5a9;
-}
-
-.theme-sepia .pdfViewer .textLayer {
-    opacity: 0.95;
 }
 
 /* ============================================================================
@@ -291,40 +179,11 @@
 }
 
 /* ============================================================================
-   Performance Optimizations
+   Reduce Motion
    ============================================================================ */
 
-/* Ensure end of content marker doesn't show */
-.pdfViewer .textLayer .endOfContent {
-    display: none;
-}
-
-/* Optimize for large documents - use content visibility */
-@supports (content-visibility: auto) {
-    .pdfViewer .page {
-        content-visibility: auto;
-        contain-intrinsic-size: auto 500px;
-    }
-}
-
-/* Reduce motion for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
-    .pdfViewer .page,
-    .pdfViewer .textLayer span {
-        will-change: auto;
-        animation: none !important;
-    }
-}
-
-/* Touch device optimizations */
-@media (pointer: coarse) {
-    .pdfViewer .textLayer {
-        /* Slightly larger touch targets on mobile */
-        cursor: default;
-    }
-    .pdfViewer .textLayer span {
-        /* Prevent accidental text selection on touch */
-        user-select: none;
-        -webkit-user-select: none;
+    .pdfViewer .page .loadingIcon {
+        animation: none;
     }
 }
