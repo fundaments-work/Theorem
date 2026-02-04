@@ -57,12 +57,17 @@
 .textLayer span,
 .textLayer br {
     color: transparent !important;
+    /* Also disable text-shadow which can cause ghost outlines */
+    text-shadow: none !important;
+    /* Ensure opacity doesn't cause visibility issues */
+    opacity: 1 !important;
 }
 
 /* Ensure marked content inside spans is also transparent */
 .pdfViewer .textLayer .markedContent span,
 .textLayer .markedContent span {
     color: transparent !important;
+    text-shadow: none !important;
 }
 
 /* ============================================================================
