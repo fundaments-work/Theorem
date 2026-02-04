@@ -14,8 +14,8 @@
    ============================================================================ */
 
 .pdfViewer {
-    /* Default scale factor - will be overridden by JavaScript */
-    --scale-factor: 1;
+    /* Note: --scale-factor is set dynamically by PDF.js JavaScript.
+       We only set the page margin/border CSS variables here. */
     --page-margin: 1px auto -8px;
     --page-border: 9px solid transparent;
 }

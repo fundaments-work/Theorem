@@ -171,8 +171,16 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     
                     if (cancelled) return;
                     
-                    // Load document
-                    const loadingTask = pdfjsLib.getDocument({ data });
+                    // Load document with proper font configuration
+                    // cMapUrl and standardFontDataUrl are required for correct
+                    // font metrics and text layer positioning.
+                    // Assets are copied to public/pdfjs/ for reliable access.
+                    const loadingTask = pdfjsLib.getDocument({
+                        data,
+                        cMapUrl: "/pdfjs/cmaps/",
+                        cMapPacked: true,
+                        standardFontDataUrl: "/pdfjs/standard_fonts/",
+                    });
                     const pdfDocument = await loadingTask.promise;
                     
                     if (cancelled) {
