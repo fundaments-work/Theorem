@@ -36,12 +36,16 @@ export interface TextLayerItem {
     transform: number[];
 }
 
+// Maximum number of pages to keep in cache before eviction
+const MAX_CACHED_PAGES = 15;
+
 export class PDFEngine {
     private pdfDocument: PDFDocumentProxy | null = null;
     private loadingTask: pdfjsLib.PDFDocumentLoadingTask | null = null;
     private destroyed = false;
     private activeRenders: Map<number, RenderTask> = new Map();
     private pageCache: Map<number, PDFPageProxy> = new Map();
+    private pageCacheOrder: number[] = []; // LRU order tracking
     private pageDimensions: Map<number, PageDimensions> = new Map();
 
     async loadDocument(
@@ -120,12 +124,78 @@ export class PDFEngine {
 
         const cached = this.pageCache.get(pageNumber);
         if (cached) {
+            // Move to end of LRU order (most recently used)
+            const orderIndex = this.pageCacheOrder.indexOf(pageNumber);
+            if (orderIndex !== -1) {
+                this.pageCacheOrder.splice(orderIndex, 1);
+            }
+            this.pageCacheOrder.push(pageNumber);
             return cached;
         }
 
         const page = await this.pdfDocument.getPage(pageNumber);
         this.pageCache.set(pageNumber, page);
+        this.pageCacheOrder.push(pageNumber);
+
+        // Evict old pages if cache is too large
+        this.evictOldPages();
+
         return page;
+    }
+
+    /**
+     * Evict least recently used pages from cache to limit memory usage
+     */
+    private evictOldPages(): void {
+        while (this.pageCache.size > MAX_CACHED_PAGES && this.pageCacheOrder.length > 0) {
+            const oldestPageNumber = this.pageCacheOrder.shift();
+            if (oldestPageNumber !== undefined) {
+                const page = this.pageCache.get(oldestPageNumber);
+                if (page) {
+                    // Don't evict if there's an active render for this page
+                    if (!this.activeRenders.has(oldestPageNumber)) {
+                        try {
+                            page.cleanup();
+                        } catch (err) {
+                            // Ignore cleanup errors
+                        }
+                        this.pageCache.delete(oldestPageNumber);
+                    } else {
+                        // Put it back at the end if it's actively rendering
+                        this.pageCacheOrder.push(oldestPageNumber);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Manually release pages that are not in the visible set
+     */
+    releasePages(keepPages: Set<number>): void {
+        const toRelease: number[] = [];
+        
+        for (const [pageNumber, page] of this.pageCache) {
+            if (!keepPages.has(pageNumber) && !this.activeRenders.has(pageNumber)) {
+                toRelease.push(pageNumber);
+            }
+        }
+
+        for (const pageNumber of toRelease) {
+            const page = this.pageCache.get(pageNumber);
+            if (page) {
+                try {
+                    page.cleanup();
+                } catch (err) {
+                    // Ignore
+                }
+                this.pageCache.delete(pageNumber);
+                const orderIndex = this.pageCacheOrder.indexOf(pageNumber);
+                if (orderIndex !== -1) {
+                    this.pageCacheOrder.splice(orderIndex, 1);
+                }
+            }
+        }
     }
 
     /**
@@ -389,6 +459,7 @@ export class PDFEngine {
             }
         }
         this.pageCache.clear();
+        this.pageCacheOrder = [];
         this.pageDimensions.clear();
 
         if (this.pdfDocument) {

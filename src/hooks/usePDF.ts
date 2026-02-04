@@ -16,6 +16,7 @@ export interface UsePDFReturn {
     getTextContent: (pageNumber: number) => Promise<TextLayerItem[]>;
     getPageDimensions: (pageNumber: number) => PageDimensions | null;
     cancelRender: (pageNumber: number) => void;
+    releasePages: (keepPages: Set<number>) => void;
     cleanup: () => Promise<void>;
 }
 
@@ -96,6 +97,10 @@ export function usePDF(): UsePDFReturn {
         engineRef.current?.cancelRender(pageNumber);
     }, []);
 
+    const releasePages = useCallback((keepPages: Set<number>): void => {
+        engineRef.current?.releasePages(keepPages);
+    }, []);
+
     const cleanup = useCallback(async (): Promise<void> => {
         await engineRef.current?.cleanup();
         setDocument(null);
@@ -111,6 +116,7 @@ export function usePDF(): UsePDFReturn {
         getTextContent,
         getPageDimensions,
         cancelRender,
+        releasePages,
         cleanup,
     };
 }

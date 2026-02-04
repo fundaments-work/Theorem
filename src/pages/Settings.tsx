@@ -473,10 +473,10 @@ export function SettingsPage() {
 
                         <SettingRow
                             label="Renderer"
-                            description="New PDF rendering engine"
+                            description="PDF rendering engine"
                         >
                             <span className="text-sm text-[var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-border-subtle)] rounded-md">
-                                PDFium (Native)
+                                PDF.js (Browser-based)
                             </span>
                         </SettingRow>
                     </Section>

@@ -1,8 +1,8 @@
 /**
- * Image Encoding Utilities for Tauri PDF Rendering
+ * Image Encoding Utilities for Tauri
  *
- * Provides efficient encoding of DynamicImage (from pdfium-render) to base64
- * for transfer from Rust backend to TypeScript frontend.
+ * Provides efficient encoding of DynamicImage to base64 for transfer
+ * from Rust backend to TypeScript frontend.
  *
  * Crates used: image (0.25), base64
  */
@@ -55,35 +55,17 @@ pub struct EncodedImage {
 /// Encode a DynamicImage to base64 PNG
 ///
 /// PNG is lossless and preserves all details. Best for:
-/// - Text-heavy PDFs where sharpness matters
+/// - Text-heavy content where sharpness matters
 /// - Documents with diagrams, charts, or line art
 /// - When you need pixel-perfect rendering
-/// - Pages with transparency (rare in PDFs)
+/// - Pages with transparency
 ///
 /// # Arguments
-/// * `image` - The DynamicImage to encode (from pdfium-render's `as_image()`)
+/// * `image` - The DynamicImage to encode
 ///
 /// # Returns
 /// * `Ok(EncodedImage)` - The encoded image with metadata
 /// * `Err(String)` - Error message if encoding fails
-///
-/// # Example
-/// ```rust
-/// use pdfium_render::prelude::*;
-///
-/// let pdfium = Pdfium::default();
-/// let document = pdfium.load_pdf_from_file("doc.pdf", None)?;
-/// let page = document.pages().get(0)?;
-///
-/// let render_config = PdfRenderConfig::new()
-///     .set_target_width(1200);
-///
-/// let bitmap = page.render_with_config(&render_config)?;
-/// let dynamic_image = bitmap.as_image();
-///
-/// let encoded = encode_to_png_base64(dynamic_image)?;
-/// println!("Data URL: {}", encoded.data_url);
-/// ```
 pub fn encode_to_png_base64(image: DynamicImage) -> Result<EncodedImage, String> {
     let width = image.width();
     let height = image.height();
@@ -174,37 +156,18 @@ pub fn encode_to_png_base64_with_settings(
 /// Encode a DynamicImage to base64 JPEG
 ///
 /// JPEG is lossy and produces smaller files. Best for:
-/// - Photo-heavy PDFs (scanned documents, magazines)
+/// - Photo-heavy content (scanned documents, magazines)
 /// - When file size is more important than perfect text sharpness
 /// - General reading where slight compression artifacts are acceptable
 /// - Better performance for large documents
 ///
 /// # Arguments
-/// * `image` - The DynamicImage to encode (from pdfium-render's `as_image()`)
+/// * `image` - The DynamicImage to encode
 /// * `quality` - JPEG quality setting (use JpegQuality enum)
 ///
 /// # Returns
 /// * `Ok(EncodedImage)` - The encoded image with metadata
 /// * `Err(String)` - Error message if encoding fails
-///
-/// # Example
-/// ```rust
-/// use pdfium_render::prelude::*;
-///
-/// let pdfium = Pdfium::default();
-/// let document = pdfium.load_pdf_from_file("magazine.pdf", None)?;
-/// let page = document.pages().get(0)?;
-///
-/// let render_config = PdfRenderConfig::new()
-///     .set_target_width(1200);
-///
-/// let bitmap = page.render_with_config(&render_config)?;
-/// let dynamic_image = bitmap.as_image();
-///
-/// // Use medium quality for general reading
-/// let encoded = encode_to_jpeg_base64(dynamic_image, JpegQuality::Medium)?;
-/// println!("Size: {} bytes", encoded.size_bytes);
-/// ```
 pub fn encode_to_jpeg_base64(
     image: DynamicImage,
     quality: JpegQuality,
