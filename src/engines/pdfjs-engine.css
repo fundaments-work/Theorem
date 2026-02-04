@@ -1,8 +1,12 @@
 /**
- * PDF.js Engine Styles - Clean & Minimal
+ * PDF.js Engine Styles
  * 
  * These styles complement the official pdf_viewer.css.
- * IMPORTANT: Do NOT override opacity or z-index of textLayer spans - it breaks selection!
+ * 
+ * IMPORTANT: PDF.js uses complex positioning for text layers.
+ * - Do NOT override transform, position, or scale properties on .textLayer or spans
+ * - Do NOT set opacity:0 on spans - it breaks text selection
+ * - The text is invisible via color:transparent (set by pdf_viewer.css)
  */
 
 /* ============================================================================
@@ -10,10 +14,10 @@
    ============================================================================ */
 
 .pdfViewer {
-    position: relative;
-    width: 100%;
-    min-height: 100%;
-    padding: 20px 0;
+    /* Default scale factor - will be overridden by JavaScript */
+    --scale-factor: 1;
+    --page-margin: 1px auto -8px;
+    --page-border: 9px solid transparent;
 }
 
 /* ============================================================================
@@ -21,16 +25,18 @@
    ============================================================================ */
 
 .pdfViewer .page {
-    position: relative;
     margin: 10px auto;
     background: white;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     border: 1px solid #ddd;
 }
 
-.pdfViewer .page canvas {
-    display: block;
-    margin: 0 auto;
+/* ============================================================================
+   Canvas Wrapper - Let PDF.js handle this
+   ============================================================================ */
+
+.pdfViewer .canvasWrapper {
+    overflow: hidden;
 }
 
 /* ============================================================================
@@ -38,30 +44,41 @@
    ============================================================================ */
 
 /*
- * PDF.js text layer uses transparent text positioned over the canvas.
- * The official CSS sets: .textLayer :is(span,br) { color:transparent; ... }
+ * The text layer is absolutely positioned over the canvas by PDF.js.
+ * Text spans have inline transforms and positions set by JavaScript.
  * 
- * CRITICAL: Do NOT set opacity:0 on spans - it breaks text selection!
- * The text is already invisible via color:transparent in pdf_viewer.css.
- * 
- * We only need to ensure proper stacking and selection behavior.
+ * We only add minimal styling for selection behavior.
+ * PDF.js CSS already sets: color:transparent, position:absolute, etc.
  */
 
-/* Ensure textLayer is above canvas for mouse events */
+/* Stacking order: canvas (0) < textLayer (1) < annotationLayer (2) */
 .pdfViewer .textLayer {
-    z-index: 2;
-    user-select: text;
-    -webkit-user-select: text;
-    -moz-user-select: text;
+    z-index: 1;
 }
 
-/* Ensure text spans receive pointer events */
-.pdfViewer .textLayer span {
+/* 
+ * CRITICAL: Ensure text is invisible (transparent) for the ghost text effect.
+ * The text must be transparent so only the canvas rendering is visible,
+ * but the spans are still selectable. Using !important to override any
+ * inherited color from parent elements.
+ * 
+ * NOTE: -webkit-text-fill-color is required for Webkit/Chromium-based browsers
+ * (including Tauri's WebView) to properly hide the text layer.
+ */
+.pdfViewer .textLayer span,
+.pdfViewer .textLayer br {
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
     pointer-events: auto;
     cursor: text;
 }
 
-/* Selection highlight styling */
+/* Don't select line breaks */
+.pdfViewer .textLayer br {
+    user-select: none;
+}
+
+/* Selection highlight color */
 .pdfViewer .textLayer ::selection {
     background: color-mix(in srgb, var(--color-accent, rgb(0, 100, 255)), transparent 60%);
 }
@@ -90,12 +107,10 @@
    ============================================================================ */
 
 .pdfViewer .annotationLayer {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
+    z-index: 2;
 }
 
-.pdfViewer .annotationLayer > * {
+.pdfViewer .annotationLayer section {
     pointer-events: auto;
 }
 
@@ -120,7 +135,7 @@
 }
 
 /* ============================================================================
-   Scrollbar
+   Scrollbar Styling
    ============================================================================ */
 
 .pdfViewerContainer::-webkit-scrollbar {
@@ -145,7 +160,7 @@
 }
 
 /* ============================================================================
-   Loading State
+   Loading Indicator
    ============================================================================ */
 
 .pdfViewer .page .loadingIcon {
@@ -166,10 +181,6 @@
     0% { transform: translate(-50%, -50%) rotate(0deg); }
     100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
-
-/* ============================================================================
-   Reduce Motion
-   ============================================================================ */
 
 @media (prefers-reduced-motion: reduce) {
     .pdfViewer .page .loadingIcon {
