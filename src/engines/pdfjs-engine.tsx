@@ -129,10 +129,7 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
                 // This ensures coordinates match 1:1
                 const viewport = page.getViewport({ scale, rotation });
 
-                // FORCE sharp rendering:
-                // WebKit sometimes reports dPR=1 even on high DPI, or renders blurry.
-                // We enforce a minimum scale of 2.0 for sharpness, or higher if screen supports it.
-                // This effectively renders at "Retina" resolution always.
+
                 const outputScale = Math.max(window.devicePixelRatio || 1, 2);
 
                 // 2. DIMENSIONS: Set exact dimensions
