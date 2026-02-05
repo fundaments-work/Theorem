@@ -3,35 +3,47 @@
  */
 
 /* Page wrapper */
-.pdf-page-wrapper {
+/* .pdf-page-wrapper {
     margin: 10px auto;
     background: white;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     border: 1px solid #ddd;
     border-radius: 2px;
-}
+} */
 
-/* Page container - holds canvas and text layer */
+/* Page container */
 .pdf-page-container {
     position: relative;
-    line-height: 0;
-    isolation: isolate; /* Create stacking context */
+    overflow: hidden;
+    /* Ensure no extra spacing affects alignment */
+    padding: 0;
+    margin: 0;
 }
 
-/* Text Layer - for text selection */
+/* Text Layer */
 .textLayer {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    overflow: hidden;
-    line-height: 1;
-    text-size-adjust: none;
-    forced-color-adjust: none;
-    opacity: 1;
     z-index: 2;
+    opacity: 1;
+    line-height: 1.0;
+    /* Prevent inheritance of text alignment */
+    text-align: left;
+    /* Reset transforms from previous attempts */
+    transform: none !important; 
 }
+
+/* Selection color */
+.textLayer ::selection {
+    background: rgba(0, 100, 200, 0.3);
+    color: transparent;
+}
+
+
+
 
 /* PDF.js uses br elements and span elements */
 .textLayer br {

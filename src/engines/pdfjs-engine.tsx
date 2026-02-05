@@ -87,7 +87,7 @@ const MAX_ZOOM = 5.0;
 const ZOOM_STEP = 0.25;
 const DEFAULT_SCALE = 1.0;
 
-// Page render component
+
 interface PageCanvasProps {
     page: PDFPageProxy;
     scale: number;
@@ -107,20 +107,16 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
         let cancelled = false;
         const canvas = canvasRef.current;
         const textLayerDiv = textLayerRef.current;
-        if (!canvas || !textLayerDiv) return;
+        const container = containerRef.current;
+        
+        if (!canvas || !textLayerDiv || !container) return;
 
         const renderPage = async () => {
-            // Cancel any ongoing render operation first
+            // Cleanup previous tasks
             if (renderTaskRef.current) {
-                try {
-                    renderTaskRef.current.cancel();
-                } catch {
-                    // Ignore cancel errors
-                }
+                try { renderTaskRef.current.cancel(); } catch { /* ignore */ }
                 renderTaskRef.current = null;
             }
-
-            // Cancel any existing text layer
             if (textLayerInstanceRef.current) {
                 textLayerInstanceRef.current.cancel();
                 textLayerInstanceRef.current = null;
@@ -129,38 +125,40 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
             setIsRendering(true);
 
             try {
-                // Get viewport at the requested scale
+                // 1. VIEWPORT: Use the SCALED viewport for both Canvas and Text
+                // This ensures coordinates match 1:1
                 const viewport = page.getViewport({ scale, rotation });
                 const outputScale = window.devicePixelRatio || 1;
 
-                // Canvas dimensions
+                // 2. DIMENSIONS: Set exact pixel dimensions
                 const cssWidth = Math.floor(viewport.width);
                 const cssHeight = Math.floor(viewport.height);
 
-                // Set canvas for HiDPI
-                canvas.width = Math.floor(cssWidth * outputScale);
-                canvas.height = Math.floor(cssHeight * outputScale);
+                // Container
+                container.style.width = `${cssWidth}px`;
+                container.style.height = `${cssHeight}px`;
+
+                // Canvas (High DPI)
+                canvas.width = Math.floor(viewport.width * outputScale);
+                canvas.height = Math.floor(viewport.height * outputScale);
                 canvas.style.width = `${cssWidth}px`;
                 canvas.style.height = `${cssHeight}px`;
 
-                // Set container size
-                if (containerRef.current) {
-                    containerRef.current.style.width = `${cssWidth}px`;
-                    containerRef.current.style.height = `${cssHeight}px`;
-                }
-
-                // Text layer matches canvas exactly
+                // Text Layer matches Canvas exactly
                 textLayerDiv.style.width = `${cssWidth}px`;
                 textLayerDiv.style.height = `${cssHeight}px`;
+                
+                // CRITICAL FIX: Set the PDF.js scale factor variable
+                // This tells the text layer how to adjust font spacing
+                textLayerDiv.style.setProperty("--scale-factor", `${scale}`);
 
                 const ctx = canvas.getContext("2d");
                 if (!ctx || cancelled) return;
 
-                // Clear and set transform for HiDPI
+                // Render Canvas
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.setTransform(outputScale, 0, 0, outputScale, 0, 0);
 
-                // Render canvas
                 const renderTask = page.render({
                     canvasContext: ctx,
                     viewport: viewport,
@@ -170,17 +168,17 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
                 await renderTask.promise;
                 if (cancelled) return;
 
-                // Clear and render text layer
-                textLayerDiv.innerHTML = '';
+                // Render Text Layer
+                textLayerDiv.innerHTML = "";
                 
                 try {
-                    const textContent: TextContent = await page.getTextContent();
+                    const textContent = await page.getTextContent();
                     if (cancelled) return;
 
                     const textLayer = new TextLayer({
                         textContentSource: textContent,
                         container: textLayerDiv,
-                        viewport: viewport,
+                        viewport: viewport, // Use the SCALED viewport
                     });
 
                     textLayerInstanceRef.current = textLayer;
@@ -197,15 +195,7 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
             } catch (error: unknown) {
                 const isCancelled = error instanceof Error && 
                     (error.message.includes('cancelled') || error.message.includes('Rendering cancelled'));
-                
-                if (!isCancelled) {
-                    console.error("[PageCanvas] Render error:", error);
-                }
-                
-                if (!cancelled) {
-                    renderTaskRef.current = null;
-                    setIsRendering(false);
-                }
+                if (!isCancelled) console.error(error);
             }
         };
 
@@ -213,23 +203,14 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
 
         return () => {
             cancelled = true;
-            if (renderTaskRef.current) {
-                try { renderTaskRef.current.cancel(); } catch { /* ignore */ }
-                renderTaskRef.current = null;
-            }
-            if (textLayerInstanceRef.current) {
-                textLayerInstanceRef.current.cancel();
-                textLayerInstanceRef.current = null;
-            }
+            if (renderTaskRef.current) try { renderTaskRef.current.cancel(); } catch {}
+            if (textLayerInstanceRef.current) textLayerInstanceRef.current.cancel();
         };
     }, [page, scale, rotation, onRenderComplete]);
 
     return (
-        <div 
-            ref={containerRef}
-            className="pdf-page-container"
-        >
-            <canvas ref={canvasRef} className="block" />
+        <div ref={containerRef} className="pdf-page-container">
+            <canvas ref={canvasRef} className="block absolute inset-0" />
             <div ref={textLayerRef} className="textLayer" />
             {isRendering && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
