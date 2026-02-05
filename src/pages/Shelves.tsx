@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo } from "react";
-import { cn } from "@/lib/utils";
+import { cn, normalizeAuthor } from "@/lib/utils";
 import { useLibraryStore, useUIStore, useSettingsStore } from "@/store";
 import { ShelfModal } from "@/components/modals";
 import { getShelfColor, getShelfInitials } from "@/lib/shelf-colors";
@@ -135,7 +135,7 @@ function BookCard({
                         {book.title}
                     </h3>
                     <p className="text-xs text-[var(--color-text-secondary)] line-clamp-1">
-                        {book.author}
+                        {normalizeAuthor(book.author) || "Unknown Author"}
                     </p>
                 </button>
                 {/* Remove button */}
@@ -181,7 +181,7 @@ function BookCard({
                         </h3>
                     </button>
                     <p className="text-xs text-[var(--color-text-secondary)] truncate">
-                        {book.author}
+                        {normalizeAuthor(book.author) || "Unknown Author"}
                     </p>
                 </div>
                 <button

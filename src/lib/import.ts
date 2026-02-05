@@ -1,6 +1,7 @@
 /**
  * Book Import Utilities
- * Tauri-native file import with metadata extraction
+ * Cross-platform file import with metadata extraction
+ * Works in both Tauri and browser environments
  */
 
 import type { Book, BookFormat } from '@/types';
@@ -16,7 +17,7 @@ let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
 
 async function initTauriPlugins() {
     if (!isTauri()) {
-        throw new Error('Tauri environment not detected');
+        return null; // Return null instead of throwing - caller will handle browser mode
     }
 
     if (!tauriDialog) {
@@ -50,13 +51,13 @@ export function getBookFormat(filePath: string): BookFormat | null {
 }
 
 /**
- * Open file picker dialog and return selected file paths
+ * Open file picker dialog and return selected file paths (Tauri only)
  */
 export async function pickBookFiles(): Promise<string[]> {
-    const { dialog } = await initTauriPlugins();
-    if (!dialog) throw new Error('Dialog plugin not available');
+    const plugins = await initTauriPlugins();
+    if (!plugins?.dialog) throw new Error('Dialog plugin not available');
 
-    const selected = await dialog.open({
+    const selected = await plugins.dialog.open({
         multiple: true,
         filters: [
             { name: 'All eBooks', extensions: ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'cbz', 'cbr', 'pdf'] },
@@ -70,6 +71,127 @@ export async function pickBookFiles(): Promise<string[]> {
 
     if (!selected) return [];
     return Array.isArray(selected) ? selected : [selected];
+}
+
+/**
+ * Browser file picker using HTML5 File Input API
+ * Returns array of File objects
+ */
+export function pickBookFilesBrowser(): Promise<File[]> {
+    return new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = '.epub,.mobi,.azw,.azw3,.fb2,.fbz,.cbz,.cbr,.pdf';
+        
+        input.onchange = () => {
+            const files = input.files ? Array.from(input.files) : [];
+            resolve(files);
+        };
+        
+        // Handle cancel - resolve with empty array
+        input.oncancel = () => resolve([]);
+        
+        // Trigger file picker
+        input.click();
+    });
+}
+
+/**
+ * Create book entry from a browser File object
+ * Used for browser-based file imports
+ */
+export async function createBookEntryFromFile(file: File): Promise<Book | null> {
+    const format = getBookFormat(file.name);
+    if (!format) {
+        console.error('Unsupported file format:', file.name);
+        return null;
+    }
+
+    // Read file as ArrayBuffer
+    const buffer = await file.arrayBuffer();
+    if (!buffer || buffer.byteLength === 0) {
+        console.error('Empty file or failed to read:', file.name);
+        return null;
+    }
+
+    const id = uuidv4();
+    const fileSize = file.size;
+
+    // Check file size - warn if very large (> 100MB)
+    if (fileSize > 100 * 1024 * 1024) {
+        console.warn('Large file detected:', file.name, formatFileSize(fileSize));
+    }
+
+    // Save to IndexedDB storage
+    const storagePath = await saveBookData(id, buffer);
+
+    // Get filename for fallback metadata
+    const filename = file.name;
+    const filenameMetadata = extractFilenameMetadata(filename);
+
+    // Extract metadata and cover from the book file
+    console.log('[Import] Extracting metadata and cover for:', filename);
+    let metadata;
+    try {
+        metadata = await extractMetadata(buffer, format, filename, id);
+    } catch (error) {
+        console.warn('[Import] Metadata extraction failed, using filename:', error);
+        metadata = null;
+    }
+
+    // Build book object with extracted metadata (with filename fallbacks)
+    // Note: Only use filename for title fallback, not for author (avoid showing filename as author)
+    const book: Book = {
+        id,
+        title: metadata?.title || filenameMetadata.title,
+        author: metadata?.author || "",
+        filePath: `browser://${filename}`, // Virtual path for browser-imported files
+        storagePath,
+        format,
+        fileSize,
+        addedAt: new Date(),
+        progress: 0,
+        isFavorite: false,
+        tags: [],
+        readingTime: 0,
+        // Additional metadata from extraction
+        coverPath: metadata?.coverDataUrl || undefined,
+        description: metadata?.description,
+        publisher: metadata?.publisher,
+        publishedDate: metadata?.publishedDate,
+        language: metadata?.language,
+    };
+
+    console.log('[Import] Book created from browser file:', {
+        id: book.id,
+        title: book.title,
+        author: book.author,
+        hasCover: !!book.coverPath,
+    });
+
+    return book;
+}
+
+/**
+ * Import books from browser File objects
+ */
+export async function importBooksFromFiles(files: File[]): Promise<Book[]> {
+    const books: Book[] = [];
+
+    for (const file of files) {
+        try {
+            const book = await createBookEntryFromFile(file);
+            if (book) {
+                books.push(book);
+            }
+        } catch (error) {
+            console.error('Failed to import book:', file.name, error);
+            // Continue with next book, don't freeze
+        }
+    }
+
+    return books;
 }
 
 /**
@@ -114,7 +236,7 @@ export function extractFilenameMetadata(filePath: string): { title: string; auth
 }
 
 /**
- * Create a book entry from a file path
+ * Create a book entry from a file path (Tauri only)
  * Extracts metadata and cover image using foliate-js
  */
 export async function createBookEntry(filePath: string): Promise<Book | null> {
@@ -124,8 +246,9 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         return null;
     }
 
-    const { fs } = await initTauriPlugins();
-    if (!fs) throw new Error('FS plugin not available');
+    const plugins = await initTauriPlugins();
+    if (!plugins?.fs) throw new Error('FS plugin not available - this function requires Tauri');
+    const fs = plugins.fs;
 
     // Get file stats
     let fileSize = 0;
@@ -168,10 +291,11 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     }
 
     // Build book object with extracted metadata (with filename fallbacks)
+    // Note: Only use filename for title fallback, not for author (avoid showing filename as author)
     const book: Book = {
         id,
         title: metadata?.title || filenameMetadata.title,
-        author: metadata?.author || filenameMetadata.author,
+        author: metadata?.author || "",
         filePath,
         storagePath,
         format,
@@ -222,22 +346,33 @@ export async function importBooks(filePaths: string[]): Promise<Book[]> {
 
 /**
  * Show file picker and import selected books
+ * Works in both Tauri and browser environments
  */
 export async function pickAndImportBooks(): Promise<Book[]> {
-    const filePaths = await pickBookFiles();
-    if (filePaths.length === 0) {
-        return [];
+    if (isTauri()) {
+        // Tauri: use native file picker
+        const filePaths = await pickBookFiles();
+        if (filePaths.length === 0) {
+            return [];
+        }
+        return importBooks(filePaths);
+    } else {
+        // Browser: use HTML5 file picker
+        const files = await pickBookFilesBrowser();
+        if (files.length === 0) {
+            return [];
+        }
+        return importBooksFromFiles(files);
     }
-    
-    return importBooks(filePaths);
 }
 
 /**
- * Scan a folder for books
+ * Scan a folder for books (Tauri only)
  */
 export async function scanFolderForBooks(folderPath: string): Promise<string[]> {
-    const { fs } = await initTauriPlugins();
-    if (!fs) throw new Error('FS plugin not available');
+    const plugins = await initTauriPlugins();
+    if (!plugins?.fs) throw new Error('FS plugin not available - folder scanning requires Tauri');
+    const fs = plugins.fs;
 
     const bookExtensions = ['.epub', '.mobi', '.azw', '.azw3', '.fb2', '.fbz', '.cbz', '.cbr'];
     const bookFiles: string[] = [];

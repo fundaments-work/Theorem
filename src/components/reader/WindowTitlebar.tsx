@@ -28,7 +28,7 @@ import {
     Eraser,
     ChevronDown,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, normalizeAuthor } from "@/lib/utils";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { DocMetadata, DocLocation } from "@/types";
 
@@ -231,7 +231,7 @@ export function WindowTitlebar({
                                 className="truncate opacity-70"
                                 style={{ color: 'var(--reader-fg, var(--color-text))' }}
                             >
-                                {metadata.author}
+                                {normalizeAuthor(metadata.author)}
                             </span>
                         ) : null}
                         {formatLocation() && (

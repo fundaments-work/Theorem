@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from "react";
-import { cn } from "@/lib/utils";
+import { cn, normalizeAuthor } from "@/lib/utils";
 import { useLibraryStore, useSettingsStore, useUIStore } from "@/store";
 import { formatReadingTime } from "@/lib/utils";
 import {
@@ -113,7 +113,7 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
                 <h4 className="font-medium text-sm text-[var(--color-text-primary)] truncate">
                     {book.title}
                 </h4>
-                <p className="text-xs text-[var(--color-text-secondary)] truncate">{book.author}</p>
+                <p className="text-xs text-[var(--color-text-secondary)] truncate">{normalizeAuthor(book.author) || "Unknown Author"}</p>
                 <div className="flex items-center gap-2 mt-2">
                     <div className="flex-1 h-1.5 bg-[var(--color-border-subtle)] rounded-full overflow-hidden">
                         <div
@@ -423,7 +423,7 @@ export function StatisticsPage() {
                                                 {book.title}
                                             </h4>
                                             <p className="text-xs text-[var(--color-text-secondary)] truncate">
-                                                {book.author}
+                                                {normalizeAuthor(book.author) || "Unknown Author"}
                                             </p>
                                         </div>
                                     </button>

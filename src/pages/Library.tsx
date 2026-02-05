@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { cn } from "@/lib/utils";
+import { cn, normalizeAuthor } from "@/lib/utils";
 import { useLibraryStore, useUIStore, useSettingsStore } from "@/store";
 import { formatProgress, formatFileSize, formatRelativeDate } from "@/lib/utils";
 import { pickAndImportBooks, scanFolderForBooks } from "@/lib/import";
@@ -182,7 +182,7 @@ function BookCard({
                             {book.title}
                         </h3>
                         <p className="text-xs text-[var(--color-text-secondary)] line-clamp-1">
-                            {book.author}
+                            {normalizeAuthor(book.author) || "Unknown Author"}
                         </p>
                         {book.progress > 0 && (
                             <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
@@ -228,7 +228,7 @@ function BookCard({
                             {book.title}
                         </h3>
                         <p className="text-xs text-[var(--color-text-secondary)] truncate">
-                            {book.author}
+                            {normalizeAuthor(book.author) || "Unknown Author"}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
                             <div
@@ -400,7 +400,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                                 {book.title}
                             </h2>
                             <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-                                {book.author}
+                                {normalizeAuthor(book.author) || "Unknown Author"}
                             </p>
                             {book.rating && (
                                 <div className="flex items-center gap-1 mt-2">
@@ -687,7 +687,7 @@ export function LibraryPage() {
             result = result.filter(
                 (b) =>
                     b.title.toLowerCase().includes(q) ||
-                    b.author.toLowerCase().includes(q) ||
+                    normalizeAuthor(b.author).toLowerCase().includes(q) ||
                     b.tags.some((t) => t.toLowerCase().includes(q))
             );
         }
@@ -709,7 +709,7 @@ export function LibraryPage() {
                     comparison = a.title.localeCompare(b.title);
                     break;
                 case "author":
-                    comparison = a.author.localeCompare(b.author);
+                    comparison = normalizeAuthor(a.author).localeCompare(normalizeAuthor(b.author));
                     break;
                 case "dateAdded":
                     const aAdded = a.addedAt instanceof Date ? a.addedAt : new Date(a.addedAt);
@@ -835,13 +835,8 @@ export function LibraryPage() {
     
 
 
-    // Handle importing books
+    // Handle importing books (works in both Tauri and browser)
     const handleAddBooks = useCallback(async () => {
-        if (!isTauri()) {
-            alert('Book import requires the desktop app. Please use the Tauri build.');
-            return;
-        }
-
         setIsImporting(true);
         try {
             const importedBooks = await pickAndImportBooks();

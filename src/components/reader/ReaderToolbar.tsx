@@ -12,7 +12,7 @@ import {
     Maximize2,
     Minimize2,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, normalizeAuthor } from '@/lib/utils';
 import type { DocMetadata, DocLocation } from '@/types';
 
 interface ReaderToolbarProps {
@@ -101,7 +101,7 @@ export function ReaderToolbar({
                         </span>
                     ) : metadata?.author ? (
                         <span className="text-[var(--color-text-muted)] truncate">
-                            {metadata.author}
+                            {normalizeAuthor(metadata.author)}
                         </span>
                     ) : null}
                     {formatLocation() && (

@@ -1,124 +1,89 @@
 /**
  * PDF.js Engine Styles
- * 
- * Custom styles for the PDF.js viewer integration with Lion Reader.
- * 
- * NOTE: pdfjs-dist/web/pdf_viewer.css is imported first in the component,
- * so these styles override/extend the defaults.
  */
 
-/* Import text layer font scaling (missing in pdfjs-dist v4.10.38) */
-@import url("./pdfjs-text-layer.css");
-
-/* ============================================================================
-   PDF Viewer Container
-   ============================================================================ */
-
-.pdfViewer {
-    /* --scale-factor is set dynamically by PDF.js JavaScript on this element */
-}
-
-/* ============================================================================
-   Page Wrapper
-   ============================================================================ */
-
-.pdfViewer .page {
+/* Page wrapper */
+.pdf-page-wrapper {
     margin: 10px auto;
     background: white;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     border: 1px solid #ddd;
+    border-radius: 2px;
 }
 
-/* ============================================================================
-   Canvas Wrapper - Let PDF.js handle this
-   ============================================================================ */
+/* Page container - holds canvas and text layer */
+.pdf-page-container {
+    position: relative;
+    line-height: 0;
+    isolation: isolate; /* Create stacking context */
+}
 
-.pdfViewer .canvasWrapper {
+/* Text Layer - for text selection */
+.textLayer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     overflow: hidden;
-}
-
-/* ============================================================================
-   Annotation Layer
-   ============================================================================ */
-
-.pdfViewer .annotationLayer {
+    line-height: 1;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    opacity: 1;
     z-index: 2;
 }
 
-.pdfViewer .annotationLayer section {
+/* PDF.js uses br elements and span elements */
+.textLayer br {
+    user-select: none;
+}
+
+.textLayer span,
+.textLayer .markedContent {
+    position: absolute;
+    white-space: pre;
+    color: transparent;
+    transform-origin: 0% 0%;
     pointer-events: auto;
+    user-select: text;
+    cursor: text;
 }
 
-.pdfViewer .annotationLayer a {
-    color: inherit;
-    text-decoration: none;
+.textLayer span::selection,
+.textLayer .markedContent::selection {
+    background: rgba(0, 100, 200, 0.35);
+    color: transparent;
 }
 
-/* ============================================================================
-   Theme Support
-   ============================================================================ */
+.textLayer span::-moz-selection,
+.textLayer .markedContent::-moz-selection {
+    background: rgba(0, 100, 200, 0.35);
+    color: transparent;
+}
 
-.theme-dark .pdfViewer .page {
+/* Ensure canvas is below text layer */
+.pdf-page-container canvas {
+    position: relative;
+    z-index: 1;
+}
+
+/* Theme support */
+.theme-dark .pdf-page-wrapper {
     background: #1a1a1a;
     border-color: #333;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-.theme-sepia .pdfViewer .page {
+.theme-sepia .pdf-page-wrapper {
     background: #f4ecd8;
     border-color: #d4c5a9;
 }
 
-/* ============================================================================
-   Scrollbar Styling
-   ============================================================================ */
-
-.pdfViewerContainer::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-}
-
-.pdfViewerContainer::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.pdfViewerContainer::-webkit-scrollbar-thumb {
-    background: var(--color-border, #ccc);
-    border-radius: 5px;
-    border: 2px solid transparent;
-    background-clip: content-box;
-}
-
-.pdfViewerContainer::-webkit-scrollbar-thumb:hover {
-    background: var(--color-text-muted, #999);
-    background-clip: content-box;
-}
-
-/* ============================================================================
-   Loading Indicator
-   ============================================================================ */
-
-.pdfViewer .page .loadingIcon {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 40px;
-    height: 40px;
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid var(--color-accent, #3498db);
-    border-radius: 50%;
-    animation: pdfjs-spin 1s linear infinite;
-    z-index: 5;
-}
-
+/* Loading spinner */
 @keyframes pdfjs-spin {
-    0% { transform: translate(-50%, -50%) rotate(0deg); }
-    100% { transform: translate(-50%, -50%) rotate(360deg); }
+    to { transform: rotate(360deg); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .pdfViewer .page .loadingIcon {
-        animation: none;
-    }
+.animate-spin {
+    animation: pdfjs-spin 1s linear infinite;
 }

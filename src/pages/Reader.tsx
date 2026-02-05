@@ -47,6 +47,7 @@ export function ReaderPage() {
 
     // File state
     const [file, setFile] = useState<File | Blob | null>(null);
+    const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
     const [metadata, setMetadata] = useState<DocMetadata | null>(null);
     const [toc, setToc] = useState<TocItem[]>([]);
     const [location, setLocation] = useState<DocLocation | null>(null);
@@ -74,16 +75,26 @@ export function ReaderPage() {
     // PDF callbacks - memoized to prevent infinite re-renders
     const handlePdfLoad = useCallback((info: import('@/engines/pdfjs-engine').PDFDocumentInfo) => {
         console.log('[PDF] Loaded:', info);
+        // Get current book data for fallback
+        const currentBookData = currentBookId ? getBook(currentBookId) : null;
+        
+        // Priority: 1. PDF metadata title, 2. Book title from library, 3. Filename, 4. 'Untitled'
+        // Only use PDF title if it differs from the filename (meaning it came from actual metadata)
+        const isPdfTitleFromMetadata = info.title && info.title !== info.filename;
+        const displayTitle = (isPdfTitleFromMetadata 
+            ? info.title 
+            : (currentBookData?.title || info.title || 'Untitled')) || 'Untitled';
+        
         setMetadata({
-            title: info.title || currentBook?.title || 'Untitled',
-            author: info.author || currentBook?.author || 'Unknown',
+            title: displayTitle,
+            author: info.author || currentBookData?.author || 'Unknown',
             description: '',
             language: '',
             publisher: '',
         });
         setToc([]);
         setIsBookReady(true);
-    }, [currentBook?.title, currentBook?.author]);
+    }, [currentBookId, getBook]);
 
     const handlePdfError = useCallback((err: Error) => {
         console.error('[PDF] Error:', err);
@@ -123,6 +134,7 @@ export function ReaderPage() {
             }
 
             setFile(null);
+            setPdfData(null);
             setMetadata(null);
             setToc([]);
             setLocation(null);
@@ -156,6 +168,14 @@ export function ReaderPage() {
                 }
                 if (!isCancelled) {
                     setFile(blob);
+                    
+                    // For PDFs, extract Uint8Array data for the PDF engine
+                    if (book.format === 'pdf') {
+                        const arrayBuffer = await blob.arrayBuffer();
+                        if (!isCancelled) {
+                            setPdfData(new Uint8Array(arrayBuffer));
+                        }
+                    }
                 }
             } catch (err) {
                 if (!isCancelled) {
@@ -1045,6 +1065,8 @@ export function ReaderPage() {
                     <PDFReader
                         ref={pdfReaderRef}
                         pdfPath={currentBook?.storagePath || currentBook?.filePath || ''}
+                        pdfData={pdfData ?? undefined}
+                        originalFilename={currentBook?.title}
                         theme={settings.readerSettings.theme}
                         onPageChange={handlePdfPageChange}
                         onLoad={handlePdfLoad}

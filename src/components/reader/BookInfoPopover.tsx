@@ -6,6 +6,7 @@
 import { X, Info, Calendar, Hash, Globe, FileText, User } from 'lucide-react';
 import type { DocMetadata } from '@/types';
 import { Backdrop, FloatingPanel } from '@/components/ui';
+import { normalizeAuthor } from '@/lib/utils';
 
 interface BookInfoPopoverProps {
     metadata: DocMetadata | null;
@@ -78,7 +79,7 @@ export function BookInfoPopover({
                                 {metadata.title}
                             </h3>
                             <p className="text-xs text-[var(--color-text-secondary)] line-clamp-1">
-                                {metadata.author}
+                                {normalizeAuthor(metadata.author) || "Unknown Author"}
                             </p>
                         </div>
                     </div>

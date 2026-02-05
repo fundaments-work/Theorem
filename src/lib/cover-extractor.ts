@@ -1,10 +1,19 @@
 /**
  * Cover & Metadata Extraction Utility
- * Extracts book cover images and metadata using foliate-js
+ * Extracts book cover images and metadata using foliate-js and PDF.js
  */
 
 import type { BookFormat } from "@/types";
 import { saveCoverImage } from "./storage";
+import { normalizeAuthor } from "./utils";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Configure PDF.js worker
+const workerUrl = new URL(
+    "pdfjs-dist/build/pdf.worker.mjs",
+    import.meta.url
+).href;
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 /**
  * Extracted metadata from a book file
@@ -72,9 +81,72 @@ export async function extractMetadata(
 
     console.log(`[CoverExtractor] Extracting metadata for ${format} file:`, filename);
 
+    // Handle PDF files using PDF.js for proper metadata extraction
+    if (format === "pdf") {
+        try {
+            const loadingTask = pdfjsLib.getDocument({
+                data: new Uint8Array(data),
+                isEvalSupported: false,
+            });
+            const pdf = await loadingTask.promise;
+            
+            const metadata = await pdf.getMetadata();
+            const metaInfo = metadata.info as Record<string, unknown>;
+            
+            result.title = (metaInfo?.Title as string) || filename.replace(/\.[^/.]+$/, "");
+            result.author = (metaInfo?.Author as string) || "";
+            
+            // Try to extract first page as cover thumbnail
+            try {
+                const page = await pdf.getPage(1);
+                const viewport = page.getViewport({ scale: 0.5 });
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d");
+                
+                if (ctx) {
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    
+                    await page.render({
+                        canvasContext: ctx,
+                        viewport: viewport,
+                    }).promise;
+                    
+                    // Convert canvas to blob
+                    const blob = await new Promise<Blob | null>((resolve) => {
+                        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.8);
+                    });
+                    
+                    if (blob && bookId) {
+                        result.coverDataUrl = await saveCoverImage(bookId, blob);
+                    }
+                    
+                    page.cleanup();
+                }
+            } catch (coverError) {
+                console.warn("[CoverExtractor] Failed to extract PDF cover:", coverError);
+            }
+            
+            pdf.destroy();
+            
+            console.log("[CoverExtractor] PDF metadata extracted:", {
+                title: result.title,
+                author: result.author,
+                hasCover: !!result.coverDataUrl,
+            });
+            
+            return result;
+        } catch (pdfError) {
+            console.warn("[CoverExtractor] Failed to extract PDF metadata:", pdfError);
+            result.title = filename.replace(/\.[^/.]+$/, "");
+            return result;
+        }
+    }
+
     // Import foliate-js makeBook for EPUB and other formats
     try {
-        const { makeBook } = await import("@/foliate-js/view.js");
+        // Use relative path to avoid MIME type issues with Vite dynamic imports
+        const { makeBook } = await import("../foliate-js/view.js");
         const mimeType = getMimeType(format);
         const file = new File([data], filename, { type: mimeType });
 
@@ -84,7 +156,8 @@ export async function extractMetadata(
         // Extract metadata
         if (book.metadata) {
             result.title = book.metadata.title || filename.replace(/\.[^/.]+$/, "");
-            result.author = book.metadata.author || "";
+            // Author can be string, object {name, sortAs, role}, or array
+            result.author = normalizeAuthor(book.metadata.author);
             result.description = book.metadata.description;
             result.publisher = book.metadata.publisher;
             result.language = book.metadata.language;

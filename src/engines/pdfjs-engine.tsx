@@ -1,8 +1,9 @@
 /**
- * PDF.js Engine Component
+ * PDF.js Engine Component - Simplified Stable Version
  *
- * A React component that renders PDF documents using PDF.js Components API.
- * Features annotations, links, zoom, navigation, and search.
+ * A React component that renders PDF documents using PDF.js.
+ * This version uses a simpler, more stable rendering approach
+ * without the full PDFViewer class to avoid initialization issues.
  */
 
 import {
@@ -16,46 +17,32 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
 import { isTauri } from "@/lib/env";
+import * as pdfjsLib from "pdfjs-dist";
+import { TextLayer } from "pdfjs-dist";
+import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
+import type { TextContent } from "pdfjs-dist/types/src/display/api";
 
-// Import PDF.js official CSS first, then our overrides
-import "pdfjs-dist/web/pdf_viewer.css";
+// Import CSS (our custom styles only, not pdf_viewer.css which conflicts)
 import "./pdfjs-engine.css";
 
-// Dynamic imports for PDF.js to avoid SSR issues
-let pdfjsLib: typeof import("pdfjs-dist") | null = null;
-let pdfjsViewer: typeof import("pdfjs-dist/web/pdf_viewer.mjs") | null = null;
-
-async function initPdfJs() {
-    if (pdfjsLib && pdfjsViewer) {
-        return { pdfjsLib, pdfjsViewer };
-    }
-    
-    const [lib, viewer] = await Promise.all([
-        import("pdfjs-dist"),
-        import("pdfjs-dist/web/pdf_viewer.mjs"),
-    ]);
-    
-    pdfjsLib = lib;
-    pdfjsViewer = viewer;
-    
-    // Set worker
-    const workerUrl = new URL(
-        "pdfjs-dist/build/pdf.worker.mjs",
-        import.meta.url
-    ).href;
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-    
-    return { pdfjsLib, pdfjsViewer };
-}
+// Configure worker using Vite's URL handling
+// This creates a proper URL that works in both dev and production
+const workerUrl = new URL(
+    "pdfjs-dist/build/pdf.worker.mjs",
+    import.meta.url
+).href;
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 // Types
 export interface PDFJsEngineProps {
     pdfPath: string;
     pdfData?: Uint8Array;
+    /** Original filename for display fallback (without extension) */
+    originalFilename?: string;
     initialPage?: number;
     onLoad?: (info: PDFDocumentInfo) => void;
     onError?: (error: Error) => void;
-    onPageChange?: (page: number, totalPages: number) => void;
+    onPageChange?: (page: number, totalPages: number, scale: number) => void;
     className?: string;
 }
 
@@ -90,10 +77,6 @@ export interface PDFJsEngineRef {
     getZoom: () => number;
     getCurrentPage: () => number;
     getTotalPages: () => number;
-    find: (query: string, options?: Partial<PDFSearchState>) => void;
-    findNext: () => void;
-    findPrevious: () => void;
-    clearSearch: () => void;
     rotateClockwise: () => void;
     rotateCounterClockwise: () => void;
 }
@@ -102,241 +85,245 @@ export interface PDFJsEngineRef {
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 5.0;
 const ZOOM_STEP = 0.25;
+const DEFAULT_SCALE = 1.0;
 
-// Text and annotation layer modes
-const TEXT_LAYER_MODE = {
-    DISABLE: 0,
-    ENABLE: 1,
-    ENABLE_PERMISSIONS: 2,
-} as const;
-
-/**
- * Hook to manage text selection behavior across the PDF viewer.
- * Implements the endOfContent technique from PDF.js for smooth selection.
- */
-function useTextSelectionManager(containerRef: React.RefObject<HTMLDivElement | null>) {
-    const abortControllerRef = useRef<AbortController | null>(null);
-    const textLayersRef = useRef<Map<HTMLElement, HTMLElement>>(new Map());
-    const prevRangeRef = useRef<Range | null>(null);
-    const isPointerDownRef = useRef(false);
-
-    const resetTextLayer = useCallback((endDiv: HTMLElement, textLayer: HTMLElement) => {
-        endDiv.style.width = "";
-        endDiv.style.height = "";
-        endDiv.style.userSelect = "";
-        textLayer.append(endDiv);
-        textLayer.classList.remove("selecting");
-    }, []);
-
-    const enableSelectionListener = useCallback(() => {
-        if (abortControllerRef.current) return;
-
-        const controller = new AbortController();
-        const { signal } = controller;
-        abortControllerRef.current = controller;
-
-        // Track pointer state
-        document.addEventListener("pointerdown", () => {
-            isPointerDownRef.current = true;
-        }, { signal });
-
-        document.addEventListener("pointerup", () => {
-            isPointerDownRef.current = false;
-            textLayersRef.current.forEach(resetTextLayer);
-        }, { signal });
-
-        window.addEventListener("blur", () => {
-            isPointerDownRef.current = false;
-            textLayersRef.current.forEach(resetTextLayer);
-        }, { signal });
-
-        document.addEventListener("keyup", () => {
-            if (!isPointerDownRef.current) {
-                textLayersRef.current.forEach(resetTextLayer);
-            }
-        }, { signal });
-
-        // Main selection change handler
-        document.addEventListener("selectionchange", () => {
-            const selection = document.getSelection();
-            if (!selection || selection.rangeCount === 0) {
-                textLayersRef.current.forEach(resetTextLayer);
-                return;
-            }
-
-            // Find active text layers
-            const activeTextLayers = new Set<HTMLElement>();
-            for (let i = 0; i < selection.rangeCount; i++) {
-                const range = selection.getRangeAt(i);
-                for (const textLayerDiv of textLayersRef.current.keys()) {
-                    if (!activeTextLayers.has(textLayerDiv) && range.intersectsNode(textLayerDiv)) {
-                        activeTextLayers.add(textLayerDiv);
-                    }
-                }
-            }
-
-            // Update selecting state on text layers
-            for (const [textLayerDiv, endDiv] of textLayersRef.current) {
-                if (activeTextLayers.has(textLayerDiv)) {
-                    textLayerDiv.classList.add("selecting");
-                } else {
-                    resetTextLayer(endDiv, textLayerDiv);
-                }
-            }
-
-            // Handle endOfContent positioning for smooth selection
-            const range = selection.getRangeAt(0);
-            const modifyStart = prevRangeRef.current &&
-                (range.compareBoundaryPoints(Range.END_TO_END, prevRangeRef.current) === 0 ||
-                 range.compareBoundaryPoints(Range.START_TO_END, prevRangeRef.current) === 0);
-
-            let anchor: Node = modifyStart ? range.startContainer : range.endContainer;
-            if (anchor.nodeType === Node.TEXT_NODE) {
-                anchor = anchor.parentNode!;
-            }
-
-            if (!modifyStart && range.endOffset === 0) {
-                do {
-                    while (!anchor.previousSibling) {
-                        anchor = anchor.parentNode!;
-                    }
-                    anchor = anchor.previousSibling!;
-                } while (!anchor.childNodes.length);
-            }
-
-            const parentTextLayer = (anchor as Element).closest?.(".textLayer") as HTMLElement | null;
-            const endDiv = parentTextLayer ? textLayersRef.current.get(parentTextLayer) : undefined;
-
-            if (endDiv && parentTextLayer) {
-                endDiv.style.width = parentTextLayer.style.width;
-                endDiv.style.height = parentTextLayer.style.height;
-                endDiv.style.userSelect = "text";
-                anchor.parentElement?.insertBefore(
-                    endDiv,
-                    modifyStart ? anchor : anchor.nextSibling
-                );
-            }
-
-            prevRangeRef.current = range.cloneRange();
-        }, { signal });
-    }, [resetTextLayer]);
-
-    const disableSelectionListener = useCallback(() => {
-        abortControllerRef.current?.abort();
-        abortControllerRef.current = null;
-        textLayersRef.current.clear();
-        prevRangeRef.current = null;
-    }, []);
-
-    const registerTextLayer = useCallback((textLayerDiv: HTMLElement, endDiv: HTMLElement) => {
-        textLayersRef.current.set(textLayerDiv, endDiv);
-        enableSelectionListener();
-    }, [enableSelectionListener]);
-
-    const unregisterTextLayer = useCallback((textLayerDiv: HTMLElement) => {
-        textLayersRef.current.delete(textLayerDiv);
-        if (textLayersRef.current.size === 0) {
-            disableSelectionListener();
-        }
-    }, [disableSelectionListener]);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            disableSelectionListener();
-        };
-    }, [disableSelectionListener]);
-
-    return { registerTextLayer, unregisterTextLayer };
+// Page render component
+interface PageCanvasProps {
+    page: PDFPageProxy;
+    scale: number;
+    rotation: number;
+    onRenderComplete?: () => void;
 }
 
-const ANNOTATION_MODE = {
-    DISABLE: 0,
-    ENABLE: 1,
-    ENABLE_FORMS: 2,
-    ENABLE_STORAGE: 3,
-} as const;
+function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const textLayerRef = useRef<HTMLDivElement>(null);
+    const renderTaskRef = useRef<ReturnType<PDFPageProxy['render']> | null>(null);
+    const textLayerInstanceRef = useRef<TextLayer | null>(null);
+    const [isRendering, setIsRendering] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        const canvas = canvasRef.current;
+        const textLayerDiv = textLayerRef.current;
+        if (!canvas || !textLayerDiv) return;
+
+        const renderPage = async () => {
+            // Cancel any ongoing render operation first
+            if (renderTaskRef.current) {
+                try {
+                    renderTaskRef.current.cancel();
+                } catch {
+                    // Ignore cancel errors
+                }
+                renderTaskRef.current = null;
+            }
+
+            // Cancel any existing text layer
+            if (textLayerInstanceRef.current) {
+                textLayerInstanceRef.current.cancel();
+                textLayerInstanceRef.current = null;
+            }
+
+            setIsRendering(true);
+
+            try {
+                // Get viewport at the requested scale
+                const viewport = page.getViewport({ scale, rotation });
+                const outputScale = window.devicePixelRatio || 1;
+
+                // Canvas dimensions
+                const cssWidth = Math.floor(viewport.width);
+                const cssHeight = Math.floor(viewport.height);
+
+                // Set canvas for HiDPI
+                canvas.width = Math.floor(cssWidth * outputScale);
+                canvas.height = Math.floor(cssHeight * outputScale);
+                canvas.style.width = `${cssWidth}px`;
+                canvas.style.height = `${cssHeight}px`;
+
+                // Set container size
+                if (containerRef.current) {
+                    containerRef.current.style.width = `${cssWidth}px`;
+                    containerRef.current.style.height = `${cssHeight}px`;
+                }
+
+                // Text layer matches canvas exactly
+                textLayerDiv.style.width = `${cssWidth}px`;
+                textLayerDiv.style.height = `${cssHeight}px`;
+
+                const ctx = canvas.getContext("2d");
+                if (!ctx || cancelled) return;
+
+                // Clear and set transform for HiDPI
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+
+                // Render canvas
+                const renderTask = page.render({
+                    canvasContext: ctx,
+                    viewport: viewport,
+                });
+                renderTaskRef.current = renderTask;
+
+                await renderTask.promise;
+                if (cancelled) return;
+
+                // Clear and render text layer
+                textLayerDiv.innerHTML = '';
+                
+                try {
+                    const textContent: TextContent = await page.getTextContent();
+                    if (cancelled) return;
+
+                    const textLayer = new TextLayer({
+                        textContentSource: textContent,
+                        container: textLayerDiv,
+                        viewport: viewport,
+                    });
+
+                    textLayerInstanceRef.current = textLayer;
+                    await textLayer.render();
+                } catch (textError) {
+                    console.warn("[PageCanvas] Text layer error:", textError);
+                }
+
+                if (!cancelled) {
+                    renderTaskRef.current = null;
+                    setIsRendering(false);
+                    onRenderComplete?.();
+                }
+            } catch (error: unknown) {
+                const isCancelled = error instanceof Error && 
+                    (error.message.includes('cancelled') || error.message.includes('Rendering cancelled'));
+                
+                if (!isCancelled) {
+                    console.error("[PageCanvas] Render error:", error);
+                }
+                
+                if (!cancelled) {
+                    renderTaskRef.current = null;
+                    setIsRendering(false);
+                }
+            }
+        };
+
+        renderPage();
+
+        return () => {
+            cancelled = true;
+            if (renderTaskRef.current) {
+                try { renderTaskRef.current.cancel(); } catch { /* ignore */ }
+                renderTaskRef.current = null;
+            }
+            if (textLayerInstanceRef.current) {
+                textLayerInstanceRef.current.cancel();
+                textLayerInstanceRef.current = null;
+            }
+        };
+    }, [page, scale, rotation, onRenderComplete]);
+
+    return (
+        <div 
+            ref={containerRef}
+            className="pdf-page-container"
+        >
+            <canvas ref={canvasRef} className="block" />
+            <div ref={textLayerRef} className="textLayer" />
+            {isRendering && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-accent)]" />
+                </div>
+            )}
+        </div>
+    );
+}
 
 /**
  * PDF.js Engine Component
  */
 export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
-    function PDFJsEngine({ pdfPath, pdfData, initialPage = 1, onLoad, onError, onPageChange, className }, ref) {
+    function PDFJsEngine({ pdfPath, pdfData, originalFilename, initialPage = 1, onLoad, onError, onPageChange, className }, ref) {
         const containerRef = useRef<HTMLDivElement>(null);
         const [isLoading, setIsLoading] = useState(true);
         const [error, setError] = useState<string | null>(null);
         const [pdfInfo, setPdfInfo] = useState<PDFDocumentInfo | null>(null);
         const [currentPage, setCurrentPage] = useState(initialPage);
         const [totalPages, setTotalPages] = useState(0);
-        const [scale, setScale] = useState(1);
+        const [scale, setScale] = useState(DEFAULT_SCALE);
         const [rotation, setRotation] = useState(0);
+        const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+        const [pages, setPages] = useState<PDFPageProxy[]>([]);
         
+        // Debounce timer for zoom changes
+        const zoomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+        // Pending scale during wheel zoom
+        const pendingScaleRef = useRef<number | null>(null);
+
         // Use refs for callbacks to avoid re-triggering the load effect
         const callbacksRef = useRef({ onLoad, onError, onPageChange });
         useEffect(() => {
             callbacksRef.current = { onLoad, onError, onPageChange };
         }, [onLoad, onError, onPageChange]);
-        
-        // PDF.js instances
-        const pdfDocRef = useRef<import("pdfjs-dist").PDFDocumentProxy | null>(null);
-        const eventBusRef = useRef<InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs").EventBus> | null>(null);
-        const linkServiceRef = useRef<InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs").PDFLinkService> | null>(null);
-        const findControllerRef = useRef<InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs").PDFFindController> | null>(null);
-        const pdfViewerRef = useRef<InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs").PDFViewer> | null>(null);
-
-        // Text selection manager
-        const { registerTextLayer, unregisterTextLayer } = useTextSelectionManager(containerRef);
 
         // Load PDF
         useEffect(() => {
             let cancelled = false;
-            
+
             const loadPdf = async () => {
+                // In browser mode, wait for pdfData to be provided
+                // This handles the race condition where component mounts before data is ready
+                if (!isTauri() && !pdfData) {
+                    // Keep loading state, data will arrive via props update
+                    return;
+                }
+
                 try {
                     setIsLoading(true);
                     setError(null);
-                    
-                    // Initialize PDF.js
-                    const { pdfjsLib, pdfjsViewer } = await initPdfJs();
-                    if (cancelled) return;
-                    
+                    setPages([]);
+
                     // Get PDF data
                     let data: Uint8Array;
                     if (pdfData) {
+                        // Use provided data (works in both browser and Tauri)
                         data = pdfData;
                     } else if (isTauri()) {
                         // Read via Tauri
                         data = await invoke<Uint8Array>("read_pdf_file", { path: pdfPath });
                     } else {
-                        throw new Error("No PDF data provided and not running in Tauri");
+                        // Should not reach here due to early return above
+                        throw new Error("PDF data not provided. Please ensure the book is properly loaded.");
                     }
-                    
+
                     if (cancelled) return;
-                    
-                    // Load document with proper font configuration
-                    // cMapUrl and standardFontDataUrl are required for correct
-                    // font metrics and text layer positioning.
-                    // Assets are copied to public/pdfjs/ for reliable access.
+
+                    // Load document
                     const loadingTask = pdfjsLib.getDocument({
                         data,
                         cMapUrl: "/pdfjs/cmaps/",
                         cMapPacked: true,
                         standardFontDataUrl: "/pdfjs/standard_fonts/",
+                        isEvalSupported: false, // Security: disable eval
                     });
-                    const pdfDocument = await loadingTask.promise;
-                    
+
+                    const pdf = await loadingTask.promise;
+
                     if (cancelled) {
-                        pdfDocument.destroy();
+                        pdf.destroy();
                         return;
                     }
-                    
-                    pdfDocRef.current = pdfDocument;
-                    
+
+                    setPdfDocument(pdf);
+
                     // Get metadata
-                    const metadata = await pdfDocument.getMetadata();
+                    const metadata = await pdf.getMetadata();
                     const metaInfo = metadata.info as Record<string, unknown>;
+                    // Use original filename (without extension) as fallback for title
+                    const displayFilename = originalFilename || pdfPath.split("/").pop()?.replace(/\.[^/.]+$/, "") || "document";
                     const info: PDFDocumentInfo = {
-                        title: (metaInfo?.Title as string) || pdfPath.split("/").pop()?.replace(".pdf", ""),
+                        title: (metaInfo?.Title as string) || displayFilename,
                         author: metaInfo?.Author as string | undefined,
                         subject: metaInfo?.Subject as string | undefined,
                         keywords: metaInfo?.Keywords as string | undefined,
@@ -344,154 +331,33 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         producer: metaInfo?.Producer as string | undefined,
                         creationDate: metaInfo?.CreationDate ? new Date(metaInfo.CreationDate as string) : undefined,
                         modificationDate: metaInfo?.ModDate ? new Date(metaInfo.ModDate as string) : undefined,
-                        totalPages: pdfDocument.numPages,
-                        filename: pdfPath.split("/").pop() || "document.pdf",
+                        totalPages: pdf.numPages,
+                        filename: displayFilename,
                     };
-                    
+
                     setPdfInfo(info);
                     setTotalPages(info.totalPages);
-                    
-                    // Setup viewer components
-                    if (!containerRef.current) return;
-                    
-                    // Create EventBus
-                    const eventBus = new pdfjsViewer.EventBus();
-                    eventBusRef.current = eventBus;
-                    
-                    // Create LinkService
-                    const linkService = new pdfjsViewer.PDFLinkService({ eventBus });
-                    linkServiceRef.current = linkService;
-                    
-                    // Create FindController
-                    const findController = new pdfjsViewer.PDFFindController({
-                        eventBus,
-                        linkService,
-                    });
-                    findControllerRef.current = findController;
-                    
-                    // Create PDFViewer with performance optimizations
-                    const pdfViewer = new pdfjsViewer.PDFViewer({
-                        container: containerRef.current,
-                        eventBus,
-                        linkService,
-                        findController,
-                        textLayerMode: TEXT_LAYER_MODE.ENABLE, // Enable text selection
-                        annotationMode: ANNOTATION_MODE.ENABLE_FORMS,
-                        removePageBorders: false,
-                        // Performance optimizations
-                        maxCanvasPixels: 4096 * 8192, // Limit canvas size (32MP)
-                        enableHWA: true, // Enable hardware acceleration
-                    });
-                    pdfViewerRef.current = pdfViewer;
-                    
-                    // Set document
-                    pdfViewer.setDocument(pdfDocument);
-                    linkService.setDocument(pdfDocument);
-                    findController.setDocument(pdfDocument);
-                    
-                    // Event listeners
-                    eventBus.on("pagesinit", () => {
-                        // Defer scale setting to ensure container is ready
-                        requestAnimationFrame(() => {
-                            if (!cancelled && pdfViewerRef.current) {
-                                try {
-                                    pdfViewer.currentScaleValue = "page-width";
-                                } catch (e) {
-                                    // Ignore scroll errors during initialization
-                                    console.warn("[PDFJsEngine] Could not set initial scale:", e);
-                                }
-                            }
-                        });
-                    });
 
-                    // Set initial --scale-factor on pages when they are created
-                    eventBus.on("pagerendered", (evt: { pageNumber: number; source: { scale: number; div: HTMLElement } }) => {
-                        const PDF_TO_CSS_UNITS = 96 / 72;
-                        const viewportScale = evt.source.scale * PDF_TO_CSS_UNITS;
-                        evt.source.div.style.setProperty("--scale-factor", viewportScale.toString());
-                    });
-                    
-                    eventBus.on("pagechanging", (evt: { pageNumber: number }) => {
-                        setCurrentPage(evt.pageNumber);
-                        callbacksRef.current.onPageChange?.(evt.pageNumber, info.totalPages);
-                    });
-
-                    // Listen for scale changes
-                    // NOTE: When NOT in standalone mode, PDF.js doesn't set --scale-factor automatically.
-                    // We need to set it manually for text layer font sizing to work correctly.
-                    eventBus.on("scalechanging", (evt: { scale: number; presetValue?: string }) => {
-                        setScale(evt.scale);
-                        
-                        // PDF_TO_CSS_UNITS = 96/72 = 1.333...
-                        // The viewport scale includes this conversion factor
-                        const PDF_TO_CSS_UNITS = 96 / 72;
-                        const viewportScale = evt.scale * PDF_TO_CSS_UNITS;
-                        
-                        // Set --scale-factor on all pages (required for text layer font sizing)
-                        if (containerRef.current) {
-                            const pages = containerRef.current.querySelectorAll(".page");
-                            pages.forEach(page => {
-                                (page as HTMLElement).style.setProperty("--scale-factor", viewportScale.toString());
-                            });
-                        }
-                    });
-
-                    // Register text layers for improved selection behavior
-                    eventBus.on("textlayerrendered", (evt: { pageNumber: number; source: { textLayerDiv: HTMLElement | null } }) => {
-                        const textLayerDiv = evt.source.textLayerDiv;
-                        if (!textLayerDiv) return;
-
-                        // Create endOfContent element for selection management
-                        let endOfContent = textLayerDiv.querySelector(".endOfContent") as HTMLElement | null;
-                        if (!endOfContent) {
-                            endOfContent = document.createElement("div");
-                            endOfContent.className = "endOfContent";
-                            textLayerDiv.append(endOfContent);
-                        }
-
-                        // Register with selection manager
-                        registerTextLayer(textLayerDiv, endOfContent);
-
-                        // Add mousedown handler for selecting class
-                        textLayerDiv.addEventListener("mousedown", () => {
-                            textLayerDiv.classList.add("selecting");
-                        });
-
-                        // Add copy handler
-                        textLayerDiv.addEventListener("copy", (event) => {
-                            const selection = document.getSelection();
-                            if (selection && selection.toString()) {
-                                event.clipboardData?.setData("text/plain", selection.toString());
-                                event.preventDefault();
-                            }
-                        });
-                    });
-
-                    // Clean up text layers when pages are destroyed
-                    eventBus.on("pageremoved", (evt: { pageNumber: number }) => {
-                        // Find and unregister any text layers for this page
-                        const textLayers = containerRef.current?.querySelectorAll(".textLayer");
-                        textLayers?.forEach(layer => {
-                            unregisterTextLayer(layer as HTMLElement);
-                        });
-                    });
-                    
-                    // Navigate to initial page (after a delay to ensure DOM is ready)
-                    if (initialPage > 1 && initialPage <= info.totalPages) {
-                        setTimeout(() => {
-                            if (!cancelled && pdfViewerRef.current) {
-                                try {
-                                    pdfViewer.currentPageNumber = initialPage;
-                                } catch (e) {
-                                    console.warn("[PDFJsEngine] Could not navigate to initial page:", e);
-                                }
-                            }
-                        }, 100);
+                    // Pre-load first few pages
+                    const initialPages: PDFPageProxy[] = [];
+                    const pagesToLoad = Math.min(3, pdf.numPages);
+                    for (let i = 1; i <= pagesToLoad; i++) {
+                        const page = await pdf.getPage(i);
+                        initialPages.push(page);
                     }
-                    
-                    setIsLoading(false);
-                    callbacksRef.current.onLoad?.(info);
-                    
+
+                    if (!cancelled) {
+                        setPages(initialPages);
+                        setIsLoading(false);
+                        callbacksRef.current.onLoad?.(info);
+                        // Also call onPageChange with initial page to update parent state
+                        callbacksRef.current.onPageChange?.(initialPage, info.totalPages, DEFAULT_SCALE);
+                    } else {
+                        // Cleanup if cancelled
+                        initialPages.forEach(p => p.cleanup());
+                        pdf.destroy();
+                    }
+
                 } catch (err) {
                     if (!cancelled) {
                         const errorMsg = err instanceof Error ? err.message : "Failed to load PDF";
@@ -502,128 +368,180 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     }
                 }
             };
-            
+
             loadPdf();
-            
+
             return () => {
                 cancelled = true;
-                // Cleanup PDF.js instances
-                try {
-                    pdfViewerRef.current?.setDocument(null as unknown as import("pdfjs-dist").PDFDocumentProxy);
-                    linkServiceRef.current?.setDocument(null as unknown as import("pdfjs-dist").PDFDocumentProxy, null);
-                    findControllerRef.current?.setDocument(null as unknown as import("pdfjs-dist").PDFDocumentProxy);
-                } catch {
-                    // Ignore cleanup errors
-                }
-                pdfDocRef.current?.destroy();
-                pdfViewerRef.current = null;
-                linkServiceRef.current = null;
-                findControllerRef.current = null;
-                eventBusRef.current = null;
-                pdfDocRef.current = null;
+                // Cleanup
+                pages.forEach(p => p.cleanup());
+                pdfDocument?.destroy();
+                setPdfDocument(null);
+                setPages([]);
             };
-        // Only reload when pdfPath, pdfData, or initialPage changes
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+            // Only reload when pdfPath, pdfData, or initialPage changes
+            // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [pdfPath, pdfData, initialPage]);
+
+        // Track loading state to prevent duplicate page loads
+        const isLoadingPageRef = useRef(false);
+
+        // Load additional pages as needed
+        useEffect(() => {
+            if (!pdfDocument || pages.length >= pdfDocument.numPages) return;
+            if (isLoadingPageRef.current) return;
+
+            let cancelled = false;
+            isLoadingPageRef.current = true;
+
+            const loadMorePages = async () => {
+                const nextPageNum = pages.length + 1;
+                if (nextPageNum > pdfDocument.numPages) {
+                    isLoadingPageRef.current = false;
+                    return;
+                }
+
+                try {
+                    const page = await pdfDocument.getPage(nextPageNum);
+                    if (!cancelled) {
+                        setPages(prev => {
+                            // Prevent duplicates
+                            if (prev.some(p => p.pageNumber === page.pageNumber)) {
+                                return prev;
+                            }
+                            return [...prev, page];
+                        });
+                    } else {
+                        page.cleanup();
+                    }
+                } catch (error) {
+                    console.error("[PDFJsEngine] Error loading page:", error);
+                } finally {
+                    isLoadingPageRef.current = false;
+                }
+            };
+
+            // Load next page when we're near the end of loaded pages
+            loadMorePages();
+
+            return () => {
+                cancelled = true;
+                isLoadingPageRef.current = false;
+            };
+        }, [pdfDocument, pages.length]);
+
+        // Handle scroll-based page tracking and wheel zoom
+        useEffect(() => {
+            const container = containerRef.current;
+            if (!container || pages.length === 0) return;
+
+            const handleScroll = () => {
+                const scrollTop = container.scrollTop;
+                const pageHeight = container.scrollHeight / pages.length;
+                const newPage = Math.floor(scrollTop / pageHeight) + 1;
+
+                if (newPage !== currentPage && newPage >= 1 && newPage <= totalPages) {
+                    setCurrentPage(newPage);
+                    callbacksRef.current.onPageChange?.(newPage, totalPages, scale);
+                }
+            };
+
+            // Wheel zoom handler - debounced direct scale change
+            const handleWheel = (e: WheelEvent) => {
+                // Check if Ctrl or Meta key is pressed for zoom
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+                    
+                    // Calculate new scale from pending or current
+                    const baseScale = pendingScaleRef.current ?? scale;
+                    const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, baseScale + delta));
+                    pendingScaleRef.current = newScale;
+                    
+                    // Clear existing debounce timer
+                    if (zoomDebounceRef.current) {
+                        clearTimeout(zoomDebounceRef.current);
+                    }
+                    
+                    // Debounce - apply scale after zoom gesture stops
+                    zoomDebounceRef.current = setTimeout(() => {
+                        if (pendingScaleRef.current !== null) {
+                            const finalScale = pendingScaleRef.current;
+                            setScale(finalScale);
+                            // Notify parent of zoom change
+                            callbacksRef.current.onPageChange?.(currentPage, totalPages, finalScale);
+                            pendingScaleRef.current = null;
+                        }
+                        zoomDebounceRef.current = null;
+                    }, 150);
+                }
+            };
+
+            container.addEventListener("scroll", handleScroll, { passive: true });
+            container.addEventListener("wheel", handleWheel, { passive: false });
+            
+            return () => {
+                container.removeEventListener("scroll", handleScroll);
+                container.removeEventListener("wheel", handleWheel);
+                // Clear zoom debounce on cleanup
+                if (zoomDebounceRef.current) {
+                    clearTimeout(zoomDebounceRef.current);
+                    zoomDebounceRef.current = null;
+                }
+            };
+        }, [pages.length, currentPage, totalPages, scale]);
 
         // Expose imperative methods
         useImperativeHandle(ref, () => ({
             goToPage: (page: number) => {
-                if (pdfViewerRef.current && page >= 1 && page <= totalPages) {
-                    pdfViewerRef.current.currentPageNumber = page;
+                if (page >= 1 && page <= totalPages && containerRef.current) {
+                    const pageHeight = containerRef.current.scrollHeight / pages.length;
+                    containerRef.current.scrollTo({
+                        top: (page - 1) * pageHeight,
+                        behavior: "smooth",
+                    });
                 }
             },
             nextPage: () => {
-                if (pdfViewerRef.current && currentPage < totalPages) {
-                    pdfViewerRef.current.currentPageNumber = currentPage + 1;
+                if (currentPage < totalPages && containerRef.current) {
+                    const pageHeight = containerRef.current.scrollHeight / pages.length;
+                    containerRef.current.scrollTo({
+                        top: currentPage * pageHeight,
+                        behavior: "smooth",
+                    });
                 }
             },
             prevPage: () => {
-                if (pdfViewerRef.current && currentPage > 1) {
-                    pdfViewerRef.current.currentPageNumber = currentPage - 1;
+                if (currentPage > 1 && containerRef.current) {
+                    const pageHeight = containerRef.current.scrollHeight / pages.length;
+                    containerRef.current.scrollTo({
+                        top: (currentPage - 2) * pageHeight,
+                        behavior: "smooth",
+                    });
                 }
             },
             zoomIn: () => {
-                if (pdfViewerRef.current) {
-                    const newScale = Math.min(scale + ZOOM_STEP, MAX_ZOOM);
-                    pdfViewerRef.current.currentScale = newScale;
-                    setScale(newScale);
-                }
+                setScale(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
             },
             zoomOut: () => {
-                if (pdfViewerRef.current) {
-                    const newScale = Math.max(scale - ZOOM_STEP, MIN_ZOOM);
-                    pdfViewerRef.current.currentScale = newScale;
-                    setScale(newScale);
-                }
+                setScale(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
             },
             zoomReset: () => {
-                if (pdfViewerRef.current) {
-                    pdfViewerRef.current.currentScale = 1;
-                    setScale(1);
-                }
+                setScale(DEFAULT_SCALE);
             },
             setZoom: (newScale: number) => {
-                if (pdfViewerRef.current) {
-                    const clampedScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale));
-                    pdfViewerRef.current.currentScale = clampedScale;
-                    setScale(clampedScale);
-                }
+                setScale(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale)));
             },
             getZoom: () => scale,
             getCurrentPage: () => currentPage,
             getTotalPages: () => totalPages,
-            find: (query: string, options?: Partial<PDFSearchState>) => {
-                if (eventBusRef.current) {
-                    eventBusRef.current.dispatch("find", {
-                        type: "",
-                        query,
-                        caseSensitive: options?.caseSensitive ?? false,
-                        entireWord: options?.entireWord ?? false,
-                        highlightAll: options?.highlightAll ?? true,
-                        findPrevious: false,
-                    });
-                }
-            },
-            findNext: () => {
-                if (eventBusRef.current) {
-                    eventBusRef.current.dispatch("findagain", {
-                        type: "",
-                        findPrevious: false,
-                    });
-                }
-            },
-            findPrevious: () => {
-                if (eventBusRef.current) {
-                    eventBusRef.current.dispatch("findagain", {
-                        type: "",
-                        findPrevious: true,
-                    });
-                }
-            },
-            clearSearch: () => {
-                if (eventBusRef.current) {
-                    eventBusRef.current.dispatch("find", {
-                        type: "",
-                        query: "",
-                    });
-                }
-            },
             rotateClockwise: () => {
-                if (pdfViewerRef.current) {
-                    const newRotation = (rotation + 90) % 360;
-                    pdfViewerRef.current.pagesRotation = newRotation;
-                    setRotation(newRotation);
-                }
+                setRotation(prev => (prev + 90) % 360);
             },
             rotateCounterClockwise: () => {
-                if (pdfViewerRef.current) {
-                    const newRotation = (rotation - 90 + 360) % 360;
-                    pdfViewerRef.current.pagesRotation = newRotation;
-                    setRotation(newRotation);
-                }
+                setRotation(prev => (prev - 90 + 360) % 360);
             },
-        }), [currentPage, totalPages, scale, rotation]);
+        }), [currentPage, totalPages, pages.length, scale]);
 
         return (
             <div className={cn("relative w-full h-full", className)}>
@@ -634,7 +552,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         <p className="mt-4 text-[var(--color-text-secondary)]">Loading PDF...</p>
                     </div>
                 )}
-                
+
                 {/* Error State */}
                 {error && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)] p-8">
@@ -647,25 +565,36 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         </p>
                     </div>
                 )}
-                
-                {/* PDF Viewer Container - must be absolutely positioned for PDF.js */}
+
+                {/* PDF Pages Container */}
                 <div
                     ref={containerRef}
                     className={cn(
-                        "absolute inset-0 overflow-auto",
+                        "absolute inset-0 overflow-auto bg-[var(--color-surface)]",
                         (isLoading || error) && "invisible"
                     )}
-                    style={{
-                        backgroundColor: "var(--color-surface)",
-                    }}
                 >
-                    <div className="pdfViewer" />
+                    <div className="flex flex-col items-center justify-start min-h-full py-4 space-y-4 mx-auto">
+                        {pages.map((page) => (
+                            <div
+                                key={`page-${page.pageNumber}`}
+                                className="pdf-page-wrapper"
+                                data-page-number={page.pageNumber}
+                            >
+                                <PageCanvas
+                                    page={page}
+                                    scale={scale}
+                                    rotation={rotation}
+                                />
+                            </div>
+                        ))}
+                    </div>
                 </div>
-                
+
                 {/* Page Info Overlay */}
                 {!isLoading && !error && totalPages > 0 && (
                     <div className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] shadow-sm">
-                        Page {currentPage} of {totalPages}
+                        Page {currentPage} of {totalPages} | {Math.round(scale * 100)}%
                     </div>
                 )}
             </div>

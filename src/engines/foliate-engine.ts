@@ -31,6 +31,7 @@ import {
     getCurrentReaderSettings,
     getThemeColors,
 } from '@/lib/reader-styles';
+import { normalizeAuthor } from '@/lib/utils';
 
 export interface FoliateEngineOptions {
     onLocationChange?: (location: DocLocation) => void;
@@ -502,7 +503,8 @@ export class FoliateEngine {
         const meta = this.book.metadata || {};
         return {
             title: this.formatLanguageMap(meta.title) || 'Unknown Title',
-            author: this.formatLanguageMap(meta.author) || 'Unknown Author',
+            // Author can be string, {name, sortAs, role}, or array - normalize it
+            author: normalizeAuthor(meta.author) || 'Unknown Author',
             description: meta.description,
             publisher: meta.publisher,
             language: meta.language,

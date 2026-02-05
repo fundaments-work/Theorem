@@ -28,6 +28,8 @@ interface PDFReaderProps {
     pdfPath: string;
     /** Optional PDF data as Uint8Array (takes precedence over pdfPath) */
     pdfData?: Uint8Array;
+    /** Original filename for display fallback (without extension) */
+    originalFilename?: string;
     /** Theme mode for the reader */
     theme?: ReaderTheme;
     /** Callback when page changes - provides page state for external controls */
@@ -135,6 +137,7 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
         {
             pdfPath,
             pdfData,
+            originalFilename,
             theme = "light",
             onPageChange,
             onLoad,
@@ -186,10 +189,6 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             getZoom: () => engineRef.current?.getZoom() ?? 1,
             getCurrentPage: () => engineRef.current?.getCurrentPage() ?? 1,
             getTotalPages: () => engineRef.current?.getTotalPages() ?? 0,
-            find: (query: string, options?) => engineRef.current?.find(query, options),
-            findNext: () => engineRef.current?.findNext(),
-            findPrevious: () => engineRef.current?.findPrevious(),
-            clearSearch: () => engineRef.current?.clearSearch(),
             rotateClockwise: () => engineRef.current?.rotateClockwise(),
             rotateCounterClockwise: () => engineRef.current?.rotateCounterClockwise(),
         }));
@@ -253,6 +252,7 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                         ref={engineRef}
                         pdfPath={pdfPath}
                         pdfData={pdfData}
+                        originalFilename={originalFilename}
                         onPageChange={handlePageChange}
                         onLoad={handleLoad}
                         onError={handleError}
