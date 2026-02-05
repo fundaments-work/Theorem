@@ -18,6 +18,8 @@
     /* Ensure no extra spacing affects alignment */
     padding: 0;
     margin: 0;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 /* Text Layer */
@@ -33,13 +35,9 @@
     /* Prevent inheritance of text alignment */
     text-align: left;
     /* Reset transforms from previous attempts */
-    transform: none !important; 
-}
-
-/* Selection color */
-.textLayer ::selection {
-    background: rgba(0, 100, 200, 0.3);
-    color: transparent;
+    transform: none !important;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 
@@ -54,23 +52,39 @@
 .textLayer .markedContent {
     position: absolute;
     white-space: pre;
-    color: transparent;
+    cursor: text;
     transform-origin: 0% 0%;
+
+    /* Text styling */
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+
+    /* Selection behavior */
     pointer-events: auto;
     user-select: text;
-    cursor: text;
+    -webkit-user-select: text;
 }
 
-.textLayer span::selection,
-.textLayer .markedContent::selection {
-    background: rgba(0, 100, 200, 0.35);
-    color: transparent;
+/* Global selection within Text Layer */
+.textLayer ::selection {
+    background: rgba(0, 100, 200, 0.35) !important;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
 }
 
+/* Specific WebKit overrides just in case */
+.textLayer span::-webkit-selection,
+.textLayer .markedContent::-webkit-selection {
+    background: rgba(0, 100, 200, 0.35) !important;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+}
+
+/* Firefox overrides */
 .textLayer span::-moz-selection,
 .textLayer .markedContent::-moz-selection {
-    background: rgba(0, 100, 200, 0.35);
-    color: transparent;
+    background: rgba(0, 100, 200, 0.35) !important;
+    color: transparent !important;
 }
 
 /* Ensure canvas is below text layer */
@@ -93,7 +107,9 @@
 
 /* Loading spinner */
 @keyframes pdfjs-spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .animate-spin {

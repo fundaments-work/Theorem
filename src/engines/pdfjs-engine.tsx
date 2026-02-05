@@ -108,7 +108,7 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
         const canvas = canvasRef.current;
         const textLayerDiv = textLayerRef.current;
         const container = containerRef.current;
-        
+
         if (!canvas || !textLayerDiv || !container) return;
 
         const renderPage = async () => {
@@ -128,41 +128,53 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
                 // 1. VIEWPORT: Use the SCALED viewport for both Canvas and Text
                 // This ensures coordinates match 1:1
                 const viewport = page.getViewport({ scale, rotation });
-                const outputScale = window.devicePixelRatio || 1;
 
-                // 2. DIMENSIONS: Set exact pixel dimensions
-                const cssWidth = Math.floor(viewport.width);
-                const cssHeight = Math.floor(viewport.height);
+                // FORCE sharp rendering:
+                // WebKit sometimes reports dPR=1 even on high DPI, or renders blurry.
+                // We enforce a minimum scale of 2.0 for sharpness, or higher if screen supports it.
+                // This effectively renders at "Retina" resolution always.
+                const outputScale = Math.max(window.devicePixelRatio || 1, 2);
+
+                // 2. DIMENSIONS: Set exact dimensions
+                // We use precise dimensions for CSS to avoid truncation blur,
+                // but integer dimensions for the canvas buffer.
+                const cssWidth = viewport.width;
+                const cssHeight = viewport.height;
 
                 // Container
                 container.style.width = `${cssWidth}px`;
                 container.style.height = `${cssHeight}px`;
 
                 // Canvas (High DPI)
-                canvas.width = Math.floor(viewport.width * outputScale);
-                canvas.height = Math.floor(viewport.height * outputScale);
+                // Use round instead of floor to find nearest integer for the buffer
+                canvas.width = Math.round(viewport.width * outputScale);
+                canvas.height = Math.round(viewport.height * outputScale);
                 canvas.style.width = `${cssWidth}px`;
                 canvas.style.height = `${cssHeight}px`;
 
                 // Text Layer matches Canvas exactly
                 textLayerDiv.style.width = `${cssWidth}px`;
                 textLayerDiv.style.height = `${cssHeight}px`;
-                
+
                 // CRITICAL FIX: Set the PDF.js scale factor variable
                 // This tells the text layer how to adjust font spacing
                 textLayerDiv.style.setProperty("--scale-factor", `${scale}`);
 
-                const ctx = canvas.getContext("2d");
+                // Add explicit transform-origin to match CSS
+                textLayerDiv.style.transformOrigin = "0 0";
+
+                const ctx = canvas.getContext("2d", { alpha: false });
                 if (!ctx || cancelled) return;
 
                 // Render Canvas
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.setTransform(outputScale, 0, 0, outputScale, 0, 0);
 
                 const renderTask = page.render({
                     canvasContext: ctx,
                     viewport: viewport,
+                    transform: [outputScale, 0, 0, outputScale, 0, 0],
                 });
+
                 renderTaskRef.current = renderTask;
 
                 await renderTask.promise;
@@ -170,7 +182,7 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
 
                 // Render Text Layer
                 textLayerDiv.innerHTML = "";
-                
+
                 try {
                     const textContent = await page.getTextContent();
                     if (cancelled) return;
@@ -193,7 +205,7 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
                     onRenderComplete?.();
                 }
             } catch (error: unknown) {
-                const isCancelled = error instanceof Error && 
+                const isCancelled = error instanceof Error &&
                     (error.message.includes('cancelled') || error.message.includes('Rendering cancelled'));
                 if (!isCancelled) console.error(error);
             }
@@ -203,7 +215,7 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
 
         return () => {
             cancelled = true;
-            if (renderTaskRef.current) try { renderTaskRef.current.cancel(); } catch {}
+            if (renderTaskRef.current) try { renderTaskRef.current.cancel(); } catch { }
             if (textLayerInstanceRef.current) textLayerInstanceRef.current.cancel();
         };
     }, [page, scale, rotation, onRenderComplete]);
@@ -236,7 +248,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const [rotation, setRotation] = useState(0);
         const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
         const [pages, setPages] = useState<PDFPageProxy[]>([]);
-        
+
         // Debounce timer for zoom changes
         const zoomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
         // Pending scale during wheel zoom
@@ -281,8 +293,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     if (cancelled) return;
 
                     // Load document
+                    // Fix: Ensure data is a "clean" Uint8Array to avoid DataCloneError in some WebKit environments
+                    // By using subarray(0) or new Uint8Array(data) we ensure it's a serializable object
                     const loadingTask = pdfjsLib.getDocument({
-                        data,
+                        data: new Uint8Array(data), // Create a clean copy to ensure transferability and satisfy TS
                         cMapUrl: "/pdfjs/cmaps/",
                         cMapPacked: true,
                         standardFontDataUrl: "/pdfjs/standard_fonts/",
@@ -433,17 +447,17 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 if (e.ctrlKey || e.metaKey) {
                     e.preventDefault();
                     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-                    
+
                     // Calculate new scale from pending or current
                     const baseScale = pendingScaleRef.current ?? scale;
                     const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, baseScale + delta));
                     pendingScaleRef.current = newScale;
-                    
+
                     // Clear existing debounce timer
                     if (zoomDebounceRef.current) {
                         clearTimeout(zoomDebounceRef.current);
                     }
-                    
+
                     // Debounce - apply scale after zoom gesture stops
                     zoomDebounceRef.current = setTimeout(() => {
                         if (pendingScaleRef.current !== null) {
@@ -460,7 +474,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
 
             container.addEventListener("scroll", handleScroll, { passive: true });
             container.addEventListener("wheel", handleWheel, { passive: false });
-            
+
             return () => {
                 container.removeEventListener("scroll", handleScroll);
                 container.removeEventListener("wheel", handleWheel);
