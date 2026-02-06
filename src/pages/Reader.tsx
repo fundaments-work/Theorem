@@ -77,14 +77,14 @@ export function ReaderPage() {
         console.log('[PDF] Loaded:', info);
         // Get current book data for fallback
         const currentBookData = currentBookId ? getBook(currentBookId) : null;
-        
+
         // Priority: 1. PDF metadata title, 2. Book title from library, 3. Filename, 4. 'Untitled'
         // Only use PDF title if it differs from the filename (meaning it came from actual metadata)
         const isPdfTitleFromMetadata = info.title && info.title !== info.filename;
-        const displayTitle = (isPdfTitleFromMetadata 
-            ? info.title 
+        const displayTitle = (isPdfTitleFromMetadata
+            ? info.title
             : (currentBookData?.title || info.title || 'Untitled')) || 'Untitled';
-        
+
         setMetadata({
             title: displayTitle,
             author: info.author || currentBookData?.author || 'Unknown',
@@ -102,7 +102,7 @@ export function ReaderPage() {
     }, []);
 
     const handlePdfPageChange = useCallback((page: number, total: number, scale: number) => {
-        console.log('[PDF] Page changed:', page, 'of', total, 'zoom:', scale);
+        // console.log('[PDF] Page changed:', page, 'of', total, 'zoom:', scale);
         setPdfCurrentPage(page);
         setPdfTotalPages(total);
         setPdfZoom(scale);
@@ -168,7 +168,7 @@ export function ReaderPage() {
                 }
                 if (!isCancelled) {
                     setFile(blob);
-                    
+
                     // For PDFs, extract Uint8Array data for the PDF engine
                     if (book.format === 'pdf') {
                         const arrayBuffer = await blob.arrayBuffer();
@@ -196,7 +196,7 @@ export function ReaderPage() {
 
         // Start tracking when book is loaded
         readingStartTimeRef.current = Date.now();
-        
+
         // Update every minute
         readingIntervalRef.current = setInterval(() => {
             if (currentBookId && readingStartTimeRef.current) {
@@ -204,16 +204,16 @@ export function ReaderPage() {
                 if (elapsedMinutes > 0) {
                     // Add reading time to book
                     addReadingTime(currentBookId, 1);
-                    
+
                     // Update global stats - use ref to access latest stats without dependency issues
                     const currentStats = statsRef.current;
                     const today = new Date().toISOString().split('T')[0];
                     const existingActivity = currentStats.dailyActivity.find(a => a.date === today);
-                    
+
                     let newDailyActivity;
                     if (existingActivity) {
-                        newDailyActivity = currentStats.dailyActivity.map(a => 
-                            a.date === today 
+                        newDailyActivity = currentStats.dailyActivity.map(a =>
+                            a.date === today
                                 ? { ...a, minutes: a.minutes + 1, booksRead: [...new Set([...a.booksRead, currentBookId])] }
                                 : a
                         );
@@ -224,21 +224,21 @@ export function ReaderPage() {
                             booksRead: [currentBookId]
                         }];
                     }
-                    
+
                     // Keep only last 84 days (12 weeks)
                     if (newDailyActivity.length > 84) {
                         newDailyActivity = newDailyActivity.slice(-84);
                     }
-                    
+
                     // Calculate streak
-                    const sortedActivity = [...newDailyActivity].sort((a, b) => 
+                    const sortedActivity = [...newDailyActivity].sort((a, b) =>
                         new Date(b.date).getTime() - new Date(a.date).getTime()
                     );
-                    
+
                     let currentStreak = 0;
                     const todayStr = new Date().toISOString().split('T')[0];
                     const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-                    
+
                     // Check if read today or yesterday to maintain streak
                     const lastReadDate = sortedActivity[0]?.date;
                     if (lastReadDate === todayStr || lastReadDate === yesterdayStr) {
@@ -254,7 +254,7 @@ export function ReaderPage() {
                             }
                         }
                     }
-                    
+
                     updateStats({
                         totalReadingTime: currentStats.totalReadingTime + 1,
                         dailyActivity: newDailyActivity,
@@ -262,7 +262,7 @@ export function ReaderPage() {
                         longestStreak: Math.max(currentStats.longestStreak, currentStreak),
                         lastReadDate: today,
                     });
-                    
+
                     // Reset start time for next minute
                     readingStartTimeRef.current = Date.now();
                 }
@@ -273,7 +273,7 @@ export function ReaderPage() {
             if (readingIntervalRef.current) {
                 clearInterval(readingIntervalRef.current);
             }
-            
+
             // Save any remaining partial minute on unmount
             if (currentBookId && readingStartTimeRef.current) {
                 const elapsedMinutes = Math.floor((Date.now() - readingStartTimeRef.current) / 60000);
@@ -282,7 +282,7 @@ export function ReaderPage() {
                 }
             }
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentBookId, addReadingTime, updateStats]);
 
     useEffect(() => {
@@ -367,19 +367,19 @@ export function ReaderPage() {
 
     const handleLocationChange = useCallback((loc: DocLocation) => {
         setLocation(loc);
-        
+
         // Suppress the first few location updates to avoid overwriting saved progress
         // The engine navigates to the saved location, which triggers relocate events
         if (suppressProgressRef.current) {
             const target = resumeTargetRef.current;
-            
+
             console.debug('[Reader] Location change while suppressed:', {
                 hasTarget: !!target,
                 targetCfi: target?.substring(0, 50),
                 currentCfi: loc.cfi?.substring(0, 50),
                 percentage: loc.percentage,
             });
-            
+
             // If we have a target CFI and current location matches it, we've arrived
             if (target && loc.cfi && loc.cfi.startsWith(target)) {
                 console.debug('[Reader] ✓ Arrived at resume target, clearing suppression');
@@ -392,7 +392,7 @@ export function ReaderPage() {
                 }
                 return; // Don't save this location change
             }
-            
+
             // If we have a target CFI but current location doesn't match, CFI is invalid
             if (target && loc.cfi && !loc.cfi.startsWith(target)) {
                 console.warn('[Reader] ✗ Invalid CFI target, clearing saved location');
@@ -408,7 +408,7 @@ export function ReaderPage() {
                 }
                 return; // Don't save this location change
             }
-            
+
             // If no target (using fraction) or first location update, clear suppression after a timeout
             if (!resumeTimeoutRef.current) {
                 console.debug('[Reader] Starting suppression timeout (1000ms)');
@@ -419,16 +419,16 @@ export function ReaderPage() {
                     resumeTimeoutRef.current = null;
                 }, 1000);
             }
-            
+
             return; // Don't save while suppressed
         }
-        
+
         if (currentBookId) {
             console.debug('[Reader] Saving location update:', {
                 cfi: loc.cfi?.substring(0, 50),
                 percentage: loc.percentage,
             });
-            
+
             const safePercentage = Math.max(0, Math.min(1, loc.percentage || 0));
             const safeCfi = loc.cfi || '';
             const lastClickFraction = lastClickFractionRef.current ?? undefined;
@@ -441,7 +441,7 @@ export function ReaderPage() {
 
             queueMicrotask(() => {
                 updateProgress(currentBookId, safePercentage, safeCfi, lastClickFraction, pageProgress);
-                
+
                 // Check if book is completed (>= 99% progress)
                 if (safePercentage >= 0.99 && currentBookId) {
                     const result = markBookCompleted(currentBookId);
@@ -450,8 +450,8 @@ export function ReaderPage() {
                         const currentStats = statsRef.current;
                         updateStats({
                             booksCompleted: currentStats.booksCompleted + 1,
-                            booksReadThisYear: result.completedYear === currentYear 
-                                ? currentStats.booksReadThisYear + 1 
+                            booksReadThisYear: result.completedYear === currentYear
+                                ? currentStats.booksReadThisYear + 1
                                 : currentStats.booksReadThisYear
                         });
                     }
@@ -459,7 +459,7 @@ export function ReaderPage() {
             });
             lastClickFractionRef.current = null;
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentBookId, updateProgress, markBookCompleted, updateStats]);
 
     const goTo = useCallback(async (target: string) => {
@@ -502,6 +502,65 @@ export function ReaderPage() {
 
     const { addAnnotation, removeAnnotation, getBookAnnotations, updateAnnotation } = useLibraryStore();
 
+    // PDF Controls - Defined here to access annotations and store actions
+    const handlePdfZoomFitPage = useCallback(() => {
+        console.log('[Reader] Zoom Fit Page');
+        pdfReaderRef.current?.zoomFitPage();
+        setPdfZoomMode('page-fit');
+    }, []);
+
+    const handlePdfZoomFitWidth = useCallback(() => {
+        console.log('[Reader] Zoom Fit Width');
+        pdfReaderRef.current?.zoomFitWidth();
+        setPdfZoomMode('width-fit');
+    }, []);
+
+    const handlePdfZoomIn = useCallback(() => {
+        pdfReaderRef.current?.zoomIn();
+        setPdfZoomMode('custom');
+    }, []);
+
+    const handlePdfZoomOut = useCallback(() => {
+        pdfReaderRef.current?.zoomOut();
+        setPdfZoomMode('custom');
+    }, []);
+
+    const handlePdfZoomReset = useCallback(() => {
+        pdfReaderRef.current?.zoomReset();
+        setPdfZoomMode('custom');
+    }, []);
+
+    const handlePdfAddBookmark = useCallback(() => {
+        if (!currentBookId) return;
+        const pageLocation = `pdf:page:${pdfCurrentPage}`;
+
+        // Check if already bookmarked
+        const existing = annotations.find(a =>
+            a.type === 'bookmark' && a.pageNumber === pdfCurrentPage
+        );
+
+        if (existing) {
+            removeAnnotation(existing.id);
+            setAnnotations(prev => prev.filter(a => a.id !== existing.id));
+        } else {
+            const bookmark: Annotation = {
+                id: crypto.randomUUID(),
+                bookId: currentBookId,
+                type: 'bookmark',
+                location: pageLocation,
+                pageNumber: pdfCurrentPage,
+                createdAt: new Date(),
+            };
+            addAnnotation(bookmark);
+            setAnnotations(prev => [...prev, bookmark]);
+        }
+    }, [currentBookId, pdfCurrentPage, annotations, addAnnotation, removeAnnotation]);
+
+    // Check if current PDF page is bookmarked
+    const isPdfPageBookmarked = annotations.some(
+        a => a.type === 'bookmark' && a.pageNumber === pdfCurrentPage
+    );
+
     // Track when book is ready
     const [isBookReady, setIsBookReady] = useState(false);
 
@@ -527,7 +586,7 @@ export function ReaderPage() {
 
     useEffect(() => {
         if (!isBookReady || !readerRef.current || hasAppliedInitialLocationRef.current) return;
-        
+
         // If we have a CFI location, the engine should have handled it during open()
         // We only need to use fraction fallback if there's no CFI
         if (initialLocation) {
@@ -535,7 +594,7 @@ export function ReaderPage() {
             hasAppliedInitialLocationRef.current = true;
             return;
         }
-        
+
         if (typeof initialFraction === 'number') {
             console.debug('[Reader] No CFI, using fraction fallback:', initialFraction);
             hasAppliedInitialLocationRef.current = true;
@@ -550,9 +609,9 @@ export function ReaderPage() {
     const handleTextSelected = useCallback((cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => {
         // Only log if debug mode
         if (process.env.NODE_ENV === 'development') {
-             console.debug('[Reader] Text selected:', { cfi: cfi.substring(0, 50), text: text.substring(0, 50) });
+            console.debug('[Reader] Text selected:', { cfi: cfi.substring(0, 50), text: text.substring(0, 50) });
         }
-        
+
         // Always fetch fresh annotations from store to avoid stale state
         const freshAnnotations = currentBookId ? getBookAnnotations(currentBookId) : [];
         console.debug('[Reader] Fresh annotations from store:', freshAnnotations.length);
@@ -581,7 +640,7 @@ export function ReaderPage() {
             }
             // Fallback: match by text content if text is provided and long enough
             // This handles cases where CFIs differ slightly for the same selection
-            if (text && text.length > 3 && a.selectedText && 
+            if (text && text.length > 3 && a.selectedText &&
                 a.type !== 'bookmark' &&
                 a.selectedText.trim() === text.trim()) {
                 console.debug('[Reader] Matched annotation by text content:', a.id);
@@ -629,18 +688,18 @@ export function ReaderPage() {
                 console.debug('[Reader] Empty text selection, ignoring');
                 return;
             }
-            
+
             // Clear any previous editing state for new selections
             setEditingHighlightId(null);
             setActiveAnnotation(null);
             setSelectedCfi(cfi);
             setSelectedText(text);
-            
+
             // Position color picker near selection - improved positioning logic
             if (rangeOrEvent && 'clientX' in rangeOrEvent) {
                 const mouseEvent = rangeOrEvent as MouseEvent;
                 if (process.env.NODE_ENV === 'development') {
-                     console.debug('[Reader] Positioning color picker for new selection from mouse:', mouseEvent.clientX, mouseEvent.clientY);
+                    console.debug('[Reader] Positioning color picker for new selection from mouse:', mouseEvent.clientX, mouseEvent.clientY);
                 }
                 setColorPickerPosition({ x: mouseEvent.clientX, y: mouseEvent.clientY });
             } else if (rangeOrEvent && 'getBoundingClientRect' in rangeOrEvent) {
@@ -655,7 +714,7 @@ export function ReaderPage() {
                 }
                 setColorPickerPosition({ x: window.innerWidth / 2, y: window.innerHeight / 3 });
             }
-            
+
             setShowColorPicker(true);
         }
     }, [currentBookId, getBookAnnotations]); // Remove colorPickerPosition dependency
@@ -700,7 +759,7 @@ export function ReaderPage() {
 
         // Check for existing highlight at this location/text before creating new
         // This is a safety net in case handleTextSelected missed it
-        const existingHighlight = freshAnnotations.find(a => 
+        const existingHighlight = freshAnnotations.find(a =>
             (a.type === 'highlight' || a.type === 'note') &&
             (a.location === selectedCfi || (a.selectedText && a.selectedText.trim() === selectedText.trim()))
         );
@@ -784,15 +843,15 @@ export function ReaderPage() {
 
         // PRIORITY 2: Fallback to CFI match
         if (!existingHighlight) {
-            existingHighlight = annotations.find(a => 
-                (a.type === 'highlight' || a.type === 'note') && 
+            existingHighlight = annotations.find(a =>
+                (a.type === 'highlight' || a.type === 'note') &&
                 a.location === selectedCfi
             );
         }
 
         // PRIORITY 3: Text content match as last resort
         if (!existingHighlight && selectedText) {
-            existingHighlight = annotations.find(a => 
+            existingHighlight = annotations.find(a =>
                 (a.type === 'highlight' || a.type === 'note') &&
                 a.selectedText?.trim() === selectedText.trim()
             );
@@ -817,11 +876,11 @@ export function ReaderPage() {
             // Must await to ensure remove completes before add
             try {
                 await readerRef.current?.removeHighlight?.(existingHighlight.id);
-                const updatedAnnotation: Annotation = { 
-                    ...existingHighlight, 
+                const updatedAnnotation: Annotation = {
+                    ...existingHighlight,
                     type: noteContent ? 'note' : 'highlight',
-                    noteContent: noteContent || undefined, 
-                    updatedAt: new Date() 
+                    noteContent: noteContent || undefined,
+                    updatedAt: new Date()
                 };
                 await readerRef.current?.addAnnotation?.(updatedAnnotation);
                 console.debug('[Reader] Re-rendered highlight with note in viewport');
@@ -879,11 +938,11 @@ export function ReaderPage() {
 
         addAnnotation(annotation);
         setAnnotations(prev => [...prev, annotation]);
-        
+
         setShowColorPicker(false);
         setSelectedText('');
         setSelectedCfi('');
-        
+
         readerRef.current?.clearSelection?.();
     }, [selectedCfi, selectedText, currentBookId, addAnnotation]);
 
@@ -934,7 +993,7 @@ export function ReaderPage() {
 
         // Then remove from store
         removeAnnotation(editingHighlightId);
-        
+
         // Update local state
         setAnnotations(prev => prev.filter(a => a.id !== editingHighlightId));
 
@@ -944,7 +1003,7 @@ export function ReaderPage() {
         setActiveAnnotation(null);
         setSelectedText('');
         setSelectedCfi('');
-        
+
         // Clear selection
         readerRef.current?.clearSelection?.();
     }, [editingHighlightId, removeAnnotation]);
@@ -1024,37 +1083,16 @@ export function ReaderPage() {
                         annotationMode: pdfAnnotationMode,
                         onPrevPage: () => pdfReaderRef.current?.prevPage(),
                         onNextPage: () => pdfReaderRef.current?.nextPage(),
-                        onZoomIn: () => {
-                            setPdfZoomMode('custom');
-                            pdfReaderRef.current?.zoomIn();
-                        },
-                        onZoomOut: () => {
-                            setPdfZoomMode('custom');
-                            pdfReaderRef.current?.zoomOut();
-                        },
-                        onZoomReset: () => {
-                            setPdfZoomMode('custom');
-                            pdfReaderRef.current?.zoomReset();
-                        },
-                        onZoomFitPage: () => {
-                            setPdfZoomMode('page-fit');
-                            // TODO: Implement fit-to-page in PDF engine
-                            console.log('[PDF] Fit to page - to be implemented');
-                        },
-                        onZoomFitWidth: () => {
-                            setPdfZoomMode('width-fit');
-                            // TODO: Implement fit-to-width in PDF engine
-                            console.log('[PDF] Fit to width - to be implemented');
-                        },
+                        onZoomIn: handlePdfZoomIn,
+                        onZoomOut: handlePdfZoomOut,
+                        onZoomReset: handlePdfZoomReset,
+                        onZoomFitPage: handlePdfZoomFitPage,
+                        onZoomFitWidth: handlePdfZoomFitWidth,
                         onRotate: () => pdfReaderRef.current?.rotateClockwise(),
                         onPageInput: (page: number) => pdfReaderRef.current?.goToPage(page),
-                        onAddBookmark: handleAddPageBookmark,
-                        onAnnotationModeChange: (mode) => {
-                            setPdfAnnotationMode(mode);
-                            // TODO: Implement annotation modes in PDF engine
-                            console.log('[PDF] Annotation mode:', mode);
-                        },
-                        isCurrentPageBookmarked: isCurrentPageBookmarked,
+                        onAddBookmark: handlePdfAddBookmark,
+                        onAnnotationModeChange: setPdfAnnotationMode,
+                        isCurrentPageBookmarked: isPdfPageBookmarked,
                     } : undefined}
                 />
             </div>
@@ -1071,6 +1109,10 @@ export function ReaderPage() {
                         onPageChange={handlePdfPageChange}
                         onLoad={handlePdfLoad}
                         onError={handlePdfError}
+                        annotations={annotations}
+                        annotationMode={pdfAnnotationMode}
+                        onAnnotationAdd={(ann) => addAnnotation({ ...ann, bookId: currentBookId || '', id: crypto.randomUUID(), createdAt: new Date() } as Annotation)}
+                        onAnnotationRemove={removeAnnotation}
                     />
                 ) : (
                     <ReaderViewport

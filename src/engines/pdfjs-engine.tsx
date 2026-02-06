@@ -21,6 +21,8 @@ import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import type { TextContent } from "pdfjs-dist/types/src/display/api";
+import type { Annotation } from "@/types";
+import { PDFAnnotationLayer } from "@/components/reader/PDFAnnotationLayer";
 
 // Import CSS (our custom styles only, not pdf_viewer.css which conflicts)
 import "./pdfjs-engine.css";
@@ -44,6 +46,12 @@ export interface PDFJsEngineProps {
     onError?: (error: Error) => void;
     onPageChange?: (page: number, totalPages: number, scale: number) => void;
     className?: string;
+    // Annotations
+    annotations?: Annotation[];
+    annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
+    onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
+    onAnnotationChange?: (annotation: Annotation) => void;
+    onAnnotationRemove?: (id: string) => void;
 }
 
 export interface PDFDocumentInfo {
@@ -79,6 +87,8 @@ export interface PDFJsEngineRef {
     getTotalPages: () => number;
     rotateClockwise: () => void;
     rotateCounterClockwise: () => void;
+    zoomFitPage: () => void;
+    zoomFitWidth: () => void;
 }
 
 // Constants
@@ -93,9 +103,25 @@ interface PageCanvasProps {
     scale: number;
     rotation: number;
     onRenderComplete?: () => void;
+    // Annotations
+    annotations?: Annotation[];
+    annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
+    onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
+    onAnnotationChange?: (annotation: Annotation) => void;
+    onAnnotationRemove?: (id: string) => void;
 }
 
-function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps) {
+function PageCanvas({
+    page,
+    scale,
+    rotation,
+    onRenderComplete,
+    annotations = [],
+    annotationMode = 'none',
+    onAnnotationAdd,
+    // onAnnotationChange, 
+    onAnnotationRemove
+}: PageCanvasProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const textLayerRef = useRef<HTMLDivElement>(null);
@@ -221,6 +247,17 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
         <div ref={containerRef} className="pdf-page-container">
             <canvas ref={canvasRef} className="block absolute inset-0" />
             <div ref={textLayerRef} className="textLayer" />
+            {/* Annotation Layer */}
+            <PDFAnnotationLayer
+                pageNumber={page.pageNumber}
+                annotations={annotations}
+                mode={annotationMode}
+                scale={scale}
+                onAnnotationAdd={(ann) => onAnnotationAdd?.(ann)}
+                onAnnotationRemove={(id) => onAnnotationRemove?.(id)}
+            />
+
+            {/* Rendering Spinner */}
             {isRendering && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-accent)]" />
@@ -234,7 +271,21 @@ function PageCanvas({ page, scale, rotation, onRenderComplete }: PageCanvasProps
  * PDF.js Engine Component
  */
 export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
-    function PDFJsEngine({ pdfPath, pdfData, originalFilename, initialPage = 1, onLoad, onError, onPageChange, className }, ref) {
+    function PDFJsEngine({
+        pdfPath,
+        pdfData,
+        originalFilename,
+        initialPage = 1,
+        onLoad,
+        onError,
+        onPageChange,
+        className,
+        annotations = [],
+        annotationMode = 'none',
+        onAnnotationAdd,
+        onAnnotationChange,
+        onAnnotationRemove
+    }, ref) {
         const containerRef = useRef<HTMLDivElement>(null);
         const [isLoading, setIsLoading] = useState(true);
         const [error, setError] = useState<string | null>(null);
@@ -245,6 +296,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const [rotation, setRotation] = useState(0);
         const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
         const [pages, setPages] = useState<PDFPageProxy[]>([]);
+
+        // Visual zoom state for CSS transform (instant feedback)
+        const [visualScale, setVisualScale] = useState(1);
 
         // Debounce timer for zoom changes
         const zoomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -438,7 +492,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 }
             };
 
-            // Wheel zoom handler - debounced direct scale change
+            // Wheel zoom handler - debounced direct scale change with instant visual feedback
             const handleWheel = (e: WheelEvent) => {
                 // Check if Ctrl or Meta key is pressed for zoom
                 if (e.ctrlKey || e.metaKey) {
@@ -450,6 +504,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, baseScale + delta));
                     pendingScaleRef.current = newScale;
 
+                    // Apply instant visual feedback via CSS transform
+                    setVisualScale(newScale / scale);
+                    // Notify parent of pending zoom for UI display
+                    callbacksRef.current.onPageChange?.(currentPage, totalPages, newScale);
+
                     // Clear existing debounce timer
                     if (zoomDebounceRef.current) {
                         clearTimeout(zoomDebounceRef.current);
@@ -460,8 +519,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         if (pendingScaleRef.current !== null) {
                             const finalScale = pendingScaleRef.current;
                             setScale(finalScale);
-                            // Notify parent of zoom change
-                            callbacksRef.current.onPageChange?.(currentPage, totalPages, finalScale);
+                            // Reset visual scale after re-render
+                            setVisualScale(1);
                             pendingScaleRef.current = null;
                         }
                         zoomDebounceRef.current = null;
@@ -533,6 +592,29 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             rotateCounterClockwise: () => {
                 setRotation(prev => (prev - 90 + 360) % 360);
             },
+            zoomFitPage: () => {
+                if (!containerRef.current || pages.length === 0) return;
+                const container = containerRef.current;
+                const firstPage = pages[0];
+                const viewport = firstPage.getViewport({ scale: 1 });
+                const containerH = container.clientHeight - 32; // padding
+                const containerW = container.clientWidth - 32;
+                const fitScale = Math.min(containerW / viewport.width, containerH / viewport.height);
+                const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
+                setScale(newScale);
+                callbacksRef.current.onPageChange?.(currentPage, totalPages, newScale);
+            },
+            zoomFitWidth: () => {
+                if (!containerRef.current || pages.length === 0) return;
+                const container = containerRef.current;
+                const firstPage = pages[0];
+                const viewport = firstPage.getViewport({ scale: 1 });
+                const containerW = container.clientWidth - 32; // padding
+                const fitScale = containerW / viewport.width;
+                const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
+                setScale(newScale);
+                callbacksRef.current.onPageChange?.(currentPage, totalPages, newScale);
+            },
         }), [currentPage, totalPages, pages.length, scale]);
 
         return (
@@ -566,7 +648,13 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         (isLoading || error) && "invisible"
                     )}
                 >
-                    <div className="flex flex-col items-center justify-start min-h-full py-4 space-y-4 mx-auto">
+                    <div
+                        className="pdf-zoom-container flex flex-col items-center justify-start min-h-full py-4 space-y-4 mx-auto"
+                        style={{
+                            transform: visualScale !== 1 ? `scale(${visualScale})` : undefined,
+                            transformOrigin: 'center top',
+                        }}
+                    >
                         {pages.map((page) => (
                             <div
                                 key={`page-${page.pageNumber}`}
@@ -577,6 +665,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                     page={page}
                                     scale={scale}
                                     rotation={rotation}
+                                    annotations={annotations}
+                                    annotationMode={annotationMode}
+                                    onAnnotationAdd={onAnnotationAdd}
+                                    onAnnotationChange={onAnnotationChange}
+                                    onAnnotationRemove={onAnnotationRemove}
                                 />
                             </div>
                         ))}

@@ -10,11 +10,11 @@ export const FIXED_LAYOUT_FORMATS: BookFormat[] = ["cbz", "cbr", "pdf"];
 export const REFLOWABLE_FORMATS: BookFormat[] = ["epub", "mobi", "azw", "azw3", "fb2"];
 
 // Helper to check if format has fixed layout (no font/size controls, uses zoom instead)
-export const isFixedLayout = (format: BookFormat): boolean => 
+export const isFixedLayout = (format: BookFormat): boolean =>
     FIXED_LAYOUT_FORMATS.includes(format);
 
 // Helper to check if format is reflowable (supports font/size controls)
-export const isReflowable = (format: BookFormat): boolean => 
+export const isReflowable = (format: BookFormat): boolean =>
     REFLOWABLE_FORMATS.includes(format);
 
 // Format display names
@@ -105,12 +105,18 @@ export interface Annotation {
     id: string;
     bookId: string;
     type: "highlight" | "note" | "bookmark";
-    location: string; // CFI or page reference
+    location: string;
     selectedText?: string;
     noteContent?: string;
     color?: HighlightColor;
     createdAt: Date;
     updatedAt?: Date;
+    // PDF-specific
+    pageNumber?: number;
+    pdfAnnotationType?: 'highlight' | 'drawing' | 'textNote';
+    drawingData?: string;
+    textNoteContent?: string;
+    rect?: { x: number; y: number; width: number; height: number };
 }
 
 // Collection Types

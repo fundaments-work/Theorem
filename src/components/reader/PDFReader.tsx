@@ -17,7 +17,7 @@ import {
 import { Loader2, AlertCircle } from "lucide-react";
 import { PDFJsEngine, type PDFJsEngineRef, type PDFDocumentInfo } from "@/engines/pdfjs-engine";
 import { cn } from "@/lib/utils";
-import type { ReaderTheme } from "@/types";
+import type { ReaderTheme, Annotation } from "@/types";
 
 // ============================================================================
 // Types
@@ -35,9 +35,16 @@ interface PDFReaderProps {
     /** Callback when page changes - provides page state for external controls */
     onPageChange?: (page: number, totalPages: number, scale: number) => void;
     /** Callback when PDF is loaded */
+    /** Callback when PDF is loaded */
     onLoad?: (info: PDFDocumentInfo) => void;
     /** Callback when an error occurs */
     onError?: (error: Error) => void;
+    // Annotations
+    annotations?: Annotation[];
+    annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
+    onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
+    onAnnotationChange?: (annotation: Annotation) => void;
+    onAnnotationRemove?: (id: string) => void;
 }
 
 // ============================================================================
@@ -142,6 +149,11 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             onPageChange,
             onLoad,
             onError,
+            annotations,
+            annotationMode,
+            onAnnotationAdd,
+            onAnnotationChange,
+            onAnnotationRemove
         },
         ref
     ) {
@@ -191,6 +203,22 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             getTotalPages: () => engineRef.current?.getTotalPages() ?? 0,
             rotateClockwise: () => engineRef.current?.rotateClockwise(),
             rotateCounterClockwise: () => engineRef.current?.rotateCounterClockwise(),
+            zoomFitPage: () => {
+                engineRef.current?.zoomFitPage();
+                setTimeout(() => {
+                    const newScale = engineRef.current?.getZoom() ?? 1;
+                    setScale(newScale);
+                    onPageChange?.(currentPage, totalPages, newScale);
+                }, 50);
+            },
+            zoomFitWidth: () => {
+                engineRef.current?.zoomFitWidth();
+                setTimeout(() => {
+                    const newScale = engineRef.current?.getZoom() ?? 1;
+                    setScale(newScale);
+                    onPageChange?.(currentPage, totalPages, newScale);
+                }, 50);
+            },
         }));
 
         // Handle page change from engine
@@ -256,6 +284,11 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                         onPageChange={handlePageChange}
                         onLoad={handleLoad}
                         onError={handleError}
+                        annotations={annotations}
+                        annotationMode={annotationMode}
+                        onAnnotationAdd={onAnnotationAdd}
+                        onAnnotationChange={onAnnotationChange}
+                        onAnnotationRemove={onAnnotationRemove}
                         className="w-full h-full"
                     />
                 </div>
