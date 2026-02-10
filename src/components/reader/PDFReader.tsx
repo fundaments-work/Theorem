@@ -39,6 +39,8 @@ interface PDFReaderProps {
     onLoad?: (info: PDFDocumentInfo) => void;
     /** Callback when an error occurs */
     onError?: (error: Error) => void;
+    /** Callback when the user taps the reading viewport */
+    onViewportTap?: () => void;
     // Annotations
     annotations?: Annotation[];
     annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
@@ -152,6 +154,7 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             onPageChange,
             onLoad,
             onError,
+            onViewportTap,
             annotations,
             annotationMode,
             highlightColor = "yellow",
@@ -294,6 +297,7 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                         onPageChange={handlePageChange}
                         onLoad={handleLoad}
                         onError={handleError}
+                        onViewportTap={onViewportTap}
                         annotations={annotations}
                         annotationMode={annotationMode}
                         highlightColor={highlightColor}

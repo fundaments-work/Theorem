@@ -232,17 +232,18 @@ export const ReaderNavbar = memo(function ReaderNavbar({
     return (
         <div
             className={cn(
-                "flex flex-col gap-1 px-4 py-2",
+                "flex flex-col gap-1.5 px-3 py-2 sm:px-4",
                 "bg-[var(--color-surface)] border-t border-[var(--color-border)]",
                 className
             )}
+            style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
         >
             {/* Info row: section label + time remaining */}
-            <div className="flex items-center justify-between text-xs text-[var(--color-text-muted)]">
-                <span className="truncate max-w-[60%]">{currentSectionLabel}</span>
+            <div className="flex items-center justify-between gap-2 text-[11px] sm:text-xs text-[var(--color-text-muted)]">
+                <span className="truncate max-w-[52%] sm:max-w-[60%]">{currentSectionLabel}</span>
                 <div className="flex items-center gap-2">
                     {timeRemaining && (
-                        <span className="text-[var(--color-text-muted)]">{timeRemaining}</span>
+                        <span className="hidden sm:inline text-[var(--color-text-muted)]">{timeRemaining}</span>
                     )}
                     <span className="font-medium text-[var(--color-text-primary)]">
                         {progressText}
@@ -254,7 +255,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
             <div
                 ref={trackRef}
                 className={cn(
-                    "relative h-6 cursor-pointer select-none",
+                    "relative h-7 sm:h-6 cursor-pointer select-none",
                     "flex items-center",
                     isDragging && "cursor-grabbing"
                 )}

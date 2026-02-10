@@ -18,8 +18,8 @@ export function Backdrop({ visible, onClick, className, blur = false }: Backdrop
     return (
         <div
             className={cn(
-                'fixed inset-0 z-40 bg-black/5 transition-all duration-300',
-                blur && 'backdrop-blur-[2px]',
+                'fixed inset-0 z-40 bg-black/22 sm:bg-black/28 transition-all duration-300',
+                blur ? 'backdrop-blur-[3px]' : 'backdrop-blur-[1px]',
                 className
             )}
             onClick={onClick}

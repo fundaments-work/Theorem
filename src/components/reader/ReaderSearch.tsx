@@ -97,9 +97,19 @@ export function ReaderSearch({
         <>
             <Backdrop visible={visible} onClick={onClose} />
 
-            <FloatingPanel visible={visible} className={cn('flex flex-col', className)}>
+            <FloatingPanel visible={visible} className={cn('flex flex-col overflow-hidden', className)}>
                 {/* Header/Search Input */}
-                <div className="p-4 border-b border-[var(--color-border)]">
+                <div className="reader-panel-header px-4 pt-4 pb-3">
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Search</h2>
+                        <button
+                            onClick={onClose}
+                            className="reader-chip w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors hover:opacity-80"
+                            aria-label="Close search"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                     <form onSubmit={handleSearch} className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
                         <input
@@ -133,7 +143,7 @@ export function ReaderSearch({
                 )}
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-2 custom-scrollbar max-h-[60vh]">
+                <div className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 custom-scrollbar">
                     {!query && !isSearching && results.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-12 px-6 text-center opacity-50">
                             <Search className="w-8 h-8 mb-3" />
@@ -181,7 +191,7 @@ export function ReaderSearch({
                 </div>
 
                 {results.length > 0 && (
-                    <div className="p-3 border-t border-[var(--color-border)] bg-[var(--color-background)] rounded-b-2xl">
+                    <div className="reader-panel-footer p-3 bg-[var(--color-background)]">
                         <p className="text-[10px] font-bold text-[var(--color-text-muted)] text-center uppercase tracking-widest">
                             {results.length} {results.length === 1 ? 'Result' : 'Results'} found
                         </p>

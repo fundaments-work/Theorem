@@ -46,6 +46,7 @@ export interface PDFJsEngineProps {
     onLoad?: (info: PDFDocumentInfo) => void;
     onError?: (error: Error) => void;
     onPageChange?: (page: number, totalPages: number, scale: number) => void;
+    onViewportTap?: () => void;
     className?: string;
     // Annotations
     annotations?: Annotation[];
@@ -1223,6 +1224,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         onLoad,
         onError,
         onPageChange,
+        onViewportTap,
         className,
         annotations = [],
         annotationMode = 'none',
@@ -1285,6 +1287,31 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             );
             return clampedScale;
         }, []);
+
+        const handleViewportClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+            if (!onViewportTap || isLoading || !!error || annotationMode !== "none") {
+                return;
+            }
+            if (event.defaultPrevented || event.button !== 0) {
+                return;
+            }
+
+            const target = event.target as Element | null;
+            if (
+                target?.closest(
+                    'a,button,input,textarea,select,label,[role="button"],[contenteditable="true"],[data-no-viewport-tap]',
+                )
+            ) {
+                return;
+            }
+
+            const selection = window.getSelection();
+            if (selection && !selection.isCollapsed && selection.toString().trim().length > 0) {
+                return;
+            }
+
+            onViewportTap();
+        }, [annotationMode, error, isLoading, onViewportTap]);
 
         const annotationsByPage = useMemo(() => {
             const grouped = new Map<number, Annotation[]>();
@@ -1678,8 +1705,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 const container = containerRef.current;
                 const firstPage = pages[0];
                 const viewport = firstPage.getViewport({ scale: PDF_TO_CSS_UNITS });
-                const containerH = container.clientHeight - 32; // padding
-                const containerW = container.clientWidth - 32;
+                const viewportPadding = container.clientWidth < 768 ? 12 : 32;
+                const containerH = container.clientHeight - viewportPadding;
+                const containerW = container.clientWidth - viewportPadding;
                 const fitScale = Math.min(containerW / viewport.width, containerH / viewport.height);
                 const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
                 applyZoom(newScale);
@@ -1689,7 +1717,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 const container = containerRef.current;
                 const firstPage = pages[0];
                 const viewport = firstPage.getViewport({ scale: PDF_TO_CSS_UNITS });
-                const containerW = container.clientWidth - 32; // padding
+                const viewportPadding = container.clientWidth < 768 ? 12 : 32;
+                const containerW = container.clientWidth - viewportPadding;
                 const fitScale = containerW / viewport.width;
                 const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
                 applyZoom(newScale);
@@ -1726,9 +1755,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         "absolute inset-0 overflow-auto bg-[var(--color-surface)]",
                         (isLoading || error) && "invisible"
                     )}
+                    onClick={handleViewportClick}
                 >
                     <div
-                        className="pdf-zoom-container flex flex-col items-center justify-start min-h-full py-4 space-y-4 mx-auto"
+                        className="pdf-zoom-container flex flex-col items-center justify-start min-h-full py-2 sm:py-4 space-y-2 sm:space-y-4 px-1 sm:px-0 mx-auto"
                     >
                         {pages.map((page) => {
                             const pageTextLayerEnabled = enableTextLayer && (
@@ -1771,7 +1801,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 </div>
 
                 {!isLoading && !error && totalPages > 0 && (
-                    <div className="absolute bottom-4 right-4 z-50 pointer-events-none px-3 py-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] shadow-sm">
+                    <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 z-50 pointer-events-none px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-xs sm:text-sm text-[var(--color-text-secondary)] shadow-sm">
                         Page {currentPage} of {totalPages} | {Math.round(scale * 100)}%
                     </div>
                 )}

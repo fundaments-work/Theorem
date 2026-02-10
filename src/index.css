@@ -437,8 +437,94 @@ foliate-view * {
 
 /* Toolbar in reader mode */
 [data-reading-mode] .reader-toolbar {
-    background-color: var(--reader-bg);
-    border-bottom-color: color-mix(in srgb, var(--reader-fg) 15%, transparent);
+    background-color: color-mix(in srgb, var(--reader-bg) 92%, transparent);
+    border-bottom-color: color-mix(in srgb, var(--reader-fg) 14%, transparent);
+    backdrop-filter: blur(14px) saturate(120%);
+    box-shadow: 0 8px 24px -18px rgba(0, 0, 0, 0.45);
+}
+
+[data-reading-mode] .reader-toolbar-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+[data-reading-mode] .reader-toolbar-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+[data-reading-mode] .reader-toolbar [data-toolbar-group] {
+    border: 1px solid color-mix(in srgb, var(--reader-fg) 14%, transparent);
+    background: color-mix(in srgb, var(--reader-fg) 4%, var(--reader-bg));
+    border-radius: 999px;
+    padding: 0.15rem;
+}
+
+[data-reading-mode] .reader-toolbar [data-toolbar-group] > button,
+[data-reading-mode] .reader-toolbar [data-toolbar-group] > form > button {
+    border-radius: 0.7rem;
+}
+
+[data-reading-mode] .reader-toolbar [data-toolbar-group] > button:hover,
+[data-reading-mode] .reader-toolbar [data-toolbar-group] > form > button:hover {
+    background: color-mix(in srgb, var(--reader-fg) 10%, transparent);
+}
+
+[data-reading-mode] .reader-toolbar [data-toolbar-group] > button[class*="opacity-60"],
+[data-reading-mode] .reader-toolbar [data-toolbar-group] > form > button[class*="opacity-60"] {
+    opacity: 0.84 !important;
+}
+
+[data-reading-mode] .reader-toolbar [data-toolbar-group] > button[class*="opacity-60"]:hover,
+[data-reading-mode] .reader-toolbar [data-toolbar-group] > form > button[class*="opacity-60"]:hover {
+    opacity: 1 !important;
+}
+
+[data-reading-mode] .reader-toolbar [data-toolbar-group="epub"] {
+    justify-content: center;
+}
+
+[data-reading-mode] .reader-toolbar [data-toolbar-group].is-plain {
+    border-color: transparent;
+    background: transparent;
+    padding: 0;
+}
+
+@media (max-width: 768px) {
+    [data-reading-mode] .reader-toolbar [data-toolbar-group="epub"] {
+        padding: 0.28rem 0.42rem;
+        gap: 0.42rem;
+    }
+
+    [data-reading-mode] .reader-toolbar [data-toolbar-group="epub"] > button {
+        min-width: 2.45rem;
+        min-height: 2.45rem;
+    }
+}
+
+[data-reading-mode] .reader-sheet {
+    background-color: color-mix(in srgb, var(--reader-bg) 96%, transparent);
+    border-color: color-mix(in srgb, var(--reader-fg) 14%, transparent);
+    box-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(16px) saturate(118%);
+}
+
+[data-reading-mode] .reader-panel-header {
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-fg) 12%, transparent);
+}
+
+[data-reading-mode] .reader-panel-footer {
+    border-top: 1px solid color-mix(in srgb, var(--reader-fg) 10%, transparent);
+}
+
+[data-reading-mode] .reader-chip {
+    border: 1px solid color-mix(in srgb, var(--reader-fg) 14%, transparent);
+    background: color-mix(in srgb, var(--reader-fg) 5%, transparent);
+    color: var(--reader-fg);
+}
+
+[data-reading-mode] .reader-chip[data-active="true"] {
+    background: color-mix(in srgb, var(--reader-fg) 18%, transparent);
+    border-color: color-mix(in srgb, var(--reader-fg) 22%, transparent);
 }
 
 /* ===============================
@@ -479,4 +565,3 @@ foliate-view * {
 /* Border colors using CSS variables */
 .border-theme { border-color: var(--color-border); }
 .border-theme-subtle { border-color: var(--color-border-subtle); }
-

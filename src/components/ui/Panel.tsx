@@ -74,21 +74,15 @@ export function FloatingPanel({
     return (
         <div
             className={cn(
-                'fixed z-50 w-80 max-w-[calc(100vw-3rem)] rounded-2xl shadow-2xl flex flex-col',
-                'transform transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
-                anchor === 'top-right' && 'top-16 right-6 origin-top-right',
-                anchor === 'top-left' && 'top-16 left-6 origin-top-left',
-                visible
-                    ? 'opacity-100 scale-100 translate-y-0'
-                    : 'opacity-0 scale-95 -translate-y-2 pointer-events-none',
+                'fixed z-50 flex flex-col reader-sheet border',
+                'left-0 right-0 bottom-0 rounded-t-2xl max-h-[min(82vh,680px)]',
+                'sm:bottom-auto sm:top-[calc(env(safe-area-inset-top)+4.25rem)] sm:max-h-[calc(100vh-6rem)] sm:w-[min(22rem,calc(100vw-2.5rem))] sm:rounded-2xl',
+                anchor === 'top-right' && 'sm:left-auto sm:right-5',
+                anchor === 'top-left' && 'sm:left-5 sm:right-auto',
+                'transform transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none sm:-translate-y-2',
                 className
             )}
-            style={{
-                backgroundColor: 'var(--reader-bg, var(--color-surface))',
-                borderColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)',
-                borderWidth: '1px',
-                borderStyle: 'solid',
-            }}
         >
             {children}
         </div>

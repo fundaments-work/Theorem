@@ -25,6 +25,7 @@ export interface UseDocumentReaderOptions {
     onError?: (error: Error) => void;
     onTextSelected?: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void;
     onLocationsSaved?: (locations: string) => void;
+    onViewportTap?: () => void;
 }
 
 export interface UseDocumentReaderReturn {
@@ -194,6 +195,9 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
                 callbacksRef.current.onError?.(err);
             },
             onTextSelected: callbacksRef.current.onTextSelected,
+            onViewportTap: () => {
+                callbacksRef.current.onViewportTap?.();
+            },
         });
 
         let isCancelled = false;

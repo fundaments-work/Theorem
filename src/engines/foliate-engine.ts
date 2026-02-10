@@ -38,6 +38,7 @@ export interface FoliateEngineOptions {
     onReady?: (metadata: DocMetadata, toc: TocItem[]) => void;
     onError?: (error: Error) => void;
     onTextSelected?: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void;
+    onViewportTap?: () => void;
 }
 
 export class FoliateEngine {
@@ -1206,6 +1207,36 @@ export class FoliateEngine {
 
     private postMessageHandler: ((event: MessageEvent) => void) | null = null;
 
+    private isInteractiveTapTarget(target: EventTarget | null): boolean {
+        if (!(target instanceof Element)) {
+            return false;
+        }
+
+        if (
+            target.closest(
+                'a,button,input,textarea,select,summary,label,[role="button"],[contenteditable="true"],[data-no-viewport-tap]',
+            )
+        ) {
+            return true;
+        }
+
+        if (target instanceof SVGElement) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private notifyViewportTap(target: EventTarget | null): void {
+        if (!this.options.onViewportTap) {
+            return;
+        }
+        if (this.isInteractiveTapTarget(target)) {
+            return;
+        }
+        this.options.onViewportTap();
+    }
+
     /**
      * Setup selection listeners inside iframe documents
      * This is needed because selectionchange doesn't bubble from iframes
@@ -1251,6 +1282,8 @@ export class FoliateEngine {
                             }
                         }
                     }
+                } else if (event.data?.type === 'foliate-tap') {
+                    this.notifyViewportTap(null);
                 }
             };
             
@@ -1309,64 +1342,6 @@ export class FoliateEngine {
                 this.injectSelectionScript(doc, content.index, callback);
             }
 
-            // Simple click test on window (capturing phase)
-            win.addEventListener('click', (e: MouseEvent) => {
-                const target = e.target as HTMLElement;
-                console.debug('[FoliateEngine] CLICK on window in section', content.index, { 
-                    target: target?.nodeName,
-                    x: e.clientX, 
-                    y: e.clientY,
-                    button: e.button
-                });
-            }, true);
-
-            // Track selection on window with capturing
-            win.addEventListener('pointerdown', (e: PointerEvent) => {
-                const target = e.target as HTMLElement;
-                console.debug('[FoliateEngine] POINTER DOWN in section', content.index, { 
-                    target: target?.nodeName,
-                    isPrimary: e.isPrimary
-                });
-            }, true);
-
-            win.addEventListener('pointerup', (e: PointerEvent) => {
-                console.debug('[FoliateEngine] POINTER UP in section', content.index);
-                
-                // Small delay to let selection finalize
-                setTimeout(() => {
-                    const selection = doc.getSelection();
-                    console.debug('[FoliateEngine] Checking selection after pointerup in section', content.index, {
-                        rangeCount: selection?.rangeCount,
-                        isCollapsed: selection?.isCollapsed,
-                    });
-                    
-                    if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
-                        const text = selection.toString().trim();
-                        console.debug('[FoliateEngine] FOUND TEXT in section', content.index, ':', text.substring(0, 50));
-                        
-                        if (text.length > 0) {
-                            try {
-                                const range = selection.getRangeAt(0);
-                                const cfi = this.getCFIFromRange(content.index, range);
-                                if (cfi) {
-                                    console.debug('[FoliateEngine] CALLING CALLBACK with:', { text: text.substring(0, 30), cfi: cfi.substring(0, 30) });
-                                    callback(cfi, text, e as MouseEvent);
-                                }
-                            } catch (err) {
-                                console.warn('[FoliateEngine] Error:', err);
-                            }
-                        }
-                    }
-                }, 100);
-            }, true);
-
-            // Also try on document as backup
-            doc.addEventListener('selectionchange', () => {
-                const selection = doc.getSelection();
-                if (selection && !selection.isCollapsed) {
-                    console.debug('[FoliateEngine] DOC selectionchange in section', content.index);
-                }
-            });
         }
 
         // Setup polling as fallback
@@ -1380,7 +1355,7 @@ export class FoliateEngine {
     private attachSelectionListenersToIframe(
         iframe: HTMLIFrameElement,
         index: number,
-        callback: (cfi: string, text: string, event: MouseEvent) => void
+        callback: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void
     ): void {
         try {
             const doc = iframe.contentDocument;
@@ -1395,6 +1370,52 @@ export class FoliateEngine {
             
             // Track last selection to avoid duplicates
             let lastSelection = '';
+            let pointerDownX = 0;
+            let pointerDownY = 0;
+            let pointerDownAt = 0;
+            let pointerMoved = false;
+            const TAP_MAX_DISTANCE = 12;
+            const TAP_MAX_DURATION = 350;
+
+            win.addEventListener(
+                'pointerdown',
+                (event: PointerEvent) => {
+                    if (!event.isPrimary || event.button !== 0) {
+                        return;
+                    }
+                    pointerDownX = event.clientX;
+                    pointerDownY = event.clientY;
+                    pointerDownAt = Date.now();
+                    pointerMoved = false;
+                },
+                true,
+            );
+
+            win.addEventListener(
+                'pointermove',
+                (event: PointerEvent) => {
+                    if (pointerDownAt === 0) {
+                        return;
+                    }
+                    const distance = Math.hypot(
+                        event.clientX - pointerDownX,
+                        event.clientY - pointerDownY,
+                    );
+                    if (distance > TAP_MAX_DISTANCE) {
+                        pointerMoved = true;
+                    }
+                },
+                true,
+            );
+
+            win.addEventListener(
+                'pointercancel',
+                () => {
+                    pointerDownAt = 0;
+                    pointerMoved = false;
+                },
+                true,
+            );
             
             // Listen for mouseup on the iframe window
             win.addEventListener('mouseup', (e: MouseEvent) => {
@@ -1429,6 +1450,49 @@ export class FoliateEngine {
                     }
                 }, 100);
             });
+
+            win.addEventListener(
+                'pointerup',
+                (event: PointerEvent) => {
+                    if (!event.isPrimary || event.button !== 0) {
+                        pointerDownAt = 0;
+                        pointerMoved = false;
+                        return;
+                    }
+
+                    const elapsed = Date.now() - pointerDownAt;
+                    const distance = Math.hypot(
+                        event.clientX - pointerDownX,
+                        event.clientY - pointerDownY,
+                    );
+                    const isTap =
+                        pointerDownAt > 0
+                        && !pointerMoved
+                        && elapsed <= TAP_MAX_DURATION
+                        && distance <= TAP_MAX_DISTANCE;
+
+                    pointerDownAt = 0;
+                    pointerMoved = false;
+
+                    if (!isTap) {
+                        return;
+                    }
+
+                    window.setTimeout(() => {
+                        const selection = doc.getSelection();
+                        const hasSelection = Boolean(
+                            selection
+                            && !selection.isCollapsed
+                            && selection.toString().trim().length > 0,
+                        );
+                        if (hasSelection) {
+                            return;
+                        }
+                        this.notifyViewportTap(event.target);
+                    }, 0);
+                },
+                true,
+            );
             
             console.debug('[FoliateEngine] Successfully attached iframe listeners for section', index);
         } catch (err) {
@@ -1448,17 +1512,49 @@ export class FoliateEngine {
         const script = doc.createElement('script');
         script.textContent = `
             (function() {
-                let isSelecting = false;
-                let selectionStartTime = 0;
                 let lastSelection = '';
+                let pointerDownX = 0;
+                let pointerDownY = 0;
+                let pointerDownAt = 0;
+                let pointerMoved = false;
+                const TAP_MAX_DISTANCE = 12;
+                const TAP_MAX_DURATION = 350;
                 
                 document.addEventListener('pointerdown', function(e) {
-                    isSelecting = true;
-                    selectionStartTime = Date.now();
+                    if (!e.isPrimary || e.button !== 0) {
+                        return;
+                    }
+                    pointerDownX = e.clientX;
+                    pointerDownY = e.clientY;
+                    pointerDownAt = Date.now();
+                    pointerMoved = false;
+                });
+
+                document.addEventListener('pointermove', function(e) {
+                    if (pointerDownAt === 0) {
+                        return;
+                    }
+                    var distance = Math.hypot(e.clientX - pointerDownX, e.clientY - pointerDownY);
+                    if (distance > TAP_MAX_DISTANCE) {
+                        pointerMoved = true;
+                    }
+                });
+
+                document.addEventListener('pointercancel', function() {
+                    pointerDownAt = 0;
+                    pointerMoved = false;
                 });
                 
                 document.addEventListener('pointerup', function(e) {
-                    isSelecting = false;
+                    const elapsed = Date.now() - pointerDownAt;
+                    const distance = Math.hypot(e.clientX - pointerDownX, e.clientY - pointerDownY);
+                    const isTap =
+                        pointerDownAt > 0
+                        && !pointerMoved
+                        && elapsed <= TAP_MAX_DURATION
+                        && distance <= TAP_MAX_DISTANCE;
+                    pointerDownAt = 0;
+                    pointerMoved = false;
                     
                     // Check selection after a short delay
                     setTimeout(function() {
@@ -1488,6 +1584,14 @@ export class FoliateEngine {
                                     }
                                 }, '*');
                             }
+                            return;
+                        }
+
+                        if (isTap) {
+                            window.parent.postMessage({
+                                type: 'foliate-tap',
+                                sectionIndex: ${index},
+                            }, '*');
                         }
                     }, 100);
                 });
@@ -1651,6 +1755,16 @@ export class FoliateEngine {
         if (this.pendingUpdateFrame) {
             cancelAnimationFrame(this.pendingUpdateFrame);
             this.pendingUpdateFrame = null;
+        }
+
+        if (this.selectionCheckInterval) {
+            clearInterval(this.selectionCheckInterval);
+            this.selectionCheckInterval = null;
+        }
+
+        if (this.postMessageHandler) {
+            window.removeEventListener('message', this.postMessageHandler);
+            this.postMessageHandler = null;
         }
         
         // Unsubscribe from style updates

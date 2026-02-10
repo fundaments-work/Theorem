@@ -139,19 +139,18 @@ export function TableOfContents({
             {/* Panel */}
             <div
                 className={cn(
-                    "fixed top-0 left-0 h-full w-80 max-w-[85vw] z-50 flex flex-col",
+                    "fixed inset-x-0 bottom-0 h-[78vh] z-50 flex flex-col",
+                    "sm:inset-x-auto sm:bottom-auto sm:top-0 sm:left-0 sm:h-full sm:w-80 sm:max-w-[85vw]",
+                    "reader-sheet border border-[var(--color-border)] rounded-t-2xl sm:rounded-none sm:rounded-r-2xl",
                     "transform transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                    visible ? "translate-x-0 shadow-2xl" : "-translate-x-full shadow-none",
+                    visible ? "translate-y-0 sm:translate-x-0 shadow-2xl" : "translate-y-full sm:-translate-x-full shadow-none",
                     className,
                 )}
-                style={{
-                    ...readerStyles.surface,
-                    borderRight: "1px solid color-mix(in srgb, var(--reader-fg) 10%, transparent)",
-                }}
+                style={readerStyles.surface}
             >
                 {/* Header */}
                 <div
-                    className="flex items-center justify-between p-5"
+                    className="reader-panel-header flex items-center justify-between p-4 sm:p-5"
                     style={readerStyles.border}
                 >
                     <div className="flex items-center gap-3">
@@ -182,7 +181,7 @@ export function TableOfContents({
                 </div>
 
                 {/* TOC Items */}
-                <div className="flex-1 overflow-y-auto pt-4 pb-12 custom-scrollbar space-y-0.5">
+                <div className="flex-1 min-h-0 overflow-y-auto pt-3 pb-8 sm:pt-4 sm:pb-12 custom-scrollbar space-y-0.5">
                     {tocItems.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-12 text-center">
                             <div
@@ -217,7 +216,7 @@ export function TableOfContents({
 
                 {/* Footer */}
                 <div
-                    className="p-4 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider"
+                    className="reader-panel-footer p-3 sm:p-4 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider"
                     style={{
                         ...readerStyles.border,
                         borderTopWidth: "1px",

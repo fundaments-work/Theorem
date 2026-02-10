@@ -174,34 +174,43 @@ export function ReaderSettings({
         <>
             <Backdrop visible={visible} onClick={onClose} />
 
-            <FloatingPanel visible={visible} className={className}>
+            <FloatingPanel visible={visible} className={cn("overflow-hidden", className)}>
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b" style={borderStyle}>
+                <div className="reader-panel-header flex items-center justify-between p-4" style={borderStyle}>
                     <div className="flex items-center gap-2">
                         <Settings2 className="w-5 h-5" style={textStyle} />
                         <h2 className="text-base font-medium" style={textStyle}>Settings</h2>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={handleReset} className="px-3 py-1.5 text-xs hover:opacity-60 transition-opacity" style={textMutedStyle}>
+                        <button
+                            onClick={handleReset}
+                            className="reader-chip px-3 py-1.5 text-xs rounded-full transition-opacity hover:opacity-80"
+                            style={textMutedStyle}
+                        >
                             Reset
                         </button>
-                        <button onClick={onClose} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
+                        <button
+                            onClick={onClose}
+                            className="reader-chip w-8 h-8 rounded-full inline-flex items-center justify-center transition-opacity hover:opacity-80"
+                            style={surfaceStyle}
+                        >
                             <X className="w-5 h-5" style={textStyle} />
                         </button>
                     </div>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b" style={borderStyle}>
+                <div className="reader-panel-header flex gap-2 px-4 py-3" style={borderStyle}>
                     {tabs.map((tab) => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={cn(
-                                'flex-1 flex items-center justify-center gap-1.5 py-3 text-xs transition-opacity border-b border-transparent',
-                                activeTab === tab.id ? 'opacity-100' : 'opacity-40 hover:opacity-70'
+                                'reader-chip flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-full transition-opacity',
+                                activeTab === tab.id ? 'opacity-100' : 'opacity-60 hover:opacity-85'
                             )}
-                            style={activeTab === tab.id ? { ...textStyle, borderColor: 'var(--reader-fg)' } : textStyle}
+                            style={activeTab === tab.id ? { ...textStyle, backgroundColor: 'color-mix(in srgb, var(--reader-fg) 18%, transparent)' } : textStyle}
+                            data-active={activeTab === tab.id}
                         >
                             {tab.icon}
                             {tab.label}
@@ -210,7 +219,7 @@ export function ReaderSettings({
                 </div>
 
                 {/* Tab Content */}
-                <div className="p-5 max-h-[60vh] overflow-y-auto">
+                <div className="p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto">
                     {/* THEMES TAB */}
                     {activeTab === 'themes' && (
                         <div className="space-y-6">
@@ -238,17 +247,18 @@ export function ReaderSettings({
                             {/* Theme Presets */}
                             <div className="space-y-3">
                                 <label className="text-xs" style={textMutedStyle}>Theme</label>
-                                <div className="flex justify-center gap-4">
+                                <div className="grid grid-cols-3 gap-2">
                                     {THEMES.map((theme) => (
                                         <button
                                             key={theme.id}
                                             onClick={() => onUpdate({ theme: theme.id })}
-                                            className="flex flex-col items-center gap-2 group"
+                                            className="reader-chip rounded-2xl p-3 flex flex-col items-center gap-2 group transition-all"
+                                            data-active={settings.theme === theme.id}
                                         >
                                             <div
                                                 className={cn(
-                                                    'w-10 h-10 rounded-full flex items-center justify-center transition-all',
-                                                    settings.theme === theme.id ? 'scale-110' : 'opacity-50 hover:opacity-80'
+                                                    'w-9 h-9 rounded-full flex items-center justify-center transition-all',
+                                                    settings.theme === theme.id ? 'scale-105' : 'opacity-65 group-hover:opacity-90'
                                                 )}
                                                 style={{ backgroundColor: theme.previewBg, color: theme.previewFg }}
                                             >
@@ -256,7 +266,7 @@ export function ReaderSettings({
                                             </div>
                                             <span className={cn(
                                                 "text-[10px] uppercase tracking-wide",
-                                                settings.theme === theme.id ? "opacity-100" : "opacity-0"
+                                                settings.theme === theme.id ? "opacity-100" : "opacity-70"
                                             )} style={textStyle}>
                                                 {theme.label}
                                             </span>

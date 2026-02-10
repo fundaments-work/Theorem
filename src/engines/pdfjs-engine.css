@@ -131,6 +131,13 @@
     border-color: #d4c5a9;
 }
 
+@media (max-width: 768px) {
+    .pdf-page-wrapper {
+        border-width: 0;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    }
+}
+
 /* Loading spinner */
 @keyframes pdfjs-spin {
     to {

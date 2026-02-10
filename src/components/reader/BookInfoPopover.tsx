@@ -6,7 +6,7 @@
 import { X, Info, Calendar, Hash, Globe, FileText, User } from 'lucide-react';
 import type { DocMetadata } from '@/types';
 import { Backdrop, FloatingPanel } from '@/components/ui';
-import { normalizeAuthor } from '@/lib/utils';
+import { cn, normalizeAuthor } from '@/lib/utils';
 
 interface BookInfoPopoverProps {
     metadata: DocMetadata | null;
@@ -43,9 +43,9 @@ export function BookInfoPopover({
         <>
             <Backdrop visible={visible} onClick={onClose} />
 
-            <FloatingPanel visible={visible} className={className}>
+            <FloatingPanel visible={visible} className={cn("overflow-hidden", className)}>
                 {/* Header */}
-                <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
+                <div className="reader-panel-header flex items-center justify-between p-4 sm:p-5">
                     <div className="flex items-center gap-2.5">
                         <div className="p-1.5 rounded-lg bg-[var(--color-background)] text-[var(--color-accent)]">
                             <Info className="w-4 h-4" />
@@ -54,13 +54,13 @@ export function BookInfoPopover({
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1.5 rounded-xl hover:bg-[var(--color-border-subtle)] transition-colors text-[var(--color-text-secondary)]"
+                        className="reader-chip w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors hover:opacity-80 text-[var(--color-text-secondary)]"
                     >
                         <X className="w-4 h-4" />
                     </button>
                 </div>
 
-                <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div className="p-5 sm:p-6 space-y-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                     {/* Cover & Title */}
                     <div className="flex gap-4">
                         {metadata.cover ? (

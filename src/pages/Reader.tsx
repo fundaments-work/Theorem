@@ -3,7 +3,7 @@
  * Full-screen reading experience with document viewer and controls
  */
 
-import { useState, useEffect, useCallback, useRef, memo, forwardRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect, memo, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, useLibraryStore, useSettingsStore } from '@/store';
 import { HighlightColorPicker, NoteEditor } from '@/components/reader';
@@ -23,6 +23,8 @@ import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation } from '@
 import { getBookBlob } from '@/lib/storage';
 import type { PDFJsEngineRef } from '@/engines/pdfjs-engine';
 
+const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
+
 export function ReaderPage() {
     const { currentBookId, setRoute } = useUIStore();
     const { getBook, updateProgress, saveBookLocations, addReadingTime, markBookCompleted } = useLibraryStore();
@@ -30,6 +32,8 @@ export function ReaderPage() {
     const readerRef = useRef<ReaderViewportHandle>(null);
     const pdfReaderRef = useRef<PDFJsEngineRef>(null);
     const loadedBookIdRef = useRef<string | null>(null);
+    const toolbarContainerRef = useRef<HTMLDivElement>(null);
+    const [toolbarHeight, setToolbarHeight] = useState(56);
 
     // PDF-specific state for titlebar controls
     const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
@@ -57,7 +61,16 @@ export function ReaderPage() {
     const [location, setLocation] = useState<DocLocation | null>(null);
     const [sectionFractions, setSectionFractions] = useState<number[]>([]);
     // UI state
-    const [showToolbar, setShowToolbar] = useState(true);
+    const [isMobileViewport, setIsMobileViewport] = useState(() => (
+        typeof window !== 'undefined'
+            ? window.matchMedia(MOBILE_READER_MEDIA_QUERY).matches
+            : false
+    ));
+    const [showToolbar, setShowToolbar] = useState(() => (
+        typeof window !== 'undefined'
+            ? !window.matchMedia(MOBILE_READER_MEDIA_QUERY).matches
+            : true
+    ));
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | null;
     const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -75,6 +88,29 @@ export function ReaderPage() {
     // Get current book format
     const currentBook = currentBookId ? getBook(currentBookId) : null;
     const isPdfFormat = currentBook?.format === 'pdf';
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const mediaQuery = window.matchMedia(MOBILE_READER_MEDIA_QUERY);
+        const updateViewportState = (matches: boolean) => {
+            setIsMobileViewport(matches);
+            setShowToolbar(!matches || activePanel !== null);
+        };
+
+        updateViewportState(mediaQuery.matches);
+
+        const handleChange = (event: MediaQueryListEvent) => {
+            updateViewportState(event.matches);
+        };
+
+        mediaQuery.addEventListener('change', handleChange);
+        return () => {
+            mediaQuery.removeEventListener('change', handleChange);
+        };
+    }, [activePanel]);
 
     // PDF callbacks - memoized to prevent infinite re-renders
     const handlePdfLoad = useCallback((info: import('@/engines/pdfjs-engine').PDFDocumentInfo) => {
@@ -312,9 +348,34 @@ export function ReaderPage() {
         };
     }, []);
 
+    useLayoutEffect(() => {
+        const toolbarNode = toolbarContainerRef.current;
+        if (!toolbarNode) {
+            return;
+        }
+
+        const updateToolbarHeight = () => {
+            const measuredHeight = Math.ceil(toolbarNode.getBoundingClientRect().height);
+            setToolbarHeight(Math.max(44, measuredHeight));
+        };
+
+        updateToolbarHeight();
+
+        const resizeObserver = new ResizeObserver(() => {
+            updateToolbarHeight();
+        });
+        resizeObserver.observe(toolbarNode);
+
+        window.addEventListener("resize", updateToolbarHeight, { passive: true });
+        return () => {
+            resizeObserver.disconnect();
+            window.removeEventListener("resize", updateToolbarHeight);
+        };
+    }, []);
+
     // Auto-hide toolbar
     useEffect(() => {
-        if (!settings.readerSettings.toolbarAutoHide) return;
+        if (isMobileViewport || !settings.readerSettings.toolbarAutoHide) return;
         let timeout: ReturnType<typeof setTimeout>;
         let lastActivity = Date.now();
 
@@ -340,7 +401,7 @@ export function ReaderPage() {
             window.removeEventListener('mousemove', showToolbarAndReset);
             window.removeEventListener('touchstart', showToolbarAndReset);
         };
-    }, [settings.readerSettings.toolbarAutoHide, settings.readerSettings.autoHideDelay, activePanel]);
+    }, [isMobileViewport, settings.readerSettings.toolbarAutoHide, settings.readerSettings.autoHideDelay, activePanel]);
 
     // Fullscreen effect
     useEffect(() => {
@@ -528,6 +589,15 @@ export function ReaderPage() {
     const handleError = useCallback((err: Error) => {
         setLoadError(err.message);
     }, []);
+
+    const handleViewportTap = useCallback(() => {
+        if (!isMobileViewport || activePanel) {
+            return;
+        }
+        setShowToolbar((previous) => !previous);
+    }, [activePanel, isMobileViewport]);
+
+    const shouldShowReaderChrome = !isMobileViewport || showToolbar || activePanel !== null;
 
     // Highlight state
     const [showColorPicker, setShowColorPicker] = useState(false);
@@ -1201,9 +1271,10 @@ export function ReaderPage() {
         >
             {/* Toolbar */}
             <div
+                ref={toolbarContainerRef}
                 className={cn(
                     "absolute top-0 left-0 right-0 z-50 transition-transform duration-300",
-                    showToolbar ? "translate-y-0" : "-translate-y-full"
+                    shouldShowReaderChrome ? "translate-y-0" : "-translate-y-full"
                 )}
             >
                 <WindowTitlebar
@@ -1250,7 +1321,15 @@ export function ReaderPage() {
             </div>
 
             {/* Reader Viewport - Use PDFReader for PDF, ReaderViewport for others */}
-            <div className={cn("flex-1 min-h-0 pt-14 overflow-hidden", !isPdfFormat && "pb-12")}>
+            <div
+                className={cn(
+                    "flex-1 min-h-0 overflow-hidden",
+                    !isPdfFormat && (
+                        shouldShowReaderChrome ? "pb-14 sm:pb-12" : "pb-0"
+                    ),
+                )}
+                style={{ paddingTop: `${shouldShowReaderChrome ? toolbarHeight : 0}px` }}
+            >
                 {isPdfFormat ? (
                     <PDFReader
                         ref={pdfReaderRef}
@@ -1261,6 +1340,7 @@ export function ReaderPage() {
                         onPageChange={handlePdfPageChange}
                         onLoad={handlePdfLoad}
                         onError={handlePdfError}
+                        onViewportTap={handleViewportTap}
                         annotations={annotations}
                         annotationMode={pdfAnnotationMode}
                         highlightColor={pdfHighlightColor}
@@ -1282,6 +1362,7 @@ export function ReaderPage() {
                         onLocationChange={handleLocationChange}
                         onLocationsSaved={handleLocationsSaved}
                         onTextSelected={handleTextSelected}
+                        onViewportTap={handleViewportTap}
                         className="w-full h-full"
                     />
                 )}
@@ -1295,7 +1376,10 @@ export function ReaderPage() {
                     sectionFractions={sectionFractions}
                     onSeek={handleSeek}
                     totalPages={location?.pageInfo?.totalPages}
-                    className="fixed bottom-0 left-0 right-0 z-40"
+                    className={cn(
+                        "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",
+                        shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
+                    )}
                 />
             )}
 

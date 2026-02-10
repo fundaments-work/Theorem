@@ -164,29 +164,30 @@ export function ReaderAnnotationsPanel({
         <>
             <Backdrop visible={visible} onClick={onClose} />
 
-            <FloatingPanel visible={visible} className={className}>
+            <FloatingPanel visible={visible} className={cn("overflow-hidden", className)}>
                 {/* Header with Tabs */}
-                <div className="flex flex-col border-b border-[var(--color-border)]">
+                <div className="reader-panel-header flex flex-col">
                     <div className="flex items-center justify-between p-4">
                         <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Annotations</h2>
                         <button
                             onClick={onClose}
-                            className="p-1.5 rounded-xl hover:bg-[var(--color-border-subtle)] transition-colors text-[var(--color-text-secondary)]"
+                            className="reader-chip w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors hover:opacity-80 text-[var(--color-text-secondary)]"
                         >
                             <X className="w-4 h-4" />
                         </button>
                     </div>
                     
                     {/* Tabs */}
-                    <div className="flex px-4 pb-2 gap-1">
+                    <div className="flex px-4 pb-3 gap-2">
                         <button
                             onClick={() => setActiveTab('bookmarks')}
                             className={cn(
-                                "flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-colors",
+                                "reader-chip flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-full transition-colors",
                                 activeTab === 'bookmarks'
-                                    ? "bg-[var(--color-accent)] text-[var(--color-background)]"
+                                    ? "bg-[var(--color-accent)] text-[var(--color-background)] border-transparent"
                                     : "text-[var(--color-text-secondary)] hover:bg-[var(--color-background)]"
                             )}
+                            data-active={activeTab === "bookmarks"}
                         >
                             <Bookmark className="w-3.5 h-3.5" />
                             Bookmarks ({bookmarks.length})
@@ -194,11 +195,12 @@ export function ReaderAnnotationsPanel({
                         <button
                             onClick={() => setActiveTab('highlights')}
                             className={cn(
-                                "flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-colors",
+                                "reader-chip flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-full transition-colors",
                                 activeTab === 'highlights'
-                                    ? "bg-[var(--color-accent)] text-[var(--color-background)]"
+                                    ? "bg-[var(--color-accent)] text-[var(--color-background)] border-transparent"
                                     : "text-[var(--color-text-secondary)] hover:bg-[var(--color-background)]"
                             )}
+                            data-active={activeTab === "highlights"}
                         >
                             <Highlighter className="w-3.5 h-3.5" />
                             Highlights ({highlights.length})
@@ -207,7 +209,7 @@ export function ReaderAnnotationsPanel({
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar max-h-[60vh]">
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 custom-scrollbar">
                     {currentItems.length === 0 ? (
                         emptyState
                     ) : (

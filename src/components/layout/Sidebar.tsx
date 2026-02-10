@@ -76,15 +76,15 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
         <aside
             ref={sidebarRef}
             className={cn(
-                "flex flex-col h-full bg-[var(--color-surface)] border-r border-[var(--color-border)]",
+                "flex flex-col h-full border-r border-[var(--color-border)]",
+                "bg-[color-mix(in_srgb,var(--color-surface)_94%,transparent)] backdrop-blur-xl",
                 "transition-all duration-300 ease-in-out",
-                sidebarOpen ? "w-56" : "w-16"
+                (sidebarOpen || isMobile) ? "w-72" : "w-[4.25rem]"
             )}
         >
             {/* Header - Logo + App Name (visible on all screens) */}
             <div className={cn(
-                "flex items-center justify-between px-4 border-b border-[var(--color-border)]",
-                isMobile ? "h-14" : "h-14"
+                "flex items-center justify-between px-4 border-b border-[var(--color-border)] h-16"
             )}>
                 <div className="flex items-center gap-3 overflow-hidden">
                     <LionLogo size={28} className="flex-shrink-0" />
@@ -126,7 +126,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                     }
                                 }}
                                 className={cn(
-                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
+                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl",
                                     "transition-colors duration-200",
                                     "hover:bg-[var(--color-border-subtle)]",
                                     currentRoute === item.id
@@ -155,7 +155,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                 }
                             }}
                             className={cn(
-                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
+                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl",
                                 "transition-colors duration-200",
                                 "hover:bg-[var(--color-border-subtle)]",
                                 currentRoute === "shelves"
@@ -191,7 +191,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                         }
                     }}
                     className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors duration-200 hover:bg-[var(--color-border-subtle)]",
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-200 hover:bg-[var(--color-border-subtle)]",
                         sidebarOpen ? "flex-1" : "w-full justify-center",
                         currentRoute === "settings"
                             ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
@@ -212,7 +212,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                     <button
                         onClick={handleToggle}
                         className={cn(
-                            "flex items-center justify-center p-2.5 rounded-lg",
+                            "flex items-center justify-center p-2.5 rounded-xl",
                             "text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)]",
                             "transition-colors duration-200",
                             sidebarOpen ? "w-10" : "w-full"

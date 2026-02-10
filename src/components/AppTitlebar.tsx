@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { isTauri } from "@/lib/env";
 
 import { useUIStore } from "@/store";
 
@@ -30,8 +31,13 @@ export function AppTitlebar({
 }: AppTitlebarProps) {
     const [isMaximized, setIsMaximized] = useState(false);
     const { currentRoute, searchQuery, setSearchQuery, setRoute } = useUIStore();
+    const isTauriRuntime = isTauri();
 
     useEffect(() => {
+        if (!isTauriRuntime) {
+            return;
+        }
+
         const updateMaximizedState = async () => {
             try {
                 const win = getCurrentWebviewWindow();
@@ -53,9 +59,12 @@ export function AppTitlebar({
         updateMaximizedState();
 
         return () => window.removeEventListener("resize", handleResize);
-    }, []);
+    }, [isTauriRuntime]);
 
     const handleMinimize = async () => {
+        if (!isTauriRuntime) {
+            return;
+        }
         try {
             const win = getCurrentWebviewWindow();
             await win.minimize();
@@ -65,6 +74,9 @@ export function AppTitlebar({
     };
 
     const handleMaximize = async () => {
+        if (!isTauriRuntime) {
+            return;
+        }
         try {
             const win = getCurrentWebviewWindow();
             if (isMaximized) {
@@ -78,6 +90,9 @@ export function AppTitlebar({
     };
 
     const handleClose = async () => {
+        if (!isTauriRuntime) {
+            return;
+        }
         try {
             const win = getCurrentWebviewWindow();
             await win.close();
@@ -112,40 +127,106 @@ export function AppTitlebar({
     return (
         <div
             className={cn(
-                "w-full z-50 select-none bg-[var(--color-surface)] border-b border-[var(--color-border)]",
-                "h-14 flex items-center justify-between px-3 gap-3",
+                "w-full z-50 select-none border-b border-[var(--color-border)]",
+                "bg-[color-mix(in_srgb,var(--color-surface)_94%,transparent)] backdrop-blur-xl",
+                "px-3 sm:px-4 py-2 sm:py-2.5",
                 className
             )}
             data-tauri-drag-region
         >
-            {/* Left side - Menu (mobile only) + Title */}
-            <div className="flex items-center gap-2 shrink-0" data-tauri-drag-region>
-                {onMenuClick && (
-                    <button
-                        onClick={onMenuClick}
-                        className="md:hidden p-2 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text)] transition-colors"
-                        title="Toggle Sidebar"
-                    >
-                        <Menu className="w-5 h-5" />
-                    </button>
-                )}
+            <div className="flex items-center justify-between gap-3 sm:gap-4" data-tauri-drag-region>
+                {/* Left side - Menu + Title */}
+                <div className="flex items-center gap-2 shrink-0 min-w-0" data-tauri-drag-region>
+                    {onMenuClick && (
+                        <button
+                            onClick={onMenuClick}
+                            className="md:hidden p-2 rounded-xl hover:bg-[var(--color-background)] text-[var(--color-text-primary)] transition-colors"
+                            title="Toggle Sidebar"
+                        >
+                            <Menu className="w-5 h-5" />
+                        </button>
+                    )}
 
-                <h1 className="text-sm font-semibold text-[var(--color-text)] truncate">
-                    {getPageTitle()}
-                </h1>
+                    <h1 className="text-sm sm:text-base font-semibold text-[var(--color-text-primary)] truncate">
+                        {getPageTitle()}
+                    </h1>
+                </div>
+
+                {/* Center - Search (desktop) */}
+                <div className="hidden sm:block flex-1 max-w-3xl" data-tauri-drag-region>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                        <input
+                            type="text"
+                            placeholder="Search books, authors, or highlights..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className={cn(
+                                "w-full pl-9 pr-4 py-2 rounded-xl",
+                                "bg-[var(--color-background)] border border-[var(--color-border)]",
+                                "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
+                                "focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent-light)]",
+                                "transition-colors duration-200"
+                            )}
+                        />
+                    </div>
+                </div>
+
+                {/* Right side - Stats button + Window controls */}
+                <div className="flex items-center gap-1 shrink-0">
+                    <button
+                        onClick={() => setRoute("statistics")}
+                        className={cn(
+                            "p-2 rounded-xl transition-colors",
+                            currentRoute === "statistics"
+                                ? "bg-[var(--color-accent)] text-white"
+                                : "text-[var(--color-text-secondary)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-primary)]"
+                        )}
+                        title="Statistics"
+                    >
+                        <BarChart3 className="w-5 h-5" />
+                    </button>
+
+                    {isTauriRuntime && (
+                        <>
+                            <div className="hidden sm:block w-px h-5 bg-[var(--color-border)] mx-1" />
+                            <button
+                                onClick={handleMinimize}
+                                className="hidden sm:inline-flex p-1.5 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text-primary)] transition-colors"
+                                title="Minimize"
+                            >
+                                <Minus className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={handleMaximize}
+                                className="hidden sm:inline-flex p-1.5 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text-primary)] transition-colors"
+                                title={isMaximized ? "Restore" : "Maximize"}
+                            >
+                                <Square className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                onClick={handleClose}
+                                className="hidden sm:inline-flex p-1.5 rounded-lg hover:bg-red-500 hover:text-white text-[var(--color-text-primary)] transition-colors"
+                                title="Close"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
-            {/* Center - Search */}
-            <div className="flex-1 max-w-3xl" data-tauri-drag-region>
+            {/* Search - Mobile */}
+            <div className="mt-2 sm:hidden">
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
                     <input
                         type="text"
-                        placeholder="Search books, authors, or highlights..."
+                        placeholder="Search books, authors, highlights..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className={cn(
-                            "w-full pl-9 pr-4 py-1.5 rounded-lg",
+                            "w-full pl-9 pr-4 py-2 rounded-xl",
                             "bg-[var(--color-background)] border border-[var(--color-border)]",
                             "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
                             "focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent-light)]",
@@ -153,48 +234,6 @@ export function AppTitlebar({
                         )}
                     />
                 </div>
-            </div>
-
-            {/* Right side - Stats button + Window controls */}
-            <div className="flex items-center gap-1 shrink-0">
-                {/* Statistics Button */}
-                <button
-                    onClick={() => setRoute("statistics")}
-                    className={cn(
-                        "p-2 rounded-lg transition-colors",
-                        currentRoute === "statistics"
-                            ? "bg-[var(--color-accent)] text-white"
-                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-primary)]"
-                    )}
-                    title="Statistics"
-                >
-                    <BarChart3 className="w-5 h-5" />
-                </button>
-
-                <div className="w-px h-5 bg-[var(--color-border)] mx-1" />
-
-                {/* Window controls */}
-                <button
-                    onClick={handleMinimize}
-                    className="p-1.5 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text)] transition-colors"
-                    title="Minimize"
-                >
-                    <Minus className="w-4 h-4" />
-                </button>
-                <button
-                    onClick={handleMaximize}
-                    className="p-1.5 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text)] transition-colors"
-                    title={isMaximized ? "Restore" : "Maximize"}
-                >
-                    <Square className="w-3.5 h-3.5" />
-                </button>
-                <button
-                    onClick={handleClose}
-                    className="p-1.5 rounded-lg hover:bg-red-500 hover:text-white text-[var(--color-text)] transition-colors"
-                    title="Close"
-                >
-                    <X className="w-4 h-4" />
-                </button>
             </div>
         </div>
     );

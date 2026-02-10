@@ -41,6 +41,7 @@ interface ReaderViewportProps {
     onError?: (error: Error) => void;
     onTextSelected?: (cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => void;
     onLocationsSaved?: (locations: string) => void;
+    onViewportTap?: () => void;
     initialLocation?: string;
     savedLocations?: string;
 }
@@ -55,6 +56,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     onError,
     onTextSelected,
     onLocationsSaved,
+    onViewportTap,
     initialLocation,
     savedLocations,
 }, ref) => {
@@ -111,6 +113,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
             onTextSelected(cfi, text);
         } : undefined,
         onLocationsSaved,
+        onViewportTap,
     });
 
     // Expose methods via ref
