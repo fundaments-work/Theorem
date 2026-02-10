@@ -10,9 +10,10 @@ import {
     useEffect,
     useRef,
     useState,
-    useCallback,
     forwardRef,
     useImperativeHandle,
+    useMemo,
+    memo,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,6 @@ import { isTauri } from "@/lib/env";
 import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import type { TextContent } from "pdfjs-dist/types/src/display/api";
 import type { Annotation } from "@/types";
 import { PDFAnnotationLayer } from "@/components/reader/PDFAnnotationLayer";
 
@@ -96,6 +96,33 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 5.0;
 const ZOOM_STEP = 0.25;
 const DEFAULT_SCALE = 1.0;
+const PDF_TO_CSS_UNITS = pdfjsLib.PixelsPerInch?.PDF_TO_CSS_UNITS ?? (96 / 72);
+const PAGE_PRERENDER_MARGIN = "200% 0px";
+const PAGE_LOAD_BATCH_SIZE = 5;
+const WEBKIT_MIN_OUTPUT_SCALE = 2;
+const MAX_CANVAS_PIXEL_COUNT = 18_000_000;
+const EMPTY_ANNOTATIONS: Annotation[] = [];
+
+function getCanvasPixelRatio(
+    cssWidth: number,
+    cssHeight: number,
+    preferSharpCanvas: boolean,
+): number {
+    const deviceRatio = Math.max(1, window.devicePixelRatio || 1);
+    const preferredRatio = preferSharpCanvas
+        ? Math.max(deviceRatio, WEBKIT_MIN_OUTPUT_SCALE)
+        : deviceRatio;
+    const safePixelBudget = Math.max(1, cssWidth * cssHeight);
+    const maxAllowedRatio = Math.sqrt(MAX_CANVAS_PIXEL_COUNT / safePixelBudget);
+    return Math.max(1, Math.min(preferredRatio, maxAllowedRatio));
+}
+
+function getCssDimension(value: number, preferSharpCanvas: boolean): number {
+    if (!preferSharpCanvas) {
+        return value;
+    }
+    return Math.max(1, Math.round(value));
+}
 
 
 interface PageCanvasProps {
@@ -106,120 +133,202 @@ interface PageCanvasProps {
     // Annotations
     annotations?: Annotation[];
     annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
+    enableTextLayer: boolean;
+    preferSharpCanvas: boolean;
     onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
-    onAnnotationChange?: (annotation: Annotation) => void;
     onAnnotationRemove?: (id: string) => void;
 }
 
-function PageCanvas({
+const PageCanvas = memo(function PageCanvas({
     page,
     scale,
     rotation,
     onRenderComplete,
     annotations = [],
-    annotationMode = 'none',
+    annotationMode = "none",
+    enableTextLayer,
+    preferSharpCanvas,
     onAnnotationAdd,
-    // onAnnotationChange, 
-    onAnnotationRemove
+    onAnnotationRemove,
 }: PageCanvasProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const textLayerRef = useRef<HTMLDivElement>(null);
-    const renderTaskRef = useRef<ReturnType<PDFPageProxy['render']> | null>(null);
+    const renderTaskRef = useRef<ReturnType<PDFPageProxy["render"]> | null>(null);
     const textLayerInstanceRef = useRef<TextLayer | null>(null);
-    const [isRendering, setIsRendering] = useState(true);
+    const [shouldRender, setShouldRender] = useState(page.pageNumber <= 2);
+    const [isRendering, setIsRendering] = useState(page.pageNumber <= 2);
+    const shouldRenderAnnotationLayer = annotationMode !== "none" || annotations.length > 0;
 
     useEffect(() => {
+        const container = containerRef.current;
+        const canvas = canvasRef.current;
+        const textLayerDiv = textLayerRef.current;
+
+        if (!container || !canvas) {
+            return;
+        }
+        if (enableTextLayer && !textLayerDiv) {
+            return;
+        }
+
+        const viewport = page.getViewport({
+            scale: scale * PDF_TO_CSS_UNITS,
+            rotation,
+        });
+        const cssWidth = getCssDimension(viewport.width, preferSharpCanvas);
+        const cssHeight = getCssDimension(viewport.height, preferSharpCanvas);
+
+        container.style.width = `${cssWidth}px`;
+        container.style.height = `${cssHeight}px`;
+        container.style.setProperty("--scale-factor", `${viewport.scale}`);
+        canvas.style.width = `${cssWidth}px`;
+        canvas.style.height = `${cssHeight}px`;
+        if (enableTextLayer && textLayerDiv) {
+            textLayerDiv.style.width = `${cssWidth}px`;
+            textLayerDiv.style.height = `${cssHeight}px`;
+            textLayerDiv.style.setProperty("--scale-factor", `${viewport.scale}`);
+        }
+    }, [page, scale, rotation, enableTextLayer, preferSharpCanvas]);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container || shouldRender) {
+            return;
+        }
+        if (typeof IntersectionObserver === "undefined") {
+            setShouldRender(true);
+            return;
+        }
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting)) {
+                    setShouldRender(true);
+                    observer.disconnect();
+                }
+            },
+            {
+                root: null,
+                rootMargin: PAGE_PRERENDER_MARGIN,
+            },
+        );
+
+        observer.observe(container);
+
+        return () => {
+            observer.disconnect();
+        };
+    }, [shouldRender]);
+
+    useEffect(() => {
+        if (!shouldRender) {
+            return;
+        }
+
         let cancelled = false;
         const canvas = canvasRef.current;
         const textLayerDiv = textLayerRef.current;
-        const container = containerRef.current;
 
-        if (!canvas || !textLayerDiv || !container) return;
+        if (!canvas) {
+            return;
+        }
+        if (enableTextLayer && !textLayerDiv) {
+            return;
+        }
 
         const renderPage = async () => {
-            // Cleanup previous tasks
             if (renderTaskRef.current) {
-                try { renderTaskRef.current.cancel(); } catch { /* ignore */ }
+                try {
+                    renderTaskRef.current.cancel();
+                } catch {
+                    // Ignore cancellation errors.
+                }
                 renderTaskRef.current = null;
             }
             if (textLayerInstanceRef.current) {
-                textLayerInstanceRef.current.cancel();
+                try {
+                    textLayerInstanceRef.current.cancel();
+                } catch {
+                    // Ignore cancellation errors.
+                }
                 textLayerInstanceRef.current = null;
             }
 
             setIsRendering(true);
 
             try {
-                // 1. VIEWPORT: Use the SCALED viewport for both Canvas and Text
-                // This ensures coordinates match 1:1
-                const viewport = page.getViewport({ scale, rotation });
-
-
-                const outputScale = Math.max(window.devicePixelRatio || 1, 2);
-
-                // 2. DIMENSIONS: Set exact dimensions
-                // We use precise dimensions for CSS to avoid truncation blur,
-                // but integer dimensions for the canvas buffer.
-                const cssWidth = viewport.width;
-                const cssHeight = viewport.height;
-
-                // Container
-                container.style.width = `${cssWidth}px`;
-                container.style.height = `${cssHeight}px`;
-
-                // Canvas (High DPI)
-                // Use round instead of floor to find nearest integer for the buffer
-                canvas.width = Math.round(viewport.width * outputScale);
-                canvas.height = Math.round(viewport.height * outputScale);
+                const viewport = page.getViewport({
+                    scale: scale * PDF_TO_CSS_UNITS,
+                    rotation,
+                });
+                const cssWidth = getCssDimension(viewport.width, preferSharpCanvas);
+                const cssHeight = getCssDimension(viewport.height, preferSharpCanvas);
+                const outputScale = getCanvasPixelRatio(
+                    cssWidth,
+                    cssHeight,
+                    preferSharpCanvas,
+                );
+                canvas.width = Math.max(1, Math.round(cssWidth * outputScale));
+                canvas.height = Math.max(1, Math.round(cssHeight * outputScale));
+                containerRef.current?.style.setProperty("--scale-factor", `${viewport.scale}`);
                 canvas.style.width = `${cssWidth}px`;
                 canvas.style.height = `${cssHeight}px`;
+                if (enableTextLayer && textLayerDiv) {
+                    textLayerDiv.style.width = `${cssWidth}px`;
+                    textLayerDiv.style.height = `${cssHeight}px`;
+                    textLayerDiv.style.setProperty("--scale-factor", `${viewport.scale}`);
+                }
 
-                // Text Layer matches Canvas exactly
-                textLayerDiv.style.width = `${cssWidth}px`;
-                textLayerDiv.style.height = `${cssHeight}px`;
+                const renderScaleX = canvas.width / viewport.width;
+                const renderScaleY = canvas.height / viewport.height;
 
-                // CRITICAL FIX: Set the PDF.js scale factor variable
-                // This tells the text layer how to adjust font spacing
-                textLayerDiv.style.setProperty("--scale-factor", `${scale}`);
+                const ctx = canvas.getContext("2d", {
+                    alpha: false,
+                });
 
-                // Add explicit transform-origin to match CSS
-                textLayerDiv.style.transformOrigin = "0 0";
+                if (!ctx || cancelled) {
+                    return;
+                }
 
-                const ctx = canvas.getContext("2d", { alpha: false });
-                if (!ctx || cancelled) return;
-
-                // Render Canvas
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                 const renderTask = page.render({
                     canvasContext: ctx,
-                    viewport: viewport,
-                    transform: [outputScale, 0, 0, outputScale, 0, 0],
+                    viewport,
+                    transform: [renderScaleX, 0, 0, renderScaleY, 0, 0],
                 });
 
                 renderTaskRef.current = renderTask;
 
                 await renderTask.promise;
-                if (cancelled) return;
+                if (cancelled) {
+                    return;
+                }
 
-                // Render Text Layer
-                textLayerDiv.innerHTML = "";
+                if (enableTextLayer && textLayerDiv) {
+                    textLayerDiv.innerHTML = "";
 
-                try {
-                    const textContent = await page.getTextContent();
-                    if (cancelled) return;
+                    try {
+                        const textContent = await page.getTextContent({
+                            includeMarkedContent: true,
+                            disableNormalization: true,
+                        });
+                        if (cancelled) {
+                            return;
+                        }
 
-                    const textLayer = new TextLayer({
-                        textContentSource: textContent,
-                        container: textLayerDiv,
-                        viewport: viewport, // Use the SCALED viewport
-                    });
+                        const textLayer = new TextLayer({
+                            textContentSource: textContent,
+                            container: textLayerDiv,
+                            viewport,
+                        });
 
-                    textLayerInstanceRef.current = textLayer;
-                    await textLayer.render();
-                } catch (textError) {
-                    console.warn("[PageCanvas] Text layer error:", textError);
+                        textLayerInstanceRef.current = textLayer;
+                        await textLayer.render();
+                    } catch (textError) {
+                        console.warn("[PageCanvas] Text layer error:", textError);
+                    }
                 }
 
                 if (!cancelled) {
@@ -229,8 +338,10 @@ function PageCanvas({
                 }
             } catch (error: unknown) {
                 const isCancelled = error instanceof Error &&
-                    (error.message.includes('cancelled') || error.message.includes('Rendering cancelled'));
-                if (!isCancelled) console.error(error);
+                    (error.message.includes("cancelled") || error.message.includes("Rendering cancelled"));
+                if (!isCancelled) {
+                    console.error(error);
+                }
             }
         };
 
@@ -238,34 +349,55 @@ function PageCanvas({
 
         return () => {
             cancelled = true;
-            if (renderTaskRef.current) try { renderTaskRef.current.cancel(); } catch { }
-            if (textLayerInstanceRef.current) textLayerInstanceRef.current.cancel();
+            if (renderTaskRef.current) {
+                try {
+                    renderTaskRef.current.cancel();
+                } catch {
+                    // Ignore cancellation errors.
+                }
+            }
+            if (enableTextLayer && textLayerInstanceRef.current) {
+                try {
+                    textLayerInstanceRef.current.cancel();
+                } catch {
+                    // Ignore cancellation errors.
+                }
+            }
         };
-    }, [page, scale, rotation, onRenderComplete]);
+    }, [
+        page,
+        scale,
+        rotation,
+        shouldRender,
+        onRenderComplete,
+        enableTextLayer,
+        preferSharpCanvas,
+    ]);
 
     return (
         <div ref={containerRef} className="pdf-page-container">
             <canvas ref={canvasRef} className="block absolute inset-0" />
-            <div ref={textLayerRef} className="textLayer" />
-            {/* Annotation Layer */}
-            <PDFAnnotationLayer
-                pageNumber={page.pageNumber}
-                annotations={annotations}
-                mode={annotationMode}
-                scale={scale}
-                onAnnotationAdd={(ann) => onAnnotationAdd?.(ann)}
-                onAnnotationRemove={(id) => onAnnotationRemove?.(id)}
-            />
+            {enableTextLayer && <div ref={textLayerRef} className="textLayer" />}
+            {shouldRenderAnnotationLayer && (
+                <PDFAnnotationLayer
+                    pageNumber={page.pageNumber}
+                    annotations={annotations}
+                    mode={annotationMode}
+                    scale={scale}
+                    onAnnotationAdd={(ann) => onAnnotationAdd?.(ann)}
+                    onAnnotationRemove={(id) => onAnnotationRemove?.(id)}
+                />
+            )}
 
             {/* Rendering Spinner */}
-            {isRendering && (
+            {shouldRender && isRendering && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-accent)]" />
                 </div>
             )}
         </div>
     );
-}
+});
 
 /**
  * PDF.js Engine Component
@@ -283,33 +415,44 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         annotations = [],
         annotationMode = 'none',
         onAnnotationAdd,
-        onAnnotationChange,
         onAnnotationRemove
     }, ref) {
         const containerRef = useRef<HTMLDivElement>(null);
         const [isLoading, setIsLoading] = useState(true);
         const [error, setError] = useState<string | null>(null);
-        const [pdfInfo, setPdfInfo] = useState<PDFDocumentInfo | null>(null);
         const [currentPage, setCurrentPage] = useState(initialPage);
         const [totalPages, setTotalPages] = useState(0);
         const [scale, setScale] = useState(DEFAULT_SCALE);
         const [rotation, setRotation] = useState(0);
         const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
         const [pages, setPages] = useState<PDFPageProxy[]>([]);
-
-        // Visual zoom state for CSS transform (instant feedback)
-        const [visualScale, setVisualScale] = useState(1);
-
-        // Debounce timer for zoom changes
-        const zoomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-        // Pending scale during wheel zoom
-        const pendingScaleRef = useRef<number | null>(null);
+        const hasAppliedInitialFitRef = useRef(false);
+        const disableTextLayer = useMemo(
+            () => isTauri(),
+            [],
+        );
 
         // Use refs for callbacks to avoid re-triggering the load effect
         const callbacksRef = useRef({ onLoad, onError, onPageChange });
         useEffect(() => {
             callbacksRef.current = { onLoad, onError, onPageChange };
         }, [onLoad, onError, onPageChange]);
+
+        const annotationsByPage = useMemo(() => {
+            const grouped = new Map<number, Annotation[]>();
+            for (const annotation of annotations) {
+                if (annotation.pageNumber == null) {
+                    continue;
+                }
+                const pageAnnotations = grouped.get(annotation.pageNumber);
+                if (pageAnnotations) {
+                    pageAnnotations.push(annotation);
+                    continue;
+                }
+                grouped.set(annotation.pageNumber, [annotation]);
+            }
+            return grouped;
+        }, [annotations]);
 
         // Load PDF
         useEffect(() => {
@@ -327,6 +470,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     setIsLoading(true);
                     setError(null);
                     setPages([]);
+                    hasAppliedInitialFitRef.current = false;
 
                     // Get PDF data
                     let data: Uint8Array;
@@ -381,12 +525,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         filename: displayFilename,
                     };
 
-                    setPdfInfo(info);
                     setTotalPages(info.totalPages);
 
                     // Pre-load first few pages
                     const initialPages: PDFPageProxy[] = [];
-                    const pagesToLoad = Math.min(3, pdf.numPages);
+                    const pagesToLoad = Math.min(PAGE_LOAD_BATCH_SIZE, pdf.numPages);
                     for (let i = 1; i <= pagesToLoad; i++) {
                         const page = await pdf.getPage(i);
                         initialPages.push(page);
@@ -432,6 +575,45 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         // Track loading state to prevent duplicate page loads
         const isLoadingPageRef = useRef(false);
 
+        // Apply an initial fit-width scale so PDF text is readable by default.
+        useEffect(() => {
+            if (hasAppliedInitialFitRef.current) {
+                return;
+            }
+            if (!containerRef.current || pages.length === 0) {
+                return;
+            }
+
+            const rafId = window.requestAnimationFrame(() => {
+                const container = containerRef.current;
+                if (!container) {
+                    return;
+                }
+
+                const containerWidth = container.clientWidth - 32;
+                if (containerWidth <= 0) {
+                    return;
+                }
+
+                const firstPage = pages[0];
+                const viewport = firstPage.getViewport({ scale: PDF_TO_CSS_UNITS });
+                if (viewport.width <= 0) {
+                    return;
+                }
+
+                const fitScale = containerWidth / viewport.width;
+                const nextScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
+
+                hasAppliedInitialFitRef.current = true;
+                setScale(nextScale);
+                callbacksRef.current.onPageChange?.(currentPage, totalPages, nextScale);
+            });
+
+            return () => {
+                cancelAnimationFrame(rafId);
+            };
+        }, [pages, currentPage, totalPages]);
+
         // Load additional pages as needed
         useEffect(() => {
             if (!pdfDocument || pages.length >= pdfDocument.numPages) return;
@@ -446,19 +628,32 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     isLoadingPageRef.current = false;
                     return;
                 }
+                const endPageNum = Math.min(
+                    nextPageNum + PAGE_LOAD_BATCH_SIZE - 1,
+                    pdfDocument.numPages,
+                );
 
                 try {
-                    const page = await pdfDocument.getPage(nextPageNum);
+                    const pagePromises: Promise<PDFPageProxy>[] = [];
+                    for (let pageNum = nextPageNum; pageNum <= endPageNum; pageNum++) {
+                        pagePromises.push(pdfDocument.getPage(pageNum));
+                    }
+                    const loadedPages = await Promise.all(pagePromises);
                     if (!cancelled) {
-                        setPages(prev => {
-                            // Prevent duplicates
-                            if (prev.some(p => p.pageNumber === page.pageNumber)) {
+                        setPages((prev) => {
+                            const existingPageNumbers = new Set(prev.map((existingPage) => existingPage.pageNumber));
+                            const nextPages = loadedPages.filter(
+                                (loadedPage) => !existingPageNumbers.has(loadedPage.pageNumber),
+                            );
+                            if (nextPages.length === 0) {
                                 return prev;
                             }
-                            return [...prev, page];
+                            return [...prev, ...nextPages];
                         });
                     } else {
-                        page.cleanup();
+                        loadedPages.forEach((loadedPage) => {
+                            loadedPage.cleanup();
+                        });
                     }
                 } catch (error) {
                     console.error("[PDFJsEngine] Error loading page:", error);
@@ -467,7 +662,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 }
             };
 
-            // Load next page when we're near the end of loaded pages
+            // Load next page batch when we're near the end of loaded pages
             loadMorePages();
 
             return () => {
@@ -481,50 +676,47 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             const container = containerRef.current;
             if (!container || pages.length === 0) return;
 
-            const handleScroll = () => {
-                const scrollTop = container.scrollTop;
-                const pageHeight = container.scrollHeight / pages.length;
-                const newPage = Math.floor(scrollTop / pageHeight) + 1;
+            let rafId: number | null = null;
 
-                if (newPage !== currentPage && newPage >= 1 && newPage <= totalPages) {
-                    setCurrentPage(newPage);
-                    callbacksRef.current.onPageChange?.(newPage, totalPages, scale);
+            const handleScroll = () => {
+                if (rafId !== null) {
+                    return;
                 }
+
+                rafId = window.requestAnimationFrame(() => {
+                    rafId = null;
+                    const centerY = container.scrollTop + (container.clientHeight / 2);
+                    let newPage = currentPage;
+                    const pageNodes = container.querySelectorAll<HTMLElement>(".pdf-page-wrapper");
+
+                    for (const pageNode of pageNodes) {
+                        const pageTop = pageNode.offsetTop;
+                        const pageBottom = pageTop + pageNode.offsetHeight;
+                        if (centerY >= pageTop && centerY <= pageBottom) {
+                            const parsedPage = Number(pageNode.dataset.pageNumber);
+                            if (!Number.isNaN(parsedPage)) {
+                                newPage = parsedPage;
+                            }
+                            break;
+                        }
+                    }
+
+                    if (newPage !== currentPage && newPage >= 1 && newPage <= totalPages) {
+                        setCurrentPage(newPage);
+                        callbacksRef.current.onPageChange?.(newPage, totalPages, scale);
+                    }
+                });
             };
 
-            // Wheel zoom handler - debounced direct scale change with instant visual feedback
             const handleWheel = (e: WheelEvent) => {
-                // Check if Ctrl or Meta key is pressed for zoom
                 if (e.ctrlKey || e.metaKey) {
                     e.preventDefault();
                     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-
-                    // Calculate new scale from pending or current
-                    const baseScale = pendingScaleRef.current ?? scale;
-                    const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, baseScale + delta));
-                    pendingScaleRef.current = newScale;
-
-                    // Apply instant visual feedback via CSS transform
-                    setVisualScale(newScale / scale);
-                    // Notify parent of pending zoom for UI display
-                    callbacksRef.current.onPageChange?.(currentPage, totalPages, newScale);
-
-                    // Clear existing debounce timer
-                    if (zoomDebounceRef.current) {
-                        clearTimeout(zoomDebounceRef.current);
-                    }
-
-                    // Debounce - apply scale after zoom gesture stops
-                    zoomDebounceRef.current = setTimeout(() => {
-                        if (pendingScaleRef.current !== null) {
-                            const finalScale = pendingScaleRef.current;
-                            setScale(finalScale);
-                            // Reset visual scale after re-render
-                            setVisualScale(1);
-                            pendingScaleRef.current = null;
-                        }
-                        zoomDebounceRef.current = null;
-                    }, 150);
+                    setScale((prev) => {
+                        const nextScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev + delta));
+                        callbacksRef.current.onPageChange?.(currentPage, totalPages, nextScale);
+                        return nextScale;
+                    });
                 }
             };
 
@@ -534,10 +726,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             return () => {
                 container.removeEventListener("scroll", handleScroll);
                 container.removeEventListener("wheel", handleWheel);
-                // Clear zoom debounce on cleanup
-                if (zoomDebounceRef.current) {
-                    clearTimeout(zoomDebounceRef.current);
-                    zoomDebounceRef.current = null;
+                if (rafId !== null) {
+                    cancelAnimationFrame(rafId);
                 }
             };
         }, [pages.length, currentPage, totalPages, scale]);
@@ -596,7 +786,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 if (!containerRef.current || pages.length === 0) return;
                 const container = containerRef.current;
                 const firstPage = pages[0];
-                const viewport = firstPage.getViewport({ scale: 1 });
+                const viewport = firstPage.getViewport({ scale: PDF_TO_CSS_UNITS });
                 const containerH = container.clientHeight - 32; // padding
                 const containerW = container.clientWidth - 32;
                 const fitScale = Math.min(containerW / viewport.width, containerH / viewport.height);
@@ -608,7 +798,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 if (!containerRef.current || pages.length === 0) return;
                 const container = containerRef.current;
                 const firstPage = pages[0];
-                const viewport = firstPage.getViewport({ scale: 1 });
+                const viewport = firstPage.getViewport({ scale: PDF_TO_CSS_UNITS });
                 const containerW = container.clientWidth - 32; // padding
                 const fitScale = containerW / viewport.width;
                 const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
@@ -650,10 +840,6 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 >
                     <div
                         className="pdf-zoom-container flex flex-col items-center justify-start min-h-full py-4 space-y-4 mx-auto"
-                        style={{
-                            transform: visualScale !== 1 ? `scale(${visualScale})` : undefined,
-                            transformOrigin: 'center top',
-                        }}
                     >
                         {pages.map((page) => (
                             <div
@@ -665,10 +851,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                     page={page}
                                     scale={scale}
                                     rotation={rotation}
-                                    annotations={annotations}
+                                    enableTextLayer={!disableTextLayer}
+                                    preferSharpCanvas={disableTextLayer}
+                                    annotations={annotationsByPage.get(page.pageNumber) ?? EMPTY_ANNOTATIONS}
                                     annotationMode={annotationMode}
                                     onAnnotationAdd={onAnnotationAdd}
-                                    onAnnotationChange={onAnnotationChange}
                                     onAnnotationRemove={onAnnotationRemove}
                                 />
                             </div>
@@ -676,9 +863,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     </div>
                 </div>
 
-                {/* Page Info Overlay */}
                 {!isLoading && !error && totalPages > 0 && (
-                    <div className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] shadow-sm">
+                    <div className="absolute bottom-4 right-4 z-50 pointer-events-none px-3 py-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] shadow-sm">
                         Page {currentPage} of {totalPages} | {Math.round(scale * 100)}%
                     </div>
                 )}

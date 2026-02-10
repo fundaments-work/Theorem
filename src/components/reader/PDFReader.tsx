@@ -223,12 +223,13 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
 
         // Handle page change from engine
         const handlePageChange = useCallback(
-            (page: number, total: number) => {
+            (page: number, total: number, reportedScale: number) => {
                 setCurrentPage(page);
                 setTotalPages(total);
-                onPageChange?.(page, total, scale);
+                setScale(reportedScale);
+                onPageChange?.(page, total, reportedScale);
             },
-            [onPageChange, scale]
+            [onPageChange]
         );
 
         // Handle load from engine

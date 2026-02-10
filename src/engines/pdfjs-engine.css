@@ -2,100 +2,78 @@
  * PDF.js Engine Styles
  */
 
-/* Zoom container for smooth CSS transform zoom */
+/* Zoom container */
 .pdf-zoom-container {
-    transition: transform 0.05s ease-out;
-    will-change: transform;
+    width: 100%;
 }
 
-/* Page wrapper */
-/* .pdf-page-wrapper {
-    margin: 10px auto;
-    background: white;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+.pdf-page-wrapper {
+    position: relative;
+    margin: 0 auto;
+    background: #fff;
     border: 1px solid #ddd;
-    border-radius: 2px;
-} */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
 
 /* Page container */
 .pdf-page-container {
     position: relative;
     overflow: hidden;
-    /* Ensure no extra spacing affects alignment */
     padding: 0;
     margin: 0;
-    user-select: none;
-    -webkit-user-select: none;
 }
 
-/* Text Layer */
+/* Text layer follows PDF.js viewer defaults for accurate hit-testing/selection */
 .textLayer {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 2;
+    text-align: initial;
+    inset: 0;
+    overflow: clip;
     opacity: 1;
-    line-height: 1.0;
-    /* Prevent inheritance of text alignment */
-    text-align: left;
-    /* Reset transforms from previous attempts */
-    transform: none !important;
-    user-select: none;
-    -webkit-user-select: none;
+    line-height: 1;
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    caret-color: CanvasText;
+    z-index: 2;
 }
 
-
-
-
-/* PDF.js uses br elements and span elements */
-.textLayer br {
-    user-select: none;
-}
-
-.textLayer span,
-.textLayer .markedContent {
+.textLayer :is(span, br) {
     position: absolute;
+    color: transparent;
     white-space: pre;
     cursor: text;
     transform-origin: 0% 0%;
-
-    /* Text styling */
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-
-    /* Selection behavior */
-    pointer-events: auto;
-    user-select: text;
-    -webkit-user-select: text;
 }
 
-/* Global selection within Text Layer */
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+    z-index: 1;
+}
+
+.textLayer span.markedContent {
+    top: 0;
+    height: 0;
+}
+
+.textLayer span[role="img"] {
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+}
+
 .textLayer ::selection {
-    background: rgba(0, 100, 200, 0.35) !important;
-    color: transparent !important;
-    -webkit-text-fill-color: transparent !important;
+    background: rgba(0, 100, 200, 0.35);
 }
 
-/* Specific WebKit overrides just in case */
-.textLayer span::-webkit-selection,
-.textLayer .markedContent::-webkit-selection {
-    background: rgba(0, 100, 200, 0.35) !important;
-    color: transparent !important;
-    -webkit-text-fill-color: transparent !important;
-}
-
-/* Firefox overrides */
-.textLayer span::-moz-selection,
-.textLayer .markedContent::-moz-selection {
-    background: rgba(0, 100, 200, 0.35) !important;
-    color: transparent !important;
+.textLayer br::selection {
+    background: transparent;
 }
 
 /* Ensure canvas is below text layer */
 .pdf-page-container canvas {
-    position: relative;
+    position: absolute;
     z-index: 1;
 }
 

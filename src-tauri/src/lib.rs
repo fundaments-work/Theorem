@@ -3,6 +3,7 @@
  */
 
 use std::fs;
+use std::env;
 use serde::Serialize;
 
 /**
@@ -232,8 +233,39 @@ fn decode_hex_string(hex: &str) -> Option<String> {
         .and_then(|bytes| String::from_utf8(bytes).ok())
 }
 
+#[cfg(target_os = "linux")]
+fn apply_linux_webkit_workarounds() {
+    // Allow advanced users to disable these workarounds for troubleshooting:
+    // LIONREADER_WEBKIT_WORKAROUNDS=0
+    if env::var("LIONREADER_WEBKIT_WORKAROUNDS")
+        .map(|value| value == "0")
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    // WebKitGTK fallback for known Linux compositor/acceleration regressions.
+    if env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
+        env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+    }
+
+    // Helps with fractional-scaling blur regressions in GTK/WebKit paths.
+    let existing_gdk_debug = env::var("GDK_DEBUG").unwrap_or_default();
+    if existing_gdk_debug.split(',').all(|flag| flag.trim() != "gl-no-fractional") {
+        let merged = if existing_gdk_debug.trim().is_empty() {
+            "gl-no-fractional".to_string()
+        } else {
+            format!("{},gl-no-fractional", existing_gdk_debug)
+        };
+        env::set_var("GDK_DEBUG", merged);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    apply_linux_webkit_workarounds();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())

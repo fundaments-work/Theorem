@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { Annotation } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -26,10 +26,6 @@ export const PDFAnnotationLayer: React.FC<PDFAnnotationLayerProps> = ({
 
     // Filter annotations for this page
     const pageAnnotations = annotations.filter(a => a.pageNumber === pageNumber);
-
-    useEffect(() => {
-        console.log(`[PDFAnnotationLayer page=${pageNumber}] mounted. Mode=${mode}. Annotations=${pageAnnotations.length}`);
-    }, [pageNumber, mode, pageAnnotations.length]);
 
     // Drawing handlers
     const handlePointerDown = (e: React.PointerEvent) => {
