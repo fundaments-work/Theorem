@@ -32,6 +32,7 @@
     opacity: 1;
     line-height: 1;
     -webkit-text-size-adjust: none;
+    -moz-text-size-adjust: none;
     text-size-adjust: none;
     forced-color-adjust: none;
     transform-origin: 0 0;
@@ -69,6 +70,41 @@
 
 .textLayer br::selection {
     background: transparent;
+}
+
+.textLayer .endOfContent {
+    display: block;
+    position: absolute;
+    inset: 100% 0 0;
+    z-index: 0;
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.textLayer.selecting .endOfContent {
+    top: 0;
+}
+
+[data-main-rotation="90"] {
+    transform: rotate(90deg) translateY(-100%);
+}
+
+[data-main-rotation="180"] {
+    transform: rotate(180deg) translate(-100%, -100%);
+}
+
+[data-main-rotation="270"] {
+    transform: rotate(270deg) translateX(-100%);
+}
+
+.hiddenCanvasElement {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    display: none;
 }
 
 /* Ensure canvas is below text layer */

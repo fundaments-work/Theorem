@@ -102,6 +102,10 @@ const PAGE_LOAD_BATCH_SIZE = 5;
 const WEBKIT_MIN_OUTPUT_SCALE = 2;
 const MAX_CANVAS_PIXEL_COUNT = 18_000_000;
 const EMPTY_ANNOTATIONS: Annotation[] = [];
+const TEXT_LAYER_SELECTING_CLASS = "selecting";
+
+const activeTextLayers = new Map<HTMLDivElement, HTMLDivElement>();
+let textLayerSelectionAbortController: AbortController | null = null;
 
 function getCanvasPixelRatio(
     cssWidth: number,
@@ -117,11 +121,420 @@ function getCanvasPixelRatio(
     return Math.max(1, Math.min(preferredRatio, maxAllowedRatio));
 }
 
-function getCssDimension(value: number, preferSharpCanvas: boolean): number {
-    if (!preferSharpCanvas) {
+function getCssDimension(value: number, snapToPixelGrid: boolean): number {
+    if (!snapToPixelGrid) {
         return value;
     }
     return Math.max(1, Math.round(value));
+}
+
+function resetTextLayerSelectionState(endNode: HTMLDivElement, layerNode: HTMLDivElement): void {
+    layerNode.append(endNode);
+    endNode.style.width = "";
+    endNode.style.height = "";
+    layerNode.classList.remove(TEXT_LAYER_SELECTING_CLASS);
+}
+
+function ensureGlobalTextLayerSelectionListeners(): void {
+    if (textLayerSelectionAbortController) {
+        return;
+    }
+
+    textLayerSelectionAbortController = new AbortController();
+    const { signal } = textLayerSelectionAbortController;
+    let pointerDown = false;
+    let isFirefox: boolean | undefined;
+    let previousRange: Range | null = null;
+
+    document.addEventListener(
+        "pointerdown",
+        () => {
+            pointerDown = true;
+        },
+        { signal },
+    );
+
+    document.addEventListener(
+        "pointerup",
+        () => {
+            pointerDown = false;
+            activeTextLayers.forEach((endNode, layerNode) => {
+                resetTextLayerSelectionState(endNode, layerNode);
+            });
+        },
+        { signal },
+    );
+
+    window.addEventListener(
+        "blur",
+        () => {
+            pointerDown = false;
+            activeTextLayers.forEach((endNode, layerNode) => {
+                resetTextLayerSelectionState(endNode, layerNode);
+            });
+        },
+        { signal },
+    );
+
+    document.addEventListener(
+        "keyup",
+        () => {
+            if (pointerDown) {
+                return;
+            }
+            activeTextLayers.forEach((endNode, layerNode) => {
+                resetTextLayerSelectionState(endNode, layerNode);
+            });
+        },
+        { signal },
+    );
+
+    document.addEventListener(
+        "selectionchange",
+        () => {
+            const selection = document.getSelection();
+            if (!selection || selection.rangeCount === 0) {
+                activeTextLayers.forEach((endNode, layerNode) => {
+                    resetTextLayerSelectionState(endNode, layerNode);
+                });
+                return;
+            }
+
+            const selectedLayerNodes = new Set<HTMLDivElement>();
+            for (let i = 0; i < selection.rangeCount; i++) {
+                const range = selection.getRangeAt(i);
+                for (const layerNode of activeTextLayers.keys()) {
+                    try {
+                        if (!selectedLayerNodes.has(layerNode) && range.intersectsNode(layerNode)) {
+                            selectedLayerNodes.add(layerNode);
+                        }
+                    } catch {
+                        // Ignore detached-node errors during rapid rerenders.
+                    }
+                }
+            }
+
+            for (const [layerNode, endNode] of activeTextLayers) {
+                if (selectedLayerNodes.has(layerNode)) {
+                    layerNode.classList.add(TEXT_LAYER_SELECTING_CLASS);
+                } else {
+                    resetTextLayerSelectionState(endNode, layerNode);
+                }
+            }
+
+            const firstEndNode = activeTextLayers.values().next().value as HTMLDivElement | undefined;
+            if (firstEndNode) {
+                isFirefox ??= getComputedStyle(firstEndNode).getPropertyValue("-moz-user-select") === "none";
+            }
+            if (isFirefox) {
+                return;
+            }
+
+            const range = selection.getRangeAt(0);
+            const modifyStart = !!previousRange && (
+                range.compareBoundaryPoints(Range.END_TO_END, previousRange) === 0 ||
+                range.compareBoundaryPoints(Range.START_TO_END, previousRange) === 0
+            );
+            let anchorNode: Node | null = modifyStart ? range.startContainer : range.endContainer;
+            if (anchorNode?.nodeType === Node.TEXT_NODE) {
+                anchorNode = anchorNode.parentNode;
+            }
+
+            const anchorElement = anchorNode instanceof HTMLElement ? anchorNode : null;
+            const layerNode = anchorElement?.closest<HTMLDivElement>(".textLayer");
+            const endNode = layerNode ? activeTextLayers.get(layerNode) : undefined;
+
+            if (layerNode && endNode) {
+                endNode.style.width = layerNode.style.width;
+                endNode.style.height = layerNode.style.height;
+                anchorElement?.parentElement?.insertBefore(
+                    endNode,
+                    modifyStart ? anchorElement : anchorElement?.nextSibling ?? null,
+                );
+            }
+
+            previousRange = range.cloneRange();
+        },
+        { signal },
+    );
+}
+
+function registerTextLayer(layerNode: HTMLDivElement, endNode: HTMLDivElement): void {
+    activeTextLayers.set(layerNode, endNode);
+    ensureGlobalTextLayerSelectionListeners();
+}
+
+function unregisterTextLayer(layerNode: HTMLDivElement): void {
+    activeTextLayers.delete(layerNode);
+    if (activeTextLayers.size > 0) {
+        return;
+    }
+    textLayerSelectionAbortController?.abort();
+    textLayerSelectionAbortController = null;
+}
+
+interface TextItemLike {
+    str?: string;
+    width?: number;
+}
+
+interface CanvasSizing {
+    canvasWidth: number;
+    canvasHeight: number;
+    renderScaleX: number;
+    renderScaleY: number;
+    scaleRoundX: number;
+    scaleRoundY: number;
+}
+
+function approximateFraction(value: number): [number, number] {
+    if (Math.floor(value) === value) {
+        return [value, 1];
+    }
+
+    const inverse = 1 / value;
+    const limit = 8;
+
+    if (inverse > limit) {
+        return [1, limit];
+    }
+    if (Math.floor(inverse) === inverse) {
+        return [1, inverse];
+    }
+
+    const target = value > 1 ? inverse : value;
+    let a = 0;
+    let b = 1;
+    let c = 1;
+    let d = 1;
+
+    while (true) {
+        const p = a + c;
+        const q = b + d;
+        if (q > limit) {
+            break;
+        }
+        if (target <= p / q) {
+            c = p;
+            d = q;
+        } else {
+            a = p;
+            b = q;
+        }
+    }
+
+    if (target - a / b < c / d - target) {
+        return target === value ? [a, b] : [b, a];
+    }
+    return target === value ? [c, d] : [d, c];
+}
+
+function floorToDivide(value: number, divider: number): number {
+    return value - (value % divider);
+}
+
+function getCanvasSizing(cssWidth: number, cssHeight: number, outputScale: number): CanvasSizing {
+    const sfx = approximateFraction(outputScale);
+    const sfy = approximateFraction(outputScale);
+
+    const canvasWidth = Math.max(
+        1,
+        floorToDivide(Math.round(cssWidth * outputScale), sfx[0]),
+    );
+    const canvasHeight = Math.max(
+        1,
+        floorToDivide(Math.round(cssHeight * outputScale), sfy[0]),
+    );
+
+    const pageWidth = Math.max(1, floorToDivide(Math.round(cssWidth), sfx[1]));
+    const pageHeight = Math.max(1, floorToDivide(Math.round(cssHeight), sfy[1]));
+
+    return {
+        canvasWidth,
+        canvasHeight,
+        renderScaleX: canvasWidth / pageWidth,
+        renderScaleY: canvasHeight / pageHeight,
+        scaleRoundX: sfx[1],
+        scaleRoundY: sfy[1],
+    };
+}
+
+function computeMedian(values: number[]): number | null {
+    if (values.length === 0) {
+        return null;
+    }
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 1) {
+        return sorted[mid];
+    }
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function parseScaleX(transform: string): number | null {
+    const match = transform.match(/scaleX\(([-+0-9.eE]+)\)/);
+    if (!match) {
+        return null;
+    }
+    const parsed = Number(match[1]);
+    if (!Number.isFinite(parsed)) {
+        return null;
+    }
+    return parsed;
+}
+
+function mergeScaleX(transform: string, correction: number): string {
+    const existing = parseScaleX(transform);
+    if (existing === null) {
+        return `${transform} scaleX(${correction})`;
+    }
+    const merged = existing * correction;
+    return transform.replace(
+        /scaleX\(([-+0-9.eE]+)\)/,
+        `scaleX(${merged})`,
+    );
+}
+
+function calibrateWebKitTextLayerWidth(
+    textDivs: HTMLSpanElement[],
+    textItems: TextItemLike[],
+    viewportScale: number,
+): void {
+    if (textDivs.length === 0 || textItems.length === 0 || viewportScale <= 0) {
+        return;
+    }
+
+    const ratiosByFont = new Map<string, number[]>();
+    const allRatios: number[] = [];
+    const sampleLimit = 2500;
+
+    let textDivIndex = 0;
+    let sampledPairs = 0;
+
+    for (const item of textItems) {
+        if (sampledPairs >= sampleLimit || textDivIndex >= textDivs.length) {
+            break;
+        }
+        if (typeof item.str !== "string") {
+            continue;
+        }
+
+        const span = textDivs[textDivIndex];
+        textDivIndex += 1;
+        if (!span?.isConnected) {
+            continue;
+        }
+        if (!item.str.trim()) {
+            continue;
+        }
+
+        const expectedWidth = Math.abs((item.width ?? 0) * viewportScale);
+        const actualWidth = span.getBoundingClientRect().width;
+        if (actualWidth <= 0.01 || expectedWidth <= 0.01) {
+            continue;
+        }
+
+        const ratio = expectedWidth / actualWidth;
+        if (ratio < 0.5 || ratio > 1.5) {
+            continue;
+        }
+
+        sampledPairs += 1;
+        allRatios.push(ratio);
+        const fontKey = span.style.fontFamily || "__default__";
+        const bucket = ratiosByFont.get(fontKey);
+        if (bucket) {
+            bucket.push(ratio);
+        } else {
+            ratiosByFont.set(fontKey, [ratio]);
+        }
+    }
+
+    if (allRatios.length < 24) {
+        if (import.meta.env.DEV) {
+            console.debug("[PDF][TextLayer] WebKit font corrections skipped: insufficient samples", {
+                sampledPairs,
+                textDivs: textDivs.length,
+                textItems: textItems.length,
+            });
+        }
+        return;
+    }
+
+    const globalMedian = computeMedian(allRatios);
+    if (!globalMedian) {
+        if (import.meta.env.DEV) {
+            console.debug("[PDF][TextLayer] WebKit font corrections skipped: no global median", {
+                sampledPairs,
+            });
+        }
+        return;
+    }
+
+    let globalCorrection: number | null = null;
+    if (Math.abs(1 - globalMedian) >= 0.02) {
+        globalCorrection = Math.max(0.75, Math.min(1.25, globalMedian));
+    }
+
+    const correctionsByFont = new Map<string, number>();
+    for (const [fontKey, ratios] of ratiosByFont) {
+        if (ratios.length < 8) {
+            continue;
+        }
+        const medianRatio = computeMedian(ratios);
+        if (!medianRatio) {
+            continue;
+        }
+        if (Math.abs(1 - medianRatio) < 0.02) {
+            continue;
+        }
+        correctionsByFont.set(fontKey, Math.max(0.75, Math.min(1.25, medianRatio)));
+    }
+
+    if (correctionsByFont.size === 0 && !globalCorrection) {
+        if (import.meta.env.DEV) {
+            console.debug("[PDF][TextLayer] WebKit font corrections skipped: below threshold", {
+                sampledPairs,
+                globalMedian,
+            });
+        }
+        return;
+    }
+
+    if (import.meta.env.DEV) {
+        console.debug("[PDF][TextLayer] WebKit font corrections:", {
+            sampledPairs,
+            globalMedian,
+            globalCorrection,
+            fonts: Array.from(correctionsByFont.entries()).map(([fontKey, correction]) => ({
+                fontKey,
+                correction,
+                samples: ratiosByFont.get(fontKey)?.length ?? 0,
+            })),
+        });
+    }
+
+    for (const span of textDivs) {
+        if (!span.isConnected) {
+            continue;
+        }
+        const fontKey = span.style.fontFamily || "__default__";
+        const correction = correctionsByFont.get(fontKey) ?? globalCorrection;
+        if (!correction) {
+            continue;
+        }
+        const transform = span.style.transform;
+        if (!transform) {
+            continue;
+        }
+        span.style.transform = mergeScaleX(transform, correction);
+    }
+}
+
+function waitForNextFrame(): Promise<void> {
+    return new Promise((resolve) => {
+        requestAnimationFrame(() => resolve());
+    });
 }
 
 
@@ -135,6 +548,9 @@ interface PageCanvasProps {
     annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
     enableTextLayer: boolean;
     preferSharpCanvas: boolean;
+    snapCssToPixels: boolean;
+    useStreamTextLayer: boolean;
+    calibrateTextLayerWidths: boolean;
     onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
     onAnnotationRemove?: (id: string) => void;
 }
@@ -148,6 +564,9 @@ const PageCanvas = memo(function PageCanvas({
     annotationMode = "none",
     enableTextLayer,
     preferSharpCanvas,
+    snapCssToPixels,
+    useStreamTextLayer,
+    calibrateTextLayerWidths,
     onAnnotationAdd,
     onAnnotationRemove,
 }: PageCanvasProps) {
@@ -176,20 +595,15 @@ const PageCanvas = memo(function PageCanvas({
             scale: scale * PDF_TO_CSS_UNITS,
             rotation,
         });
-        const cssWidth = getCssDimension(viewport.width, preferSharpCanvas);
-        const cssHeight = getCssDimension(viewport.height, preferSharpCanvas);
+        const cssWidth = getCssDimension(viewport.width, snapCssToPixels);
+        const cssHeight = getCssDimension(viewport.height, snapCssToPixels);
 
         container.style.width = `${cssWidth}px`;
         container.style.height = `${cssHeight}px`;
         container.style.setProperty("--scale-factor", `${viewport.scale}`);
         canvas.style.width = `${cssWidth}px`;
         canvas.style.height = `${cssHeight}px`;
-        if (enableTextLayer && textLayerDiv) {
-            textLayerDiv.style.width = `${cssWidth}px`;
-            textLayerDiv.style.height = `${cssHeight}px`;
-            textLayerDiv.style.setProperty("--scale-factor", `${viewport.scale}`);
-        }
-    }, [page, scale, rotation, enableTextLayer, preferSharpCanvas]);
+    }, [page, scale, rotation, enableTextLayer, snapCssToPixels]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -262,26 +676,23 @@ const PageCanvas = memo(function PageCanvas({
                     scale: scale * PDF_TO_CSS_UNITS,
                     rotation,
                 });
-                const cssWidth = getCssDimension(viewport.width, preferSharpCanvas);
-                const cssHeight = getCssDimension(viewport.height, preferSharpCanvas);
+                const cssWidth = getCssDimension(viewport.width, snapCssToPixels);
+                const cssHeight = getCssDimension(viewport.height, snapCssToPixels);
                 const outputScale = getCanvasPixelRatio(
                     cssWidth,
                     cssHeight,
                     preferSharpCanvas,
                 );
-                canvas.width = Math.max(1, Math.round(cssWidth * outputScale));
-                canvas.height = Math.max(1, Math.round(cssHeight * outputScale));
+                const sizing = getCanvasSizing(cssWidth, cssHeight, outputScale);
+                canvas.width = sizing.canvasWidth;
+                canvas.height = sizing.canvasHeight;
                 containerRef.current?.style.setProperty("--scale-factor", `${viewport.scale}`);
+                containerRef.current?.style.setProperty("--scale-round-x", `${sizing.scaleRoundX}px`);
+                containerRef.current?.style.setProperty("--scale-round-y", `${sizing.scaleRoundY}px`);
                 canvas.style.width = `${cssWidth}px`;
                 canvas.style.height = `${cssHeight}px`;
-                if (enableTextLayer && textLayerDiv) {
-                    textLayerDiv.style.width = `${cssWidth}px`;
-                    textLayerDiv.style.height = `${cssHeight}px`;
-                    textLayerDiv.style.setProperty("--scale-factor", `${viewport.scale}`);
-                }
-
-                const renderScaleX = canvas.width / viewport.width;
-                const renderScaleY = canvas.height / viewport.height;
+                const renderScaleX = sizing.renderScaleX;
+                const renderScaleY = sizing.renderScaleY;
 
                 const ctx = canvas.getContext("2d", {
                     alpha: false,
@@ -307,25 +718,76 @@ const PageCanvas = memo(function PageCanvas({
                 }
 
                 if (enableTextLayer && textLayerDiv) {
+                    unregisterTextLayer(textLayerDiv);
                     textLayerDiv.innerHTML = "";
+                    textLayerDiv.tabIndex = 0;
+                    if (textLayerDiv.dataset.textSelectionBound !== "1") {
+                        textLayerDiv.addEventListener("mousedown", () => {
+                            textLayerDiv.classList.add(TEXT_LAYER_SELECTING_CLASS);
+                        });
+                        textLayerDiv.addEventListener("copy", (event) => {
+                            const selection = document.getSelection();
+                            if (!selection) {
+                                return;
+                            }
+                            event.preventDefault();
+                            event.clipboardData?.setData("text/plain", selection.toString());
+                        });
+                        textLayerDiv.dataset.textSelectionBound = "1";
+                    }
 
                     try {
-                        const textContent = await page.getTextContent({
-                            includeMarkedContent: true,
-                            disableNormalization: true,
-                        });
+                        let textItemsForCalibration: TextItemLike[] | null = null;
+                        const textContentSource = useStreamTextLayer
+                            ? page.streamTextContent({
+                                includeMarkedContent: true,
+                                disableNormalization: true,
+                            })
+                            : await page.getTextContent({
+                                includeMarkedContent: true,
+                                disableNormalization: true,
+                            });
+                        if (!useStreamTextLayer) {
+                            textItemsForCalibration =
+                                (textContentSource as { items?: TextItemLike[] }).items ?? null;
+                        }
                         if (cancelled) {
                             return;
                         }
 
                         const textLayer = new TextLayer({
-                            textContentSource: textContent,
+                            textContentSource,
                             container: textLayerDiv,
                             viewport,
                         });
 
                         textLayerInstanceRef.current = textLayer;
                         await textLayer.render();
+
+                        if (calibrateTextLayerWidths && textItemsForCalibration) {
+                            const renderedSpans = textLayer.textDivs as unknown as HTMLSpanElement[];
+                            calibrateWebKitTextLayerWidth(
+                                renderedSpans,
+                                textItemsForCalibration,
+                                viewport.scale,
+                            );
+
+                            // A second pass after fonts/layout settle in WebKit reduces residual drift.
+                            await waitForNextFrame();
+                            await waitForNextFrame();
+                            if (!cancelled) {
+                                calibrateWebKitTextLayerWidth(
+                                    renderedSpans,
+                                    textItemsForCalibration,
+                                    viewport.scale,
+                                );
+                            }
+                        }
+
+                        const endOfContent = document.createElement("div");
+                        endOfContent.className = "endOfContent";
+                        textLayerDiv.append(endOfContent);
+                        registerTextLayer(textLayerDiv, endOfContent);
                     } catch (textError) {
                         console.warn("[PageCanvas] Text layer error:", textError);
                     }
@@ -363,6 +825,9 @@ const PageCanvas = memo(function PageCanvas({
                     // Ignore cancellation errors.
                 }
             }
+            if (enableTextLayer && textLayerDiv) {
+                unregisterTextLayer(textLayerDiv);
+            }
         };
     }, [
         page,
@@ -372,6 +837,9 @@ const PageCanvas = memo(function PageCanvas({
         onRenderComplete,
         enableTextLayer,
         preferSharpCanvas,
+        snapCssToPixels,
+        useStreamTextLayer,
+        calibrateTextLayerWidths,
     ]);
 
     return (
@@ -427,10 +895,12 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
         const [pages, setPages] = useState<PDFPageProxy[]>([]);
         const hasAppliedInitialFitRef = useRef(false);
-        const disableTextLayer = useMemo(
+        const isDesktopWebKit = useMemo(
             () => isTauri(),
             [],
         );
+        const enableTextLayer = true;
+        const useStreamTextLayer = !isDesktopWebKit;
 
         // Use refs for callbacks to avoid re-triggering the load effect
         const callbacksRef = useRef({ onLoad, onError, onPageChange });
@@ -841,25 +1311,36 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     <div
                         className="pdf-zoom-container flex flex-col items-center justify-start min-h-full py-4 space-y-4 mx-auto"
                     >
-                        {pages.map((page) => (
-                            <div
-                                key={`page-${page.pageNumber}`}
-                                className="pdf-page-wrapper"
-                                data-page-number={page.pageNumber}
-                            >
-                                <PageCanvas
-                                    page={page}
-                                    scale={scale}
-                                    rotation={rotation}
-                                    enableTextLayer={!disableTextLayer}
-                                    preferSharpCanvas={disableTextLayer}
-                                    annotations={annotationsByPage.get(page.pageNumber) ?? EMPTY_ANNOTATIONS}
-                                    annotationMode={annotationMode}
-                                    onAnnotationAdd={onAnnotationAdd}
-                                    onAnnotationRemove={onAnnotationRemove}
-                                />
-                            </div>
-                        ))}
+                        {pages.map((page) => {
+                            const pageTextLayerEnabled = enableTextLayer && (
+                                isDesktopWebKit
+                                    ? page.pageNumber === currentPage
+                                    : Math.abs(page.pageNumber - currentPage) <= 1
+                            );
+
+                            return (
+                                <div
+                                    key={`page-${page.pageNumber}`}
+                                    className="pdf-page-wrapper"
+                                    data-page-number={page.pageNumber}
+                                >
+                                    <PageCanvas
+                                        page={page}
+                                        scale={scale}
+                                        rotation={rotation}
+                                        enableTextLayer={pageTextLayerEnabled}
+                                        preferSharpCanvas={isDesktopWebKit && !pageTextLayerEnabled}
+                                        snapCssToPixels={isDesktopWebKit && !pageTextLayerEnabled}
+                                        useStreamTextLayer={useStreamTextLayer}
+                                        calibrateTextLayerWidths={isDesktopWebKit && pageTextLayerEnabled}
+                                        annotations={annotationsByPage.get(page.pageNumber) ?? EMPTY_ANNOTATIONS}
+                                        annotationMode={annotationMode}
+                                        onAnnotationAdd={onAnnotationAdd}
+                                        onAnnotationRemove={onAnnotationRemove}
+                                    />
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
