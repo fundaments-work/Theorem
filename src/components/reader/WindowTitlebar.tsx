@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { cn, normalizeAuthor } from "@/lib/utils";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import type { DocMetadata, DocLocation } from "@/types";
+import type { DocMetadata, DocLocation, HighlightColor } from "@/types";
 
 interface WindowTitlebarProps {
     metadata: DocMetadata | null;
@@ -56,6 +56,7 @@ interface WindowTitlebarProps {
         zoom: number;
         zoomMode?: 'custom' | 'page-fit' | 'width-fit';
         annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
+        annotationColor?: HighlightColor;
         onPrevPage: () => void;
         onNextPage: () => void;
         onZoomIn: () => void;
@@ -67,6 +68,7 @@ interface WindowTitlebarProps {
         onPageInput?: (page: number) => void;
         onAddBookmark?: () => void;
         onAnnotationModeChange?: (mode: 'none' | 'highlight' | 'pen' | 'text' | 'erase') => void;
+        onAnnotationColorChange?: (color: HighlightColor) => void;
         isCurrentPageBookmarked?: boolean;
     };
 }
@@ -86,6 +88,15 @@ function ToolbarButton({ onClick, active, title, children }: { onClick?: () => v
         </button>
     );
 }
+
+const annotationColorSwatches: Array<{ color: HighlightColor; label: string; fill: string }> = [
+    { color: "yellow", label: "Yellow", fill: "#f4b400" },
+    { color: "green", label: "Green", fill: "#2e7d32" },
+    { color: "blue", label: "Blue", fill: "#1976d2" },
+    { color: "red", label: "Red", fill: "#d32f2f" },
+    { color: "orange", label: "Orange", fill: "#f57c00" },
+    { color: "purple", label: "Purple", fill: "#7b1fa2" },
+];
 
 export function WindowTitlebar({
     metadata,
@@ -112,6 +123,14 @@ export function WindowTitlebar({
     const currentChapter = location?.tocItem?.label || location?.pageItem?.label;
 
     const isPdfMode = hideReaderControls && pdfControls;
+    const activeAnnotationColor = pdfControls?.annotationColor || "yellow";
+
+    useEffect(() => {
+        if (isPdfMode) {
+            return;
+        }
+        setShowZoomMenu(false);
+    }, [isPdfMode]);
 
     // Listen for window state changes
     useEffect(() => {
@@ -193,10 +212,9 @@ export function WindowTitlebar({
                 backgroundColor: 'var(--reader-bg, var(--color-surface))',
                 borderBottomColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)',
             }}
-            data-tauri-drag-region
         >
             {/* Left side - Title area */}
-            <div className="flex items-center gap-2 flex-1 min-w-0" data-tauri-drag-region>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
                 <button
                     onClick={onBack}
                     className="p-1.5 rounded-lg transition-colors shrink-0 hover:opacity-70"
@@ -211,7 +229,7 @@ export function WindowTitlebar({
                     style={{ backgroundColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)' }}
                 />
 
-                <div className="flex-1 min-w-0 text-left overflow-hidden" data-tauri-drag-region>
+                <div className="flex-1 min-w-0 text-left overflow-hidden">
                     <h1 
                         className="text-sm font-medium truncate"
                         style={{ color: 'var(--reader-fg, var(--color-text))' }}
@@ -245,7 +263,7 @@ export function WindowTitlebar({
 
             {/* Center - PDF Controls or Spacer */}
             {isPdfMode ? (
-                <div className="flex items-center gap-1 shrink-0" data-tauri-drag-region>
+                <div className="flex items-center gap-1 shrink-0">
                     <button
                         onClick={pdfControls!.onPrevPage}
                         disabled={pdfControls!.currentPage <= 1}
@@ -315,6 +333,35 @@ export function WindowTitlebar({
                         title="Next page"
                     >
                         <ChevronRight className="w-4 h-4" />
+                    </button>
+
+                    <div 
+                        className="w-px h-4 mx-1" 
+                        style={{ backgroundColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)' }}
+                    />
+
+                    <button
+                        onClick={onToggleToc}
+                        className={cn(
+                            "p-1.5 rounded transition-opacity",
+                            activePanel === "toc" ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
+                        )}
+                        style={{ color: 'var(--reader-fg)' }}
+                        title="Table of contents"
+                    >
+                        <List className="w-4 h-4" />
+                    </button>
+
+                    <button
+                        onClick={onToggleBookmarks}
+                        className={cn(
+                            "p-1.5 rounded transition-opacity",
+                            activePanel === "bookmarks" ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
+                        )}
+                        style={{ color: 'var(--reader-fg)' }}
+                        title="Annotations & bookmarks"
+                    >
+                        <LineSquiggle className="w-4 h-4" />
                     </button>
 
                     <div 
@@ -409,24 +456,72 @@ export function WindowTitlebar({
                     />
 
                     {/* Annotation Tools */}
-                    <button
-                        onClick={() => pdfControls!.onAnnotationModeChange?.(
-                            pdfControls!.annotationMode === 'highlight' ? 'none' : 'highlight'
-                        )}
-                        className={cn(
-                            "p-1.5 rounded transition-opacity",
-                            pdfControls!.annotationMode === 'highlight' ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
-                        )}
-                        style={{ color: 'var(--reader-fg)' }}
-                        title="Highlight text"
-                    >
-                        <Highlighter className="w-4 h-4" />
-                    </button>
+                    <div className="relative">
+                        <button
+                            onClick={() => {
+                                if (pdfControls!.annotationMode !== "highlight") {
+                                    pdfControls!.onAnnotationModeChange?.("highlight");
+                                    return;
+                                }
+                                pdfControls!.onAnnotationModeChange?.("none");
+                            }}
+                            className={cn(
+                                "relative p-1.5 rounded transition-opacity",
+                                pdfControls!.annotationMode === 'highlight'
+                                    ? "opacity-100 bg-[var(--color-accent)]/20"
+                                    : "opacity-60 hover:opacity-100",
+                            )}
+                            style={{ color: 'var(--reader-fg)' }}
+                            title="Highlight text"
+                        >
+                            <Highlighter className="w-4 h-4" />
+                            <span
+                                className="absolute -right-0.5 -bottom-0.5 w-2 h-2 rounded-full border border-black/20"
+                                style={{
+                                    backgroundColor: annotationColorSwatches.find(
+                                        (swatch) => swatch.color === activeAnnotationColor,
+                                    )?.fill || "#f4b400",
+                                }}
+                            />
+                        </button>
+                    </div>
+
+                    {pdfControls!.annotationMode === "highlight" && (
+                        <div
+                            className="flex items-center gap-1 px-1 py-0.5 rounded-md"
+                            style={{ backgroundColor: "color-mix(in srgb, var(--reader-fg, var(--color-text)) 8%, transparent)" }}
+                        >
+                            {annotationColorSwatches.map((swatch) => (
+                                <button
+                                    key={swatch.color}
+                                    onClick={() => {
+                                        pdfControls!.onAnnotationColorChange?.(swatch.color);
+                                        pdfControls!.onAnnotationModeChange?.("highlight");
+                                    }}
+                                    className={cn(
+                                        "w-3.5 h-3.5 rounded-full border transition-transform",
+                                        pdfControls!.annotationColor === swatch.color
+                                            ? "scale-110"
+                                            : "hover:scale-110",
+                                    )}
+                                    style={{
+                                        backgroundColor: swatch.fill,
+                                        borderColor: pdfControls!.annotationColor === swatch.color
+                                            ? "rgba(0,0,0,0.45)"
+                                            : "rgba(0,0,0,0.2)",
+                                    }}
+                                    title={swatch.label}
+                                />
+                            ))}
+                        </div>
+                    )}
 
                     <button
-                        onClick={() => pdfControls!.onAnnotationModeChange?.(
-                            pdfControls!.annotationMode === 'pen' ? 'none' : 'pen'
-                        )}
+                        onClick={() => {
+                            pdfControls!.onAnnotationModeChange?.(
+                                pdfControls!.annotationMode === 'pen' ? 'none' : 'pen',
+                            );
+                        }}
                         className={cn(
                             "p-1.5 rounded transition-opacity",
                             pdfControls!.annotationMode === 'pen' ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
@@ -438,9 +533,11 @@ export function WindowTitlebar({
                     </button>
 
                     <button
-                        onClick={() => pdfControls!.onAnnotationModeChange?.(
-                            pdfControls!.annotationMode === 'text' ? 'none' : 'text'
-                        )}
+                        onClick={() => {
+                            pdfControls!.onAnnotationModeChange?.(
+                                pdfControls!.annotationMode === 'text' ? 'none' : 'text',
+                            );
+                        }}
                         className={cn(
                             "p-1.5 rounded transition-opacity",
                             pdfControls!.annotationMode === 'text' ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
@@ -452,9 +549,11 @@ export function WindowTitlebar({
                     </button>
 
                     <button
-                        onClick={() => pdfControls!.onAnnotationModeChange?.(
-                            pdfControls!.annotationMode === 'erase' ? 'none' : 'erase'
-                        )}
+                        onClick={() => {
+                            pdfControls!.onAnnotationModeChange?.(
+                                pdfControls!.annotationMode === 'erase' ? 'none' : 'erase',
+                            );
+                        }}
                         className={cn(
                             "p-1.5 rounded transition-opacity",
                             pdfControls!.annotationMode === 'erase' ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
@@ -495,7 +594,7 @@ export function WindowTitlebar({
                     </button>
                 </div>
             ) : (
-                <div className="flex-1 h-full" data-tauri-drag-region />
+                <div className="flex-1 h-full" />
             )}
 
             {/* Right side - Reader controls */}

@@ -37,6 +37,7 @@ export function ReaderPage() {
     const [pdfZoom, setPdfZoom] = useState(1);
     const [pdfZoomMode, setPdfZoomMode] = useState<'custom' | 'page-fit' | 'width-fit'>('custom');
     const [pdfAnnotationMode, setPdfAnnotationMode] = useState<'none' | 'highlight' | 'pen' | 'text' | 'erase'>('none');
+    const [pdfAnnotationColor, setPdfAnnotationColor] = useState<HighlightColor>("yellow");
 
     // Reading time tracking
     const readingStartTimeRef = useRef<number | null>(null);
@@ -92,7 +93,7 @@ export function ReaderPage() {
             language: '',
             publisher: '',
         });
-        setToc([]);
+        setToc(info.toc || []);
         setIsBookReady(true);
     }, [currentBookId, getBook]);
 
@@ -462,12 +463,37 @@ export function ReaderPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentBookId, updateProgress, markBookCompleted, updateStats]);
 
+    const resolvePdfTargetPage = useCallback((target: string): number | null => {
+        const directMatch = target.match(/pdf:page:(\d+)/i);
+        if (directMatch) {
+            return Number(directMatch[1]);
+        }
+        const hashMatch = target.match(/[?#&]page=(\d+)/i);
+        if (hashMatch) {
+            return Number(hashMatch[1]);
+        }
+        const numericValue = Number(target);
+        if (Number.isFinite(numericValue) && numericValue > 0) {
+            return Math.floor(numericValue);
+        }
+        return null;
+    }, []);
+
     const goTo = useCallback(async (target: string) => {
+        if (isPdfFormat) {
+            const pageNumber = resolvePdfTargetPage(target);
+            if (pageNumber) {
+                pdfReaderRef.current?.goToPage(pageNumber);
+            }
+            setActivePanel(null);
+            return;
+        }
+
         if (readerRef.current) {
             await readerRef.current.goTo(target);
         }
         setActivePanel(null);
-    }, []);
+    }, [isPdfFormat, resolvePdfTargetPage]);
 
     const handleSeek = useCallback((fraction: number) => {
         lastClickFractionRef.current = fraction;
@@ -530,6 +556,89 @@ export function ReaderPage() {
         setPdfZoomMode('custom');
     }, []);
 
+    const handlePdfAnnotationAdd = useCallback((partialAnnotation: Partial<Annotation>) => {
+        if (!currentBookId) {
+            return;
+        }
+
+        const annotationId = partialAnnotation.id || crypto.randomUUID();
+        const pageNumber = partialAnnotation.pageNumber ?? pdfCurrentPage;
+        const normalizedAnnotation: Annotation = {
+            id: annotationId,
+            bookId: currentBookId,
+            type: partialAnnotation.type
+                || (partialAnnotation.pdfAnnotationType === "highlight" ? "highlight" : "note"),
+            location: partialAnnotation.location || `pdf:page:${pageNumber}`,
+            selectedText: partialAnnotation.selectedText,
+            noteContent: partialAnnotation.noteContent,
+            color: partialAnnotation.color || pdfAnnotationColor,
+            createdAt: partialAnnotation.createdAt ? new Date(partialAnnotation.createdAt) : new Date(),
+            updatedAt: partialAnnotation.updatedAt ? new Date(partialAnnotation.updatedAt) : undefined,
+            pageNumber,
+            pdfAnnotationType: partialAnnotation.pdfAnnotationType,
+            drawingData: partialAnnotation.drawingData,
+            textNoteContent: partialAnnotation.textNoteContent,
+            rect: partialAnnotation.rect,
+            rects: partialAnnotation.rects,
+            strokeWidth: partialAnnotation.strokeWidth,
+        };
+
+        const existingAnnotation = getBookAnnotations(currentBookId).find((annotation) => annotation.id === annotationId);
+        if (existingAnnotation) {
+            updateAnnotation(annotationId, {
+                ...normalizedAnnotation,
+                updatedAt: new Date(),
+            });
+        } else {
+            addAnnotation(normalizedAnnotation);
+        }
+
+        setAnnotations((previousAnnotations) => {
+            const existingIndex = previousAnnotations.findIndex((annotation) => annotation.id === annotationId);
+            if (existingIndex === -1) {
+                return [...previousAnnotations, normalizedAnnotation];
+            }
+            const nextAnnotations = [...previousAnnotations];
+            nextAnnotations[existingIndex] = {
+                ...nextAnnotations[existingIndex],
+                ...normalizedAnnotation,
+                updatedAt: new Date(),
+            };
+            return nextAnnotations;
+        });
+    }, [
+        addAnnotation,
+        currentBookId,
+        getBookAnnotations,
+        pdfAnnotationColor,
+        pdfCurrentPage,
+        updateAnnotation,
+    ]);
+
+    const handlePdfAnnotationChange = useCallback((annotation: Annotation) => {
+        if (!currentBookId) {
+            return;
+        }
+
+        updateAnnotation(annotation.id, {
+            ...annotation,
+            updatedAt: new Date(),
+        });
+
+        setAnnotations((previousAnnotations) => previousAnnotations.map((currentAnnotation) =>
+            currentAnnotation.id === annotation.id
+                ? { ...currentAnnotation, ...annotation, updatedAt: new Date() }
+                : currentAnnotation
+        ));
+    }, [currentBookId, updateAnnotation]);
+
+    const handlePdfAnnotationRemove = useCallback((annotationId: string) => {
+        removeAnnotation(annotationId);
+        setAnnotations((previousAnnotations) => previousAnnotations.filter(
+            (annotation) => annotation.id !== annotationId,
+        ));
+    }, [removeAnnotation]);
+
     const handlePdfAddBookmark = useCallback(() => {
         if (!currentBookId) return;
         const pageLocation = `pdf:page:${pdfCurrentPage}`;
@@ -540,8 +649,7 @@ export function ReaderPage() {
         );
 
         if (existing) {
-            removeAnnotation(existing.id);
-            setAnnotations(prev => prev.filter(a => a.id !== existing.id));
+            handlePdfAnnotationRemove(existing.id);
         } else {
             const bookmark: Annotation = {
                 id: crypto.randomUUID(),
@@ -551,10 +659,9 @@ export function ReaderPage() {
                 pageNumber: pdfCurrentPage,
                 createdAt: new Date(),
             };
-            addAnnotation(bookmark);
-            setAnnotations(prev => [...prev, bookmark]);
+            handlePdfAnnotationAdd(bookmark);
         }
-    }, [currentBookId, pdfCurrentPage, annotations, addAnnotation, removeAnnotation]);
+    }, [annotations, currentBookId, handlePdfAnnotationAdd, handlePdfAnnotationRemove, pdfCurrentPage]);
 
     // Check if current PDF page is bookmarked
     const isPdfPageBookmarked = annotations.some(
@@ -574,6 +681,9 @@ export function ReaderPage() {
         if (currentBookId && isBookReady) {
             const bookAnnotations = getBookAnnotations(currentBookId);
             setAnnotations(bookAnnotations);
+            if (isPdfFormat) {
+                return;
+            }
             // Load annotations into viewport (with delay to ensure foliate is ready)
             const timer = setTimeout(() => {
                 readerRef.current?.loadAnnotations?.(bookAnnotations).catch((err: Error) => {
@@ -582,7 +692,7 @@ export function ReaderPage() {
             }, 500);
             return () => clearTimeout(timer);
         }
-    }, [currentBookId, getBookAnnotations, isBookReady]);
+    }, [currentBookId, getBookAnnotations, isBookReady, isPdfFormat]);
 
     useEffect(() => {
         if (!isBookReady || !readerRef.current || hasAppliedInitialLocationRef.current) return;
@@ -1081,6 +1191,7 @@ export function ReaderPage() {
                         zoom: pdfZoom,
                         zoomMode: pdfZoomMode,
                         annotationMode: pdfAnnotationMode,
+                        annotationColor: pdfAnnotationColor,
                         onPrevPage: () => pdfReaderRef.current?.prevPage(),
                         onNextPage: () => pdfReaderRef.current?.nextPage(),
                         onZoomIn: handlePdfZoomIn,
@@ -1092,6 +1203,7 @@ export function ReaderPage() {
                         onPageInput: (page: number) => pdfReaderRef.current?.goToPage(page),
                         onAddBookmark: handlePdfAddBookmark,
                         onAnnotationModeChange: setPdfAnnotationMode,
+                        onAnnotationColorChange: setPdfAnnotationColor,
                         isCurrentPageBookmarked: isPdfPageBookmarked,
                     } : undefined}
                 />
@@ -1111,8 +1223,10 @@ export function ReaderPage() {
                         onError={handlePdfError}
                         annotations={annotations}
                         annotationMode={pdfAnnotationMode}
-                        onAnnotationAdd={(ann) => addAnnotation({ ...ann, bookId: currentBookId || '', id: crypto.randomUUID(), createdAt: new Date() } as Annotation)}
-                        onAnnotationRemove={removeAnnotation}
+                        annotationColor={pdfAnnotationColor}
+                        onAnnotationAdd={handlePdfAnnotationAdd}
+                        onAnnotationChange={handlePdfAnnotationChange}
+                        onAnnotationRemove={handlePdfAnnotationRemove}
                     />
                 ) : (
                     <ReaderViewport
@@ -1143,31 +1257,38 @@ export function ReaderPage() {
                 />
             )}
 
-            {/* Panels - All affected by brightness filter (hidden for PDFs) */}
+            {/* Panels - TOC + annotations available for all formats */}
+            <TableOfContents
+                toc={toc}
+                visible={activePanel === 'toc'}
+                onClose={() => setActivePanel(null)}
+                onNavigate={goTo}
+                currentHref={isPdfFormat ? `pdf:page:${pdfCurrentPage}` : location?.tocItem?.href}
+            />
+
+            <ReaderAnnotationsPanel
+                bookId={currentBookId || ''}
+                visible={activePanel === 'bookmarks'}
+                onClose={() => setActivePanel(null)}
+                onNavigate={goTo}
+                onDelete={(id) => {
+                    if (isPdfFormat) {
+                        handlePdfAnnotationRemove(id);
+                        return;
+                    }
+                    readerRef.current?.removeHighlight?.(id);
+                }}
+            />
+
+            {/* Reader-only panels */}
             {!isPdfFormat && (
                 <>
-                    <TableOfContents
-                        toc={toc}
-                        visible={activePanel === 'toc'}
-                        onClose={() => setActivePanel(null)}
-                        onNavigate={goTo}
-                        currentHref={location?.tocItem?.href}
-                    />
-
                     <ReaderSettings
                         settings={settings.readerSettings}
                         visible={activePanel === 'settings'}
                         onClose={() => setActivePanel(null)}
                         onUpdate={updateReaderSettings}
                         format={getBook(currentBookId || '')?.format}
-                    />
-
-                    <ReaderAnnotationsPanel
-                        bookId={currentBookId || ''}
-                        visible={activePanel === 'bookmarks'}
-                        onClose={() => setActivePanel(null)}
-                        onNavigate={goTo}
-                        onDelete={(id) => readerRef.current?.removeHighlight?.(id)}
                     />
 
                     <ReaderSearch
@@ -1230,6 +1351,3 @@ export function ReaderPage() {
         </div>
     );
 }
-
-
-

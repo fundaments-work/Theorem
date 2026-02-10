@@ -117,6 +117,8 @@ export interface Annotation {
     drawingData?: string;
     textNoteContent?: string;
     rect?: { x: number; y: number; width: number; height: number };
+    rects?: Array<{ x: number; y: number; width: number; height: number }>;
+    strokeWidth?: number;
 }
 
 // Collection Types

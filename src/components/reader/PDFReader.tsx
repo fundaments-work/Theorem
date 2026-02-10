@@ -17,7 +17,7 @@ import {
 import { Loader2, AlertCircle } from "lucide-react";
 import { PDFJsEngine, type PDFJsEngineRef, type PDFDocumentInfo } from "@/engines/pdfjs-engine";
 import { cn } from "@/lib/utils";
-import type { ReaderTheme, Annotation } from "@/types";
+import type { ReaderTheme, Annotation, HighlightColor } from "@/types";
 
 // ============================================================================
 // Types
@@ -42,6 +42,7 @@ interface PDFReaderProps {
     // Annotations
     annotations?: Annotation[];
     annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
+    annotationColor?: HighlightColor;
     onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
     onAnnotationChange?: (annotation: Annotation) => void;
     onAnnotationRemove?: (id: string) => void;
@@ -151,6 +152,7 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             onError,
             annotations,
             annotationMode,
+            annotationColor = "yellow",
             onAnnotationAdd,
             onAnnotationChange,
             onAnnotationRemove
@@ -287,6 +289,7 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                         onError={handleError}
                         annotations={annotations}
                         annotationMode={annotationMode}
+                        annotationColor={annotationColor}
                         onAnnotationAdd={onAnnotationAdd}
                         onAnnotationChange={onAnnotationChange}
                         onAnnotationRemove={onAnnotationRemove}

@@ -42,10 +42,12 @@
 
 .textLayer :is(span, br) {
     position: absolute;
-    color: transparent;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent;
     white-space: pre;
     cursor: text;
     transform-origin: 0% 0%;
+    text-shadow: none;
 }
 
 .textLayer > :not(.markedContent),

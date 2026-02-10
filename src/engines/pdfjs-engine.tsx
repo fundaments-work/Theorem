@@ -10,6 +10,7 @@ import {
     useEffect,
     useRef,
     useState,
+    useCallback,
     forwardRef,
     useImperativeHandle,
     useMemo,
@@ -21,7 +22,7 @@ import { isTauri } from "@/lib/env";
 import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import type { Annotation } from "@/types";
+import type { Annotation, HighlightColor, TocItem } from "@/types";
 import { PDFAnnotationLayer } from "@/components/reader/PDFAnnotationLayer";
 
 // Import CSS (our custom styles only, not pdf_viewer.css which conflicts)
@@ -49,6 +50,7 @@ export interface PDFJsEngineProps {
     // Annotations
     annotations?: Annotation[];
     annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
+    annotationColor?: HighlightColor;
     onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
     onAnnotationChange?: (annotation: Annotation) => void;
     onAnnotationRemove?: (id: string) => void;
@@ -65,6 +67,7 @@ export interface PDFDocumentInfo {
     modificationDate?: Date;
     totalPages: number;
     filename: string;
+    toc?: TocItem[];
 }
 
 export interface PDFSearchState {
@@ -97,26 +100,37 @@ const MAX_ZOOM = 5.0;
 const ZOOM_STEP = 0.25;
 const DEFAULT_SCALE = 1.0;
 const PDF_TO_CSS_UNITS = pdfjsLib.PixelsPerInch?.PDF_TO_CSS_UNITS ?? (96 / 72);
-const PAGE_PRERENDER_MARGIN = "300% 0px";
+const PAGE_PRERENDER_MARGIN = "220% 0px";
 const PAGE_LOAD_BATCH_SIZE = 5;
 const WEBKIT_MIN_OUTPUT_SCALE = 2;
-const MAX_CANVAS_PIXEL_COUNT = 18_000_000;
+const MAX_CANVAS_PIXEL_COUNT = 16_000_000;
+const TEXT_CONTENT_CACHE_LIMIT = 8;
 const EMPTY_ANNOTATIONS: Annotation[] = [];
 const TEXT_LAYER_SELECTING_CLASS = "selecting";
 const WEBKIT_TEXT_LAYER_PAGE_WINDOW = 1;
 const DEBUG_WEBKIT_TEXT_LAYER = false;
 
 const activeTextLayers = new Map<HTMLDivElement, HTMLDivElement>();
+const pageTextContentCache = new Map<number, PageTextContent>();
 let textLayerSelectionAbortController: AbortController | null = null;
 
 function getCanvasPixelRatio(
     cssWidth: number,
     cssHeight: number,
     preferSharpCanvas: boolean,
+    currentScale: number,
 ): number {
     const deviceRatio = Math.max(1, window.devicePixelRatio || 1);
+    // Reduce supersampling at high zoom levels to keep WebKit memory/render cost bounded.
+    const sharpRatioTarget = currentScale <= 1.2
+        ? WEBKIT_MIN_OUTPUT_SCALE
+        : currentScale <= 1.8
+            ? 1.75
+            : currentScale <= 2.6
+                ? 1.5
+                : 1.25;
     const preferredRatio = preferSharpCanvas
-        ? Math.max(deviceRatio, WEBKIT_MIN_OUTPUT_SCALE)
+        ? Math.max(deviceRatio, sharpRatioTarget)
         : deviceRatio;
     const safePixelBudget = Math.max(1, cssWidth * cssHeight);
     const maxAllowedRatio = Math.sqrt(MAX_CANVAS_PIXEL_COUNT / safePixelBudget);
@@ -431,6 +445,37 @@ interface TextItemLike {
 }
 type PageTextContent = Awaited<ReturnType<PDFPageProxy["getTextContent"]>>;
 
+function clearPageTextContentCache(): void {
+    pageTextContentCache.clear();
+}
+
+async function getPageTextContent(page: PDFPageProxy): Promise<PageTextContent> {
+    const pageNumber = page.pageNumber;
+    const cachedTextContent = pageTextContentCache.get(pageNumber);
+    if (cachedTextContent) {
+        // Refresh insertion order to keep this page hot in the small LRU cache.
+        pageTextContentCache.delete(pageNumber);
+        pageTextContentCache.set(pageNumber, cachedTextContent);
+        return cachedTextContent;
+    }
+
+    const textContent = await page.getTextContent({
+        includeMarkedContent: true,
+        disableNormalization: true,
+    });
+    pageTextContentCache.set(pageNumber, textContent);
+
+    while (pageTextContentCache.size > TEXT_CONTENT_CACHE_LIMIT) {
+        const oldestKey = pageTextContentCache.keys().next().value as number | undefined;
+        if (oldestKey === undefined) {
+            break;
+        }
+        pageTextContentCache.delete(oldestKey);
+    }
+
+    return textContent;
+}
+
 interface CanvasSizing {
     canvasWidth: number;
     canvasHeight: number;
@@ -690,6 +735,120 @@ function waitForNextFrame(): Promise<void> {
     });
 }
 
+interface PdfOutlineItemLike {
+    title?: string | null;
+    dest?: unknown;
+    items?: PdfOutlineItemLike[] | null;
+}
+
+async function resolvePdfDestPageNumber(
+    pdfDocument: PDFDocumentProxy,
+    destination: unknown,
+): Promise<number | null> {
+    try {
+        const explicitDestination = typeof destination === "string"
+            ? await pdfDocument.getDestination(destination)
+            : destination;
+        if (!Array.isArray(explicitDestination) || explicitDestination.length === 0) {
+            return null;
+        }
+
+        const destinationReference = explicitDestination[0];
+        if (typeof destinationReference === "number") {
+            return destinationReference + 1;
+        }
+        if (!destinationReference || typeof destinationReference !== "object") {
+            return null;
+        }
+
+        const pageIndex = await pdfDocument.getPageIndex(destinationReference as Parameters<PDFDocumentProxy["getPageIndex"]>[0]);
+        return pageIndex + 1;
+    } catch {
+        return null;
+    }
+}
+
+function sanitizeTocLabel(label?: string | null, fallback?: string): string {
+    const trimmed = (label || "").replace(/\s+/g, " ").trim();
+    if (trimmed.length > 0) {
+        return trimmed;
+    }
+    return fallback || "Section";
+}
+
+async function convertPdfOutlineItems(
+    pdfDocument: PDFDocumentProxy,
+    items: PdfOutlineItemLike[],
+    depth: number,
+    maxDepth: number,
+): Promise<TocItem[]> {
+    if (depth > maxDepth) {
+        return [];
+    }
+
+    const converted = await Promise.all(items.map(async (item, index) => {
+        const pageNumber = await resolvePdfDestPageNumber(pdfDocument, item.dest);
+        const subitems = item.items && item.items.length > 0
+            ? await convertPdfOutlineItems(pdfDocument, item.items, depth + 1, maxDepth)
+            : undefined;
+
+        const href = pageNumber
+            ? `pdf:page:${pageNumber}`
+            : subitems && subitems.length > 0
+                ? subitems[0].href
+                : "pdf:page:1";
+
+        return {
+            label: sanitizeTocLabel(item.title, `Section ${index + 1}`),
+            href,
+            subitems: subitems && subitems.length > 0 ? subitems : undefined,
+        } satisfies TocItem;
+    }));
+
+    return converted;
+}
+
+function buildPdfPageFallbackToc(totalPages: number): TocItem[] {
+    if (totalPages <= 0) {
+        return [];
+    }
+    const step = totalPages <= 120 ? 1 : totalPages <= 300 ? 2 : totalPages <= 700 ? 5 : 10;
+    const tocItems: TocItem[] = [];
+    for (let page = 1; page <= totalPages; page += step) {
+        tocItems.push({
+            label: step === 1 ? `Page ${page}` : `Pages ${page}-${Math.min(totalPages, page + step - 1)}`,
+            href: `pdf:page:${page}`,
+        });
+    }
+    if (tocItems[tocItems.length - 1]?.href !== `pdf:page:${totalPages}`) {
+        tocItems.push({
+            label: `Page ${totalPages}`,
+            href: `pdf:page:${totalPages}`,
+        });
+    }
+    return tocItems;
+}
+
+async function buildPdfToc(pdfDocument: PDFDocumentProxy): Promise<TocItem[]> {
+    try {
+        const outline = await pdfDocument.getOutline();
+        if (outline && outline.length > 0) {
+            const convertedOutline = await convertPdfOutlineItems(
+                pdfDocument,
+                outline as unknown as PdfOutlineItemLike[],
+                0,
+                8,
+            );
+            if (convertedOutline.length > 0) {
+                return convertedOutline;
+            }
+        }
+    } catch (error) {
+        console.warn("[PDFJsEngine] Failed to build PDF outline TOC:", error);
+    }
+    return buildPdfPageFallbackToc(pdfDocument.numPages);
+}
+
 
 interface PageCanvasProps {
     page: PDFPageProxy;
@@ -699,12 +858,14 @@ interface PageCanvasProps {
     // Annotations
     annotations?: Annotation[];
     annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
+    annotationColor: HighlightColor;
     enableTextLayer: boolean;
     preferSharpCanvas: boolean;
     snapCssToPixels: boolean;
     useStreamTextLayer: boolean;
     calibrateTextLayerWidths: boolean;
     onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
+    onAnnotationChange?: (annotation: Annotation) => void;
     onAnnotationRemove?: (id: string) => void;
 }
 
@@ -715,12 +876,14 @@ const PageCanvas = memo(function PageCanvas({
     onRenderComplete,
     annotations = [],
     annotationMode = "none",
+    annotationColor,
     enableTextLayer,
     preferSharpCanvas,
     snapCssToPixels,
     useStreamTextLayer,
     calibrateTextLayerWidths,
     onAnnotationAdd,
+    onAnnotationChange,
     onAnnotationRemove,
 }: PageCanvasProps) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -728,7 +891,6 @@ const PageCanvas = memo(function PageCanvas({
     const textLayerRef = useRef<HTMLDivElement>(null);
     const renderTaskRef = useRef<ReturnType<PDFPageProxy["render"]> | null>(null);
     const textLayerInstanceRef = useRef<TextLayer | null>(null);
-    const cachedTextContentRef = useRef<PageTextContent | null>(null);
     const lastCanvasRenderKeyRef = useRef<string>("");
     const hasRenderedCanvasRef = useRef(false);
     const [shouldRender, setShouldRender] = useState(page.pageNumber <= 3);
@@ -836,6 +998,7 @@ const PageCanvas = memo(function PageCanvas({
                     cssWidth,
                     cssHeight,
                     preferSharpCanvas,
+                    scale,
                 );
                 const sizing = getCanvasSizing(cssWidth, cssHeight, outputScale);
                 const canvasRenderKey = [
@@ -917,13 +1080,8 @@ const PageCanvas = memo(function PageCanvas({
                                 disableNormalization: true,
                             });
                         } else {
-                            if (!cachedTextContentRef.current) {
-                                cachedTextContentRef.current = await page.getTextContent({
-                                    includeMarkedContent: true,
-                                    disableNormalization: true,
-                                });
-                            }
-                            textContentSource = cachedTextContentRef.current;
+                            const textContent = await getPageTextContent(page);
+                            textContentSource = textContent;
                             textItemsForCalibration =
                                 (textContentSource.items as unknown as TextItemLike[]) ?? null;
                         }
@@ -1032,7 +1190,9 @@ const PageCanvas = memo(function PageCanvas({
                     annotations={annotations}
                     mode={annotationMode}
                     scale={scale}
+                    selectedColor={annotationColor}
                     onAnnotationAdd={(ann) => onAnnotationAdd?.(ann)}
+                    onAnnotationChange={(annotation) => onAnnotationChange?.(annotation)}
                     onAnnotationRemove={(id) => onAnnotationRemove?.(id)}
                 />
             )}
@@ -1062,7 +1222,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         className,
         annotations = [],
         annotationMode = 'none',
+        annotationColor = "yellow",
         onAnnotationAdd,
+        onAnnotationChange,
         onAnnotationRemove
     }, ref) {
         const containerRef = useRef<HTMLDivElement>(null);
@@ -1075,6 +1237,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
         const [pages, setPages] = useState<PDFPageProxy[]>([]);
         const hasAppliedInitialFitRef = useRef(false);
+        const currentPageRef = useRef(initialPage);
+        const totalPagesRef = useRef(0);
+        const scaleRef = useRef(DEFAULT_SCALE);
         const isDesktopWebKit = useMemo(
             () => isTauri(),
             [],
@@ -1087,6 +1252,33 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         useEffect(() => {
             callbacksRef.current = { onLoad, onError, onPageChange };
         }, [onLoad, onError, onPageChange]);
+
+        useEffect(() => {
+            currentPageRef.current = currentPage;
+        }, [currentPage]);
+
+        useEffect(() => {
+            totalPagesRef.current = totalPages;
+        }, [totalPages]);
+
+        useEffect(() => {
+            scaleRef.current = scale;
+        }, [scale]);
+
+        const applyZoom = useCallback((requestedScale: number): number => {
+            const clampedScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, requestedScale));
+            if (Math.abs(clampedScale - scaleRef.current) < 0.0001) {
+                return scaleRef.current;
+            }
+            scaleRef.current = clampedScale;
+            setScale(clampedScale);
+            callbacksRef.current.onPageChange?.(
+                currentPageRef.current,
+                totalPagesRef.current,
+                clampedScale,
+            );
+            return clampedScale;
+        }, []);
 
         const annotationsByPage = useMemo(() => {
             const grouped = new Map<number, Annotation[]>();
@@ -1120,6 +1312,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     setIsLoading(true);
                     setError(null);
                     setPages([]);
+                    clearPageTextContentCache();
                     hasAppliedInitialFitRef.current = false;
 
                     // Get PDF data
@@ -1160,6 +1353,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     // Get metadata
                     const metadata = await pdf.getMetadata();
                     const metaInfo = metadata.info as Record<string, unknown>;
+                    const tocItems = await buildPdfToc(pdf);
                     // Use original filename (without extension) as fallback for title
                     const displayFilename = originalFilename || pdfPath.split("/").pop()?.replace(/\.[^/.]+$/, "") || "document";
                     const info: PDFDocumentInfo = {
@@ -1173,6 +1367,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         modificationDate: metaInfo?.ModDate ? new Date(metaInfo.ModDate as string) : undefined,
                         totalPages: pdf.numPages,
                         filename: displayFilename,
+                        toc: tocItems,
                     };
 
                     setTotalPages(info.totalPages);
@@ -1217,6 +1412,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 pdfDocument?.destroy();
                 setPdfDocument(null);
                 setPages([]);
+                clearPageTextContentCache();
             };
             // Only reload when pdfPath, pdfData, or initialPage changes
             // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1255,14 +1451,13 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 const nextScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
 
                 hasAppliedInitialFitRef.current = true;
-                setScale(nextScale);
-                callbacksRef.current.onPageChange?.(currentPage, totalPages, nextScale);
+                applyZoom(nextScale);
             });
 
             return () => {
                 cancelAnimationFrame(rafId);
             };
-        }, [pages, currentPage, totalPages]);
+        }, [pages, applyZoom]);
 
         // Load additional pages as needed
         useEffect(() => {
@@ -1327,6 +1522,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             if (!container || pages.length === 0) return;
 
             let rafId: number | null = null;
+            let zoomRafId: number | null = null;
+            let pendingWheelDelta = 0;
 
             const handleScroll = () => {
                 if (rafId !== null) {
@@ -1336,7 +1533,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 rafId = window.requestAnimationFrame(() => {
                     rafId = null;
                     const centerY = container.scrollTop + (container.clientHeight / 2);
-                    let newPage = currentPage;
+                    let newPage = currentPageRef.current;
                     const pageNodes = container.querySelectorAll<HTMLElement>(".pdf-page-wrapper");
 
                     for (const pageNode of pageNodes) {
@@ -1351,22 +1548,42 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         }
                     }
 
-                    if (newPage !== currentPage && newPage >= 1 && newPage <= totalPages) {
+                    const totalPageCount = totalPagesRef.current;
+                    if (newPage !== currentPageRef.current && newPage >= 1 && newPage <= totalPageCount) {
+                        currentPageRef.current = newPage;
                         setCurrentPage(newPage);
-                        callbacksRef.current.onPageChange?.(newPage, totalPages, scale);
+                        callbacksRef.current.onPageChange?.(newPage, totalPageCount, scaleRef.current);
                     }
                 });
+            };
+
+            const flushWheelZoom = () => {
+                zoomRafId = null;
+                if (pendingWheelDelta === 0) {
+                    return;
+                }
+                const nextScale = Math.max(
+                    MIN_ZOOM,
+                    Math.min(MAX_ZOOM, scaleRef.current + pendingWheelDelta),
+                );
+                pendingWheelDelta = 0;
+                applyZoom(nextScale);
             };
 
             const handleWheel = (e: WheelEvent) => {
                 if (e.ctrlKey || e.metaKey) {
                     e.preventDefault();
                     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-                    setScale((prev) => {
-                        const nextScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev + delta));
-                        callbacksRef.current.onPageChange?.(currentPage, totalPages, nextScale);
-                        return nextScale;
-                    });
+                    pendingWheelDelta += delta;
+                    const maxStepPerFrame = ZOOM_STEP * 3;
+                    if (pendingWheelDelta > maxStepPerFrame) {
+                        pendingWheelDelta = maxStepPerFrame;
+                    } else if (pendingWheelDelta < -maxStepPerFrame) {
+                        pendingWheelDelta = -maxStepPerFrame;
+                    }
+                    if (zoomRafId === null) {
+                        zoomRafId = window.requestAnimationFrame(flushWheelZoom);
+                    }
                 }
             };
 
@@ -1379,8 +1596,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 if (rafId !== null) {
                     cancelAnimationFrame(rafId);
                 }
+                if (zoomRafId !== null) {
+                    cancelAnimationFrame(zoomRafId);
+                }
             };
-        }, [pages.length, currentPage, totalPages, scale]);
+        }, [pages.length, applyZoom]);
 
         // Expose imperative methods
         useImperativeHandle(ref, () => ({
@@ -1412,16 +1632,16 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 }
             },
             zoomIn: () => {
-                setScale(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
+                applyZoom(scaleRef.current + ZOOM_STEP);
             },
             zoomOut: () => {
-                setScale(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
+                applyZoom(scaleRef.current - ZOOM_STEP);
             },
             zoomReset: () => {
-                setScale(DEFAULT_SCALE);
+                applyZoom(DEFAULT_SCALE);
             },
             setZoom: (newScale: number) => {
-                setScale(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale)));
+                applyZoom(newScale);
             },
             getZoom: () => scale,
             getCurrentPage: () => currentPage,
@@ -1441,8 +1661,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 const containerW = container.clientWidth - 32;
                 const fitScale = Math.min(containerW / viewport.width, containerH / viewport.height);
                 const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
-                setScale(newScale);
-                callbacksRef.current.onPageChange?.(currentPage, totalPages, newScale);
+                applyZoom(newScale);
             },
             zoomFitWidth: () => {
                 if (!containerRef.current || pages.length === 0) return;
@@ -1452,10 +1671,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 const containerW = container.clientWidth - 32; // padding
                 const fitScale = containerW / viewport.width;
                 const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
-                setScale(newScale);
-                callbacksRef.current.onPageChange?.(currentPage, totalPages, newScale);
+                applyZoom(newScale);
             },
-        }), [currentPage, totalPages, pages.length, scale]);
+        }), [applyZoom, currentPage, pages.length, scale, totalPages]);
 
         return (
             <div className={cn("relative w-full h-full", className)}>
@@ -1497,6 +1715,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                     ? Math.abs(page.pageNumber - currentPage) <= WEBKIT_TEXT_LAYER_PAGE_WINDOW
                                     : Math.abs(page.pageNumber - currentPage) <= 1
                             );
+                            const pageUseStreamTextLayer = isDesktopWebKit
+                                ? page.pageNumber !== currentPage
+                                : useStreamTextLayer;
 
                             return (
                                 <div
@@ -1511,11 +1732,13 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                         enableTextLayer={pageTextLayerEnabled}
                                         preferSharpCanvas={isDesktopWebKit}
                                         snapCssToPixels={isDesktopWebKit}
-                                        useStreamTextLayer={useStreamTextLayer}
+                                        useStreamTextLayer={pageUseStreamTextLayer}
                                         calibrateTextLayerWidths={isDesktopWebKit && page.pageNumber === currentPage}
                                         annotations={annotationsByPage.get(page.pageNumber) ?? EMPTY_ANNOTATIONS}
                                         annotationMode={annotationMode}
+                                        annotationColor={annotationColor}
                                         onAnnotationAdd={onAnnotationAdd}
+                                        onAnnotationChange={onAnnotationChange}
                                         onAnnotationRemove={onAnnotationRemove}
                                     />
                                 </div>
