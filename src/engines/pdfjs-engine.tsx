@@ -103,6 +103,8 @@ const WEBKIT_MIN_OUTPUT_SCALE = 2;
 const MAX_CANVAS_PIXEL_COUNT = 18_000_000;
 const EMPTY_ANNOTATIONS: Annotation[] = [];
 const TEXT_LAYER_SELECTING_CLASS = "selecting";
+const WEBKIT_TEXT_LAYER_PAGE_WINDOW = 1;
+const DEBUG_WEBKIT_TEXT_LAYER = false;
 
 const activeTextLayers = new Map<HTMLDivElement, HTMLDivElement>();
 let textLayerSelectionAbortController: AbortController | null = null;
@@ -135,6 +137,23 @@ function resetTextLayerSelectionState(endNode: HTMLDivElement, layerNode: HTMLDi
     layerNode.classList.remove(TEXT_LAYER_SELECTING_CLASS);
 }
 
+function findScrollableAncestor(node: HTMLElement | null): HTMLElement | null {
+    let current: HTMLElement | null = node;
+    while (current) {
+        const style = getComputedStyle(current);
+        const overflowY = style.overflowY;
+        if (
+            (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+            current.scrollHeight > current.clientHeight + 1
+        ) {
+            return current;
+        }
+        current = current.parentElement;
+    }
+    const root = document.scrollingElement;
+    return root instanceof HTMLElement ? root : null;
+}
+
 function ensureGlobalTextLayerSelectionListeners(): void {
     if (textLayerSelectionAbortController) {
         return;
@@ -145,6 +164,28 @@ function ensureGlobalTextLayerSelectionListeners(): void {
     let pointerDown = false;
     let isFirefox: boolean | undefined;
     let previousRange: Range | null = null;
+    let selectionFrameId = 0;
+    let autoScrollRafId = 0;
+    let autoScrollVelocity = 0;
+    let autoScrollTarget: HTMLElement | null = null;
+
+    const stopAutoScroll = () => {
+        if (autoScrollRafId !== 0) {
+            cancelAnimationFrame(autoScrollRafId);
+            autoScrollRafId = 0;
+        }
+        autoScrollVelocity = 0;
+        autoScrollTarget = null;
+    };
+
+    const runAutoScroll = () => {
+        if (!pointerDown || !autoScrollTarget || autoScrollVelocity === 0) {
+            stopAutoScroll();
+            return;
+        }
+        autoScrollTarget.scrollTop += autoScrollVelocity;
+        autoScrollRafId = requestAnimationFrame(runAutoScroll);
+    };
 
     document.addEventListener(
         "pointerdown",
@@ -158,6 +199,7 @@ function ensureGlobalTextLayerSelectionListeners(): void {
         "pointerup",
         () => {
             pointerDown = false;
+            stopAutoScroll();
             activeTextLayers.forEach((endNode, layerNode) => {
                 resetTextLayerSelectionState(endNode, layerNode);
             });
@@ -169,6 +211,7 @@ function ensureGlobalTextLayerSelectionListeners(): void {
         "blur",
         () => {
             pointerDown = false;
+            stopAutoScroll();
             activeTextLayers.forEach((endNode, layerNode) => {
                 resetTextLayerSelectionState(endNode, layerNode);
             });
@@ -190,72 +233,181 @@ function ensureGlobalTextLayerSelectionListeners(): void {
     );
 
     document.addEventListener(
-        "selectionchange",
+        "pointercancel",
         () => {
-            const selection = document.getSelection();
-            if (!selection || selection.rangeCount === 0) {
-                activeTextLayers.forEach((endNode, layerNode) => {
-                    resetTextLayerSelectionState(endNode, layerNode);
-                });
+            pointerDown = false;
+            stopAutoScroll();
+        },
+        { signal },
+    );
+
+    document.addEventListener(
+        "pointermove",
+        (event) => {
+            if (!pointerDown) {
                 return;
             }
 
-            const selectedLayerNodes = new Set<HTMLDivElement>();
-            for (let i = 0; i < selection.rangeCount; i++) {
-                const range = selection.getRangeAt(i);
-                for (const layerNode of activeTextLayers.keys()) {
-                    try {
-                        if (!selectedLayerNodes.has(layerNode) && range.intersectsNode(layerNode)) {
-                            selectedLayerNodes.add(layerNode);
-                        }
-                    } catch {
-                        // Ignore detached-node errors during rapid rerenders.
+            const selection = document.getSelection();
+            if (!selection || selection.rangeCount === 0) {
+                return;
+            }
+
+            let sourceElement = event.target instanceof HTMLElement ? event.target : null;
+            if (!sourceElement) {
+                const pointedElement = document.elementFromPoint(event.clientX, event.clientY);
+                sourceElement = pointedElement instanceof HTMLElement ? pointedElement : null;
+            }
+
+            let layerNode = sourceElement?.closest<HTMLDivElement>(".textLayer") ?? null;
+            if (!layerNode) {
+                for (const candidate of activeTextLayers.keys()) {
+                    if (candidate.classList.contains(TEXT_LAYER_SELECTING_CLASS)) {
+                        layerNode = candidate;
+                        break;
                     }
                 }
             }
-
-            for (const [layerNode, endNode] of activeTextLayers) {
-                if (selectedLayerNodes.has(layerNode)) {
-                    layerNode.classList.add(TEXT_LAYER_SELECTING_CLASS);
-                } else {
-                    resetTextLayerSelectionState(endNode, layerNode);
-                }
-            }
-
-            const firstEndNode = activeTextLayers.values().next().value as HTMLDivElement | undefined;
-            if (firstEndNode) {
-                isFirefox ??= getComputedStyle(firstEndNode).getPropertyValue("-moz-user-select") === "none";
-            }
-            if (isFirefox) {
+            if (!layerNode) {
+                stopAutoScroll();
                 return;
             }
 
-            const range = selection.getRangeAt(0);
-            const modifyStart = !!previousRange && (
-                range.compareBoundaryPoints(Range.END_TO_END, previousRange) === 0 ||
-                range.compareBoundaryPoints(Range.START_TO_END, previousRange) === 0
-            );
-            let anchorNode: Node | null = modifyStart ? range.startContainer : range.endContainer;
-            if (anchorNode?.nodeType === Node.TEXT_NODE) {
-                anchorNode = anchorNode.parentNode;
+            const scrollContainer = findScrollableAncestor(layerNode);
+            if (!scrollContainer) {
+                stopAutoScroll();
+                return;
             }
 
-            const anchorElement = anchorNode instanceof HTMLElement ? anchorNode : null;
-            const layerNode = anchorElement?.closest<HTMLDivElement>(".textLayer");
-            const endNode = layerNode ? activeTextLayers.get(layerNode) : undefined;
+            const rect = scrollContainer.getBoundingClientRect();
+            const edgeThreshold = 52;
+            let velocity = 0;
 
-            if (layerNode && endNode) {
-                endNode.style.width = layerNode.style.width;
-                endNode.style.height = layerNode.style.height;
-                anchorElement?.parentElement?.insertBefore(
-                    endNode,
-                    modifyStart ? anchorElement : anchorElement?.nextSibling ?? null,
+            if (event.clientY < rect.top + edgeThreshold) {
+                const ratio = Math.min(1, (rect.top + edgeThreshold - event.clientY) / edgeThreshold);
+                velocity = -Math.max(2, Math.round(24 * ratio));
+            } else if (event.clientY > rect.bottom - edgeThreshold) {
+                const ratio = Math.min(1, (event.clientY - (rect.bottom - edgeThreshold)) / edgeThreshold);
+                velocity = Math.max(2, Math.round(24 * ratio));
+            }
+
+            if (velocity === 0) {
+                stopAutoScroll();
+                return;
+            }
+
+            autoScrollTarget = scrollContainer;
+            autoScrollVelocity = velocity;
+            if (autoScrollRafId === 0) {
+                autoScrollRafId = requestAnimationFrame(runAutoScroll);
+            }
+        },
+        {
+            signal,
+            passive: true,
+        },
+    );
+
+    document.addEventListener(
+        "selectionchange",
+        () => {
+            if (selectionFrameId !== 0) {
+                return;
+            }
+            selectionFrameId = requestAnimationFrame(() => {
+                selectionFrameId = 0;
+
+                const selection = document.getSelection();
+                if (!selection || selection.rangeCount === 0) {
+                    // WebKit can transiently clear selection while dragging outside text glyph bounds.
+                    if (pointerDown) {
+                        return;
+                    }
+                    activeTextLayers.forEach((endNode, layerNode) => {
+                        resetTextLayerSelectionState(endNode, layerNode);
+                    });
+                    return;
+                }
+
+                const selectedLayerNodes = new Set<HTMLDivElement>();
+                for (let i = 0; i < selection.rangeCount; i++) {
+                    const range = selection.getRangeAt(i);
+                    for (const layerNode of activeTextLayers.keys()) {
+                        try {
+                            if (!selectedLayerNodes.has(layerNode) && range.intersectsNode(layerNode)) {
+                                selectedLayerNodes.add(layerNode);
+                            }
+                        } catch {
+                            // Ignore detached-node errors during rapid rerenders.
+                        }
+                    }
+                }
+
+                if (selectedLayerNodes.size === 0) {
+                    if (pointerDown) {
+                        return;
+                    }
+                    activeTextLayers.forEach((endNode, layerNode) => {
+                        resetTextLayerSelectionState(endNode, layerNode);
+                    });
+                    return;
+                }
+
+                for (const [layerNode, endNode] of activeTextLayers) {
+                    if (selectedLayerNodes.has(layerNode)) {
+                        layerNode.classList.add(TEXT_LAYER_SELECTING_CLASS);
+                    } else {
+                        resetTextLayerSelectionState(endNode, layerNode);
+                    }
+                }
+
+                const firstEndNode = activeTextLayers.values().next().value as HTMLDivElement | undefined;
+                if (firstEndNode) {
+                    isFirefox ??= getComputedStyle(firstEndNode).getPropertyValue("-moz-user-select") === "none";
+                }
+                if (isFirefox) {
+                    return;
+                }
+
+                const range = selection.getRangeAt(0);
+                const modifyStart = !!previousRange && (
+                    range.compareBoundaryPoints(Range.END_TO_END, previousRange) === 0 ||
+                    range.compareBoundaryPoints(Range.START_TO_END, previousRange) === 0
                 );
-            }
+                let anchorNode: Node | null = modifyStart ? range.startContainer : range.endContainer;
+                if (anchorNode?.nodeType === Node.TEXT_NODE) {
+                    anchorNode = anchorNode.parentNode;
+                }
 
-            previousRange = range.cloneRange();
+                const anchorElement = anchorNode instanceof HTMLElement ? anchorNode : null;
+                const layerNode = anchorElement?.closest<HTMLDivElement>(".textLayer");
+                const endNode = layerNode ? activeTextLayers.get(layerNode) : undefined;
+
+                if (layerNode && endNode) {
+                    endNode.style.width = layerNode.style.width;
+                    endNode.style.height = layerNode.style.height;
+                    anchorElement?.parentElement?.insertBefore(
+                        endNode,
+                        modifyStart ? anchorElement : anchorElement?.nextSibling ?? null,
+                    );
+                }
+
+                previousRange = range.cloneRange();
+            });
         },
         { signal },
+    );
+
+    signal.addEventListener(
+        "abort",
+        () => {
+            if (selectionFrameId !== 0) {
+                cancelAnimationFrame(selectionFrameId);
+                selectionFrameId = 0;
+            }
+            stopAutoScroll();
+        },
+        { once: true },
     );
 }
 
@@ -277,6 +429,7 @@ interface TextItemLike {
     str?: string;
     width?: number;
 }
+type PageTextContent = Awaited<ReturnType<PDFPageProxy["getTextContent"]>>;
 
 interface CanvasSizing {
     canvasWidth: number;
@@ -451,7 +604,7 @@ function calibrateWebKitTextLayerWidth(
     }
 
     if (allRatios.length < 24) {
-        if (import.meta.env.DEV) {
+        if (import.meta.env.DEV && DEBUG_WEBKIT_TEXT_LAYER) {
             console.debug("[PDF][TextLayer] WebKit font corrections skipped: insufficient samples", {
                 sampledPairs,
                 textDivs: textDivs.length,
@@ -463,7 +616,7 @@ function calibrateWebKitTextLayerWidth(
 
     const globalMedian = computeMedian(allRatios);
     if (!globalMedian) {
-        if (import.meta.env.DEV) {
+        if (import.meta.env.DEV && DEBUG_WEBKIT_TEXT_LAYER) {
             console.debug("[PDF][TextLayer] WebKit font corrections skipped: no global median", {
                 sampledPairs,
             });
@@ -492,7 +645,7 @@ function calibrateWebKitTextLayerWidth(
     }
 
     if (correctionsByFont.size === 0 && !globalCorrection) {
-        if (import.meta.env.DEV) {
+        if (import.meta.env.DEV && DEBUG_WEBKIT_TEXT_LAYER) {
             console.debug("[PDF][TextLayer] WebKit font corrections skipped: below threshold", {
                 sampledPairs,
                 globalMedian,
@@ -501,7 +654,7 @@ function calibrateWebKitTextLayerWidth(
         return;
     }
 
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && DEBUG_WEBKIT_TEXT_LAYER) {
         console.debug("[PDF][TextLayer] WebKit font corrections:", {
             sampledPairs,
             globalMedian,
@@ -575,6 +728,9 @@ const PageCanvas = memo(function PageCanvas({
     const textLayerRef = useRef<HTMLDivElement>(null);
     const renderTaskRef = useRef<ReturnType<PDFPageProxy["render"]> | null>(null);
     const textLayerInstanceRef = useRef<TextLayer | null>(null);
+    const cachedTextContentRef = useRef<PageTextContent | null>(null);
+    const lastCalibrationKeyRef = useRef<string>("");
+    const lastCanvasRenderKeyRef = useRef<string>("");
     const [shouldRender, setShouldRender] = useState(page.pageNumber <= 2);
     const [isRendering, setIsRendering] = useState(page.pageNumber <= 2);
     const shouldRenderAnnotationLayer = annotationMode !== "none" || annotations.length > 0;
@@ -669,8 +825,6 @@ const PageCanvas = memo(function PageCanvas({
                 textLayerInstanceRef.current = null;
             }
 
-            setIsRendering(true);
-
             try {
                 const viewport = page.getViewport({
                     scale: scale * PDF_TO_CSS_UNITS,
@@ -684,6 +838,19 @@ const PageCanvas = memo(function PageCanvas({
                     preferSharpCanvas,
                 );
                 const sizing = getCanvasSizing(cssWidth, cssHeight, outputScale);
+                const canvasRenderKey = [
+                    page.pageNumber,
+                    viewport.scale.toFixed(4),
+                    rotation,
+                    sizing.canvasWidth,
+                    sizing.canvasHeight,
+                ].join(":");
+                const shouldRenderCanvas = lastCanvasRenderKeyRef.current !== canvasRenderKey;
+
+                if (shouldRenderCanvas) {
+                    setIsRendering(true);
+                }
+
                 canvas.width = sizing.canvasWidth;
                 canvas.height = sizing.canvasHeight;
                 containerRef.current?.style.setProperty("--scale-factor", `${viewport.scale}`);
@@ -691,30 +858,32 @@ const PageCanvas = memo(function PageCanvas({
                 containerRef.current?.style.setProperty("--scale-round-y", `${sizing.scaleRoundY}px`);
                 canvas.style.width = `${cssWidth}px`;
                 canvas.style.height = `${cssHeight}px`;
-                const renderScaleX = sizing.renderScaleX;
-                const renderScaleY = sizing.renderScaleY;
 
-                const ctx = canvas.getContext("2d", {
-                    alpha: false,
-                });
+                if (shouldRenderCanvas) {
+                    const renderScaleX = sizing.renderScaleX;
+                    const renderScaleY = sizing.renderScaleY;
+                    const ctx = canvas.getContext("2d", {
+                        alpha: false,
+                    });
 
-                if (!ctx || cancelled) {
-                    return;
-                }
+                    if (!ctx || cancelled) {
+                        return;
+                    }
 
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                const renderTask = page.render({
-                    canvasContext: ctx,
-                    viewport,
-                    transform: [renderScaleX, 0, 0, renderScaleY, 0, 0],
-                });
+                    const renderTask = page.render({
+                        canvasContext: ctx,
+                        viewport,
+                        transform: [renderScaleX, 0, 0, renderScaleY, 0, 0],
+                    });
 
-                renderTaskRef.current = renderTask;
-
-                await renderTask.promise;
-                if (cancelled) {
-                    return;
+                    renderTaskRef.current = renderTask;
+                    await renderTask.promise;
+                    if (cancelled) {
+                        return;
+                    }
+                    lastCanvasRenderKeyRef.current = canvasRenderKey;
                 }
 
                 if (enableTextLayer && textLayerDiv) {
@@ -722,7 +891,7 @@ const PageCanvas = memo(function PageCanvas({
                     textLayerDiv.innerHTML = "";
                     textLayerDiv.tabIndex = 0;
                     if (textLayerDiv.dataset.textSelectionBound !== "1") {
-                        textLayerDiv.addEventListener("mousedown", () => {
+                        textLayerDiv.addEventListener("pointerdown", () => {
                             textLayerDiv.classList.add(TEXT_LAYER_SELECTING_CLASS);
                         });
                         textLayerDiv.addEventListener("copy", (event) => {
@@ -738,18 +907,22 @@ const PageCanvas = memo(function PageCanvas({
 
                     try {
                         let textItemsForCalibration: TextItemLike[] | null = null;
-                        const textContentSource = useStreamTextLayer
-                            ? page.streamTextContent({
-                                includeMarkedContent: true,
-                                disableNormalization: true,
-                            })
-                            : await page.getTextContent({
+                        let textContentSource: PageTextContent | ReturnType<PDFPageProxy["streamTextContent"]>;
+                        if (useStreamTextLayer) {
+                            textContentSource = page.streamTextContent({
                                 includeMarkedContent: true,
                                 disableNormalization: true,
                             });
-                        if (!useStreamTextLayer) {
+                        } else {
+                            if (!cachedTextContentRef.current) {
+                                cachedTextContentRef.current = await page.getTextContent({
+                                    includeMarkedContent: true,
+                                    disableNormalization: true,
+                                });
+                            }
+                            textContentSource = cachedTextContentRef.current;
                             textItemsForCalibration =
-                                (textContentSource as { items?: TextItemLike[] }).items ?? null;
+                                (textContentSource.items as unknown as TextItemLike[]) ?? null;
                         }
                         if (cancelled) {
                             return;
@@ -765,22 +938,26 @@ const PageCanvas = memo(function PageCanvas({
                         await textLayer.render();
 
                         if (calibrateTextLayerWidths && textItemsForCalibration) {
-                            const renderedSpans = textLayer.textDivs as unknown as HTMLSpanElement[];
-                            calibrateWebKitTextLayerWidth(
-                                renderedSpans,
-                                textItemsForCalibration,
-                                viewport.scale,
-                            );
-
-                            // A second pass after fonts/layout settle in WebKit reduces residual drift.
-                            await waitForNextFrame();
-                            await waitForNextFrame();
-                            if (!cancelled) {
+                            const calibrationKey = `${page.pageNumber}:${viewport.scale.toFixed(4)}:${rotation}`;
+                            if (lastCalibrationKeyRef.current !== calibrationKey) {
+                                const renderedSpans = textLayer.textDivs as unknown as HTMLSpanElement[];
                                 calibrateWebKitTextLayerWidth(
                                     renderedSpans,
                                     textItemsForCalibration,
                                     viewport.scale,
                                 );
+
+                                // A second pass after fonts/layout settle in WebKit reduces residual drift.
+                                await waitForNextFrame();
+                                await waitForNextFrame();
+                                if (!cancelled) {
+                                    calibrateWebKitTextLayerWidth(
+                                        renderedSpans,
+                                        textItemsForCalibration,
+                                        viewport.scale,
+                                    );
+                                }
+                                lastCalibrationKeyRef.current = calibrationKey;
                             }
                         }
 
@@ -1314,7 +1491,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         {pages.map((page) => {
                             const pageTextLayerEnabled = enableTextLayer && (
                                 isDesktopWebKit
-                                    ? page.pageNumber === currentPage
+                                    ? Math.abs(page.pageNumber - currentPage) <= WEBKIT_TEXT_LAYER_PAGE_WINDOW
                                     : Math.abs(page.pageNumber - currentPage) <= 1
                             );
 
@@ -1329,10 +1506,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                         scale={scale}
                                         rotation={rotation}
                                         enableTextLayer={pageTextLayerEnabled}
-                                        preferSharpCanvas={isDesktopWebKit && !pageTextLayerEnabled}
-                                        snapCssToPixels={isDesktopWebKit && !pageTextLayerEnabled}
+                                        preferSharpCanvas={isDesktopWebKit}
+                                        snapCssToPixels={isDesktopWebKit}
                                         useStreamTextLayer={useStreamTextLayer}
-                                        calibrateTextLayerWidths={isDesktopWebKit && pageTextLayerEnabled}
+                                        calibrateTextLayerWidths={isDesktopWebKit && page.pageNumber === currentPage}
                                         annotations={annotationsByPage.get(page.pageNumber) ?? EMPTY_ANNOTATIONS}
                                         annotationMode={annotationMode}
                                         onAnnotationAdd={onAnnotationAdd}

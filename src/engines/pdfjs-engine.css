@@ -86,6 +86,10 @@
     top: 0;
 }
 
+.textLayer.selecting {
+    touch-action: none;
+}
+
 [data-main-rotation="90"] {
     transform: rotate(90deg) translateY(-100%);
 }
