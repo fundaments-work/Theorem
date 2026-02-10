@@ -19,7 +19,9 @@ interface PDFAnnotationLayerProps {
     annotations: Annotation[];
     mode: "none" | "highlight" | "pen" | "text" | "erase";
     scale: number;
-    selectedColor: HighlightColor;
+    highlightColor: HighlightColor;
+    penColor: HighlightColor;
+    penWidth: number;
     onAnnotationAdd: (annotation: Partial<Annotation>) => void;
     onAnnotationChange?: (annotation: Annotation) => void;
     onAnnotationRemove: (id: string) => void;
@@ -101,7 +103,9 @@ export function PDFAnnotationLayer({
     annotations,
     mode,
     scale,
-    selectedColor,
+    highlightColor,
+    penColor,
+    penWidth,
     onAnnotationAdd,
     onAnnotationChange,
     onAnnotationRemove,
@@ -236,13 +240,13 @@ export function PDFAnnotationLayer({
         if (!context) {
             return;
         }
-        context.lineWidth = 2 * scale;
+        context.lineWidth = penWidth * scale;
         context.lineCap = "round";
         context.lineJoin = "round";
-        context.strokeStyle = PEN_COLORS[selectedColor];
+        context.strokeStyle = PEN_COLORS[penColor];
         context.lineTo(localPoint.x * scale, localPoint.y * scale);
         context.stroke();
-    }, [getLocalPoint, isDrawing, scale, selectedColor]);
+    }, [getLocalPoint, isDrawing, penColor, penWidth, scale]);
 
     const finishDrawing = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
         if (activePointerIdRef.current !== null && activePointerIdRef.current === event.pointerId) {
@@ -269,14 +273,14 @@ export function PDFAnnotationLayer({
                 pageNumber,
                 location: `pdf:page:${pageNumber}`,
                 selectedText: "Freehand annotation",
-                color: selectedColor,
-                strokeWidth: 2,
+                color: penColor,
+                strokeWidth: penWidth,
             });
         }
 
         currentPathRef.current = [];
         clearTempCanvas();
-    }, [clearTempCanvas, isDrawing, onAnnotationAdd, pageNumber, selectedColor]);
+    }, [clearTempCanvas, isDrawing, onAnnotationAdd, pageNumber, penColor, penWidth]);
 
     const openTextNoteEditor = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
         const localPoint = getLocalPoint(event);
@@ -333,7 +337,7 @@ export function PDFAnnotationLayer({
                 textNoteContent: trimmedText,
                 noteContent: trimmedText,
                 selectedText: trimmedText,
-                color: existingAnnotation.color || selectedColor,
+                color: existingAnnotation.color || penColor,
                 rect: baseRect,
                 updatedAt: new Date(),
             };
@@ -351,7 +355,7 @@ export function PDFAnnotationLayer({
                 selectedText: trimmedText,
                 pageNumber,
                 location: `pdf:page:${pageNumber}`,
-                color: selectedColor,
+                color: penColor,
                 rect: baseRect,
             });
         }
@@ -363,8 +367,8 @@ export function PDFAnnotationLayer({
         onAnnotationRemove,
         pageAnnotations,
         pageNumber,
+        penColor,
         scale,
-        selectedColor,
         textNoteEditor,
     ]);
 
@@ -464,12 +468,12 @@ export function PDFAnnotationLayer({
             pageNumber,
             location: `pdf:page:${pageNumber}`,
             selectedText,
-            color: selectedColor,
+            color: highlightColor,
             rects,
         });
 
         selection.removeAllRanges();
-    }, [mode, onAnnotationAdd, pageNumber, scale, selectedColor]);
+    }, [highlightColor, mode, onAnnotationAdd, pageNumber, scale]);
 
     useEffect(() => {
         if (mode !== "highlight") {
@@ -640,7 +644,7 @@ export function PDFAnnotationLayer({
                         .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x * scale} ${point.y * scale}`)
                         .join(" ");
                     const strokeWidth = (annotation.strokeWidth ?? 2) * scale;
-                    const strokeColor = PEN_COLORS[annotation.color || selectedColor];
+                    const strokeColor = PEN_COLORS[annotation.color || penColor];
 
                     return (
                         <svg key={annotation.id} className="absolute inset-0 w-full h-full pointer-events-none">
@@ -675,7 +679,7 @@ export function PDFAnnotationLayer({
                                 top: `${top}px`,
                                 width: `${iconSize}px`,
                                 height: `${iconSize}px`,
-                                backgroundColor: PEN_COLORS[annotation.color || selectedColor],
+                                backgroundColor: PEN_COLORS[annotation.color || penColor],
                                 color: "#ffffff",
                                 borderColor: "rgba(0,0,0,0.2)",
                                 pointerEvents: mode === "text" ? "auto" : "none",

@@ -50,7 +50,9 @@ export interface PDFJsEngineProps {
     // Annotations
     annotations?: Annotation[];
     annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
-    annotationColor?: HighlightColor;
+    highlightColor?: HighlightColor;
+    penColor?: HighlightColor;
+    penWidth?: number;
     onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
     onAnnotationChange?: (annotation: Annotation) => void;
     onAnnotationRemove?: (id: string) => void;
@@ -67,6 +69,7 @@ export interface PDFDocumentInfo {
     modificationDate?: Date;
     totalPages: number;
     filename: string;
+    hasOutline?: boolean;
     toc?: TocItem[];
 }
 
@@ -808,28 +811,9 @@ async function convertPdfOutlineItems(
     return converted;
 }
 
-function buildPdfPageFallbackToc(totalPages: number): TocItem[] {
-    if (totalPages <= 0) {
-        return [];
-    }
-    const step = totalPages <= 120 ? 1 : totalPages <= 300 ? 2 : totalPages <= 700 ? 5 : 10;
-    const tocItems: TocItem[] = [];
-    for (let page = 1; page <= totalPages; page += step) {
-        tocItems.push({
-            label: step === 1 ? `Page ${page}` : `Pages ${page}-${Math.min(totalPages, page + step - 1)}`,
-            href: `pdf:page:${page}`,
-        });
-    }
-    if (tocItems[tocItems.length - 1]?.href !== `pdf:page:${totalPages}`) {
-        tocItems.push({
-            label: `Page ${totalPages}`,
-            href: `pdf:page:${totalPages}`,
-        });
-    }
-    return tocItems;
-}
-
-async function buildPdfToc(pdfDocument: PDFDocumentProxy): Promise<TocItem[]> {
+async function buildPdfToc(
+    pdfDocument: PDFDocumentProxy,
+): Promise<{ tocItems: TocItem[]; hasOutline: boolean }> {
     try {
         const outline = await pdfDocument.getOutline();
         if (outline && outline.length > 0) {
@@ -840,13 +824,19 @@ async function buildPdfToc(pdfDocument: PDFDocumentProxy): Promise<TocItem[]> {
                 8,
             );
             if (convertedOutline.length > 0) {
-                return convertedOutline;
+                return {
+                    tocItems: convertedOutline,
+                    hasOutline: true,
+                };
             }
         }
     } catch (error) {
         console.warn("[PDFJsEngine] Failed to build PDF outline TOC:", error);
     }
-    return buildPdfPageFallbackToc(pdfDocument.numPages);
+    return {
+        tocItems: [],
+        hasOutline: false,
+    };
 }
 
 
@@ -858,7 +848,9 @@ interface PageCanvasProps {
     // Annotations
     annotations?: Annotation[];
     annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
-    annotationColor: HighlightColor;
+    highlightColor: HighlightColor;
+    penColor: HighlightColor;
+    penWidth: number;
     enableTextLayer: boolean;
     preferSharpCanvas: boolean;
     snapCssToPixels: boolean;
@@ -876,7 +868,9 @@ const PageCanvas = memo(function PageCanvas({
     onRenderComplete,
     annotations = [],
     annotationMode = "none",
-    annotationColor,
+    highlightColor,
+    penColor,
+    penWidth,
     enableTextLayer,
     preferSharpCanvas,
     snapCssToPixels,
@@ -1123,7 +1117,15 @@ const PageCanvas = memo(function PageCanvas({
                         textLayerDiv.append(endOfContent);
                         registerTextLayer(textLayerDiv, endOfContent);
                     } catch (textError) {
-                        console.warn("[PageCanvas] Text layer error:", textError);
+                        const isAbortError = textError instanceof Error
+                            && (
+                                textError.name === "AbortException"
+                                || textError.message.toLowerCase().includes("abort")
+                                || textError.message.toLowerCase().includes("cancel")
+                            );
+                        if (!isAbortError) {
+                            console.warn("[PageCanvas] Text layer error:", textError);
+                        }
                     }
                 }
 
@@ -1190,7 +1192,9 @@ const PageCanvas = memo(function PageCanvas({
                     annotations={annotations}
                     mode={annotationMode}
                     scale={scale}
-                    selectedColor={annotationColor}
+                    highlightColor={highlightColor}
+                    penColor={penColor}
+                    penWidth={penWidth}
                     onAnnotationAdd={(ann) => onAnnotationAdd?.(ann)}
                     onAnnotationChange={(annotation) => onAnnotationChange?.(annotation)}
                     onAnnotationRemove={(id) => onAnnotationRemove?.(id)}
@@ -1222,7 +1226,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         className,
         annotations = [],
         annotationMode = 'none',
-        annotationColor = "yellow",
+        highlightColor = "yellow",
+        penColor = "blue",
+        penWidth = 2,
         onAnnotationAdd,
         onAnnotationChange,
         onAnnotationRemove
@@ -1353,7 +1359,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     // Get metadata
                     const metadata = await pdf.getMetadata();
                     const metaInfo = metadata.info as Record<string, unknown>;
-                    const tocItems = await buildPdfToc(pdf);
+                    const { tocItems, hasOutline } = await buildPdfToc(pdf);
                     // Use original filename (without extension) as fallback for title
                     const displayFilename = originalFilename || pdfPath.split("/").pop()?.replace(/\.[^/.]+$/, "") || "document";
                     const info: PDFDocumentInfo = {
@@ -1367,10 +1373,18 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         modificationDate: metaInfo?.ModDate ? new Date(metaInfo.ModDate as string) : undefined,
                         totalPages: pdf.numPages,
                         filename: displayFilename,
+                        hasOutline,
                         toc: tocItems,
                     };
 
+                    const clampedInitialPage = Math.max(1, Math.min(initialPage, info.totalPages || 1));
+                    // Keep refs/state in sync before first callback so parent never receives 0 total pages.
+                    currentPageRef.current = clampedInitialPage;
+                    totalPagesRef.current = info.totalPages;
+                    scaleRef.current = DEFAULT_SCALE;
+                    setCurrentPage(clampedInitialPage);
                     setTotalPages(info.totalPages);
+                    setScale(DEFAULT_SCALE);
 
                     // Pre-load first few pages
                     const initialPages: PDFPageProxy[] = [];
@@ -1385,7 +1399,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         setIsLoading(false);
                         callbacksRef.current.onLoad?.(info);
                         // Also call onPageChange with initial page to update parent state
-                        callbacksRef.current.onPageChange?.(initialPage, info.totalPages, DEFAULT_SCALE);
+                        callbacksRef.current.onPageChange?.(clampedInitialPage, info.totalPages, DEFAULT_SCALE);
                     } else {
                         // Cleanup if cancelled
                         initialPages.forEach(p => p.cleanup());
@@ -1452,6 +1466,13 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
 
                 hasAppliedInitialFitRef.current = true;
                 applyZoom(nextScale);
+                if (totalPagesRef.current > 0) {
+                    callbacksRef.current.onPageChange?.(
+                        currentPageRef.current,
+                        totalPagesRef.current,
+                        nextScale,
+                    );
+                }
             });
 
             return () => {
@@ -1736,7 +1757,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                         calibrateTextLayerWidths={isDesktopWebKit && page.pageNumber === currentPage}
                                         annotations={annotationsByPage.get(page.pageNumber) ?? EMPTY_ANNOTATIONS}
                                         annotationMode={annotationMode}
-                                        annotationColor={annotationColor}
+                                        highlightColor={highlightColor}
+                                        penColor={penColor}
+                                        penWidth={penWidth}
                                         onAnnotationAdd={onAnnotationAdd}
                                         onAnnotationChange={onAnnotationChange}
                                         onAnnotationRemove={onAnnotationRemove}

@@ -42,7 +42,9 @@ interface PDFReaderProps {
     // Annotations
     annotations?: Annotation[];
     annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
-    annotationColor?: HighlightColor;
+    highlightColor?: HighlightColor;
+    penColor?: HighlightColor;
+    penWidth?: number;
     onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
     onAnnotationChange?: (annotation: Annotation) => void;
     onAnnotationRemove?: (id: string) => void;
@@ -152,7 +154,9 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             onError,
             annotations,
             annotationMode,
-            annotationColor = "yellow",
+            highlightColor = "yellow",
+            penColor = "blue",
+            penWidth = 2,
             onAnnotationAdd,
             onAnnotationChange,
             onAnnotationRemove
@@ -239,9 +243,12 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             (info: PDFDocumentInfo) => {
                 setIsLoading(false);
                 setTotalPages(info.totalPages);
+                const loadedScale = engineRef.current?.getZoom() ?? scale;
+                const loadedPage = engineRef.current?.getCurrentPage() ?? 1;
+                onPageChange?.(loadedPage, info.totalPages, loadedScale);
                 onLoad?.(info);
             },
-            [onLoad]
+            [onLoad, onPageChange, scale]
         );
 
         // Handle error from engine
@@ -289,7 +296,9 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                         onError={handleError}
                         annotations={annotations}
                         annotationMode={annotationMode}
-                        annotationColor={annotationColor}
+                        highlightColor={highlightColor}
+                        penColor={penColor}
+                        penWidth={penWidth}
                         onAnnotationAdd={onAnnotationAdd}
                         onAnnotationChange={onAnnotationChange}
                         onAnnotationRemove={onAnnotationRemove}

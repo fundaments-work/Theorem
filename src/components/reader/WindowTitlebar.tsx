@@ -56,7 +56,9 @@ interface WindowTitlebarProps {
         zoom: number;
         zoomMode?: 'custom' | 'page-fit' | 'width-fit';
         annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
-        annotationColor?: HighlightColor;
+        highlightColor?: HighlightColor;
+        penColor?: HighlightColor;
+        penWidth?: number;
         onPrevPage: () => void;
         onNextPage: () => void;
         onZoomIn: () => void;
@@ -68,7 +70,9 @@ interface WindowTitlebarProps {
         onPageInput?: (page: number) => void;
         onAddBookmark?: () => void;
         onAnnotationModeChange?: (mode: 'none' | 'highlight' | 'pen' | 'text' | 'erase') => void;
-        onAnnotationColorChange?: (color: HighlightColor) => void;
+        onHighlightColorChange?: (color: HighlightColor) => void;
+        onPenColorChange?: (color: HighlightColor) => void;
+        onPenWidthChange?: (width: number) => void;
         isCurrentPageBookmarked?: boolean;
     };
 }
@@ -97,6 +101,7 @@ const annotationColorSwatches: Array<{ color: HighlightColor; label: string; fil
     { color: "orange", label: "Orange", fill: "#f57c00" },
     { color: "purple", label: "Purple", fill: "#7b1fa2" },
 ];
+const BRUSH_WIDTH_OPTIONS = [1, 2, 4, 6];
 
 export function WindowTitlebar({
     metadata,
@@ -123,7 +128,9 @@ export function WindowTitlebar({
     const currentChapter = location?.tocItem?.label || location?.pageItem?.label;
 
     const isPdfMode = hideReaderControls && pdfControls;
-    const activeAnnotationColor = pdfControls?.annotationColor || "yellow";
+    const activeHighlightColor = pdfControls?.highlightColor || "yellow";
+    const activePenColor = pdfControls?.penColor || "blue";
+    const activePenWidth = pdfControls?.penWidth || 2;
 
     useEffect(() => {
         if (isPdfMode) {
@@ -479,7 +486,7 @@ export function WindowTitlebar({
                                 className="absolute -right-0.5 -bottom-0.5 w-2 h-2 rounded-full border border-black/20"
                                 style={{
                                     backgroundColor: annotationColorSwatches.find(
-                                        (swatch) => swatch.color === activeAnnotationColor,
+                                        (swatch) => swatch.color === activeHighlightColor,
                                     )?.fill || "#f4b400",
                                 }}
                             />
@@ -495,18 +502,18 @@ export function WindowTitlebar({
                                 <button
                                     key={swatch.color}
                                     onClick={() => {
-                                        pdfControls!.onAnnotationColorChange?.(swatch.color);
+                                        pdfControls!.onHighlightColorChange?.(swatch.color);
                                         pdfControls!.onAnnotationModeChange?.("highlight");
                                     }}
                                     className={cn(
                                         "w-3.5 h-3.5 rounded-full border transition-transform",
-                                        pdfControls!.annotationColor === swatch.color
+                                        activeHighlightColor === swatch.color
                                             ? "scale-110"
                                             : "hover:scale-110",
                                     )}
                                     style={{
                                         backgroundColor: swatch.fill,
-                                        borderColor: pdfControls!.annotationColor === swatch.color
+                                        borderColor: activeHighlightColor === swatch.color
                                             ? "rgba(0,0,0,0.45)"
                                             : "rgba(0,0,0,0.2)",
                                     }}
@@ -523,14 +530,91 @@ export function WindowTitlebar({
                             );
                         }}
                         className={cn(
-                            "p-1.5 rounded transition-opacity",
+                            "relative p-1.5 rounded transition-opacity",
                             pdfControls!.annotationMode === 'pen' ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
                         )}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Draw with pen"
                     >
                         <Pencil className="w-4 h-4" />
+                        <span
+                            className="absolute -right-0.5 -bottom-0.5 rounded-full border border-black/20"
+                            style={{
+                                width: `${Math.max(5, Math.min(9, 3 + activePenWidth))}px`,
+                                height: `${Math.max(5, Math.min(9, 3 + activePenWidth))}px`,
+                                backgroundColor: annotationColorSwatches.find(
+                                    (swatch) => swatch.color === activePenColor,
+                                )?.fill || "#1976d2",
+                            }}
+                        />
                     </button>
+
+                    {pdfControls!.annotationMode === "pen" && (
+                        <div
+                            className="flex items-center gap-1 px-1 py-0.5 rounded-md"
+                            style={{ backgroundColor: "color-mix(in srgb, var(--reader-fg, var(--color-text)) 8%, transparent)" }}
+                        >
+                            {annotationColorSwatches.map((swatch) => (
+                                <button
+                                    key={`pen-${swatch.color}`}
+                                    onClick={() => {
+                                        pdfControls!.onPenColorChange?.(swatch.color);
+                                        pdfControls!.onAnnotationModeChange?.("pen");
+                                    }}
+                                    className={cn(
+                                        "w-3.5 h-3.5 rounded-full border transition-transform",
+                                        activePenColor === swatch.color
+                                            ? "scale-110"
+                                            : "hover:scale-110",
+                                    )}
+                                    style={{
+                                        backgroundColor: swatch.fill,
+                                        borderColor: activePenColor === swatch.color
+                                            ? "rgba(0,0,0,0.45)"
+                                            : "rgba(0,0,0,0.2)",
+                                    }}
+                                    title={`${swatch.label} pen`}
+                                />
+                            ))}
+                            <div
+                                className="w-px h-3 mx-0.5"
+                                style={{ backgroundColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 22%, transparent)' }}
+                            />
+                            {BRUSH_WIDTH_OPTIONS.map((width) => (
+                                <button
+                                    key={`brush-width-${width}`}
+                                    onClick={() => {
+                                        pdfControls!.onPenWidthChange?.(width);
+                                        pdfControls!.onAnnotationModeChange?.("pen");
+                                    }}
+                                    className={cn(
+                                        "h-5 px-1.5 rounded border transition-colors",
+                                        activePenWidth === width
+                                            ? "opacity-100 bg-[var(--color-accent)]/20"
+                                            : "opacity-75 hover:opacity-100",
+                                    )}
+                                    style={{
+                                        borderColor: activePenWidth === width
+                                            ? "color-mix(in srgb, var(--reader-fg, var(--color-text)) 35%, transparent)"
+                                            : "color-mix(in srgb, var(--reader-fg, var(--color-text)) 18%, transparent)",
+                                        color: "var(--reader-fg)",
+                                    }}
+                                    title={`Brush width ${width}px`}
+                                >
+                                    <span
+                                        className="block rounded-full"
+                                        style={{
+                                            width: "10px",
+                                            height: `${Math.max(2, width)}px`,
+                                            backgroundColor: annotationColorSwatches.find(
+                                                (swatch) => swatch.color === activePenColor,
+                                            )?.fill || "#1976d2",
+                                        }}
+                                    />
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
                     <button
                         onClick={() => {

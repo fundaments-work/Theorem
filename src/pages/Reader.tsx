@@ -37,7 +37,10 @@ export function ReaderPage() {
     const [pdfZoom, setPdfZoom] = useState(1);
     const [pdfZoomMode, setPdfZoomMode] = useState<'custom' | 'page-fit' | 'width-fit'>('custom');
     const [pdfAnnotationMode, setPdfAnnotationMode] = useState<'none' | 'highlight' | 'pen' | 'text' | 'erase'>('none');
-    const [pdfAnnotationColor, setPdfAnnotationColor] = useState<HighlightColor>("yellow");
+    const [pdfHighlightColor, setPdfHighlightColor] = useState<HighlightColor>("yellow");
+    const [pdfBrushColor, setPdfBrushColor] = useState<HighlightColor>("blue");
+    const [pdfBrushWidth, setPdfBrushWidth] = useState(2);
+    const [pdfHasOutline, setPdfHasOutline] = useState(false);
 
     // Reading time tracking
     const readingStartTimeRef = useRef<number | null>(null);
@@ -93,7 +96,12 @@ export function ReaderPage() {
             language: '',
             publisher: '',
         });
-        setToc(info.toc || []);
+        setToc(Array.isArray(info.toc) ? info.toc : []);
+        setPdfHasOutline(Boolean(info.hasOutline ?? ((info.toc?.length || 0) > 0)));
+        // Ensure titlebar page indicator has total pages immediately on load.
+        setPdfCurrentPage((currentPage) => Math.max(1, currentPage));
+        setPdfTotalPages(Math.max(0, info.totalPages || 0));
+        setPdfZoom(1);
         setIsBookReady(true);
     }, [currentBookId, getBook]);
 
@@ -104,8 +112,13 @@ export function ReaderPage() {
 
     const handlePdfPageChange = useCallback((page: number, total: number, scale: number) => {
         // console.log('[PDF] Page changed:', page, 'of', total, 'zoom:', scale);
-        setPdfCurrentPage(page);
-        setPdfTotalPages(total);
+        setPdfCurrentPage(Math.max(1, page));
+        setPdfTotalPages((prevTotal) => {
+            if (total > 0) {
+                return total;
+            }
+            return prevTotal;
+        });
         setPdfZoom(scale);
     }, []);
 
@@ -136,6 +149,11 @@ export function ReaderPage() {
 
             setFile(null);
             setPdfData(null);
+            setPdfCurrentPage(1);
+            setPdfTotalPages(0);
+            setPdfZoom(1);
+            setPdfZoomMode('custom');
+            setPdfHasOutline(false);
             setMetadata(null);
             setToc([]);
             setLocation(null);
@@ -354,7 +372,7 @@ export function ReaderPage() {
 
     const handleReady = useCallback((meta: DocMetadata, tocItems: TocItem[]) => {
         setMetadata(meta);
-        setToc(tocItems);
+        setToc(Array.isArray(tocItems) ? tocItems : []);
         setIsBookReady(true);
         // Get section fractions from the reader after it's ready
         // Use a small delay to ensure the engine has processed the book
@@ -563,6 +581,22 @@ export function ReaderPage() {
 
         const annotationId = partialAnnotation.id || crypto.randomUUID();
         const pageNumber = partialAnnotation.pageNumber ?? pdfCurrentPage;
+        const annotationColor = partialAnnotation.color
+            || (
+                partialAnnotation.pdfAnnotationType === "highlight"
+                    || partialAnnotation.type === "highlight"
+                    ? pdfHighlightColor
+                    : partialAnnotation.pdfAnnotationType === "drawing"
+                        || partialAnnotation.pdfAnnotationType === "textNote"
+                        ? pdfBrushColor
+                        : undefined
+            );
+        const annotationStrokeWidth = partialAnnotation.strokeWidth
+            ?? (
+                partialAnnotation.pdfAnnotationType === "drawing"
+                    ? pdfBrushWidth
+                    : undefined
+            );
         const normalizedAnnotation: Annotation = {
             id: annotationId,
             bookId: currentBookId,
@@ -571,7 +605,7 @@ export function ReaderPage() {
             location: partialAnnotation.location || `pdf:page:${pageNumber}`,
             selectedText: partialAnnotation.selectedText,
             noteContent: partialAnnotation.noteContent,
-            color: partialAnnotation.color || pdfAnnotationColor,
+            color: annotationColor,
             createdAt: partialAnnotation.createdAt ? new Date(partialAnnotation.createdAt) : new Date(),
             updatedAt: partialAnnotation.updatedAt ? new Date(partialAnnotation.updatedAt) : undefined,
             pageNumber,
@@ -580,7 +614,7 @@ export function ReaderPage() {
             textNoteContent: partialAnnotation.textNoteContent,
             rect: partialAnnotation.rect,
             rects: partialAnnotation.rects,
-            strokeWidth: partialAnnotation.strokeWidth,
+            strokeWidth: annotationStrokeWidth,
         };
 
         const existingAnnotation = getBookAnnotations(currentBookId).find((annotation) => annotation.id === annotationId);
@@ -610,8 +644,10 @@ export function ReaderPage() {
         addAnnotation,
         currentBookId,
         getBookAnnotations,
-        pdfAnnotationColor,
+        pdfBrushColor,
+        pdfBrushWidth,
         pdfCurrentPage,
+        pdfHighlightColor,
         updateAnnotation,
     ]);
 
@@ -1191,7 +1227,9 @@ export function ReaderPage() {
                         zoom: pdfZoom,
                         zoomMode: pdfZoomMode,
                         annotationMode: pdfAnnotationMode,
-                        annotationColor: pdfAnnotationColor,
+                        highlightColor: pdfHighlightColor,
+                        penColor: pdfBrushColor,
+                        penWidth: pdfBrushWidth,
                         onPrevPage: () => pdfReaderRef.current?.prevPage(),
                         onNextPage: () => pdfReaderRef.current?.nextPage(),
                         onZoomIn: handlePdfZoomIn,
@@ -1203,7 +1241,9 @@ export function ReaderPage() {
                         onPageInput: (page: number) => pdfReaderRef.current?.goToPage(page),
                         onAddBookmark: handlePdfAddBookmark,
                         onAnnotationModeChange: setPdfAnnotationMode,
-                        onAnnotationColorChange: setPdfAnnotationColor,
+                        onHighlightColorChange: setPdfHighlightColor,
+                        onPenColorChange: setPdfBrushColor,
+                        onPenWidthChange: setPdfBrushWidth,
                         isCurrentPageBookmarked: isPdfPageBookmarked,
                     } : undefined}
                 />
@@ -1223,7 +1263,9 @@ export function ReaderPage() {
                         onError={handlePdfError}
                         annotations={annotations}
                         annotationMode={pdfAnnotationMode}
-                        annotationColor={pdfAnnotationColor}
+                        highlightColor={pdfHighlightColor}
+                        penColor={pdfBrushColor}
+                        penWidth={pdfBrushWidth}
                         onAnnotationAdd={handlePdfAnnotationAdd}
                         onAnnotationChange={handlePdfAnnotationChange}
                         onAnnotationRemove={handlePdfAnnotationRemove}
@@ -1264,6 +1306,8 @@ export function ReaderPage() {
                 onClose={() => setActivePanel(null)}
                 onNavigate={goTo}
                 currentHref={isPdfFormat ? `pdf:page:${pdfCurrentPage}` : location?.tocItem?.href}
+                isPdf={isPdfFormat}
+                pdfHasOutline={pdfHasOutline}
             />
 
             <ReaderAnnotationsPanel
