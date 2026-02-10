@@ -97,7 +97,7 @@ const MAX_ZOOM = 5.0;
 const ZOOM_STEP = 0.25;
 const DEFAULT_SCALE = 1.0;
 const PDF_TO_CSS_UNITS = pdfjsLib.PixelsPerInch?.PDF_TO_CSS_UNITS ?? (96 / 72);
-const PAGE_PRERENDER_MARGIN = "200% 0px";
+const PAGE_PRERENDER_MARGIN = "300% 0px";
 const PAGE_LOAD_BATCH_SIZE = 5;
 const WEBKIT_MIN_OUTPUT_SCALE = 2;
 const MAX_CANVAS_PIXEL_COUNT = 18_000_000;
@@ -729,10 +729,10 @@ const PageCanvas = memo(function PageCanvas({
     const renderTaskRef = useRef<ReturnType<PDFPageProxy["render"]> | null>(null);
     const textLayerInstanceRef = useRef<TextLayer | null>(null);
     const cachedTextContentRef = useRef<PageTextContent | null>(null);
-    const lastCalibrationKeyRef = useRef<string>("");
     const lastCanvasRenderKeyRef = useRef<string>("");
-    const [shouldRender, setShouldRender] = useState(page.pageNumber <= 2);
-    const [isRendering, setIsRendering] = useState(page.pageNumber <= 2);
+    const hasRenderedCanvasRef = useRef(false);
+    const [shouldRender, setShouldRender] = useState(page.pageNumber <= 3);
+    const [isRendering, setIsRendering] = useState(page.pageNumber <= 3);
     const shouldRenderAnnotationLayer = annotationMode !== "none" || annotations.length > 0;
 
     useEffect(() => {
@@ -845,14 +845,13 @@ const PageCanvas = memo(function PageCanvas({
                     sizing.canvasWidth,
                     sizing.canvasHeight,
                 ].join(":");
-                const shouldRenderCanvas = lastCanvasRenderKeyRef.current !== canvasRenderKey;
+                const shouldRenderCanvas =
+                    !hasRenderedCanvasRef.current || lastCanvasRenderKeyRef.current !== canvasRenderKey;
 
                 if (shouldRenderCanvas) {
                     setIsRendering(true);
                 }
 
-                canvas.width = sizing.canvasWidth;
-                canvas.height = sizing.canvasHeight;
                 containerRef.current?.style.setProperty("--scale-factor", `${viewport.scale}`);
                 containerRef.current?.style.setProperty("--scale-round-x", `${sizing.scaleRoundX}px`);
                 containerRef.current?.style.setProperty("--scale-round-y", `${sizing.scaleRoundY}px`);
@@ -860,6 +859,9 @@ const PageCanvas = memo(function PageCanvas({
                 canvas.style.height = `${cssHeight}px`;
 
                 if (shouldRenderCanvas) {
+                    canvas.width = sizing.canvasWidth;
+                    canvas.height = sizing.canvasHeight;
+
                     const renderScaleX = sizing.renderScaleX;
                     const renderScaleY = sizing.renderScaleY;
                     const ctx = canvas.getContext("2d", {
@@ -883,6 +885,7 @@ const PageCanvas = memo(function PageCanvas({
                     if (cancelled) {
                         return;
                     }
+                    hasRenderedCanvasRef.current = true;
                     lastCanvasRenderKeyRef.current = canvasRenderKey;
                 }
 
@@ -938,26 +941,22 @@ const PageCanvas = memo(function PageCanvas({
                         await textLayer.render();
 
                         if (calibrateTextLayerWidths && textItemsForCalibration) {
-                            const calibrationKey = `${page.pageNumber}:${viewport.scale.toFixed(4)}:${rotation}`;
-                            if (lastCalibrationKeyRef.current !== calibrationKey) {
-                                const renderedSpans = textLayer.textDivs as unknown as HTMLSpanElement[];
+                            const renderedSpans = textLayer.textDivs as unknown as HTMLSpanElement[];
+                            calibrateWebKitTextLayerWidth(
+                                renderedSpans,
+                                textItemsForCalibration,
+                                viewport.scale,
+                            );
+
+                            // A second pass after fonts/layout settle in WebKit reduces residual drift.
+                            await waitForNextFrame();
+                            await waitForNextFrame();
+                            if (!cancelled) {
                                 calibrateWebKitTextLayerWidth(
                                     renderedSpans,
                                     textItemsForCalibration,
                                     viewport.scale,
                                 );
-
-                                // A second pass after fonts/layout settle in WebKit reduces residual drift.
-                                await waitForNextFrame();
-                                await waitForNextFrame();
-                                if (!cancelled) {
-                                    calibrateWebKitTextLayerWidth(
-                                        renderedSpans,
-                                        textItemsForCalibration,
-                                        viewport.scale,
-                                    );
-                                }
-                                lastCalibrationKeyRef.current = calibrationKey;
                             }
                         }
 
@@ -981,6 +980,9 @@ const PageCanvas = memo(function PageCanvas({
                 if (!isCancelled) {
                     console.error(error);
                 }
+                if (!cancelled) {
+                    setIsRendering(false);
+                }
             }
         };
 
@@ -988,6 +990,7 @@ const PageCanvas = memo(function PageCanvas({
 
         return () => {
             cancelled = true;
+            setIsRendering(false);
             if (renderTaskRef.current) {
                 try {
                     renderTaskRef.current.cancel();
