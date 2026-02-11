@@ -123,8 +123,8 @@ export function NoteEditor({
                 "fixed z-[100] animate-fade-in",
                 "bg-[var(--color-surface)]",
                 "border border-[var(--color-border)]",
-                "rounded-lg shadow-lg",
-                "p-4 w-[320px]"
+                "rounded-lg shadow-[var(--shadow-md)]",
+                "p-4 w-[var(--layout-note-editor-width)]"
             )}
             style={{
                 left: adjustedPosition.x,
@@ -163,7 +163,7 @@ export function NoteEditor({
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Add your note..."
                 className={cn(
-                    "w-full min-h-[80px] max-h-[200px]",
+                    "w-full min-h-[var(--layout-note-editor-min-height)] max-h-[var(--layout-note-editor-max-height)]",
                     "px-3 py-2 text-sm",
                     "bg-[var(--color-background)]",
                     "border border-[var(--color-border)]",
@@ -187,7 +187,7 @@ export function NoteEditor({
                         "px-3 py-1.5 text-xs font-medium",
                         "rounded-md",
                         "bg-[var(--color-accent)]",
-                        "text-[var(--color-surface)]",
+                        "text-[var(--color-accent-contrast)]",
                         "hover:opacity-90",
                         "transition-opacity"
                     )}

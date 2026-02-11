@@ -35,7 +35,7 @@ const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
 function EmptyShelves({ onCreate }: { onCreate: () => void }) {
     return (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-[var(--color-border-subtle)] flex items-center justify-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <FolderOpen className="w-6 h-6 text-[var(--color-text-secondary)]" />
             </div>
             <h2 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">
@@ -48,7 +48,7 @@ function EmptyShelves({ onCreate }: { onCreate: () => void }) {
                 onClick={onCreate}
                 className={cn(
                     "flex items-center gap-2 px-6 py-2.5 rounded-full",
-                    "bg-[var(--color-accent)] text-white text-sm font-medium",
+                    "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
                     "hover:opacity-90 transition-opacity"
                 )}
             >
@@ -63,7 +63,7 @@ function EmptyShelves({ onCreate }: { onCreate: () => void }) {
 function EmptyShelfDetail({ shelfName, onAddBooks }: { shelfName: string; onAddBooks: () => void }) {
     return (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-[var(--color-border-subtle)] flex items-center justify-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <BookOpen className="w-6 h-6 text-[var(--color-text-secondary)]" />
             </div>
             <h2 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">
@@ -76,7 +76,7 @@ function EmptyShelfDetail({ shelfName, onAddBooks }: { shelfName: string; onAddB
                 onClick={onAddBooks}
                 className={cn(
                     "flex items-center gap-2 px-6 py-2.5 rounded-full",
-                    "bg-[var(--color-accent)] text-white text-sm font-medium",
+                    "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
                     "hover:opacity-90 transition-opacity"
                 )}
             >
@@ -107,7 +107,7 @@ function BookCard({
                     onClick={() => onOpenBook(book)}
                     className="block w-full text-left"
                 >
-                    <div className="relative aspect-[2/3] bg-[var(--color-border-subtle)] mb-3 overflow-hidden rounded-lg border border-[var(--color-border)] transition-all duration-200 group-hover:shadow-lg">
+                    <div className="relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden rounded-lg border border-[var(--color-border)] transition-all duration-200 group-hover:shadow-lg">
                         {book.coverPath ? (
                             <img
                                 src={book.coverPath}
@@ -123,7 +123,7 @@ function BookCard({
 
                         {/* Progress Bar */}
                         {book.progress > 0 && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
                                 <div
                                     className="h-full bg-[var(--color-accent)]"
                                     style={{ width: `${book.progress * 100}%` }}
@@ -144,7 +144,7 @@ function BookCard({
                         e.stopPropagation();
                         await onRemoveFromShelf(book.id);
                     }}
-                    className="absolute top-2 right-2 p-1.5 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                    className="absolute top-2 right-2 p-1.5 rounded-md bg-[var(--color-overlay-strong)] text-[var(--color-text-inverse)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--color-overlay-strong-hover)]"
                     title="Remove from shelf"
                 >
                     <X className="w-3.5 h-3.5" />
@@ -156,7 +156,7 @@ function BookCard({
     // List view
     if (viewMode === "list") {
         return (
-            <div className="group flex items-center gap-4 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-text-muted)] transition-colors">
+            <div className="group flex items-center gap-4 p-3 ui-surface hover:border-[var(--color-text-muted)] transition-colors">
                 <button
                     onClick={() => onOpenBook(book)}
                     className="flex-shrink-0"
@@ -169,7 +169,7 @@ function BookCard({
                             loading="lazy"
                         />
                     ) : (
-                        <div className="w-12 h-16 bg-[var(--color-border-subtle)] rounded flex items-center justify-center">
+                        <div className="w-12 h-16 bg-[var(--color-surface-muted)] rounded flex items-center justify-center">
                             <BookOpen className="w-5 h-5 text-[var(--color-text-muted)]" />
                         </div>
                     )}
@@ -189,7 +189,7 @@ function BookCard({
                         e.stopPropagation();
                         await onRemoveFromShelf(book.id);
                     }}
-                    className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-error)] opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-error)] opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Remove from shelf"
                 >
                     <X className="w-4 h-4" />
@@ -203,7 +203,7 @@ function BookCard({
         <div className="group relative">
             <button
                 onClick={() => onOpenBook(book)}
-                className="block w-full relative aspect-[2/3] bg-[var(--color-border-subtle)] overflow-hidden rounded-lg border border-[var(--color-border)] hover:shadow-lg transition-all duration-200"
+                className="block w-full relative aspect-[2/3] bg-[var(--color-surface-muted)] overflow-hidden rounded-lg border border-[var(--color-border)] hover:shadow-lg transition-all duration-200"
             >
                 {book.coverPath ? (
                     <img
@@ -213,14 +213,14 @@ function BookCard({
                         loading="lazy"
                     />
                 ) : (
-                    <div className="book-cover-placeholder w-full h-full text-[10px] p-2 flex items-center justify-center">
+                    <div className="book-cover-placeholder w-full h-full text-[var(--font-size-3xs)] p-2 flex items-center justify-center">
                         <span className="line-clamp-3 text-center">{book.title}</span>
                     </div>
                 )}
 
                 {/* Progress Bar */}
                 {book.progress > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
                         <div
                             className="h-full bg-[var(--color-accent)]"
                             style={{ width: `${book.progress * 100}%` }}
@@ -234,7 +234,7 @@ function BookCard({
                     e.stopPropagation();
                     await onRemoveFromShelf(book.id);
                 }}
-                className="absolute top-1 right-1 p-1 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                className="absolute top-1 right-1 p-1 rounded-md bg-[var(--color-overlay-strong)] text-[var(--color-text-inverse)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--color-overlay-strong-hover)]"
                 title="Remove from shelf"
             >
                 <X className="w-3 h-3" />
@@ -258,10 +258,10 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
     const displayBooks = books.slice(0, 4);
 
     return (
-        <div className="group relative bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl hover:border-[var(--color-text-muted)] transition-colors">
+        <div className="group relative ui-card hover:border-[var(--color-text-muted)] transition-colors">
             {/* Cover Grid Preview */}
             <button onClick={onClick} className="block w-full">
-                <div className="aspect-[16/10] bg-[var(--color-border-subtle)] p-4">
+                <div className="aspect-[16/10] bg-[var(--color-surface-muted)] p-4">
                     {displayBooks.length > 0 ? (
                         <div className="grid grid-cols-2 gap-2 h-full">
                             {displayBooks.map((book, i) => (
@@ -334,7 +334,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                                 e.stopPropagation();
                                 setShowMenu(!showMenu);
                             }}
-                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         >
                             <MoreVertical className="w-4 h-4" />
                         </button>
@@ -344,13 +344,13 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                                     className="fixed inset-0 z-10"
                                     onClick={() => setShowMenu(false)}
                                 />
-                                <div className="absolute right-0 top-full mt-1 w-36 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg z-20 py-1">
+                                <div className="absolute right-0 top-full mt-1 w-36 ui-surface shadow-lg z-20 py-1">
                                     <button
                                         onClick={() => {
                                             onEdit();
                                             setShowMenu(false);
                                         }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-border-subtle)]"
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
                                     >
                                         <Edit3 className="w-4 h-4" />
                                         Edit
@@ -360,7 +360,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                                             onDelete();
                                             setShowMenu(false);
                                         }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-error)] hover:bg-[var(--color-border-subtle)]"
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-error)] hover:bg-[var(--color-surface-muted)]"
                                     >
                                         <Trash2 className="w-4 h-4" />
                                         Delete
@@ -439,7 +439,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                 <div className="flex items-center gap-4">
                     <button
                         onClick={onBack}
-                        className="p-2 rounded-lg text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)] transition-colors"
+                        className="p-2 rounded-lg text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
@@ -454,7 +454,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                         {getShelfInitials(shelf.name)}
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
+                        <h1 className="ui-page-title">
                             {shelf.name}
                         </h1>
                         <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
@@ -470,7 +470,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                         "flex items-center justify-center w-10 h-10 rounded-lg",
                         "border border-[var(--color-border)] bg-[var(--color-surface)]",
                         "text-[var(--color-text-secondary)]",
-                        "hover:bg-[var(--color-border-subtle)] transition-colors"
+                        "hover:bg-[var(--color-surface-muted)] transition-colors"
                     )}
                     title={`View: ${viewMode}`}
                 >
@@ -597,7 +597,7 @@ export function ShelvesPage() {
         const shelf = collections.find((s) => s.id === selectedShelfId);
         if (shelf) {
             return (
-                <div className="p-8 max-w-7xl mx-auto min-h-screen">
+                <div className="ui-page">
                     <ShelfDetail shelf={shelf} onBack={() => setSelectedShelfId(null)} />
                 </div>
             );
@@ -607,21 +607,21 @@ export function ShelvesPage() {
     // Show shelves list
     if (collections.length === 0) {
         return (
-            <div className="p-8 max-w-7xl mx-auto min-h-screen">
+            <div className="ui-page">
                 <EmptyShelves onCreate={handleCreateShelf} />
             </div>
         );
     }
 
     return (
-        <div className="p-8 max-w-7xl mx-auto animate-fade-in min-h-screen">
+        <div className="ui-page animate-fade-in">
             {/* Header */}
             <div className="flex items-center justify-between mb-10">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
+                    <h1 className="ui-page-title">
                         Shelves
                     </h1>
-                    <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                    <p className="ui-page-subtitle">
                         {collections.length} {collections.length === 1 ? "shelf" : "shelves"} •{" "}
                         {collections.reduce((acc, s) => acc + getActualBookCount(s.bookIds), 0)} books
                     </p>
@@ -631,7 +631,7 @@ export function ShelvesPage() {
                     onClick={handleCreateShelf}
                     className={cn(
                         "flex items-center gap-2 px-4 py-2.5 rounded-lg",
-                        "bg-[var(--color-accent)] text-white text-sm font-medium",
+                        "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
                         "hover:opacity-90 transition-opacity"
                     )}
                 >

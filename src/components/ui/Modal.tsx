@@ -12,10 +12,10 @@ export interface ModalProps {
 }
 
 const sizeClasses = {
-    sm: "max-w-md",    // 448px → ~28rem
-    md: "max-w-xl",    // 576px → ~36rem  
-    lg: "max-w-2xl",   // 672px → ~42rem
-    xl: "max-w-4xl",   // 896px → ~56rem
+    sm: "max-w-md min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-sm))]",
+    md: "max-w-xl min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-md))]",
+    lg: "max-w-2xl min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-lg))]",
+    xl: "max-w-4xl min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-xl))]",
 };
 
 /**
@@ -67,8 +67,8 @@ export function Modal({
         <div
             ref={overlayRef}
             className={cn(
-                "fixed inset-0 z-[1000] flex items-center justify-center p-4",
-                "bg-black/50 backdrop-blur-sm",
+                "fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4",
+                "bg-[var(--color-overlay-strong)]",
                 "animate-fade-in"
             )}
             onClick={(e) => {
@@ -79,16 +79,13 @@ export function Modal({
         >
             <div
                 className={cn(
-                    "bg-[var(--color-surface)] rounded-xl shadow-2xl",
-                    "flex flex-col max-h-[90vh]",
+                    "ui-card bg-[var(--color-surface)] rounded-xl shadow-[var(--shadow-lg)]",
+                    "flex flex-col max-h-[var(--layout-modal-max-height)]",
                     "overflow-hidden",
                     "w-full",
                     sizeClasses[size],
                     className
                 )}
-                style={{
-                    minWidth: size === "sm" ? "400px" : size === "md" ? "500px" : size === "lg" ? "600px" : "700px"
-                }}
                 onClick={(e) => e.stopPropagation()}
             >
                 {children}
@@ -113,7 +110,7 @@ export function ModalHeader({ title, onClose, showCloseButton = true }: ModalHea
             {showCloseButton && onClose && (
                 <button
                     onClick={onClose}
-                    className="p-1 rounded-lg hover:bg-[var(--color-border-subtle)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
+                    className="ui-icon-btn w-8 h-8 rounded-lg text-[var(--color-text-muted)]"
                     aria-label="Close"
                 >
                     <svg

@@ -32,96 +32,35 @@ export class ErrorBoundary extends Component<Props, State> {
     render() {
         if (this.state.hasError) {
             return (
-                <div style={{ 
-                    minHeight: "100vh", 
-                    display: "flex", 
-                    alignItems: "center", 
-                    justifyContent: "center",
-                    backgroundColor: "#f3f4f6",
-                    padding: "2rem",
-                    fontFamily: "system-ui, -apple-system, sans-serif"
-                }}>
-                    <div style={{
-                        maxWidth: "800px",
-                        width: "100%",
-                        backgroundColor: "white",
-                        borderRadius: "12px",
-                        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
-                        padding: "2rem"
-                    }}>
-                        <h1 style={{ 
-                            fontSize: "1.5rem", 
-                            fontWeight: "bold", 
-                            color: "#dc2626",
-                            marginBottom: "1rem"
-                        }}>
-                            ⚠️ Something went wrong
+                <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)] p-8">
+                    <div className="ui-card w-full max-w-4xl p-8">
+                        <h1 className="text-2xl font-bold text-[var(--color-error)] mb-4">
+                            Application Error
                         </h1>
-                        <p style={{ color: "#4b5563", marginBottom: "1rem" }}>
+                        <p className="text-[var(--color-text-secondary)] mb-4">
                             The application encountered an unexpected error.
                         </p>
-                        <div style={{ 
-                            backgroundColor: "#fee2e2",
-                            border: "1px solid #fecaca",
-                            borderRadius: "8px",
-                            padding: "1rem",
-                            marginBottom: "1rem",
-                            overflow: "auto"
-                        }}>
-                            <p style={{ 
-                                fontFamily: "monospace", 
-                                fontSize: "0.875rem",
-                                color: "#991b1b",
-                                whiteSpace: "pre-wrap",
-                                wordBreak: "break-word"
-                            }}>
+                        <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-error)_26%,var(--color-border))] bg-[color-mix(in_srgb,var(--color-error)_8%,var(--color-surface))] p-4 mb-4 overflow-auto">
+                            <p className="font-mono text-sm text-[var(--color-error)] whitespace-pre-wrap break-words">
                                 <strong>Error:</strong> {this.state.error?.message}
                             </p>
                         </div>
                         {this.state.error?.stack && (
-                            <pre style={{
-                                backgroundColor: "#1f2937",
-                                color: "#f87171",
-                                padding: "1rem",
-                                borderRadius: "8px",
-                                overflow: "auto",
-                                fontSize: "0.75rem",
-                                maxHeight: "300px",
-                                marginBottom: "1rem"
-                            }}>
+                            <pre className="rounded-lg bg-[var(--color-surface-muted)] text-[var(--color-error)] p-4 overflow-auto text-xs max-h-[var(--layout-error-stack-max-height)] mb-4">
                                 {this.state.error.stack}
                             </pre>
                         )}
                         {this.state.errorInfo?.componentStack && (
-                            <div style={{ marginBottom: "1rem" }}>
-                                <p style={{ fontWeight: "bold", marginBottom: "0.5rem" }}>Component Stack:</p>
-                                <pre style={{
-                                    backgroundColor: "#374151",
-                                    color: "#fbbf24",
-                                    padding: "1rem",
-                                    borderRadius: "8px",
-                                    overflow: "auto",
-                                    fontSize: "0.75rem",
-                                    maxHeight: "200px"
-                                }}>
+                            <div className="mb-4">
+                                <p className="font-semibold mb-2 text-[var(--color-text-primary)]">Component Stack:</p>
+                                <pre className="rounded-lg bg-[var(--color-surface-muted)] text-[var(--color-warning)] p-4 overflow-auto text-xs max-h-[var(--layout-error-component-stack-max-height)]">
                                     {this.state.errorInfo.componentStack}
                                 </pre>
                             </div>
                         )}
                         <button
                             onClick={() => window.location.reload()}
-                            style={{
-                                padding: "0.75rem 1.5rem",
-                                backgroundColor: "#2563eb",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "8px",
-                                cursor: "pointer",
-                                fontSize: "1rem",
-                                fontWeight: "500"
-                            }}
-                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#1d4ed8"}
-                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#2563eb"}
+                            className="ui-btn ui-btn-primary"
                         >
                             Reload Page
                         </button>

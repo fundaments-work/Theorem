@@ -23,7 +23,7 @@ import {
 function EmptyBookmarks() {
     return (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-[var(--color-border-subtle)] flex items-center justify-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <Bookmark className="w-6 h-6 text-[var(--color-text-secondary)]" />
             </div>
             <h2 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">
@@ -61,7 +61,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
         return (
             <div 
                 onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
-                className="group flex items-center gap-4 p-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-text-muted)] transition-colors cursor-pointer"
+                className="group flex items-center gap-4 p-4 ui-surface hover:border-[var(--color-text-muted)] transition-colors cursor-pointer"
             >
                 {/* Cover */}
                 <div className="flex-shrink-0">
@@ -72,7 +72,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                             className="w-10 h-14 object-cover rounded shadow-sm"
                         />
                     ) : (
-                        <div className="w-10 h-14 bg-[var(--color-border-subtle)] rounded flex items-center justify-center">
+                        <div className="w-10 h-14 bg-[var(--color-surface-muted)] rounded flex items-center justify-center">
                             <BookOpen className="w-4 h-4 text-[var(--color-text-muted)]" />
                         </div>
                     )}
@@ -101,7 +101,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                             e.stopPropagation();
                             book && onGoToBookmark(bookmark.bookId, bookmark.location);
                         }}
-                        className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]"
+                        className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text-primary)]"
                         title="Go to bookmark"
                     >
                         <ExternalLink className="w-4 h-4" />
@@ -111,7 +111,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                             e.stopPropagation();
                             await onDelete(bookmark.id);
                         }}
-                        className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-error)]"
+                        className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-error)]"
                         title="Delete bookmark"
                     >
                         <Trash2 className="w-4 h-4" />
@@ -122,11 +122,11 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
     }
 
     return (
-        <div className="group bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+        <div className="group ui-surface overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
             {/* Book Cover Section */}
             <div
                 onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
-                className="block w-full aspect-[3/2] bg-[var(--color-border-subtle)] relative overflow-hidden cursor-pointer"
+                className="block w-full aspect-[3/2] bg-[var(--color-surface-muted)] relative overflow-hidden cursor-pointer"
             >
                 {book?.coverPath ? (
                     <>
@@ -135,12 +135,12 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                             alt={book.title}
                             className="w-full h-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-overlay-strong)] to-transparent" />
                         <div className="absolute bottom-3 left-3 right-3">
-                            <h3 className="font-medium text-sm text-white line-clamp-1">
+                            <h3 className="font-medium text-sm text-[var(--color-text-inverse)] line-clamp-1">
                                 {book?.title || "Unknown Book"}
                             </h3>
-                            <p className="text-xs text-white/80 line-clamp-1">
+                            <p className="text-xs text-[var(--color-text-inverse)] opacity-80 line-clamp-1">
                                 {book?.author || "Unknown Author"}
                             </p>
                         </div>
@@ -157,7 +157,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                 {/* Bookmark Icon */}
                 <div className="absolute top-3 right-3">
                     <div className="w-8 h-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center">
-                        <Bookmark className="w-4 h-4 text-white fill-white" />
+                        <Bookmark className="w-4 h-4 text-[var(--color-text-inverse)] fill-[var(--color-text-inverse)]" />
                     </div>
                 </div>
             </div>
@@ -177,14 +177,14 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                             onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
-                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)]"
+                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"
                             title="Go to bookmark"
                         >
                             <ExternalLink className="w-4 h-4" />
                         </button>
                         <button
                             onClick={async () => await onDelete(bookmark.id)}
-                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-error)]"
+                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-error)]"
                             title="Delete bookmark"
                         >
                             <Trash2 className="w-4 h-4" />
@@ -270,14 +270,14 @@ export function BookmarksPage() {
     }
 
     return (
-        <div className="p-8 max-w-7xl mx-auto animate-fade-in min-h-screen">
+        <div className="ui-page animate-fade-in">
             {/* Header */}
             <div className="flex items-start justify-between mb-10">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
+                    <h1 className="ui-page-title">
                         Bookmarks
                     </h1>
-                    <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                    <p className="ui-page-subtitle">
                         {filteredBookmarks.length} {filteredBookmarks.length === 1 ? "bookmark" : "bookmarks"} across{" "}
                         {new Set(filteredBookmarks.map((b) => b.bookId)).size} books
                     </p>
@@ -298,7 +298,7 @@ export function BookmarksPage() {
                 />
 
                 {/* View Mode Toggle */}
-                <div className="flex items-center bg-[var(--color-border-subtle)] rounded-lg p-1">
+                <div className="flex items-center bg-[var(--color-surface-muted)] rounded-lg p-1">
                     <button
                         onClick={() => setViewMode("grid")}
                         className={cn(

@@ -5,22 +5,22 @@
  */
 
 :root {
-    --light-bg: #ffffff;
-    --light-fg: #000000;
-    --dark-bg: #222222;
-    --dark-fg: #e0e0e0;
-    --hover: rgba(0, 0, 0, 0.03);
-    --active: rgba(0, 0, 0, 0.05);
-    --border: rgba(0, 0, 0, 0.15);
+    --light-bg: var(--reader-bg);
+    --light-fg: var(--reader-fg);
+    --dark-bg: var(--reader-bg);
+    --dark-fg: var(--reader-fg);
+    --hover: var(--color-overlay-subtle);
+    --active: var(--color-overlay-medium);
+    --border: var(--color-border);
     --bg: var(--light-bg);
     --fg: var(--light-fg);
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --hover: rgba(255, 255, 255, 0.03);
-        --active: rgba(255, 255, 255, 0.05);
-        --border: rgba(255, 255, 255, 0.15);
+        --hover: var(--color-overlay-subtle);
+        --active: var(--color-overlay-medium);
+        --border: var(--color-border);
         --bg: var(--dark-bg);
         --fg: var(--dark-fg);
     }
@@ -62,7 +62,7 @@ foliate-view::part(foot) {
     height: 400px;
     border-radius: 12px;
     border: 0;
-    box-shadow: 0 0 0 1px var(--border), 0 0 12px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 0 0 1px var(--border), var(--shadow-md);
     background: var(--bg);
     color: var(--fg);
 }
@@ -140,7 +140,7 @@ foliate-view::part(foot) {
     display: block;
     position: absolute;
     height: 10px;
-    border: 9px solid red;
+    border: 9px solid var(--color-accent);
 }
 
 #ribbon:before {

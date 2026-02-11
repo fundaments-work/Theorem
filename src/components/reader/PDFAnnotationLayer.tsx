@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    HIGHLIGHT_COLORS,
+    HIGHLIGHT_SOLID_COLORS,
+} from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 import type { Annotation, HighlightColor } from "@/types";
 
@@ -27,23 +31,9 @@ interface PDFAnnotationLayerProps {
     onAnnotationRemove: (id: string) => void;
 }
 
-const PEN_COLORS: Record<HighlightColor, string> = {
-    yellow: "#f4b400",
-    green: "#2e7d32",
-    blue: "#1976d2",
-    red: "#d32f2f",
-    orange: "#f57c00",
-    purple: "#7b1fa2",
-};
+const PEN_COLORS: Record<HighlightColor, string> = HIGHLIGHT_SOLID_COLORS;
 
-const PDF_HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
-    yellow: "rgba(244, 180, 0, 0.26)",
-    green: "rgba(46, 125, 50, 0.24)",
-    blue: "rgba(25, 118, 210, 0.22)",
-    red: "rgba(211, 47, 47, 0.22)",
-    orange: "rgba(245, 124, 0, 0.24)",
-    purple: "rgba(123, 31, 162, 0.22)",
-};
+const PDF_HIGHLIGHT_COLORS: Record<HighlightColor, string> = HIGHLIGHT_COLORS;
 
 function getAnnotationRects(annotation: Annotation): Array<{ x: number; y: number; width: number; height: number }> {
     if (annotation.rects && annotation.rects.length > 0) {
@@ -613,7 +603,7 @@ export function PDFAnnotationLayer({
                         <div
                             key={`${annotation.id}-${index}`}
                             title={annotation.selectedText || "Highlight"}
-                            className="absolute pointer-events-none rounded-[2px]"
+                            className="absolute pointer-events-none rounded-[var(--radius-xs)]"
                             style={{
                                 left: `${rect.x * scale}px`,
                                 top: `${(rect.y + Math.min(rect.height * 0.16, 1.4 / Math.max(scale, 0.01))) * scale}px`,
@@ -680,8 +670,8 @@ export function PDFAnnotationLayer({
                                 width: `${iconSize}px`,
                                 height: `${iconSize}px`,
                                 backgroundColor: PEN_COLORS[annotation.color || penColor],
-                                color: "#ffffff",
-                                borderColor: "rgba(0,0,0,0.2)",
+                                color: "var(--color-text-inverse)",
+                                borderColor: "var(--color-overlay-medium)",
                                 pointerEvents: mode === "text" ? "auto" : "none",
                             }}
                             onPointerDown={(event) => {
@@ -693,7 +683,7 @@ export function PDFAnnotationLayer({
                                 }
                             }}
                         >
-                            <span className="text-[9px] leading-none font-semibold">T</span>
+                            <span className="text-[var(--font-size-4xs)] leading-none font-semibold">T</span>
                         </button>
                     );
                 }
@@ -740,7 +730,7 @@ export function PDFAnnotationLayer({
                                 setTextNoteEditor(null);
                             }
                         }}
-                        className="w-full min-h-[74px] resize-none rounded border text-xs p-2 focus:outline-none"
+                        className="w-full min-h-[var(--layout-annotation-editor-min-height)] resize-none rounded border text-xs p-2 focus:outline-none"
                         placeholder="Write a note..."
                         style={{
                             color: "var(--reader-fg, var(--color-text))",
@@ -751,7 +741,7 @@ export function PDFAnnotationLayer({
                     <div className="mt-2 flex items-center justify-end gap-2">
                         <button
                             type="button"
-                            className="px-2 py-1 rounded text-[11px] opacity-80 hover:opacity-100"
+                            className="px-2 py-1 rounded text-[var(--font-size-2xs)] opacity-80 hover:opacity-100"
                             style={{
                                 color: "var(--reader-fg, var(--color-text))",
                             }}
@@ -761,7 +751,7 @@ export function PDFAnnotationLayer({
                         </button>
                         <button
                             type="button"
-                            className="px-2 py-1 rounded text-[11px] bg-[var(--color-accent)] text-white"
+                            className="px-2 py-1 rounded text-[var(--font-size-2xs)] bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
                             onClick={saveTextNoteEditor}
                         >
                             Save Note

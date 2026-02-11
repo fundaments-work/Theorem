@@ -14,6 +14,7 @@ import {
     AlignLeft, AlignJustify, AlignCenter, Type,
     Palette, Maximize2, Zap, Settings2, ZoomIn
 } from 'lucide-react';
+import { READER_THEME_PREVIEWS } from "@/lib/design-tokens";
 import { cn } from '@/lib/utils';
 import { ReaderSettings as ReaderSettingsType, ReaderTheme, FontFamily, BookFormat } from '@/types';
 import { isFixedLayout } from '@/types';
@@ -31,9 +32,9 @@ interface ReaderSettingsProps {
 type TabId = 'themes' | 'typography' | 'zoom' | 'layout';
 
 const THEMES: Array<{ id: ReaderTheme; label: string; icon: React.ReactNode; previewBg: string; previewFg: string }> = [
-    { id: 'light', label: 'Light', icon: <Sun className="w-5 h-5" />, previewBg: '#ffffff', previewFg: '#000000' },
-    { id: 'sepia', label: 'Sepia', icon: <Sunrise className="w-5 h-5" />, previewBg: '#f4ecd8', previewFg: '#5f4b32' },
-    { id: 'dark', label: 'Dark', icon: <Moon className="w-5 h-5" />, previewBg: '#000000', previewFg: '#ffffff' },
+    { id: "light", label: "Light", icon: <Sun className="w-5 h-5" />, previewBg: READER_THEME_PREVIEWS.light.bg, previewFg: READER_THEME_PREVIEWS.light.fg },
+    { id: "sepia", label: "Sepia", icon: <Sunrise className="w-5 h-5" />, previewBg: READER_THEME_PREVIEWS.sepia.bg, previewFg: READER_THEME_PREVIEWS.sepia.fg },
+    { id: "dark", label: "Dark", icon: <Moon className="w-5 h-5" />, previewBg: READER_THEME_PREVIEWS.dark.bg, previewFg: READER_THEME_PREVIEWS.dark.fg },
 ];
 
 const FONTS: Array<{ id: FontFamily; label: string; family: string }> = [
@@ -137,14 +138,6 @@ export function ReaderSettings({
         50, 200, 10
     );
 
-    useEffect(() => {
-        if (!visible) return;
-        brightnessSlider.value !== settings.brightness && brightnessSlider.handleChange({ target: { value: String(settings.brightness) } } as any);
-        fontSizeSlider.value !== settings.fontSize && fontSizeSlider.handleChange({ target: { value: String(settings.fontSize) } } as any);
-        lineHeightSlider.value !== settings.lineHeight && lineHeightSlider.handleChange({ target: { value: String(settings.lineHeight) } } as any);
-        zoomSlider.value !== settings.zoom && zoomSlider.handleChange({ target: { value: String(settings.zoom) } } as any);
-    }, [settings.brightness, settings.fontSize, settings.lineHeight, settings.zoom, visible]);
-
     const currentFontFamily = FONTS.find(f => f.id === settings.fontFamily)?.family;
 
     const handleReset = useCallback(() => {
@@ -164,11 +157,11 @@ export function ReaderSettings({
         { id: 'layout' as TabId, label: 'Layout', icon: <Maximize2 className="w-4 h-4" /> },
     ];
 
-    // Common styles using CSS variables
-    const textStyle = { color: 'var(--reader-fg)' };
-    const textMutedStyle = { color: 'var(--reader-fg)', opacity: 0.5 };
-    const borderStyle = { borderColor: 'color-mix(in srgb, var(--reader-fg) 12%, transparent)' };
-    const surfaceStyle = { backgroundColor: 'color-mix(in srgb, var(--reader-fg) 5%, var(--reader-bg))' };
+    // Common styles using semantic design tokens
+    const textStyle = { color: 'var(--color-text-primary)' };
+    const textMutedStyle = { color: 'var(--color-text-muted)' };
+    const borderStyle = { borderColor: 'var(--color-border)' };
+    const surfaceStyle = { backgroundColor: 'var(--color-surface-muted)' };
 
     return (
         <>
@@ -200,22 +193,23 @@ export function ReaderSettings({
                 </div>
 
                 {/* Tabs */}
-                <div className="reader-panel-header flex gap-2 px-4 py-3" style={borderStyle}>
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={cn(
-                                'reader-chip flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-full transition-opacity',
-                                activeTab === tab.id ? 'opacity-100' : 'opacity-60 hover:opacity-85'
-                            )}
-                            style={activeTab === tab.id ? { ...textStyle, backgroundColor: 'color-mix(in srgb, var(--reader-fg) 18%, transparent)' } : textStyle}
-                            data-active={activeTab === tab.id}
-                        >
-                            {tab.icon}
-                            {tab.label}
-                        </button>
-                    ))}
+                <div className="reader-panel-header px-4 py-3" style={borderStyle}>
+                    <div className="grid grid-cols-3 gap-2">
+                        {tabs.map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={cn(
+                                    'reader-chip w-full min-h-9 flex items-center justify-center gap-1.5 px-2 text-xs rounded-lg transition-colors duration-150',
+                                    activeTab === tab.id ? 'opacity-100' : 'opacity-70 hover:opacity-100',
+                                )}
+                                data-active={activeTab === tab.id}
+                            >
+                                {tab.icon}
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Tab Content */}
@@ -238,7 +232,7 @@ export function ReaderSettings({
                                         onMouseDown={brightnessSlider.handleMouseDown}
                                         onMouseUp={brightnessSlider.handleMouseUp}
                                         className="flex-1 h-1 rounded-full"
-                                        style={{ accentColor: 'var(--reader-fg)' }}
+                                        style={{ accentColor: 'var(--color-accent)' }}
                                     />
                                     <Sun className="w-5 h-5" style={textStyle} />
                                 </div>
@@ -252,12 +246,12 @@ export function ReaderSettings({
                                         <button
                                             key={theme.id}
                                             onClick={() => onUpdate({ theme: theme.id })}
-                                            className="reader-chip rounded-2xl p-3 flex flex-col items-center gap-2 group transition-all"
+                                            className="reader-chip rounded-2xl p-3 flex flex-col items-center gap-2 group transition-colors duration-150"
                                             data-active={settings.theme === theme.id}
                                         >
                                             <div
                                                 className={cn(
-                                                    'w-9 h-9 rounded-full flex items-center justify-center transition-all',
+                                                    'w-9 h-9 rounded-full flex items-center justify-center transition-opacity duration-150',
                                                     settings.theme === theme.id ? 'scale-105' : 'opacity-65 group-hover:opacity-90'
                                                 )}
                                                 style={{ backgroundColor: theme.previewBg, color: theme.previewFg }}
@@ -265,7 +259,7 @@ export function ReaderSettings({
                                                 {theme.icon}
                                             </div>
                                             <span className={cn(
-                                                "text-[10px] uppercase tracking-wide",
+                                                "text-[var(--font-size-3xs)] uppercase tracking-wide",
                                                 settings.theme === theme.id ? "opacity-100" : "opacity-70"
                                             )} style={textStyle}>
                                                 {theme.label}
@@ -291,17 +285,21 @@ export function ReaderSettings({
                                             key={font.id}
                                             onClick={() => onUpdate({ fontFamily: font.id })}
                                             className={cn(
-                                                'py-3 px-3 rounded-lg flex flex-col items-center gap-1.5 transition-all border text-left',
+                                                'py-3 px-3 rounded-lg flex flex-col items-center gap-1.5 transition-colors duration-150 border text-left',
                                                 settings.fontFamily === font.id
                                                     ? 'opacity-100'
                                                     : 'opacity-40 hover:opacity-70'
                                             )}
                                             style={{
                                                 backgroundColor: settings.fontFamily === font.id
-                                                    ? 'color-mix(in srgb, var(--reader-fg) 15%, transparent)'
+                                                    ? 'var(--color-accent-light)'
                                                     : 'transparent',
-                                                borderColor: 'color-mix(in srgb, var(--reader-fg) 15%, transparent)',
-                                                color: 'var(--reader-fg)',
+                                                borderColor: settings.fontFamily === font.id
+                                                    ? 'color-mix(in srgb, var(--color-accent) 35%, var(--color-border))'
+                                                    : 'var(--color-border)',
+                                                color: settings.fontFamily === font.id
+                                                    ? 'var(--color-accent)'
+                                                    : 'var(--color-text-secondary)',
                                                 fontFamily: font.family,
                                             }}
                                         >
@@ -315,19 +313,19 @@ export function ReaderSettings({
                                 
                                 {/* Font preview showing sample in selected font */}
                                 <div
-                                    className="p-3 text-center text-base rounded-lg border mt-3 transition-all"
+                                    className="p-3 text-center text-base rounded-lg border mt-3 transition-colors duration-150"
                                     style={{
-                                        borderColor: 'color-mix(in srgb, var(--reader-fg) 12%, transparent)',
+                                        borderColor: 'var(--color-border)',
                                         fontFamily: currentFontFamily,
-                                        color: 'var(--reader-fg)',
-                                        backgroundColor: 'color-mix(in srgb, var(--reader-fg) 3%, var(--reader-bg))',
+                                        color: 'var(--color-text-primary)',
+                                        backgroundColor: 'var(--color-surface-muted)',
                                     }}
                                 >
                                     The quick brown fox jumps over the lazy dog
                                 </div>
                                 
                                 {/* Font family indicator */}
-                                <div className="text-[10px] text-center uppercase tracking-wider opacity-50" style={textStyle}>
+                                <div className="text-[var(--font-size-3xs)] text-center uppercase tracking-wider opacity-50" style={textStyle}>
                                     {settings.fontFamily === 'original' ? 'Book default' : settings.fontFamily}
                                 </div>
                             </div>
@@ -347,7 +345,7 @@ export function ReaderSettings({
                                         value={fontSizeSlider.value}
                                         onChange={fontSizeSlider.handleChange}
                                         className="flex-1 h-1 rounded-full"
-                                        style={{ accentColor: 'var(--reader-fg)' }}
+                                        style={{ accentColor: 'var(--color-accent)' }}
                                     />
                                     <button onClick={fontSizeSlider.increment} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
                                         <Plus className="w-4 h-4" style={textStyle} />
@@ -359,7 +357,7 @@ export function ReaderSettings({
                             <button 
                                 onClick={() => setShowAdvancedType(!showAdvancedType)} 
                                 className="w-full py-3 text-xs rounded-lg border transition-opacity hover:opacity-70 flex items-center justify-center gap-2"
-                                style={{ ...borderStyle, color: 'var(--reader-fg)' }}
+                                style={{ ...borderStyle, color: 'var(--color-text-secondary)' }}
                             >
                                 <span>{showAdvancedType ? 'Less options' : 'More options'}</span>
                                 <svg 
@@ -384,7 +382,7 @@ export function ReaderSettings({
                                             value={lineHeightSlider.value}
                                             onChange={lineHeightSlider.handleChange}
                                             className="w-full h-1 rounded-full"
-                                            style={{ accentColor: 'var(--reader-fg)' }}
+                                            style={{ accentColor: 'var(--color-accent)' }}
                                         />
                                     </div>
 
@@ -397,21 +395,25 @@ export function ReaderSettings({
                                                     key={id}
                                                     onClick={() => onUpdate({ textAlign: id })}
                                                     className={cn(
-                                                        'py-2.5 rounded-lg flex flex-col items-center gap-1.5 transition-all border',
+                                                        'py-2.5 rounded-lg flex flex-col items-center gap-1.5 transition-colors duration-150 border',
                                                         settings.textAlign === id 
                                                             ? 'opacity-100' 
                                                             : 'opacity-40 hover:opacity-70'
                                                     )}
                                                     style={{ 
                                                         backgroundColor: settings.textAlign === id 
-                                                            ? 'color-mix(in srgb, var(--reader-fg) 15%, transparent)' 
+                                                            ? 'var(--color-accent-light)' 
                                                             : 'transparent',
-                                                        borderColor: 'color-mix(in srgb, var(--reader-fg) 15%, transparent)',
-                                                        color: 'var(--reader-fg)'
+                                                        borderColor: settings.textAlign === id
+                                                            ? 'color-mix(in srgb, var(--color-accent) 35%, var(--color-border))'
+                                                            : 'var(--color-border)',
+                                                        color: settings.textAlign === id
+                                                            ? 'var(--color-accent)'
+                                                            : 'var(--color-text-secondary)',
                                                     }}
                                                 >
                                                     <Icon className="w-4 h-4" />
-                                                    <span className="text-[10px]">{label}</span>
+                                                    <span className="text-[var(--font-size-3xs)]">{label}</span>
                                                 </button>
                                             ))}
                                         </div>
@@ -442,7 +444,7 @@ export function ReaderSettings({
                                         value={zoomSlider.value}
                                         onChange={zoomSlider.handleChange}
                                         className="flex-1 h-1 rounded-full"
-                                        style={{ accentColor: 'var(--reader-fg)' }}
+                                        style={{ accentColor: 'var(--color-accent)' }}
                                     />
                                     <button onClick={zoomSlider.increment} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
                                         <Plus className="w-4 h-4" style={textStyle} />
@@ -466,17 +468,21 @@ export function ReaderSettings({
                                             key={preset.id}
                                             onClick={() => onUpdate({ zoom: preset.value })}
                                             className={cn(
-                                                'py-2 rounded-lg text-xs transition-all border',
+                                                'py-2 rounded-lg text-xs transition-colors duration-150 border',
                                                 settings.zoom === preset.value
                                                     ? 'opacity-100'
                                                     : 'opacity-40 hover:opacity-70'
                                             )}
                                             style={{
                                                 backgroundColor: settings.zoom === preset.value
-                                                    ? 'color-mix(in srgb, var(--reader-fg) 15%, transparent)'
+                                                    ? 'var(--color-accent-light)'
                                                     : 'transparent',
-                                                borderColor: 'color-mix(in srgb, var(--reader-fg) 15%, transparent)',
-                                                color: 'var(--reader-fg)',
+                                                borderColor: settings.zoom === preset.value
+                                                    ? 'color-mix(in srgb, var(--color-accent) 35%, var(--color-border))'
+                                                    : 'var(--color-border)',
+                                                color: settings.zoom === preset.value
+                                                    ? 'var(--color-accent)'
+                                                    : 'var(--color-text-secondary)',
                                             }}
                                         >
                                             {preset.label}
@@ -505,15 +511,19 @@ export function ReaderSettings({
                                             key={id}
                                             onClick={() => onUpdate({ flow: id })}
                                             className={cn(
-                                                'py-3 rounded-lg flex flex-col items-center gap-2 transition-all border',
+                                                'py-3 rounded-lg flex flex-col items-center gap-2 transition-colors duration-150 border',
                                                 settings.flow === id ? 'opacity-100' : 'opacity-40 hover:opacity-70'
                                             )}
                                             style={{ 
                                                 backgroundColor: settings.flow === id 
-                                                    ? 'color-mix(in srgb, var(--reader-fg) 10%, transparent)' 
+                                                    ? 'var(--color-accent-light)' 
                                                     : 'transparent',
-                                                borderColor: 'color-mix(in srgb, var(--reader-fg) 15%, transparent)',
-                                                color: 'var(--reader-fg)'
+                                                borderColor: settings.flow === id
+                                                    ? 'color-mix(in srgb, var(--color-accent) 35%, var(--color-border))'
+                                                    : 'var(--color-border)',
+                                                color: settings.flow === id
+                                                    ? 'var(--color-accent)'
+                                                    : 'var(--color-text-secondary)',
                                             }}
                                         >
                                             <Icon className="w-5 h-5" />
@@ -540,7 +550,7 @@ export function ReaderSettings({
                                         value={zoomSlider.value}
                                         onChange={zoomSlider.handleChange}
                                         className="flex-1 h-1 rounded-full"
-                                        style={{ accentColor: 'var(--reader-fg)' }}
+                                        style={{ accentColor: 'var(--color-accent)' }}
                                     />
                                     <button onClick={zoomSlider.increment} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
                                         <Plus className="w-4 h-4" style={textStyle} />

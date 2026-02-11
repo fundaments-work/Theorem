@@ -89,8 +89,16 @@ function ErrorState({
     return (
         <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-surface)] z-20">
             <div className="flex flex-col items-center gap-4 max-w-md text-center p-8">
-                <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
-                    <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+                <div
+                    className="w-16 h-16 rounded-full flex items-center justify-center"
+                    style={{
+                        backgroundColor: "color-mix(in srgb, var(--color-error) 14%, var(--color-surface))",
+                    }}
+                >
+                    <AlertCircle
+                        className="w-8 h-8"
+                        style={{ color: "var(--color-error)" }}
+                    />
                 </div>
                 <h3 className="text-lg font-medium text-[var(--color-text-primary)]">
                     Failed to load PDF
@@ -101,7 +109,7 @@ function ErrorState({
                         onClick={onRetry}
                         className={cn(
                             "mt-4 px-4 py-2 rounded-lg",
-                            "bg-[var(--color-accent)] text-white",
+                            "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]",
                             "hover:bg-[var(--color-accent-hover)]",
                             "transition-colors text-sm font-medium"
                         )}

@@ -31,6 +31,7 @@ import {
     getCurrentReaderSettings,
     getThemeColors,
 } from '@/lib/reader-styles';
+import { HIGHLIGHT_SOLID_COLORS } from "@/lib/design-tokens";
 import { normalizeAuthor } from '@/lib/utils';
 
 export interface FoliateEngineOptions {
@@ -430,14 +431,7 @@ export class FoliateEngine {
     }
 
     private getHighlightColor(colorName: string): string {
-        const colorMap: Record<string, string> = {
-            yellow: 'rgba(255, 235, 59, 1)',
-            green: 'rgba(76, 175, 80, 1)',
-            blue: 'rgba(33, 150, 243, 1)',
-            red: 'rgba(244, 67, 54, 1)',
-            orange: 'rgba(255, 152, 0, 1)',
-            purple: 'rgba(156, 39, 176, 1)',
-        };
+        const colorMap: Record<string, string> = HIGHLIGHT_SOLID_COLORS;
         return colorMap[colorName] || colorMap.yellow;
     }
 

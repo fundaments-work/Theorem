@@ -10,9 +10,9 @@
 .pdf-page-wrapper {
     position: relative;
     margin: 0 auto;
-    background: #fff;
-    border: 1px solid #ddd;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
 }
 
 /* Page container */
@@ -67,7 +67,7 @@
 }
 
 .textLayer ::selection {
-    background: rgba(0, 100, 200, 0.35);
+    background: color-mix(in srgb, var(--color-accent) 35%, transparent);
 }
 
 .textLayer br::selection {
@@ -121,20 +121,20 @@
 
 /* Theme support */
 .theme-dark .pdf-page-wrapper {
-    background: #1a1a1a;
-    border-color: #333;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-md);
 }
 
 .theme-sepia .pdf-page-wrapper {
-    background: #f4ecd8;
-    border-color: #d4c5a9;
+    background: var(--color-surface);
+    border-color: var(--color-border);
 }
 
 @media (max-width: 768px) {
     .pdf-page-wrapper {
         border-width: 0;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+        box-shadow: var(--shadow-xs);
     }
 }
 

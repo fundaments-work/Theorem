@@ -77,9 +77,9 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
             ref={sidebarRef}
             className={cn(
                 "flex flex-col h-full border-r border-[var(--color-border)]",
-                "bg-[color-mix(in_srgb,var(--color-surface)_94%,transparent)] backdrop-blur-xl",
-                "transition-all duration-300 ease-in-out",
-                (sidebarOpen || isMobile) ? "w-72" : "w-[4.25rem]"
+                "ui-panel",
+                "transition-[width] duration-220 ease-out",
+                (sidebarOpen || isMobile) ? "w-[var(--layout-sidebar-width)]" : "w-[var(--layout-sidebar-collapsed-width)]"
             )}
         >
             {/* Header - Logo + App Name (visible on all screens) */}
@@ -99,7 +99,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                 {isMobile && onClose && (
                     <button
                         onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] transition-colors"
+                        className="ui-icon-btn w-9 h-9 rounded-lg text-[var(--color-text-secondary)]"
                         aria-label="Close sidebar"
                     >
                         <X className="w-5 h-5" />
@@ -126,11 +126,10 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                     }
                                 }}
                                 className={cn(
-                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl",
-                                    "transition-colors duration-200",
-                                    "hover:bg-[var(--color-border-subtle)]",
+                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl ui-clickable",
+                                    "hover:bg-[var(--color-surface-muted)]",
                                     currentRoute === item.id
-                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
                                         : "text-[var(--color-text-secondary)]"
                                 )}
                                 title={!sidebarOpen ? item.label : undefined}
@@ -155,11 +154,10 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                 }
                             }}
                             className={cn(
-                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl",
-                                "transition-colors duration-200",
-                                "hover:bg-[var(--color-border-subtle)]",
+                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl ui-clickable",
+                                "hover:bg-[var(--color-surface-muted)]",
                                 currentRoute === "shelves"
-                                    ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                                    ? "bg-[var(--color-accent-light)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
                                     : "text-[var(--color-text-secondary)]"
                             )}
                             title={!sidebarOpen ? "Shelves" : undefined}
@@ -191,10 +189,10 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                         }
                     }}
                     className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-200 hover:bg-[var(--color-border-subtle)]",
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl ui-clickable hover:bg-[var(--color-surface-muted)]",
                         sidebarOpen ? "flex-1" : "w-full justify-center",
                         currentRoute === "settings"
-                            ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                            ? "bg-[var(--color-accent-light)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
                             : "text-[var(--color-text-secondary)]"
                     )}
                     title={!sidebarOpen ? "Settings" : undefined}
@@ -212,9 +210,8 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                     <button
                         onClick={handleToggle}
                         className={cn(
-                            "flex items-center justify-center p-2.5 rounded-xl",
-                            "text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)]",
-                            "transition-colors duration-200",
+                            "flex items-center justify-center p-2.5 rounded-xl ui-clickable",
+                            "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]",
                             sidebarOpen ? "w-10" : "w-full"
                         )}
                         title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}

@@ -70,7 +70,7 @@ export function BookInfoPopover({
                                 className="w-20 aspect-[2/3] object-cover rounded-lg shadow-md border border-[var(--color-border)]"
                             />
                         ) : (
-                            <div className="w-20 aspect-[2/3] bg-[var(--color-border-subtle)] rounded-lg flex items-center justify-center text-[var(--color-text-muted)] border border-[var(--color-border)]">
+                            <div className="w-20 aspect-[2/3] bg-[var(--color-surface-muted)] rounded-lg flex items-center justify-center text-[var(--color-text-muted)] border border-[var(--color-border)]">
                                 <FileText className="w-6 h-6" />
                             </div>
                         )}
@@ -88,7 +88,7 @@ export function BookInfoPopover({
                     <div className="space-y-4">
                         {sections.map(({ label, value, Icon }, idx) => (
                             <div key={idx} className="flex flex-col gap-1.5">
-                                <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1.5">
+                                <span className="text-[var(--font-size-3xs)] font-bold text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1.5">
                                     <Icon className="w-4 h-4" />
                                     {label}
                                 </span>
@@ -102,7 +102,7 @@ export function BookInfoPopover({
                     {/* Description */}
                     {metadata.description && (
                         <div className="space-y-2 pt-2 border-t border-[var(--color-border-subtle)]">
-                            <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                            <span className="text-[var(--font-size-3xs)] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
                                 Description
                             </span>
                             <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed italic line-clamp-[8]">

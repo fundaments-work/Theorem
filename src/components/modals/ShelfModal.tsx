@@ -58,10 +58,7 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                                 onKeyDown={handleKeyDown}
                                 placeholder="e.g., To Read, Favorites, Sci-Fi"
                                 className={cn(
-                                    "w-full px-3 py-2.5 rounded-lg",
-                                    "bg-[var(--color-background)] border border-[var(--color-border)]",
-                                    "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
-                                    "focus:outline-none focus:border-[var(--color-accent)]"
+                                    "ui-input w-full"
                                 )}
                                 autoFocus
                             />
@@ -75,10 +72,7 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Add a description for this shelf..."
                                 className={cn(
-                                    "w-full px-3 py-2.5 rounded-lg resize-none",
-                                    "bg-[var(--color-background)] border border-[var(--color-border)]",
-                                    "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
-                                    "focus:outline-none focus:border-[var(--color-accent)]"
+                                    "ui-input w-full resize-none min-h-[calc(var(--control-height-md)_*_2.1)]"
                                 )}
                                 rows={3}
                             />
@@ -89,7 +83,7 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 rounded-lg text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-border-subtle)] transition-colors"
+                        className="ui-btn ui-btn-ghost"
                     >
                         Cancel
                     </button>
@@ -97,9 +91,7 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                         type="submit"
                         disabled={!name.trim()}
                         className={cn(
-                            "px-4 py-2 rounded-lg text-sm font-medium",
-                            "bg-[var(--color-accent)] text-white",
-                            "hover:opacity-90 transition-opacity",
+                            "ui-btn ui-btn-primary",
                             "disabled:opacity-50 disabled:cursor-not-allowed"
                         )}
                     >

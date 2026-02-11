@@ -1264,7 +1264,7 @@ export function ReaderPage() {
                 </p>
                 <button
                     onClick={() => setRoute('library')}
-                    className="px-6 py-2 bg-[var(--color-accent)] text-[var(--color-surface)] rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                    className="px-6 py-2 bg-[var(--color-accent)] text-[var(--color-accent-contrast)] rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
                 >
                     Back to Library
                 </button>
@@ -1298,6 +1298,8 @@ export function ReaderPage() {
                     metadata={metadata}
                     location={location}
                     onBack={handleBack}
+                    onPrevPage={() => readerRef.current?.prev()}
+                    onNextPage={() => readerRef.current?.next()}
                     onToggleToc={() => togglePanel('toc')}
                     onToggleSettings={() => togglePanel('settings')}
                     onToggleBookmarks={() => togglePanel('bookmarks')}

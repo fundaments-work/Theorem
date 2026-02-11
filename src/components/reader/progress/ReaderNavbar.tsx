@@ -219,7 +219,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
             <div className="text-center">
                 <div className="font-medium">{pct}%</div>
                 {hoveredSectionLabel && (
-                    <div className="text-[var(--color-text-muted)] text-xs max-w-[200px] truncate">
+                    <div className="text-[var(--color-text-muted)] text-xs max-w-[var(--layout-tooltip-max-width)] truncate">
                         {hoveredSectionLabel}
                     </div>
                 )}
@@ -239,7 +239,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
             style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
         >
             {/* Info row: section label + time remaining */}
-            <div className="flex items-center justify-between gap-2 text-[11px] sm:text-xs text-[var(--color-text-muted)]">
+            <div className="flex items-center justify-between gap-2 text-[var(--font-size-2xs)] sm:text-xs text-[var(--color-text-muted)]">
                 <span className="truncate max-w-[52%] sm:max-w-[60%]">{currentSectionLabel}</span>
                 <div className="flex items-center gap-2">
                     {timeRemaining && (

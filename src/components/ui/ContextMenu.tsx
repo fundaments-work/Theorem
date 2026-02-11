@@ -98,7 +98,7 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
         <>
             {/* Backdrop to capture clicks outside - high z-index to cover everything */}
             <div 
-                className="fixed inset-0 z-[900]"
+                className="fixed inset-0 z-[var(--z-dropdown)]"
                 onClick={() => setIsOpen(false)}
             />
             
@@ -106,9 +106,9 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
             <div
                 ref={menuRef}
                 className={cn(
-                    "fixed z-[950] min-w-[180px] max-w-[280px]",
+                    "fixed z-[calc(var(--z-dropdown)+1)] min-w-[var(--layout-dropdown-menu-min-width)] max-w-[var(--layout-dropdown-menu-max-width)]",
                     "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                    "rounded-lg shadow-2xl py-1",
+                    "rounded-lg shadow-[var(--shadow-md)] py-1",
                     "animate-fade-in"
                 )}
                 style={{
@@ -130,8 +130,8 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                                 item.disabled
                                     ? "opacity-50 cursor-not-allowed text-[var(--color-text-muted)]"
                                     : item.danger
-                                        ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
-                                        : "text-[var(--color-text-primary)] hover:bg-[var(--color-border-subtle)]"
+                                        ? "text-[var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_10%,transparent)]"
+                                        : "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
                             )}
                         >
                             {item.icon && (

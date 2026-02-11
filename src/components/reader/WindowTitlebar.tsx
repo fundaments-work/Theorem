@@ -28,6 +28,7 @@ import {
     Eraser,
     ChevronDown,
 } from "lucide-react";
+import { HIGHLIGHT_SOLID_COLORS } from "@/lib/design-tokens";
 import { cn, normalizeAuthor } from "@/lib/utils";
 import { isTauri } from "@/lib/env";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -37,6 +38,8 @@ interface WindowTitlebarProps {
     metadata: DocMetadata | null;
     location?: DocLocation | null;
     onBack: () => void;
+    onPrevPage?: () => void;
+    onNextPage?: () => void;
     onToggleToc: () => void;
     onToggleSettings: () => void;
     onToggleBookmarks: () => void;
@@ -115,7 +118,7 @@ function WindowControlButton({
             className={cn(
                 "p-2 lg:p-1.5 rounded-lg transition-colors duration-150 opacity-80 hover:opacity-100",
                 danger
-                    ? "hover:bg-red-500/85 hover:text-white"
+                    ? "ui-icon-btn-danger"
                     : "hover:bg-[var(--color-background)]",
             )}
             style={{ color: "var(--reader-fg)" }}
@@ -127,12 +130,12 @@ function WindowControlButton({
 }
 
 const annotationColorSwatches: Array<{ color: HighlightColor; label: string; fill: string }> = [
-    { color: "yellow", label: "Yellow", fill: "#f4b400" },
-    { color: "green", label: "Green", fill: "#2e7d32" },
-    { color: "blue", label: "Blue", fill: "#1976d2" },
-    { color: "red", label: "Red", fill: "#d32f2f" },
-    { color: "orange", label: "Orange", fill: "#f57c00" },
-    { color: "purple", label: "Purple", fill: "#7b1fa2" },
+    { color: "yellow", label: "Yellow", fill: HIGHLIGHT_SOLID_COLORS.yellow },
+    { color: "green", label: "Green", fill: HIGHLIGHT_SOLID_COLORS.green },
+    { color: "blue", label: "Blue", fill: HIGHLIGHT_SOLID_COLORS.blue },
+    { color: "red", label: "Red", fill: HIGHLIGHT_SOLID_COLORS.red },
+    { color: "orange", label: "Orange", fill: HIGHLIGHT_SOLID_COLORS.orange },
+    { color: "purple", label: "Purple", fill: HIGHLIGHT_SOLID_COLORS.purple },
 ];
 const BRUSH_WIDTH_OPTIONS = [1, 2, 4, 6];
 
@@ -140,6 +143,8 @@ export function WindowTitlebar({
     metadata,
     location,
     onBack,
+    onPrevPage,
+    onNextPage,
     onToggleToc,
     onToggleSettings,
     onToggleBookmarks,
@@ -259,7 +264,7 @@ export function WindowTitlebar({
             className={cn(
                 "w-full z-50 select-none border-b reader-toolbar",
                 "min-h-11 flex flex-col items-stretch gap-1 px-2 py-1",
-                "pt-[max(0.1rem,env(safe-area-inset-top))]",
+                "pt-[max(var(--spacing-xxs),env(safe-area-inset-top))]",
                 "lg:h-11 lg:min-h-0 lg:flex-row lg:items-center lg:justify-between lg:gap-0 lg:py-0",
                 "bg-[var(--color-surface)] border-[var(--color-border)]",
                 className
@@ -317,7 +322,7 @@ export function WindowTitlebar({
                 </div>
             </div>
 
-            {/* Center - PDF Controls or Spacer */}
+            {/* Center - Reader Controls */}
             {isPdfMode ? (
                 <div className="w-full overflow-x-auto overflow-y-visible reader-toolbar-scroll lg:w-auto">
                     <div className="my-0.5 mr-1 flex items-center gap-1 shrink-0 min-w-max" data-toolbar-group>
@@ -464,7 +469,7 @@ export function WindowTitlebar({
                                     onClick={() => setShowZoomMenu(false)}
                                 />
                                 <div 
-                                    className="absolute top-full right-0 mt-1 py-1 rounded-lg shadow-lg border z-50 min-w-[120px]"
+                                    className="absolute top-full right-0 mt-1 py-1 rounded-lg shadow-lg border z-50 min-w-[var(--layout-popover-min-width)]"
                                     style={{
                                         backgroundColor: 'var(--color-surface)',
                                         borderColor: 'var(--color-border)',
@@ -551,11 +556,11 @@ export function WindowTitlebar({
                         >
                             <Highlighter className="w-4 h-4" />
                             <span
-                                className="absolute -right-0.5 -bottom-0.5 w-2 h-2 rounded-full border border-black/20"
+                                className="absolute -right-0.5 -bottom-0.5 w-2 h-2 rounded-full border border-[var(--color-overlay-medium)]"
                                 style={{
                                     backgroundColor: annotationColorSwatches.find(
                                         (swatch) => swatch.color === activeHighlightColor,
-                                    )?.fill || "#f4b400",
+                                    )?.fill || HIGHLIGHT_SOLID_COLORS.yellow,
                                 }}
                             />
                         </button>
@@ -582,8 +587,8 @@ export function WindowTitlebar({
                                     style={{
                                         backgroundColor: swatch.fill,
                                         borderColor: activeHighlightColor === swatch.color
-                                            ? "rgba(0,0,0,0.45)"
-                                            : "rgba(0,0,0,0.2)",
+                                            ? "color-mix(in srgb, var(--reader-fg, var(--color-text)) 45%, transparent)"
+                                            : "color-mix(in srgb, var(--reader-fg, var(--color-text)) 20%, transparent)",
                                     }}
                                     title={swatch.label}
                                 />
@@ -607,13 +612,13 @@ export function WindowTitlebar({
                     >
                         <Pencil className="w-4 h-4" />
                         <span
-                            className="absolute -right-0.5 -bottom-0.5 rounded-full border border-black/20"
+                            className="absolute -right-0.5 -bottom-0.5 rounded-full border border-[var(--color-overlay-medium)]"
                             style={{
                                 width: `${Math.max(5, Math.min(9, 3 + activePenWidth))}px`,
                                 height: `${Math.max(5, Math.min(9, 3 + activePenWidth))}px`,
                                 backgroundColor: annotationColorSwatches.find(
                                     (swatch) => swatch.color === activePenColor,
-                                )?.fill || "#1976d2",
+                                )?.fill || HIGHLIGHT_SOLID_COLORS.blue,
                             }}
                         />
                     </button>
@@ -639,8 +644,8 @@ export function WindowTitlebar({
                                     style={{
                                         backgroundColor: swatch.fill,
                                         borderColor: activePenColor === swatch.color
-                                            ? "rgba(0,0,0,0.45)"
-                                            : "rgba(0,0,0,0.2)",
+                                            ? "color-mix(in srgb, var(--reader-fg, var(--color-text)) 45%, transparent)"
+                                            : "color-mix(in srgb, var(--reader-fg, var(--color-text)) 20%, transparent)",
                                     }}
                                     title={`${swatch.label} pen`}
                                 />
@@ -677,7 +682,7 @@ export function WindowTitlebar({
                                             height: `${Math.max(2, width)}px`,
                                             backgroundColor: annotationColorSwatches.find(
                                                 (swatch) => swatch.color === activePenColor,
-                                            )?.fill || "#1976d2",
+                                            )?.fill || HIGHLIGHT_SOLID_COLORS.blue,
                                         }}
                                     />
                                 </button>
@@ -748,79 +753,117 @@ export function WindowTitlebar({
                     </div>
                 </div>
             ) : (
-                <div className="hidden lg:flex flex-1 h-full" />
+                <div className="w-full overflow-x-auto overflow-y-visible reader-toolbar-scroll lg:w-auto">
+                    <div className="my-0.5 mr-1 flex items-center gap-1 shrink-0 min-w-max" data-toolbar-group="epub">
+                        <button
+                            onClick={onPrevPage}
+                            disabled={!onPrevPage}
+                            className={cn(
+                                ICON_BUTTON_CLASS,
+                                ICON_BUTTON_INACTIVE_CLASS,
+                                "disabled:opacity-30 disabled:cursor-not-allowed",
+                            )}
+                            style={{ color: 'var(--reader-fg)' }}
+                            title="Previous section"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+
+                        <button
+                            onClick={onNextPage}
+                            disabled={!onNextPage}
+                            className={cn(
+                                ICON_BUTTON_CLASS,
+                                ICON_BUTTON_INACTIVE_CLASS,
+                                "disabled:opacity-30 disabled:cursor-not-allowed",
+                            )}
+                            style={{ color: 'var(--reader-fg)' }}
+                            title="Next section"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+
+                        <div
+                            className="w-px h-4 mx-1"
+                            style={{ backgroundColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)' }}
+                        />
+
+                        <ToolbarButton
+                            onClick={onToggleToc}
+                            active={activePanel === "toc"}
+                            title="Table of Contents"
+                        >
+                            <List className="w-4 h-4" />
+                        </ToolbarButton>
+
+                        <ToolbarButton
+                            onClick={onToggleSearch}
+                            active={activePanel === "search"}
+                            title="Search"
+                        >
+                            <Search className="w-4 h-4" />
+                        </ToolbarButton>
+
+                        {onAddBookmark && (
+                            <ToolbarButton
+                                onClick={onAddBookmark}
+                                title={isCurrentPageBookmarked ? "Remove bookmark (Ctrl+D)" : "Bookmark current page (Ctrl+D)"}
+                            >
+                                <BookmarkIcon
+                                    className={cn("w-4 h-4", isCurrentPageBookmarked && "fill-current")}
+                                />
+                            </ToolbarButton>
+                        )}
+
+                        <ToolbarButton
+                            onClick={onToggleBookmarks}
+                            active={activePanel === "bookmarks"}
+                            title="View Annotations"
+                        >
+                            <LineSquiggle className="w-4 h-4" />
+                        </ToolbarButton>
+
+                        <ToolbarButton
+                            onClick={onToggleSettings}
+                            active={activePanel === "settings"}
+                            title="Reading Settings"
+                        >
+                            <Type className="w-4 h-4" />
+                        </ToolbarButton>
+
+                        <div
+                            className="w-px h-4 mx-1"
+                            style={{ backgroundColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)' }}
+                        />
+
+                        <ToolbarButton
+                            onClick={onToggleInfo}
+                            active={activePanel === "info"}
+                            title="Book Information"
+                        >
+                            <MoreVertical className="w-4 h-4" />
+                        </ToolbarButton>
+                    </div>
+                </div>
             )}
 
-            {/* Right side - Reader and window controls */}
-            <div className="w-full overflow-x-auto overflow-y-visible reader-toolbar-scroll lg:w-auto">
+            {/* Right side - Window controls */}
+            <div
+                className={cn(
+                    "overflow-x-auto overflow-y-visible reader-toolbar-scroll",
+                    isTauriRuntime
+                        ? "hidden lg:block lg:w-auto"
+                        : onToggleFullscreen
+                            ? "hidden xl:block xl:w-auto"
+                            : "hidden",
+                )}
+            >
                 <div
                     className={cn(
                         "flex items-center shrink-0 min-w-max mx-auto sm:mx-0",
                         "gap-1",
                     )}
                 >
-                    {!hideReaderControls && (
-                        <div className="my-0.5 mr-1 flex items-center gap-1" data-toolbar-group="epub">
-                            <ToolbarButton
-                                onClick={onToggleToc}
-                                active={activePanel === "toc"}
-                                title="Table of Contents"
-                            >
-                                <List className="w-4 h-4" />
-                            </ToolbarButton>
-
-                            <ToolbarButton
-                                onClick={onToggleSearch}
-                                active={activePanel === "search"}
-                                title="Search"
-                            >
-                                <Search className="w-4 h-4" />
-                            </ToolbarButton>
-
-                            {/* Add Bookmark - Quick add/remove current page */}
-                            {onAddBookmark && (
-                                <ToolbarButton
-                                    onClick={onAddBookmark}
-                                    title={isCurrentPageBookmarked ? "Remove bookmark (Ctrl+D)" : "Bookmark current page (Ctrl+D)"}
-                                >
-                                    <BookmarkIcon
-                                        className={cn("w-4 h-4", isCurrentPageBookmarked && "fill-current")}
-                                    />
-                                </ToolbarButton>
-                            )}
-
-                            {/* View Annotations (Bookmarks & Highlights) */}
-                            <ToolbarButton
-                                onClick={onToggleBookmarks}
-                                active={activePanel === "bookmarks"}
-                                title="View Annotations"
-                            >
-                                <LineSquiggle className="w-4 h-4" />
-                            </ToolbarButton>
-
-                            <ToolbarButton
-                                onClick={onToggleSettings}
-                                active={activePanel === "settings"}
-                                title="Reading Settings"
-                            >
-                                <Type className="w-4 h-4" />
-                            </ToolbarButton>
-
-                            <div
-                                className="hidden sm:block w-px h-4 mx-1"
-                                style={{ backgroundColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)' }}
-                            />
-
-                            <ToolbarButton
-                                onClick={onToggleInfo}
-                                active={activePanel === "info"}
-                                title="Book Information"
-                            >
-                                <MoreVertical className="w-4 h-4" />
-                            </ToolbarButton>
-                        </div>
-                    )}
-
                     {/* Window Controls */}
                     {isTauriRuntime && (
                         <div

@@ -118,13 +118,13 @@ export function ReaderSearch({
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             placeholder="Search in book..."
-                            className="w-full h-10 pl-10 pr-10 bg-[var(--color-background)] rounded-xl text-sm border-2 border-transparent focus:border-[var(--color-accent)] transition-all outline-none text-[var(--color-text-primary)]"
+                            className="w-full h-10 pl-10 pr-10 bg-[var(--color-background)] rounded-xl text-sm border-2 border-transparent focus:border-[var(--color-accent)] transition-colors outline-none text-[var(--color-text-primary)]"
                         />
                         {query && (
                             <button
                                 type="button"
                                 onClick={handleClear}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--color-border-subtle)] transition-colors text-[var(--color-text-muted)]"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors text-[var(--color-text-muted)]"
                             >
                                 <X className="w-3.5 h-3.5" />
                             </button>
@@ -136,7 +136,7 @@ export function ReaderSearch({
                 {isSearching && (
                     <div className="h-1 bg-[var(--color-background)] overflow-hidden">
                         <div
-                            className="h-full bg-[var(--color-accent)] transition-all duration-300"
+                            className="h-full bg-[var(--color-accent)] transition-[width] duration-300"
                             style={{ width: `${progress}%` }}
                         />
                     </div>
@@ -170,10 +170,10 @@ export function ReaderSearch({
                             <button
                                 key={index}
                                 onClick={() => handleNavigate(result.cfi)}
-                                className="w-full flex flex-col gap-1 p-3 rounded-xl hover:bg-[var(--color-background)] transition-all text-left group"
+                                className="w-full flex flex-col gap-1 p-3 rounded-xl hover:bg-[var(--color-background)] transition-colors text-left group"
                             >
                                 <p
-                                    className="text-[13px] text-[var(--color-text-secondary)] line-clamp-3 leading-relaxed"
+                                    className="text-[var(--font-size-caption)] text-[var(--color-text-secondary)] line-clamp-3 leading-relaxed"
                                     dangerouslySetInnerHTML={{
                                         __html: result.excerpt.replace(
                                             new RegExp(`(${query})`, 'gi'),
@@ -181,7 +181,7 @@ export function ReaderSearch({
                                         )
                                     }}
                                 />
-                                <div className="flex items-center gap-1.5 text-[10px] text-[var(--color-accent)] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex items-center gap-1.5 text-[var(--font-size-3xs)] text-[var(--color-accent)] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
                                     <span>Jump to match</span>
                                     <ChevronRight className="w-3 h-3" />
                                 </div>
@@ -192,7 +192,7 @@ export function ReaderSearch({
 
                 {results.length > 0 && (
                     <div className="reader-panel-footer p-3 bg-[var(--color-background)]">
-                        <p className="text-[10px] font-bold text-[var(--color-text-muted)] text-center uppercase tracking-widest">
+                        <p className="text-[var(--font-size-3xs)] font-bold text-[var(--color-text-muted)] text-center uppercase tracking-widest">
                             {results.length} {results.length === 1 ? 'Result' : 'Results'} found
                         </p>
                     </div>

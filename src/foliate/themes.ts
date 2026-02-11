@@ -3,6 +3,8 @@
  * Ported from Foliate GTK app
  */
 
+import { APP_THEME_PALETTES } from "@/lib/design-tokens";
+
 export interface ThemeColors {
     fg: string;
     bg: string;
@@ -18,33 +20,57 @@ export interface Theme {
 
 export const themes: Theme[] = [
     {
-        name: 'light',
-        label: 'Light',
-        light: { fg: '#000000', bg: '#ffffff', link: '#0066cc' },
-        dark: { fg: '#000000', bg: '#ffffff', link: '#0066cc' }
+        name: "light",
+        label: "Light",
+        light: {
+            fg: APP_THEME_PALETTES.light.readerFg,
+            bg: APP_THEME_PALETTES.light.readerBg,
+            link: APP_THEME_PALETTES.light.readerLink,
+        },
+        dark: {
+            fg: APP_THEME_PALETTES.light.readerFg,
+            bg: APP_THEME_PALETTES.light.readerBg,
+            link: APP_THEME_PALETTES.light.readerLink,
+        },
     },
     {
-        name: 'sepia',
-        label: 'Sepia',
-        light: { fg: '#5b4636', bg: '#f1e8d0', link: '#008b8b' },
-        dark: { fg: '#ffd595', bg: '#342e25', link: '#48d1cc' }
+        name: "sepia",
+        label: "Sepia",
+        light: {
+            fg: APP_THEME_PALETTES.sepia.readerFg,
+            bg: APP_THEME_PALETTES.sepia.readerBg,
+            link: APP_THEME_PALETTES.sepia.readerLink,
+        },
+        dark: {
+            fg: APP_THEME_PALETTES.sepia.readerFg,
+            bg: APP_THEME_PALETTES.sepia.readerBg,
+            link: APP_THEME_PALETTES.sepia.readerLink,
+        },
     },
     {
-        name: 'dark',
-        label: 'Dark',
-        light: { fg: '#e0e0e0', bg: '#222222', link: '#77bbee' },
-        dark: { fg: '#e0e0e0', bg: '#222222', link: '#77bbee' }
-    }
+        name: "dark",
+        label: "Dark",
+        light: {
+            fg: APP_THEME_PALETTES.dark.readerFg,
+            bg: APP_THEME_PALETTES.dark.readerBg,
+            link: APP_THEME_PALETTES.dark.readerLink,
+        },
+        dark: {
+            fg: APP_THEME_PALETTES.dark.readerFg,
+            bg: APP_THEME_PALETTES.dark.readerBg,
+            link: APP_THEME_PALETTES.dark.readerLink,
+        },
+    },
 ];
 
 export const invertTheme = (theme: Theme) => ({
     ...theme,
     inverted: {
         fg: theme.dark.bg,
-        link: theme.dark.bg
-    }
+        link: theme.dark.bg,
+    },
 });
 
 export const getTheme = (name: string): Theme => {
-    return themes.find(t => t.name === name) || themes[0];
+    return themes.find((theme) => theme.name === name) || themes[0];
 };

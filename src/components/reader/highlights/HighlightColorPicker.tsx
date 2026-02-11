@@ -6,6 +6,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquare, X, Check, Trash2 } from 'lucide-react';
 import { ask } from '@tauri-apps/plugin-dialog';
+import {
+    HIGHLIGHT_COLOR_TOKENS,
+    HIGHLIGHT_PICKER_ACTIVE_COLORS,
+    HIGHLIGHT_PICKER_COLORS,
+} from "@/lib/design-tokens";
 import { cn } from '@/lib/utils';
 import { isTauri } from '@/lib/env';
 import type { HighlightColor } from '@/types';
@@ -24,47 +29,15 @@ interface HighlightColorPickerProps {
 
 // Color configurations with proper highlight styling
 const COLOR_OPTIONS: { 
-    color: HighlightColor; 
-    bg: string; 
-    activeBg: string;
+    color: HighlightColor;
     label: string;
 }[] = [
-    { 
-        color: 'yellow', 
-        bg: 'bg-[#FFE082]', 
-        activeBg: 'bg-[#FFD54F]',
-        label: 'Yellow'
-    },
-    { 
-        color: 'green', 
-        bg: 'bg-[#A5D6A7]', 
-        activeBg: 'bg-[#81C784]',
-        label: 'Green'
-    },
-    { 
-        color: 'blue', 
-        bg: 'bg-[#90CAF9]', 
-        activeBg: 'bg-[#64B5F6]',
-        label: 'Blue'
-    },
-    { 
-        color: 'red', 
-        bg: 'bg-[#EF9A9A]', 
-        activeBg: 'bg-[#E57373]',
-        label: 'Red'
-    },
-    { 
-        color: 'orange', 
-        bg: 'bg-[#FFCC80]', 
-        activeBg: 'bg-[#FFB74D]',
-        label: 'Orange'
-    },
-    { 
-        color: 'purple', 
-        bg: 'bg-[#CE93D8]', 
-        activeBg: 'bg-[#BA68C8]',
-        label: 'Purple'
-    },
+    { color: "yellow", label: HIGHLIGHT_COLOR_TOKENS.yellow.label },
+    { color: "green", label: HIGHLIGHT_COLOR_TOKENS.green.label },
+    { color: "blue", label: HIGHLIGHT_COLOR_TOKENS.blue.label },
+    { color: "red", label: HIGHLIGHT_COLOR_TOKENS.red.label },
+    { color: "orange", label: HIGHLIGHT_COLOR_TOKENS.orange.label },
+    { color: "purple", label: HIGHLIGHT_COLOR_TOKENS.purple.label },
 ];
 
 // Animation keyframes
@@ -306,14 +279,13 @@ export function HighlightColorPicker({
                     "fixed z-[100]",
                     "bg-[var(--color-surface)]",
                     "border border-[var(--color-border)]",
-                    "rounded-xl shadow-xl",
+                    "rounded-xl shadow-[var(--shadow-md)]",
                     "p-2",
                     isClosing ? "picker-animate-out" : "picker-animate-in"
                 )}
                 style={{
                     left: adjustedPosition.x,
                     top: adjustedPosition.y,
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)',
                 }}
             >
                 {/* Header with close button */}
@@ -328,7 +300,7 @@ export function HighlightColorPicker({
                             "text-[var(--color-text-muted)]",
                             "hover:bg-[var(--color-surface-hover)]",
                             "hover:text-[var(--color-text-primary)]",
-                            "transition-all duration-150"
+                            "transition-colors duration-150"
                         )}
                     >
                         <X className="w-3.5 h-3.5" />
@@ -345,13 +317,13 @@ export function HighlightColorPicker({
                             <button
                                 onClick={handleDeleteCancelled}
                                 className={cn(
-                                    "flex-1 px-2 py-1.5 text-[11px] font-medium",
+                                    "flex-1 px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
                                     "rounded-lg",
                                     "bg-[var(--color-surface-variant)]",
                                     "text-[var(--color-text-secondary)]",
                                     "hover:bg-[var(--color-surface-hover)]",
                                     "hover:text-[var(--color-text-primary)]",
-                                    "transition-all duration-150",
+                                    "transition-colors duration-150",
                                     "active:scale-95"
                                 )}
                             >
@@ -360,12 +332,10 @@ export function HighlightColorPicker({
                             <button
                                 onClick={handleDeleteConfirmed}
                                 className={cn(
-                                    "flex-1 px-2 py-1.5 text-[11px] font-medium",
+                                    "reader-danger-action flex-1 px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
                                     "rounded-lg",
-                                    "bg-red-500/10",
-                                    "text-red-500",
-                                    "hover:bg-red-500/20",
-                                    "transition-all duration-150",
+                                    "bg-[color-mix(in_srgb,var(--color-error)_10%,transparent)]",
+                                    "transition-colors duration-150",
                                     "active:scale-95"
                                 )}
                             >
@@ -377,27 +347,31 @@ export function HighlightColorPicker({
                     <>
                         {/* Color grid */}
                         <div className="flex gap-1 px-1 mb-3">
-                            {COLOR_OPTIONS.map(({ color, bg, activeBg, label }) => (
+                            {COLOR_OPTIONS.map(({ color, label }) => (
                                 <button
                                     key={color}
                                     onClick={() => handleColorClick(color)}
                                     className={cn(
                                         "w-7 h-7 rounded-lg",
                                         "flex items-center justify-center",
-                                        selectedColor === color ? activeBg : bg,
-                                        "border border-black/10",
+                                        "border border-[var(--color-overlay-subtle)]",
                                         "shadow-sm",
                                         "hover:scale-110",
                                         "hover:shadow-md",
                                         "active:scale-95",
-                                        "transition-all duration-150",
+                                        "transition-[transform,box-shadow] duration-150",
                                         "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-1"
                                     )}
+                                    style={{
+                                        backgroundColor: selectedColor === color
+                                            ? HIGHLIGHT_PICKER_ACTIVE_COLORS[color]
+                                            : HIGHLIGHT_PICKER_COLORS[color],
+                                    }}
                                     title={`${label} (Shortcut: ${COLOR_OPTIONS.findIndex(c => c.color === color) + 1})`}
                                     aria-label={`Select ${label} highlight color`}
                                 >
                                     {selectedColor === color && (
-                                        <Check className="w-3.5 h-3.5 text-black/60" strokeWidth={3} />
+                                        <Check className="w-3.5 h-3.5 text-[var(--color-overlay-strong)]" strokeWidth={3} />
                                     )}
                                 </button>
                             ))}
@@ -412,13 +386,13 @@ export function HighlightColorPicker({
                                 }}
                                 className={cn(
                                     "flex-1 flex items-center justify-center gap-1.5",
-                                    "px-2 py-1.5 text-[11px] font-medium",
+                                    "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
                                     "rounded-lg",
                                     "bg-[var(--color-surface-variant)]",
                                     "text-[var(--color-text-secondary)]",
                                     "hover:bg-[var(--color-surface-hover)]",
                                     "hover:text-[var(--color-text-primary)]",
-                                    "transition-all duration-150",
+                                    "transition-colors duration-150",
                                     "active:scale-95"
                                 )}
                             >
@@ -434,12 +408,11 @@ export function HighlightColorPicker({
                                 <button
                                     onClick={handleDeleteClick}
                                     className={cn(
-                                        "w-full flex items-center justify-center gap-1.5",
-                                        "px-2 py-1.5 text-[11px] font-medium",
+                                        "reader-danger-action w-full flex items-center justify-center gap-1.5",
+                                        "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
                                         "rounded-lg",
-                                        "text-red-500",
-                                        "hover:bg-red-500/10",
-                                        "transition-all duration-150",
+                                        "hover:bg-[color-mix(in_srgb,var(--color-error)_10%,transparent)]",
+                                        "transition-colors duration-150",
                                         "active:scale-95"
                                     )}
                                 >

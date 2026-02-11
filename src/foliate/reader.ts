@@ -5,7 +5,7 @@
  * Adapted for React web app (removed WebKit/GTK specific code)
  */
 
-import type { Theme } from './themes';
+import { getTheme, type Theme } from "./themes";
 
 interface ReaderStyle {
     spacing: number;
@@ -59,12 +59,7 @@ export class Reader {
             justify: true,
             hyphenate: true,
             invert: false,
-            theme: {
-                name: 'light',
-                label: 'Light',
-                light: { fg: '#000000', bg: '#ffffff', link: '#0066cc' },
-                dark: { fg: '#000000', bg: '#ffffff', link: '#0066cc' }
-            }
+            theme: getTheme("light"),
         };
     }
 
@@ -306,7 +301,6 @@ export function getCSS({
         }
     `, `
         @media screen and (prefers-color-scheme: light) {
-            ${theme.light.bg !== '#ffffff' ? `
             html, body {
                 color: ${theme.light.fg} !important;
                 background: none !important;
@@ -326,7 +320,7 @@ export function getCSS({
             .${CSS.escape(activeClass)}, .${CSS.escape(activeClass)} * {
                 color: ${theme.light.fg} !important;
                 background: color-mix(in hsl, ${theme.light.fg}, ${theme.light.bg} 85%) !important;
-            }` : ''}
+            }
         }
         @media screen and (prefers-color-scheme: dark) {
             ${invert ? '' : `

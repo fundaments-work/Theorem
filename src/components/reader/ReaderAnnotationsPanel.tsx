@@ -5,10 +5,11 @@
 
 import { useState } from 'react';
 import { Bookmark, X, Trash2, ExternalLink, Highlighter, MessageSquare } from 'lucide-react';
+import { HIGHLIGHT_PICKER_COLORS } from "@/lib/design-tokens";
 import { useLibraryStore } from '@/store';
 import { format } from 'date-fns';
 import { Backdrop, FloatingPanel } from '@/components/ui';
-import type { Annotation } from '@/types';
+import type { Annotation, HighlightColor } from '@/types';
 import { cn } from '@/lib/utils';
 
 interface ReaderAnnotationsPanelProps {
@@ -45,13 +46,13 @@ export function ReaderAnnotationsPanel({
     const renderBookmarkItem = (bookmark: Annotation) => (
         <div
             key={bookmark.id}
-            className="group flex flex-col gap-2 p-3 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-background)] transition-all cursor-pointer"
+            className="group flex flex-col gap-2 p-3 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors cursor-pointer"
             onClick={() => handleNavigate(bookmark)}
         >
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                     <Bookmark className="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" />
-                    <span className="text-[13px] font-medium text-[var(--color-text-primary)] truncate">
+                    <span className="text-[var(--font-size-caption)] font-medium text-[var(--color-text-primary)] truncate">
                         {bookmark.selectedText || 'Bookmark'}
                     </span>
                 </div>
@@ -61,12 +62,12 @@ export function ReaderAnnotationsPanel({
                         removeAnnotation(bookmark.id);
                         onDelete?.(bookmark.id);
                     }}
-                    className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                    className="reader-danger-action p-1.5 rounded-lg text-[var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
                 >
                     <Trash2 className="w-3.5 h-3.5" />
                 </button>
             </div>
-            <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] font-medium pl-6">
+            <div className="flex items-center justify-between text-[var(--font-size-3xs)] text-[var(--color-text-muted)] font-medium pl-6">
                 <span>{format(new Date(bookmark.createdAt), 'MMM d, yyyy')}</span>
                 <div className="flex items-center gap-1 text-[var(--color-accent)] opacity-0 group-hover:opacity-100 transition-opacity">
                     <span>Jump to</span>
@@ -79,7 +80,7 @@ export function ReaderAnnotationsPanel({
     const renderHighlightItem = (highlight: Annotation) => (
         <div
             key={highlight.id}
-            className="group flex flex-col gap-2 p-3 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-background)] transition-all cursor-pointer"
+            className="group flex flex-col gap-2 p-3 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors cursor-pointer"
             onClick={() => handleNavigate(highlight)}
         >
             <div className="flex items-start justify-between gap-3">
@@ -93,11 +94,11 @@ export function ReaderAnnotationsPanel({
                         }}
                     />
                     <div className="flex-1 min-w-0">
-                        <p className="text-[13px] text-[var(--color-text-primary)] line-clamp-2 leading-snug">
+                        <p className="text-[var(--font-size-caption)] text-[var(--color-text-primary)] line-clamp-2 leading-snug">
                             &ldquo;{highlight.selectedText || 'Highlight'}&rdquo;
                         </p>
                         {highlight.noteContent && (
-                            <div className="flex items-center gap-1 mt-1 text-[10px] text-[var(--color-text-muted)]">
+                            <div className="flex items-center gap-1 mt-1 text-[var(--font-size-3xs)] text-[var(--color-text-muted)]">
                                 <MessageSquare className="w-3 h-3" />
                                 <span className="line-clamp-1">{highlight.noteContent}</span>
                             </div>
@@ -110,12 +111,12 @@ export function ReaderAnnotationsPanel({
                         removeAnnotation(highlight.id);
                         onDelete?.(highlight.id);
                     }}
-                    className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                    className="reader-danger-action p-1.5 rounded-lg text-[var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
                 >
                     <Trash2 className="w-3.5 h-3.5" />
                 </button>
             </div>
-            <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] font-medium pl-6">
+            <div className="flex items-center justify-between text-[var(--font-size-3xs)] text-[var(--color-text-muted)] font-medium pl-6">
                 <span>{format(new Date(highlight.createdAt), 'MMM d, yyyy')}</span>
                 <div className="flex items-center gap-1 text-[var(--color-accent)] opacity-0 group-hover:opacity-100 transition-opacity">
                     <span>Jump to</span>
@@ -125,16 +126,8 @@ export function ReaderAnnotationsPanel({
         </div>
     );
 
-    const getHighlightColor = (color?: string): string => {
-        const colors: Record<string, string> = {
-            yellow: '#FFE082',
-            green: '#A5D6A7',
-            blue: '#90CAF9',
-            red: '#EF9A9A',
-            orange: '#FFCC80',
-            purple: '#CE93D8',
-        };
-        return colors[color || 'yellow'];
+    const getHighlightColor = (color?: HighlightColor): string => {
+        return color ? HIGHLIGHT_PICKER_COLORS[color] : HIGHLIGHT_PICKER_COLORS.yellow;
     };
 
     const currentItems = activeTab === 'bookmarks' ? bookmarks : highlights;
@@ -184,7 +177,7 @@ export function ReaderAnnotationsPanel({
                             className={cn(
                                 "reader-chip flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-full transition-colors",
                                 activeTab === 'bookmarks'
-                                    ? "bg-[var(--color-accent)] text-[var(--color-background)] border-transparent"
+                                    ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] border-transparent"
                                     : "text-[var(--color-text-secondary)] hover:bg-[var(--color-background)]"
                             )}
                             data-active={activeTab === "bookmarks"}
@@ -197,7 +190,7 @@ export function ReaderAnnotationsPanel({
                             className={cn(
                                 "reader-chip flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-full transition-colors",
                                 activeTab === 'highlights'
-                                    ? "bg-[var(--color-accent)] text-[var(--color-background)] border-transparent"
+                                    ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] border-transparent"
                                     : "text-[var(--color-text-secondary)] hover:bg-[var(--color-background)]"
                             )}
                             data-active={activeTab === "highlights"}

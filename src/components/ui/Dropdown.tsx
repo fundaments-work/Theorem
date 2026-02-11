@@ -31,7 +31,7 @@ const sizeClasses = {
 
 const variantClasses = {
     default: "bg-[var(--color-surface)] border border-[var(--color-border)]",
-    filled: "bg-[var(--color-border-subtle)] border-none",
+    filled: "bg-[var(--color-surface-muted)] border-none",
     outlined: "bg-transparent border border-[var(--color-border)]",
 };
 
@@ -114,10 +114,9 @@ export function Dropdown<T extends string = string>({
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled}
                 className={cn(
-                    "flex items-center justify-between gap-2 w-full rounded-lg",
+                    "flex items-center justify-between gap-2 w-full rounded-lg ui-clickable ui-focus-ring",
                     "text-[var(--color-text-primary)]",
-                    "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50",
-                    "transition-all duration-200",
+                    "transition-colors duration-200",
                     "disabled:opacity-50 disabled:cursor-not-allowed",
                     sizeClasses[size],
                     variantClasses[variant],
@@ -140,16 +139,16 @@ export function Dropdown<T extends string = string>({
                 <>
                     {/* Backdrop for mobile/click-outside */}
                     <div
-                        className="fixed inset-0 z-[999]"
+                        className="fixed inset-0 z-[var(--z-dropdown)]"
                         onClick={() => setIsOpen(false)}
                     />
 
                     {/* Menu */}
                     <div
                         className={cn(
-                            "absolute z-[1000] mt-1 min-w-full w-max",
+                            "absolute z-[calc(var(--z-dropdown)+1)] mt-1 min-w-full w-max",
                             "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                            "rounded-lg shadow-lg shadow-black/10",
+                            "rounded-lg shadow-[var(--shadow-md)]",
                             "py-1 max-h-60 overflow-y-auto",
                             align === "right" ? "right-0" : "left-0",
                             dropdownClassName
@@ -169,7 +168,7 @@ export function Dropdown<T extends string = string>({
                                         "disabled:opacity-40 disabled:cursor-not-allowed",
                                         isSelected
                                             ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]"
+                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text-primary)]"
                                     )}
                                 >
                                     <span className="truncate">{option.label}</span>

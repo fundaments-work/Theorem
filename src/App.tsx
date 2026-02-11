@@ -125,7 +125,7 @@ function App() {
             {/* Mobile sidebar overlay - only on small screens */}
             {sidebarOpen && (
                 <div
-                    className="fixed inset-0 z-40 bg-black/50 md:hidden"
+                    className="fixed inset-0 z-[var(--z-backdrop)] bg-[var(--color-overlay-strong)] md:hidden"
                     onClick={toggleSidebar}
                 />
             )}
@@ -133,7 +133,7 @@ function App() {
             {/* Mobile sidebar - only on small screens */}
             <div
                 className={cn(
-                    "fixed left-0 top-0 h-full z-[60] md:hidden",
+                    "fixed left-0 top-0 h-full z-[calc(var(--z-dropdown)+1)] md:hidden",
                     "transform transition-transform duration-300",
                     sidebarOpen ? "translate-x-0" : "-translate-x-full",
                 )}

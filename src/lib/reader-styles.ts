@@ -7,8 +7,9 @@
  * - No debouncing for visual changes - they're instant via CSS
  */
 
-import type { ReaderSettings, ReaderTheme, FontFamily, ReadingFlow, PageLayout } from '@/types';
+import { APP_THEME_PALETTES, READER_THEME_PREVIEWS } from "@/lib/design-tokens";
 import { getTheme } from '@/foliate/themes';
+import type { ReaderSettings, ReaderTheme, FontFamily, ReadingFlow, PageLayout } from '@/types';
 
 // CSS Variable names mapping
 const CSS_VARS = {
@@ -46,9 +47,21 @@ const FONT_FAMILY_VALUES: Record<FontFamily, string> = {
 
 // Theme color values - Minimal: black & white only, sepia for warmth
 const THEME_COLORS: Record<ReaderTheme, { bg: string; fg: string; link: string }> = {
-    light: { bg: '#ffffff', fg: '#000000', link: '#000000' },  // Black on white
-    sepia: { bg: '#f4ecd8', fg: '#5f4b32', link: '#8b6914' },  // Warm sepia
-    dark: { bg: '#000000', fg: '#ffffff', link: '#ffffff' },   // White on black
+    light: {
+        bg: READER_THEME_PREVIEWS.light.bg,
+        fg: READER_THEME_PREVIEWS.light.fg,
+        link: APP_THEME_PALETTES.light.readerLink,
+    },
+    sepia: {
+        bg: READER_THEME_PREVIEWS.sepia.bg,
+        fg: READER_THEME_PREVIEWS.sepia.fg,
+        link: APP_THEME_PALETTES.sepia.readerLink,
+    },
+    dark: {
+        bg: READER_THEME_PREVIEWS.dark.bg,
+        fg: READER_THEME_PREVIEWS.dark.fg,
+        link: APP_THEME_PALETTES.dark.readerLink,
+    },
 };
 
 // Cache for current settings to avoid recomputation
@@ -194,9 +207,9 @@ export function createReaderCSS(settings?: ReaderSettings): string {
     const s = settings || currentSettings;
     
     // Use provided settings or defaults
-    const bg = s ? THEME_COLORS[s.theme].bg : '#ffffff';
-    const fg = s ? THEME_COLORS[s.theme].fg : '#1a1a1a';
-    const link = s ? THEME_COLORS[s.theme].link : '#0066cc';
+    const bg = s ? THEME_COLORS[s.theme].bg : READER_THEME_PREVIEWS.light.bg;
+    const fg = s ? THEME_COLORS[s.theme].fg : READER_THEME_PREVIEWS.light.fg;
+    const link = s ? THEME_COLORS[s.theme].link : APP_THEME_PALETTES.light.readerLink;
     const fontSize = s?.fontSize ?? 18;
     const lineHeight = s?.lineHeight ?? 1.6;
     const letterSpacing = s?.letterSpacing ?? 0;
@@ -291,11 +304,11 @@ export function initReaderStyles(settings: ReaderSettings): void {
             
             /* Theme-based scrollbar styling */
             .theme-dark ::-webkit-scrollbar-thumb {
-                background: #333333;
+                background: var(--app-border);
             }
             
             .theme-sepia ::-webkit-scrollbar-thumb {
-                background: #d4c9a8;
+                background: var(--app-border);
             }
             
             /* Smooth transitions for theme changes */

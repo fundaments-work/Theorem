@@ -4,27 +4,8 @@
  * Ported and adapted from foliate-js/overlayer.js
  */
 
-import type { Annotation, HighlightColor } from '@/types';
-
-// Color definitions matching the type system
-const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
-    yellow: 'rgba(255, 235, 59, 0.4)',
-    green: 'rgba(76, 175, 80, 0.4)',
-    blue: 'rgba(33, 150, 243, 0.4)',
-    red: 'rgba(244, 67, 54, 0.4)',
-    orange: 'rgba(255, 152, 0, 0.4)',
-    purple: 'rgba(156, 39, 176, 0.4)',
-};
-
-// Dark theme versions with adjusted opacity
-const HIGHLIGHT_COLORS_DARK: Record<HighlightColor, string> = {
-    yellow: 'rgba(255, 235, 59, 0.25)',
-    green: 'rgba(76, 175, 80, 0.25)',
-    blue: 'rgba(33, 150, 243, 0.25)',
-    red: 'rgba(244, 67, 54, 0.25)',
-    orange: 'rgba(255, 152, 0, 0.25)',
-    purple: 'rgba(156, 39, 176, 0.25)',
-};
+import { HIGHLIGHT_COLORS, HIGHLIGHT_COLORS_DARK } from "@/lib/design-tokens";
+import type { Annotation, HighlightColor } from "@/types";
 
 export interface HighlightRect {
     left: number;

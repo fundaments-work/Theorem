@@ -41,14 +41,14 @@ export function ReaderBookmarks({
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1.5 rounded-xl hover:bg-[var(--color-border-subtle)] transition-colors text-[var(--color-text-secondary)]"
+                        className="p-1.5 rounded-xl hover:bg-[var(--color-surface-muted)] transition-colors text-[var(--color-text-secondary)]"
                     >
                         <X className="w-4 h-4" />
                     </button>
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar max-h-[60vh]">
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar max-h-[var(--layout-reader-list-max-height)]">
                     {bookmarks.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
                             <div className="w-12 h-12 rounded-2xl bg-[var(--color-background)] flex items-center justify-center mb-4 text-[var(--color-text-muted)]">
@@ -64,7 +64,7 @@ export function ReaderBookmarks({
                             {bookmarks.map((bookmark) => (
                                 <div
                                     key={bookmark.id}
-                                    className="group flex flex-col gap-2 p-3 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-background)] transition-all cursor-pointer"
+                                    className="group flex flex-col gap-2 p-3 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors cursor-pointer"
                                     onClick={() => {
                                         onNavigate(bookmark.location);
                                         onClose();
@@ -72,7 +72,7 @@ export function ReaderBookmarks({
                                 >
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[13px] font-medium text-[var(--color-text-primary)] line-clamp-2 leading-snug">
+                                            <p className="text-[var(--font-size-caption)] font-medium text-[var(--color-text-primary)] line-clamp-2 leading-snug">
                                                 {bookmark.selectedText || 'Position ' + bookmark.location.substring(0, 8) + '...'}
                                             </p>
                                         </div>
@@ -81,12 +81,12 @@ export function ReaderBookmarks({
                                                 e.stopPropagation();
                                                 removeAnnotation(bookmark.id);
                                             }}
-                                            className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                                            className="reader-danger-action p-1.5 rounded-lg text-[var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
-                                    <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] font-medium">
+                                    <div className="flex items-center justify-between text-[var(--font-size-3xs)] text-[var(--color-text-muted)] font-medium">
                                         <span>{format(new Date(bookmark.createdAt), 'MMM d, yyyy')}</span>
                                         <div className="flex items-center gap-1 text-[var(--color-accent)] opacity-0 group-hover:opacity-100 transition-opacity">
                                             <span>Jump to</span>

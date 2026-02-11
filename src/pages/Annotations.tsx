@@ -4,9 +4,10 @@
  */
 
 import { useState, useMemo } from "react";
+import { HIGHLIGHT_SOLID_COLORS } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 import { useLibraryStore, useUIStore } from "@/store";
-import { HIGHLIGHT_COLORS, type HighlightColor } from "@/types";
+import type { HighlightColor } from "@/types";
 import { EditNoteModal } from "@/components/modals";
 import { Dropdown } from "@/components/ui";
 import {
@@ -23,8 +24,8 @@ import {
 function ColorBadge({ color }: { color: HighlightColor }) {
     return (
         <span
-            className="inline-block w-3 h-3 rounded-full border border-black/10"
-            style={{ backgroundColor: HIGHLIGHT_COLORS[color] }}
+            className="inline-block w-3 h-3 rounded-full border border-[var(--color-overlay-subtle)]"
+            style={{ backgroundColor: HIGHLIGHT_SOLID_COLORS[color] }}
         />
     );
 }
@@ -51,7 +52,7 @@ function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" }) {
 
     return (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-[var(--color-border-subtle)] flex items-center justify-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <Icon className="w-6 h-6 text-[var(--color-text-secondary)]" />
             </div>
             <h2 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">
@@ -107,7 +108,7 @@ function AnnotationCard({
     };
 
     return (
-        <div className="group bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-text-muted)] transition-colors">
+        <div className="group ui-surface p-5 hover:border-[var(--color-text-muted)] transition-colors">
             {/* Header */}
             <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -122,7 +123,7 @@ function AnnotationCard({
                 <div className="relative">
                     <button
                         onClick={() => setShowMenu(!showMenu)}
-                        className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                         <MoreVertical className="w-4 h-4" />
                     </button>
@@ -132,13 +133,13 @@ function AnnotationCard({
                                 className="fixed inset-0 z-10"
                                 onClick={() => setShowMenu(false)}
                             />
-                            <div className="absolute right-0 top-full mt-1 w-36 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg z-20 py-1">
+                            <div className="absolute right-0 top-full mt-1 w-36 ui-surface shadow-lg z-20 py-1">
                                 <button
                                     onClick={() => {
                                         onEdit(annotation.id);
                                         setShowMenu(false);
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-border-subtle)]"
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
                                 >
                                     <Edit3 className="w-4 h-4" />
                                     Edit
@@ -148,7 +149,7 @@ function AnnotationCard({
                                         onDelete(annotation.id);
                                         setShowMenu(false);
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-error)] hover:bg-[var(--color-border-subtle)]"
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-error)] hover:bg-[var(--color-surface-muted)]"
                                 >
                                     <Trash2 className="w-4 h-4" />
                                     Delete
@@ -188,7 +189,7 @@ function AnnotationCard({
                     ) : (
                         <BookOpen className="w-4 h-4" />
                     )}
-                    <span className="truncate max-w-[150px]">{book?.title || "Unknown Book"}</span>
+                    <span className="truncate max-w-[var(--layout-inline-title-max-width)]">{book?.title || "Unknown Book"}</span>
                 </button>
                 <span className="text-xs text-[var(--color-text-muted)]">
                     {new Date(annotation.createdAt).toLocaleDateString()}
@@ -294,14 +295,14 @@ export function AnnotationsPage() {
     }
 
     return (
-        <div className="p-8 max-w-7xl mx-auto animate-fade-in min-h-screen">
+        <div className="ui-page animate-fade-in">
             {/* Header */}
             <div className="flex items-start justify-between mb-10">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
+                    <h1 className="ui-page-title">
                         Highlights & Notes
                     </h1>
-                    <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                    <p className="ui-page-subtitle">
                         {filteredAnnotations.length} {filteredAnnotations.length === 1 ? "annotation" : "annotations"} across{" "}
                         {new Set(filteredAnnotations.map((a) => a.bookId)).size} books
                     </p>
@@ -311,7 +312,7 @@ export function AnnotationsPage() {
             {/* Filters */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                 {/* Filter Tabs */}
-                <div className="flex items-center gap-1 p-1 bg-[var(--color-border-subtle)] rounded-lg w-fit">
+                <div className="flex items-center gap-1 p-1 bg-[var(--color-surface-muted)] rounded-lg w-fit">
                     {filterTabs.map((tab) => (
                         <button
                             key={tab.id}

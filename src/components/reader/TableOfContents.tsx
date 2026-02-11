@@ -56,7 +56,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref }: TocItemCompo
             <div
                 className={cn(
                     "flex items-center gap-3 py-2.5 px-3 rounded-lg cursor-pointer",
-                    "transition-all duration-200 ease-out mx-2 my-0.5",
+                    "transition-colors duration-200 ease-out mx-2 my-0.5",
                     isActive
                         ? "font-semibold"
                         : "hover:bg-[color-mix(in_srgb,var(--reader-fg)_5%,var(--reader-bg))]",
@@ -83,7 +83,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref }: TocItemCompo
                 ) : (
                     <div className="w-5 flex items-center justify-center">
                         <div
-                            className="w-1.5 h-1.5 rounded-full transition-all"
+                            className="w-1.5 h-1.5 rounded-full transition-transform"
                             style={{
                                 backgroundColor: "var(--reader-fg)",
                                 opacity: isActive ? 1 : 0.3,
@@ -92,7 +92,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref }: TocItemCompo
                         />
                     </div>
                 )}
-                <span className="flex-1 text-[13px] truncate leading-tight">{item.label}</span>
+                <span className="flex-1 text-[var(--font-size-caption)] truncate leading-tight">{item.label}</span>
             </div>
 
             {hasChildren && isExpanded && (
@@ -134,16 +134,16 @@ export function TableOfContents({
 
     return (
         <>
-            <Backdrop visible={visible} onClick={onClose} blur />
+            <Backdrop visible={visible} onClick={onClose} />
 
             {/* Panel */}
             <div
                 className={cn(
-                    "fixed inset-x-0 bottom-0 h-[78vh] z-50 flex flex-col",
-                    "sm:inset-x-auto sm:bottom-auto sm:top-0 sm:left-0 sm:h-full sm:w-80 sm:max-w-[85vw]",
+                    "fixed inset-x-0 bottom-0 h-[var(--layout-reader-panel-mobile-height)] z-50 flex flex-col",
+                    "sm:inset-x-auto sm:bottom-auto sm:top-0 sm:left-0 sm:h-full sm:w-80 sm:max-w-[var(--layout-reader-panel-max-width-mobile)]",
                     "reader-sheet border border-[var(--color-border)] rounded-t-2xl sm:rounded-none sm:rounded-r-2xl",
-                    "transform transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                    visible ? "translate-y-0 sm:translate-x-0 shadow-2xl" : "translate-y-full sm:-translate-x-full shadow-none",
+                    "transform transition-transform duration-240 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                    visible ? "translate-y-0 sm:translate-x-0 shadow-[var(--shadow-md)]" : "translate-y-full sm:-translate-x-full shadow-none",
                     className,
                 )}
                 style={readerStyles.surface}
@@ -166,7 +166,7 @@ export function TableOfContents({
                             <h2 className="text-sm font-semibold tracking-tight" style={readerStyles.textPrimary}>
                                 {isPdf ? "Navigation" : "Table of Contents"}
                             </h2>
-                            <p className="text-[10px] font-medium uppercase tracking-wider" style={readerStyles.textMuted}>
+                            <p className="text-[var(--font-size-3xs)] font-medium uppercase tracking-wider" style={readerStyles.textMuted}>
                                 {isPdf ? "Outline" : "Navigation"}
                             </p>
                         </div>
@@ -196,7 +196,7 @@ export function TableOfContents({
                                 {isPdf ? "No outline available" : "No contents found"}
                             </p>
                             {isPdf && !pdfHasOutline && (
-                                <p className="mt-2 text-[11px] leading-relaxed" style={readerStyles.textMuted}>
+                                <p className="mt-2 text-[var(--font-size-2xs)] leading-relaxed" style={readerStyles.textMuted}>
                                     This PDF has no embedded outline.
                                 </p>
                             )}
@@ -216,7 +216,7 @@ export function TableOfContents({
 
                 {/* Footer */}
                 <div
-                    className="reader-panel-footer p-3 sm:p-4 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider"
+                    className="reader-panel-footer p-3 sm:p-4 flex items-center justify-between text-[var(--font-size-3xs)] font-medium uppercase tracking-wider"
                     style={{
                         ...readerStyles.border,
                         borderTopWidth: "1px",

@@ -44,10 +44,7 @@ export function EditNoteModal({ isOpen, content, onClose, onSave }: EditNoteModa
                     onChange={(e) => setEditContent(e.target.value)}
                     onKeyDown={handleKeyDown}
                     className={cn(
-                        "w-full h-40 p-3 rounded-lg resize-none",
-                        "bg-[var(--color-background)] border border-[var(--color-border)]",
-                        "text-sm text-[var(--color-text-primary)]",
-                        "focus:outline-none focus:border-[var(--color-accent)]"
+                        "ui-input w-full h-40 p-3 resize-none"
                     )}
                     placeholder="Add your note..."
                     autoFocus
@@ -56,17 +53,13 @@ export function EditNoteModal({ isOpen, content, onClose, onSave }: EditNoteModa
             <ModalFooter>
                 <button
                     onClick={onClose}
-                    className="px-4 py-2 rounded-lg text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-border-subtle)] transition-colors"
+                    className="ui-btn ui-btn-ghost"
                 >
                     Cancel
                 </button>
                 <button
                     onClick={handleSave}
-                    className={cn(
-                        "px-4 py-2 rounded-lg text-sm font-medium",
-                        "bg-[var(--color-accent)] text-white",
-                        "hover:opacity-90 transition-opacity"
-                    )}
+                    className={cn("ui-btn ui-btn-primary")}
                 >
                     Save
                 </button>

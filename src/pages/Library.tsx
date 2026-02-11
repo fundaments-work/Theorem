@@ -148,7 +148,7 @@ function BookCard({
                     {/* Cover Image */}
                     <div 
                         className={cn(
-                            "relative aspect-[2/3] bg-[var(--color-border-subtle)] mb-3 overflow-hidden rounded-lg",
+                            "relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden rounded-lg",
                             "border border-[var(--color-border)]",
                             "transition-all duration-200 group-hover:shadow-lg cursor-pointer"
                         )}
@@ -168,7 +168,7 @@ function BookCard({
 
                         {/* Progress Bar */}
                         {book.progress > 0 && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
                                 <div
                                     className="h-full bg-[var(--color-accent)]"
                                     style={{ width: `${book.progress * 100}%` }}
@@ -181,7 +181,7 @@ function BookCard({
                             className={cn(
                                 "absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-colors pointer-events-none",
                                 book.isFavorite 
-                                    ? "bg-[var(--color-accent)] text-white" 
+                                    ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]" 
                                     : "opacity-0"
                             )}
                         >
@@ -198,7 +198,7 @@ function BookCard({
                             {normalizeAuthor(book.author) || "Unknown Author"}
                         </p>
                         {book.progress > 0 && (
-                            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+                            <p className="text-[var(--font-size-3xs)] text-[var(--color-text-muted)] mt-1">
                                 {formatProgress(book.progress)}
                             </p>
                         )}
@@ -213,12 +213,12 @@ function BookCard({
         return (
             <ContextMenu items={contextMenuItems}>
                 <div 
-                    className="group flex items-center gap-4 p-3 w-full rounded-lg hover:bg-[var(--color-border-subtle)] transition-colors cursor-pointer select-none"
+                    className="group flex items-center gap-4 p-3 w-full rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors cursor-pointer select-none"
                     onClick={handleCardClick}
                 >
                     {/* Cover Image */}
                     <div className={cn(
-                        "relative w-12 h-16 flex-shrink-0 bg-[var(--color-border-subtle)] overflow-hidden rounded",
+                        "relative w-12 h-16 flex-shrink-0 bg-[var(--color-surface-muted)] overflow-hidden rounded",
                         "border border-[var(--color-border)]"
                     )}>
                         {book.coverPath ? (
@@ -229,7 +229,7 @@ function BookCard({
                                 loading="lazy"
                             />
                         ) : (
-                            <div className="book-cover-placeholder w-full h-full text-[8px] p-1 flex items-center justify-center">
+                            <div className="book-cover-placeholder w-full h-full ui-text-3xs p-1 flex items-center justify-center">
                                 <span className="line-clamp-2 text-center">{book.title}</span>
                             </div>
                         )}
@@ -256,11 +256,11 @@ function BookCard({
                             </div>
                             {book.rating && (
                                 <div className="flex items-center gap-0.5">
-                                    <Star className="w-3 h-3 text-yellow-500 fill-current" />
-                                    <span className="text-[10px] text-[var(--color-text-muted)]">{book.rating}</span>
+                                    <Star className="w-3 h-3 text-[var(--color-warning)] fill-current" />
+                                    <span className="text-[var(--font-size-3xs)] text-[var(--color-text-muted)]">{book.rating}</span>
                                 </div>
                             )}
-                            <span className="text-[10px] text-[var(--color-text-muted)] uppercase">{FORMAT_DISPLAY_NAMES[book.format] || book.format}</span>
+                            <span className="text-[var(--font-size-3xs)] text-[var(--color-text-muted)] uppercase">{FORMAT_DISPLAY_NAMES[book.format] || book.format}</span>
                         </div>
                     </div>
 
@@ -284,7 +284,7 @@ function BookCard({
         <ContextMenu items={contextMenuItems}>
             <div
                 onClick={handleCardClick}
-                className="group relative aspect-[2/3] bg-[var(--color-border-subtle)] overflow-hidden rounded-lg border border-[var(--color-border)] hover:shadow-lg transition-all duration-200 w-full cursor-pointer select-none"
+                className="group relative aspect-[2/3] bg-[var(--color-surface-muted)] overflow-hidden rounded-lg border border-[var(--color-border)] hover:shadow-lg transition-all duration-200 w-full cursor-pointer select-none"
             >
                 {book.coverPath ? (
                     <img
@@ -294,14 +294,14 @@ function BookCard({
                         loading="lazy"
                     />
                 ) : (
-                    <div className="book-cover-placeholder w-full h-full text-[10px] p-2 flex items-center justify-center">
+                    <div className="book-cover-placeholder w-full h-full text-[var(--font-size-3xs)] p-2 flex items-center justify-center">
                         <span className="line-clamp-3 text-center">{book.title}</span>
                     </div>
                 )}
 
                 {/* Progress Bar */}
                 {book.progress > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
                         <div
                             className="h-full bg-[var(--color-accent)]"
                             style={{ width: `${book.progress * 100}%` }}
@@ -314,7 +314,7 @@ function BookCard({
                     className={cn(
                         "absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center transition-colors pointer-events-none",
                         book.isFavorite 
-                            ? "bg-[var(--color-accent)] text-white" 
+                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]" 
                             : "opacity-0"
                     )}
                 >
@@ -329,7 +329,7 @@ function BookCard({
 function EmptyLibrary({ onAddBooks, isLoading }: { onAddBooks: () => void; isLoading: boolean }) {
     return (
         <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-[var(--color-border-subtle)] flex items-center justify-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <BookOpen className="w-6 h-6 text-[var(--color-text-secondary)]" />
             </div>
             <h2 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">
@@ -343,7 +343,7 @@ function EmptyLibrary({ onAddBooks, isLoading }: { onAddBooks: () => void; isLoa
                 disabled={isLoading}
                 className={cn(
                     "flex items-center gap-2 px-6 py-2.5 rounded-full",
-                    "bg-[var(--color-accent)] text-white text-sm font-medium",
+                    "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
                     "hover:opacity-90 transition-opacity",
                     "disabled:opacity-50 disabled:cursor-not-allowed"
                 )}
@@ -373,7 +373,7 @@ function ImportButton({
             disabled={isLoading}
             className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg",
-                "bg-[var(--color-accent)] text-white text-sm font-medium",
+                "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
                 "hover:opacity-90 transition-opacity",
                 "disabled:opacity-50 disabled:cursor-not-allowed"
             )}
@@ -404,7 +404,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                                 className="w-24 h-36 object-cover rounded-lg shadow-md"
                             />
                         ) : (
-                            <div className="w-24 h-36 bg-[var(--color-border-subtle)] rounded-lg flex items-center justify-center">
+                            <div className="w-24 h-36 bg-[var(--color-surface-muted)] rounded-lg flex items-center justify-center">
                                 <BookOpen className="w-8 h-8 text-[var(--color-text-muted)]" />
                             </div>
                         )}
@@ -422,7 +422,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                                             key={i}
                                             className={cn(
                                                 "w-4 h-4",
-                                                i < book.rating! ? "text-yellow-500 fill-current" : "text-[var(--color-border)]"
+                                                i < book.rating! ? "text-[var(--color-warning)] fill-current" : "text-[var(--color-border)]"
                                             )}
                                         />
                                     ))}
@@ -497,7 +497,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                                     {book.tags.map((tag: string) => (
                                         <span
                                             key={tag}
-                                            className="px-2 py-0.5 text-xs rounded-full bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)]"
+                                            className="px-2 py-0.5 text-xs rounded-full bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)]"
                                         >
                                             {tag}
                                         </span>
@@ -511,7 +511,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
             <ModalFooter>
                 <button
                     onClick={onClose}
-                    className="px-4 py-2 rounded-lg bg-[var(--color-border-subtle)] text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors"
+                    className="px-4 py-2 rounded-lg bg-[var(--color-surface-muted)] text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors"
                 >
                     Close
                 </button>
@@ -564,7 +564,7 @@ function AddToShelfModal({
                                             onClose();
                                         }
                                     }}
-                                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--color-border-subtle)] transition-colors text-left"
+                                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors text-left"
                                 >
                                     <FolderOpen className="w-5 h-5 text-[var(--color-text-muted)]" />
                                     <div className="flex-1">
@@ -606,7 +606,7 @@ function AddToShelfModal({
                                 onClick={handleCreateShelf}
                                 disabled={!newShelfName.trim()}
                                 className={cn(
-                                    "px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium",
+                                    "px-4 py-2 rounded-lg bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
                                     "hover:opacity-90 transition-opacity",
                                     "disabled:opacity-50 disabled:cursor-not-allowed"
                                 )}
@@ -978,14 +978,14 @@ export function LibraryPage() {
     }
 
     return (
-        <div className="p-8 max-w-7xl mx-auto animate-fade-in min-h-screen">
+        <div className="ui-page animate-fade-in">
             {/* Header */}
             <div className="flex items-center justify-between mb-10">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
+                    <h1 className="ui-page-title">
                         {selectedShelf ? selectedShelf.name : showFavoritesOnly ? "Favorites" : "Library"}
                     </h1>
-                    <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                    <p className="ui-page-subtitle">
                         {sortedBooks.length} {sortedBooks.length === 1 ? 'book' : 'books'}
                         {(selectedShelf || showFavoritesOnly) && (
                             <button
@@ -1015,7 +1015,7 @@ export function LibraryPage() {
                             "flex items-center justify-center w-10 h-10 rounded-lg",
                             "border border-[var(--color-border)] bg-[var(--color-surface)]",
                             "text-[var(--color-text-secondary)]",
-                            "hover:bg-[var(--color-border-subtle)] transition-colors"
+                            "hover:bg-[var(--color-surface-muted)] transition-colors"
                         )}
                         title={`View: ${settings.libraryViewMode}`}
                     >
@@ -1032,7 +1032,7 @@ export function LibraryPage() {
                                 "flex items-center gap-2 px-4 py-2 rounded-lg",
                                 "border border-[var(--color-border)] bg-[var(--color-surface)]",
                                 "text-[var(--color-text-secondary)] text-sm",
-                                "hover:bg-[var(--color-border-subtle)] transition-colors",
+                                "hover:bg-[var(--color-surface-muted)] transition-colors",
                                 "disabled:opacity-50 disabled:cursor-not-allowed"
                             )}
                             title="Scan Folder"
@@ -1054,8 +1054,8 @@ export function LibraryPage() {
                                 "flex items-center gap-2 px-4 py-2 rounded-lg",
                                 "border border-[var(--color-border)] bg-[var(--color-surface)]",
                                 "text-[var(--color-text-secondary)] text-sm",
-                                "hover:bg-[var(--color-border-subtle)] transition-colors",
-                                showFilterDropdown && "bg-[var(--color-border-subtle)]"
+                                "hover:bg-[var(--color-surface-muted)] transition-colors",
+                                showFilterDropdown && "bg-[var(--color-surface-muted)]"
                             )}
                         >
                             <Filter className="w-4 h-4" />
@@ -1069,7 +1069,7 @@ export function LibraryPage() {
                                     className="fixed inset-0 z-10"
                                     onClick={() => setShowFilterDropdown(false)}
                                 />
-                                <div className="absolute right-0 top-full mt-2 w-56 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg z-20 py-2">
+                                <div className="absolute right-0 top-full mt-2 w-56 ui-surface shadow-lg z-20 py-2">
                                     {/* Sort By */}
                                     <div className="px-3 py-2 border-b border-[var(--color-border)]">
                                         <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Sort By</p>
@@ -1089,7 +1089,7 @@ export function LibraryPage() {
                                                         "w-full flex items-center justify-between px-2 py-1.5 rounded text-sm",
                                                         settings.librarySortBy === option.id
                                                             ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                                     )}
                                                 >
                                                     {option.label}
@@ -1104,14 +1104,14 @@ export function LibraryPage() {
                                     {/* Sort Order */}
                                     <div className="px-3 py-2 border-b border-[var(--color-border)]">
                                         <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Order</p>
-                                        <div className="flex gap-2">
+                                        <div className="grid grid-cols-2 gap-2">
                                             <button
                                                 onClick={() => updateSettings({ librarySortOrder: "asc" })}
                                                 className={cn(
-                                                    "flex-1 px-3 py-1.5 rounded text-sm",
+                                                    "w-full min-w-0 min-h-9 px-2 py-1.5 rounded-lg text-sm whitespace-nowrap text-center",
                                                     settings.librarySortOrder === "asc"
                                                         ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                        : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)]"
+                                                        : "bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)]"
                                                 )}
                                             >
                                                 Ascending
@@ -1119,10 +1119,10 @@ export function LibraryPage() {
                                             <button
                                                 onClick={() => updateSettings({ librarySortOrder: "desc" })}
                                                 className={cn(
-                                                    "flex-1 px-3 py-1.5 rounded text-sm",
+                                                    "w-full min-w-0 min-h-9 px-2 py-1.5 rounded-lg text-sm whitespace-nowrap text-center",
                                                     settings.librarySortOrder === "desc"
                                                         ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                        : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)]"
+                                                        : "bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)]"
                                                 )}
                                             >
                                                 Descending
@@ -1143,7 +1143,7 @@ export function LibraryPage() {
                                                     "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
                                                     !showFavoritesOnly
                                                         ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                                                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                                 )}
                                             >
                                                 <BookOpen className="w-4 h-4" />
@@ -1158,7 +1158,7 @@ export function LibraryPage() {
                                                     "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
                                                     showFavoritesOnly
                                                         ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                                                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                                 )}
                                             >
                                                 <Heart className={cn("w-4 h-4", showFavoritesOnly && "fill-current")} />
@@ -1182,7 +1182,7 @@ export function LibraryPage() {
                                                         "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
                                                         !selectedShelf
                                                             ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                                     )}
                                                 >
                                                     <BookOpen className="w-4 h-4" />
@@ -1203,11 +1203,11 @@ export function LibraryPage() {
                                                                 "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
                                                                 isSelected
                                                                     ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                                                                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                                             )}
                                                         >
                                                             <div
-                                                                className="w-4 h-4 rounded flex items-center justify-center text-[8px] font-semibold"
+                                                                className="w-4 h-4 rounded flex items-center justify-center ui-text-3xs font-semibold"
                                                                 style={{
                                                                     backgroundColor: colors.bg,
                                                                     color: colors.text,
@@ -1230,7 +1230,7 @@ export function LibraryPage() {
                                                 setRoute("shelves");
                                                 setShowFilterDropdown(false);
                                             }}
-                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-border-subtle)] transition-colors"
+                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
                                         >
                                             <Plus className="w-4 h-4" />
                                             Manage Shelves...

@@ -33,13 +33,13 @@ export function TopNav({ onMenuClick }: TopNavProps) {
     };
 
     return (
-        <header className="flex items-center justify-between h-14 px-4 bg-[var(--color-surface)] border-b border-[var(--color-border)]">
+        <header className="flex items-center justify-between h-14 px-4 bg-[var(--color-surface)] border-b border-[var(--color-border)] ui-panel">
             {/* Left Section */}
             <div className="flex items-center gap-4">
                 {/* Mobile menu button */}
                 <button
                     onClick={onMenuClick}
-                    className="lg:hidden p-2 rounded-lg text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)]"
+                    className="lg:hidden ui-icon-btn w-9 h-9 rounded-lg text-[var(--color-text-secondary)]"
                 >
                     <Menu className="w-5 h-5" />
                 </button>
@@ -60,11 +60,8 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className={cn(
-                            "w-full pl-10 pr-4 py-2 rounded-lg",
-                            "bg-[var(--color-background)] border border-[var(--color-border)]",
-                            "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
-                            "focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-light)]",
-                            "transition-colors duration-200"
+                            "ui-input w-full pl-10 pr-4 rounded-lg",
+                            "min-h-[var(--control-height-md)]"
                         )}
                     />
                 </div>
@@ -76,10 +73,10 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                 <button
                     onClick={() => setRoute("statistics")}
                     className={cn(
-                        "p-2 rounded-lg transition-colors",
+                        "ui-icon-btn w-9 h-9 rounded-lg",
                         currentRoute === "statistics"
-                            ? "bg-[var(--color-accent)] text-white"
-                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]"
+                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] border border-[var(--color-accent)]"
+                            : "text-[var(--color-text-secondary)]"
                     )}
                     title="Statistics"
                 >

@@ -449,7 +449,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                         </p>
                         <button
                             onClick={() => window.location.reload()}
-                            className="px-4 py-2 bg-[var(--color-accent)] text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                            className="px-4 py-2 bg-[var(--color-accent)] text-[var(--color-accent-contrast)] rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
                         >
                             Retry
                         </button>
@@ -508,8 +508,8 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                     )}
                     style={{
                         background: navDirection === 'next'
-                            ? 'linear-gradient(to left, rgba(0,0,0,0.1), transparent)'
-                            : 'linear-gradient(to right, rgba(0,0,0,0.1), transparent)'
+                            ? 'linear-gradient(to left, var(--color-overlay-subtle), transparent)'
+                            : 'linear-gradient(to right, var(--color-overlay-subtle), transparent)'
                     }}
                 />
             )}

@@ -46,12 +46,12 @@ export const FORMAT_COLORS: Record<BookFormat, string> = {
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'red' | 'orange' | 'purple';
 
 export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
-    yellow: 'rgba(255, 235, 59, 0.4)',
-    green: 'rgba(76, 175, 80, 0.4)',
-    blue: 'rgba(33, 150, 243, 0.4)',
-    red: 'rgba(244, 67, 54, 0.4)',
-    orange: 'rgba(255, 152, 0, 0.4)',
-    purple: 'rgba(156, 39, 176, 0.4)',
+    yellow: "rgba(244, 180, 0, 0.26)",
+    green: "rgba(46, 125, 50, 0.24)",
+    blue: "rgba(25, 118, 210, 0.22)",
+    red: "rgba(211, 47, 47, 0.22)",
+    orange: "rgba(245, 124, 0, 0.24)",
+    purple: "rgba(123, 31, 162, 0.22)",
 };
 
 // Book Entity

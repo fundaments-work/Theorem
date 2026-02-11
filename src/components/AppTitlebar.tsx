@@ -127,8 +127,7 @@ export function AppTitlebar({
     return (
         <div
             className={cn(
-                "w-full z-50 select-none border-b border-[var(--color-border)]",
-                "bg-[color-mix(in_srgb,var(--color-surface)_94%,transparent)] backdrop-blur-xl",
+                "w-full z-50 select-none border-b border-[var(--color-border)] ui-panel",
                 "px-3 sm:px-4 py-2 sm:py-2.5",
                 className
             )}
@@ -140,7 +139,7 @@ export function AppTitlebar({
                     {onMenuClick && (
                         <button
                             onClick={onMenuClick}
-                            className="md:hidden p-2 rounded-xl hover:bg-[var(--color-background)] text-[var(--color-text-primary)] transition-colors"
+                            className="md:hidden ui-icon-btn w-9 h-9 rounded-xl text-[var(--color-text-primary)]"
                             title="Toggle Sidebar"
                         >
                             <Menu className="w-5 h-5" />
@@ -162,11 +161,8 @@ export function AppTitlebar({
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className={cn(
-                                "w-full pl-9 pr-4 py-2 rounded-xl",
-                                "bg-[var(--color-background)] border border-[var(--color-border)]",
-                                "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
-                                "focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent-light)]",
-                                "transition-colors duration-200"
+                                "ui-input w-full pl-9 pr-4 rounded-xl",
+                                "min-h-[var(--control-height-md)]"
                             )}
                         />
                     </div>
@@ -177,10 +173,10 @@ export function AppTitlebar({
                     <button
                         onClick={() => setRoute("statistics")}
                         className={cn(
-                            "p-2 rounded-xl transition-colors",
+                            "ui-icon-btn w-9 h-9 rounded-xl",
                             currentRoute === "statistics"
-                                ? "bg-[var(--color-accent)] text-white"
-                                : "text-[var(--color-text-secondary)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-primary)]"
+                                ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] border border-[var(--color-accent)]"
+                                : "text-[var(--color-text-secondary)]"
                         )}
                         title="Statistics"
                     >
@@ -192,21 +188,21 @@ export function AppTitlebar({
                             <div className="hidden sm:block w-px h-5 bg-[var(--color-border)] mx-1" />
                             <button
                                 onClick={handleMinimize}
-                                className="hidden sm:inline-flex p-1.5 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text-primary)] transition-colors"
+                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 rounded-lg text-[var(--color-text-primary)]"
                                 title="Minimize"
                             >
                                 <Minus className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={handleMaximize}
-                                className="hidden sm:inline-flex p-1.5 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text-primary)] transition-colors"
+                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 rounded-lg text-[var(--color-text-primary)]"
                                 title={isMaximized ? "Restore" : "Maximize"}
                             >
                                 <Square className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={handleClose}
-                                className="hidden sm:inline-flex p-1.5 rounded-lg hover:bg-red-500 hover:text-white text-[var(--color-text-primary)] transition-colors"
+                                className="hidden sm:inline-flex ui-icon-btn ui-icon-btn-danger w-8 h-8 rounded-lg text-[var(--color-text-primary)]"
                                 title="Close"
                             >
                                 <X className="w-4 h-4" />
@@ -226,11 +222,8 @@ export function AppTitlebar({
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className={cn(
-                            "w-full pl-9 pr-4 py-2 rounded-xl",
-                            "bg-[var(--color-background)] border border-[var(--color-border)]",
-                            "text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
-                            "focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent-light)]",
-                            "transition-colors duration-200"
+                            "ui-input w-full pl-9 pr-4 rounded-xl",
+                            "min-h-[var(--control-height-md)]"
                         )}
                     />
                 </div>

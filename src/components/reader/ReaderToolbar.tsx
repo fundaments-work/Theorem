@@ -71,7 +71,7 @@ export function ReaderToolbar({
             className={cn(
                 'relative w-full z-20',
                 'h-14 px-4 flex items-center justify-between flex-shrink-0',
-                'bg-[var(--color-surface)]/95 backdrop-blur-lg',
+                'bg-[var(--color-surface)]/95',
                 'border-b border-[var(--color-border)]',
                 className
             )}
@@ -118,9 +118,9 @@ export function ReaderToolbar({
                 <button
                     onClick={onToggleToc}
                     className={cn(
-                        "p-2 rounded-xl transition-all duration-200",
+                        "p-2 rounded-xl transition-colors duration-150",
                         activePanel === 'toc'
-                            ? "bg-[var(--color-accent)] text-[var(--color-background)] shadow-lg shadow-[var(--color-accent)]/10"
+                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
                             : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
                     )}
                     title="Table of Contents"
@@ -132,9 +132,9 @@ export function ReaderToolbar({
                 <button
                     onClick={onToggleSearch}
                     className={cn(
-                        "p-2 rounded-xl transition-all duration-200",
+                        "p-2 rounded-xl transition-colors duration-150",
                         activePanel === 'search'
-                            ? "bg-[var(--color-accent)] text-[var(--color-background)] shadow-lg shadow-[var(--color-accent)]/10"
+                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
                             : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
                     )}
                     title="Search"
@@ -147,7 +147,7 @@ export function ReaderToolbar({
                     <button
                         onClick={onAddBookmark}
                         className={cn(
-                            "p-2 rounded-xl transition-all duration-200",
+                            "p-2 rounded-xl transition-colors duration-150",
                             "hover:bg-[var(--color-background)] text-[var(--color-text)]"
                         )}
                         title="Bookmark current page (Ctrl+D)"
@@ -160,9 +160,9 @@ export function ReaderToolbar({
                 <button
                     onClick={onToggleBookmarks}
                     className={cn(
-                        "p-2 rounded-xl transition-all duration-200",
+                        "p-2 rounded-xl transition-colors duration-150",
                         activePanel === 'bookmarks'
-                            ? "bg-[var(--color-accent)] text-[var(--color-background)] shadow-lg shadow-[var(--color-accent)]/10"
+                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
                             : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
                     )}
                     title="View Bookmarks & Highlights"
@@ -174,9 +174,9 @@ export function ReaderToolbar({
                 <button
                     onClick={onToggleSettings}
                     className={cn(
-                        "p-2 rounded-xl transition-all duration-200 min-w-[40px] flex items-center justify-center",
+                        "p-2 rounded-xl transition-colors duration-150 min-w-[var(--control-icon-button-size)] flex items-center justify-center",
                         activePanel === 'settings'
-                            ? "bg-[var(--color-accent)] text-[var(--color-background)] shadow-lg shadow-[var(--color-accent)]/10"
+                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
                             : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
                     )}
                     title="Reading Settings"
@@ -188,9 +188,9 @@ export function ReaderToolbar({
                 <button
                     onClick={onToggleFullscreen}
                     className={cn(
-                        "p-2 rounded-xl transition-all duration-200",
+                        "p-2 rounded-xl transition-colors duration-150",
                         fullscreen
-                            ? "bg-[var(--color-accent)] text-[var(--color-background)] shadow-lg shadow-[var(--color-accent)]/10"
+                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
                             : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
                     )}
                     title={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
@@ -204,9 +204,9 @@ export function ReaderToolbar({
                 <button
                     onClick={onToggleInfo}
                     className={cn(
-                        "p-2 rounded-xl transition-all duration-200",
+                        "p-2 rounded-xl transition-colors duration-150",
                         activePanel === 'info'
-                            ? "bg-[var(--color-accent)] text-white shadow-lg shadow-[var(--color-accent)]/20"
+                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
                             : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
                     )}
                     title="Book Information"
