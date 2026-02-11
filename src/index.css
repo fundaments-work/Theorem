@@ -5,26 +5,26 @@
 
 @theme {
     /* App semantic colors */
-    --color-background: var(--app-bg, #f7f6f3);
+    --color-background: var(--app-bg, #ffffff);
     --color-surface: var(--app-surface, #ffffff);
     --color-surface-elevated: var(--app-surface-elevated, #ffffff);
-    --color-surface-muted: var(--app-surface-muted, #f2efe9);
-    --color-surface-variant: var(--app-surface-variant, #f2efe9);
-    --color-surface-hover: var(--app-surface-hover, #eae5db);
-    --color-text-primary: var(--app-text-primary, #171614);
-    --color-text-secondary: var(--app-text-secondary, #4e4a42);
-    --color-text-muted: var(--app-text-muted, #7c766a);
-    --color-text-inverse: var(--app-text-inverse, #faf8f4);
-    --color-border: var(--app-border, #d8d1c4);
-    --color-border-subtle: var(--app-border-subtle, #ebe6dc);
-    --color-accent: var(--app-accent, #a55a18);
-    --color-accent-hover: var(--app-accent-hover, #854712);
-    --color-accent-light: var(--app-accent-light, #f4e2d2);
+    --color-surface-muted: var(--app-surface-muted, #f5f5f5);
+    --color-surface-variant: var(--app-surface-variant, #f2f2f2);
+    --color-surface-hover: var(--app-surface-hover, #ebebeb);
+    --color-text-primary: var(--app-text-primary, #111111);
+    --color-text-secondary: var(--app-text-secondary, #262626);
+    --color-text-muted: var(--app-text-muted, #4a4a4a);
+    --color-text-inverse: var(--app-text-inverse, #ffffff);
+    --color-border: var(--app-border, #cfcfcf);
+    --color-border-subtle: var(--app-border-subtle, #e5e5e5);
+    --color-accent: var(--app-accent, #111111);
+    --color-accent-hover: var(--app-accent-hover, #000000);
+    --color-accent-light: var(--app-accent-light, #ededed);
     --color-accent-contrast: var(--app-accent-contrast, #ffffff);
-    --color-success: var(--app-success, #1f7a4f);
-    --color-warning: var(--app-warning, #b26a10);
-    --color-error: var(--app-error, #b3261e);
-    --color-info: var(--app-info, #1f5d8a);
+    --color-success: var(--app-success, #111111);
+    --color-warning: var(--app-warning, #2a2a2a);
+    --color-error: var(--app-error, #000000);
+    --color-info: var(--app-info, #333333);
     --color-focus-ring: var(--app-focus-ring, color-mix(in srgb, var(--color-accent) 62%, white));
     --color-overlay-subtle: var(--app-overlay-subtle, color-mix(in srgb, var(--color-text-primary) 10%, transparent));
     --color-overlay-medium: var(--app-overlay-medium, color-mix(in srgb, var(--color-text-primary) 22%, transparent));
@@ -39,7 +39,7 @@
     /* Reader variables */
     --reader-bg: var(--reader-bg-override, #ffffff);
     --reader-fg: var(--reader-fg-override, #1a1a1a);
-    --reader-link: var(--reader-link-override, #0066cc);
+    --reader-link: var(--reader-link-override, #111111);
     --reader-font-size: 18px;
     --reader-line-height: 1.6;
     --reader-margin-x: 10%;
@@ -124,18 +124,18 @@
     --z-tooltip: 400;
 
     /* Shared highlight tokens */
-    --highlight-yellow: #f4b400;
-    --highlight-green: #2e7d32;
-    --highlight-blue: #1976d2;
-    --highlight-red: #d32f2f;
-    --highlight-orange: #f57c00;
-    --highlight-purple: #7b1fa2;
-    --highlight-yellow-soft: rgba(244, 180, 0, 0.26);
-    --highlight-green-soft: rgba(46, 125, 50, 0.24);
-    --highlight-blue-soft: rgba(25, 118, 210, 0.22);
-    --highlight-red-soft: rgba(211, 47, 47, 0.22);
-    --highlight-orange-soft: rgba(245, 124, 0, 0.24);
-    --highlight-purple-soft: rgba(123, 31, 162, 0.22);
+    --highlight-yellow: #111111;
+    --highlight-green: #2b2b2b;
+    --highlight-blue: #454545;
+    --highlight-red: #5f5f5f;
+    --highlight-orange: #7a7a7a;
+    --highlight-purple: #949494;
+    --highlight-yellow-soft: rgba(17, 17, 17, 0.28);
+    --highlight-green-soft: rgba(43, 43, 43, 0.24);
+    --highlight-blue-soft: rgba(69, 69, 69, 0.22);
+    --highlight-red-soft: rgba(95, 95, 95, 0.2);
+    --highlight-orange-soft: rgba(122, 122, 122, 0.18);
+    --highlight-purple-soft: rgba(148, 148, 148, 0.16);
 
     /* Layout scale */
     --container-width-sm: 40rem;
@@ -297,102 +297,102 @@ button:disabled {
 /* Light Theme (default) */
 .theme-light,
 :root {
-    --app-bg: #f7f6f3;
+    --app-bg: #ffffff;
     --app-surface: #ffffff;
     --app-surface-elevated: #ffffff;
-    --app-surface-muted: #f2efe9;
-    --app-surface-variant: #f2efe9;
-    --app-surface-hover: #ece7dd;
-    --app-text-primary: #171614;
-    --app-text-secondary: #4e4a42;
-    --app-text-muted: #7c766a;
-    --app-text-inverse: #faf8f4;
-    --app-border: #d8d1c4;
-    --app-border-subtle: #ebe6dc;
-    --app-accent: #a55a18;
-    --app-accent-hover: #854712;
-    --app-accent-light: #f4e2d2;
+    --app-surface-muted: #f5f5f5;
+    --app-surface-variant: #f2f2f2;
+    --app-surface-hover: #ebebeb;
+    --app-text-primary: #111111;
+    --app-text-secondary: #262626;
+    --app-text-muted: #4a4a4a;
+    --app-text-inverse: #ffffff;
+    --app-border: #cfcfcf;
+    --app-border-subtle: #e5e5e5;
+    --app-accent: #111111;
+    --app-accent-hover: #000000;
+    --app-accent-light: #ededed;
     --app-accent-contrast: #ffffff;
-    --app-success: #1f7a4f;
-    --app-warning: #b26a10;
-    --app-error: #b3261e;
-    --app-info: #1f5d8a;
-    --app-overlay-subtle: color-mix(in srgb, #171614 10%, transparent);
-    --app-overlay-medium: color-mix(in srgb, #171614 22%, transparent);
-    --app-overlay-strong: color-mix(in srgb, #171614 55%, transparent);
-    --app-overlay-strong-hover: color-mix(in srgb, #171614 70%, transparent);
+    --app-success: #111111;
+    --app-warning: #2a2a2a;
+    --app-error: #000000;
+    --app-info: #333333;
+    --app-overlay-subtle: color-mix(in srgb, #111111 10%, transparent);
+    --app-overlay-medium: color-mix(in srgb, #111111 22%, transparent);
+    --app-overlay-strong: color-mix(in srgb, #111111 55%, transparent);
+    --app-overlay-strong-hover: color-mix(in srgb, #111111 70%, transparent);
 
     /* Reader colors */
     --reader-bg-override: #ffffff;
-    --reader-fg-override: #1b1915;
-    --reader-link-override: #8a4a12;
+    --reader-fg-override: #111111;
+    --reader-link-override: #111111;
 }
 
-/* Sepia Theme */
+/* Soft Gray Theme */
 .theme-sepia {
-    --app-bg: #e8e0cf;
-    --app-surface: #f4ecd8;
-    --app-surface-elevated: #fbf2de;
-    --app-surface-muted: #ede4cf;
-    --app-surface-variant: #ede4cf;
-    --app-surface-hover: #e5dbc6;
-    --app-text-primary: #5f4b32;
-    --app-text-secondary: #7a634a;
-    --app-text-muted: #9a8264;
-    --app-text-inverse: #f7f0e2;
-    --app-border: #dcd3bd;
-    --app-border-subtle: #e8e1cf;
-    --app-accent: #8b6914;
-    --app-accent-hover: #6b5110;
-    --app-accent-light: #efe2c7;
+    --app-bg: #f2f2f2;
+    --app-surface: #f8f8f8;
+    --app-surface-elevated: #ffffff;
+    --app-surface-muted: #ececec;
+    --app-surface-variant: #e7e7e7;
+    --app-surface-hover: #dfdfdf;
+    --app-text-primary: #141414;
+    --app-text-secondary: #2e2e2e;
+    --app-text-muted: #535353;
+    --app-text-inverse: #f8f8f8;
+    --app-border: #c8c8c8;
+    --app-border-subtle: #dfdfdf;
+    --app-accent: #111111;
+    --app-accent-hover: #000000;
+    --app-accent-light: #e5e5e5;
     --app-accent-contrast: #ffffff;
-    --app-success: #5f4b32;
-    --app-warning: #b8860b;
-    --app-error: #a0522d;
-    --app-info: #5f4b32;
-    --app-overlay-subtle: color-mix(in srgb, #5f4b32 10%, transparent);
-    --app-overlay-medium: color-mix(in srgb, #5f4b32 22%, transparent);
-    --app-overlay-strong: color-mix(in srgb, #5f4b32 55%, transparent);
-    --app-overlay-strong-hover: color-mix(in srgb, #5f4b32 70%, transparent);
+    --app-success: #1a1a1a;
+    --app-warning: #303030;
+    --app-error: #000000;
+    --app-info: #3d3d3d;
+    --app-overlay-subtle: color-mix(in srgb, #141414 10%, transparent);
+    --app-overlay-medium: color-mix(in srgb, #141414 22%, transparent);
+    --app-overlay-strong: color-mix(in srgb, #141414 55%, transparent);
+    --app-overlay-strong-hover: color-mix(in srgb, #141414 70%, transparent);
 
     /* Reader colors */
-    --reader-bg-override: #f4ecd8;
-    --reader-fg-override: #5f4b32;
-    --reader-link-override: #8b4513;
+    --reader-bg-override: #f2f2f2;
+    --reader-fg-override: #111111;
+    --reader-link-override: #111111;
 }
 
 /* Dark Theme */
 .theme-dark {
     color-scheme: dark;
-    --app-bg: #111111;
-    --app-surface: #1b1a19;
-    --app-surface-elevated: #242220;
-    --app-surface-muted: #1f1d1b;
-    --app-surface-variant: #1f1d1b;
-    --app-surface-hover: #2a2723;
-    --app-text-primary: #f2f0ec;
-    --app-text-secondary: #cec9be;
-    --app-text-muted: #a59f93;
-    --app-text-inverse: #181613;
-    --app-border: #35312a;
-    --app-border-subtle: #2a2722;
-    --app-accent: #f2b166;
-    --app-accent-hover: #ffcb90;
-    --app-accent-light: #3d2d1d;
-    --app-accent-contrast: #1a1611;
-    --app-success: #4ade80;
-    --app-warning: #fbbf35;
-    --app-error: #f87171;
-    --app-info: #65a8ef;
-    --app-overlay-subtle: color-mix(in srgb, #f2f0ec 10%, transparent);
-    --app-overlay-medium: color-mix(in srgb, #f2f0ec 22%, transparent);
-    --app-overlay-strong: color-mix(in srgb, #f2f0ec 55%, transparent);
-    --app-overlay-strong-hover: color-mix(in srgb, #f2f0ec 70%, transparent);
+    --app-bg: #0b0b0b;
+    --app-surface: #121212;
+    --app-surface-elevated: #191919;
+    --app-surface-muted: #1e1e1e;
+    --app-surface-variant: #242424;
+    --app-surface-hover: #2d2d2d;
+    --app-text-primary: #f5f5f5;
+    --app-text-secondary: #e0e0e0;
+    --app-text-muted: #c2c2c2;
+    --app-text-inverse: #0b0b0b;
+    --app-border: #424242;
+    --app-border-subtle: #2c2c2c;
+    --app-accent: #ffffff;
+    --app-accent-hover: #f0f0f0;
+    --app-accent-light: #2a2a2a;
+    --app-accent-contrast: #111111;
+    --app-success: #f5f5f5;
+    --app-warning: #d9d9d9;
+    --app-error: #ffffff;
+    --app-info: #cccccc;
+    --app-overlay-subtle: color-mix(in srgb, #f5f5f5 10%, transparent);
+    --app-overlay-medium: color-mix(in srgb, #f5f5f5 22%, transparent);
+    --app-overlay-strong: color-mix(in srgb, #f5f5f5 55%, transparent);
+    --app-overlay-strong-hover: color-mix(in srgb, #f5f5f5 70%, transparent);
 
     /* Reader colors */
-    --reader-bg-override: #151413;
-    --reader-fg-override: #ece6db;
-    --reader-link-override: #f0b86f;
+    --reader-bg-override: #101010;
+    --reader-fg-override: #f5f5f5;
+    --reader-link-override: #ffffff;
 }
 
 /* Dark theme scrollbar */
@@ -406,11 +406,11 @@ button:disabled {
 
 /* Sepia theme scrollbar */
 .theme-sepia ::-webkit-scrollbar-thumb {
-    background: #d4c9a8;
+    background: var(--app-border);
 }
 
 .theme-sepia ::-webkit-scrollbar-thumb:hover {
-    background: #c4b998;
+    background: var(--app-text-muted);
 }
 
 /* Animations */
@@ -725,17 +725,17 @@ foliate-view * {
 
 .theme-preview[data-theme="light"] {
     --reader-bg: #ffffff;
-    --reader-fg: #1a1a1a;
+    --reader-fg: #111111;
 }
 
 .theme-preview[data-theme="sepia"] {
-    --reader-bg: #f4ecd8;
-    --reader-fg: #5f4b32;
+    --reader-bg: #f2f2f2;
+    --reader-fg: #111111;
 }
 
 .theme-preview[data-theme="dark"] {
-    --reader-bg: #1a1a1a;
-    --reader-fg: #e0e0e0;
+    --reader-bg: #101010;
+    --reader-fg: #f5f5f5;
 }
 
 /* ===============================
@@ -814,6 +814,12 @@ foliate-view * {
     font-size: var(--font-size-sm);
     line-height: var(--line-height-relaxed);
     color: var(--color-text-muted);
+}
+
+.ui-brand-wordmark {
+    font-family: var(--font-playfair);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--letter-spacing-wide);
 }
 
 .ui-divider {

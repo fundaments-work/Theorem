@@ -91,7 +91,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                 <div className={cn("flex items-center overflow-hidden", isCollapsedDesktop ? "justify-center" : "gap-3")}>
                     <TheoremLogo size={28} className="flex-shrink-0" />
                     <span className={cn(
-                        "font-semibold text-lg text-[var(--color-text-primary)] whitespace-nowrap",
+                        "ui-brand-wordmark text-lg text-[var(--color-text-primary)] whitespace-nowrap",
                         !isMobile && !sidebarOpen ? "opacity-0 w-0" : "opacity-100"
                     )}>
                         Theorem

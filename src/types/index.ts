@@ -32,26 +32,26 @@ export const FORMAT_DISPLAY_NAMES: Record<BookFormat, string> = {
 
 // Format icons or colors could be added here
 export const FORMAT_COLORS: Record<BookFormat, string> = {
-    epub: '#3498db',  // Blue
-    mobi: '#f39c12',  // Orange
-    azw: '#f39c12',   // Orange
-    azw3: '#f39c12',  // Orange
-    fb2: '#9b59b6',   // Purple
-    cbz: '#2ecc71',   // Green
-    cbr: '#2ecc71',   // Green
-    pdf: '#e74c3c',   // Red
+    epub: "#111111",
+    mobi: "#2b2b2b",
+    azw: "#2b2b2b",
+    azw3: "#2b2b2b",
+    fb2: "#454545",
+    cbz: "#5f5f5f",
+    cbr: "#5f5f5f",
+    pdf: "#7a7a7a",
 };
 
 // Highlight Colors - single source of truth
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'red' | 'orange' | 'purple';
 
 export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
-    yellow: "rgba(244, 180, 0, 0.26)",
-    green: "rgba(46, 125, 50, 0.24)",
-    blue: "rgba(25, 118, 210, 0.22)",
-    red: "rgba(211, 47, 47, 0.22)",
-    orange: "rgba(245, 124, 0, 0.24)",
-    purple: "rgba(123, 31, 162, 0.22)",
+    yellow: "rgba(17, 17, 17, 0.28)",
+    green: "rgba(43, 43, 43, 0.24)",
+    blue: "rgba(69, 69, 69, 0.22)",
+    red: "rgba(95, 95, 95, 0.2)",
+    orange: "rgba(122, 122, 122, 0.18)",
+    purple: "rgba(148, 148, 148, 0.16)",
 };
 
 // Book Entity
