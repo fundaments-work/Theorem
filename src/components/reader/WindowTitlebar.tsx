@@ -78,17 +78,47 @@ interface WindowTitlebarProps {
     };
 }
 
+const ICON_BUTTON_CLASS = "p-2 lg:p-1.5 rounded-lg transition-opacity duration-150";
+const ICON_BUTTON_ACTIVE_CLASS = "opacity-100 bg-[var(--color-accent)]/20";
+const ICON_BUTTON_INACTIVE_CLASS = "opacity-60 hover:opacity-100";
+
 function ToolbarButton({ onClick, active, title, children }: { onClick?: () => void; active?: boolean; title: string; children: React.ReactNode }) {
     return (
         <button
             onClick={onClick}
             className={cn(
-                "p-2 lg:p-1.5 rounded-xl transition-colors duration-200 border",
-                active
-                    ? "bg-[var(--color-accent)] border-transparent"
-                    : "reader-chip hover:bg-[var(--color-background)]"
+                ICON_BUTTON_CLASS,
+                active ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
             )}
-            style={{ color: active ? 'var(--reader-bg)' : 'var(--reader-fg)' }}
+            style={{ color: "var(--reader-fg)" }}
+            title={title}
+        >
+            {children}
+        </button>
+    );
+}
+
+function WindowControlButton({
+    onClick,
+    title,
+    danger = false,
+    children,
+}: {
+    onClick: () => void;
+    title: string;
+    danger?: boolean;
+    children: React.ReactNode;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className={cn(
+                "p-2 lg:p-1.5 rounded-lg transition-colors duration-150 opacity-80 hover:opacity-100",
+                danger
+                    ? "hover:bg-red-500/85 hover:text-white"
+                    : "hover:bg-[var(--color-background)]",
+            )}
+            style={{ color: "var(--reader-fg)" }}
             title={title}
         >
             {children}
@@ -290,11 +320,15 @@ export function WindowTitlebar({
             {/* Center - PDF Controls or Spacer */}
             {isPdfMode ? (
                 <div className="w-full overflow-x-auto overflow-y-visible reader-toolbar-scroll lg:w-auto">
-                    <div className="flex items-center gap-1 shrink-0 min-w-max" data-toolbar-group>
+                    <div className="my-0.5 mr-1 flex items-center gap-1 shrink-0 min-w-max" data-toolbar-group>
                     <button
                         onClick={pdfControls!.onPrevPage}
                         disabled={pdfControls!.currentPage <= 1}
-                        className="p-2 lg:p-1.5 rounded transition-opacity opacity-60 hover:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className={cn(
+                            ICON_BUTTON_CLASS,
+                            ICON_BUTTON_INACTIVE_CLASS,
+                            "disabled:opacity-30 disabled:cursor-not-allowed",
+                        )}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Previous page"
                     >
@@ -325,7 +359,7 @@ export function WindowTitlebar({
                                     setInputPage("");
                                 }}
                                 autoFocus
-                                className="w-12 px-1 py-0.5 text-xs text-center rounded"
+                                className="w-12 px-1 py-0.5 text-xs text-center rounded-lg"
                                 style={{ 
                                     backgroundColor: 'var(--color-background)',
                                     color: 'var(--reader-fg)',
@@ -342,7 +376,7 @@ export function WindowTitlebar({
                                 setInputPage(pdfControls!.currentPage.toString());
                                 setShowPageInput(true);
                             }}
-                            className="px-2 py-0.5 rounded transition-opacity opacity-60 hover:opacity-100"
+                            className="px-2 py-0.5 rounded-lg transition-opacity opacity-60 hover:opacity-100"
                             style={{ color: 'var(--reader-fg)' }}
                             title="Click to jump to page"
                         >
@@ -355,7 +389,11 @@ export function WindowTitlebar({
                     <button
                         onClick={pdfControls!.onNextPage}
                         disabled={pdfControls!.currentPage >= pdfControls!.totalPages}
-                        className="p-2 lg:p-1.5 rounded transition-opacity opacity-60 hover:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className={cn(
+                            ICON_BUTTON_CLASS,
+                            ICON_BUTTON_INACTIVE_CLASS,
+                            "disabled:opacity-30 disabled:cursor-not-allowed",
+                        )}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Next page"
                     >
@@ -370,8 +408,8 @@ export function WindowTitlebar({
                     <button
                         onClick={onToggleToc}
                         className={cn(
-                            "p-2 lg:p-1.5 rounded transition-opacity",
-                            activePanel === "toc" ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
+                            ICON_BUTTON_CLASS,
+                            activePanel === "toc" ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
                         )}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Table of contents"
@@ -382,8 +420,8 @@ export function WindowTitlebar({
                     <button
                         onClick={onToggleBookmarks}
                         className={cn(
-                            "p-2 lg:p-1.5 rounded transition-opacity",
-                            activePanel === "bookmarks" ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
+                            ICON_BUTTON_CLASS,
+                            activePanel === "bookmarks" ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
                         )}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Annotations & bookmarks"
@@ -398,7 +436,7 @@ export function WindowTitlebar({
 
                     <button
                         onClick={pdfControls!.onZoomOut}
-                        className="p-2 lg:p-1.5 rounded transition-opacity opacity-60 hover:opacity-100"
+                        className={cn(ICON_BUTTON_CLASS, ICON_BUTTON_INACTIVE_CLASS)}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Zoom out"
                     >
@@ -409,7 +447,7 @@ export function WindowTitlebar({
                     <div className="relative hidden sm:block">
                         <button
                             onClick={() => setShowZoomMenu(!showZoomMenu)}
-                            className="px-2 py-0.5 rounded transition-opacity opacity-60 hover:opacity-100 text-xs font-medium flex items-center gap-0.5"
+                            className="px-2 py-0.5 rounded-lg transition-opacity opacity-60 hover:opacity-100 text-xs font-medium flex items-center gap-0.5"
                             style={{ color: 'var(--reader-fg)' }}
                             title="Zoom options"
                         >
@@ -470,7 +508,7 @@ export function WindowTitlebar({
 
                     <button
                         onClick={pdfControls!.onZoomReset}
-                        className="sm:hidden px-2 py-1 rounded transition-opacity opacity-70 hover:opacity-100 text-xs font-medium"
+                        className="sm:hidden px-2 py-1 rounded-lg transition-opacity opacity-70 hover:opacity-100 text-xs font-medium"
                         style={{ color: 'var(--reader-fg)' }}
                         title="Reset zoom"
                     >
@@ -479,7 +517,7 @@ export function WindowTitlebar({
 
                     <button
                         onClick={pdfControls!.onZoomIn}
-                        className="p-2 lg:p-1.5 rounded transition-opacity opacity-60 hover:opacity-100"
+                        className={cn(ICON_BUTTON_CLASS, ICON_BUTTON_INACTIVE_CLASS)}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Zoom in"
                     >
@@ -502,10 +540,11 @@ export function WindowTitlebar({
                                 pdfControls!.onAnnotationModeChange?.("none");
                             }}
                             className={cn(
-                                "relative p-2 lg:p-1.5 rounded transition-opacity",
+                                "relative",
+                                ICON_BUTTON_CLASS,
                                 pdfControls!.annotationMode === 'highlight'
-                                    ? "opacity-100 bg-[var(--color-accent)]/20"
-                                    : "opacity-60 hover:opacity-100",
+                                    ? ICON_BUTTON_ACTIVE_CLASS
+                                    : ICON_BUTTON_INACTIVE_CLASS,
                             )}
                             style={{ color: 'var(--reader-fg)' }}
                             title="Highlight text"
@@ -559,8 +598,9 @@ export function WindowTitlebar({
                             );
                         }}
                         className={cn(
-                            "relative p-2 lg:p-1.5 rounded transition-opacity",
-                            pdfControls!.annotationMode === 'pen' ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
+                            "relative",
+                            ICON_BUTTON_CLASS,
+                            pdfControls!.annotationMode === 'pen' ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
                         )}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Draw with pen"
@@ -617,7 +657,7 @@ export function WindowTitlebar({
                                         pdfControls!.onAnnotationModeChange?.("pen");
                                     }}
                                     className={cn(
-                                        "h-5 px-1.5 rounded border transition-colors",
+                                        "h-5 px-1.5 rounded-lg border transition-colors",
                                         activePenWidth === width
                                             ? "opacity-100 bg-[var(--color-accent)]/20"
                                             : "opacity-75 hover:opacity-100",
@@ -652,8 +692,8 @@ export function WindowTitlebar({
                             );
                         }}
                         className={cn(
-                            "p-2 lg:p-1.5 rounded transition-opacity",
-                            pdfControls!.annotationMode === 'text' ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
+                            ICON_BUTTON_CLASS,
+                            pdfControls!.annotationMode === 'text' ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
                         )}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Add text annotation"
@@ -668,8 +708,8 @@ export function WindowTitlebar({
                             );
                         }}
                         className={cn(
-                            "p-2 lg:p-1.5 rounded transition-opacity",
-                            pdfControls!.annotationMode === 'erase' ? "opacity-100 bg-[var(--color-accent)]/20" : "opacity-60 hover:opacity-100"
+                            ICON_BUTTON_CLASS,
+                            pdfControls!.annotationMode === 'erase' ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
                         )}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Eraser"
@@ -687,8 +727,8 @@ export function WindowTitlebar({
                         <button
                             onClick={pdfControls!.onAddBookmark}
                             className={cn(
-                                "p-2 lg:p-1.5 rounded transition-opacity",
-                                pdfControls!.isCurrentPageBookmarked ? "opacity-100" : "opacity-60 hover:opacity-100"
+                                ICON_BUTTON_CLASS,
+                                pdfControls!.isCurrentPageBookmarked ? "opacity-100" : ICON_BUTTON_INACTIVE_CLASS,
                             )}
                             style={{ color: 'var(--reader-fg)' }}
                             title={pdfControls!.isCurrentPageBookmarked ? "Remove bookmark" : "Bookmark page"}
@@ -699,7 +739,7 @@ export function WindowTitlebar({
 
                     <button
                         onClick={pdfControls!.onRotate}
-                        className="p-2 lg:p-1.5 rounded transition-opacity opacity-60 hover:opacity-100"
+                        className={cn(ICON_BUTTON_CLASS, ICON_BUTTON_INACTIVE_CLASS)}
                         style={{ color: 'var(--reader-fg)' }}
                         title="Rotate"
                     >
@@ -711,17 +751,16 @@ export function WindowTitlebar({
                 <div className="hidden lg:flex flex-1 h-full" />
             )}
 
-            {/* Right side - Reader controls */}
+            {/* Right side - Reader and window controls */}
             <div className="w-full overflow-x-auto overflow-y-visible reader-toolbar-scroll lg:w-auto">
                 <div
                     className={cn(
                         "flex items-center shrink-0 min-w-max mx-auto sm:mx-0",
-                        hideReaderControls ? "gap-1" : "gap-1.5",
+                        "gap-1",
                     )}
-                    data-toolbar-group={hideReaderControls ? "pdf" : "epub"}
                 >
                     {!hideReaderControls && (
-                        <>
+                        <div className="my-0.5 mr-1 flex items-center gap-1" data-toolbar-group="epub">
                             <ToolbarButton
                                 onClick={onToggleToc}
                                 active={activePanel === "toc"}
@@ -764,7 +803,7 @@ export function WindowTitlebar({
                                 active={activePanel === "settings"}
                                 title="Reading Settings"
                             >
-                                <span className="text-sm font-serif font-bold">Aa</span>
+                                <Type className="w-4 h-4" />
                             </ToolbarButton>
 
                             <div
@@ -779,31 +818,72 @@ export function WindowTitlebar({
                             >
                                 <MoreVertical className="w-4 h-4" />
                             </ToolbarButton>
-                        </>
+                        </div>
                     )}
-
-                    <div className="hidden md:block">
-                        <ToolbarButton
-                            onClick={onToggleFullscreen}
-                            active={fullscreen}
-                            title={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-                        >
-                            {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                        </ToolbarButton>
-                    </div>
 
                     {/* Window Controls */}
                     {isTauriRuntime && (
-                        <div className="hidden lg:flex items-center gap-0.5 ml-2">
-                            <button onClick={handleMinimize} className="p-2 lg:p-1.5 rounded opacity-50 hover:opacity-100 transition-opacity" style={{ color: 'var(--reader-fg)' }} title="Minimize">
+                        <div
+                            className="hidden lg:flex items-center gap-0.5 rounded-lg border px-1 py-0.5 mr-1"
+                            style={{
+                                borderColor: "color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)",
+                                backgroundColor: "color-mix(in srgb, var(--reader-fg, var(--color-text)) 5%, transparent)",
+                            }}
+                        >
+                            {onToggleFullscreen && (
+                                <>
+                                    <WindowControlButton
+                                        onClick={onToggleFullscreen}
+                                        title={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                                    >
+                                        {fullscreen ? (
+                                            <Minimize2 className="w-4 h-4" />
+                                        ) : (
+                                            <Maximize2 className="w-4 h-4" />
+                                        )}
+                                    </WindowControlButton>
+                                    <div
+                                        className="w-px h-4 mx-0.5"
+                                        style={{
+                                            backgroundColor:
+                                                "color-mix(in srgb, var(--reader-fg, var(--color-text)) 20%, transparent)",
+                                        }}
+                                    />
+                                </>
+                            )}
+                            <WindowControlButton onClick={handleMinimize} title="Minimize">
                                 <Minus className="w-4 h-4" />
-                            </button>
-                            <button onClick={handleMaximize} className="p-2 lg:p-1.5 rounded opacity-50 hover:opacity-100 transition-opacity" style={{ color: 'var(--reader-fg)' }} title={isMaximized ? "Restore" : "Maximize"}>
+                            </WindowControlButton>
+                            <WindowControlButton
+                                onClick={handleMaximize}
+                                title={isMaximized ? "Restore" : "Maximize"}
+                            >
                                 <Square className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={handleClose} className="p-2 lg:p-1.5 rounded opacity-50 hover:opacity-100 transition-opacity" style={{ color: 'var(--reader-fg)' }} title="Close">
+                            </WindowControlButton>
+                            <WindowControlButton onClick={handleClose} title="Close" danger>
                                 <X className="w-4 h-4" />
-                            </button>
+                            </WindowControlButton>
+                        </div>
+                    )}
+
+                    {!isTauriRuntime && onToggleFullscreen && (
+                        <div
+                            className="hidden xl:flex items-center gap-0.5 rounded-lg border px-1 py-0.5 mr-1"
+                            style={{
+                                borderColor: "color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)",
+                                backgroundColor: "color-mix(in srgb, var(--reader-fg, var(--color-text)) 5%, transparent)",
+                            }}
+                        >
+                            <WindowControlButton
+                                onClick={onToggleFullscreen}
+                                title={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                            >
+                                {fullscreen ? (
+                                    <Minimize2 className="w-4 h-4" />
+                                ) : (
+                                    <Maximize2 className="w-4 h-4" />
+                                )}
+                            </WindowControlButton>
                         </div>
                     )}
                 </div>
