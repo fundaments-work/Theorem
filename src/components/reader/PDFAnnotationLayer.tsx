@@ -751,7 +751,7 @@ export function PDFAnnotationLayer({
                         </button>
                         <button
                             type="button"
-                            className="px-2 py-1 rounded text-[var(--font-size-2xs)] bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
+                            className="px-2 py-1 rounded text-[var(--font-size-2xs)] bg-[var(--color-accent)] ui-text-accent-contrast"
                             onClick={saveTextNoteEditor}
                         >
                             Save Note

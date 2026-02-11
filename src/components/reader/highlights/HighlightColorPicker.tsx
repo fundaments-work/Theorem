@@ -290,16 +290,16 @@ export function HighlightColorPicker({
             >
                 {/* Header with close button */}
                 <div className="flex items-center justify-between px-1 mb-2">
-                    <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide">
+                    <span className="text-xs font-semibold text-[color:var(--color-text-secondary)] uppercase tracking-wide">
                         Highlight
                     </span>
                     <button
                         onClick={handleClose}
                         className={cn(
                             "p-1 rounded-md",
-                            "text-[var(--color-text-muted)]",
+                            "text-[color:var(--color-text-muted)]",
                             "hover:bg-[var(--color-surface-hover)]",
-                            "hover:text-[var(--color-text-primary)]",
+                            "hover:text-[color:var(--color-text-primary)]",
                             "transition-colors duration-150"
                         )}
                     >
@@ -310,7 +310,7 @@ export function HighlightColorPicker({
                 {/* Inline delete confirmation */}
                 {showDeleteConfirm ? (
                     <div className="px-1 py-2">
-                        <p className="text-xs text-[var(--color-text-secondary)] text-center mb-2">
+                        <p className="text-xs text-[color:var(--color-text-secondary)] text-center mb-2">
                             Delete this highlight and any associated notes?
                         </p>
                         <div className="flex gap-1.5">
@@ -320,9 +320,9 @@ export function HighlightColorPicker({
                                     "flex-1 px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
                                     "rounded-lg",
                                     "bg-[var(--color-surface-variant)]",
-                                    "text-[var(--color-text-secondary)]",
+                                    "text-[color:var(--color-text-secondary)]",
                                     "hover:bg-[var(--color-surface-hover)]",
-                                    "hover:text-[var(--color-text-primary)]",
+                                    "hover:text-[color:var(--color-text-primary)]",
                                     "transition-colors duration-150",
                                     "active:scale-95"
                                 )}
@@ -371,7 +371,7 @@ export function HighlightColorPicker({
                                     aria-label={`Select ${label} highlight color`}
                                 >
                                     {selectedColor === color && (
-                                        <Check className="w-3.5 h-3.5 text-[var(--color-overlay-strong)]" strokeWidth={3} />
+                                        <Check className="w-3.5 h-3.5 text-[color:var(--color-overlay-strong)]" strokeWidth={3} />
                                     )}
                                 </button>
                             ))}
@@ -389,9 +389,9 @@ export function HighlightColorPicker({
                                     "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
                                     "rounded-lg",
                                     "bg-[var(--color-surface-variant)]",
-                                    "text-[var(--color-text-secondary)]",
+                                    "text-[color:var(--color-text-secondary)]",
                                     "hover:bg-[var(--color-surface-hover)]",
-                                    "hover:text-[var(--color-text-primary)]",
+                                    "hover:text-[color:var(--color-text-primary)]",
                                     "transition-colors duration-150",
                                     "active:scale-95"
                                 )}

@@ -84,28 +84,28 @@ export function ReaderToolbar({
                     className="p-2 rounded-lg hover:bg-[var(--color-background)] transition-colors"
                     title="Back to Library"
                 >
-                    <ArrowLeft className="w-5 h-5 text-[var(--color-text)]" />
+                    <ArrowLeft className="w-5 h-5 text-[color:var(--color-text)]" />
                 </button>
 
             </div>
 
             {/* Center: Book Title, Chapter & Location */}
             <div className="flex-1 mx-4 text-center overflow-hidden">
-                <h1 className="text-sm font-medium text-[var(--color-text)] truncate">
+                <h1 className="text-sm font-medium text-[color:var(--color-text)] truncate">
                     {metadata?.title || 'Loading...'}
                 </h1>
                 <div className="flex items-center justify-center gap-2 text-xs">
                     {currentChapter ? (
-                        <span className="text-[var(--color-accent)] font-medium truncate">
+                        <span className="text-[color:var(--color-accent)] font-medium truncate">
                             {currentChapter}
                         </span>
                     ) : metadata?.author ? (
-                        <span className="text-[var(--color-text-muted)] truncate">
+                        <span className="text-[color:var(--color-text-muted)] truncate">
                             {normalizeAuthor(metadata.author)}
                         </span>
                     ) : null}
                     {formatLocation() && (
-                        <span className="text-[var(--color-text-muted)]">
+                        <span className="text-[color:var(--color-text-muted)]">
                             • {formatLocation()}
                         </span>
                     )}
@@ -120,8 +120,8 @@ export function ReaderToolbar({
                     className={cn(
                         "p-2 rounded-xl transition-colors duration-150",
                         activePanel === 'toc'
-                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
-                            : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
                     )}
                     title="Table of Contents"
                 >
@@ -134,8 +134,8 @@ export function ReaderToolbar({
                     className={cn(
                         "p-2 rounded-xl transition-colors duration-150",
                         activePanel === 'search'
-                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
-                            : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
                     )}
                     title="Search"
                 >
@@ -148,7 +148,7 @@ export function ReaderToolbar({
                         onClick={onAddBookmark}
                         className={cn(
                             "p-2 rounded-xl transition-colors duration-150",
-                            "hover:bg-[var(--color-background)] text-[var(--color-text)]"
+                            "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
                         )}
                         title="Bookmark current page (Ctrl+D)"
                     >
@@ -162,8 +162,8 @@ export function ReaderToolbar({
                     className={cn(
                         "p-2 rounded-xl transition-colors duration-150",
                         activePanel === 'bookmarks'
-                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
-                            : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
                     )}
                     title="View Bookmarks & Highlights"
                 >
@@ -176,8 +176,8 @@ export function ReaderToolbar({
                     className={cn(
                         "p-2 rounded-xl transition-colors duration-150 min-w-[var(--control-icon-button-size)] flex items-center justify-center",
                         activePanel === 'settings'
-                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
-                            : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
                     )}
                     title="Reading Settings"
                 >
@@ -190,8 +190,8 @@ export function ReaderToolbar({
                     className={cn(
                         "p-2 rounded-xl transition-colors duration-150",
                         fullscreen
-                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
-                            : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
                     )}
                     title={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                 >
@@ -206,8 +206,8 @@ export function ReaderToolbar({
                     className={cn(
                         "p-2 rounded-xl transition-colors duration-150",
                         activePanel === 'info'
-                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
-                            : "hover:bg-[var(--color-background)] text-[var(--color-text)]"
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
                     )}
                     title="Book Information"
                 >

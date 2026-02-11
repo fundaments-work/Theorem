@@ -48,7 +48,7 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                 <ModalBody>
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1.5">
+                            <label className="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1.5">
                                 Name
                             </label>
                             <input
@@ -64,8 +64,8 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1.5">
-                                Description <span className="text-[var(--color-text-muted)] font-normal">(optional)</span>
+                            <label className="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1.5">
+                                Description <span className="text-[color:var(--color-text-muted)] font-normal">(optional)</span>
                             </label>
                             <textarea
                                 value={description}

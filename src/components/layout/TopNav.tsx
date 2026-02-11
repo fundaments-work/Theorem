@@ -39,13 +39,13 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                 {/* Mobile menu button */}
                 <button
                     onClick={onMenuClick}
-                    className="lg:hidden ui-icon-btn w-9 h-9 rounded-lg text-[var(--color-text-secondary)]"
+                    className="lg:hidden ui-icon-btn w-9 h-9 rounded-lg text-[color:var(--color-text-secondary)]"
                 >
                     <Menu className="w-5 h-5" />
                 </button>
 
                 {/* Page Title */}
-                <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">
+                <h1 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
                     {getPageTitle()}
                 </h1>
             </div>
@@ -53,7 +53,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
             {/* Center Section - Search */}
             <div className="flex-1 max-w-3xl mx-4">
                 <div className="relative w-full">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                     <input
                         type="text"
                         placeholder="Search books, authors, or highlights..."
@@ -75,8 +75,8 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                     className={cn(
                         "ui-icon-btn w-9 h-9 rounded-lg",
                         currentRoute === "statistics"
-                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] border border-[var(--color-accent)]"
-                            : "text-[var(--color-text-secondary)]"
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast border border-[var(--color-accent)]"
+                            : "text-[color:var(--color-text-secondary)]"
                     )}
                     title="Statistics"
                 >

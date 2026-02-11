@@ -101,7 +101,7 @@ export function ReaderSearch({
                 {/* Header/Search Input */}
                 <div className="reader-panel-header px-4 pt-4 pb-3">
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Search</h2>
+                        <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">Search</h2>
                         <button
                             onClick={onClose}
                             className="reader-chip w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors hover:opacity-80"
@@ -111,20 +111,20 @@ export function ReaderSearch({
                         </button>
                     </div>
                     <form onSubmit={handleSearch} className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                         <input
                             ref={inputRef}
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             placeholder="Search in book..."
-                            className="w-full h-10 pl-10 pr-10 bg-[var(--color-background)] rounded-xl text-sm border-2 border-transparent focus:border-[var(--color-accent)] transition-colors outline-none text-[var(--color-text-primary)]"
+                            className="w-full h-10 pl-10 pr-10 bg-[var(--color-background)] rounded-xl text-sm border-2 border-transparent focus:border-[var(--color-accent)] transition-colors outline-none text-[color:var(--color-text-primary)]"
                         />
                         {query && (
                             <button
                                 type="button"
                                 onClick={handleClear}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors text-[var(--color-text-muted)]"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors text-[color:var(--color-text-muted)]"
                             >
                                 <X className="w-3.5 h-3.5" />
                             </button>
@@ -153,15 +153,15 @@ export function ReaderSearch({
 
                     {query && isSearching && results.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-                            <Loader2 className="w-6 h-6 animate-spin text-[var(--color-accent)] mb-3" />
-                            <p className="text-xs text-[var(--color-text-muted)]">Scanning book... {progress}%</p>
+                            <Loader2 className="w-6 h-6 animate-spin text-[color:var(--color-accent)] mb-3" />
+                            <p className="text-xs text-[color:var(--color-text-muted)]">Scanning book... {progress}%</p>
                         </div>
                     )}
 
                     {query && !isSearching && results.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-12 px-6 text-center opacity-70">
                             <h3 className="text-sm font-semibold mb-1">No results found</h3>
-                            <p className="text-xs text-[var(--color-text-muted)]">Try a different search term</p>
+                            <p className="text-xs text-[color:var(--color-text-muted)]">Try a different search term</p>
                         </div>
                     )}
 
@@ -173,15 +173,15 @@ export function ReaderSearch({
                                 className="w-full flex flex-col gap-1 p-3 rounded-xl hover:bg-[var(--color-background)] transition-colors text-left group"
                             >
                                 <p
-                                    className="text-[var(--font-size-caption)] text-[var(--color-text-secondary)] line-clamp-3 leading-relaxed"
+                                    className="text-[var(--font-size-caption)] text-[color:var(--color-text-secondary)] line-clamp-3 leading-relaxed"
                                     dangerouslySetInnerHTML={{
                                         __html: result.excerpt.replace(
                                             new RegExp(`(${query})`, 'gi'),
-                                            '<span class="bg-[var(--color-accent)]/20 text-[var(--color-accent)] font-bold">$1</span>'
+                                            '<span class="bg-[var(--color-accent)]/20 text-[color:var(--color-accent)] font-bold">$1</span>'
                                         )
                                     }}
                                 />
-                                <div className="flex items-center gap-1.5 text-[var(--font-size-3xs)] text-[var(--color-accent)] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex items-center gap-1.5 text-[var(--font-size-3xs)] text-[color:var(--color-accent)] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
                                     <span>Jump to match</span>
                                     <ChevronRight className="w-3 h-3" />
                                 </div>
@@ -192,7 +192,7 @@ export function ReaderSearch({
 
                 {results.length > 0 && (
                     <div className="reader-panel-footer p-3 bg-[var(--color-background)]">
-                        <p className="text-[var(--font-size-3xs)] font-bold text-[var(--color-text-muted)] text-center uppercase tracking-widest">
+                        <p className="text-[var(--font-size-3xs)] font-bold text-[color:var(--color-text-muted)] text-center uppercase tracking-widest">
                             {results.length} {results.length === 1 ? 'Result' : 'Results'} found
                         </p>
                     </div>

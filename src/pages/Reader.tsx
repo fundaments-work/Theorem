@@ -1251,20 +1251,20 @@ export function ReaderPage() {
     if (loadError) {
         return (
             <div className="fixed inset-0 flex flex-col items-center justify-center p-8 text-center bg-[var(--color-background)]">
-                <div className="w-16 h-16 rounded-full bg-[var(--color-error)]/10 flex items-center justify-center mb-6 text-[var(--color-error)]">
+                <div className="w-16 h-16 rounded-full bg-[var(--color-error)]/10 flex items-center justify-center mb-6 text-[color:var(--color-error)]">
                     <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                 </div>
-                <h2 className="text-xl font-semibold text-[var(--color-text-primary)] mb-2">
+                <h2 className="text-xl font-semibold text-[color:var(--color-text-primary)] mb-2">
                     Failed to Load Book
                 </h2>
-                <p className="text-[var(--color-text-secondary)] mb-8 max-w-md">
+                <p className="text-[color:var(--color-text-secondary)] mb-8 max-w-md">
                     {loadError}
                 </p>
                 <button
                     onClick={() => setRoute('library')}
-                    className="px-6 py-2 bg-[var(--color-accent)] text-[var(--color-accent-contrast)] rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                    className="px-6 py-2 bg-[var(--color-accent)] ui-text-accent-contrast rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
                 >
                     Back to Library
                 </button>
@@ -1352,7 +1352,7 @@ export function ReaderPage() {
                 {isPdfFormat ? (
                     <Suspense
                         fallback={(
-                            <div className="flex h-full w-full items-center justify-center text-[var(--color-text-secondary)]">
+                            <div className="flex h-full w-full items-center justify-center text-[color:var(--color-text-secondary)]">
                                 Loading PDF engine...
                             </div>
                         )}

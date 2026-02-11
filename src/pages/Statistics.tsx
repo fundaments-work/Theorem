@@ -34,15 +34,15 @@ function StatCard({ icon, label, value, subtext }: StatCardProps) {
     return (
         <div className="ui-card p-5 hover:border-[var(--color-text-muted)] transition-colors">
             <div className="flex items-start justify-between">
-                <div className="p-2.5 rounded-lg bg-[var(--color-surface-muted)] text-[var(--color-text-primary)]">
+                <div className="p-2.5 rounded-lg bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]">
                     {icon}
                 </div>
             </div>
             <div className="mt-4">
-                <p className="text-2xl font-bold text-[var(--color-text-primary)]">{value}</p>
-                <p className="text-sm text-[var(--color-text-muted)] mt-0.5">{label}</p>
+                <p className="text-2xl font-bold text-[color:var(--color-text-primary)]">{value}</p>
+                <p className="text-sm text-[color:var(--color-text-muted)] mt-0.5">{label}</p>
                 {subtext && (
-                    <p className="text-xs text-[var(--color-text-secondary)] mt-2">{subtext}</p>
+                    <p className="text-xs text-[color:var(--color-text-secondary)] mt-2">{subtext}</p>
                 )}
             </div>
         </div>
@@ -64,8 +64,8 @@ function ProgressBar({
     return (
         <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-                <span className="text-[var(--color-text-secondary)]">{label}</span>
-                <span className="text-[var(--color-text-primary)] font-medium">
+                <span className="text-[color:var(--color-text-secondary)]">{label}</span>
+                <span className="text-[color:var(--color-text-primary)] font-medium">
                     {current} / {target}
                 </span>
             </div>
@@ -106,14 +106,14 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
                 />
             ) : (
                 <div className="w-12 h-16 bg-[var(--color-surface-muted)] rounded flex items-center justify-center flex-shrink-0">
-                    <BookOpen className="w-5 h-5 text-[var(--color-text-muted)]" />
+                    <BookOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                 </div>
             )}
             <div className="flex-1 min-w-0">
-                <h4 className="font-medium text-sm text-[var(--color-text-primary)] truncate">
+                <h4 className="font-medium text-sm text-[color:var(--color-text-primary)] truncate">
                     {book.title}
                 </h4>
-                <p className="text-xs text-[var(--color-text-secondary)] truncate">{normalizeAuthor(book.author) || "Unknown Author"}</p>
+                <p className="text-xs text-[color:var(--color-text-secondary)] truncate">{normalizeAuthor(book.author) || "Unknown Author"}</p>
                 <div className="flex items-center gap-2 mt-2">
                     <div className="flex-1 h-1.5 bg-[var(--color-surface-muted)] rounded-full overflow-hidden">
                         <div
@@ -121,12 +121,12 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
                             style={{ width: `${book.progress * 100}%` }}
                         />
                     </div>
-                    <span className="text-xs text-[var(--color-text-muted)]">
+                    <span className="text-xs text-[color:var(--color-text-muted)]">
                         {Math.round(book.progress * 100)}%
                     </span>
                 </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)] flex-shrink-0" />
+            <ChevronRight className="w-4 h-4 text-[color:var(--color-text-muted)] flex-shrink-0" />
         </button>
     );
 }
@@ -191,8 +191,8 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: import('@/types').D
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-[var(--color-text-primary)]">Reading Activity</span>
-                <span className="text-xs text-[var(--color-text-muted)]">Last 12 weeks</span>
+                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">Reading Activity</span>
+                <span className="text-xs text-[color:var(--color-text-muted)]">Last 12 weeks</span>
             </div>
             <div className="flex gap-1">
                 {weeks.map((week, weekIndex) => (
@@ -210,7 +210,7 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: import('@/types').D
                     </div>
                 ))}
             </div>
-            <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+            <div className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
                 <span>Less</span>
                 {[0, 1, 2, 3, 4].map((level) => (
                     <div key={level} className={cn("w-3 h-3 rounded-sm", getColor(level))} />
@@ -218,7 +218,7 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: import('@/types').D
                 <span>More</span>
             </div>
             {todayMinutes > 0 && (
-                <p className="text-xs text-[var(--color-text-muted)]">
+                <p className="text-xs text-[color:var(--color-text-muted)]">
                     Today: {todayMinutes} minutes read
                 </p>
             )}
@@ -307,9 +307,9 @@ export function StatisticsPage() {
                     <section className="ui-card p-6">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="p-2 rounded-lg bg-[var(--color-surface-muted)]">
-                                <Target className="w-5 h-5 text-[var(--color-text-primary)]" />
+                                <Target className="w-5 h-5 text-[color:var(--color-text-primary)]" />
                             </div>
-                            <h2 className="font-semibold text-[var(--color-text-primary)]">Reading Goals</h2>
+                            <h2 className="font-semibold text-[color:var(--color-text-primary)]">Reading Goals</h2>
                         </div>
                         <div className="space-y-6">
                             <ProgressBar
@@ -334,10 +334,10 @@ export function StatisticsPage() {
                     {recentBooks.length > 0 && (
                         <section>
                             <div className="flex items-center justify-between mb-4">
-                                <h2 className="font-semibold text-[var(--color-text-primary)]">Recently Read</h2>
+                                <h2 className="font-semibold text-[color:var(--color-text-primary)]">Recently Read</h2>
                                 <button
                                     onClick={() => setRoute("library")}
-                                    className="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors flex items-center gap-1"
+                                    className="text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] transition-colors flex items-center gap-1"
                                 >
                                     View All
                                     <ChevronRight className="w-4 h-4" />
@@ -362,31 +362,31 @@ export function StatisticsPage() {
                     <section className="ui-card p-6">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="p-2 rounded-lg bg-[var(--color-surface-muted)]">
-                                <Highlighter className="w-5 h-5 text-[var(--color-text-primary)]" />
+                                <Highlighter className="w-5 h-5 text-[color:var(--color-text-primary)]" />
                             </div>
-                            <h2 className="font-semibold text-[var(--color-text-primary)]">Annotations</h2>
+                            <h2 className="font-semibold text-[color:var(--color-text-primary)]">Annotations</h2>
                         </div>
                         <div className="space-y-4">
                             <div className="flex items-center justify-between p-3 bg-[var(--color-surface-muted)] rounded-lg">
                                 <div className="flex items-center gap-2">
-                                    <Highlighter className="w-4 h-4 text-[var(--color-text-muted)]" />
-                                    <span className="text-sm text-[var(--color-text-primary)]">Highlights</span>
+                                    <Highlighter className="w-4 h-4 text-[color:var(--color-text-muted)]" />
+                                    <span className="text-sm text-[color:var(--color-text-primary)]">Highlights</span>
                                 </div>
-                                <span className="font-medium text-[var(--color-text-primary)]">{totalHighlights}</span>
+                                <span className="font-medium text-[color:var(--color-text-primary)]">{totalHighlights}</span>
                             </div>
                             <div className="flex items-center justify-between p-3 bg-[var(--color-surface-muted)] rounded-lg">
                                 <div className="flex items-center gap-2">
-                                    <BookOpen className="w-4 h-4 text-[var(--color-text-muted)]" />
-                                    <span className="text-sm text-[var(--color-text-primary)]">Notes</span>
+                                    <BookOpen className="w-4 h-4 text-[color:var(--color-text-muted)]" />
+                                    <span className="text-sm text-[color:var(--color-text-primary)]">Notes</span>
                                 </div>
-                                <span className="font-medium text-[var(--color-text-primary)]">{totalNotes}</span>
+                                <span className="font-medium text-[color:var(--color-text-primary)]">{totalNotes}</span>
                             </div>
                             <div className="flex items-center justify-between p-3 bg-[var(--color-surface-muted)] rounded-lg">
                                 <div className="flex items-center gap-2">
-                                    <Bookmark className="w-4 h-4 text-[var(--color-text-muted)]" />
-                                    <span className="text-sm text-[var(--color-text-primary)]">Bookmarks</span>
+                                    <Bookmark className="w-4 h-4 text-[color:var(--color-text-muted)]" />
+                                    <span className="text-sm text-[color:var(--color-text-primary)]">Bookmarks</span>
                                 </div>
-                                <span className="font-medium text-[var(--color-text-primary)]">{totalBookmarks}</span>
+                                <span className="font-medium text-[color:var(--color-text-primary)]">{totalBookmarks}</span>
                             </div>
                         </div>
                     </section>
@@ -396,9 +396,9 @@ export function StatisticsPage() {
                         <section className="ui-card p-6">
                             <div className="flex items-center gap-3 mb-6">
                                 <div className="p-2 rounded-lg bg-[var(--color-surface-muted)]">
-                                    <Star className="w-5 h-5 text-[var(--color-text-primary)]" />
+                                    <Star className="w-5 h-5 text-[color:var(--color-text-primary)]" />
                                 </div>
-                                <h2 className="font-semibold text-[var(--color-text-primary)]">Favorites</h2>
+                                <h2 className="font-semibold text-[color:var(--color-text-primary)]">Favorites</h2>
                             </div>
                             <div className="space-y-3">
                                 {favoriteBooks.map((book) => (
@@ -415,14 +415,14 @@ export function StatisticsPage() {
                                             />
                                         ) : (
                                             <div className="w-10 h-14 bg-[var(--color-surface-muted)] rounded flex items-center justify-center flex-shrink-0">
-                                                <BookOpen className="w-4 h-4 text-[var(--color-text-muted)]" />
+                                                <BookOpen className="w-4 h-4 text-[color:var(--color-text-muted)]" />
                                             </div>
                                         )}
                                         <div className="flex-1 min-w-0">
-                                            <h4 className="text-sm font-medium text-[var(--color-text-primary)] truncate group-hover:text-[var(--color-accent)] transition-colors">
+                                            <h4 className="text-sm font-medium text-[color:var(--color-text-primary)] truncate group-hover:text-[color:var(--color-accent)] transition-colors">
                                                 {book.title}
                                             </h4>
-                                            <p className="text-xs text-[var(--color-text-secondary)] truncate">
+                                            <p className="text-xs text-[color:var(--color-text-secondary)] truncate">
                                                 {normalizeAuthor(book.author) || "Unknown Author"}
                                             </p>
                                         </div>
@@ -436,57 +436,57 @@ export function StatisticsPage() {
                     <section className="ui-card p-6">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="p-2 rounded-lg bg-[var(--color-surface-muted)]">
-                                <Trophy className="w-5 h-5 text-[var(--color-text-primary)]" />
+                                <Trophy className="w-5 h-5 text-[color:var(--color-text-primary)]" />
                             </div>
-                            <h2 className="font-semibold text-[var(--color-text-primary)]">Achievements</h2>
+                            <h2 className="font-semibold text-[color:var(--color-text-primary)]">Achievements</h2>
                         </div>
                         <div className="space-y-3">
                             {completedBooks >= 1 && (
                                 <div className="flex items-center gap-3 p-3 bg-[var(--color-accent-light)] rounded-lg">
                                     <div className="w-8 h-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center">
-                                        <BookOpen className="w-4 h-4 text-[var(--color-text-inverse)]" />
+                                        <BookOpen className="w-4 h-4 text-[color:var(--color-text-inverse)]" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-medium text-[var(--color-text-primary)]">First Book</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">Completed your first book</p>
+                                        <p className="text-sm font-medium text-[color:var(--color-text-primary)]">First Book</p>
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">Completed your first book</p>
                                     </div>
                                 </div>
                             )}
                             {completedBooks >= 5 && (
                                 <div className="flex items-center gap-3 p-3 bg-[var(--color-accent-light)] rounded-lg">
                                     <div className="w-8 h-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center">
-                                        <TrendingUp className="w-4 h-4 text-[var(--color-text-inverse)]" />
+                                        <TrendingUp className="w-4 h-4 text-[color:var(--color-text-inverse)]" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-medium text-[var(--color-text-primary)]">Bookworm</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">Completed 5 books</p>
+                                        <p className="text-sm font-medium text-[color:var(--color-text-primary)]">Bookworm</p>
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">Completed 5 books</p>
                                     </div>
                                 </div>
                             )}
                             {stats.currentStreak >= 7 && (
                                 <div className="flex items-center gap-3 p-3 bg-[var(--color-accent-light)] rounded-lg">
                                     <div className="w-8 h-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center">
-                                        <Flame className="w-4 h-4 text-[var(--color-text-inverse)]" />
+                                        <Flame className="w-4 h-4 text-[color:var(--color-text-inverse)]" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-medium text-[var(--color-text-primary)]">On Fire</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">7 day reading streak</p>
+                                        <p className="text-sm font-medium text-[color:var(--color-text-primary)]">On Fire</p>
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">7 day reading streak</p>
                                     </div>
                                 </div>
                             )}
                             {totalHighlights >= 10 && (
                                 <div className="flex items-center gap-3 p-3 bg-[var(--color-accent-light)] rounded-lg">
                                     <div className="w-8 h-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center">
-                                        <Highlighter className="w-4 h-4 text-[var(--color-text-inverse)]" />
+                                        <Highlighter className="w-4 h-4 text-[color:var(--color-text-inverse)]" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-medium text-[var(--color-text-primary)]">Highlighter</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">Created 10 highlights</p>
+                                        <p className="text-sm font-medium text-[color:var(--color-text-primary)]">Highlighter</p>
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">Created 10 highlights</p>
                                     </div>
                                 </div>
                             )}
                             {completedBooks < 1 && totalHighlights < 10 && stats.currentStreak < 7 && (
-                                <p className="text-sm text-[var(--color-text-muted)] text-center py-4">
+                                <p className="text-sm text-[color:var(--color-text-muted)] text-center py-4">
                                     Keep reading to unlock achievements!
                                 </p>
                             )}

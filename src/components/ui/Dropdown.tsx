@@ -115,7 +115,7 @@ export function Dropdown<T extends string = string>({
                 disabled={disabled}
                 className={cn(
                     "flex items-center justify-between gap-2 w-full rounded-lg ui-clickable ui-focus-ring",
-                    "text-[var(--color-text-primary)]",
+                    "text-[color:var(--color-text-primary)]",
                     "transition-colors duration-200",
                     "disabled:opacity-50 disabled:cursor-not-allowed",
                     sizeClasses[size],
@@ -123,12 +123,12 @@ export function Dropdown<T extends string = string>({
                     isOpen && "ring-2 ring-[var(--color-accent)]/50"
                 )}
             >
-                <span className={cn("truncate", !selectedOption && "text-[var(--color-text-muted)]")}>
+                <span className={cn("truncate", !selectedOption && "text-[color:var(--color-text-muted)]")}>
                     {selectedOption?.label || placeholder}
                 </span>
                 <ChevronDown
                     className={cn(
-                        "w-4 h-4 text-[var(--color-text-muted)] flex-shrink-0 transition-transform duration-200",
+                        "w-4 h-4 text-[color:var(--color-text-muted)] flex-shrink-0 transition-transform duration-200",
                         isOpen && "rotate-180"
                     )}
                 />
@@ -167,8 +167,8 @@ export function Dropdown<T extends string = string>({
                                         "text-sm transition-colors",
                                         "disabled:opacity-40 disabled:cursor-not-allowed",
                                         isSelected
-                                            ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text-primary)]"
+                                            ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
+                                            : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
                                     )}
                                 >
                                     <span className="truncate">{option.label}</span>
@@ -180,7 +180,7 @@ export function Dropdown<T extends string = string>({
                         })}
 
                         {options.length === 0 && (
-                            <div className="px-3 py-2 text-sm text-[var(--color-text-muted)]">
+                            <div className="px-3 py-2 text-sm text-[color:var(--color-text-muted)]">
                                 No options available
                             </div>
                         )}

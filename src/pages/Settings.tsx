@@ -55,13 +55,13 @@ function Section({ title, description, icon, children }: SectionProps) {
         <section className="ui-card">
             <div className="px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface-muted)]/50">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-[var(--color-surface)] text-[var(--color-text-primary)]">
+                    <div className="p-2 rounded-lg bg-[var(--color-surface)] text-[color:var(--color-text-primary)]">
                         {icon}
                     </div>
                     <div>
-                        <h2 className="font-semibold text-[var(--color-text-primary)]">{title}</h2>
+                        <h2 className="font-semibold text-[color:var(--color-text-primary)]">{title}</h2>
                         {description && (
-                            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{description}</p>
+                            <p className="text-xs text-[color:var(--color-text-muted)] mt-0.5">{description}</p>
                         )}
                     </div>
                 </div>
@@ -82,9 +82,9 @@ function SettingRow({ label, description, children }: SettingRowProps) {
     return (
         <div className="flex items-center justify-between py-4 first:pt-0 last:pb-0 border-b border-[var(--color-border-subtle)] last:border-0">
             <div className="flex-1 pr-4">
-                <label className="font-medium text-sm text-[var(--color-text-primary)]">{label}</label>
+                <label className="font-medium text-sm text-[color:var(--color-text-primary)]">{label}</label>
                 {description && (
-                    <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{description}</p>
+                    <p className="text-xs text-[color:var(--color-text-muted)] mt-0.5">{description}</p>
                 )}
             </div>
             <div className="flex-shrink-0">{children}</div>
@@ -137,8 +137,8 @@ function ButtonSelect<T extends string>({
                     className={cn(
                         "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
                         value === opt.value
-                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]"
-                            : "bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                            : "bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                     )}
                 >
                     {opt.label}
@@ -230,8 +230,8 @@ export function SettingsPage() {
                         className={cn(
                             "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
                             activeTab === tab.id
-                                ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
-                                : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                                ? "bg-[var(--color-surface)] text-[color:var(--color-text-primary)] shadow-sm"
+                                : "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                         )}
                     >
                         <tab.icon className="w-4 h-4" />
@@ -318,12 +318,12 @@ export function SettingsPage() {
                                     max={180}
                                     className={cn(
                                         "w-20 px-3 py-1.5 rounded-lg text-sm",
-                                        "bg-[var(--color-surface-muted)] text-[var(--color-text-primary)]",
+                                        "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
                                         "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
                                         "text-center"
                                     )}
                                 />
-                                <span className="text-sm text-[var(--color-text-secondary)]">min/day</span>
+                                <span className="text-sm text-[color:var(--color-text-secondary)]">min/day</span>
                             </div>
                         </SettingRow>
 
@@ -340,19 +340,19 @@ export function SettingsPage() {
                                     max={100}
                                     className={cn(
                                         "w-20 px-3 py-1.5 rounded-lg text-sm",
-                                        "bg-[var(--color-surface-muted)] text-[var(--color-text-primary)]",
+                                        "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
                                         "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
                                         "text-center"
                                     )}
                                 />
-                                <span className="text-sm text-[var(--color-text-secondary)]">books/year</span>
+                                <span className="text-sm text-[color:var(--color-text-secondary)]">books/year</span>
                             </div>
                         </SettingRow>
 
                         <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
                             <div className="flex items-center justify-between text-sm">
-                                <span className="text-[var(--color-text-secondary)]">Current Progress</span>
-                                <span className="text-[var(--color-text-primary)] font-medium">
+                                <span className="text-[color:var(--color-text-secondary)]">Current Progress</span>
+                                <span className="text-[color:var(--color-text-primary)] font-medium">
                                     {stats.booksReadThisYear} / {stats.yearlyBookGoal} books
                                 </span>
                             </div>
@@ -418,7 +418,7 @@ export function SettingsPage() {
                                 onChange={(e) => setDailyReviewTime(e.target.value)}
                                 className={cn(
                                     "px-3 py-1.5 rounded-md text-sm",
-                                    "bg-[var(--color-surface-muted)] text-[var(--color-text-primary)]",
+                                    "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
                                     "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
                                 )}
                             />
@@ -439,7 +439,7 @@ export function SettingsPage() {
                                     resetSettings();
                                 }
                             }}
-                            className="flex items-center gap-2 px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] transition-colors"
                         >
                             <RotateCcw className="w-4 h-4" />
                             Reset to Defaults
@@ -475,7 +475,7 @@ export function SettingsPage() {
                             label="Primary API"
                             description="Online dictionary service"
                         >
-                            <span className="text-sm text-[var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md">
+                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md">
                                 Free Dictionary API
                             </span>
                         </SettingRow>
@@ -484,7 +484,7 @@ export function SettingsPage() {
                             label="Fallback"
                             description="Secondary dictionary source"
                         >
-                            <span className="text-sm text-[var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md">
+                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md">
                                 Wiktionary
                             </span>
                         </SettingRow>
@@ -514,13 +514,13 @@ export function SettingsPage() {
                             description="StarDict format • 45 MB"
                         >
                             {offlineDictInstalled ? (
-                                <span className="text-sm text-[var(--color-success)] flex items-center gap-1">
+                                <span className="text-sm text-[color:var(--color-success)] flex items-center gap-1">
                                     <BookOpenCheck className="w-4 h-4" /> Installed
                                 </span>
                             ) : (
                                 <button
                                     onClick={() => setOfflineDictInstalled(true)}
-                                    className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:opacity-90 transition-opacity"
+                                    className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90 transition-opacity"
                                 >
                                     <Download className="w-4 h-4" /> Download
                                 </button>
@@ -531,7 +531,7 @@ export function SettingsPage() {
                             label="English (UK)"
                             description="StarDict format • 42 MB"
                         >
-                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors">
+                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors">
                                 <Download className="w-4 h-4" /> Download
                             </button>
                         </SettingRow>
@@ -540,7 +540,7 @@ export function SettingsPage() {
                             label="Spanish"
                             description="StarDict format • 38 MB"
                         >
-                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors">
+                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors">
                                 <Download className="w-4 h-4" /> Download
                             </button>
                         </SettingRow>
@@ -549,7 +549,7 @@ export function SettingsPage() {
                             label="French"
                             description="StarDict format • 35 MB"
                         >
-                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors">
+                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors">
                                 <Download className="w-4 h-4" /> Download
                             </button>
                         </SettingRow>
@@ -577,7 +577,7 @@ export function SettingsPage() {
                             description={`Check for new articles every ${rssSyncInterval} minutes`}
                         >
                             <div className="flex items-center gap-3">
-                                <span className="text-xs text-[var(--color-text-muted)]">15m</span>
+                                <span className="text-xs text-[color:var(--color-text-muted)]">15m</span>
                                 <input
                                     type="range"
                                     min={15}
@@ -587,7 +587,7 @@ export function SettingsPage() {
                                     onChange={(e) => setRssSyncInterval(parseInt(e.target.value))}
                                     className="w-32"
                                 />
-                                <span className="text-xs text-[var(--color-text-muted)]">4h</span>
+                                <span className="text-xs text-[color:var(--color-text-muted)]">4h</span>
                             </div>
                         </SettingRow>
 
@@ -627,7 +627,7 @@ export function SettingsPage() {
                                 placeholder="reading, later, web"
                                 className={cn(
                                     "px-3 py-1.5 rounded-md text-sm w-48",
-                                    "bg-[var(--color-surface-muted)] text-[var(--color-text-primary)]",
+                                    "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
                                     "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
                                 )}
                             />
@@ -651,7 +651,7 @@ export function SettingsPage() {
                             description="Subscribe to newsletters with this address"
                         >
                             <div className="flex items-center gap-2">
-                                <code className="px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md text-sm text-[var(--color-text-secondary)]">
+                                <code className="px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md text-sm text-[color:var(--color-text-secondary)]">
                                     {newsletterEmail}
                                 </code>
                                 <button
@@ -675,7 +675,7 @@ export function SettingsPage() {
                             label="Sender Filtering"
                             description="Block unwanted newsletter senders"
                         >
-                            <button className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors">
+                            <button className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors">
                                 Manage Senders
                             </button>
                         </SettingRow>
@@ -710,11 +710,11 @@ export function SettingsPage() {
                                     placeholder="/path/to/vault"
                                     className={cn(
                                         "px-3 py-1.5 rounded-md text-sm w-48",
-                                        "bg-[var(--color-surface-muted)] text-[var(--color-text-primary)]",
+                                        "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
                                         "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
                                     )}
                                 />
-                                <button className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors">
+                                <button className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors">
                                     Browse
                                 </button>
                             </div>
@@ -769,7 +769,7 @@ export function SettingsPage() {
                                     description="Keep this secret!"
                                 >
                                     <div className="flex items-center gap-2">
-                                        <code className="px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md text-sm text-[var(--color-text-secondary)] max-w-[var(--layout-tooltip-max-width)] truncate">
+                                        <code className="px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md text-sm text-[color:var(--color-text-secondary)] max-w-[var(--layout-tooltip-max-width)] truncate">
                                             {apiKey || "No key generated"}
                                         </code>
                                         {apiKey ? (
@@ -782,7 +782,7 @@ export function SettingsPage() {
                                         ) : (
                                             <button
                                                 onClick={generateApiKey}
-                                                className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:opacity-90 transition-opacity"
+                                                className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90 transition-opacity"
                                             >
                                                 Generate
                                             </button>
@@ -799,20 +799,20 @@ export function SettingsPage() {
                                         placeholder="https://your-app.com/webhook"
                                         className={cn(
                                             "px-3 py-1.5 rounded-md text-sm w-56",
-                                            "bg-[var(--color-surface-muted)] text-[var(--color-text-primary)]",
+                                            "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
                                             "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
                                         )}
                                     />
                                 </SettingRow>
 
                                 <div className="mt-4 p-4 bg-[var(--color-surface-muted)] rounded-lg">
-                                    <p className="text-sm font-medium text-[var(--color-text-primary)] mb-2">API Documentation</p>
-                                    <p className="text-xs text-[var(--color-text-muted)] mb-3">
+                                    <p className="text-sm font-medium text-[color:var(--color-text-primary)] mb-2">API Documentation</p>
+                                    <p className="text-xs text-[color:var(--color-text-muted)] mb-3">
                                         Access your library, highlights, and vocabulary programmatically.
                                     </p>
                                     <a
                                         href="#"
-                                        className="text-xs text-[var(--color-accent)] hover:underline flex items-center gap-1"
+                                        className="text-xs text-[color:var(--color-accent)] hover:underline flex items-center gap-1"
                                     >
                                         View OpenAPI docs <ExternalLink className="w-3 h-3" />
                                     </a>
@@ -858,7 +858,7 @@ export function SettingsPage() {
                             description={`${ttsSpeed.toFixed(1)}x`}
                         >
                             <div className="flex items-center gap-3">
-                                <span className="text-xs text-[var(--color-text-muted)]">0.5x</span>
+                                <span className="text-xs text-[color:var(--color-text-muted)]">0.5x</span>
                                 <input
                                     type="range"
                                     min={0.5}
@@ -868,7 +868,7 @@ export function SettingsPage() {
                                     onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
                                     className="w-32"
                                 />
-                                <span className="text-xs text-[var(--color-text-muted)]">3x</span>
+                                <span className="text-xs text-[color:var(--color-text-muted)]">3x</span>
                             </div>
                         </SettingRow>
 
@@ -919,7 +919,7 @@ export function SettingsPage() {
                                     placeholder="sk-..."
                                     className={cn(
                                         "px-3 py-1.5 rounded-md text-sm w-48",
-                                        "bg-[var(--color-surface-muted)] text-[var(--color-text-primary)]",
+                                        "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
                                         "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
                                     )}
                                 />
@@ -973,20 +973,20 @@ export function SettingsPage() {
                                     label="Account"
                                     description="Signed in as"
                                 >
-                                    <span className="text-sm text-[var(--color-text-muted)]">
+                                    <span className="text-sm text-[color:var(--color-text-muted)]">
                                         Not signed in
                                     </span>
                                 </SettingRow>
 
                                 <div className="mt-4 p-4 bg-[var(--color-accent)]/10 rounded-lg border border-[var(--color-accent)]/20">
-                                    <p className="text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                                    <p className="text-sm font-medium text-[color:var(--color-text-primary)] mb-2">
                                         Theorem Cloud
                                     </p>
-                                    <p className="text-xs text-[var(--color-text-muted)] mb-3">
+                                    <p className="text-xs text-[color:var(--color-text-muted)] mb-3">
                                         Sync your library, highlights, and vocabulary across all devices.
                                         End-to-end encryption included.
                                     </p>
-                                    <button className="px-4 py-2 rounded-md text-sm bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:opacity-90 transition-opacity">
+                                    <button className="px-4 py-2 rounded-md text-sm bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90 transition-opacity">
                                         Sign In / Create Account
                                     </button>
                                 </div>
@@ -1004,7 +1004,7 @@ export function SettingsPage() {
                                         placeholder="https://sync.your-domain.com"
                                         className={cn(
                                             "px-3 py-1.5 rounded-md text-sm w-56",
-                                            "bg-[var(--color-surface-muted)] text-[var(--color-text-primary)]",
+                                            "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
                                             "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
                                         )}
                                     />
@@ -1014,23 +1014,23 @@ export function SettingsPage() {
                                     label="Server Status"
                                     description="Connection health"
                                 >
-                                    <span className="text-sm text-[var(--color-text-muted)] flex items-center gap-1">
+                                    <span className="text-sm text-[color:var(--color-text-muted)] flex items-center gap-1">
                                         <span className="w-2 h-2 rounded-full bg-[var(--color-error)]" />
                                         Disconnected
                                     </span>
                                 </SettingRow>
 
                                 <div className="mt-4 p-4 bg-[var(--color-surface-muted)] rounded-lg">
-                                    <p className="text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                                    <p className="text-sm font-medium text-[color:var(--color-text-primary)] mb-2">
                                         Self-hosted Server
                                     </p>
-                                    <p className="text-xs text-[var(--color-text-muted)] mb-3">
+                                    <p className="text-xs text-[color:var(--color-text-muted)] mb-3">
                                         Run your own sync server for complete privacy.
                                         Docker image available.
                                     </p>
                                     <a
                                         href="#"
-                                        className="text-xs text-[var(--color-accent)] hover:underline flex items-center gap-1"
+                                        className="text-xs text-[color:var(--color-accent)] hover:underline flex items-center gap-1"
                                     >
                                         Setup Guide <ExternalLink className="w-3 h-3" />
                                     </a>
@@ -1097,17 +1097,17 @@ export function SettingsPage() {
                         <div className="space-y-3">
                             <div className="flex items-center justify-between p-3 bg-[var(--color-surface-muted)] rounded-lg">
                                 <div className="flex items-center gap-3">
-                                    <Laptop className="w-5 h-5 text-[var(--color-text-muted)]" />
+                                    <Laptop className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                                     <div>
-                                        <p className="font-medium text-sm text-[var(--color-text-primary)]">
+                                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">
                                             This Device
                                         </p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">
                                             Last synced: Never
                                         </p>
                                     </div>
                                 </div>
-                                <span className="text-xs px-2 py-1 bg-[var(--color-success)]/10 text-[var(--color-success)] rounded-full">
+                                <span className="text-xs px-2 py-1 bg-[var(--color-success)]/10 text-[color:var(--color-success)] rounded-full">
                                     Online
                                 </span>
                             </div>
@@ -1127,25 +1127,25 @@ export function SettingsPage() {
                         <div className="space-y-4">
                             <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)] rounded-lg">
                                 <div className="flex items-center gap-3">
-                                    <BookOpen className="w-5 h-5 text-[var(--color-text-muted)]" />
+                                    <BookOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                                     <div>
-                                        <p className="font-medium text-sm text-[var(--color-text-primary)]">Books</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Books</p>
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">
                                             {books.length} {books.length === 1 ? "book" : "books"}
                                         </p>
                                     </div>
                                 </div>
-                                <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
                                     {formatFileSize(totalStorage)}
                                 </span>
                             </div>
 
                             <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)] rounded-lg">
                                 <div className="flex items-center gap-3">
-                                    <FolderOpen className="w-5 h-5 text-[var(--color-text-muted)]" />
+                                    <FolderOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                                     <div>
-                                        <p className="font-medium text-sm text-[var(--color-text-primary)]">Highlights & Notes</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Highlights & Notes</p>
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">
                                             {annotations.length} {annotations.length === 1 ? "annotation" : "annotations"}
                                         </p>
                                     </div>
@@ -1154,30 +1154,30 @@ export function SettingsPage() {
 
                             <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)] rounded-lg">
                                 <div className="flex items-center gap-3">
-                                    <Rss className="w-5 h-5 text-[var(--color-text-muted)]" />
+                                    <Rss className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                                     <div>
-                                        <p className="font-medium text-sm text-[var(--color-text-primary)]">RSS Articles</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">RSS Articles</p>
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">
                                             0 articles cached
                                         </p>
                                     </div>
                                 </div>
-                                <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
                                     0 MB
                                 </span>
                             </div>
 
                             <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)] rounded-lg">
                                 <div className="flex items-center gap-3">
-                                    <Languages className="w-5 h-5 text-[var(--color-text-muted)]" />
+                                    <Languages className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                                     <div>
-                                        <p className="font-medium text-sm text-[var(--color-text-primary)]">Offline Dictionaries</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Offline Dictionaries</p>
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">
                                             {offlineDictInstalled ? "1 installed" : "None installed"}
                                         </p>
                                     </div>
                                 </div>
-                                <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
                                     {offlineDictInstalled ? "45 MB" : "0 MB"}
                                 </span>
                             </div>
@@ -1195,7 +1195,7 @@ export function SettingsPage() {
                                 className={cn(
                                     "w-full flex items-center gap-3 p-4 rounded-lg",
                                     "border border-[var(--color-error)]/20",
-                                    "text-[var(--color-error)] hover:bg-[var(--color-error)]/5",
+                                    "text-[color:var(--color-error)] hover:bg-[var(--color-error)]/5",
                                     "transition-colors text-left"
                                 )}
                             >
@@ -1213,14 +1213,14 @@ export function SettingsPage() {
                                 className={cn(
                                     "w-full flex items-center gap-3 p-4 rounded-lg",
                                     "border border-[var(--color-border)]",
-                                    "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]",
+                                    "text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]",
                                     "transition-colors text-left"
                                 )}
                             >
                                 <Download className="w-5 h-5" />
                                 <div className="flex-1">
                                     <p className="font-medium text-sm">Export Data</p>
-                                    <p className="text-xs text-[var(--color-text-muted)]">
+                                    <p className="text-xs text-[color:var(--color-text-muted)]">
                                         Download all your data as JSON
                                     </p>
                                 </div>

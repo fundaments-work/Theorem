@@ -104,13 +104,13 @@ interface ModalHeaderProps {
 export function ModalHeader({ title, onClose, showCloseButton = true }: ModalHeaderProps) {
     return (
         <div className="flex items-center justify-between p-6 border-b border-[var(--color-border)]">
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
                 {title}
             </h2>
             {showCloseButton && onClose && (
                 <button
                     onClick={onClose}
-                    className="ui-icon-btn w-8 h-8 rounded-lg text-[var(--color-text-muted)]"
+                    className="ui-icon-btn w-8 h-8 rounded-lg text-[color:var(--color-text-muted)]"
                     aria-label="Close"
                 >
                     <svg

@@ -182,7 +182,7 @@ function BookCard({
                             className={cn(
                                 "absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-colors pointer-events-none",
                                 book.isFavorite 
-                                    ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]" 
+                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast" 
                                     : "opacity-0"
                             )}
                         >
@@ -192,14 +192,14 @@ function BookCard({
 
                     {/* Book Info */}
                     <div>
-                        <h3 className="font-medium text-sm text-[var(--color-text-primary)] line-clamp-1 mb-0.5">
+                        <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] line-clamp-1 mb-0.5">
                             {book.title}
                         </h3>
-                        <p className="text-xs text-[var(--color-text-secondary)] line-clamp-1">
+                        <p className="text-xs text-[color:var(--color-text-secondary)] line-clamp-1">
                             {normalizeAuthor(book.author) || "Unknown Author"}
                         </p>
                         {book.progress > 0 && (
-                            <p className="text-[var(--font-size-3xs)] text-[var(--color-text-muted)] mt-1">
+                            <p className="text-[var(--font-size-3xs)] text-[color:var(--color-text-muted)] mt-1">
                                 {formatProgress(book.progress)}
                             </p>
                         )}
@@ -238,10 +238,10 @@ function BookCard({
 
                     {/* Book Info */}
                     <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-sm text-[var(--color-text-primary)] truncate">
+                        <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] truncate">
                             {book.title}
                         </h3>
-                        <p className="text-xs text-[var(--color-text-secondary)] truncate">
+                        <p className="text-xs text-[color:var(--color-text-secondary)] truncate">
                             {normalizeAuthor(book.author) || "Unknown Author"}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
@@ -249,7 +249,7 @@ function BookCard({
                                 className={cn(
                                     "transition-colors pointer-events-none",
                                     book.isFavorite 
-                                        ? "text-[var(--color-accent)]" 
+                                        ? "text-[color:var(--color-accent)]" 
                                         : "opacity-0"
                                 )}
                             >
@@ -257,22 +257,22 @@ function BookCard({
                             </div>
                             {book.rating && (
                                 <div className="flex items-center gap-0.5">
-                                    <Star className="w-3 h-3 text-[var(--color-warning)] fill-current" />
-                                    <span className="text-[var(--font-size-3xs)] text-[var(--color-text-muted)]">{book.rating}</span>
+                                    <Star className="w-3 h-3 text-[color:var(--color-warning)] fill-current" />
+                                    <span className="text-[var(--font-size-3xs)] text-[color:var(--color-text-muted)]">{book.rating}</span>
                                 </div>
                             )}
-                            <span className="text-[var(--font-size-3xs)] text-[var(--color-text-muted)] uppercase">{FORMAT_DISPLAY_NAMES[book.format] || book.format}</span>
+                            <span className="text-[var(--font-size-3xs)] text-[color:var(--color-text-muted)] uppercase">{FORMAT_DISPLAY_NAMES[book.format] || book.format}</span>
                         </div>
                     </div>
 
                     {/* Progress */}
                     <div className="text-right">
                         {book.progress > 0 ? (
-                            <p className="text-sm text-[var(--color-text-secondary)]">
+                            <p className="text-sm text-[color:var(--color-text-secondary)]">
                                 {formatProgress(book.progress)}
                             </p>
                         ) : (
-                            <p className="text-xs text-[var(--color-text-muted)]">Not started</p>
+                            <p className="text-xs text-[color:var(--color-text-muted)]">Not started</p>
                         )}
                     </div>
                 </div>
@@ -315,7 +315,7 @@ function BookCard({
                     className={cn(
                         "absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center transition-colors pointer-events-none",
                         book.isFavorite 
-                            ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]" 
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast" 
                             : "opacity-0"
                     )}
                 >
@@ -331,12 +331,12 @@ function EmptyLibrary({ onAddBooks, isLoading }: { onAddBooks: () => void; isLoa
     return (
         <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
-                <BookOpen className="w-6 h-6 text-[var(--color-text-secondary)]" />
+                <BookOpen className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">
+            <h2 className="text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 No books yet
             </h2>
-            <p className="text-[var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
+            <p className="text-[color:var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
                 Import books to start reading
             </p>
             <button
@@ -344,7 +344,7 @@ function EmptyLibrary({ onAddBooks, isLoading }: { onAddBooks: () => void; isLoa
                 disabled={isLoading}
                 className={cn(
                     "flex items-center gap-2 px-6 py-2.5 rounded-full",
-                    "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
+                    "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
                     "hover:opacity-90 transition-opacity",
                     "disabled:opacity-50 disabled:cursor-not-allowed"
                 )}
@@ -374,7 +374,7 @@ function ImportButton({
             disabled={isLoading}
             className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg",
-                "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
+                "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
                 "hover:opacity-90 transition-opacity",
                 "disabled:opacity-50 disabled:cursor-not-allowed"
             )}
@@ -406,14 +406,14 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                             />
                         ) : (
                             <div className="w-24 h-36 bg-[var(--color-surface-muted)] rounded-lg flex items-center justify-center">
-                                <BookOpen className="w-8 h-8 text-[var(--color-text-muted)]" />
+                                <BookOpen className="w-8 h-8 text-[color:var(--color-text-muted)]" />
                             </div>
                         )}
                         <div className="flex-1 min-w-0">
-                            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] line-clamp-2">
+                            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] line-clamp-2">
                                 {book.title}
                             </h2>
-                            <p className="text-sm text-[var(--color-text-secondary)] mt-1">
+                            <p className="text-sm text-[color:var(--color-text-secondary)] mt-1">
                                 {normalizeAuthor(book.author) || "Unknown Author"}
                             </p>
                             {book.rating && (
@@ -423,7 +423,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                                             key={i}
                                             className={cn(
                                                 "w-4 h-4",
-                                                i < book.rating! ? "text-[var(--color-warning)] fill-current" : "text-[var(--color-border)]"
+                                                i < book.rating! ? "text-[color:var(--color-warning)] fill-current" : "text-[color:var(--color-border)]"
                                             )}
                                         />
                                     ))}
@@ -435,8 +435,8 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                     <div className="mt-6 space-y-3">
                         {book.description && (
                             <div>
-                                <p className="text-xs text-[var(--color-text-muted)] uppercase">Description</p>
-                                <p className="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-4">
+                                <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Description</p>
+                                <p className="text-sm text-[color:var(--color-text-secondary)] mt-1 line-clamp-4">
                                     {book.description}
                                 </p>
                             </div>
@@ -444,61 +444,61 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                         <div className="grid grid-cols-2 gap-3">
                             {book.publisher && (
                                 <div>
-                                    <p className="text-xs text-[var(--color-text-muted)] uppercase">Publisher</p>
-                                    <p className="text-sm text-[var(--color-text-secondary)]">{book.publisher}</p>
+                                    <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Publisher</p>
+                                    <p className="text-sm text-[color:var(--color-text-secondary)]">{book.publisher}</p>
                                 </div>
                             )}
                             {book.publishedDate && (
                                 <div>
-                                    <p className="text-xs text-[var(--color-text-muted)] uppercase">Published</p>
-                                    <p className="text-sm text-[var(--color-text-secondary)]">{book.publishedDate}</p>
+                                    <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Published</p>
+                                    <p className="text-sm text-[color:var(--color-text-secondary)]">{book.publishedDate}</p>
                                 </div>
                             )}
                             {book.language && (
                                 <div>
-                                    <p className="text-xs text-[var(--color-text-muted)] uppercase">Language</p>
-                                    <p className="text-sm text-[var(--color-text-secondary)]">{book.language}</p>
+                                    <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Language</p>
+                                    <p className="text-sm text-[color:var(--color-text-secondary)]">{book.language}</p>
                                 </div>
                             )}
                             {book.isbn && (
                                 <div>
-                                    <p className="text-xs text-[var(--color-text-muted)] uppercase">ISBN</p>
-                                    <p className="text-sm text-[var(--color-text-secondary)]">{book.isbn}</p>
+                                    <p className="text-xs text-[color:var(--color-text-muted)] uppercase">ISBN</p>
+                                    <p className="text-sm text-[color:var(--color-text-secondary)]">{book.isbn}</p>
                                 </div>
                             )}
                             <div>
-                                <p className="text-xs text-[var(--color-text-muted)] uppercase">Format</p>
-                                <p className="text-sm text-[var(--color-text-secondary)] uppercase">{FORMAT_DISPLAY_NAMES[book.format] || book.format}</p>
+                                <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Format</p>
+                                <p className="text-sm text-[color:var(--color-text-secondary)] uppercase">{FORMAT_DISPLAY_NAMES[book.format] || book.format}</p>
                             </div>
                             <div>
-                                <p className="text-xs text-[var(--color-text-muted)] uppercase">Size</p>
-                                <p className="text-sm text-[var(--color-text-secondary)]">{formatFileSize(book.fileSize)}</p>
+                                <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Size</p>
+                                <p className="text-sm text-[color:var(--color-text-secondary)]">{formatFileSize(book.fileSize)}</p>
                             </div>
                             <div>
-                                <p className="text-xs text-[var(--color-text-muted)] uppercase">Added</p>
-                                <p className="text-sm text-[var(--color-text-secondary)]">{formatRelativeDate(book.addedAt instanceof Date ? book.addedAt : new Date(book.addedAt))}</p>
+                                <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Added</p>
+                                <p className="text-sm text-[color:var(--color-text-secondary)]">{formatRelativeDate(book.addedAt instanceof Date ? book.addedAt : new Date(book.addedAt))}</p>
                             </div>
                             {book.lastReadAt && (
                                 <div>
-                                    <p className="text-xs text-[var(--color-text-muted)] uppercase">Last Read</p>
-                                    <p className="text-sm text-[var(--color-text-secondary)]">{book.lastReadAt ? formatRelativeDate(book.lastReadAt instanceof Date ? book.lastReadAt : new Date(book.lastReadAt)) : "Never"}</p>
+                                    <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Last Read</p>
+                                    <p className="text-sm text-[color:var(--color-text-secondary)]">{book.lastReadAt ? formatRelativeDate(book.lastReadAt instanceof Date ? book.lastReadAt : new Date(book.lastReadAt)) : "Never"}</p>
                                 </div>
                             )}
                         </div>
                         {book.progress > 0 && (
                             <div>
-                                <p className="text-xs text-[var(--color-text-muted)] uppercase">Progress</p>
-                                <p className="text-sm text-[var(--color-text-secondary)]">{formatProgress(book.progress)}</p>
+                                <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Progress</p>
+                                <p className="text-sm text-[color:var(--color-text-secondary)]">{formatProgress(book.progress)}</p>
                             </div>
                         )}
                         {book.tags.length > 0 && (
                             <div>
-                                <p className="text-xs text-[var(--color-text-muted)] uppercase mb-1">Tags</p>
+                                <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-1">Tags</p>
                                 <div className="flex flex-wrap gap-1">
                                     {book.tags.map((tag: string) => (
                                         <span
                                             key={tag}
-                                            className="px-2 py-0.5 text-xs rounded-full bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)]"
+                                            className="px-2 py-0.5 text-xs rounded-full bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]"
                                         >
                                             {tag}
                                         </span>
@@ -512,7 +512,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
             <ModalFooter>
                 <button
                     onClick={onClose}
-                    className="px-4 py-2 rounded-lg bg-[var(--color-surface-muted)] text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors"
+                    className="px-4 py-2 rounded-lg bg-[var(--color-surface-muted)] text-sm text-[color:var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors"
                 >
                     Close
                 </button>
@@ -550,7 +550,7 @@ function AddToShelfModal({
         <Modal isOpen={isOpen} onClose={onClose} size="sm" showCloseButton={true}>
             <ModalBody className="p-0">
                 <div className="p-6">
-                    <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">
+                    <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">
                         Add to Shelf
                     </h2>
                     
@@ -567,12 +567,12 @@ function AddToShelfModal({
                                     }}
                                     className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors text-left"
                                 >
-                                    <FolderOpen className="w-5 h-5 text-[var(--color-text-muted)]" />
+                                    <FolderOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                                     <div className="flex-1">
-                                        <p className="text-sm font-medium text-[var(--color-text-primary)]">
+                                        <p className="text-sm font-medium text-[color:var(--color-text-primary)]">
                                             {shelf.name}
                                         </p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">
                                             {shelf.bookIds.length} {shelf.bookIds.length === 1 ? "book" : "books"}
                                         </p>
                                     </div>
@@ -580,13 +580,13 @@ function AddToShelfModal({
                             ))}
                         </div>
                     ) : (
-                        <p className="text-sm text-[var(--color-text-muted)] text-center py-4">
+                        <p className="text-sm text-[color:var(--color-text-muted)] text-center py-4">
                             No shelves yet. Create one below.
                         </p>
                     )}
 
                     <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
-                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Create New Shelf</p>
+                        <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Create New Shelf</p>
                         <div className="flex gap-2">
                             <input
                                 type="text"
@@ -596,7 +596,7 @@ function AddToShelfModal({
                                 className={cn(
                                     "flex-1 px-3 py-2 rounded-lg",
                                     "bg-[var(--color-background)] border border-[var(--color-border)]",
-                                    "text-sm text-[var(--color-text-primary)]",
+                                    "text-sm text-[color:var(--color-text-primary)]",
                                     "focus:outline-none focus:border-[var(--color-accent)]"
                                 )}
                                 onKeyDown={(e) => {
@@ -607,7 +607,7 @@ function AddToShelfModal({
                                 onClick={handleCreateShelf}
                                 disabled={!newShelfName.trim()}
                                 className={cn(
-                                    "px-4 py-2 rounded-lg bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
+                                    "px-4 py-2 rounded-lg bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
                                     "hover:opacity-90 transition-opacity",
                                     "disabled:opacity-50 disabled:cursor-not-allowed"
                                 )}
@@ -621,7 +621,7 @@ function AddToShelfModal({
             <ModalFooter>
                 <button
                     onClick={onClose}
-                    className="px-4 py-2 rounded-lg text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+                    className="px-4 py-2 rounded-lg text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors"
                 >
                     Cancel
                 </button>
@@ -995,13 +995,13 @@ export function LibraryPage() {
                                     setSelectedShelfId(null);
                                     setShowFavoritesOnly(false);
                                 }}
-                                className="ml-2 text-[var(--color-accent)] hover:underline"
+                                className="ml-2 text-[color:var(--color-accent)] hover:underline"
                             >
                                 Clear filter
                             </button>
                         )}
                         {isExtractingCovers && (
-                            <span className="ml-2 text-[var(--color-accent)]">
+                            <span className="ml-2 text-[color:var(--color-accent)]">
                                 • Extracting covers ({extractionProgress.current}/{extractionProgress.total})
                             </span>
                         )}
@@ -1015,7 +1015,7 @@ export function LibraryPage() {
                         className={cn(
                             "flex items-center justify-center w-10 h-10 rounded-lg",
                             "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                            "text-[var(--color-text-secondary)]",
+                            "text-[color:var(--color-text-secondary)]",
                             "hover:bg-[var(--color-surface-muted)] transition-colors"
                         )}
                         title={`View: ${settings.libraryViewMode}`}
@@ -1032,7 +1032,7 @@ export function LibraryPage() {
                             className={cn(
                                 "flex items-center gap-2 px-4 py-2 rounded-lg",
                                 "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                                "text-[var(--color-text-secondary)] text-sm",
+                                "text-[color:var(--color-text-secondary)] text-sm",
                                 "hover:bg-[var(--color-surface-muted)] transition-colors",
                                 "disabled:opacity-50 disabled:cursor-not-allowed"
                             )}
@@ -1054,7 +1054,7 @@ export function LibraryPage() {
                             className={cn(
                                 "flex items-center gap-2 px-4 py-2 rounded-lg",
                                 "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                                "text-[var(--color-text-secondary)] text-sm",
+                                "text-[color:var(--color-text-secondary)] text-sm",
                                 "hover:bg-[var(--color-surface-muted)] transition-colors",
                                 showFilterDropdown && "bg-[var(--color-surface-muted)]"
                             )}
@@ -1073,7 +1073,7 @@ export function LibraryPage() {
                                 <div className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] ui-surface shadow-lg z-20 py-2">
                                     {/* Sort By */}
                                     <div className="px-3 py-2 border-b border-[var(--color-border)]">
-                                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Sort By</p>
+                                        <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Sort By</p>
                                         <div className="space-y-1">
                                             {[
                                                 { id: "title", label: "Title" },
@@ -1089,8 +1089,8 @@ export function LibraryPage() {
                                                     className={cn(
                                                         "w-full flex items-center justify-between px-2 py-1.5 rounded text-sm",
                                                         settings.librarySortBy === option.id
-                                                            ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                                            ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
+                                                            : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                                     )}
                                                 >
                                                     {option.label}
@@ -1104,11 +1104,11 @@ export function LibraryPage() {
 
                                     {/* Sort Order */}
                                     <div className="px-3 py-2 border-b border-[var(--color-border)]">
-                                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">
+                                        <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">
                                             Order
                                         </p>
                                         <div className="relative">
-                                            <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" />
+                                            <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[color:var(--color-text-muted)]" />
                                             <Dropdown<LibrarySortOrder>
                                                 value={settings.librarySortOrder}
                                                 onChange={(value) => {
@@ -1129,7 +1129,7 @@ export function LibraryPage() {
                                                     "[&>button]:pl-9",
                                                     "[&>button]:pr-3",
                                                     "[&>button]:min-h-[var(--control-height-sm)]",
-                                                    "[&>button]:text-[var(--color-text-secondary)]"
+                                                    "[&>button]:text-[color:var(--color-text-secondary)]"
                                                 )}
                                                 dropdownClassName="!w-full !min-w-full"
                                             />
@@ -1138,7 +1138,7 @@ export function LibraryPage() {
 
                                     {/* Filter by Favorites */}
                                     <div className="px-3 py-2 border-b border-[var(--color-border)]">
-                                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Filter</p>
+                                        <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Filter</p>
                                         <div className="space-y-1">
                                             <button
                                                 onClick={() => {
@@ -1148,8 +1148,8 @@ export function LibraryPage() {
                                                 className={cn(
                                                     "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
                                                     !showFavoritesOnly
-                                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                                        ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
+                                                        : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                                 )}
                                             >
                                                 <BookOpen className="w-4 h-4" />
@@ -1163,8 +1163,8 @@ export function LibraryPage() {
                                                 className={cn(
                                                     "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
                                                     showFavoritesOnly
-                                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                                        ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
+                                                        : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                                 )}
                                             >
                                                 <Heart className={cn("w-4 h-4", showFavoritesOnly && "fill-current")} />
@@ -1176,7 +1176,7 @@ export function LibraryPage() {
                                     {/* Filter by Shelf */}
                                     {collections.length > 0 && (
                                         <div className="px-3 py-2 border-b border-[var(--color-border)]">
-                                            <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Filter by Shelf</p>
+                                            <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Filter by Shelf</p>
                                             <div className="space-y-1 max-h-32 overflow-y-auto">
                                                 <button
                                                     onClick={() => {
@@ -1187,8 +1187,8 @@ export function LibraryPage() {
                                                     className={cn(
                                                         "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
                                                         !selectedShelf
-                                                            ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                                            ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
+                                                            : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                                     )}
                                                 >
                                                     <BookOpen className="w-4 h-4" />
@@ -1208,8 +1208,8 @@ export function LibraryPage() {
                                                             className={cn(
                                                                 "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
                                                                 isSelected
-                                                                    ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                                                    ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
+                                                                    : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                                             )}
                                                         >
                                                             <div
@@ -1236,7 +1236,7 @@ export function LibraryPage() {
                                                 setRoute("shelves");
                                                 setShowFilterDropdown(false);
                                             }}
-                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
                                         >
                                             <Plus className="w-4 h-4" />
                                             Manage Shelves...
@@ -1253,13 +1253,13 @@ export function LibraryPage() {
             <section>
                 {sortedBooks.length === 0 ? (
                     <div className="text-center py-16">
-                        <p className="text-[var(--color-text-muted)]">
+                        <p className="text-[color:var(--color-text-muted)]">
                             No books match your search.
                         </p>
                         {searchQuery && (
                             <button
                                 onClick={() => useUIStore.getState().setSearchQuery("")}
-                                className="mt-2 text-sm text-[var(--color-accent)] hover:underline"
+                                className="mt-2 text-sm text-[color:var(--color-accent)] hover:underline"
                             >
                                 Clear search
                             </button>

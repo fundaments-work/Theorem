@@ -33,7 +33,7 @@ const DESKTOP_STARTUP_MIN_HEIGHT = 720;
 
 function PageFallback() {
     return (
-        <div className="flex h-full w-full items-center justify-center text-[var(--color-text-secondary)]">
+        <div className="flex h-full w-full items-center justify-center text-[color:var(--color-text-secondary)]">
             Loading...
         </div>
     );

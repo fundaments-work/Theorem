@@ -242,10 +242,7 @@ a:hover {
     color: var(--color-accent-hover);
 }
 
-button,
-input,
-textarea,
-select {
+:where(button, input, textarea, select) {
     font: inherit;
     color: inherit;
 }
@@ -918,6 +915,10 @@ foliate-view * {
     background: var(--color-accent-light);
     border-color: color-mix(in srgb, var(--color-accent) 42%, var(--color-border));
     color: var(--color-accent);
+}
+
+.ui-text-accent-contrast {
+    color: var(--color-accent-contrast);
 }
 
 /* Button primitives */

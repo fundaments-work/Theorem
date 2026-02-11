@@ -140,7 +140,7 @@ export function AppTitlebar({
                         <div className="md:hidden">
                             <button
                                 onClick={onMenuClick}
-                                className="ui-icon-btn w-9 h-9 rounded-xl text-[var(--color-text-primary)]"
+                                className="ui-icon-btn w-9 h-9 rounded-xl text-[color:var(--color-text-primary)]"
                                 title="Toggle Sidebar"
                             >
                                 <Menu className="w-5 h-5" />
@@ -148,7 +148,7 @@ export function AppTitlebar({
                         </div>
                     )}
 
-                    <h1 className="text-sm sm:text-base font-semibold text-[var(--color-text-primary)] truncate">
+                    <h1 className="text-sm sm:text-base font-semibold text-[color:var(--color-text-primary)] truncate">
                         {getPageTitle()}
                     </h1>
                 </div>
@@ -156,7 +156,7 @@ export function AppTitlebar({
                 {/* Center - Search (desktop) */}
                 <div className="hidden lg:flex lg:flex-1 lg:min-w-[18rem] lg:max-w-3xl" data-tauri-drag-region>
                     <div className="relative w-full">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                         <input
                             type="text"
                             placeholder="Search books, authors, or highlights..."
@@ -177,8 +177,8 @@ export function AppTitlebar({
                         className={cn(
                             "ui-icon-btn w-9 h-9 rounded-xl",
                             currentRoute === "statistics"
-                                ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] border border-[var(--color-accent)]"
-                                : "text-[var(--color-text-secondary)]"
+                                ? "bg-[var(--color-accent)] ui-text-accent-contrast border border-[var(--color-accent)]"
+                                : "text-[color:var(--color-text-secondary)]"
                         )}
                         title="Statistics"
                     >
@@ -190,21 +190,21 @@ export function AppTitlebar({
                             <div className="hidden sm:block w-px h-5 bg-[var(--color-border)] mx-1" />
                             <button
                                 onClick={handleMinimize}
-                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 rounded-lg text-[var(--color-text-primary)]"
+                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 rounded-lg text-[color:var(--color-text-primary)]"
                                 title="Minimize"
                             >
                                 <Minus className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={handleMaximize}
-                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 rounded-lg text-[var(--color-text-primary)]"
+                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 rounded-lg text-[color:var(--color-text-primary)]"
                                 title={isMaximized ? "Restore" : "Maximize"}
                             >
                                 <Square className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={handleClose}
-                                className="hidden sm:inline-flex ui-icon-btn ui-icon-btn-danger w-8 h-8 rounded-lg text-[var(--color-text-primary)]"
+                                className="hidden sm:inline-flex ui-icon-btn ui-icon-btn-danger w-8 h-8 rounded-lg text-[color:var(--color-text-primary)]"
                                 title="Close"
                             >
                                 <X className="w-4 h-4" />
@@ -217,7 +217,7 @@ export function AppTitlebar({
             {/* Search - Compact layouts */}
             <div className="mt-2 lg:hidden">
                 <div className="relative w-full">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                     <input
                         type="text"
                         placeholder="Search books, authors, highlights..."

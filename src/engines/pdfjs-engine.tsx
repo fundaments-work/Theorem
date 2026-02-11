@@ -1757,18 +1757,18 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 {isLoading && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)]">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--color-accent)]"></div>
-                        <p className="mt-4 text-[var(--color-text-secondary)]">Loading PDF...</p>
+                        <p className="mt-4 text-[color:var(--color-text-secondary)]">Loading PDF...</p>
                     </div>
                 )}
 
                 {/* Error State */}
                 {error && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)] p-8">
-                        <div className="text-[var(--color-error)] text-4xl mb-4">⚠️</div>
-                        <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-2">
+                        <div className="text-[color:var(--color-error)] text-4xl mb-4">⚠️</div>
+                        <h3 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-2">
                             Failed to load PDF
                         </h3>
-                        <p className="text-[var(--color-text-secondary)] text-center max-w-md">
+                        <p className="text-[color:var(--color-text-secondary)] text-center max-w-md">
                             {error}
                         </p>
                     </div>
@@ -1827,7 +1827,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 </div>
 
                 {!isLoading && !error && totalPages > 0 && (
-                    <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 z-50 pointer-events-none px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-xs sm:text-sm text-[var(--color-text-secondary)] shadow-sm">
+                    <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 z-50 pointer-events-none px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-xs sm:text-sm text-[color:var(--color-text-secondary)] shadow-sm">
                         Page {currentPage} of {totalPages} | {Math.round(scale * 100)}%
                     </div>
                 )}

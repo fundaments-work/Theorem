@@ -64,9 +64,9 @@ function LoadingState({ message = "Loading PDF..." }: { message?: string }) {
         <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-surface)] z-20">
             <div className="flex flex-col items-center gap-4">
                 <div className="relative">
-                    <Loader2 className="w-10 h-10 animate-spin text-[var(--color-accent)]" />
+                    <Loader2 className="w-10 h-10 animate-spin text-[color:var(--color-accent)]" />
                 </div>
-                <span className="text-sm text-[var(--color-text-secondary)]">{message}</span>
+                <span className="text-sm text-[color:var(--color-text-secondary)]">{message}</span>
             </div>
         </div>
     );
@@ -100,16 +100,16 @@ function ErrorState({
                         style={{ color: "var(--color-error)" }}
                     />
                 </div>
-                <h3 className="text-lg font-medium text-[var(--color-text-primary)]">
+                <h3 className="text-lg font-medium text-[color:var(--color-text-primary)]">
                     Failed to load PDF
                 </h3>
-                <p className="text-sm text-[var(--color-text-secondary)]">{error}</p>
+                <p className="text-sm text-[color:var(--color-text-secondary)]">{error}</p>
                 {onRetry && (
                     <button
                         onClick={onRetry}
                         className={cn(
                             "mt-4 px-4 py-2 rounded-lg",
-                            "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]",
+                            "bg-[var(--color-accent)] ui-text-accent-contrast",
                             "hover:bg-[var(--color-accent-hover)]",
                             "transition-colors text-sm font-medium"
                         )}

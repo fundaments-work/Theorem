@@ -91,7 +91,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                 <div className={cn("flex items-center overflow-hidden", isCollapsedDesktop ? "justify-center" : "gap-3")}>
                     <TheoremLogo size={28} className="flex-shrink-0" />
                     <span className={cn(
-                        "ui-brand-wordmark text-lg text-[var(--color-text-primary)] whitespace-nowrap",
+                        "ui-brand-wordmark text-lg text-[color:var(--color-text-primary)] whitespace-nowrap",
                         !isMobile && !sidebarOpen ? "opacity-0 w-0" : "opacity-100"
                     )}>
                         Theorem
@@ -101,7 +101,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                 {isMobile && onClose && (
                     <button
                         onClick={onClose}
-                        className="ui-icon-btn w-9 h-9 rounded-lg text-[var(--color-text-secondary)]"
+                        className="ui-icon-btn w-9 h-9 rounded-lg text-[color:var(--color-text-secondary)]"
                         aria-label="Close sidebar"
                     >
                         <X className="w-5 h-5" />
@@ -132,8 +132,8 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                     isCollapsedDesktop ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
                                     "hover:bg-[var(--color-surface-muted)]",
                                     currentRoute === item.id
-                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
-                                        : "text-[var(--color-text-secondary)]"
+                                        ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
+                                        : "text-[color:var(--color-text-secondary)]"
                                 )}
                                 title={!sidebarOpen ? item.label : undefined}
                             >
@@ -161,8 +161,8 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                 isCollapsedDesktop ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
                                 "hover:bg-[var(--color-surface-muted)]",
                                 currentRoute === "shelves"
-                                    ? "bg-[var(--color-accent-light)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
-                                    : "text-[var(--color-text-secondary)]"
+                                    ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
+                                    : "text-[color:var(--color-text-secondary)]"
                             )}
                             title={!sidebarOpen ? "Shelves" : undefined}
                         >
@@ -200,8 +200,8 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                             ? "w-full justify-center px-0 py-2.5"
                             : "flex-1 gap-3 px-3 py-2.5",
                         currentRoute === "settings"
-                            ? "text-[var(--color-accent)]"
-                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                            ? "text-[color:var(--color-accent)]"
+                            : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                     )}
                     title={!sidebarOpen ? "Settings" : undefined}
                 >
@@ -220,7 +220,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                             onClick={handleToggle}
                             className={cn(
                                 "flex items-center justify-center p-2.5 rounded-xl ui-clickable",
-                                "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]",
+                                "text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]",
                                 sidebarOpen ? "w-10" : "w-full",
                             )}
                             title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}

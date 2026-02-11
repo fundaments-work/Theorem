@@ -128,10 +128,10 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                                 "w-full flex items-center gap-3 px-3 py-2 text-left",
                                 "text-sm transition-colors",
                                 item.disabled
-                                    ? "opacity-50 cursor-not-allowed text-[var(--color-text-muted)]"
+                                    ? "opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]"
                                     : item.danger
-                                        ? "text-[var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_10%,transparent)]"
-                                        : "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
+                                        ? "text-[color:var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_10%,transparent)]"
+                                        : "text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
                             )}
                         >
                             {item.icon && (
@@ -141,7 +141,7 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                             )}
                             <span className="flex-1">{item.label}</span>
                             {item.shortcut && (
-                                <span className="text-xs text-[var(--color-text-muted)]">
+                                <span className="text-xs text-[color:var(--color-text-muted)]">
                                     {item.shortcut}
                                 </span>
                             )}

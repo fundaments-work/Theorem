@@ -133,14 +133,14 @@ export function NoteEditor({
         >
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
                     {initialNote ? 'Edit Note' : 'Add Note'}
                 </span>
                 <button
                     onClick={onClose}
                     className={cn(
                         "p-1 rounded-md",
-                        "text-[var(--color-text-muted)]",
+                        "text-[color:var(--color-text-muted)]",
                         "hover:bg-[var(--color-surface-hover)]",
                         "transition-colors"
                     )}
@@ -151,7 +151,7 @@ export function NoteEditor({
 
             {/* Selected text preview */}
             {selectedText && (
-                <div className="mb-3 px-2 py-1.5 bg-[var(--color-surface-variant)] rounded text-xs text-[var(--color-text-secondary)] line-clamp-2">
+                <div className="mb-3 px-2 py-1.5 bg-[var(--color-surface-variant)] rounded text-xs text-[color:var(--color-text-secondary)] line-clamp-2">
                     &ldquo;{selectedText.slice(0, 100)}{selectedText.length > 100 ? '...' : ''}&rdquo;
                 </div>
             )}
@@ -168,8 +168,8 @@ export function NoteEditor({
                     "bg-[var(--color-background)]",
                     "border border-[var(--color-border)]",
                     "rounded-md resize-y",
-                    "text-[var(--color-text-primary)]",
-                    "placeholder:text-[var(--color-text-muted)]",
+                    "text-[color:var(--color-text-primary)]",
+                    "placeholder:text-[color:var(--color-text-muted)]",
                     "focus:outline-none focus:border-[var(--color-accent)]",
                     "transition-colors"
                 )}
@@ -177,7 +177,7 @@ export function NoteEditor({
 
             {/* Footer with save button */}
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--color-border)]">
-                <span className="text-xs text-[var(--color-text-muted)]">
+                <span className="text-xs text-[color:var(--color-text-muted)]">
                     Ctrl+Enter to save
                 </span>
                 <button
@@ -187,7 +187,7 @@ export function NoteEditor({
                         "px-3 py-1.5 text-xs font-medium",
                         "rounded-md",
                         "bg-[var(--color-accent)]",
-                        "text-[var(--color-accent-contrast)]",
+                        "ui-text-accent-contrast",
                         "hover:opacity-90",
                         "transition-opacity"
                     )}

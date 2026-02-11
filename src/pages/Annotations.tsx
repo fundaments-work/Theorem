@@ -53,12 +53,12 @@ function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" }) {
     return (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
-                <Icon className="w-6 h-6 text-[var(--color-text-secondary)]" />
+                <Icon className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">
+            <h2 className="text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 {titles[type]}
             </h2>
-            <p className="text-[var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
+            <p className="text-[color:var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
                 {descriptions[type]}
             </p>
         </div>
@@ -112,7 +112,7 @@ function AnnotationCard({
             {/* Header */}
             <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+                    <div className="flex items-center gap-2 text-[color:var(--color-text-muted)]">
                         {getIcon()}
                         <span className="text-xs capitalize">{annotation.type}</span>
                     </div>
@@ -123,7 +123,7 @@ function AnnotationCard({
                 <div className="relative">
                     <button
                         onClick={() => setShowMenu(!showMenu)}
-                        className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                         <MoreVertical className="w-4 h-4" />
                     </button>
@@ -139,7 +139,7 @@ function AnnotationCard({
                                         onEdit(annotation.id);
                                         setShowMenu(false);
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
                                 >
                                     <Edit3 className="w-4 h-4" />
                                     Edit
@@ -149,7 +149,7 @@ function AnnotationCard({
                                         onDelete(annotation.id);
                                         setShowMenu(false);
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-error)] hover:bg-[var(--color-surface-muted)]"
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[color:var(--color-error)] hover:bg-[var(--color-surface-muted)]"
                                 >
                                     <Trash2 className="w-4 h-4" />
                                     Delete
@@ -163,12 +163,12 @@ function AnnotationCard({
             {/* Content */}
             <div className="space-y-3">
                 {annotation.selectedText && (
-                    <blockquote className="text-sm text-[var(--color-text-secondary)] border-l-2 border-[var(--color-border)] pl-3 italic line-clamp-3">
+                    <blockquote className="text-sm text-[color:var(--color-text-secondary)] border-l-2 border-[var(--color-border)] pl-3 italic line-clamp-3">
                         "{annotation.selectedText}"
                     </blockquote>
                 )}
                 {annotation.noteContent && (
-                    <p className="text-sm text-[var(--color-text-primary)] whitespace-pre-wrap line-clamp-4">
+                    <p className="text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap line-clamp-4">
                         {annotation.noteContent}
                     </p>
                 )}
@@ -178,7 +178,7 @@ function AnnotationCard({
             <div className="flex items-center justify-between mt-4 pt-4 border-t border-[var(--color-border-subtle)]">
                 <button
                     onClick={() => book && onGoToBook(annotation.bookId)}
-                    className="flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
+                    className="flex items-center gap-2 text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition-colors"
                 >
                     {book?.coverPath ? (
                         <img
@@ -191,7 +191,7 @@ function AnnotationCard({
                     )}
                     <span className="truncate max-w-[var(--layout-inline-title-max-width)]">{book?.title || "Unknown Book"}</span>
                 </button>
-                <span className="text-xs text-[var(--color-text-muted)]">
+                <span className="text-xs text-[color:var(--color-text-muted)]">
                     {new Date(annotation.createdAt).toLocaleDateString()}
                 </span>
             </div>
@@ -320,8 +320,8 @@ export function AnnotationsPage() {
                             className={cn(
                                 "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
                                 activeFilter === tab.id
-                                    ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
-                                    : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                                    ? "bg-[var(--color-surface)] text-[color:var(--color-text-primary)] shadow-sm"
+                                    : "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                             )}
                         >
                             <tab.icon className="w-4 h-4" />
@@ -359,7 +359,7 @@ export function AnnotationsPage() {
             {/* Annotations Grid */}
             {filteredAnnotations.length === 0 ? (
                 <div className="text-center py-16">
-                    <p className="text-[var(--color-text-muted)]">
+                    <p className="text-[color:var(--color-text-muted)]">
                         No {activeFilter === "all" ? "" : activeFilter} found
                         {searchQuery ? " matching your search" : ""}.
                     </p>

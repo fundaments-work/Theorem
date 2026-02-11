@@ -36,19 +36,19 @@ function EmptyShelves({ onCreate }: { onCreate: () => void }) {
     return (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
-                <FolderOpen className="w-6 h-6 text-[var(--color-text-secondary)]" />
+                <FolderOpen className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">
+            <h2 className="text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 No Shelves Yet
             </h2>
-            <p className="text-[var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
+            <p className="text-[color:var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
                 Create shelves to organize your books your way.
             </p>
             <button
                 onClick={onCreate}
                 className={cn(
                     "flex items-center gap-2 px-6 py-2.5 rounded-full",
-                    "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
+                    "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
                     "hover:opacity-90 transition-opacity"
                 )}
             >
@@ -64,19 +64,19 @@ function EmptyShelfDetail({ shelfName, onAddBooks }: { shelfName: string; onAddB
     return (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
-                <BookOpen className="w-6 h-6 text-[var(--color-text-secondary)]" />
+                <BookOpen className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">
+            <h2 className="text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 "{shelfName}" is Empty
             </h2>
-            <p className="text-[var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
+            <p className="text-[color:var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
                 Add books from your library to this shelf.
             </p>
             <button
                 onClick={onAddBooks}
                 className={cn(
                     "flex items-center gap-2 px-6 py-2.5 rounded-full",
-                    "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
+                    "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
                     "hover:opacity-90 transition-opacity"
                 )}
             >
@@ -131,10 +131,10 @@ function BookCard({
                             </div>
                         )}
                     </div>
-                    <h3 className="font-medium text-sm text-[var(--color-text-primary)] line-clamp-1 mb-0.5">
+                    <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] line-clamp-1 mb-0.5">
                         {book.title}
                     </h3>
-                    <p className="text-xs text-[var(--color-text-secondary)] line-clamp-1">
+                    <p className="text-xs text-[color:var(--color-text-secondary)] line-clamp-1">
                         {normalizeAuthor(book.author) || "Unknown Author"}
                     </p>
                 </button>
@@ -144,7 +144,7 @@ function BookCard({
                         e.stopPropagation();
                         await onRemoveFromShelf(book.id);
                     }}
-                    className="absolute top-2 right-2 p-1.5 rounded-md bg-[var(--color-overlay-strong)] text-[var(--color-text-inverse)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--color-overlay-strong-hover)]"
+                    className="absolute top-2 right-2 p-1.5 rounded-md bg-[var(--color-overlay-strong)] text-[color:var(--color-text-inverse)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--color-overlay-strong-hover)]"
                     title="Remove from shelf"
                 >
                     <X className="w-3.5 h-3.5" />
@@ -170,17 +170,17 @@ function BookCard({
                         />
                     ) : (
                         <div className="w-12 h-16 bg-[var(--color-surface-muted)] rounded flex items-center justify-center">
-                            <BookOpen className="w-5 h-5 text-[var(--color-text-muted)]" />
+                            <BookOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                         </div>
                     )}
                 </button>
                 <div className="flex-1 min-w-0">
                     <button onClick={() => onOpenBook(book)} className="text-left w-full">
-                        <h3 className="font-medium text-sm text-[var(--color-text-primary)] truncate hover:text-[var(--color-accent)] transition-colors">
+                        <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] truncate hover:text-[color:var(--color-accent)] transition-colors">
                             {book.title}
                         </h3>
                     </button>
-                    <p className="text-xs text-[var(--color-text-secondary)] truncate">
+                    <p className="text-xs text-[color:var(--color-text-secondary)] truncate">
                         {normalizeAuthor(book.author) || "Unknown Author"}
                     </p>
                 </div>
@@ -189,7 +189,7 @@ function BookCard({
                         e.stopPropagation();
                         await onRemoveFromShelf(book.id);
                     }}
-                    className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-error)] opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="p-2 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-error)] opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Remove from shelf"
                 >
                     <X className="w-4 h-4" />
@@ -234,7 +234,7 @@ function BookCard({
                     e.stopPropagation();
                     await onRemoveFromShelf(book.id);
                 }}
-                className="absolute top-1 right-1 p-1 rounded-md bg-[var(--color-overlay-strong)] text-[var(--color-text-inverse)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--color-overlay-strong-hover)]"
+                className="absolute top-1 right-1 p-1 rounded-md bg-[var(--color-overlay-strong)] text-[color:var(--color-text-inverse)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--color-overlay-strong-hover)]"
                 title="Remove from shelf"
             >
                 <X className="w-3 h-3" />
@@ -280,7 +280,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                                         />
                                     ) : (
                                         <div className="w-full h-full bg-[var(--color-surface)] flex items-center justify-center">
-                                            <BookOpen className="w-6 h-6 text-[var(--color-text-muted)]" />
+                                            <BookOpen className="w-6 h-6 text-[color:var(--color-text-muted)]" />
                                         </div>
                                     )}
                                 </div>
@@ -295,8 +295,8 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full">
-                            <FolderOpen className="w-12 h-12 text-[var(--color-text-muted)] mb-2" />
-                            <span className="text-sm text-[var(--color-text-secondary)]">Empty Shelf</span>
+                            <FolderOpen className="w-12 h-12 text-[color:var(--color-text-muted)] mb-2" />
+                            <span className="text-sm text-[color:var(--color-text-secondary)]">Empty Shelf</span>
                         </div>
                     )}
                 </div>
@@ -318,11 +318,11 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                     
                     <div className="flex-1 min-w-0 overflow-hidden">
                         <button onClick={onClick} className="text-left w-full">
-                            <h3 className="font-semibold text-[var(--color-text-primary)] truncate group-hover:text-[var(--color-accent)] transition-colors">
+                            <h3 className="font-semibold text-[color:var(--color-text-primary)] truncate group-hover:text-[color:var(--color-accent)] transition-colors">
                                 {shelf.name}
                             </h3>
                         </button>
-                        <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+                        <p className="text-xs text-[color:var(--color-text-muted)] mt-0.5">
                             {actualBookCount} {actualBookCount === 1 ? "book" : "books"}
                         </p>
                     </div>
@@ -334,7 +334,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                                 e.stopPropagation();
                                 setShowMenu(!showMenu);
                             }}
-                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                            className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         >
                             <MoreVertical className="w-4 h-4" />
                         </button>
@@ -350,7 +350,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                                             onEdit();
                                             setShowMenu(false);
                                         }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
                                     >
                                         <Edit3 className="w-4 h-4" />
                                         Edit
@@ -360,7 +360,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                                             onDelete();
                                             setShowMenu(false);
                                         }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-error)] hover:bg-[var(--color-surface-muted)]"
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[color:var(--color-error)] hover:bg-[var(--color-surface-muted)]"
                                     >
                                         <Trash2 className="w-4 h-4" />
                                         Delete
@@ -439,7 +439,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                 <div className="flex items-center gap-4">
                     <button
                         onClick={onBack}
-                        className="p-2 rounded-lg text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                        className="p-2 rounded-lg text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
@@ -457,7 +457,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                         <h1 className="ui-page-title">
                             {shelf.name}
                         </h1>
-                        <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
+                        <p className="text-sm text-[color:var(--color-text-muted)] mt-0.5">
                             {shelfBooks.length} {shelfBooks.length === 1 ? "book" : "books"}
                         </p>
                     </div>
@@ -469,7 +469,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                     className={cn(
                         "flex items-center justify-center w-10 h-10 rounded-lg",
                         "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                        "text-[var(--color-text-secondary)]",
+                        "text-[color:var(--color-text-secondary)]",
                         "hover:bg-[var(--color-surface-muted)] transition-colors"
                     )}
                     title={`View: ${viewMode}`}
@@ -631,7 +631,7 @@ export function ShelvesPage() {
                     onClick={handleCreateShelf}
                     className={cn(
                         "flex items-center gap-2 px-4 py-2.5 rounded-lg",
-                        "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] text-sm font-medium",
+                        "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
                         "hover:opacity-90 transition-opacity"
                     )}
                 >
@@ -643,7 +643,7 @@ export function ShelvesPage() {
             {/* Shelves Grid */}
             {filteredShelves.length === 0 ? (
                 <div className="text-center py-16">
-                    <p className="text-[var(--color-text-muted)]">
+                    <p className="text-[color:var(--color-text-muted)]">
                         No shelves found matching your search.
                     </p>
                 </div>

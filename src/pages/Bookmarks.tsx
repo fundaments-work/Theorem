@@ -24,12 +24,12 @@ function EmptyBookmarks() {
     return (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
-                <Bookmark className="w-6 h-6 text-[var(--color-text-secondary)]" />
+                <Bookmark className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">
+            <h2 className="text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 No Bookmarks Yet
             </h2>
-            <p className="text-[var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
+            <p className="text-[color:var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
                 Bookmark pages while reading to quickly return to them later.
             </p>
         </div>
@@ -73,23 +73,23 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                         />
                     ) : (
                         <div className="w-10 h-14 bg-[var(--color-surface-muted)] rounded flex items-center justify-center">
-                            <BookOpen className="w-4 h-4 text-[var(--color-text-muted)]" />
+                            <BookOpen className="w-4 h-4 text-[color:var(--color-text-muted)]" />
                         </div>
                     )}
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm text-[var(--color-text-primary)] truncate hover:text-[var(--color-accent)] transition-colors">
+                    <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] truncate hover:text-[color:var(--color-accent)] transition-colors">
                         {book?.title || "Unknown Book"}
                     </h3>
-                    <p className="text-xs text-[var(--color-text-secondary)] truncate">
+                    <p className="text-xs text-[color:var(--color-text-secondary)] truncate">
                         {book?.author || "Unknown Author"}
                     </p>
                 </div>
 
                 {/* Date */}
-                <div className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
+                <div className="hidden sm:flex items-center gap-1.5 text-xs text-[color:var(--color-text-muted)]">
                     <Clock className="w-3.5 h-3.5" />
                     {new Date(bookmark.createdAt).toLocaleDateString()}
                 </div>
@@ -101,7 +101,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                             e.stopPropagation();
                             book && onGoToBookmark(bookmark.bookId, bookmark.location);
                         }}
-                        className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text-primary)]"
+                        className="p-2 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
                         title="Go to bookmark"
                     >
                         <ExternalLink className="w-4 h-4" />
@@ -111,7 +111,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                             e.stopPropagation();
                             await onDelete(bookmark.id);
                         }}
-                        className="p-2 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-error)]"
+                        className="p-2 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-error)]"
                         title="Delete bookmark"
                     >
                         <Trash2 className="w-4 h-4" />
@@ -137,18 +137,18 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-overlay-strong)] to-transparent" />
                         <div className="absolute bottom-3 left-3 right-3">
-                            <h3 className="font-medium text-sm text-[var(--color-text-inverse)] line-clamp-1">
+                            <h3 className="font-medium text-sm text-[color:var(--color-text-inverse)] line-clamp-1">
                                 {book?.title || "Unknown Book"}
                             </h3>
-                            <p className="text-xs text-[var(--color-text-inverse)] opacity-80 line-clamp-1">
+                            <p className="text-xs text-[color:var(--color-text-inverse)] opacity-80 line-clamp-1">
                                 {book?.author || "Unknown Author"}
                             </p>
                         </div>
                     </>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full p-4">
-                        <BookOpen className="w-10 h-10 text-[var(--color-text-muted)] mb-2" />
-                        <span className="text-sm text-[var(--color-text-secondary)] text-center line-clamp-2">
+                        <BookOpen className="w-10 h-10 text-[color:var(--color-text-muted)] mb-2" />
+                        <span className="text-sm text-[color:var(--color-text-secondary)] text-center line-clamp-2">
                             {book?.title || "Unknown Book"}
                         </span>
                     </div>
@@ -157,7 +157,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                 {/* Bookmark Icon */}
                 <div className="absolute top-3 right-3">
                     <div className="w-8 h-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center">
-                        <Bookmark className="w-4 h-4 text-[var(--color-text-inverse)] fill-[var(--color-text-inverse)]" />
+                        <Bookmark className="w-4 h-4 text-[color:var(--color-text-inverse)] fill-[var(--color-text-inverse)]" />
                     </div>
                 </div>
             </div>
@@ -165,26 +165,26 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
             {/* Content */}
             <div className="p-4">
                 {bookmark.selectedText && (
-                    <blockquote className="text-sm text-[var(--color-text-secondary)] border-l-2 border-[var(--color-border)] pl-3 italic line-clamp-2 mb-3">
+                    <blockquote className="text-sm text-[color:var(--color-text-secondary)] border-l-2 border-[var(--color-border)] pl-3 italic line-clamp-2 mb-3">
                         "{bookmark.selectedText}"
                     </blockquote>
                 )}
 
                 <div className="flex items-center justify-between">
-                    <span className="text-xs text-[var(--color-text-muted)]">
+                    <span className="text-xs text-[color:var(--color-text-muted)]">
                         {new Date(bookmark.createdAt).toLocaleDateString()}
                     </span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                             onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
-                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"
+                            className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"
                             title="Go to bookmark"
                         >
                             <ExternalLink className="w-4 h-4" />
                         </button>
                         <button
                             onClick={async () => await onDelete(bookmark.id)}
-                            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-error)]"
+                            className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-error)]"
                             title="Delete bookmark"
                         >
                             <Trash2 className="w-4 h-4" />
@@ -304,8 +304,8 @@ export function BookmarksPage() {
                         className={cn(
                             "p-2 rounded-md transition-colors",
                             viewMode === "grid"
-                                ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
-                                : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+                                ? "bg-[var(--color-surface)] text-[color:var(--color-text-primary)] shadow-sm"
+                                : "text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
                         )}
                         title="Grid view"
                     >
@@ -316,8 +316,8 @@ export function BookmarksPage() {
                         className={cn(
                             "p-2 rounded-md transition-colors",
                             viewMode === "list"
-                                ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
-                                : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+                                ? "bg-[var(--color-surface)] text-[color:var(--color-text-primary)] shadow-sm"
+                                : "text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
                         )}
                         title="List view"
                     >
@@ -329,7 +329,7 @@ export function BookmarksPage() {
             {/* Bookmarks Display */}
             {filteredBookmarks.length === 0 ? (
                 <div className="text-center py-16">
-                    <p className="text-[var(--color-text-muted)]">
+                    <p className="text-[color:var(--color-text-muted)]">
                         No bookmarks found{searchQuery ? " matching your search" : ""}.
                     </p>
                 </div>
