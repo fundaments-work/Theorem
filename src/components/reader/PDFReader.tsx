@@ -183,19 +183,15 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             prevPage: () => engineRef.current?.prevPage(),
             zoomIn: () => {
                 engineRef.current?.zoomIn();
-                setTimeout(() => {
-                    const newScale = engineRef.current?.getZoom() ?? 1;
-                    setScale(newScale);
-                    onPageChange?.(currentPage, totalPages, newScale);
-                }, 50);
+                const newScale = engineRef.current?.getZoom() ?? 1;
+                setScale(newScale);
+                onPageChange?.(currentPage, totalPages, newScale);
             },
             zoomOut: () => {
                 engineRef.current?.zoomOut();
-                setTimeout(() => {
-                    const newScale = engineRef.current?.getZoom() ?? 1;
-                    setScale(newScale);
-                    onPageChange?.(currentPage, totalPages, newScale);
-                }, 50);
+                const newScale = engineRef.current?.getZoom() ?? 1;
+                setScale(newScale);
+                onPageChange?.(currentPage, totalPages, newScale);
             },
             zoomReset: () => {
                 engineRef.current?.zoomReset();
@@ -214,19 +210,15 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             rotateCounterClockwise: () => engineRef.current?.rotateCounterClockwise(),
             zoomFitPage: () => {
                 engineRef.current?.zoomFitPage();
-                setTimeout(() => {
-                    const newScale = engineRef.current?.getZoom() ?? 1;
-                    setScale(newScale);
-                    onPageChange?.(currentPage, totalPages, newScale);
-                }, 50);
+                const newScale = engineRef.current?.getZoom() ?? 1;
+                setScale(newScale);
+                onPageChange?.(currentPage, totalPages, newScale);
             },
             zoomFitWidth: () => {
                 engineRef.current?.zoomFitWidth();
-                setTimeout(() => {
-                    const newScale = engineRef.current?.getZoom() ?? 1;
-                    setScale(newScale);
-                    onPageChange?.(currentPage, totalPages, newScale);
-                }, 50);
+                const newScale = engineRef.current?.getZoom() ?? 1;
+                setScale(newScale);
+                onPageChange?.(currentPage, totalPages, newScale);
             },
         }));
 

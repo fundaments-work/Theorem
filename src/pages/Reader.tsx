@@ -3,32 +3,44 @@
  * Full-screen reading experience with document viewer and controls
  */
 
-import { useState, useEffect, useCallback, useRef, useLayoutEffect, memo, forwardRef } from 'react';
+import { Suspense, lazy, useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, useLibraryStore, useSettingsStore } from '@/store';
-import { HighlightColorPicker, NoteEditor } from '@/components/reader';
-import {
-    ReaderViewport,
-    WindowTitlebar,
-    TableOfContents,
-    ReaderSettings,
-    ReaderAnnotationsPanel,
-    ReaderSearch,
-    BookInfoPopover,
-    ReaderViewportHandle,
-    ReaderNavbar,
-    PDFReader,
-} from '@/components/reader';
+import { WindowTitlebar } from '@/components/reader/WindowTitlebar';
+import { TableOfContents } from '@/components/reader/TableOfContents';
+import { ReaderSettings } from '@/components/reader/ReaderSettings';
+import { ReaderAnnotationsPanel } from '@/components/reader/ReaderAnnotationsPanel';
+import { ReaderSearch } from '@/components/reader/ReaderSearch';
+import { BookInfoPopover } from '@/components/reader/BookInfoPopover';
+import { ReaderNavbar } from '@/components/reader/progress/ReaderNavbar';
+import { ReaderViewport } from '@/components/reader/ReaderViewport';
+import { HighlightColorPicker } from '@/components/reader/highlights/HighlightColorPicker';
+import { NoteEditor } from '@/components/reader/highlights/NoteEditor';
 import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation } from '@/types';
-import { getBookBlob } from '@/lib/storage';
+import { isTauri } from '@/lib/env';
+import { getBookBlob, getBookData } from '@/lib/storage';
 import type { PDFJsEngineRef } from '@/engines/pdfjs-engine';
+import type { ReaderViewportHandle } from '@/components/reader/ReaderViewport';
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
+const LazyPDFReader = lazy(() =>
+    import('@/components/reader/PDFReader').then((module) => ({ default: module.PDFReader })),
+);
 
 export function ReaderPage() {
-    const { currentBookId, setRoute } = useUIStore();
-    const { getBook, updateProgress, saveBookLocations, addReadingTime, markBookCompleted } = useLibraryStore();
-    const { settings, updateReaderSettings, stats, updateStats } = useSettingsStore();
+    const currentBookId = useUIStore((state) => state.currentBookId);
+    const setRoute = useUIStore((state) => state.setRoute);
+
+    const getBook = useLibraryStore((state) => state.getBook);
+    const updateProgress = useLibraryStore((state) => state.updateProgress);
+    const saveBookLocations = useLibraryStore((state) => state.saveBookLocations);
+    const addReadingTime = useLibraryStore((state) => state.addReadingTime);
+    const markBookCompleted = useLibraryStore((state) => state.markBookCompleted);
+
+    const settings = useSettingsStore((state) => state.settings);
+    const updateReaderSettings = useSettingsStore((state) => state.updateReaderSettings);
+    const stats = useSettingsStore((state) => state.stats);
+    const updateStats = useSettingsStore((state) => state.updateStats);
     const readerRef = useRef<ReaderViewportHandle>(null);
     const pdfReaderRef = useRef<PDFJsEngineRef>(null);
     const loadedBookIdRef = useRef<string | null>(null);
@@ -80,6 +92,11 @@ export function ReaderPage() {
     const resumeTargetRef = useRef<string | null>(null);
     const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasAppliedInitialLocationRef = useRef(false);
+    const debug = useCallback((...args: unknown[]) => {
+        if (import.meta.env.DEV) {
+            console.debug(...args);
+        }
+    }, []);
 
     const togglePanel = useCallback((panel: ReaderPanel) => {
         setActivePanel(current => current === panel ? null : panel);
@@ -114,7 +131,6 @@ export function ReaderPage() {
 
     // PDF callbacks - memoized to prevent infinite re-renders
     const handlePdfLoad = useCallback((info: import('@/engines/pdfjs-engine').PDFDocumentInfo) => {
-        console.log('[PDF] Loaded:', info);
         // Get current book data for fallback
         const currentBookData = currentBookId ? getBook(currentBookId) : null;
 
@@ -142,7 +158,6 @@ export function ReaderPage() {
     }, [currentBookId, getBook]);
 
     const handlePdfError = useCallback((err: Error) => {
-        console.error('[PDF] Error:', err);
         setLoadError(err.message);
     }, []);
 
@@ -206,12 +221,6 @@ export function ReaderPage() {
             const progressFallback = book.progress !== undefined && book.progress < 0.95 ? book.progress : undefined;
             const fractionToUse = book.lastClickFraction ?? progressFallback;
             setInitialFraction(fractionToUse);
-            console.debug('[Reader] Resume state:', {
-                currentLocation: nextLocation?.substring(0, 50),
-                lastClickFraction: book.lastClickFraction,
-                progress: book.progress,
-                usingFraction: fractionToUse,
-            });
             suppressProgressRef.current = !!nextLocation || fractionToUse !== undefined;
             resumeTargetRef.current = nextLocation || null;
             hasAppliedInitialLocationRef.current = false;
@@ -221,22 +230,33 @@ export function ReaderPage() {
             setLoadError(null);
 
             try {
-                const blob = await getBookBlob(book.id, book.storagePath || book.filePath);
+                const storagePath = book.storagePath || book.filePath;
+
+                if (book.format === 'pdf') {
+                    const canPdfEngineReadDirectPath = isTauri()
+                        && !!storagePath
+                        && !storagePath.startsWith('browser://')
+                        && !storagePath.startsWith('idb://');
+
+                    if (canPdfEngineReadDirectPath) {
+                        return;
+                    }
+
+                    const data = await getBookData(book.id, storagePath);
+                    if (isCancelled) return;
+                    if (!data) {
+                        throw new Error('Could not read PDF file from storage.');
+                    }
+                    setPdfData(new Uint8Array(data));
+                    return;
+                }
+
+                const blob = await getBookBlob(book.id, storagePath);
                 if (isCancelled) return;
                 if (!blob) {
                     throw new Error('Could not read book file from storage.');
                 }
-                if (!isCancelled) {
-                    setFile(blob);
-
-                    // For PDFs, extract Uint8Array data for the PDF engine
-                    if (book.format === 'pdf') {
-                        const arrayBuffer = await blob.arrayBuffer();
-                        if (!isCancelled) {
-                            setPdfData(new Uint8Array(arrayBuffer));
-                        }
-                    }
-                }
+                setFile(blob);
             } catch (err) {
                 if (!isCancelled) {
                     setLoadError(err instanceof Error ? err.message : 'Unknown error loading book');
@@ -248,7 +268,7 @@ export function ReaderPage() {
 
         loadBook();
         return () => { isCancelled = true; };
-    }, [currentBookId]);
+    }, [currentBookId, getBook]);
 
     // Track reading time
     useEffect(() => {
@@ -458,7 +478,7 @@ export function ReaderPage() {
         if (suppressProgressRef.current) {
             const target = resumeTargetRef.current;
 
-            console.debug('[Reader] Location change while suppressed:', {
+            debug('[Reader] Location change while suppressed:', {
                 hasTarget: !!target,
                 targetCfi: target?.substring(0, 50),
                 currentCfi: loc.cfi?.substring(0, 50),
@@ -467,7 +487,7 @@ export function ReaderPage() {
 
             // If we have a target CFI and current location matches it, we've arrived
             if (target && loc.cfi && loc.cfi.startsWith(target)) {
-                console.debug('[Reader] ✓ Arrived at resume target, clearing suppression');
+                debug('[Reader] ✓ Arrived at resume target, clearing suppression');
                 suppressProgressRef.current = false;
                 resumeTargetRef.current = null;
                 hasAppliedInitialLocationRef.current = true;
@@ -496,9 +516,9 @@ export function ReaderPage() {
 
             // If no target (using fraction) or first location update, clear suppression after a timeout
             if (!resumeTimeoutRef.current) {
-                console.debug('[Reader] Starting suppression timeout (1000ms)');
+                debug('[Reader] Starting suppression timeout (1000ms)');
                 resumeTimeoutRef.current = setTimeout(() => {
-                    console.debug('[Reader] Suppression timeout expired');
+                    debug('[Reader] Suppression timeout expired');
                     suppressProgressRef.current = false;
                     resumeTargetRef.current = null;
                     resumeTimeoutRef.current = null;
@@ -509,7 +529,7 @@ export function ReaderPage() {
         }
 
         if (currentBookId) {
-            console.debug('[Reader] Saving location update:', {
+            debug('[Reader] Saving location update:', {
                 cfi: loc.cfi?.substring(0, 50),
                 percentage: loc.percentage,
             });
@@ -619,17 +639,18 @@ export function ReaderPage() {
     const [editingNote, setEditingNote] = useState('');
     const [pendingHighlightColor, setPendingHighlightColor] = useState<HighlightColor>('yellow');
 
-    const { addAnnotation, removeAnnotation, getBookAnnotations, updateAnnotation } = useLibraryStore();
+    const addAnnotation = useLibraryStore((state) => state.addAnnotation);
+    const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
+    const getBookAnnotations = useLibraryStore((state) => state.getBookAnnotations);
+    const updateAnnotation = useLibraryStore((state) => state.updateAnnotation);
 
     // PDF Controls - Defined here to access annotations and store actions
     const handlePdfZoomFitPage = useCallback(() => {
-        console.log('[Reader] Zoom Fit Page');
         pdfReaderRef.current?.zoomFitPage();
         setPdfZoomMode('page-fit');
     }, []);
 
     const handlePdfZoomFitWidth = useCallback(() => {
-        console.log('[Reader] Zoom Fit Width');
         pdfReaderRef.current?.zoomFitWidth();
         setPdfZoomMode('width-fit');
     }, []);
@@ -811,13 +832,13 @@ export function ReaderPage() {
         // If we have a CFI location, the engine should have handled it during open()
         // We only need to use fraction fallback if there's no CFI
         if (initialLocation) {
-            console.debug('[Reader] CFI was provided, engine should have navigated');
+            debug('[Reader] CFI was provided, engine should have navigated');
             hasAppliedInitialLocationRef.current = true;
             return;
         }
 
         if (typeof initialFraction === 'number') {
-            console.debug('[Reader] No CFI, using fraction fallback:', initialFraction);
+            debug('[Reader] No CFI, using fraction fallback:', initialFraction);
             hasAppliedInitialLocationRef.current = true;
             // Small delay to ensure view is fully ready
             setTimeout(() => {
@@ -828,18 +849,15 @@ export function ReaderPage() {
 
     // Memoized highlight selection handler
     const handleTextSelected = useCallback((cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => {
-        // Only log if debug mode
-        if (process.env.NODE_ENV === 'development') {
-            console.debug('[Reader] Text selected:', { cfi: cfi.substring(0, 50), text: text.substring(0, 50) });
-        }
+        debug('[Reader] Text selected:', { cfi: cfi.substring(0, 50), text: text.substring(0, 50) });
 
         // Always fetch fresh annotations from store to avoid stale state
         const freshAnnotations = currentBookId ? getBookAnnotations(currentBookId) : [];
-        console.debug('[Reader] Fresh annotations from store:', freshAnnotations.length);
-        console.debug('[Reader] Available highlight/note annotations:', freshAnnotations.filter(a => a.type === 'highlight' || a.type === 'note').map(a => ({ id: a.id.substring(0, 8), loc: a.location?.substring(0, 40), text: a.selectedText?.substring(0, 30) })));
+        debug('[Reader] Fresh annotations from store:', freshAnnotations.length);
+        debug('[Reader] Available highlight/note annotations:', freshAnnotations.filter(a => a.type === 'highlight' || a.type === 'note').map(a => ({ id: a.id.substring(0, 8), loc: a.location?.substring(0, 40), text: a.selectedText?.substring(0, 30) })));
 
         if (!cfi) {
-            console.debug('[Reader] Empty CFI, ignoring');
+            debug('[Reader] Empty CFI, ignoring');
             return;
         }
 
@@ -848,14 +866,14 @@ export function ReaderPage() {
         let existingAnnotation = freshAnnotations.find(a => {
             // Match by exact CFI for highlights/notes
             if (a.location === cfi && (a.type === 'highlight' || a.type === 'note')) {
-                console.debug('[Reader] Matched annotation by exact CFI:', a.id);
+                debug('[Reader] Matched annotation by exact CFI:', a.id);
                 return true;
             }
             // Partial CFI match: one is prefix of the other (handles CFI variations)
             if (a.location && cfi && (a.type === 'highlight' || a.type === 'note')) {
                 const isPrefixMatch = cfi.startsWith(a.location) || a.location.startsWith(cfi);
                 if (isPrefixMatch) {
-                    console.debug('[Reader] Matched annotation by partial CFI:', a.id, { cfi: cfi.substring(0, 40), stored: a.location.substring(0, 40) });
+                    debug('[Reader] Matched annotation by partial CFI:', a.id, { cfi: cfi.substring(0, 40), stored: a.location.substring(0, 40) });
                     return true;
                 }
             }
@@ -864,7 +882,7 @@ export function ReaderPage() {
             if (text && text.length > 3 && a.selectedText &&
                 a.type !== 'bookmark' &&
                 a.selectedText.trim() === text.trim()) {
-                console.debug('[Reader] Matched annotation by text content:', a.id);
+                debug('[Reader] Matched annotation by text content:', a.id);
                 return true;
             }
             return false;
@@ -877,10 +895,10 @@ export function ReaderPage() {
 
         if (existingAnnotation) {
             // Show color picker for existing annotation
-            console.debug('[Reader] ✓ Found existing annotation:', existingAnnotation.id, existingAnnotation.type, '- setting editingHighlightId');
+            debug('[Reader] ✓ Found existing annotation:', existingAnnotation.id, existingAnnotation.type, '- setting editingHighlightId');
             setActiveAnnotation(existingAnnotation);
             setEditingHighlightId(existingAnnotation.id);
-            console.debug('[Reader] editingHighlightId set to:', existingAnnotation.id);
+            debug('[Reader] editingHighlightId set to:', existingAnnotation.id);
             setSelectedCfi(existingAnnotation.location); // Use stored location for consistency
             setSelectedText(existingAnnotation.selectedText || text || '');
 
@@ -888,25 +906,25 @@ export function ReaderPage() {
             if (rangeOrEvent && 'clientX' in rangeOrEvent) {
                 // Mouse event - position near click
                 const mouseEvent = rangeOrEvent as MouseEvent;
-                console.debug('[Reader] Positioning color picker from mouse event:', mouseEvent.clientX, mouseEvent.clientY);
+                debug('[Reader] Positioning color picker from mouse event:', mouseEvent.clientX, mouseEvent.clientY);
                 setColorPickerPosition({ x: mouseEvent.clientX, y: mouseEvent.clientY });
             } else if (rangeOrEvent && 'getBoundingClientRect' in rangeOrEvent) {
                 // Range object - position at top-center of range
                 const rect = rangeOrEvent.getBoundingClientRect();
-                console.debug('[Reader] Positioning color picker from range rect:', rect.left, rect.top, rect.width, rect.height);
+                debug('[Reader] Positioning color picker from range rect:', rect.left, rect.top, rect.width, rect.height);
                 setColorPickerPosition({ x: rect.left + rect.width / 2, y: rect.top });
             } else {
                 // Fallback to center of screen
-                console.debug('[Reader] Positioning color picker at screen center (fallback)');
+                debug('[Reader] Positioning color picker at screen center (fallback)');
                 setColorPickerPosition({ x: window.innerWidth / 2, y: window.innerHeight / 3 });
             }
 
             setShowColorPicker(true);
         } else {
             // Show color picker for new text selection
-            console.debug('[Reader] ✗ No existing annotation found - treating as new selection');
+            debug('[Reader] ✗ No existing annotation found - treating as new selection');
             if (!text.trim()) {
-                console.debug('[Reader] Empty text selection, ignoring');
+                debug('[Reader] Empty text selection, ignoring');
                 return;
             }
 
@@ -919,20 +937,14 @@ export function ReaderPage() {
             // Position color picker near selection - improved positioning logic
             if (rangeOrEvent && 'clientX' in rangeOrEvent) {
                 const mouseEvent = rangeOrEvent as MouseEvent;
-                if (process.env.NODE_ENV === 'development') {
-                    console.debug('[Reader] Positioning color picker for new selection from mouse:', mouseEvent.clientX, mouseEvent.clientY);
-                }
+                debug('[Reader] Positioning color picker for new selection from mouse:', mouseEvent.clientX, mouseEvent.clientY);
                 setColorPickerPosition({ x: mouseEvent.clientX, y: mouseEvent.clientY });
             } else if (rangeOrEvent && 'getBoundingClientRect' in rangeOrEvent) {
                 const rect = rangeOrEvent.getBoundingClientRect();
-                if (process.env.NODE_ENV === 'development') {
-                    console.debug('[Reader] Positioning color picker for new selection from range:', rect.left, rect.top);
-                }
+                debug('[Reader] Positioning color picker for new selection from range:', rect.left, rect.top);
                 setColorPickerPosition({ x: rect.left + rect.width / 2, y: rect.top });
             } else {
-                if (process.env.NODE_ENV === 'development') {
-                    console.debug('[Reader] Positioning color picker at screen center (fallback)');
-                }
+                debug('[Reader] Positioning color picker at screen center (fallback)');
                 setColorPickerPosition({ x: window.innerWidth / 2, y: window.innerHeight / 3 });
             }
 
@@ -962,7 +974,7 @@ export function ReaderPage() {
                     await readerRef.current?.removeHighlight?.(editingHighlightId);
                     const updatedAnnotation: Annotation = { ...existingAnnotation, color, updatedAt: new Date() };
                     await readerRef.current?.addAnnotation?.(updatedAnnotation);
-                    console.debug('[Reader] Updated existing highlight color:', editingHighlightId, color);
+                    debug('[Reader] Updated existing highlight color:', editingHighlightId, color);
                 } catch (err) {
                     console.warn('[Reader] Failed to update highlight in viewport:', err);
                 }
@@ -987,7 +999,7 @@ export function ReaderPage() {
 
         if (existingHighlight) {
             // Update existing highlight with new color instead of creating duplicate
-            console.debug('[Reader] Found existing highlight, updating color instead of creating duplicate:', existingHighlight.id);
+            debug('[Reader] Found existing highlight, updating color instead of creating duplicate:', existingHighlight.id);
             updateAnnotation(existingHighlight.id, { color });
             setAnnotations(prev => prev.map(a =>
                 a.id === existingHighlight.id ? { ...a, color, updatedAt: new Date() } : a
@@ -1011,7 +1023,7 @@ export function ReaderPage() {
                     // Use the annotation from the engine (which has the correct ID)
                     addAnnotation(annotationWithBookId);
                     setAnnotations(prev => [...prev, annotationWithBookId]);
-                    console.debug('[Reader] Created new highlight:', annotationWithBookId.id);
+                    debug('[Reader] Created new highlight:', annotationWithBookId.id);
                 } else {
                     console.warn('[Reader] addHighlight returned null/undefined');
                 }
@@ -1033,7 +1045,7 @@ export function ReaderPage() {
     const handleAddNote = useCallback(() => {
         if (!selectedCfi || !currentBookId) return;
 
-        console.debug('[Reader] Opening note editor, editingHighlightId:', editingHighlightId, 'activeAnnotation:', activeAnnotation?.id);
+        debug('[Reader] Opening note editor, editingHighlightId:', editingHighlightId, 'activeAnnotation:', activeAnnotation?.id);
 
         // Close color picker and open note editor
         setShowColorPicker(false);
@@ -1044,11 +1056,11 @@ export function ReaderPage() {
         if (editingHighlightId && activeAnnotation) {
             setEditingNote(activeAnnotation.noteContent || '');
             setPendingHighlightColor(activeAnnotation.color || 'yellow');
-            console.debug('[Reader] Editing existing highlight, preserving ID:', editingHighlightId);
+            debug('[Reader] Editing existing highlight, preserving ID:', editingHighlightId);
         } else {
             setEditingNote('');
             setPendingHighlightColor('yellow');
-            console.debug('[Reader] Creating new highlight with note');
+            debug('[Reader] Creating new highlight with note');
         }
 
         setShowNoteEditor(true);
@@ -1080,7 +1092,7 @@ export function ReaderPage() {
 
         if (existingHighlight) {
             // Update existing highlight with note using updateAnnotation to preserve ID
-            console.debug('[Reader] Adding note to existing highlight:', existingHighlight.id);
+            debug('[Reader] Adding note to existing highlight:', existingHighlight.id);
             updateAnnotation(existingHighlight.id, {
                 type: noteContent ? 'note' : 'highlight',
                 noteContent: noteContent || undefined,
@@ -1104,13 +1116,13 @@ export function ReaderPage() {
                     updatedAt: new Date()
                 };
                 await readerRef.current?.addAnnotation?.(updatedAnnotation);
-                console.debug('[Reader] Re-rendered highlight with note in viewport');
+                debug('[Reader] Re-rendered highlight with note in viewport');
             } catch (err) {
                 console.warn('[Reader] Failed to re-render highlight with note:', err);
             }
         } else {
             // Create new highlight with note
-            console.debug('[Reader] Creating new highlight with note');
+            debug('[Reader] Creating new highlight with note');
             const annotation: Annotation = {
                 id: crypto.randomUUID(),
                 bookId: currentBookId,
@@ -1201,13 +1213,13 @@ export function ReaderPage() {
             return;
         }
 
-        console.debug('[Reader] Deleting highlight:', editingHighlightId);
+        debug('[Reader] Deleting highlight:', editingHighlightId);
 
         // Remove from viewport FIRST (before removing from store)
         // This is important because the engine needs to find the annotation in its internal map
         try {
             await readerRef.current?.removeHighlight?.(editingHighlightId);
-            console.debug('[Reader] Successfully removed highlight from viewport');
+            debug('[Reader] Successfully removed highlight from viewport');
         } catch (err) {
             console.warn('[Reader] Failed to remove highlight from viewport:', err);
         }
@@ -1336,25 +1348,33 @@ export function ReaderPage() {
                 style={{ paddingTop: `${shouldShowReaderChrome ? toolbarHeight : 0}px` }}
             >
                 {isPdfFormat ? (
-                    <PDFReader
-                        ref={pdfReaderRef}
-                        pdfPath={currentBook?.storagePath || currentBook?.filePath || ''}
-                        pdfData={pdfData ?? undefined}
-                        originalFilename={currentBook?.title}
-                        theme={settings.readerSettings.theme}
-                        onPageChange={handlePdfPageChange}
-                        onLoad={handlePdfLoad}
-                        onError={handlePdfError}
-                        onViewportTap={handleViewportTap}
-                        annotations={annotations}
-                        annotationMode={pdfAnnotationMode}
-                        highlightColor={pdfHighlightColor}
-                        penColor={pdfBrushColor}
-                        penWidth={pdfBrushWidth}
-                        onAnnotationAdd={handlePdfAnnotationAdd}
-                        onAnnotationChange={handlePdfAnnotationChange}
-                        onAnnotationRemove={handlePdfAnnotationRemove}
-                    />
+                    <Suspense
+                        fallback={(
+                            <div className="flex h-full w-full items-center justify-center text-[var(--color-text-secondary)]">
+                                Loading PDF engine...
+                            </div>
+                        )}
+                    >
+                        <LazyPDFReader
+                            ref={pdfReaderRef}
+                            pdfPath={currentBook?.storagePath || currentBook?.filePath || ''}
+                            pdfData={pdfData ?? undefined}
+                            originalFilename={currentBook?.title}
+                            theme={settings.readerSettings.theme}
+                            onPageChange={handlePdfPageChange}
+                            onLoad={handlePdfLoad}
+                            onError={handlePdfError}
+                            onViewportTap={handleViewportTap}
+                            annotations={annotations}
+                            annotationMode={pdfAnnotationMode}
+                            highlightColor={pdfHighlightColor}
+                            penColor={pdfBrushColor}
+                            penWidth={pdfBrushWidth}
+                            onAnnotationAdd={handlePdfAnnotationAdd}
+                            onAnnotationChange={handlePdfAnnotationChange}
+                            onAnnotationRemove={handlePdfAnnotationRemove}
+                        />
+                    </Suspense>
                 ) : (
                     <ReaderViewport
                         key={currentBookId || 'no-book'}
@@ -1453,7 +1473,7 @@ export function ReaderPage() {
                         onBookmark={handleBookmarkFromSelection}
                         onDelete={editingHighlightId ? handleDeleteFromColorPicker : undefined}
                         onClose={() => {
-                            console.debug('[Reader] Color picker closing, clearing state');
+                            debug('[Reader] Color picker closing, clearing state');
                             setShowColorPicker(false);
                             setEditingHighlightId(null);
                             setActiveAnnotation(null);

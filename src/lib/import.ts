@@ -9,11 +9,51 @@ import { v4 as uuidv4 } from 'uuid';
 import { isTauri } from './env';
 import { saveBookData, getBookData } from './storage';
 import { formatFileSize } from './utils';
-import { extractMetadata } from './cover-extractor';
+
+type ExtractMetadataFn = typeof import('./cover-extractor')['extractMetadata'];
 
 // Dynamically import Tauri plugins
 let tauriDialog: typeof import('@tauri-apps/plugin-dialog') | null = null;
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
+let extractMetadataFnPromise: Promise<ExtractMetadataFn> | null = null;
+
+const IMPORT_CONCURRENCY = 3;
+
+async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
+    if (!extractMetadataFnPromise) {
+        extractMetadataFnPromise = import('./cover-extractor').then(
+            (module) => module.extractMetadata,
+        );
+    }
+
+    return extractMetadataFnPromise;
+}
+
+async function runWithConcurrency<TInput, TOutput>(
+    items: TInput[],
+    concurrency: number,
+    worker: (item: TInput, index: number) => Promise<TOutput>,
+): Promise<TOutput[]> {
+    if (items.length === 0) {
+        return [];
+    }
+
+    const results: TOutput[] = new Array(items.length);
+    let nextIndex = 0;
+
+    const runWorker = async () => {
+        while (nextIndex < items.length) {
+            const currentIndex = nextIndex;
+            nextIndex += 1;
+            results[currentIndex] = await worker(items[currentIndex], currentIndex);
+        }
+    };
+
+    const workerCount = Math.max(1, Math.min(concurrency, items.length));
+    const workers = Array.from({ length: workerCount }, () => runWorker());
+    await Promise.all(workers);
+    return results;
+}
 
 async function initTauriPlugins() {
     if (!isTauri()) {
@@ -145,9 +185,9 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
     const filenameMetadata = extractFilenameMetadata(filename);
 
     // Extract metadata and cover from the book file
-    console.log('[Import] Extracting metadata and cover for:', filename);
     let metadata;
     try {
+        const extractMetadata = await getExtractMetadataFn();
         metadata = await extractMetadata(buffer, format, filename, id);
     } catch (error) {
         console.warn('[Import] Metadata extraction failed, using filename:', error);
@@ -177,13 +217,6 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
         language: metadata?.language,
     };
 
-    console.log('[Import] Book created from browser file:', {
-        id: book.id,
-        title: book.title,
-        author: book.author,
-        hasCover: !!book.coverPath,
-    });
-
     return book;
 }
 
@@ -191,21 +224,20 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
  * Import books from browser File objects
  */
 export async function importBooksFromFiles(files: File[]): Promise<Book[]> {
-    const books: Book[] = [];
-
-    for (const file of files) {
-        try {
-            const book = await createBookEntryFromFile(file);
-            if (book) {
-                books.push(book);
+    const imported = await runWithConcurrency(
+        files,
+        IMPORT_CONCURRENCY,
+        async (file): Promise<Book | null> => {
+            try {
+                return await createBookEntryFromFile(file);
+            } catch (error) {
+                console.error('Failed to import book:', file.name, error);
+                return null;
             }
-        } catch (error) {
-            console.error('Failed to import book:', file.name, error);
-            // Continue with next book, don't freeze
-        }
-    }
+        },
+    );
 
-    return books;
+    return imported.filter((book): book is Book => book !== null);
 }
 
 /**
@@ -214,7 +246,6 @@ export async function importBooksFromFiles(files: File[]): Promise<Book[]> {
  */
 export async function readBookFile(filePath: string, bookId?: string): Promise<ArrayBuffer> {
     try {
-        console.log('[Import] Reading book file:', { filePath, bookId });
         // Use getBookData which properly handles both Tauri paths and IndexedDB URLs
         const data = await getBookData(bookId || '', filePath);
         if (!data) {
@@ -299,9 +330,9 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     const filenameMetadata = extractFilenameMetadata(filePath);
 
     // Extract metadata and cover from the book file
-    console.log('[Import] Extracting metadata and cover for:', filename);
     let metadata;
     try {
+        const extractMetadata = await getExtractMetadataFn();
         metadata = await extractMetadata(buffer, format, filename, id);
     } catch (error) {
         console.warn('[Import] Metadata extraction failed, using filename:', error);
@@ -331,13 +362,6 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         language: metadata?.language,
     };
 
-    console.log('[Import] Book created:', {
-        id: book.id,
-        title: book.title,
-        author: book.author,
-        hasCover: !!book.coverPath,
-    });
-
     return book;
 }
 
@@ -345,21 +369,20 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
  * Import multiple books with error handling
  */
 export async function importBooks(filePaths: string[]): Promise<Book[]> {
-    const books: Book[] = [];
-
-    for (const filePath of filePaths) {
-        try {
-            const book = await createBookEntry(filePath);
-            if (book) {
-                books.push(book);
+    const imported = await runWithConcurrency(
+        filePaths,
+        IMPORT_CONCURRENCY,
+        async (filePath): Promise<Book | null> => {
+            try {
+                return await createBookEntry(filePath);
+            } catch (error) {
+                console.error('Failed to import book:', filePath, error);
+                return null;
             }
-        } catch (error) {
-            console.error('Failed to import book:', filePath, error);
-            // Continue with next book, don't freeze
-        }
-    }
+        },
+    );
 
-    return books;
+    return imported.filter((book): book is Book => book !== null);
 }
 
 /**

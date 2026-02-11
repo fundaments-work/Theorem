@@ -6,14 +6,25 @@
 import type { BookFormat } from "@/types";
 import { saveCoverImage } from "./storage";
 import { normalizeAuthor } from "./utils";
-import * as pdfjsLib from "pdfjs-dist";
 
-// Configure PDF.js worker
-const workerUrl = new URL(
-    "pdfjs-dist/build/pdf.worker.mjs",
-    import.meta.url
-).href;
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+type PdfJsModule = typeof import("pdfjs-dist");
+
+let pdfJsModulePromise: Promise<PdfJsModule> | null = null;
+
+async function getPdfJsModule(): Promise<PdfJsModule> {
+    if (!pdfJsModulePromise) {
+        pdfJsModulePromise = import("pdfjs-dist").then((module) => {
+            const workerUrl = new URL(
+                "pdfjs-dist/build/pdf.worker.mjs",
+                import.meta.url,
+            ).href;
+            module.GlobalWorkerOptions.workerSrc = workerUrl;
+            return module;
+        });
+    }
+
+    return pdfJsModulePromise;
+}
 
 /**
  * Extracted metadata from a book file
@@ -84,6 +95,7 @@ export async function extractMetadata(
     // Handle PDF files using PDF.js for proper metadata extraction
     if (format === "pdf") {
         try {
+            const pdfjsLib = await getPdfJsModule();
             const loadingTask = pdfjsLib.getDocument({
                 data: new Uint8Array(data),
                 isEvalSupported: false,

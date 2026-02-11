@@ -9,10 +9,59 @@ import { isTauri } from './env';
 const STORE_NAME = 'lion-reader-books';
 const METADATA_STORE = 'lion-reader-metadata';
 const COVERS_STORE = 'lion-reader-covers';
+const BLOB_CACHE_LIMIT = 4;
 
 // Cache for Tauri FS module
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
 let appDataDirPath: string | null = null;
+const blobCache = new Map<string, Blob>();
+const pendingDataReads = new Map<string, Promise<ArrayBuffer | null>>();
+const pendingBlobReads = new Map<string, Promise<Blob | null>>();
+
+function getStorageKey(id: string, filePath?: string): string {
+    return filePath || `id:${id}`;
+}
+
+function getMimeTypeFromPath(filePath?: string): string {
+    const ext = filePath?.toLowerCase().split('.').pop();
+    if (ext === 'pdf') {
+        return 'application/pdf';
+    }
+    if (ext === 'epub') {
+        return 'application/epub+zip';
+    }
+    return 'application/octet-stream';
+}
+
+function getCachedBlob(cacheKey: string): Blob | null {
+    const cached = blobCache.get(cacheKey);
+    if (!cached) {
+        return null;
+    }
+
+    // Refresh insertion order for LRU eviction.
+    blobCache.delete(cacheKey);
+    blobCache.set(cacheKey, cached);
+    return cached;
+}
+
+function cacheBlob(cacheKey: string, blob: Blob): void {
+    blobCache.set(cacheKey, blob);
+
+    while (blobCache.size > BLOB_CACHE_LIMIT) {
+        const oldestKey = blobCache.keys().next().value as string | undefined;
+        if (!oldestKey) {
+            break;
+        }
+        blobCache.delete(oldestKey);
+    }
+}
+
+function clearBlobCacheForBook(id: string, filePath?: string): void {
+    blobCache.delete(getStorageKey(id, filePath));
+    blobCache.delete(`idb://${id}`);
+    blobCache.delete(`id:${id}`);
+}
 
 // Dynamically import Tauri FS
 async function getTauriFs() {
@@ -71,6 +120,7 @@ async function getAppDir() {
 export async function saveBookData(id: string, data: ArrayBuffer): Promise<string> {
     const fs = await getTauriFs();
     const appDir = await getAppDir();
+    clearBlobCacheForBook(id);
     
     if (fs && appDir) {
         const relativePath = `books/${id}.book`;
@@ -118,55 +168,62 @@ function getRelativeStoragePath(filePath: string): string | null {
  * Get book data from storage as ArrayBuffer
  */
 export async function getBookData(id: string, filePath?: string): Promise<ArrayBuffer | null> {
-    const fs = await getTauriFs();
-    
-    // Check if this is a browser-imported file (virtual path)
-    const isBrowserPath = filePath?.startsWith('browser://');
-    // Check if this is an IndexedDB URL
-    const isIdbUrl = filePath?.startsWith('idb://');
-    
-    // If we have Tauri and a real file path (not browser:// or idb://), read from there
-    if (fs && filePath && !isIdbUrl && !isBrowserPath) {
-        try {
-            console.log('[Storage] Reading from Tauri FS:', filePath);
-            
-            // Check if this is an app storage path - use baseDir for those
-            if (isAppStoragePath(filePath)) {
-                const relativePath = getRelativeStoragePath(filePath);
-                if (relativePath) {
-                    console.log('[Storage] Using baseDir for app storage path:', relativePath);
-                    const contents = await fs.readFile(relativePath, {
-                        baseDir: fs.BaseDirectory.AppData
-                    });
-                    return contents.buffer as ArrayBuffer;
-                }
-            }
-            
-            // For external files, read directly
-            const contents = await fs.readFile(filePath);
-            return contents.buffer as ArrayBuffer;
-        } catch (error) {
-            console.error('[Storage] Error reading file from Tauri FS:', error);
-            // Continue to fallback
-        }
+    const cacheKey = getStorageKey(id, filePath);
+    const pendingRead = pendingDataReads.get(cacheKey);
+    if (pendingRead) {
+        return pendingRead;
     }
-    
-    // Extract ID from idb:// URL if needed, otherwise use the provided id
-    const effectiveId = isIdbUrl ? filePath!.slice(6) : id;
-    
-    // Fallback to IndexedDB (for browser mode and idb:// paths)
-    try {
-        console.log('[Storage] Reading from IndexedDB, id:', effectiveId);
-        const data = await get<ArrayBuffer>(`${STORE_NAME}-${effectiveId}`);
-        if (data) {
-            console.log('[Storage] Found data in IndexedDB, size:', data.byteLength);
-            return data;
+
+    const readPromise = (async () => {
+        const fs = await getTauriFs();
+
+        // Check if this is a browser-imported file (virtual path)
+        const isBrowserPath = filePath?.startsWith('browser://');
+        // Check if this is an IndexedDB URL
+        const isIdbUrl = filePath?.startsWith('idb://');
+
+        // If we have Tauri and a real file path (not browser:// or idb://), read from there
+        if (fs && filePath && !isIdbUrl && !isBrowserPath) {
+            try {
+                // Check if this is an app storage path - use baseDir for those
+                if (isAppStoragePath(filePath)) {
+                    const relativePath = getRelativeStoragePath(filePath);
+                    if (relativePath) {
+                        const contents = await fs.readFile(relativePath, {
+                            baseDir: fs.BaseDirectory.AppData,
+                        });
+                        return contents.buffer as ArrayBuffer;
+                    }
+                }
+
+                // For external files, read directly
+                const contents = await fs.readFile(filePath);
+                return contents.buffer as ArrayBuffer;
+            } catch (error) {
+                console.error('[Storage] Error reading file from Tauri FS:', error);
+                // Continue to fallback
+            }
         }
-        console.error('[Storage] No data found in IndexedDB for id:', effectiveId);
-        return null;
-    } catch (error) {
-        console.error('[Storage] Failed to get book data from IndexedDB:', error);
-        return null;
+
+        // Extract ID from idb:// URL if needed, otherwise use the provided id
+        const effectiveId = isIdbUrl ? filePath!.slice(6) : id;
+
+        // Fallback to IndexedDB (for browser mode and idb:// paths)
+        try {
+            const data = await get<ArrayBuffer>(`${STORE_NAME}-${effectiveId}`);
+            return data ?? null;
+        } catch (error) {
+            console.error('[Storage] Failed to get book data from IndexedDB:', error);
+            return null;
+        }
+    })();
+
+    pendingDataReads.set(cacheKey, readPromise);
+
+    try {
+        return await readPromise;
+    } finally {
+        pendingDataReads.delete(cacheKey);
     }
 }
 
@@ -175,69 +232,75 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
  * This avoids extra memory copies when passing to EPUB.js
  */
 export async function getBookBlob(id: string, filePath?: string): Promise<Blob | null> {
-    const fs = await getTauriFs();
-    
-    // Check if this is a browser-imported file (virtual path)
-    const isBrowserPath = filePath?.startsWith('browser://');
-    // Check if this is an IndexedDB URL
-    const isIdbUrl = filePath?.startsWith('idb://');
-    
-    // If we have Tauri and a real file path (not browser:// or idb://), read from there
-    if (fs && filePath && !isIdbUrl && !isBrowserPath) {
-        try {
-            console.log('[Storage] Reading blob from Tauri FS:', filePath);
-            
-            // Detect MIME type from extension
-            const ext = filePath.toLowerCase().split('.').pop();
-            const mimeType = ext === 'epub' ? 'application/epub+zip' : 
-                            ext === 'pdf' ? 'application/pdf' :
-                            'application/octet-stream';
-            
-            // Check if this is an app storage path - use baseDir for those
-            if (isAppStoragePath(filePath)) {
-                const relativePath = getRelativeStoragePath(filePath);
-                if (relativePath) {
-                    console.log('[Storage] Using baseDir for app storage path:', relativePath);
-                    const contents = await fs.readFile(relativePath, {
-                        baseDir: fs.BaseDirectory.AppData
-                    });
-                    return new Blob([contents], { type: mimeType });
-                }
-            }
-            
-            // For external files, read directly
-            const contents = await fs.readFile(filePath);
-            return new Blob([contents], { type: mimeType });
-        } catch (error) {
-            console.error('[Storage] Error reading blob from Tauri FS:', error);
-            // Continue to fallback
-        }
+    const cacheKey = getStorageKey(id, filePath);
+    const cachedBlob = getCachedBlob(cacheKey);
+    if (cachedBlob) {
+        return cachedBlob;
     }
-    
-    // Extract ID from idb:// URL if needed
-    const effectiveId = isIdbUrl ? filePath!.slice(6) : id;
-    
-    // Fallback to IndexedDB (for browser mode and idb:// paths)
-    try {
-        console.log('[Storage] Reading blob from IndexedDB, id:', effectiveId);
-        const data = await get<ArrayBuffer>(`${STORE_NAME}-${effectiveId}`);
-        if (data) {
-            console.log('[Storage] Found blob data in IndexedDB, size:', data.byteLength);
-            // Detect MIME type from original filePath or default
-            let mimeType = 'application/epub+zip';
-            if (filePath) {
-                const ext = filePath.toLowerCase().split('.').pop();
-                mimeType = ext === 'pdf' ? 'application/pdf' :
-                          ext === 'epub' ? 'application/epub+zip' :
-                          'application/octet-stream';
+
+    const pendingRead = pendingBlobReads.get(cacheKey);
+    if (pendingRead) {
+        return pendingRead;
+    }
+
+    const readPromise = (async () => {
+        const fs = await getTauriFs();
+
+        // Check if this is a browser-imported file (virtual path)
+        const isBrowserPath = filePath?.startsWith('browser://');
+        // Check if this is an IndexedDB URL
+        const isIdbUrl = filePath?.startsWith('idb://');
+        const mimeType = getMimeTypeFromPath(filePath);
+
+        // If we have Tauri and a real file path (not browser:// or idb://), read from there
+        if (fs && filePath && !isIdbUrl && !isBrowserPath) {
+            try {
+                // Check if this is an app storage path - use baseDir for those
+                if (isAppStoragePath(filePath)) {
+                    const relativePath = getRelativeStoragePath(filePath);
+                    if (relativePath) {
+                        const contents = await fs.readFile(relativePath, {
+                            baseDir: fs.BaseDirectory.AppData,
+                        });
+                        return new Blob([contents], { type: mimeType });
+                    }
+                }
+
+                // For external files, read directly
+                const contents = await fs.readFile(filePath);
+                return new Blob([contents], { type: mimeType });
+            } catch (error) {
+                console.error('[Storage] Error reading blob from Tauri FS:', error);
+                // Continue to fallback
+            }
+        }
+
+        // Extract ID from idb:// URL if needed
+        const effectiveId = isIdbUrl ? filePath!.slice(6) : id;
+
+        // Fallback to IndexedDB (for browser mode and idb:// paths)
+        try {
+            const data = await get<ArrayBuffer>(`${STORE_NAME}-${effectiveId}`);
+            if (!data) {
+                return null;
             }
             return new Blob([data], { type: mimeType });
+        } catch (error) {
+            console.error('[Storage] Failed to get book blob from IndexedDB:', error);
+            return null;
         }
-        console.error('[Storage] No blob data found in IndexedDB for id:', effectiveId);
-        return null;
-    } catch (error) {
-        console.error('[Storage] Failed to get book blob from IndexedDB:', error);
-        return null;
+    })();
+
+    pendingBlobReads.set(cacheKey, readPromise);
+
+    try {
+        const blob = await readPromise;
+        if (blob) {
+            cacheBlob(cacheKey, blob);
+        }
+        return blob;
+    } finally {
+        pendingBlobReads.delete(cacheKey);
     }
 }
 
@@ -246,6 +309,7 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
  */
 export async function deleteBookData(id: string, filePath?: string): Promise<void> {
     const fs = await getTauriFs();
+    clearBlobCacheForBook(id, filePath);
     
     if (fs && filePath && !filePath.startsWith('idb://')) {
         try {
@@ -327,7 +391,6 @@ export async function saveCoverImage(bookId: string, blob: Blob): Promise<string
     try {
         const dataUrl = await blobToDataUrl(blob);
         await set(`${COVERS_STORE}-${bookId}`, dataUrl);
-        console.log('[Storage] Saved cover for book:', bookId, 'size:', dataUrl.length);
         return dataUrl;
     } catch (error) {
         console.error('[Storage] Failed to save cover image:', error);

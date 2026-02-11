@@ -105,6 +105,7 @@ const ZOOM_STEP = 0.25;
 const DEFAULT_SCALE = 1.0;
 const PDF_TO_CSS_UNITS = pdfjsLib.PixelsPerInch?.PDF_TO_CSS_UNITS ?? (96 / 72);
 const PAGE_PRERENDER_MARGIN = "220% 0px";
+const INITIAL_PAGE_LOAD_SIZE = 2;
 const PAGE_LOAD_BATCH_SIZE = 5;
 const WEBKIT_MIN_OUTPUT_SCALE = 2;
 const MAX_CANVAS_PIXEL_COUNT = 16_000_000;
@@ -451,6 +452,14 @@ type PageTextContent = Awaited<ReturnType<PDFPageProxy["getTextContent"]>>;
 
 function clearPageTextContentCache(): void {
     pageTextContentCache.clear();
+}
+
+function toSerializablePdfData(data: Uint8Array): Uint8Array {
+    // Some WebKit builds are sensitive to non-zero offsets in typed arrays.
+    if (data.byteOffset === 0 && data.byteLength === data.buffer.byteLength) {
+        return data;
+    }
+    return new Uint8Array(data);
 }
 
 async function getPageTextContent(page: PDFPageProxy): Promise<PageTextContent> {
@@ -1332,6 +1341,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         // Load PDF
         useEffect(() => {
             let cancelled = false;
+            let loadedPdf: PDFDocumentProxy | null = null;
 
             const loadPdf = async () => {
                 // In browser mode, wait for pdfData to be provided
@@ -1367,7 +1377,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     // Fix: Ensure data is a "clean" Uint8Array to avoid DataCloneError in some WebKit environments
                     // By using subarray(0) or new Uint8Array(data) we ensure it's a serializable object
                     const loadingTask = pdfjsLib.getDocument({
-                        data: new Uint8Array(data), // Create a clean copy to ensure transferability and satisfy TS
+                        data: toSerializablePdfData(data),
                         cMapUrl: "/pdfjs/cmaps/",
                         cMapPacked: true,
                         standardFontDataUrl: "/pdfjs/standard_fonts/",
@@ -1375,6 +1385,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     });
 
                     const pdf = await loadingTask.promise;
+                    loadedPdf = pdf;
 
                     if (cancelled) {
                         pdf.destroy();
@@ -1384,9 +1395,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     setPdfDocument(pdf);
 
                     // Get metadata
-                    const metadata = await pdf.getMetadata();
+                    const [metadata, { tocItems, hasOutline }] = await Promise.all([
+                        pdf.getMetadata(),
+                        buildPdfToc(pdf),
+                    ]);
                     const metaInfo = metadata.info as Record<string, unknown>;
-                    const { tocItems, hasOutline } = await buildPdfToc(pdf);
                     // Use original filename (without extension) as fallback for title
                     const displayFilename = originalFilename || pdfPath.split("/").pop()?.replace(/\.[^/.]+$/, "") || "document";
                     const info: PDFDocumentInfo = {
@@ -1414,12 +1427,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     setScale(DEFAULT_SCALE);
 
                     // Pre-load first few pages
-                    const initialPages: PDFPageProxy[] = [];
-                    const pagesToLoad = Math.min(PAGE_LOAD_BATCH_SIZE, pdf.numPages);
-                    for (let i = 1; i <= pagesToLoad; i++) {
-                        const page = await pdf.getPage(i);
-                        initialPages.push(page);
-                    }
+                    const pagesToLoad = Math.min(INITIAL_PAGE_LOAD_SIZE, pdf.numPages);
+                    const initialPages = await Promise.all(
+                        Array.from({ length: pagesToLoad }, (_, pageIndex) => pdf.getPage(pageIndex + 1)),
+                    );
 
                     if (!cancelled) {
                         setPages(initialPages);
@@ -1449,15 +1460,17 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             return () => {
                 cancelled = true;
                 // Cleanup
-                pages.forEach(p => p.cleanup());
-                pdfDocument?.destroy();
+                setPages((existingPages) => {
+                    existingPages.forEach((page) => page.cleanup());
+                    return [];
+                });
+                loadedPdf?.destroy();
                 setPdfDocument(null);
-                setPages([]);
                 clearPageTextContentCache();
             };
             // Only reload when pdfPath, pdfData, or initialPage changes
             // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [pdfPath, pdfData, initialPage]);
+        }, [pdfPath, pdfData, initialPage, originalFilename]);
 
         // Track loading state to prevent duplicate page loads
         const isLoadingPageRef = useRef(false);
@@ -1650,33 +1663,46 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             };
         }, [pages.length, applyZoom]);
 
+        const scrollToPage = useCallback((targetPage: number, behavior: ScrollBehavior = "smooth") => {
+            const container = containerRef.current;
+            if (!container) {
+                return;
+            }
+
+            const pageNode = container.querySelector<HTMLElement>(
+                `.pdf-page-wrapper[data-page-number="${targetPage}"]`,
+            );
+            if (pageNode) {
+                container.scrollTo({
+                    top: Math.max(0, pageNode.offsetTop - 8),
+                    behavior,
+                });
+                return;
+            }
+
+            // Fallback while additional pages are still being loaded.
+            const approximatePageHeight = container.scrollHeight / Math.max(1, pages.length);
+            container.scrollTo({
+                top: Math.max(0, (targetPage - 1) * approximatePageHeight),
+                behavior,
+            });
+        }, [pages.length]);
+
         // Expose imperative methods
         useImperativeHandle(ref, () => ({
             goToPage: (page: number) => {
-                if (page >= 1 && page <= totalPages && containerRef.current) {
-                    const pageHeight = containerRef.current.scrollHeight / pages.length;
-                    containerRef.current.scrollTo({
-                        top: (page - 1) * pageHeight,
-                        behavior: "smooth",
-                    });
+                if (page >= 1 && page <= totalPages) {
+                    scrollToPage(page);
                 }
             },
             nextPage: () => {
-                if (currentPage < totalPages && containerRef.current) {
-                    const pageHeight = containerRef.current.scrollHeight / pages.length;
-                    containerRef.current.scrollTo({
-                        top: currentPage * pageHeight,
-                        behavior: "smooth",
-                    });
+                if (currentPage < totalPages) {
+                    scrollToPage(currentPage + 1);
                 }
             },
             prevPage: () => {
-                if (currentPage > 1 && containerRef.current) {
-                    const pageHeight = containerRef.current.scrollHeight / pages.length;
-                    containerRef.current.scrollTo({
-                        top: (currentPage - 2) * pageHeight,
-                        behavior: "smooth",
-                    });
+                if (currentPage > 1) {
+                    scrollToPage(currentPage - 1);
                 }
             },
             zoomIn: () => {
@@ -1691,9 +1717,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             setZoom: (newScale: number) => {
                 applyZoom(newScale);
             },
-            getZoom: () => scale,
-            getCurrentPage: () => currentPage,
-            getTotalPages: () => totalPages,
+            getZoom: () => scaleRef.current,
+            getCurrentPage: () => currentPageRef.current,
+            getTotalPages: () => totalPagesRef.current,
             rotateClockwise: () => {
                 setRotation(prev => (prev + 90) % 360);
             },
@@ -1723,7 +1749,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
                 applyZoom(newScale);
             },
-        }), [applyZoom, currentPage, pages.length, scale, totalPages]);
+        }), [applyZoom, currentPage, pages.length, scrollToPage, totalPages]);
 
         return (
             <div className={cn("relative w-full h-full", className)}>

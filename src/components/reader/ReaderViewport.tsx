@@ -171,20 +171,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 
                 if (!cancelled) {
                     lastAppliedSettingsRef.current = { ...settings };
-                    
-                    // Setup iframe selection listeners after book is loaded
-                    if (onTextSelected) {
-                        setTimeout(() => {
-                            const engine = getEngine();
-                            if (engine) {
-                                console.debug('[ReaderViewport] Setting up iframe listeners after open');
-                                engine.setupIframeSelectionListener((cfi, text, event) => {
-                                    console.debug('[ReaderViewport] Selection from iframe:', { cfi: cfi.substring(0, 30), text: text.substring(0, 30) });
-                                    onTextSelected(cfi, text, event);
-                                });
-                            }
-                        }, 500);
-                    }
                 }
             } catch (err) {
                 if (!cancelled) {
@@ -199,7 +185,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [file, initialLocation, isInitialized, savedLocations !== undefined]);
+    }, [file, format, initialLocation, isInitialized, savedLocations]);
 
     // Apply settings changes - optimized with batching
     useEffect(() => {
@@ -360,19 +346,14 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         const engine = getEngine();
         if (!engine) return;
 
-        console.debug('[ReaderViewport] Setting up selection handlers');
-
         // Set up iframe selection listener - this is crucial!
         engine.setupIframeSelectionListener((cfi, text, event) => {
-            console.debug('[ReaderViewport] Iframe selection detected:', { cfi: cfi.substring(0, 30), text: text.substring(0, 30) });
             onTextSelected(cfi, text, event);
         });
 
         // Also handle load events to set up listeners on new sections
         const handleLoad = () => {
-            console.debug('[ReaderViewport] Section loaded, setting up selection listeners');
             engine.setupIframeSelectionListener((cfi, text, event) => {
-                console.debug('[ReaderViewport] Iframe selection detected (after load):', { cfi: cfi.substring(0, 30), text: text.substring(0, 30) });
                 onTextSelected(cfi, text, event);
             });
         };

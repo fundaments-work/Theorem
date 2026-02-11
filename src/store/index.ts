@@ -143,6 +143,50 @@ const createCacheEntry = (book: Book): CachedBookMetadata => ({
     lastReadAt: book.lastReadAt || new Date(),
 });
 
+function updateBookById(
+    books: Book[],
+    bookId: string,
+    updater: (book: Book) => Book,
+): { books: Book[]; updatedBook: Book | null } {
+    const index = books.findIndex((book) => book.id === bookId);
+    if (index === -1) {
+        return { books, updatedBook: null };
+    }
+
+    const currentBook = books[index];
+    const nextBook = updater(currentBook);
+    if (nextBook === currentBook) {
+        return { books, updatedBook: currentBook };
+    }
+
+    const nextBooks = books.slice();
+    nextBooks[index] = nextBook;
+    return { books: nextBooks, updatedBook: nextBook };
+}
+
+const bookLookupCache = new WeakMap<Book[], Map<string, Book>>();
+const cachedBookLookupCache = new WeakMap<CachedBookMetadata[], Map<string, CachedBookMetadata>>();
+
+function getBookLookup(books: Book[]): Map<string, Book> {
+    const existingLookup = bookLookupCache.get(books);
+    if (existingLookup) {
+        return existingLookup;
+    }
+    const nextLookup = new Map(books.map((book) => [book.id, book]));
+    bookLookupCache.set(books, nextLookup);
+    return nextLookup;
+}
+
+function getCachedBookLookup(cache: CachedBookMetadata[]): Map<string, CachedBookMetadata> {
+    const existingLookup = cachedBookLookupCache.get(cache);
+    if (existingLookup) {
+        return existingLookup;
+    }
+    const nextLookup = new Map(cache.map((book) => [book.id, book]));
+    cachedBookLookupCache.set(cache, nextLookup);
+    return nextLookup;
+}
+
 // Library Store
 interface LibraryStore {
     books: Book[];
@@ -231,32 +275,33 @@ export const useLibraryStore = create<LibraryStore>()(
                 })),
 
             updateBook: (bookId, updates) =>
-                set((state) => ({
-                    books: state.books.map((b) =>
-                        b.id === bookId ? { ...b, ...updates } : b
-                    ),
-                })),
+                set((state) => {
+                    const { books } = updateBookById(state.books, bookId, (book) => ({
+                        ...book,
+                        ...updates,
+                    }));
+                    return { books };
+                }),
 
             updateProgress: (bookId, progress, location, lastClickFraction, pageProgress) =>
                 set((state) => {
-                    const updatedBooks = state.books.map((b) =>
-                        b.id === bookId
-                            ? {
-                                ...b,
-                                progress,
-                                currentLocation: location,
-                                ...(lastClickFraction !== undefined && { lastClickFraction }),
-                                ...(pageProgress !== undefined && { pageProgress }),
-                                lastReadAt: new Date()
-                            }
-                            : b
+                    const { books: updatedBooks, updatedBook } = updateBookById(
+                        state.books,
+                        bookId,
+                        (book) => ({
+                            ...book,
+                            progress,
+                            currentLocation: location,
+                            ...(lastClickFraction !== undefined && { lastClickFraction }),
+                            ...(pageProgress !== undefined && { pageProgress }),
+                            lastReadAt: new Date(),
+                        }),
                     );
 
                     // Update cache as well for fast access
-                    const book = updatedBooks.find(b => b.id === bookId);
-                    if (book) {
-                        const existingCache = state.recentBooksCache.filter(b => b.id !== bookId);
-                        const newCache = [createCacheEntry(book), ...existingCache].slice(0, 20);
+                    if (updatedBook) {
+                        const existingCache = state.recentBooksCache.filter((book) => book.id !== bookId);
+                        const newCache = [createCacheEntry(updatedBook), ...existingCache].slice(0, 20);
                         return { books: updatedBooks, recentBooksCache: newCache };
                     }
 
@@ -264,35 +309,41 @@ export const useLibraryStore = create<LibraryStore>()(
                 }),
 
             toggleFavorite: (bookId) =>
-                set((state) => ({
-                    books: state.books.map((b) =>
-                        b.id === bookId ? { ...b, isFavorite: !b.isFavorite } : b
-                    ),
-                })),
+                set((state) => {
+                    const { books } = updateBookById(state.books, bookId, (book) => ({
+                        ...book,
+                        isFavorite: !book.isFavorite,
+                    }));
+                    return { books };
+                }),
 
             updateBookMetadata: (bookId, metadata) =>
-                set((state) => ({
-                    books: state.books.map((b) =>
-                        b.id === bookId ? { ...b, ...metadata } : b
-                    ),
-                })),
+                set((state) => {
+                    const { books } = updateBookById(state.books, bookId, (book) => ({
+                        ...book,
+                        ...metadata,
+                    }));
+                    return { books };
+                }),
 
             saveBookLocations: (bookId, locations) =>
-                set((state) => ({
-                    books: state.books.map((b) =>
-                        b.id === bookId ? { ...b, locations } : b
-                    ),
-                })),
+                set((state) => {
+                    const { books } = updateBookById(state.books, bookId, (book) => ({
+                        ...book,
+                        locations,
+                    }));
+                    return { books };
+                }),
 
             // Reading time tracking
             addReadingTime: (bookId, minutes) =>
-                set((state) => ({
-                    books: state.books.map((b) =>
-                        b.id === bookId
-                            ? { ...b, readingTime: (b.readingTime || 0) + minutes }
-                            : b
-                    ),
-                })),
+                set((state) => {
+                    const { books } = updateBookById(state.books, bookId, (book) => ({
+                        ...book,
+                        readingTime: (book.readingTime || 0) + minutes,
+                    }));
+                    return { books };
+                }),
 
             // Book completion
             markBookCompleted: (bookId) => {
@@ -446,7 +497,7 @@ export const useLibraryStore = create<LibraryStore>()(
             },
 
             // Getters
-            getBook: (bookId) => get().books.find((b) => b.id === bookId),
+            getBook: (bookId) => getBookLookup(get().books).get(bookId),
 
             getRecentBooks: (limit = 10) =>
                 [...get().books]
@@ -473,9 +524,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 );
             },
 
-            getCachedBook: (bookId) => {
-                return get().recentBooksCache.find(b => b.id === bookId);
-            },
+            getCachedBook: (bookId) => getCachedBookLookup(get().recentBooksCache).get(bookId),
 
             setLastScannedAt: (date) => set({ lastScannedAt: date }),
 

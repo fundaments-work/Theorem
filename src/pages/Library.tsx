@@ -7,7 +7,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { cn, normalizeAuthor } from "@/lib/utils";
 import { useLibraryStore, useUIStore, useSettingsStore } from "@/store";
 import { formatProgress, formatFileSize, formatRelativeDate } from "@/lib/utils";
-import { pickAndImportBooks, scanFolderForBooks } from "@/lib/import";
+import { importBooks, pickAndImportBooks, scanFolderForBooks } from "@/lib/import";
 import { 
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw, 
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3,
@@ -17,7 +17,6 @@ import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder
 import { FORMAT_DISPLAY_NAMES } from "@/types";
 import { isTauri } from "@/lib/env";
 import { getBookData } from "@/lib/storage";
-import { extractMetadata } from "@/lib/cover-extractor";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import type { ContextMenuItem } from "@/components/ui/ContextMenu";
 import { Modal, ModalBody, ModalFooter } from "@/components/ui/Modal";
@@ -30,6 +29,20 @@ const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
     list: <List className="w-4 h-4" />,
     compact: <Grid3X3 className="w-4 h-4" />,
 };
+
+type ExtractMetadataFn = typeof import("@/lib/cover-extractor").extractMetadata;
+
+const COVER_EXTRACTION_BATCH_SIZE = 3;
+let extractMetadataPromise: Promise<ExtractMetadataFn> | null = null;
+
+async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
+    if (!extractMetadataPromise) {
+        extractMetadataPromise = import("@/lib/cover-extractor").then(
+            (module) => module.extractMetadata,
+        );
+    }
+    return extractMetadataPromise;
+}
 
 // Book Card Component with Context Menu
 function BookCard({ 
@@ -618,7 +631,6 @@ function AddToShelfModal({
 
 // Main Library Page
 export function LibraryPage() {
-    console.log("[LibraryPage] Component rendering");
     const books = useLibraryStore((state) => state.books);
     const collections = useLibraryStore((state) => state.collections);
     const addBooks = useLibraryStore((state) => state.addBooks);
@@ -666,14 +678,20 @@ export function LibraryPage() {
     }, []);
     
     const selectedShelf = selectedShelfId ? collections.find(c => c.id === selectedShelfId) : null;
+    const selectedShelfBookIds = useMemo(() => {
+        if (!selectedShelf) {
+            return null;
+        }
+        return new Set(selectedShelf.bookIds);
+    }, [selectedShelf]);
 
     // Filter books based on search query, selected shelf, and favorites
     const filteredBooks = useMemo(() => {
         let result = books;
         
         // Filter by shelf if selected
-        if (selectedShelf) {
-            result = result.filter(b => selectedShelf.bookIds.includes(b.id));
+        if (selectedShelfBookIds) {
+            result = result.filter((book) => selectedShelfBookIds.has(book.id));
         }
         
         // Filter by favorites
@@ -693,7 +711,7 @@ export function LibraryPage() {
         }
         
         return result;
-    }, [books, searchQuery, selectedShelf, showFavoritesOnly]);
+    }, [books, searchQuery, selectedShelfBookIds, showFavoritesOnly]);
 
     // Sort books
     const sortedBooks = useMemo(() => {
@@ -748,72 +766,95 @@ export function LibraryPage() {
         if (booksWithoutCovers.length === 0) return;
         
         extractionStartedRef.current = true;
-        
+
+        let isCancelled = false;
+
         const extractCovers = async () => {
-            console.log('[Library] Starting cover extraction for', booksWithoutCovers.length, 'books');
             setIsExtractingCovers(true);
-            setExtractionProgress({ current: 0, total: booksWithoutCovers.length });
-            
-            for (let i = 0; i < booksWithoutCovers.length; i++) {
-                const book = booksWithoutCovers[i];
-                setExtractionProgress({ current: i + 1, total: booksWithoutCovers.length });
-                
-                try {
-                    const storagePath = book.storagePath || book.filePath;
-                    const data = await getBookData(book.id, storagePath);
-                    
-                    if (!data) {
-                        console.warn('[Library] Could not load book data for:', book.id);
-                        continue;
+            const total = booksWithoutCovers.length;
+            setExtractionProgress({ current: 0, total });
+
+            try {
+                const extractMetadata = await getExtractMetadataFn();
+                let processedCount = 0;
+
+                for (let i = 0; i < booksWithoutCovers.length && !isCancelled; i += COVER_EXTRACTION_BATCH_SIZE) {
+                    const batch = booksWithoutCovers.slice(i, i + COVER_EXTRACTION_BATCH_SIZE);
+
+                    await Promise.all(batch.map(async (book) => {
+                        try {
+                            const storagePath = book.storagePath || book.filePath;
+                            const data = await getBookData(book.id, storagePath);
+
+                            if (!data) {
+                                return;
+                            }
+
+                            const filename = book.filePath.split(/[/\\]/).pop() || 'book.epub';
+                            const metadata = await extractMetadata(data, book.format, filename, book.id);
+
+                            const updates: Partial<Book> = {};
+
+                            if (metadata.coverDataUrl) {
+                                updates.coverPath = metadata.coverDataUrl;
+                            }
+
+                            if (metadata.title && (book.title === 'Unknown' || book.title.includes('.'))) {
+                                updates.title = metadata.title;
+                            }
+                            if (metadata.author && (book.author === 'Unknown Author' || !book.author)) {
+                                updates.author = metadata.author;
+                            }
+
+                            if (metadata.description && !book.description) {
+                                updates.description = metadata.description;
+                            }
+                            if (metadata.publisher && !book.publisher) {
+                                updates.publisher = metadata.publisher;
+                            }
+                            if (metadata.language && !book.language) {
+                                updates.language = metadata.language;
+                            }
+                            if (metadata.publishedDate && !book.publishedDate) {
+                                updates.publishedDate = metadata.publishedDate;
+                            }
+
+                            if (!isCancelled && Object.keys(updates).length > 0) {
+                                updateBook(book.id, updates);
+                            }
+                        } catch (error) {
+                            console.error('[Library] Failed to extract cover for book:', book.id, error);
+                        }
+                    }));
+
+                    processedCount += batch.length;
+                    if (!isCancelled) {
+                        setExtractionProgress({
+                            current: Math.min(processedCount, total),
+                            total,
+                        });
                     }
-                    
-                    const filename = book.filePath.split(/[/\\]/).pop() || 'book.epub';
-                    const metadata = await extractMetadata(data, book.format, filename, book.id);
-                    
-                    const updates: Partial<Book> = {};
-                    
-                    if (metadata.coverDataUrl) {
-                        updates.coverPath = metadata.coverDataUrl;
+
+                    // Yield to keep UI responsive while processing large libraries.
+                    if (!isCancelled) {
+                        await new Promise((resolve) => setTimeout(resolve, 0));
                     }
-                    
-                    if (metadata.title && (book.title === 'Unknown' || book.title.includes('.'))) {
-                        updates.title = metadata.title;
-                    }
-                    if (metadata.author && (book.author === 'Unknown Author' || !book.author)) {
-                        updates.author = metadata.author;
-                    }
-                    
-                    if (metadata.description && !book.description) {
-                        updates.description = metadata.description;
-                    }
-                    if (metadata.publisher && !book.publisher) {
-                        updates.publisher = metadata.publisher;
-                    }
-                    if (metadata.language && !book.language) {
-                        updates.language = metadata.language;
-                    }
-                    if (metadata.publishedDate && !book.publishedDate) {
-                        updates.publishedDate = metadata.publishedDate;
-                    }
-                    
-                    if (Object.keys(updates).length > 0) {
-                        console.log('[Library] Updating book with extracted data:', book.id, updates);
-                        updateBook(book.id, updates);
-                    }
-                } catch (error) {
-                    console.error('[Library] Failed to extract cover for book:', book.id, error);
                 }
-                
-                await new Promise(resolve => setTimeout(resolve, 100));
+            } finally {
+                if (!isCancelled) {
+                    setIsExtractingCovers(false);
+                }
             }
-            
-            setIsExtractingCovers(false);
-            console.log('[Library] Cover extraction complete');
         };
         
-        const timeoutId = setTimeout(extractCovers, 500);
+        const timeoutId = setTimeout(() => {
+            void extractCovers();
+        }, 300);
         
-        return () => clearTimeout(timeoutId);
+        return () => {
+            isCancelled = true;
+            clearTimeout(timeoutId);
+        };
     }, [books, updateBook]);
 
     // Close filter dropdown when clicking outside
@@ -867,8 +908,6 @@ export function LibraryPage() {
             
             if (folder && typeof folder === 'string') {
                 const bookPaths = await scanFolderForBooks(folder);
-                
-                const { importBooks } = await import('@/lib/import');
                 const importedBooks = await importBooks(bookPaths);
                 
                 if (importedBooks.length > 0) {
@@ -1296,4 +1335,3 @@ export function LibraryPage() {
         </div>
     );
 }
-
