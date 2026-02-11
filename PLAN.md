@@ -1,4 +1,4 @@
-# Lion Reader - Roadmap
+# Theorem - Roadmap
 
 ## Core Philosophy
 

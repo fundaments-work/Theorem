@@ -6,7 +6,7 @@
 
 ---
 
-**Project:** Lion Reader
+**Project:** Theorem
 **Generated:** 2026-02-11 10:32:48
 **Category:** Knowledge Base/Documentation
 

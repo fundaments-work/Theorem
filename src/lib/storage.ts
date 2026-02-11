@@ -6,9 +6,9 @@
 import { get, set, del } from 'idb-keyval';
 import { isTauri } from './env';
 
-const STORE_NAME = 'lion-reader-books';
-const METADATA_STORE = 'lion-reader-metadata';
-const COVERS_STORE = 'lion-reader-covers';
+const STORE_NAME = 'theorem-books';
+const METADATA_STORE = 'theorem-metadata';
+const COVERS_STORE = 'theorem-covers';
 const BLOB_CACHE_LIMIT = 4;
 
 // Cache for Tauri FS module

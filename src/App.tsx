@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { AppTitlebar } from "@/components/AppTitlebar";
 import { Sidebar } from "@/components/layout";
@@ -44,6 +44,7 @@ function App() {
     const sidebarOpen = useUIStore((state) => state.sidebarOpen);
     const toggleSidebar = useUIStore((state) => state.toggleSidebar);
     const isTauriRuntime = isTauri();
+    const mainScrollRef = useRef<HTMLElement>(null);
 
     // Initialize reader styles on app load
     useEffect(() => {
@@ -84,6 +85,14 @@ function App() {
 
     // Check if we're in reader mode (full screen, no sidebar)
     const isReaderMode = currentRoute === "reader";
+
+    // Reset scroll position when navigating between non-reader pages.
+    useEffect(() => {
+        if (isReaderMode) {
+            return;
+        }
+        mainScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }, [currentRoute, isReaderMode]);
 
     const renderPage = () => {
         switch (currentRoute) {
@@ -143,10 +152,10 @@ function App() {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                <AppTitlebar title="Lion Reader" onMenuClick={toggleSidebar} />
+                <AppTitlebar title="Theorem" onMenuClick={toggleSidebar} />
 
                 {/* Page Content */}
-                <main className="flex-1 overflow-y-auto">
+                <main ref={mainScrollRef} className="flex-1 overflow-y-auto">
                     <Suspense fallback={<PageFallback />}>
                         {renderPage()}
                     </Suspense>

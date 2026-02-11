@@ -28,7 +28,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
             case "bookDetails":
                 return "Book Details";
             default:
-                return "Lion Reader";
+                return "Theorem";
         }
     };
 
@@ -52,15 +52,15 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 
             {/* Center Section - Search */}
             <div className="flex-1 max-w-3xl mx-4">
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                <div className="relative w-full">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
                     <input
                         type="text"
                         placeholder="Search books, authors, or highlights..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className={cn(
-                            "ui-input w-full pl-10 pr-4 rounded-lg",
+                            "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-lg",
                             "min-h-[var(--control-height-md)]"
                         )}
                     />

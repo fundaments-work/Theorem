@@ -1,6 +1,6 @@
-# Lion Reader Design Token Implementation
+# Theorem Design Token Implementation
 
-Lion Reader now uses a complete token system covering color, typography, spacing,
+Theorem now uses a complete token system covering color, typography, spacing,
 layout, sizing, elevation, motion, controls, and z-index.
 
 ## Sources of truth

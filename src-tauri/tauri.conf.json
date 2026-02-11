@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Lion Reader",
+  "productName": "Theorem",
   "version": "0.1.0",
-  "identifier": "com.lionreader.app",
+  "identifier": "work.fundamentals.theorem",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Lion Reader",
+        "title": "Theorem",
         "width": 1440,
         "height": 900,
         "minWidth": 800,

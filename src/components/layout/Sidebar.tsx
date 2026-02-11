@@ -2,7 +2,7 @@ import { useCallback, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useUIStore, useSettingsStore } from "@/store";
 import type { AppRoute } from "@/types";
-import { LionLogo } from "@/components/LionLogo";
+import { TheoremLogo } from "@/components/TheoremLogo";
 import {
     Library,
     Bookmark,
@@ -36,6 +36,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
     const { settings, updateSettings } = useSettingsStore();
     const sidebarRef = useRef<HTMLElement>(null);
     const touchStartX = useRef<number>(0);
+    const isCollapsedDesktop = !isMobile && !sidebarOpen;
 
     const handleToggle = useCallback(() => {
         toggleSidebar();
@@ -84,15 +85,16 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
         >
             {/* Header - Logo + App Name (visible on all screens) */}
             <div className={cn(
-                "flex items-center justify-between px-4 border-b border-[var(--color-border)] h-16"
+                "flex items-center border-b border-[var(--color-border)] h-16",
+                isCollapsedDesktop ? "justify-center px-0" : "justify-between px-4"
             )}>
-                <div className="flex items-center gap-3 overflow-hidden">
-                    <LionLogo size={28} className="flex-shrink-0" />
+                <div className={cn("flex items-center overflow-hidden", isCollapsedDesktop ? "justify-center" : "gap-3")}>
+                    <TheoremLogo size={28} className="flex-shrink-0" />
                     <span className={cn(
                         "font-semibold text-lg text-[var(--color-text-primary)] whitespace-nowrap",
                         !isMobile && !sidebarOpen ? "opacity-0 w-0" : "opacity-100"
                     )}>
-                        Lion Reader
+                        Theorem
                     </span>
                 </div>
                 {/* Close button - only on mobile */}
@@ -118,7 +120,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                     setRoute(item.id);
                                     // Clear shelf filter when navigating away from library
                                     if (item.id !== "library") {
-                                        sessionStorage.removeItem("lion-reader-selected-shelf");
+                                        sessionStorage.removeItem("theorem-selected-shelf");
                                     }
                                     // Close mobile sidebar on navigation
                                     if (isMobile && onClose) {
@@ -126,7 +128,8 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                     }
                                 }}
                                 className={cn(
-                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl ui-clickable",
+                                    "w-full flex items-center rounded-xl ui-clickable",
+                                    isCollapsedDesktop ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
                                     "hover:bg-[var(--color-surface-muted)]",
                                     currentRoute === item.id
                                         ? "bg-[var(--color-accent-light)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
@@ -154,7 +157,8 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                 }
                             }}
                             className={cn(
-                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl ui-clickable",
+                                "w-full flex items-center rounded-xl ui-clickable",
+                                isCollapsedDesktop ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
                                 "hover:bg-[var(--color-surface-muted)]",
                                 currentRoute === "shelves"
                                     ? "bg-[var(--color-accent-light)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
@@ -176,10 +180,12 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
             </nav>
 
             {/* Bottom Actions */}
-            <div className={cn(
-                "p-2 border-t border-[var(--color-border)] flex",
-                sidebarOpen ? "flex-row items-center gap-1" : "flex-col space-y-1"
-            )}>
+            <div
+                className={cn(
+                    "p-2 border-t border-[var(--color-border)]",
+                    isCollapsedDesktop ? "flex flex-col gap-1" : "flex items-center gap-1",
+                )}
+            >
                 {/* Settings */}
                 <button
                     onClick={() => {
@@ -189,11 +195,13 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                         }
                     }}
                     className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-xl ui-clickable hover:bg-[var(--color-surface-muted)]",
-                        sidebarOpen ? "flex-1" : "w-full justify-center",
+                        "flex items-center rounded-xl ui-clickable transition-colors",
+                        isCollapsedDesktop
+                            ? "w-full justify-center px-0 py-2.5"
+                            : "flex-1 gap-3 px-3 py-2.5",
                         currentRoute === "settings"
-                            ? "bg-[var(--color-accent-light)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
-                            : "text-[var(--color-text-secondary)]"
+                            ? "text-[var(--color-accent)]"
+                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                     )}
                     title={!sidebarOpen ? "Settings" : undefined}
                 >
@@ -205,23 +213,25 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                     )}
                 </button>
 
-                {/* Collapse Toggle - desktop only */}
+                {/* Collapse Toggle - large screens only */}
                 {!isMobile && (
-                    <button
-                        onClick={handleToggle}
-                        className={cn(
-                            "flex items-center justify-center p-2.5 rounded-xl ui-clickable",
-                            "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]",
-                            sidebarOpen ? "w-10" : "w-full"
-                        )}
-                        title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-                    >
-                        {sidebarOpen ? (
-                            <ChevronLeft className="w-5 h-5" />
-                        ) : (
-                            <ChevronRight className="w-5 h-5" />
-                        )}
-                    </button>
+                    <div className="hidden lg:block">
+                        <button
+                            onClick={handleToggle}
+                            className={cn(
+                                "flex items-center justify-center p-2.5 rounded-xl ui-clickable",
+                                "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]",
+                                sidebarOpen ? "w-10" : "w-full",
+                            )}
+                            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                        >
+                            {sidebarOpen ? (
+                                <ChevronLeft className="w-5 h-5" />
+                            ) : (
+                                <ChevronRight className="w-5 h-5" />
+                            )}
+                        </button>
+                    </div>
                 )}
             </div>
 

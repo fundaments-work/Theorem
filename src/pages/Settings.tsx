@@ -172,7 +172,7 @@ export function SettingsPage() {
     const [ttsHighlightWords, setTtsHighlightWords] = useState(true);
     const [syncMode, setSyncMode] = useState<"off" | "cloud" | "selfhosted">("off");
     const [syncEncryption, setSyncEncryption] = useState(true);
-    const [newsletterEmail, setNewsletterEmail] = useState("your-name@read.lionreader.app");
+    const [newsletterEmail, setNewsletterEmail] = useState("your-name@theorem.fundamentals.work");
     const [vocabularyEnabled, setVocabularyEnabled] = useState(true);
     const [dailyReviewTime, setDailyReviewTime] = useState("09:00");
 
@@ -980,7 +980,7 @@ export function SettingsPage() {
 
                                 <div className="mt-4 p-4 bg-[var(--color-accent)]/10 rounded-lg border border-[var(--color-accent)]/20">
                                     <p className="text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                                        Lion Reader Cloud
+                                        Theorem Cloud
                                     </p>
                                     <p className="text-xs text-[var(--color-text-muted)] mb-3">
                                         Sync your library, highlights, and vocabulary across all devices.

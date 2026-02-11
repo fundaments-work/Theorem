@@ -1,7 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
-/* Lion Reader Design System - Token Based */
+/* Theorem Design System - Token Based */
 
 @theme {
     /* App semantic colors */
@@ -1031,6 +1031,23 @@ foliate-view * {
     border-color: color-mix(in srgb, var(--color-accent) 58%, var(--color-border));
     outline: 2px solid color-mix(in srgb, var(--color-accent) 28%, transparent);
     outline-offset: 0;
+}
+
+.ui-input-with-leading-icon {
+    padding-left: calc(var(--control-padding-x) + var(--icon-size-sm) + var(--spacing-md));
+}
+
+.ui-input-search {
+    border-radius: var(--radius-2xl);
+    background: color-mix(in srgb, var(--color-surface) 58%, var(--color-surface-muted));
+}
+
+.ui-input-search:hover {
+    background: var(--color-surface);
+}
+
+.ui-input-search:focus-visible {
+    background: var(--color-surface);
 }
 
 /* Empty states */

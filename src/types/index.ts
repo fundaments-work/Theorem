@@ -1,5 +1,5 @@
 /**
- * Lion Reader Type Definitions
+ * Theorem Type Definitions
  */
 
 // Book format types used in library metadata.

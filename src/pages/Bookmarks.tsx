@@ -257,7 +257,7 @@ export function BookmarksPage() {
 
     const handleGoToBookmark = (bookId: string, location: string) => {
         // Store the bookmark location in sessionStorage so the reader can navigate to it
-        sessionStorage.setItem("lion-reader-goto-location", location);
+        sessionStorage.setItem("theorem-goto-location", location);
         setRoute("reader", bookId);
     };
 

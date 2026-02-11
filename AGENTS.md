@@ -1,4 +1,4 @@
-# Agent Guidelines for Lion Reader
+# Agent Guidelines for Theorem
 
 Tauri-based desktop e-book reader built with React, TypeScript, Vite, and Tailwind CSS v4. Uses Zustand for state management and Foliate-js for EPUB rendering.
 

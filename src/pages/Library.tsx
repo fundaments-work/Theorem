@@ -19,6 +19,7 @@ import { isTauri } from "@/lib/env";
 import { getBookData } from "@/lib/storage";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import type { ContextMenuItem } from "@/components/ui/ContextMenu";
+import { Dropdown } from "@/components/ui/Dropdown";
 import { Modal, ModalBody, ModalFooter } from "@/components/ui/Modal";
 import { confirmDeleteBook } from "@/lib/dialogs";
 import { getShelfColor, getShelfInitials } from "@/lib/shelf-colors";
@@ -671,7 +672,7 @@ export function LibraryPage() {
     
     // Initialize selected shelf from session storage on mount
     useEffect(() => {
-        const shelfId = sessionStorage.getItem("lion-reader-selected-shelf");
+        const shelfId = sessionStorage.getItem("theorem-selected-shelf");
         if (shelfId) {
             setSelectedShelfId(shelfId);
         }
@@ -990,7 +991,7 @@ export function LibraryPage() {
                         {(selectedShelf || showFavoritesOnly) && (
                             <button
                                 onClick={() => {
-                                    sessionStorage.removeItem("lion-reader-selected-shelf");
+                                    sessionStorage.removeItem("theorem-selected-shelf");
                                     setSelectedShelfId(null);
                                     setShowFavoritesOnly(false);
                                 }}
@@ -1069,7 +1070,7 @@ export function LibraryPage() {
                                     className="fixed inset-0 z-10"
                                     onClick={() => setShowFilterDropdown(false)}
                                 />
-                                <div className="absolute right-0 top-full mt-2 w-56 ui-surface shadow-lg z-20 py-2">
+                                <div className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] ui-surface shadow-lg z-20 py-2">
                                     {/* Sort By */}
                                     <div className="px-3 py-2 border-b border-[var(--color-border)]">
                                         <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Sort By</p>
@@ -1103,30 +1104,35 @@ export function LibraryPage() {
 
                                     {/* Sort Order */}
                                     <div className="px-3 py-2 border-b border-[var(--color-border)]">
-                                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Order</p>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <button
-                                                onClick={() => updateSettings({ librarySortOrder: "asc" })}
+                                        <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">
+                                            Order
+                                        </p>
+                                        <div className="relative">
+                                            <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" />
+                                            <Dropdown<LibrarySortOrder>
+                                                value={settings.librarySortOrder}
+                                                onChange={(value) => {
+                                                    updateSettings({
+                                                        librarySortOrder: value,
+                                                    });
+                                                }}
+                                                options={[
+                                                    { value: "asc", label: "Ascending" },
+                                                    { value: "desc", label: "Descending" },
+                                                ]}
+                                                variant="filled"
+                                                size="sm"
+                                                align="right"
                                                 className={cn(
-                                                    "w-full min-w-0 min-h-9 px-2 py-1.5 rounded-lg text-sm whitespace-nowrap text-center",
-                                                    settings.librarySortOrder === "asc"
-                                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                        : "bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)]"
+                                                    "w-full",
+                                                    "[&>button]:w-full",
+                                                    "[&>button]:pl-9",
+                                                    "[&>button]:pr-3",
+                                                    "[&>button]:min-h-[var(--control-height-sm)]",
+                                                    "[&>button]:text-[var(--color-text-secondary)]"
                                                 )}
-                                            >
-                                                Ascending
-                                            </button>
-                                            <button
-                                                onClick={() => updateSettings({ librarySortOrder: "desc" })}
-                                                className={cn(
-                                                    "w-full min-w-0 min-h-9 px-2 py-1.5 rounded-lg text-sm whitespace-nowrap text-center",
-                                                    settings.librarySortOrder === "desc"
-                                                        ? "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
-                                                        : "bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)]"
-                                                )}
-                                            >
-                                                Descending
-                                            </button>
+                                                dropdownClassName="!w-full !min-w-full"
+                                            />
                                         </div>
                                     </div>
 
@@ -1174,7 +1180,7 @@ export function LibraryPage() {
                                             <div className="space-y-1 max-h-32 overflow-y-auto">
                                                 <button
                                                     onClick={() => {
-                                                        sessionStorage.removeItem("lion-reader-selected-shelf");
+                                                        sessionStorage.removeItem("theorem-selected-shelf");
                                                         setSelectedShelfId(null);
                                                         setShowFilterDropdown(false);
                                                     }}
@@ -1196,7 +1202,7 @@ export function LibraryPage() {
                                                             key={shelf.id}
                                                             onClick={() => {
                                                                 setSelectedShelfId(shelf.id);
-                                                                sessionStorage.setItem("lion-reader-selected-shelf", shelf.id);
+                                                                sessionStorage.setItem("theorem-selected-shelf", shelf.id);
                                                                 setShowFilterDropdown(false);
                                                             }}
                                                             className={cn(

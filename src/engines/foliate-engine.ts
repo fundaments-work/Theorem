@@ -479,10 +479,10 @@ export class FoliateEngine {
         if (!s) return;
         
         // Find or create the style element
-        let style = doc.getElementById('lion-reader-styles') as HTMLStyleElement;
+        let style = doc.getElementById('theorem-reader-styles') as HTMLStyleElement;
         if (!style) {
             style = doc.createElement('style');
-            style.id = 'lion-reader-styles';
+            style.id = 'theorem-reader-styles';
             doc.head?.appendChild(style);
         }
         

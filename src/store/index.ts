@@ -530,7 +530,7 @@ export const useLibraryStore = create<LibraryStore>()(
 
         }),
         {
-            name: "lion-reader-library",
+            name: "theorem-library",
             partialize: (state) => ({
                 books: state.books,
                 collections: state.collections,
@@ -603,7 +603,7 @@ export const useSettingsStore = create<SettingsStore>()(
             },
         }),
         {
-            name: "lion-reader-settings",
+            name: "theorem-settings",
             onRehydrateStorage: () => (state) => {
                 // Apply saved reader settings when store is rehydrated
                 if (state?.settings.readerSettings) {

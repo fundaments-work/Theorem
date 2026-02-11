@@ -153,7 +153,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         if (!container || engineRef.current) return;
 
         // Prevent double init
-        const containerKey = '__lionReaderInit';
+        const containerKey = '__theoremReaderInit';
         if ((container as any)[containerKey]) return;
         (container as any)[containerKey] = true;
 

@@ -416,7 +416,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
 
     const handleGoToLibrary = () => {
         // Store the shelf ID in session storage so Library page can filter by it
-        sessionStorage.setItem("lion-reader-selected-shelf", shelf.id);
+        sessionStorage.setItem("theorem-selected-shelf", shelf.id);
         setRoute("library");
     };
 

@@ -1,14 +1,14 @@
 /**
- * LionLogo Component
- * Simple SVG lion logo
+ * TheoremLogo Component
+ * Simple SVG brand logo
  */
 
-interface LionLogoProps {
+interface TheoremLogoProps {
     className?: string;
     size?: number;
 }
 
-export function LionLogo({ className, size = 32 }: LionLogoProps) {
+export function TheoremLogo({ className, size = 32 }: TheoremLogoProps) {
     const logoColors = {
         face: "var(--color-accent-light)",
         mane: "var(--color-accent)",
@@ -25,7 +25,7 @@ export function LionLogo({ className, size = 32 }: LionLogoProps) {
             xmlns="http://www.w3.org/2000/svg"
             className={className}
         >
-            {/* Lion face circle */}
+            {/* Face circle */}
             <circle
                 cx="50"
                 cy="50"
@@ -78,4 +78,4 @@ export function LionLogo({ className, size = 32 }: LionLogoProps) {
     );
 }
 
-export default LionLogo;
+export default TheoremLogo;

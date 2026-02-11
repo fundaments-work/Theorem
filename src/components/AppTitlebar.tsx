@@ -137,13 +137,15 @@ export function AppTitlebar({
                 {/* Left side - Menu + Title */}
                 <div className="flex items-center gap-2 shrink-0 min-w-0" data-tauri-drag-region>
                     {onMenuClick && (
-                        <button
-                            onClick={onMenuClick}
-                            className="md:hidden ui-icon-btn w-9 h-9 rounded-xl text-[var(--color-text-primary)]"
-                            title="Toggle Sidebar"
-                        >
-                            <Menu className="w-5 h-5" />
-                        </button>
+                        <div className="md:hidden">
+                            <button
+                                onClick={onMenuClick}
+                                className="ui-icon-btn w-9 h-9 rounded-xl text-[var(--color-text-primary)]"
+                                title="Toggle Sidebar"
+                            >
+                                <Menu className="w-5 h-5" />
+                            </button>
+                        </div>
                     )}
 
                     <h1 className="text-sm sm:text-base font-semibold text-[var(--color-text-primary)] truncate">
@@ -152,16 +154,16 @@ export function AppTitlebar({
                 </div>
 
                 {/* Center - Search (desktop) */}
-                <div className="hidden sm:block flex-1 max-w-3xl" data-tauri-drag-region>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                <div className="hidden lg:flex lg:flex-1 lg:min-w-[18rem] lg:max-w-3xl" data-tauri-drag-region>
+                    <div className="relative w-full">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
                         <input
                             type="text"
                             placeholder="Search books, authors, or highlights..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className={cn(
-                                "ui-input w-full pl-9 pr-4 rounded-xl",
+                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-xl",
                                 "min-h-[var(--control-height-md)]"
                             )}
                         />
@@ -212,17 +214,17 @@ export function AppTitlebar({
                 </div>
             </div>
 
-            {/* Search - Mobile */}
-            <div className="mt-2 sm:hidden">
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+            {/* Search - Compact layouts */}
+            <div className="mt-2 lg:hidden">
+                <div className="relative w-full">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
                     <input
                         type="text"
                         placeholder="Search books, authors, highlights..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className={cn(
-                            "ui-input w-full pl-9 pr-4 rounded-xl",
+                            "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-xl",
                             "min-h-[var(--control-height-md)]"
                         )}
                     />
