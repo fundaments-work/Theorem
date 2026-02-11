@@ -2,7 +2,8 @@
  * Lion Reader Type Definitions
  */
 
-// Book Format Types - All formats supported by foliate-js
+// Book format types used in library metadata.
+// Note: "cbr" is kept for backward compatibility with previously imported entries.
 export type BookFormat = "epub" | "mobi" | "azw" | "azw3" | "fb2" | "cbz" | "cbr" | "pdf";
 
 // Format categories for UI behavior

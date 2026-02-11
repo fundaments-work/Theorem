@@ -31,23 +31,33 @@ async function initTauriPlugins() {
 
 /**
  * Determine book format from file extension
- * Supports: EPUB, MOBI/AZW, FB2, CBZ/CBR, PDF
+ * Supports: EPUB, MOBI/AZW, FB2, CBZ, PDF
+ * Note: CBR is recognized for graceful rejection, but not currently importable.
  */
 export function getBookFormat(filePath: string): BookFormat | null {
-    const ext = filePath.toLowerCase().split('.').pop();
-    switch (ext) {
-        case 'epub': return 'epub';
-        case 'mobi': return 'mobi';
-        case 'azw': return 'azw';
-        case 'azw3': return 'azw3';
-        case 'fb2': return 'fb2';
-        case 'fbz':
-        case 'fb2.zip': return 'fb2';
-        case 'cbz': return 'cbz';
-        case 'cbr': return 'cbr';
-        case 'pdf': return 'pdf';
-        default: return null;
-    }
+    const lowerPath = filePath.toLowerCase();
+
+    // Multi-part extensions must be checked before single-part matches.
+    if (lowerPath.endsWith('.fb2.zip')) return 'fb2';
+
+    if (lowerPath.endsWith('.epub')) return 'epub';
+    if (lowerPath.endsWith('.mobi')) return 'mobi';
+    if (lowerPath.endsWith('.azw3')) return 'azw3';
+    if (lowerPath.endsWith('.azw')) return 'azw';
+    if (lowerPath.endsWith('.fb2')) return 'fb2';
+    if (lowerPath.endsWith('.fbz')) return 'fb2';
+    if (lowerPath.endsWith('.cbz')) return 'cbz';
+    if (lowerPath.endsWith('.cbr')) return 'cbr';
+    if (lowerPath.endsWith('.pdf')) return 'pdf';
+
+    return null;
+}
+
+/**
+ * Returns true when the format can be imported and rendered in this build.
+ */
+export function isImportFormatSupported(format: BookFormat): boolean {
+    return format !== 'cbr';
 }
 
 /**
@@ -60,11 +70,11 @@ export async function pickBookFiles(): Promise<string[]> {
     const selected = await plugins.dialog.open({
         multiple: true,
         filters: [
-            { name: 'All eBooks', extensions: ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'cbz', 'cbr', 'pdf'] },
+            { name: 'All eBooks', extensions: ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'fb2.zip', 'cbz', 'pdf'] },
             { name: 'EPUB', extensions: ['epub'] },
             { name: 'Kindle (MOBI/AZW)', extensions: ['mobi', 'azw', 'azw3'] },
-            { name: 'FictionBook (FB2)', extensions: ['fb2', 'fbz'] },
-            { name: 'Comics (CBZ/CBR)', extensions: ['cbz', 'cbr'] },
+            { name: 'FictionBook (FB2)', extensions: ['fb2', 'fbz', 'fb2.zip'] },
+            { name: 'Comics (CBZ)', extensions: ['cbz'] },
             { name: 'PDF', extensions: ['pdf'] },
         ],
     });
@@ -82,7 +92,7 @@ export function pickBookFilesBrowser(): Promise<File[]> {
         const input = document.createElement('input');
         input.type = 'file';
         input.multiple = true;
-        input.accept = '.epub,.mobi,.azw,.azw3,.fb2,.fbz,.cbz,.cbr,.pdf';
+        input.accept = '.epub,.mobi,.azw,.azw3,.fb2,.fbz,.fb2.zip,.cbz,.pdf';
         
         input.onchange = () => {
             const files = input.files ? Array.from(input.files) : [];
@@ -105,6 +115,10 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
     const format = getBookFormat(file.name);
     if (!format) {
         console.error('Unsupported file format:', file.name);
+        return null;
+    }
+    if (!isImportFormatSupported(format)) {
+        console.error('[Import] CBR archives are not supported in this build:', file.name);
         return null;
     }
 
@@ -245,6 +259,10 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         console.error('Unsupported file format:', filePath);
         return null;
     }
+    if (!isImportFormatSupported(format)) {
+        console.error('[Import] CBR archives are not supported in this build:', filePath);
+        return null;
+    }
 
     const plugins = await initTauriPlugins();
     if (!plugins?.fs) throw new Error('FS plugin not available - this function requires Tauri');
@@ -374,7 +392,6 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
     if (!plugins?.fs) throw new Error('FS plugin not available - folder scanning requires Tauri');
     const fs = plugins.fs;
 
-    const bookExtensions = ['.epub', '.mobi', '.azw', '.azw3', '.fb2', '.fbz', '.cbz', '.cbr'];
     const bookFiles: string[] = [];
 
     async function scanDir(dir: string) {
@@ -387,8 +404,19 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
                 if (entry.isDirectory) {
                     await scanDir(fullPath);
                 } else if (entry.isFile) {
-                    const ext = entry.name.toLowerCase().slice(entry.name.lastIndexOf('.'));
-                    if (bookExtensions.includes(ext)) {
+                    const lowerName = entry.name.toLowerCase();
+                    const isSupportedBook =
+                        lowerName.endsWith('.epub')
+                        || lowerName.endsWith('.mobi')
+                        || lowerName.endsWith('.azw')
+                        || lowerName.endsWith('.azw3')
+                        || lowerName.endsWith('.fb2')
+                        || lowerName.endsWith('.fbz')
+                        || lowerName.endsWith('.fb2.zip')
+                        || lowerName.endsWith('.cbz')
+                        || lowerName.endsWith('.pdf');
+
+                    if (isSupportedBook) {
                         bookFiles.push(fullPath);
                     }
                 }

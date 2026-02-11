@@ -182,6 +182,11 @@ export function ReaderPage() {
                 setLoadError('Book not found in library');
                 return;
             }
+            if (book.format === 'cbr') {
+                setLoadError('CBR archives are not supported in this build. Convert to CBZ and re-import.');
+                loadedBookIdRef.current = null;
+                return;
+            }
 
             setFile(null);
             setPdfData(null);

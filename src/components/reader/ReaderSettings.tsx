@@ -110,7 +110,7 @@ export function ReaderSettings({
     const [activeTab, setActiveTab] = useState<TabId>('themes');
     const [showAdvancedType, setShowAdvancedType] = useState(false);
     
-    // Determine if current format is fixed layout (CBZ, CBR)
+    // Determine if current format is fixed layout (CBZ/PDF, plus legacy CBR entries)
     const isFixed = isFixedLayout(format);
 
     const brightnessSlider = useSmoothSlider(
@@ -421,7 +421,7 @@ export function ReaderSettings({
                         </div>
                     )}
 
-                    {/* ZOOM TAB - For fixed layouts (CBZ, CBR) */}
+                    {/* ZOOM TAB - For fixed layouts (CBZ/PDF, plus legacy CBR entries) */}
                     {activeTab === 'zoom' && (
                         <div className="space-y-5">
                             {/* Zoom Level */}
