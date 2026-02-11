@@ -22,14 +22,14 @@ import {
 // Empty state component
 function EmptyBookmarks() {
     return (
-        <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <Bookmark className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+            <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 No Bookmarks Yet
             </h2>
-            <p className="text-[color:var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
+            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 Bookmark pages while reading to quickly return to them later.
             </p>
         </div>
@@ -266,7 +266,11 @@ export function BookmarksPage() {
     };
 
     if (bookmarks.length === 0) {
-        return <EmptyBookmarks />;
+        return (
+            <div className="ui-page">
+                <EmptyBookmarks />
+            </div>
+        );
     }
 
     return (

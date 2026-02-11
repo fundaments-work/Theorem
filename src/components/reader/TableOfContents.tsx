@@ -183,7 +183,7 @@ export function TableOfContents({
                 {/* TOC Items */}
                 <div className="flex-1 min-h-0 overflow-y-auto pt-3 pb-8 sm:pt-4 sm:pb-12 custom-scrollbar space-y-0.5">
                     {tocItems.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-12 text-center">
+                        <div className="w-full flex flex-col items-center justify-center p-12 text-center">
                             <div
                                 className="w-12 h-12 rounded-full flex items-center justify-center mb-4"
                                 style={{
@@ -196,7 +196,7 @@ export function TableOfContents({
                                 {isPdf ? "No outline available" : "No contents found"}
                             </p>
                             {isPdf && !pdfHasOutline && (
-                                <p className="mt-2 text-[var(--font-size-2xs)] leading-relaxed" style={readerStyles.textMuted}>
+                                <p className="w-full max-w-[16rem] mt-2 text-[var(--font-size-2xs)] leading-relaxed" style={readerStyles.textMuted}>
                                     This PDF has no embedded outline.
                                 </p>
                             )}

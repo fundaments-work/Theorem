@@ -80,14 +80,14 @@ interface SettingRowProps {
 
 function SettingRow({ label, description, children }: SettingRowProps) {
     return (
-        <div className="flex items-center justify-between py-4 first:pt-0 last:pb-0 border-b border-[var(--color-border-subtle)] last:border-0">
-            <div className="flex-1 pr-4">
+        <div className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 border-b border-[var(--color-border-subtle)] last:border-0 sm:flex-row sm:items-center sm:justify-between">
+            <div className="w-full sm:flex-1 sm:pr-4">
                 <label className="font-medium text-sm text-[color:var(--color-text-primary)]">{label}</label>
                 {description && (
                     <p className="text-xs text-[color:var(--color-text-muted)] mt-0.5">{description}</p>
                 )}
             </div>
-            <div className="flex-shrink-0">{children}</div>
+            <div className="w-full sm:w-auto sm:flex-shrink-0">{children}</div>
         </div>
     );
 }
@@ -129,15 +129,15 @@ function ButtonSelect<T extends string>({
     onChange: (value: T) => void;
 }) {
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             {options.map((opt) => (
                 <button
                     key={opt.value}
                     onClick={() => onChange(opt.value)}
                     className={cn(
-                        "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                        "px-3 py-1.5 rounded-md text-sm font-medium transition-colors min-w-[4.5rem]",
                         value === opt.value
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast shadow-[var(--shadow-xs)]"
                             : "bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                     )}
                 >
@@ -222,22 +222,44 @@ export function SettingsPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex items-center gap-1 p-1 bg-[var(--color-surface-muted)] rounded-lg w-fit mb-8 flex-wrap">
-                {tabButtons.map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={cn(
-                            "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
-                            activeTab === tab.id
-                                ? "bg-[var(--color-surface)] text-[color:var(--color-text-primary)] shadow-sm"
-                                : "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
-                        )}
-                    >
-                        <tab.icon className="w-4 h-4" />
-                        {tab.label}
-                    </button>
-                ))}
+            <div className="mb-8 space-y-3">
+                <div className="sm:hidden -mx-1 px-1">
+                    <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory">
+                        {tabButtons.map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={cn(
+                                    "snap-start flex min-w-[9.5rem] items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
+                                    activeTab === tab.id
+                                        ? "bg-[var(--color-accent)] ui-text-accent-contrast border-[var(--color-accent)] shadow-[var(--shadow-xs)]"
+                                        : "bg-[var(--color-surface)] border-[var(--color-border)] text-[color:var(--color-text-secondary)]"
+                                )}
+                            >
+                                <tab.icon className="w-4 h-4" />
+                                <span className="truncate">{tab.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="hidden sm:flex items-center gap-1 p-1 bg-[var(--color-surface-muted)] rounded-lg w-fit flex-wrap">
+                    {tabButtons.map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={cn(
+                                "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
+                                activeTab === tab.id
+                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast border border-[var(--color-accent)] shadow-[var(--shadow-xs)]"
+                                    : "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
+                            )}
+                        >
+                            <tab.icon className="w-4 h-4" />
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* General Settings */}

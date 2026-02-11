@@ -30,6 +30,7 @@ export function AppTitlebar({
     className,
 }: AppTitlebarProps) {
     const [isMaximized, setIsMaximized] = useState(false);
+    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
     const { currentRoute, searchQuery, setSearchQuery, setRoute } = useUIStore();
     const isTauriRuntime = isTauri();
 
@@ -60,6 +61,10 @@ export function AppTitlebar({
 
         return () => window.removeEventListener("resize", handleResize);
     }, [isTauriRuntime]);
+
+    useEffect(() => {
+        setIsMobileSearchOpen(false);
+    }, [currentRoute]);
 
     const handleMinimize = async () => {
         if (!isTauriRuntime) {
@@ -173,6 +178,19 @@ export function AppTitlebar({
                 {/* Right side - Stats button + Window controls */}
                 <div className="flex items-center gap-1 shrink-0">
                     <button
+                        onClick={() => setIsMobileSearchOpen((prev) => !prev)}
+                        className={cn(
+                            "lg:!hidden ui-icon-btn w-9 h-9 rounded-xl",
+                            isMobileSearchOpen
+                                ? "bg-[var(--color-accent)] ui-text-accent-contrast border border-[var(--color-accent)]"
+                                : "text-[color:var(--color-text-secondary)]"
+                        )}
+                        title={isMobileSearchOpen ? "Hide search" : "Search"}
+                    >
+                        <Search className="w-5 h-5" />
+                    </button>
+
+                    <button
                         onClick={() => setRoute("statistics")}
                         className={cn(
                             "ui-icon-btn w-9 h-9 rounded-xl",
@@ -214,8 +232,35 @@ export function AppTitlebar({
                 </div>
             </div>
 
-            {/* Search - Compact layouts */}
-            <div className="mt-2 lg:hidden">
+            {/* Search - Mobile (toggle from icon) */}
+            {isMobileSearchOpen && (
+                <div className="mt-2 lg:hidden">
+                    <div className="relative w-full">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
+                        <input
+                            type="text"
+                            placeholder="Search books, authors, highlights..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            autoFocus
+                            className={cn(
+                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-12 rounded-xl",
+                                "min-h-[var(--control-height-md)]"
+                            )}
+                        />
+                        <button
+                            onClick={() => setIsMobileSearchOpen(false)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 ui-icon-btn w-7 h-7 rounded-lg text-[color:var(--color-text-muted)]"
+                            title="Close search"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Search - Tablet layouts (hidden on phone sizes) */}
+            <div className="mt-2 hidden sm:block lg:hidden">
                 <div className="relative w-full">
                     <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                     <input

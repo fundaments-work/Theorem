@@ -1344,9 +1344,12 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             let loadedPdf: PDFDocumentProxy | null = null;
 
             const loadPdf = async () => {
-                // In browser mode, wait for pdfData to be provided
-                // This handles the race condition where component mounts before data is ready
-                if (!isTauri() && !pdfData) {
+                const isVirtualPath = pdfPath.startsWith("idb://") || pdfPath.startsWith("browser://");
+                const requiresProvidedData = !isTauri() || isVirtualPath || !pdfPath;
+
+                // Wait for in-memory bytes when direct filesystem loading is not possible.
+                // This prevents Tauri from attempting to read virtual idb:// paths.
+                if (requiresProvidedData && !pdfData) {
                     // Keep loading state, data will arrive via props update
                     return;
                 }
@@ -1363,11 +1366,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     if (pdfData) {
                         // Use provided data (works in both browser and Tauri)
                         data = pdfData;
-                    } else if (isTauri()) {
+                    } else if (isTauri() && pdfPath && !isVirtualPath) {
                         // Read via Tauri
                         data = await invoke<Uint8Array>("read_pdf_file", { path: pdfPath });
                     } else {
-                        // Should not reach here due to early return above
+                        // Should not reach here due to early return above.
                         throw new Error("PDF data not provided. Please ensure the book is properly loaded.");
                     }
 
@@ -1751,6 +1754,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             },
         }), [applyZoom, currentPage, pages.length, scrollToPage, totalPages]);
 
+        const displayError = error?.replace(/\s+/g, " ").trim();
+
         return (
             <div className={cn("relative w-full h-full", className)}>
                 {/* Loading State */}
@@ -1762,14 +1767,14 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 )}
 
                 {/* Error State */}
-                {error && (
+                {displayError && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)] p-8">
                         <div className="text-[color:var(--color-error)] text-4xl mb-4">⚠️</div>
-                        <h3 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-2">
+                        <h3 className="ui-empty-state-title text-lg font-semibold text-[color:var(--color-text-primary)] mb-2">
                             Failed to load PDF
                         </h3>
-                        <p className="text-[color:var(--color-text-secondary)] text-center max-w-md">
-                            {error}
+                        <p className="ui-empty-state-copy text-[color:var(--color-text-secondary)] text-center leading-relaxed">
+                            {displayError}
                         </p>
                     </div>
                 )}

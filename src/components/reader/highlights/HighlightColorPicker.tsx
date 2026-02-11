@@ -87,11 +87,9 @@ export function HighlightColorPicker({
     // This optimization prevents any DOM work when closed
     if (!isOpen) return null;
 
-    if (process.env.NODE_ENV === 'development') {
-        console.debug('[HighlightColorPicker] RENDER: isOpen=', isOpen, 'onDelete=', typeof onDelete, 'currentColor=', currentColor);
-    }
-
     const popupRef = useRef<HTMLDivElement>(null);
+    const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hasScheduledCloseRef = useRef(false);
     const [adjustedPosition, setAdjustedPosition] = useState(position);
     const [isClosing, setIsClosing] = useState(false);
     const [selectedColor, setSelectedColor] = useState<HighlightColor | null>(currentColor || null);
@@ -102,6 +100,12 @@ export function HighlightColorPicker({
         if (isOpen) {
             setSelectedColor(currentColor || null);
             setShowDeleteConfirm(false);
+            setIsClosing(false);
+            hasScheduledCloseRef.current = false;
+            if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+                closeTimeoutRef.current = null;
+            }
         }
     }, [isOpen, currentColor]);
 
@@ -110,6 +114,7 @@ export function HighlightColorPicker({
         // Skip calculation if not open
         if (!isOpen) {
             setIsClosing(false);
+            hasScheduledCloseRef.current = false;
             return;
         }
 
@@ -162,8 +167,16 @@ export function HighlightColorPicker({
 
     // Close handlers with animation
     const handleClose = useCallback(() => {
+        if (hasScheduledCloseRef.current) {
+            return;
+        }
+        hasScheduledCloseRef.current = true;
         setIsClosing(true);
-        setTimeout(onClose, 150);
+        closeTimeoutRef.current = setTimeout(() => {
+            closeTimeoutRef.current = null;
+            hasScheduledCloseRef.current = false;
+            onClose();
+        }, 150);
     }, [onClose]);
 
     // Color selection with animation feedback
@@ -238,7 +251,6 @@ export function HighlightColorPicker({
 
         const handleClickOutside = (e: MouseEvent) => {
             if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-                console.debug('[HighlightColorPicker] Click outside detected, closing');
                 handleClose();
             }
         };
@@ -251,7 +263,6 @@ export function HighlightColorPicker({
 
         // Also close on scroll or resize
         const handleScrollOrResize = () => {
-            console.debug('[HighlightColorPicker] Scroll/resize detected, closing');
             handleClose();
         };
         
@@ -266,6 +277,16 @@ export function HighlightColorPicker({
             window.removeEventListener('resize', handleScrollOrResize);
         };
     }, [isOpen, handleClose]);
+
+    useEffect(() => {
+        return () => {
+            if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+                closeTimeoutRef.current = null;
+            }
+            hasScheduledCloseRef.current = false;
+        };
+    }, []);
 
     // Final safety check - redundant with early return but good for clarity
 

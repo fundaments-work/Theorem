@@ -124,18 +124,18 @@
     --z-tooltip: 400;
 
     /* Shared highlight tokens */
-    --highlight-yellow: #111111;
-    --highlight-green: #2b2b2b;
-    --highlight-blue: #454545;
-    --highlight-red: #5f5f5f;
-    --highlight-orange: #7a7a7a;
-    --highlight-purple: #949494;
-    --highlight-yellow-soft: rgba(17, 17, 17, 0.28);
-    --highlight-green-soft: rgba(43, 43, 43, 0.24);
-    --highlight-blue-soft: rgba(69, 69, 69, 0.22);
-    --highlight-red-soft: rgba(95, 95, 95, 0.2);
-    --highlight-orange-soft: rgba(122, 122, 122, 0.18);
-    --highlight-purple-soft: rgba(148, 148, 148, 0.16);
+    --highlight-yellow: #f4b400;
+    --highlight-green: #2e7d32;
+    --highlight-blue: #1976d2;
+    --highlight-red: #d32f2f;
+    --highlight-orange: #f57c00;
+    --highlight-purple: #7b1fa2;
+    --highlight-yellow-soft: rgba(244, 180, 0, 0.26);
+    --highlight-green-soft: rgba(46, 125, 50, 0.24);
+    --highlight-blue-soft: rgba(25, 118, 210, 0.22);
+    --highlight-red-soft: rgba(211, 47, 47, 0.22);
+    --highlight-orange-soft: rgba(245, 124, 0, 0.24);
+    --highlight-purple-soft: rgba(123, 31, 162, 0.22);
 
     /* Layout scale */
     --container-width-sm: 40rem;
@@ -919,6 +919,35 @@ foliate-view * {
 
 .ui-text-accent-contrast {
     color: var(--color-accent-contrast);
+}
+
+/* Empty/error state layout safeguards */
+.ui-empty-state-stack {
+    width: min(100%, 26rem);
+    min-width: min(100%, 18rem);
+    margin-inline: auto;
+}
+
+.ui-empty-state-title {
+    width: 100%;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: keep-all;
+    text-wrap: balance;
+}
+
+.ui-empty-state-copy {
+    width: 100%;
+    max-width: 24rem;
+    margin-inline: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.ui-empty-state-action {
+    min-width: 10.5rem;
+    white-space: nowrap;
 }
 
 /* Button primitives */

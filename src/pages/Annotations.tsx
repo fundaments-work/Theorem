@@ -51,14 +51,14 @@ function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" }) {
     const Icon = icons[type];
 
     return (
-        <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <Icon className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+            <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 {titles[type]}
             </h2>
-            <p className="text-[color:var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
+            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 {descriptions[type]}
             </p>
         </div>
@@ -291,7 +291,11 @@ export function AnnotationsPage() {
     const annotationCount = annotations.filter((a) => a.type !== "bookmark").length;
 
     if (annotationCount === 0) {
-        return <EmptyAnnotations type="all" />;
+        return (
+            <div className="ui-page">
+                <EmptyAnnotations type="all" />
+            </div>
+        );
     }
 
     return (

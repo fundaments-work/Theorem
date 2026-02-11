@@ -329,21 +329,21 @@ function BookCard({
 // Empty State Component
 function EmptyLibrary({ onAddBooks, isLoading }: { onAddBooks: () => void; isLoading: boolean }) {
     return (
-        <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
+        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-24 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <BookOpen className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+            <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 No books yet
             </h2>
-            <p className="text-[color:var(--color-text-muted)] mb-8 max-w-xs mx-auto text-sm">
+            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 Import books to start reading
             </p>
             <button
                 onClick={onAddBooks}
                 disabled={isLoading}
                 className={cn(
-                    "flex items-center gap-2 px-6 py-2.5 rounded-full",
+                    "ui-empty-state-action flex items-center gap-2 px-6 py-2.5 rounded-full",
                     "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
                     "hover:opacity-90 transition-opacity",
                     "disabled:opacity-50 disabled:cursor-not-allowed"

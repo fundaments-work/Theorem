@@ -85,13 +85,26 @@ const ICON_BUTTON_CLASS = "p-2 lg:p-1.5 rounded-lg transition-opacity duration-1
 const ICON_BUTTON_ACTIVE_CLASS = "opacity-100 bg-[var(--color-accent)]/20";
 const ICON_BUTTON_INACTIVE_CLASS = "opacity-60 hover:opacity-100";
 
-function ToolbarButton({ onClick, active, title, children }: { onClick?: () => void; active?: boolean; title: string; children: React.ReactNode }) {
+function ToolbarButton({
+    onClick,
+    active,
+    title,
+    className,
+    children,
+}: {
+    onClick?: () => void;
+    active?: boolean;
+    title: string;
+    className?: string;
+    children: React.ReactNode;
+}) {
     return (
         <button
             onClick={onClick}
             className={cn(
                 ICON_BUTTON_CLASS,
                 active ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
+                className,
             )}
             style={{ color: "var(--reader-fg)" }}
             title={title}
@@ -800,6 +813,7 @@ export function WindowTitlebar({
                             onClick={onToggleSearch}
                             active={activePanel === "search"}
                             title="Search"
+                            className="lg:hidden"
                         >
                             <Search className="w-4 h-4" />
                         </ToolbarButton>

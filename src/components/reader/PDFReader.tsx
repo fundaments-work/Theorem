@@ -86,9 +86,11 @@ function ErrorState({
     error: string;
     onRetry?: () => void;
 }) {
+    const displayError = error.replace(/\s+/g, " ").trim();
+
     return (
         <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-surface)] z-20">
-            <div className="flex flex-col items-center gap-4 max-w-md text-center p-8">
+            <div className="ui-empty-state-stack flex flex-col items-center gap-4 text-center p-8">
                 <div
                     className="w-16 h-16 rounded-full flex items-center justify-center"
                     style={{
@@ -100,15 +102,15 @@ function ErrorState({
                         style={{ color: "var(--color-error)" }}
                     />
                 </div>
-                <h3 className="text-lg font-medium text-[color:var(--color-text-primary)]">
+                <h3 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)]">
                     Failed to load PDF
                 </h3>
-                <p className="text-sm text-[color:var(--color-text-secondary)]">{error}</p>
+                <p className="ui-empty-state-copy text-sm text-[color:var(--color-text-secondary)] leading-relaxed">{displayError}</p>
                 {onRetry && (
                     <button
                         onClick={onRetry}
                         className={cn(
-                            "mt-4 px-4 py-2 rounded-lg",
+                            "ui-empty-state-action mt-4 px-4 py-2 rounded-lg",
                             "bg-[var(--color-accent)] ui-text-accent-contrast",
                             "hover:bg-[var(--color-accent-hover)]",
                             "transition-colors text-sm font-medium"

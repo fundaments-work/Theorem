@@ -1249,25 +1249,29 @@ export function ReaderPage() {
 
     // Error state
     if (loadError) {
+        const displayLoadError = loadError.replace(/\s+/g, " ").trim();
+
         return (
-            <div className="fixed inset-0 flex flex-col items-center justify-center p-8 text-center bg-[var(--color-background)]">
-                <div className="w-16 h-16 rounded-full bg-[var(--color-error)]/10 flex items-center justify-center mb-6 text-[color:var(--color-error)]">
-                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+            <div className="fixed inset-0 flex items-center justify-center bg-[var(--color-background)] px-4 sm:px-8 py-8">
+                <div className="ui-empty-state-stack flex flex-col items-center text-center">
+                    <div className="w-16 h-16 rounded-full bg-[var(--color-error)]/10 flex items-center justify-center mb-6 text-[color:var(--color-error)]">
+                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <h2 className="ui-empty-state-title text-xl font-semibold text-[color:var(--color-text-primary)] mb-2">
+                        Failed to Load Book
+                    </h2>
+                    <p className="ui-empty-state-copy text-[color:var(--color-text-secondary)] mb-8 leading-relaxed">
+                        {displayLoadError}
+                    </p>
+                    <button
+                        onClick={() => setRoute('library')}
+                        className="ui-empty-state-action px-6 py-2 bg-[var(--color-accent)] ui-text-accent-contrast rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                    >
+                        Back to Library
+                    </button>
                 </div>
-                <h2 className="text-xl font-semibold text-[color:var(--color-text-primary)] mb-2">
-                    Failed to Load Book
-                </h2>
-                <p className="text-[color:var(--color-text-secondary)] mb-8 max-w-md">
-                    {loadError}
-                </p>
-                <button
-                    onClick={() => setRoute('library')}
-                    className="px-6 py-2 bg-[var(--color-accent)] ui-text-accent-contrast rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
-                >
-                    Back to Library
-                </button>
             </div>
         );
     }
@@ -1475,7 +1479,6 @@ export function ReaderPage() {
                         onBookmark={handleBookmarkFromSelection}
                         onDelete={editingHighlightId ? handleDeleteFromColorPicker : undefined}
                         onClose={() => {
-                            debug('[Reader] Color picker closing, clearing state');
                             setShowColorPicker(false);
                             setEditingHighlightId(null);
                             setActiveAnnotation(null);

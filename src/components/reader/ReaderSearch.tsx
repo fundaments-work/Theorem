@@ -145,23 +145,23 @@ export function ReaderSearch({
                 {/* Content */}
                 <div className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 custom-scrollbar">
                     {!query && !isSearching && results.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center opacity-50">
+                        <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center opacity-50">
                             <Search className="w-8 h-8 mb-3" />
-                            <p className="text-xs font-medium">Find words, names or phrases</p>
+                            <p className="w-full max-w-[15rem] text-xs font-medium leading-relaxed">Find words, names or phrases</p>
                         </div>
                     )}
 
                     {query && isSearching && results.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+                        <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center">
                             <Loader2 className="w-6 h-6 animate-spin text-[color:var(--color-accent)] mb-3" />
-                            <p className="text-xs text-[color:var(--color-text-muted)]">Scanning book... {progress}%</p>
+                            <p className="w-full max-w-[15rem] text-xs text-[color:var(--color-text-muted)] leading-relaxed">Scanning book... {progress}%</p>
                         </div>
                     )}
 
                     {query && !isSearching && results.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center opacity-70">
+                        <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center opacity-70">
                             <h3 className="text-sm font-semibold mb-1">No results found</h3>
-                            <p className="text-xs text-[color:var(--color-text-muted)]">Try a different search term</p>
+                            <p className="w-full max-w-[15rem] text-xs text-[color:var(--color-text-muted)] leading-relaxed">Try a different search term</p>
                         </div>
                     )}
 

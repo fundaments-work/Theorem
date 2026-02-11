@@ -132,22 +132,22 @@ export function ReaderAnnotationsPanel({
 
     const currentItems = activeTab === 'bookmarks' ? bookmarks : highlights;
     const emptyState = activeTab === 'bookmarks' ? (
-        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+        <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center">
             <div className="w-12 h-12 rounded-2xl bg-[var(--color-background)] flex items-center justify-center mb-4 text-[color:var(--color-text-muted)]">
                 <Bookmark className="w-6 h-6" />
             </div>
             <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)] mb-1">No bookmarks yet</h3>
-            <p className="text-xs text-[color:var(--color-text-muted)] leading-relaxed">
+            <p className="w-full max-w-[17rem] text-xs text-[color:var(--color-text-muted)] leading-relaxed">
                 Click the bookmark button in the toolbar to save your current page.
             </p>
         </div>
     ) : (
-        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+        <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center">
             <div className="w-12 h-12 rounded-2xl bg-[var(--color-background)] flex items-center justify-center mb-4 text-[color:var(--color-text-muted)]">
                 <Highlighter className="w-6 h-6" />
             </div>
             <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)] mb-1">No highlights yet</h3>
-            <p className="text-xs text-[color:var(--color-text-muted)] leading-relaxed">
+            <p className="w-full max-w-[17rem] text-xs text-[color:var(--color-text-muted)] leading-relaxed">
                 Select text and choose a color to highlight important passages.
             </p>
         </div>
