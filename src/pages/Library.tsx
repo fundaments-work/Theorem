@@ -8,6 +8,7 @@ import { cn, normalizeAuthor } from "@/lib/utils";
 import { useLibraryStore, useUIStore, useSettingsStore } from "@/store";
 import { formatProgress, formatFileSize, formatRelativeDate } from "@/lib/utils";
 import { importBooks, pickAndImportBooks, scanFolderForBooks } from "@/lib/import";
+import { rankByFuzzyQuery } from "@/lib/search/fuzzy";
 import { 
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw, 
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3,
@@ -702,13 +703,25 @@ export function LibraryPage() {
         
         // Filter by search query
         if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
-            result = result.filter(
-                (b) =>
-                    b.title.toLowerCase().includes(q) ||
-                    normalizeAuthor(b.author).toLowerCase().includes(q) ||
-                    b.tags.some((t) => t.toLowerCase().includes(q))
+            const rankedBooks = rankByFuzzyQuery(
+                result.map((book) => ({
+                    book,
+                    title: book.title,
+                    author: normalizeAuthor(book.author),
+                    tags: book.tags.join(" "),
+                    format: `${FORMAT_DISPLAY_NAMES[book.format]} ${book.format}`,
+                })),
+                searchQuery,
+                {
+                    keys: [
+                        { name: "title", weight: 0.45 },
+                        { name: "author", weight: 0.3 },
+                        { name: "tags", weight: 0.15 },
+                        { name: "format", weight: 0.1 },
+                    ],
+                },
             );
+            result = rankedBooks.map(({ item }) => item.book);
         }
         
         return result;
@@ -716,6 +729,10 @@ export function LibraryPage() {
 
     // Sort books
     const sortedBooks = useMemo(() => {
+        if (searchQuery.trim()) {
+            return filteredBooks;
+        }
+
         const sorted = [...filteredBooks];
         const sortBy = settings.librarySortBy;
         const sortOrder = settings.librarySortOrder;
@@ -756,7 +773,7 @@ export function LibraryPage() {
         });
 
         return sorted;
-    }, [filteredBooks, settings.librarySortBy, settings.librarySortOrder]);
+    }, [filteredBooks, searchQuery, settings.librarySortBy, settings.librarySortOrder]);
 
     // Auto-extract covers for books that don't have them
     useEffect(() => {

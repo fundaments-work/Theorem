@@ -230,6 +230,10 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                 setScale(newScale);
                 onPageChange?.(currentPage, totalPages, newScale);
             },
+            search: (query: string) => engineRef.current?.search(query) || (async function* () {
+                yield "done" as const;
+            })(),
+            clearSearch: () => engineRef.current?.clearSearch(),
         }));
 
         // Handle page change from engine

@@ -5,6 +5,7 @@
 
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { rankByFuzzyQuery } from "@/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "@/store";
 import { confirmDeleteBookmark } from "@/lib/dialogs";
 import { Dropdown } from "@/components/ui";
@@ -202,6 +203,10 @@ export function BookmarksPage() {
     const { setRoute, searchQuery } = useUIStore();
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
+    const bookLookup = useMemo(
+        () => new Map(books.map((book) => [book.id, book])),
+        [books],
+    );
 
     // Get only bookmark annotations
     const bookmarks = useMemo(() => {
@@ -214,13 +219,26 @@ export function BookmarksPage() {
 
         // Apply search filter from global search
         if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
-            filtered = filtered.filter(
-                (b) =>
-                    b.selectedText?.toLowerCase().includes(q) ||
-                    books.find((book) => book.id === b.bookId)?.title.toLowerCase().includes(q) ||
-                    books.find((book) => book.id === b.bookId)?.author.toLowerCase().includes(q)
+            const rankedBookmarks = rankByFuzzyQuery(
+                filtered.map((bookmark) => {
+                    const book = bookLookup.get(bookmark.bookId);
+                    return {
+                        bookmark,
+                        selectedText: bookmark.selectedText || "",
+                        bookTitle: book?.title || "",
+                        bookAuthor: book?.author || "",
+                    };
+                }),
+                searchQuery,
+                {
+                    keys: [
+                        { name: "selectedText", weight: 0.4 },
+                        { name: "bookTitle", weight: 0.35 },
+                        { name: "bookAuthor", weight: 0.25 },
+                    ],
+                },
             );
+            return rankedBookmarks.map(({ item }) => item.bookmark);
         }
 
         // Sort
@@ -237,8 +255,8 @@ export function BookmarksPage() {
                     return dateA.getTime() - dateB.getTime();
                 }
                 case "book":
-                    const bookA = books.find((book) => book.id === a.bookId)?.title || "";
-                    const bookB = books.find((book) => book.id === b.bookId)?.title || "";
+                    const bookA = bookLookup.get(a.bookId)?.title || "";
+                    const bookB = bookLookup.get(b.bookId)?.title || "";
                     return bookA.localeCompare(bookB);
                 default:
                     return 0;
@@ -246,7 +264,7 @@ export function BookmarksPage() {
         });
 
         return filtered;
-    }, [bookmarks, searchQuery, sortBy, books]);
+    }, [bookmarks, searchQuery, sortBy, bookLookup]);
 
     const handleDelete = async (id: string) => {
         const confirmed = await confirmDeleteBookmark();

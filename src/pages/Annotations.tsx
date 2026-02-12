@@ -6,6 +6,7 @@
 import { useState, useMemo } from "react";
 import { HIGHLIGHT_SOLID_COLORS } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
+import { rankByFuzzyQuery } from "@/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "@/store";
 import type { HighlightColor } from "@/types";
 import { EditNoteModal } from "@/components/modals";
@@ -214,6 +215,10 @@ export function AnnotationsPage() {
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
+    const bookTitleLookup = useMemo(
+        () => new Map(books.map((book) => [book.id, book.title])),
+        [books],
+    );
 
     // Filter annotations (excluding bookmarks - they have their own page)
     const filteredAnnotations = useMemo(() => {
@@ -231,13 +236,23 @@ export function AnnotationsPage() {
 
         // Apply search filter from global search
         if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
-            filtered = filtered.filter(
-                (a) =>
-                    a.selectedText?.toLowerCase().includes(q) ||
-                    a.noteContent?.toLowerCase().includes(q) ||
-                    books.find((b) => b.id === a.bookId)?.title.toLowerCase().includes(q)
+            const rankedAnnotations = rankByFuzzyQuery(
+                filtered.map((annotation) => ({
+                    annotation,
+                    selectedText: annotation.selectedText || "",
+                    noteContent: annotation.noteContent || "",
+                    bookTitle: bookTitleLookup.get(annotation.bookId) || "",
+                })),
+                searchQuery,
+                {
+                    keys: [
+                        { name: "selectedText", weight: 0.45 },
+                        { name: "noteContent", weight: 0.35 },
+                        { name: "bookTitle", weight: 0.2 },
+                    ],
+                },
             );
+            return rankedAnnotations.map(({ item }) => item.annotation);
         }
 
         // Sort
@@ -254,8 +269,8 @@ export function AnnotationsPage() {
                     return dateA.getTime() - dateB.getTime();
                 }
                 case "book":
-                    const bookA = books.find((book) => book.id === a.bookId)?.title || "";
-                    const bookB = books.find((book) => book.id === b.bookId)?.title || "";
+                    const bookA = bookTitleLookup.get(a.bookId) || "";
+                    const bookB = bookTitleLookup.get(b.bookId) || "";
                     return bookA.localeCompare(bookB);
                 default:
                     return 0;
@@ -263,7 +278,7 @@ export function AnnotationsPage() {
         });
 
         return filtered;
-    }, [annotations, activeFilter, searchQuery, sortBy, books]);
+    }, [annotations, activeFilter, searchQuery, sortBy, bookTitleLookup]);
 
     const handleDelete = (id: string) => {
         if (confirm("Are you sure you want to delete this annotation?")) {

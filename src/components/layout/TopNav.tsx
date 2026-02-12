@@ -1,4 +1,9 @@
 import { cn } from "@/lib/utils";
+import {
+    getSearchPlaceholder,
+    hasSearchDomain,
+    resolveSearchDomain,
+} from "@/lib/search/domain";
 import { useUIStore } from "@/store";
 import { Search, Menu, BarChart3 } from "lucide-react";
 
@@ -8,6 +13,12 @@ interface TopNavProps {
 
 export function TopNav({ onMenuClick }: TopNavProps) {
     const { currentRoute, searchQuery, setSearchQuery, setRoute } = useUIStore();
+    const searchDomain = resolveSearchDomain({
+        placement: "appTitlebar",
+        route: currentRoute,
+    });
+    const isSearchVisible = hasSearchDomain(searchDomain);
+    const searchPlaceholder = getSearchPlaceholder(searchDomain);
 
     const getPageTitle = () => {
         switch (currentRoute) {
@@ -51,21 +62,23 @@ export function TopNav({ onMenuClick }: TopNavProps) {
             </div>
 
             {/* Center Section - Search */}
-            <div className="flex-1 max-w-3xl mx-4">
-                <div className="relative w-full">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
-                    <input
-                        type="text"
-                        placeholder="Search books, authors, or highlights..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className={cn(
-                            "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-lg",
-                            "min-h-[var(--control-height-md)]"
-                        )}
-                    />
+            {isSearchVisible && (
+                <div className="flex-1 max-w-3xl mx-4">
+                    <div className="relative w-full">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
+                        <input
+                            type="text"
+                            placeholder={searchPlaceholder}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className={cn(
+                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-lg",
+                                "min-h-[var(--control-height-md)]"
+                            )}
+                        />
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Right Section */}
             <div className="flex items-center gap-2">

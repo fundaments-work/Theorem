@@ -13,6 +13,40 @@ interface SearchMatch {
     excerpt: string;
 }
 
+const LIVE_SEARCH_DEBOUNCE_MS = 220;
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function highlightExcerpt(excerpt: string, query: string): string {
+    const safeExcerpt = escapeHtml(excerpt);
+    const safeQuery = escapeHtml(query.trim());
+
+    if (!safeQuery) {
+        return safeExcerpt;
+    }
+
+    if (!safeExcerpt.toLowerCase().includes(safeQuery.toLowerCase())) {
+        return safeExcerpt;
+    }
+
+    const queryRegex = new RegExp(`(${escapeRegExp(safeQuery)})`, "gi");
+    return safeExcerpt.replace(
+        queryRegex,
+        '<span class="bg-[var(--color-accent)]/20 text-[color:var(--color-accent)] font-bold">$1</span>',
+    );
+}
+
 interface ReaderSearchProps {
     visible: boolean;
     onClose: () => void;
@@ -36,20 +70,28 @@ export function ReaderSearch({
     const [progress, setProgress] = useState(0);
     const searchRef = useRef(0);
     const inputRef = useRef<HTMLInputElement>(null);
+    const onSearchRef = useRef(onSearch);
+    const onClearSearchRef = useRef(onClearSearch);
+    const liveSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Focus input when visible
     useEffect(() => {
-        if (visible) {
-            const timer = setTimeout(() => inputRef.current?.focus(), 100);
-            return () => clearTimeout(timer);
-        } else {
-            handleClear();
-        }
-    }, [visible]);
+        onSearchRef.current = onSearch;
+    }, [onSearch]);
 
-    const handleSearch = useCallback(async (e?: React.FormEvent) => {
-        e?.preventDefault();
-        if (!query.trim()) return;
+    useEffect(() => {
+        onClearSearchRef.current = onClearSearch;
+    }, [onClearSearch]);
+
+    const clearLiveSearchTimer = useCallback(() => {
+        if (liveSearchTimerRef.current) {
+            clearTimeout(liveSearchTimerRef.current);
+            liveSearchTimerRef.current = null;
+        }
+    }, []);
+
+    const runSearch = useCallback(async (searchQuery: string) => {
+        const normalizedQuery = searchQuery.trim();
+        if (!normalizedQuery) return;
 
         setIsSearching(true);
         setResults([]);
@@ -58,7 +100,7 @@ export function ReaderSearch({
         const currentSearchId = searchRef.current;
 
         try {
-            const iter = onSearch(query);
+            const iter = onSearchRef.current(normalizedQuery);
             for await (const result of iter) {
                 if (currentSearchId !== searchRef.current) break;
 
@@ -78,20 +120,67 @@ export function ReaderSearch({
                 setIsSearching(false);
             }
         }
-    }, [query, onSearch]);
+    }, []);
+
+    // Focus input when visible
+    useEffect(() => {
+        if (visible) {
+            const timer = setTimeout(() => inputRef.current?.focus(), 100);
+            return () => clearTimeout(timer);
+        } else {
+            handleClear();
+        }
+    }, [visible]);
+
+    const handleSearch = useCallback(async (e?: React.FormEvent) => {
+        e?.preventDefault();
+        const normalizedQuery = query.trim();
+        if (!normalizedQuery) return;
+        clearLiveSearchTimer();
+        await runSearch(normalizedQuery);
+    }, [clearLiveSearchTimer, query, runSearch]);
 
     const handleClear = useCallback(() => {
+        clearLiveSearchTimer();
         setQuery('');
         setResults([]);
         setIsSearching(false);
         setProgress(0);
         searchRef.current++;
-        onClearSearch();
-    }, [onClearSearch]);
+        onClearSearchRef.current();
+    }, [clearLiveSearchTimer]);
 
     const handleNavigate = useCallback((cfi: string) => {
         onNavigate(cfi);
     }, [onNavigate]);
+
+    useEffect(() => {
+        clearLiveSearchTimer();
+        if (!visible) {
+            return;
+        }
+
+        const normalizedQuery = query.trim();
+        if (!normalizedQuery) {
+            setResults([]);
+            setIsSearching(false);
+            setProgress(0);
+            searchRef.current++;
+            onClearSearchRef.current();
+            return;
+        }
+
+        liveSearchTimerRef.current = setTimeout(() => {
+            liveSearchTimerRef.current = null;
+            void runSearch(normalizedQuery);
+        }, LIVE_SEARCH_DEBOUNCE_MS);
+
+        return clearLiveSearchTimer;
+    }, [clearLiveSearchTimer, query, runSearch, visible]);
+
+    useEffect(() => {
+        return clearLiveSearchTimer;
+    }, [clearLiveSearchTimer]);
 
     return (
         <>
@@ -175,10 +264,7 @@ export function ReaderSearch({
                                 <p
                                     className="text-[var(--font-size-caption)] text-[color:var(--color-text-secondary)] line-clamp-3 leading-relaxed"
                                     dangerouslySetInnerHTML={{
-                                        __html: result.excerpt.replace(
-                                            new RegExp(`(${query})`, 'gi'),
-                                            '<span class="bg-[var(--color-accent)]/20 text-[color:var(--color-accent)] font-bold">$1</span>'
-                                        )
+                                        __html: highlightExcerpt(result.excerpt, query),
                                     }}
                                 />
                                 <div className="flex items-center gap-1.5 text-[var(--font-size-3xs)] text-[color:var(--color-accent)] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">

@@ -15,6 +15,11 @@ import {
 import { cn } from "@/lib/utils";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { isTauri } from "@/lib/env";
+import {
+    getSearchPlaceholder,
+    hasSearchDomain,
+    resolveSearchDomain,
+} from "@/lib/search/domain";
 
 import { useUIStore } from "@/store";
 
@@ -33,6 +38,12 @@ export function AppTitlebar({
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
     const { currentRoute, searchQuery, setSearchQuery, setRoute } = useUIStore();
     const isTauriRuntime = isTauri();
+    const searchDomain = resolveSearchDomain({
+        placement: "appTitlebar",
+        route: currentRoute,
+    });
+    const isSearchVisible = hasSearchDomain(searchDomain);
+    const searchPlaceholder = getSearchPlaceholder(searchDomain);
 
     useEffect(() => {
         if (!isTauriRuntime) {
@@ -65,6 +76,12 @@ export function AppTitlebar({
     useEffect(() => {
         setIsMobileSearchOpen(false);
     }, [currentRoute]);
+
+    useEffect(() => {
+        if (!isSearchVisible) {
+            setIsMobileSearchOpen(false);
+        }
+    }, [isSearchVisible]);
 
     const handleMinimize = async () => {
         if (!isTauriRuntime) {
@@ -159,36 +176,40 @@ export function AppTitlebar({
                 </div>
 
                 {/* Center - Search (desktop) */}
-                <div className="hidden lg:flex lg:flex-1 lg:min-w-[18rem] lg:max-w-3xl" data-tauri-drag-region>
-                    <div className="relative w-full">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
-                        <input
-                            type="text"
-                            placeholder="Search books, authors, or highlights..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className={cn(
-                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-xl",
-                                "min-h-[var(--control-height-md)]"
-                            )}
-                        />
+                {isSearchVisible && (
+                    <div className="hidden lg:flex lg:flex-1 lg:min-w-[18rem] lg:max-w-3xl" data-tauri-drag-region>
+                        <div className="relative w-full">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
+                            <input
+                                type="text"
+                                placeholder={searchPlaceholder}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className={cn(
+                                    "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-xl",
+                                    "min-h-[var(--control-height-md)]"
+                                )}
+                            />
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Right side - Stats button + Window controls */}
                 <div className="flex items-center gap-1 shrink-0">
-                    <button
-                        onClick={() => setIsMobileSearchOpen((prev) => !prev)}
-                        className={cn(
-                            "lg:!hidden ui-icon-btn w-9 h-9 rounded-xl",
-                            isMobileSearchOpen
-                                ? "bg-[var(--color-accent)] ui-text-accent-contrast border border-[var(--color-accent)]"
-                                : "text-[color:var(--color-text-secondary)]"
-                        )}
-                        title={isMobileSearchOpen ? "Hide search" : "Search"}
-                    >
-                        <Search className="w-5 h-5" />
-                    </button>
+                    {isSearchVisible && (
+                        <button
+                            onClick={() => setIsMobileSearchOpen((prev) => !prev)}
+                            className={cn(
+                                "lg:!hidden ui-icon-btn w-9 h-9 rounded-xl",
+                                isMobileSearchOpen
+                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast border border-[var(--color-accent)]"
+                                    : "text-[color:var(--color-text-secondary)]"
+                            )}
+                            title={isMobileSearchOpen ? "Hide search" : "Search"}
+                        >
+                            <Search className="w-5 h-5" />
+                        </button>
+                    )}
 
                     <button
                         onClick={() => setRoute("statistics")}
@@ -233,13 +254,13 @@ export function AppTitlebar({
             </div>
 
             {/* Search - Mobile (toggle from icon) */}
-            {isMobileSearchOpen && (
+            {isSearchVisible && isMobileSearchOpen && (
                 <div className="mt-2 lg:hidden">
                     <div className="relative w-full">
                         <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                         <input
                             type="text"
-                            placeholder="Search books, authors, highlights..."
+                            placeholder={searchPlaceholder}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             autoFocus
@@ -260,21 +281,23 @@ export function AppTitlebar({
             )}
 
             {/* Search - Tablet layouts (hidden on phone sizes) */}
-            <div className="mt-2 hidden sm:block lg:hidden">
-                <div className="relative w-full">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
-                    <input
-                        type="text"
-                        placeholder="Search books, authors, highlights..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className={cn(
-                            "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-xl",
-                            "min-h-[var(--control-height-md)]"
-                        )}
-                    />
+            {isSearchVisible && (
+                <div className="mt-2 hidden sm:block lg:hidden">
+                    <div className="relative w-full">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
+                        <input
+                            type="text"
+                            placeholder={searchPlaceholder}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className={cn(
+                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-xl",
+                                "min-h-[var(--control-height-md)]"
+                            )}
+                        />
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

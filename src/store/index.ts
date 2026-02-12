@@ -92,7 +92,11 @@ export const useUIStore = create<UIStore>((set) => ({
     error: undefined,
 
     setRoute: (route, bookId) =>
-        set({ currentRoute: route, currentBookId: bookId }),
+        set({
+            currentRoute: route,
+            currentBookId: bookId,
+            searchQuery: "",
+        }),
     toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
     setSearchQuery: (query) => set({ searchQuery: query }),
     setSelectedBooks: (bookIds) => set({ selectedBooks: bookIds }),

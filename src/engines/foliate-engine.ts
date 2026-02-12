@@ -32,7 +32,26 @@ import {
     getThemeColors,
 } from '@/lib/reader-styles';
 import { HIGHLIGHT_SOLID_COLORS } from "@/lib/design-tokens";
+import { rankByFuzzyQuery } from "@/lib/search/fuzzy";
 import { normalizeAuthor } from '@/lib/utils';
+
+const READER_SEARCH_EXACT_LIMIT = 120;
+const READER_SEARCH_FALLBACK_TRIGGER_THRESHOLD = 3;
+const READER_SEARCH_FALLBACK_LIMIT = 12;
+const READER_SEARCH_FALLBACK_MAX_SECTIONS = 300;
+const READER_SEARCH_FALLBACK_SECTION_CHAR_LIMIT = 8000;
+const READER_SEARCH_EXCERPT_CONTEXT_CHARS = 80;
+
+interface ReaderSearchExcerpt {
+    pre?: string;
+    match?: string;
+    post?: string;
+}
+
+interface ReaderSearchSectionCacheItem {
+    cfi: string;
+    text: string;
+}
 
 export interface FoliateEngineOptions {
     onLocationChange?: (location: DocLocation) => void;
@@ -77,6 +96,8 @@ export class FoliateEngine {
     // CFI cache to avoid re-parsing
     private cfiCache = new Map<string, string>();
     private cfiCacheMaxSize = 100;
+    private searchSectionCache: ReaderSearchSectionCacheItem[] | null = null;
+    private searchCacheBookRef: unknown = null;
 
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
@@ -125,6 +146,8 @@ export class FoliateEngine {
             }
             
             this.book = await makeBook(file);
+            this.searchSectionCache = null;
+            this.searchCacheBookRef = this.book;
 
             // Create foliate-view element
             this.view = document.createElement('foliate-view');
@@ -1103,33 +1126,252 @@ export class FoliateEngine {
 
     // Search
     async *search(query: string): AsyncGenerator<SearchResult | { progress: number } | 'done'> {
-        if (!this.book) return;
+        if (!this.book || !this.view) return;
 
-        const sections = this.book.sections || [];
-        const totalSections = sections.length;
+        const normalizedQuery = query.trim();
+        if (!normalizedQuery) {
+            yield 'done';
+            return;
+        }
 
-        for (let i = 0; i < totalSections; i++) {
-            const section = sections[i];
-            try {
-                const doc = await section.createDocument?.();
-                if (doc) {
-                    const textContent = doc.body?.textContent || '';
-                    const index = textContent.toLowerCase().indexOf(query.toLowerCase());
-                    if (index !== -1) {
+        let exactMatchCount = 0;
+        const yieldedCFIs = new Set<string>();
+
+        try {
+            const searchIterator = this.view.search({
+                query: normalizedQuery,
+                matchCase: false,
+                matchDiacritics: false,
+                matchWholeWords: false,
+            });
+
+            for await (const result of searchIterator) {
+                if (result === 'done') {
+                    break;
+                }
+
+                if (
+                    result
+                    && typeof result === 'object'
+                    && 'progress' in result
+                    && typeof result.progress === 'number'
+                ) {
+                    yield { progress: result.progress };
+                    continue;
+                }
+
+                if (!result || typeof result !== 'object') {
+                    continue;
+                }
+
+                if ('cfi' in result && typeof result.cfi === 'string' && result.cfi) {
+                    if (!yieldedCFIs.has(result.cfi)) {
+                        yieldedCFIs.add(result.cfi);
                         yield {
-                            cfi: `section-${i}`,
-                            excerpt: textContent.substring(index, index + 100),
+                            cfi: result.cfi,
+                            excerpt: this.normalizeSearchExcerpt((result as { excerpt?: unknown }).excerpt),
                         };
+                        exactMatchCount++;
                     }
                 }
-            } catch (e) {
-                console.warn('Search error in section', i, e);
-            }
 
-            yield { progress: (i + 1) / totalSections };
+                if ('subitems' in result && Array.isArray(result.subitems)) {
+                    for (const subitem of result.subitems) {
+                        if (!subitem || typeof subitem !== 'object') {
+                            continue;
+                        }
+                        if (!('cfi' in subitem) || typeof subitem.cfi !== 'string' || !subitem.cfi) {
+                            continue;
+                        }
+
+                        if (yieldedCFIs.has(subitem.cfi)) {
+                            continue;
+                        }
+
+                        yieldedCFIs.add(subitem.cfi);
+                        yield {
+                            cfi: subitem.cfi,
+                            excerpt: this.normalizeSearchExcerpt(
+                                (subitem as { excerpt?: unknown }).excerpt,
+                            ),
+                        };
+                        exactMatchCount++;
+
+                        if (exactMatchCount >= READER_SEARCH_EXACT_LIMIT) {
+                            break;
+                        }
+                    }
+                }
+
+                if (exactMatchCount >= READER_SEARCH_EXACT_LIMIT) {
+                    break;
+                }
+            }
+        } catch (error) {
+            console.warn('[FoliateEngine] Exact search failed:', error);
+        }
+
+        if (exactMatchCount === 0) {
+            const sectionNumber = Number(normalizedQuery);
+            const sections = this.book.sections || [];
+            const targetSectionIndex = sectionNumber - 1;
+            if (Number.isInteger(sectionNumber) && targetSectionIndex >= 0 && targetSectionIndex < sections.length) {
+                const cfi = this.view.getCFI?.(targetSectionIndex) || `section-${targetSectionIndex}`;
+                if (cfi && !yieldedCFIs.has(cfi)) {
+                    yieldedCFIs.add(cfi);
+                    const fallbackText = this.createSectionFallbackSearchText(
+                        sections[targetSectionIndex],
+                        targetSectionIndex,
+                    );
+                    yield {
+                        cfi,
+                        excerpt: fallbackText || `Page ${sectionNumber}`,
+                    };
+                    exactMatchCount++;
+                }
+            }
+        }
+
+        if (exactMatchCount < READER_SEARCH_FALLBACK_TRIGGER_THRESHOLD) {
+            const sectionCache = await this.getSearchSectionCache();
+            const fallbackResults = rankByFuzzyQuery(sectionCache, normalizedQuery, {
+                keys: [{ name: 'text', weight: 1 }],
+                limit: READER_SEARCH_FALLBACK_LIMIT,
+            });
+
+            for (const { item } of fallbackResults) {
+                if (yieldedCFIs.has(item.cfi)) {
+                    continue;
+                }
+
+                yieldedCFIs.add(item.cfi);
+                yield {
+                    cfi: item.cfi,
+                    excerpt: this.createSearchExcerpt(item.text, normalizedQuery),
+                };
+            }
         }
 
         yield 'done';
+    }
+
+    private normalizeSearchExcerpt(excerpt: unknown): string {
+        if (typeof excerpt === 'string') {
+            return excerpt;
+        }
+
+        if (excerpt && typeof excerpt === 'object') {
+            const parsedExcerpt = excerpt as ReaderSearchExcerpt;
+            const pre = parsedExcerpt.pre || '';
+            const match = parsedExcerpt.match || '';
+            const post = parsedExcerpt.post || '';
+            const normalized = `${pre}${match}${post}`.trim();
+            if (normalized) {
+                return normalized;
+            }
+        }
+
+        return '';
+    }
+
+    private createSearchExcerpt(sectionText: string, query: string): string {
+        const normalizedText = sectionText.replace(/\s+/g, ' ').trim();
+        if (!normalizedText) {
+            return '';
+        }
+
+        const queryIndex = normalizedText.toLowerCase().indexOf(query.toLowerCase());
+        if (queryIndex === -1) {
+            return normalizedText.slice(0, READER_SEARCH_EXCERPT_CONTEXT_CHARS * 2);
+        }
+
+        const excerptStart = Math.max(0, queryIndex - READER_SEARCH_EXCERPT_CONTEXT_CHARS);
+        const excerptEnd = Math.min(
+            normalizedText.length,
+            queryIndex + query.length + READER_SEARCH_EXCERPT_CONTEXT_CHARS,
+        );
+        const needsLeadingEllipsis = excerptStart > 0;
+        const needsTrailingEllipsis = excerptEnd < normalizedText.length;
+
+        return `${needsLeadingEllipsis ? '…' : ''}${normalizedText.slice(excerptStart, excerptEnd)}${needsTrailingEllipsis ? '…' : ''}`;
+    }
+
+    private async getSearchSectionCache(): Promise<ReaderSearchSectionCacheItem[]> {
+        if (!this.book || !this.view) {
+            return [];
+        }
+
+        if (this.searchSectionCache && this.searchCacheBookRef === this.book) {
+            return this.searchSectionCache;
+        }
+
+        const sections = this.book.sections || [];
+        const sectionCache: ReaderSearchSectionCacheItem[] = [];
+        const sectionsToCache = Math.min(sections.length, READER_SEARCH_FALLBACK_MAX_SECTIONS);
+
+        for (let i = 0; i < sectionsToCache; i++) {
+            const section = sections[i];
+            try {
+                const sectionDocument = await section.createDocument?.();
+                const rawText = sectionDocument?.body?.textContent || '';
+                const normalizedText = rawText.replace(/\s+/g, ' ').trim();
+                const cfi = this.view.getCFI?.(i) || `section-${i}`;
+                if (!cfi) {
+                    continue;
+                }
+
+                const sectionSearchText = normalizedText
+                    ? normalizedText.slice(0, READER_SEARCH_FALLBACK_SECTION_CHAR_LIMIT)
+                    : this.createSectionFallbackSearchText(section, i);
+                if (!sectionSearchText) {
+                    continue;
+                }
+
+                sectionCache.push({
+                    cfi,
+                    text: sectionSearchText,
+                });
+            } catch (error) {
+                console.warn('[FoliateEngine] Failed to cache section text for search:', i, error);
+            }
+        }
+
+        this.searchSectionCache = sectionCache;
+        this.searchCacheBookRef = this.book;
+        return sectionCache;
+    }
+
+    private createSectionFallbackSearchText(section: any, sectionIndex: number): string {
+        const sectionPositionLabel = this.isFixedLayoutFormat
+            ? `Page ${sectionIndex + 1}`
+            : `Section ${sectionIndex + 1}`;
+        const candidates = [
+            this.normalizeSectionSearchLabel(section?.id),
+            this.normalizeSectionSearchLabel(section?.href),
+            this.normalizeSectionSearchLabel(section?.name),
+            this.normalizeSectionSearchLabel(section?.label),
+            this.normalizeSectionSearchLabel(section?.filename),
+        ];
+        const parts = new Set<string>([sectionPositionLabel]);
+        for (const candidate of candidates) {
+            if (candidate) {
+                parts.add(candidate);
+            }
+        }
+        return Array.from(parts).join(' | ');
+    }
+
+    private normalizeSectionSearchLabel(value: unknown): string {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value
+            .replace(/^.*[\\/]/, '')
+            .replace(/[#?].*$/, '')
+            .replace(/\.[a-z0-9]{1,5}$/i, '')
+            .replace(/[_-]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
     }
 
     clearSearch(): void {
@@ -1772,6 +2014,8 @@ export class FoliateEngine {
             this.view.remove?.();
             this.view = null;
         }
+        this.searchSectionCache = null;
+        this.searchCacheBookRef = null;
         this.book = null;
         this.container = null;
     }

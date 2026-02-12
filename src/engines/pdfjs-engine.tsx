@@ -19,10 +19,11 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
 import { isTauri } from "@/lib/env";
+import { rankByFuzzyQuery } from "@/lib/search/fuzzy";
 import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import type { Annotation, HighlightColor, TocItem } from "@/types";
+import type { Annotation, HighlightColor, SearchResult, TocItem } from "@/types";
 import { PDFAnnotationLayer } from "@/components/reader/PDFAnnotationLayer";
 
 // Import CSS (our custom styles only, not pdf_viewer.css which conflicts)
@@ -96,6 +97,8 @@ export interface PDFJsEngineRef {
     rotateCounterClockwise: () => void;
     zoomFitPage: () => void;
     zoomFitWidth: () => void;
+    search: (query: string) => AsyncGenerator<SearchResult | { progress: number } | "done">;
+    clearSearch: () => void;
 }
 
 // Constants
@@ -114,6 +117,12 @@ const EMPTY_ANNOTATIONS: Annotation[] = [];
 const TEXT_LAYER_SELECTING_CLASS = "selecting";
 const WEBKIT_TEXT_LAYER_PAGE_WINDOW = 1;
 const DEBUG_WEBKIT_TEXT_LAYER = false;
+const PDF_SEARCH_EXACT_LIMIT = 120;
+const PDF_SEARCH_FALLBACK_TRIGGER_THRESHOLD = 3;
+const PDF_SEARCH_FALLBACK_LIMIT = 12;
+const PDF_SEARCH_FALLBACK_PAGE_CHAR_LIMIT = 8_000;
+const PDF_SEARCH_EXCERPT_CONTEXT_CHARS = 80;
+const PDF_SEARCH_EXACT_SCAN_PROGRESS_WEIGHT = 0.9;
 
 const activeTextLayers = new Map<HTMLDivElement, HTMLDivElement>();
 const pageTextContentCache = new Map<number, PageTextContent>();
@@ -450,6 +459,11 @@ interface TextItemLike {
 }
 type PageTextContent = Awaited<ReturnType<PDFPageProxy["getTextContent"]>>;
 
+interface PDFSearchPageItem {
+    pageNumber: number;
+    text: string;
+}
+
 function clearPageTextContentCache(): void {
     pageTextContentCache.clear();
 }
@@ -487,6 +501,48 @@ async function getPageTextContent(page: PDFPageProxy): Promise<PageTextContent> 
     }
 
     return textContent;
+}
+
+function getNormalizedPageText(textContent: PageTextContent): string {
+    const textItems = textContent.items as unknown as TextItemLike[];
+    const rawText = textItems
+        .map((item) => (typeof item?.str === "string" ? item.str : ""))
+        .join(" ");
+    return rawText.replace(/\s+/g, " ").trim();
+}
+
+function getPdfSearchLocation(pageNumber: number): string {
+    return `pdf:page:${pageNumber}`;
+}
+
+function createPdfSearchExcerpt(pageText: string, query: string, knownMatchIndex?: number): string {
+    const normalizedText = pageText.replace(/\s+/g, " ").trim();
+    if (!normalizedText) {
+        return "";
+    }
+
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) {
+        return normalizedText.slice(0, PDF_SEARCH_EXCERPT_CONTEXT_CHARS * 2);
+    }
+
+    const matchIndex = typeof knownMatchIndex === "number"
+        ? knownMatchIndex
+        : normalizedText.toLowerCase().indexOf(normalizedQuery.toLowerCase());
+
+    if (matchIndex === -1) {
+        return normalizedText.slice(0, PDF_SEARCH_EXCERPT_CONTEXT_CHARS * 2);
+    }
+
+    const excerptStart = Math.max(0, matchIndex - PDF_SEARCH_EXCERPT_CONTEXT_CHARS);
+    const excerptEnd = Math.min(
+        normalizedText.length,
+        matchIndex + normalizedQuery.length + PDF_SEARCH_EXCERPT_CONTEXT_CHARS,
+    );
+    const needsLeadingEllipsis = excerptStart > 0;
+    const needsTrailingEllipsis = excerptEnd < normalizedText.length;
+
+    return `${needsLeadingEllipsis ? "…" : ""}${normalizedText.slice(excerptStart, excerptEnd)}${needsTrailingEllipsis ? "…" : ""}`;
 }
 
 interface CanvasSizing {
@@ -1257,6 +1313,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const currentPageRef = useRef(initialPage);
         const totalPagesRef = useRef(0);
         const scaleRef = useRef(DEFAULT_SCALE);
+        const searchSessionRef = useRef(0);
         const isDesktopWebKit = useMemo(
             () => isTauri(),
             [],
@@ -1296,6 +1353,122 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             );
             return clampedScale;
         }, []);
+
+        const clearSearch = useCallback(() => {
+            searchSessionRef.current += 1;
+        }, []);
+
+        const search = useCallback(
+            async function* (
+                query: string,
+            ): AsyncGenerator<SearchResult | { progress: number } | "done"> {
+                const normalizedQuery = query.trim();
+                if (!normalizedQuery) {
+                    yield "done";
+                    return;
+                }
+
+                const activePdfDocument = pdfDocument;
+                if (!activePdfDocument) {
+                    yield "done";
+                    return;
+                }
+
+                searchSessionRef.current += 1;
+                const sessionId = searchSessionRef.current;
+                const normalizedQueryLower = normalizedQuery.toLowerCase();
+                const yieldedLocations = new Set<string>();
+                const searchablePages: PDFSearchPageItem[] = [];
+                let exactMatchCount = 0;
+                const totalPageCount = Math.max(1, activePdfDocument.numPages);
+
+                for (let pageNumber = 1; pageNumber <= totalPageCount; pageNumber++) {
+                    if (searchSessionRef.current !== sessionId) {
+                        return;
+                    }
+
+                    let pageText = "";
+                    try {
+                        const page = await activePdfDocument.getPage(pageNumber);
+                        const pageTextContent = await getPageTextContent(page);
+                        pageText = getNormalizedPageText(pageTextContent);
+                    } catch (error) {
+                        console.warn("[PDFJsEngine] Failed to read page text for search:", pageNumber, error);
+                    }
+
+                    if (pageText) {
+                        const boundedPageText = pageText.slice(0, PDF_SEARCH_FALLBACK_PAGE_CHAR_LIMIT);
+                        searchablePages.push({
+                            pageNumber,
+                            text: boundedPageText,
+                        });
+
+                        const matchIndex = pageText.toLowerCase().indexOf(normalizedQueryLower);
+                        if (matchIndex !== -1) {
+                            const location = getPdfSearchLocation(pageNumber);
+                            if (!yieldedLocations.has(location)) {
+                                yieldedLocations.add(location);
+                                exactMatchCount += 1;
+                                yield {
+                                    cfi: location,
+                                    excerpt: createPdfSearchExcerpt(pageText, normalizedQuery, matchIndex),
+                                };
+                            }
+                        }
+                    }
+
+                    yield {
+                        progress: (pageNumber / totalPageCount) * PDF_SEARCH_EXACT_SCAN_PROGRESS_WEIGHT,
+                    };
+
+                    if (exactMatchCount >= PDF_SEARCH_EXACT_LIMIT) {
+                        break;
+                    }
+                }
+
+                if (searchSessionRef.current !== sessionId) {
+                    return;
+                }
+
+                if (exactMatchCount < PDF_SEARCH_FALLBACK_TRIGGER_THRESHOLD && searchablePages.length > 0) {
+                    const fuzzyResults = rankByFuzzyQuery(searchablePages, normalizedQuery, {
+                        keys: [{ name: "text", weight: 1 }],
+                        limit: PDF_SEARCH_FALLBACK_LIMIT,
+                    });
+                    const fallbackResultCount = Math.max(1, fuzzyResults.length);
+                    let fallbackResultIndex = 0;
+
+                    for (const { item } of fuzzyResults) {
+                        if (searchSessionRef.current !== sessionId) {
+                            return;
+                        }
+
+                        fallbackResultIndex += 1;
+                        const location = getPdfSearchLocation(item.pageNumber);
+                        if (!yieldedLocations.has(location)) {
+                            yieldedLocations.add(location);
+                            yield {
+                                cfi: location,
+                                excerpt: createPdfSearchExcerpt(item.text, normalizedQuery),
+                            };
+                        }
+
+                        yield {
+                            progress: PDF_SEARCH_EXACT_SCAN_PROGRESS_WEIGHT
+                                + ((fallbackResultIndex / fallbackResultCount)
+                                    * (1 - PDF_SEARCH_EXACT_SCAN_PROGRESS_WEIGHT)),
+                        };
+                    }
+                }
+
+                if (searchSessionRef.current !== sessionId) {
+                    return;
+                }
+
+                yield "done";
+            },
+            [pdfDocument],
+        );
 
         const handleViewportClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
             if (!onViewportTap || isLoading || !!error || annotationMode !== "none") {
@@ -1359,6 +1532,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     setError(null);
                     setPages([]);
                     clearPageTextContentCache();
+                    searchSessionRef.current += 1;
                     hasAppliedInitialFitRef.current = false;
 
                     // Get PDF data
@@ -1470,6 +1644,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 loadedPdf?.destroy();
                 setPdfDocument(null);
                 clearPageTextContentCache();
+                searchSessionRef.current += 1;
             };
             // Only reload when pdfPath, pdfData, or initialPage changes
             // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1752,7 +1927,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
                 applyZoom(newScale);
             },
-        }), [applyZoom, currentPage, pages.length, scrollToPage, totalPages]);
+            search: (query: string) => search(query),
+            clearSearch: () => clearSearch(),
+        }), [applyZoom, clearSearch, currentPage, pages.length, scrollToPage, search, totalPages]);
 
         const displayError = error?.replace(/\s+/g, " ").trim();
 

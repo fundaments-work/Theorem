@@ -5,6 +5,7 @@
 
 import { useState, useMemo } from "react";
 import { cn, normalizeAuthor } from "@/lib/utils";
+import { rankByFuzzyQuery } from "@/lib/search/fuzzy";
 import { useLibraryStore, useUIStore, useSettingsStore } from "@/store";
 import { ShelfModal } from "@/components/modals";
 import { getShelfColor, getShelfInitials } from "@/lib/shelf-colors";
@@ -539,13 +540,25 @@ export function ShelvesPage() {
 
     // Filter shelves by search query
     const filteredShelves = useMemo(() => {
-        if (!searchQuery.trim()) return collections;
-        const q = searchQuery.toLowerCase();
-        return collections.filter(
-            (s) =>
-                s.name.toLowerCase().includes(q) ||
-                s.description?.toLowerCase().includes(q)
+        if (!searchQuery.trim()) {
+            return collections;
+        }
+
+        const rankedShelves = rankByFuzzyQuery(
+            collections.map((shelf) => ({
+                shelf,
+                name: shelf.name,
+                description: shelf.description || "",
+            })),
+            searchQuery,
+            {
+                keys: [
+                    { name: "name", weight: 0.65 },
+                    { name: "description", weight: 0.35 },
+                ],
+            },
         );
+        return rankedShelves.map(({ item }) => item.shelf);
     }, [collections, searchQuery]);
 
     // Helper to get actual books count (excluding deleted books)

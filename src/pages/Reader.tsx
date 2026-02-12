@@ -1439,7 +1439,7 @@ export function ReaderPage() {
                 }}
             />
 
-            {/* Reader-only panels */}
+            {/* Reader settings/info panels */}
             {!isPdfFormat && (
                 <>
                     <ReaderSettings
@@ -1450,14 +1450,6 @@ export function ReaderPage() {
                         format={getBook(currentBookId || '')?.format}
                     />
 
-                    <ReaderSearch
-                        visible={activePanel === 'search'}
-                        onClose={() => setActivePanel(null)}
-                        onNavigate={goTo}
-                        onSearch={(q) => readerRef.current?.search(q) || (async function* () { })()}
-                        onClearSearch={() => readerRef.current?.clearSearch()}
-                    />
-
                     <BookInfoPopover
                         metadata={metadata}
                         visible={activePanel === 'info'}
@@ -1465,6 +1457,30 @@ export function ReaderPage() {
                     />
                 </>
             )}
+
+            {/* Search panel available for EPUB/PDF */}
+            <ReaderSearch
+                visible={activePanel === 'search'}
+                onClose={() => setActivePanel(null)}
+                onNavigate={goTo}
+                onSearch={(q) => {
+                    if (isPdfFormat) {
+                        return pdfReaderRef.current?.search(q) || (async function* () {
+                            yield 'done' as const;
+                        })();
+                    }
+                    return readerRef.current?.search(q) || (async function* () {
+                        yield 'done' as const;
+                    })();
+                }}
+                onClearSearch={() => {
+                    if (isPdfFormat) {
+                        pdfReaderRef.current?.clearSearch();
+                        return;
+                    }
+                    readerRef.current?.clearSearch();
+                }}
+            />
 
             {/* Highlight Color Picker Popup - only for non-PDF formats */}
             {!isPdfFormat && (

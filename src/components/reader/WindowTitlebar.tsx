@@ -51,7 +51,7 @@ interface WindowTitlebarProps {
     fullscreen?: boolean;
     onToggleFullscreen?: () => void;
     className?: string;
-    /** When true, hides reader-specific controls (TOC, search, bookmarks, settings) - used for PDFs */
+    /** When true, switches the center toolbar to PDF-specific controls */
     hideReaderControls?: boolean;
     /** PDF-specific controls - only used when hideReaderControls is true */
     pdfControls?: {
@@ -433,6 +433,18 @@ export function WindowTitlebar({
                         title="Table of contents"
                     >
                         <List className="w-4 h-4" />
+                    </button>
+
+                    <button
+                        onClick={onToggleSearch}
+                        className={cn(
+                            ICON_BUTTON_CLASS,
+                            activePanel === "search" ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
+                        )}
+                        style={{ color: 'var(--reader-fg)' }}
+                        title="Search in document"
+                    >
+                        <Search className="w-4 h-4" />
                     </button>
 
                     <button
