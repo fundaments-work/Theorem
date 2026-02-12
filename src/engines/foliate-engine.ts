@@ -19,14 +19,11 @@ import type {
     PageLayout,
     ThemeSettings,
     ReaderTheme,
-    ReaderSettings,
     BookFormat,
 } from '@/types';
 import { isFixedLayout, isReflowable } from '@/types';
 import { getTheme } from '@/foliate/themes';
 import { 
-    getEngineSettings, 
-    createReaderCSS, 
     registerEngineStyleCallback,
     getCurrentReaderSettings,
     getThemeColors,
@@ -203,9 +200,6 @@ export class FoliateEngine {
             // Apply settings synchronously where possible
             this.applySettingsSync();
             
-            // Apply CSS with current settings to all iframes
-            this.applyCSSToAllIframes();
-            
             // Async settings application
             await this.applySettingsAsync();
 
@@ -264,9 +258,6 @@ export class FoliateEngine {
             if (detail?.doc?.documentElement) {
                 // Apply zoom immediately
                 detail.doc.documentElement.style.zoom = String(this.zoom_level);
-                
-                // Inject CSS with current settings
-                this.injectCSSIntoIframe(detail.doc);
             }
         });
 
@@ -295,12 +286,44 @@ export class FoliateEngine {
                 }
             }
             
-            // Clamp fraction to valid range [0, 1] to prevent invalid progress values
-            // The fraction from view.js is the global book fraction (not section fraction)
+            const pageInfo = detail.location ? {
+                currentPage: detail.location.current + 1,
+                endPage: detail.location.next + 1,
+                totalPages: detail.location.total,
+                range:
+                    detail.location.current !== detail.location.next
+                        ? `${detail.location.current + 1}-${detail.location.next + 1}`
+                        : `${detail.location.current + 1}`,
+                isEstimated: true,
+            } : undefined;
+
+            // Clamp fraction to valid range [0, 1].
+            // Prefer foliate's global fraction, but derive a robust fallback when it is missing.
             const rawFraction = detail.fraction;
-            const fraction = typeof rawFraction === 'number' && isFinite(rawFraction)
+            let fraction = typeof rawFraction === 'number' && isFinite(rawFraction)
                 ? Math.max(0, Math.min(1, rawFraction))
-                : 0;
+                : NaN;
+            if (!isFinite(fraction)) {
+                if (pageInfo && pageInfo.totalPages > 1) {
+                    fraction = Math.max(
+                        0,
+                        Math.min(1, (pageInfo.currentPage - 1) / (pageInfo.totalPages - 1)),
+                    );
+                } else if (
+                    typeof detail.section?.current === 'number'
+                    && detail.section.current >= 0
+                    && this.sectionFractions.length > detail.section.current + 1
+                ) {
+                    const start = this.sectionFractions[detail.section.current];
+                    const end = this.sectionFractions[detail.section.current + 1];
+                    if (isFinite(start) && isFinite(end)) {
+                        fraction = Math.max(0, Math.min(1, (start + end) / 2));
+                    }
+                }
+            }
+            if (!isFinite(fraction)) {
+                fraction = this.currentLocation?.percentage ?? 0;
+            }
             
             console.debug('[FoliateEngine] Relocate event:', {
                 section: detail.section?.current,
@@ -314,11 +337,7 @@ export class FoliateEngine {
                 percentage: fraction,
                 tocItem: detail.tocItem,
                 pageItem: detail.pageItem,
-                pageInfo: detail.location ? {
-                    currentPage: detail.location.current + 1,
-                    endPage: detail.location.next + 1,
-                    totalPages: detail.location.total,
-                } : undefined,
+                pageInfo,
             };
 
             this.currentLocation = location;
@@ -484,48 +503,8 @@ export class FoliateEngine {
         // Update internal theme reference
         this.theme = currentSettings.theme;
         
-        // Apply CSS to all iframes
-        this.applyCSSToAllIframes();
-        
         // Schedule async settings update for things that need foliate's renderer
         this.scheduleSettingsUpdate();
-    }
-
-    /**
-     * Apply CSS with current settings to all iframes
-     */
-    private applyCSSToAllIframes(): void {
-        if (!this.view?.renderer) return;
-        
-        const currentSettings = getCurrentReaderSettings();
-        if (!currentSettings) return;
-        
-        const contents = this.view.renderer.getContents?.() || [];
-        for (const content of contents) {
-            const doc = content.doc;
-            if (doc) {
-                this.injectCSSIntoIframe(doc, currentSettings);
-            }
-        }
-    }
-
-    /**
-     * Inject CSS with current settings into an iframe document
-     */
-    private injectCSSIntoIframe(doc: Document, settings?: ReaderSettings | null): void {
-        const s = settings || getCurrentReaderSettings();
-        if (!s) return;
-        
-        // Find or create the style element
-        let style = doc.getElementById('theorem-reader-styles') as HTMLStyleElement;
-        if (!style) {
-            style = doc.createElement('style');
-            style.id = 'theorem-reader-styles';
-            doc.head?.appendChild(style);
-        }
-        
-        // Update the CSS content with current values
-        style.textContent = createReaderCSS(s);
     }
 
     private extractMetadata(): DocMetadata {
@@ -576,15 +555,26 @@ export class FoliateEngine {
         if (!this.view?.renderer) return;
 
         const renderer = this.view.renderer;
+        const currentSettings = getCurrentReaderSettings();
         
         // These can be applied synchronously
         renderer.setAttribute('flow', this.flow === 'scroll' ? 'scrolled' : 'paginated');
         renderer.setAttribute('gap', '5%');
+        renderer.setAttribute(
+            'max-inline-size',
+            `${currentSettings?.fontSize ? Math.max(480, currentSettings.fontSize * 40) : 720}px`,
+        );
+        renderer.setAttribute('max-block-size', '800px');
         // Auto layout: use double columns for paged mode on larger screens, single for scroll or small screens
         const columnCount = this.layout === 'single' ? 1 : 
                            this.layout === 'double' ? 2 :
                            this.flow === 'scroll' ? 1 : 2; // auto: 2 columns for paged, 1 for scroll
         renderer.setAttribute('max-column-count', columnCount);
+        if (currentSettings?.enableAnimations) {
+            renderer.setAttribute('animated', '');
+        } else {
+            renderer.removeAttribute('animated');
+        }
         
         // Apply zoom synchronously to existing contents
         this.applyZoomSync();
@@ -608,6 +598,7 @@ export class FoliateEngine {
 
         const readerStyle = {
             spacing: currentSettings.lineHeight,
+            lineHeight: currentSettings.lineHeight,
             justify: currentSettings.textAlign === 'justify',
             hyphenate: currentSettings.hyphenation,
             invert: false,
@@ -727,7 +718,12 @@ export class FoliateEngine {
             `;
             
             const foliateCSS = getCSS(readerStyle);
-            renderer.setStyles([customCSS, ...foliateCSS]);
+            if (Array.isArray(foliateCSS)) {
+                const [beforeStyle = '', style = ''] = foliateCSS;
+                renderer.setStyles([beforeStyle, `${style}\n${customCSS}`]);
+            } else {
+                renderer.setStyles(`${foliateCSS}\n${customCSS}`);
+            }
         }
     }
 
@@ -924,14 +920,6 @@ export class FoliateEngine {
      * Apply theme/settings - optimized with batching
      */
     applyTheme(settings: ThemeSettings): void {
-        const currentSettings = getCurrentReaderSettings();
-        const hadChanges = 
-            currentSettings?.fontSize !== settings.fontSize ||
-            currentSettings?.lineHeight !== settings.lineHeight ||
-            currentSettings?.textAlign !== settings.textAlign ||
-            currentSettings?.hyphenation !== settings.hyphenation ||
-            currentSettings?.forcePublisherStyles !== settings.forcePublisherStyles;
-        
         this.settings = settings;
         
         if (settings.flow) {
@@ -940,18 +928,13 @@ export class FoliateEngine {
         }
         if (settings.layout) this.layout = settings.layout;
         if (settings.zoom) this.zoom_level = this.clampZoomLevel(settings.zoom / 100);
-        
-        if (hadChanges) {
-            this.scheduleSettingsUpdate();
-        }
+
+        this.scheduleSettingsUpdate();
         
         // Apply zoom immediately if changed
         if (settings.zoom) {
             this.applyZoomSync();
         }
-        
-        // Apply CSS to all iframes with new settings
-        this.applyCSSToAllIframes();
     }
 
     setTheme(theme: ReaderTheme): void {

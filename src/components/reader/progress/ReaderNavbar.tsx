@@ -72,41 +72,78 @@ export const ReaderNavbar = memo(function ReaderNavbar({
     const [dragFraction, setDragFraction] = useState<number | null>(null);
     const trackRef = useRef<HTMLDivElement>(null);
 
-    // Current progress (0-1)
-    const progress = location?.percentage ?? 0;
+    const normalizedSectionFractions = useMemo(() => {
+        if (sectionFractions.length === 0) {
+            return [];
+        }
+
+        const normalized: number[] = [];
+        let last = -1;
+        for (const fraction of sectionFractions) {
+            if (!Number.isFinite(fraction)) {
+                continue;
+            }
+            const clamped = Math.max(0, Math.min(1, fraction));
+            if (clamped + 1e-6 < last) {
+                continue;
+            }
+            if (Math.abs(clamped - last) < 1e-4) {
+                continue;
+            }
+            normalized.push(clamped);
+            last = clamped;
+        }
+        return normalized;
+    }, [sectionFractions]);
+
+    // Current progress (0-1).
+    // Prefer page-based progress when available for paginated flow consistency.
+    const progress = useMemo(() => {
+        const percentage = typeof location?.percentage === "number" && Number.isFinite(location.percentage)
+            ? Math.max(0, Math.min(1, location.percentage))
+            : 0;
+        const pageInfo = location?.pageInfo;
+        if (pageInfo && pageInfo.totalPages > 1) {
+            const pageFraction = (pageInfo.currentPage - 1) / (pageInfo.totalPages - 1);
+            if (Number.isFinite(pageFraction)) {
+                return Math.max(0, Math.min(1, pageFraction));
+            }
+        }
+        return percentage;
+    }, [location?.percentage, location?.pageInfo?.currentPage, location?.pageInfo?.totalPages]);
 
     // Display fraction (drag position takes precedence when dragging)
     const displayFraction = isDragging && dragFraction !== null ? dragFraction : progress;
+
+    const getSectionLabelForFraction = useCallback((fraction: number): string | null => {
+        if (toc.length === 0) {
+            return null;
+        }
+        if (normalizedSectionFractions.length === 0) {
+            return toc[0]?.label ?? null;
+        }
+        for (let i = normalizedSectionFractions.length - 1; i >= 0; i--) {
+            if (normalizedSectionFractions[i] <= fraction) {
+                const tocIndex = Math.max(0, Math.min(i, toc.length - 1));
+                return toc[tocIndex]?.label ?? null;
+            }
+        }
+        return toc[0]?.label ?? null;
+    }, [toc, normalizedSectionFractions]);
 
     // Current section label
     const currentSectionLabel = useMemo(() => {
         if (location?.tocItem?.label) {
             return location.tocItem.label;
         }
-        // Fallback: find section from TOC based on progress
-        if (toc.length > 0 && sectionFractions.length > 0) {
-            for (let i = sectionFractions.length - 1; i >= 0; i--) {
-                if (sectionFractions[i] <= progress) {
-                    return toc[i]?.label ?? "";
-                }
-            }
-            return toc[0]?.label ?? "";
-        }
-        return "";
-    }, [location?.tocItem?.label, toc, sectionFractions, progress]);
+        return getSectionLabelForFraction(progress) ?? "";
+    }, [location?.tocItem?.label, getSectionLabelForFraction, progress]);
 
     // Hovered section label (for tooltip)
     const hoveredSectionLabel = useMemo(() => {
         if (hoverFraction === null) return null;
-        if (toc.length === 0 || sectionFractions.length === 0) return null;
-
-        for (let i = sectionFractions.length - 1; i >= 0; i--) {
-            if (sectionFractions[i] <= hoverFraction) {
-                return toc[i]?.label ?? null;
-            }
-        }
-        return toc[0]?.label ?? null;
-    }, [hoverFraction, toc, sectionFractions]);
+        return getSectionLabelForFraction(hoverFraction);
+    }, [hoverFraction, getSectionLabelForFraction]);
 
     // Time remaining estimate
     const timeRemaining = useMemo(() => {
@@ -189,13 +226,15 @@ export const ReaderNavbar = memo(function ReaderNavbar({
 
     // Section markers - memoized to prevent re-renders
     const sectionMarkers = useMemo(() => {
-        if (sectionFractions.length === 0) return null;
+        if (normalizedSectionFractions.length === 0) return null;
 
-        return sectionFractions.map((fraction, index) => {
+        return normalizedSectionFractions.map((fraction, index) => {
             // Skip first marker at 0%
             if (fraction < 0.01) return null;
+            // Skip last marker at 100%
+            if (fraction > 0.99) return null;
             // Skip markers too close together (< 2%)
-            if (index > 0 && fraction - sectionFractions[index - 1] < 0.02) return null;
+            if (index > 0 && fraction - normalizedSectionFractions[index - 1] < 0.02) return null;
 
             return (
                 <div
@@ -205,7 +244,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                 />
             );
         });
-    }, [sectionFractions]);
+    }, [normalizedSectionFractions]);
 
     // Tooltip content
     const tooltipContent = useMemo(() => {

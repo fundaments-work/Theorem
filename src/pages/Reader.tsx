@@ -758,13 +758,6 @@ export function ReaderPage() {
         setLoadError(err.message);
     }, []);
 
-    const handleViewportTap = useCallback(() => {
-        if (!isMobileViewport || activePanel) {
-            return;
-        }
-        setShowToolbar((previous) => !previous);
-    }, [activePanel, isMobileViewport]);
-
     const handleZoomGestureChange = useCallback((zoom: number) => {
         const clampedZoom = clampReaderZoomByFlow(zoom, settings.readerSettings.flow);
         if (readerZoomRef.current === clampedZoom) {
@@ -816,6 +809,25 @@ export function ReaderPage() {
     const [noteEditorPosition, setNoteEditorPosition] = useState({ x: 0, y: 0 });
     const [editingNote, setEditingNote] = useState('');
     const [pendingHighlightColor, setPendingHighlightColor] = useState<HighlightColor>('yellow');
+
+    const handleViewportTap = useCallback(() => {
+        if (showColorPicker || showNoteEditor) {
+            setShowColorPicker(false);
+            setShowNoteEditor(false);
+            setEditingHighlightId(null);
+            setActiveAnnotation(null);
+            setSelectedText('');
+            setSelectedCfi('');
+            setEditingNote('');
+            readerRef.current?.clearSelection?.();
+            return;
+        }
+
+        if (!isMobileViewport || activePanel) {
+            return;
+        }
+        setShowToolbar((previous) => !previous);
+    }, [activePanel, isMobileViewport, showColorPicker, showNoteEditor]);
 
     const addAnnotation = useLibraryStore((state) => state.addAnnotation);
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);

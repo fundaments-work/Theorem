@@ -789,7 +789,7 @@ export function WindowTitlebar({
                                 "disabled:opacity-30 disabled:cursor-not-allowed",
                             )}
                             style={{ color: 'var(--reader-fg)' }}
-                            title="Previous section"
+                            title="Previous page"
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </button>
@@ -803,7 +803,7 @@ export function WindowTitlebar({
                                 "disabled:opacity-30 disabled:cursor-not-allowed",
                             )}
                             style={{ color: 'var(--reader-fg)' }}
-                            title="Next section"
+                            title="Next page"
                         >
                             <ChevronRight className="w-4 h-4" />
                         </button>
