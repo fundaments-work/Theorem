@@ -2,12 +2,15 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
+const LONG_PRESS_DURATION_MS = 420;
+const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
+
 export interface ContextMenuItem {
     id: string;
     label: string;
     icon?: React.ReactNode;
     shortcut?: string;
-    onClick: () => void;
+    onClick?: () => void;
     disabled?: boolean;
     separator?: boolean;
     danger?: boolean;
@@ -28,17 +31,78 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLDivElement>(null);
+    const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const longPressTriggeredRef = useRef(false);
+    const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+    const clearLongPress = useCallback(() => {
+        if (longPressTimeoutRef.current) {
+            clearTimeout(longPressTimeoutRef.current);
+            longPressTimeoutRef.current = null;
+        }
+    }, []);
+
+    const openMenuAt = useCallback((x: number, y: number) => {
+        setPosition({ x, y });
+        setIsOpen(true);
+    }, []);
 
     const handleContextMenu = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        
-        // Calculate position to keep menu on screen
-        const x = e.clientX;
-        const y = e.clientY;
-        
-        setPosition({ x, y });
-        setIsOpen(true);
+
+        openMenuAt(e.clientX, e.clientY);
+    }, [openMenuAt]);
+
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        if (e.touches.length !== 1) {
+            return;
+        }
+
+        const touch = e.touches[0];
+        const touchX = touch.clientX;
+        const touchY = touch.clientY;
+        touchStartRef.current = { x: touchX, y: touchY };
+        longPressTriggeredRef.current = false;
+        clearLongPress();
+
+        longPressTimeoutRef.current = setTimeout(() => {
+            longPressTriggeredRef.current = true;
+            openMenuAt(touchX, touchY);
+        }, LONG_PRESS_DURATION_MS);
+    }, [clearLongPress, openMenuAt]);
+
+    const handleTouchMove = useCallback((e: React.TouchEvent) => {
+        if (!touchStartRef.current || e.touches.length !== 1) {
+            clearLongPress();
+            return;
+        }
+
+        const touch = e.touches[0];
+        const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
+        const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+
+        if (deltaX > LONG_PRESS_MOVE_TOLERANCE_PX || deltaY > LONG_PRESS_MOVE_TOLERANCE_PX) {
+            clearLongPress();
+        }
+    }, [clearLongPress]);
+
+    const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+        clearLongPress();
+        touchStartRef.current = null;
+
+        if (longPressTriggeredRef.current) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, [clearLongPress]);
+
+    const handleClickCapture = useCallback((e: React.MouseEvent) => {
+        if (longPressTriggeredRef.current) {
+            e.preventDefault();
+            e.stopPropagation();
+            longPressTriggeredRef.current = false;
+        }
     }, []);
 
     const handleClickOutside = useCallback((e: MouseEvent) => {
@@ -62,6 +126,12 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
             document.removeEventListener("keydown", handleKeyDown);
         };
     }, [isOpen, handleClickOutside]);
+
+    useEffect(() => {
+        return () => {
+            clearLongPress();
+        };
+    }, [clearLongPress]);
 
     // Adjust position to keep menu on screen
     useEffect(() => {
@@ -87,8 +157,8 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
     }, [isOpen, position]);
 
     const handleItemClick = (item: ContextMenuItem) => {
-        if (!item.disabled) {
-            item.onClick();
+        if (!item.disabled && !item.separator) {
+            item.onClick?.();
             setIsOpen(false);
         }
     };
@@ -116,12 +186,21 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                     top: position.y,
                 }}
             >
-                {items.map((item, index) => (
-                    <div key={item.id}>
-                        {item.separator && index > 0 && (
-                            <div className="my-1 border-t border-[var(--color-border)]" />
-                        )}
+                {items.map((item, index) => {
+                    if (item.separator) {
+                        const hasActionBefore = items.slice(0, index).some((entry) => !entry.separator);
+                        const hasActionAfter = items.slice(index + 1).some((entry) => !entry.separator);
+                        if (!hasActionBefore || !hasActionAfter) {
+                            return null;
+                        }
+                        return (
+                            <div key={item.id} className="my-1 border-t border-[var(--color-border)]" />
+                        );
+                    }
+
+                    return (
                         <button
+                            key={item.id}
                             onClick={() => handleItemClick(item)}
                             disabled={item.disabled}
                             className={cn(
@@ -146,8 +225,8 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                                 </span>
                             )}
                         </button>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </>
     ) : null;
@@ -156,6 +235,11 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
         <div
             ref={triggerRef}
             onContextMenu={handleContextMenu}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+            onClickCapture={handleClickCapture}
             className={className}
         >
             {children}

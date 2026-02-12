@@ -587,7 +587,7 @@ export function ReaderPage() {
             return;
         }
 
-        const result = markBookCompleted(bookId);
+        const result = markBookCompleted(bookId, "auto");
         if (!result || result.wasAlreadyCompleted) {
             return;
         }

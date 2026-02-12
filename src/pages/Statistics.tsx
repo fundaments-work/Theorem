@@ -232,10 +232,20 @@ export function StatisticsPage() {
     const { stats } = useSettingsStore();
     const { setRoute } = useUIStore();
 
+    function isBookCompleted(book: (typeof books)[number]) {
+        if (book.manualCompletionState === "read") {
+            return true;
+        }
+        if (book.manualCompletionState === "unread") {
+            return false;
+        }
+        return !!book.completedAt || book.progress >= 0.99;
+    }
+
     // Calculate statistics
     const totalBooks = books.length;
-    const completedBooks = books.filter((b) => b.progress >= 0.99).length;
-    const inProgressBooks = books.filter((b) => b.progress > 0 && b.progress < 0.99).length;
+    const completedBooks = books.filter((book) => isBookCompleted(book)).length;
+    const inProgressBooks = books.filter((book) => !isBookCompleted(book) && book.progress > 0).length;
     const totalHighlights = annotations.filter((a) => a.type === "highlight").length;
     const totalNotes = annotations.filter((a) => a.type === "note").length;
     const totalBookmarks = annotations.filter((a) => a.type === "bookmark").length;
@@ -497,4 +507,3 @@ export function StatisticsPage() {
         </div>
     );
 }
-

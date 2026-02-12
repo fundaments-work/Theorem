@@ -136,6 +136,8 @@ interface CachedBookMetadata {
     lastReadAt: Date;
 }
 
+type CompletionUpdateSource = "auto" | "manual";
+
 // Helper to create cache entry from book
 const createCacheEntry = (book: Book): CachedBookMetadata => ({
     id: book.id,
@@ -220,7 +222,11 @@ interface LibraryStore {
     addReadingTime: (bookId: string, minutes: number) => void;
     
     // Book completion
-    markBookCompleted: (bookId: string) => { wasAlreadyCompleted: boolean; completedYear: number } | null;
+    markBookCompleted: (
+        bookId: string,
+        source?: CompletionUpdateSource,
+    ) => { wasAlreadyCompleted: boolean; completedYear: number } | null;
+    markBookUnread: (bookId: string) => boolean;
 
     // Collection actions
     addCollection: (collection: Collection) => void;
@@ -393,9 +399,14 @@ export const useLibraryStore = create<LibraryStore>()(
                 }),
 
             // Book completion
-            markBookCompleted: (bookId) => {
+            markBookCompleted: (bookId, source = "manual") => {
                 const book = get().books.find((b) => b.id === bookId);
                 if (!book) return null;
+
+                // Respect explicit manual unread override for automatic completion.
+                if (source === "auto" && book.manualCompletionState === "unread") {
+                    return null;
+                }
 
                 const now = new Date();
                 const currentYear = now.getFullYear();
@@ -409,18 +420,83 @@ export const useLibraryStore = create<LibraryStore>()(
                     completedYear = completedDate.getFullYear();
                 }
 
-                // Only update if not already completed
-                if (!wasAlreadyCompleted) {
-                    set((state) => ({
-                        books: state.books.map((b) =>
-                            b.id === bookId
-                                ? { ...b, progress: 1.0, completedAt: now }
-                                : b
-                        ),
-                    }));
+                // Keep explicit manual-read override persisted.
+                const shouldSetManualRead = source === "manual" && book.manualCompletionState !== "read";
+                const shouldSetCompletedAt = !wasAlreadyCompleted;
+
+                if (shouldSetManualRead || shouldSetCompletedAt) {
+                    set((state) => {
+                        const { books: updatedBooks, updatedBook } = updateBookById(
+                            state.books,
+                            bookId,
+                            (current) => ({
+                                ...current,
+                                progress: 1.0,
+                                completedAt: current.completedAt || now,
+                                ...(
+                                    !current.completedAt
+                                        ? { progressBeforeFinish: Math.max(0, Math.min(1, current.progress || 0)) }
+                                        : {}
+                                ),
+                                ...(source === "manual" ? { manualCompletionState: "read" as const } : {}),
+                            }),
+                        );
+
+                        if (!updatedBook) {
+                            return { books: updatedBooks };
+                        }
+
+                        const existingCache = state.recentBooksCache.filter((entry) => entry.id !== bookId);
+                        const newCache = [createCacheEntry(updatedBook), ...existingCache].slice(0, 20);
+
+                        return {
+                            books: updatedBooks,
+                            recentBooksCache: newCache,
+                        };
+                    });
                 }
 
                 return { wasAlreadyCompleted, completedYear };
+            },
+
+            markBookUnread: (bookId) => {
+                const book = get().books.find((b) => b.id === bookId);
+                if (!book) return false;
+
+                const restoredProgress = Math.max(0, Math.min(1, book.progressBeforeFinish ?? 0));
+                const isAlreadyUnread = !book.completedAt && book.manualCompletionState === "unread";
+
+                if (isAlreadyUnread) {
+                    return false;
+                }
+
+                set((state) => {
+                    const { books: updatedBooks, updatedBook } = updateBookById(
+                        state.books,
+                        bookId,
+                        (current) => ({
+                            ...current,
+                            completedAt: undefined,
+                            manualCompletionState: "unread",
+                            progress: Math.max(0, Math.min(1, current.progressBeforeFinish ?? 0)),
+                            progressBeforeFinish: undefined,
+                        }),
+                    );
+
+                    if (!updatedBook) {
+                        return { books: updatedBooks };
+                    }
+
+                    const existingCache = state.recentBooksCache.filter((entry) => entry.id !== bookId);
+                    const newCache = [createCacheEntry(updatedBook), ...existingCache].slice(0, 20);
+
+                    return {
+                        books: updatedBooks,
+                        recentBooksCache: newCache,
+                    };
+                });
+
+                return true;
             },
 
             // Collection actions

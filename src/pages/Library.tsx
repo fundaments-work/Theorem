@@ -11,7 +11,7 @@ import { importBooks, pickAndImportBooks, scanFolderForBooks } from "@/lib/impor
 import { rankByFuzzyQuery } from "@/lib/search/fuzzy";
 import { 
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw, 
-    Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3,
+    Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
     ChevronDown, Star, X, ArrowUpDown
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "@/types";
@@ -46,6 +46,16 @@ async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
     return extractMetadataPromise;
 }
 
+function isBookMarkedRead(book: Book): boolean {
+    if (book.manualCompletionState === "read") {
+        return true;
+    }
+    if (book.manualCompletionState === "unread") {
+        return false;
+    }
+    return !!book.completedAt || book.progress >= 0.999;
+}
+
 // Book Card Component with Context Menu
 function BookCard({ 
     book, 
@@ -55,6 +65,8 @@ function BookCard({
     onDeleteBook,
     onShowInfo,
     onAddToShelf,
+    onMarkAsRead,
+    onMarkAsUnread,
     collections
 }: { 
     book: Book; 
@@ -64,10 +76,13 @@ function BookCard({
     onDeleteBook: (bookId: string) => void;
     onShowInfo: (book: Book) => void;
     onAddToShelf: (bookId: string) => void;
+    onMarkAsRead: (bookId: string) => void;
+    onMarkAsUnread: (bookId: string) => void;
     collections: Collection[];
 }) {
     const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const clickCountRef = useRef(0);
+    const isCompleted = isBookMarkedRead(book);
 
     const handleCardClick = () => {
         clickCountRef.current += 1;
@@ -107,6 +122,18 @@ function BookCard({
             onClick: () => onToggleFavorite(book.id),
         },
         {
+            id: isCompleted ? "mark-as-unread" : "mark-as-read",
+            label: isCompleted ? "Mark Unfinish" : "Mark Finish",
+            icon: isCompleted ? <RotateCcw className="w-4 h-4" /> : <CheckCheck className="w-4 h-4" />,
+            onClick: () => {
+                if (isCompleted) {
+                    onMarkAsUnread(book.id);
+                    return;
+                }
+                onMarkAsRead(book.id);
+            },
+        },
+        {
             id: "add-to-shelf",
             label: "Add to Shelf...",
             icon: <BookMarked className="w-4 h-4" />,
@@ -116,7 +143,6 @@ function BookCard({
             id: "separator1",
             label: "",
             separator: true,
-            onClick: () => {},
         },
         {
             id: "info",
@@ -128,7 +154,6 @@ function BookCard({
             id: "separator2",
             label: "",
             separator: true,
-            onClick: () => {},
         },
         {
             id: "delete",
@@ -262,7 +287,6 @@ function BookCard({
                                     <span className="text-[var(--font-size-3xs)] text-[color:var(--color-text-muted)]">{book.rating}</span>
                                 </div>
                             )}
-                            <span className="text-[var(--font-size-3xs)] text-[color:var(--color-text-muted)] uppercase">{FORMAT_DISPLAY_NAMES[book.format] || book.format}</span>
                         </div>
                     </div>
 
@@ -639,6 +663,8 @@ export function LibraryPage() {
     const removeBook = useLibraryStore((state) => state.removeBook);
     const updateBook = useLibraryStore((state) => state.updateBook);
     const toggleFavorite = useLibraryStore((state) => state.toggleFavorite);
+    const markBookCompleted = useLibraryStore((state) => state.markBookCompleted);
+    const markBookUnread = useLibraryStore((state) => state.markBookUnread);
     const addBookToCollection = useLibraryStore((state) => state.addBookToCollection);
     const addCollection = useLibraryStore((state) => state.addCollection);
     
@@ -965,6 +991,14 @@ export function LibraryPage() {
         setAddToShelfBookId(bookId);
         setIsAddToShelfModalOpen(true);
     }, []);
+
+    const handleMarkAsRead = useCallback((bookId: string) => {
+        markBookCompleted(bookId, "manual");
+    }, [markBookCompleted]);
+
+    const handleMarkAsUnread = useCallback((bookId: string) => {
+        markBookUnread(bookId);
+    }, [markBookUnread]);
 
     const handleAddBookToShelf = useCallback((bookId: string, shelfId: string) => {
         addBookToCollection(bookId, shelfId);
@@ -1294,6 +1328,8 @@ export function LibraryPage() {
                                 onDeleteBook={handleDeleteBook}
                                 onShowInfo={handleShowInfo}
                                 onAddToShelf={handleAddToShelf}
+                                onMarkAsRead={handleMarkAsRead}
+                                onMarkAsUnread={handleMarkAsUnread}
                                 collections={collections}
                             />
                         ))}
@@ -1310,6 +1346,8 @@ export function LibraryPage() {
                                 onDeleteBook={handleDeleteBook}
                                 onShowInfo={handleShowInfo}
                                 onAddToShelf={handleAddToShelf}
+                                onMarkAsRead={handleMarkAsRead}
+                                onMarkAsUnread={handleMarkAsUnread}
                                 collections={collections}
                             />
                         ))}
@@ -1326,6 +1364,8 @@ export function LibraryPage() {
                                 onDeleteBook={handleDeleteBook}
                                 onShowInfo={handleShowInfo}
                                 onAddToShelf={handleAddToShelf}
+                                onMarkAsRead={handleMarkAsRead}
+                                onMarkAsUnread={handleMarkAsUnread}
                                 collections={collections}
                             />
                         ))}

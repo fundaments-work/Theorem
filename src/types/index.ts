@@ -96,9 +96,14 @@ export interface Book {
     tags: string[];
     rating?: number; // 1-5
     isFavorite: boolean;
+    // Explicit user override for read status.
+    // "read"/"unread" takes precedence over automatic completion derived from progress.
+    manualCompletionState?: "read" | "unread";
+    // Snapshot of progress before the latest finished state, restored on "unfinish".
+    progressBeforeFinish?: number;
     // Statistics
     readingTime: number; // in minutes
-    completedAt?: Date; // When the book was finished (progress >= 0.99)
+    completedAt?: Date; // When the book was marked completed (auto or manual)
 }
 
 // Reading Progress
