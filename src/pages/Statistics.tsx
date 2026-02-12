@@ -79,6 +79,18 @@ function ProgressBar({
     );
 }
 
+function getDateTimestamp(dateValue: unknown): number {
+    if (!dateValue) {
+        return 0;
+    }
+
+    const parsedDate = dateValue instanceof Date
+        ? dateValue
+        : new Date(dateValue as string | number);
+    const timestamp = parsedDate.getTime();
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
 // Recent book card
 interface RecentBookCardProps {
     book: {
@@ -254,7 +266,7 @@ export function StatisticsPage() {
     const recentBooks = useMemo(() => {
         return [...books]
             .filter((b) => b.lastReadAt)
-            .sort((a, b) => (b.lastReadAt?.getTime() || 0) - (a.lastReadAt?.getTime() || 0))
+            .sort((a, b) => getDateTimestamp(b.lastReadAt) - getDateTimestamp(a.lastReadAt))
             .slice(0, 5);
     }, [books]);
 
