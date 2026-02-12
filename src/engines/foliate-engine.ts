@@ -41,6 +41,10 @@ const READER_SEARCH_FALLBACK_LIMIT = 12;
 const READER_SEARCH_FALLBACK_MAX_SECTIONS = 300;
 const READER_SEARCH_FALLBACK_SECTION_CHAR_LIMIT = 8000;
 const READER_SEARCH_EXCERPT_CONTEXT_CHARS = 80;
+const MIN_READER_ZOOM_LEVEL = 0.2;
+const MIN_PAGED_READER_ZOOM_LEVEL = 1.0;
+const MAX_READER_ZOOM_LEVEL = 4.0;
+const READER_ZOOM_STEP = 0.1;
 
 interface ReaderSearchExcerpt {
     pre?: string;
@@ -101,6 +105,17 @@ export class FoliateEngine {
 
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
+    }
+
+    private getMinZoomLevelForFlow(flow: ReadingFlow = this.flow): number {
+        return flow === 'scroll' ? MIN_READER_ZOOM_LEVEL : MIN_PAGED_READER_ZOOM_LEVEL;
+    }
+
+    private clampZoomLevel(level: number, flow: ReadingFlow = this.flow): number {
+        return Math.max(
+            this.getMinZoomLevelForFlow(flow),
+            Math.min(MAX_READER_ZOOM_LEVEL, level),
+        );
     }
 
     async init(container: HTMLElement): Promise<void> {
@@ -182,7 +197,7 @@ export class FoliateEngine {
             // Apply initial settings
             this.layout = layout;
             this.flow = flow;
-            this.zoom_level = Math.max(0.2, Math.min(4.0, zoom / 100));
+            this.zoom_level = this.clampZoomLevel(zoom / 100, this.flow);
             this._marginValue = margins;
 
             // Apply settings synchronously where possible
@@ -849,16 +864,21 @@ export class FoliateEngine {
     setFlow(flow: ReadingFlow): void {
         if (this.flow === flow) return;
         this.flow = flow;
+        const clampedZoom = this.clampZoomLevel(this.zoom_level);
+        if (clampedZoom !== this.zoom_level) {
+            this.zoom_level = clampedZoom;
+            this.applyZoomSync();
+        }
         this.scheduleSettingsUpdate();
     }
 
     // Zoom methods - synchronous for instant feedback
     zoomIn(): void {
-        this.setZoomLevel(Math.min(4.0, this.zoom_level + 0.1));
+        this.setZoomLevel(this.zoom_level + READER_ZOOM_STEP);
     }
 
     zoomOut(): void {
-        this.setZoomLevel(Math.max(0.2, this.zoom_level - 0.1));
+        this.setZoomLevel(this.zoom_level - READER_ZOOM_STEP);
     }
 
     zoomRestore(): void {
@@ -866,7 +886,7 @@ export class FoliateEngine {
     }
 
     setZoomLevel(level: number): void {
-        const newLevel = Math.max(0.2, Math.min(4.0, level));
+        const newLevel = this.clampZoomLevel(level);
         if (this.zoom_level === newLevel) return;
         
         this.zoom_level = newLevel;
@@ -914,9 +934,12 @@ export class FoliateEngine {
         
         this.settings = settings;
         
-        if (settings.flow) this.flow = settings.flow;
+        if (settings.flow) {
+            this.flow = settings.flow;
+            this.zoom_level = this.clampZoomLevel(this.zoom_level, this.flow);
+        }
         if (settings.layout) this.layout = settings.layout;
-        if (settings.zoom) this.zoom_level = settings.zoom / 100;
+        if (settings.zoom) this.zoom_level = this.clampZoomLevel(settings.zoom / 100);
         
         if (hadChanges) {
             this.scheduleSettingsUpdate();

@@ -10,6 +10,7 @@
 import {
     useRef,
     useState,
+    useEffect,
     useCallback,
     forwardRef,
     useImperativeHandle,
@@ -17,7 +18,7 @@ import {
 import { Loader2, AlertCircle } from "lucide-react";
 import { PDFJsEngine, type PDFJsEngineRef, type PDFDocumentInfo } from "@/engines/pdfjs-engine";
 import { cn } from "@/lib/utils";
-import type { ReaderTheme, Annotation, HighlightColor } from "@/types";
+import type { ReaderTheme, Annotation, HighlightColor, PdfZoomMode } from "@/types";
 
 // ============================================================================
 // Types
@@ -30,6 +31,12 @@ interface PDFReaderProps {
     pdfData?: Uint8Array;
     /** Original filename for display fallback (without extension) */
     originalFilename?: string;
+    /** Initial page to open */
+    initialPage?: number;
+    /** Initial zoom level */
+    initialZoom?: number;
+    /** Initial zoom mode */
+    initialZoomMode?: PdfZoomMode;
     /** Theme mode for the reader */
     theme?: ReaderTheme;
     /** Callback when page changes - provides page state for external controls */
@@ -50,6 +57,7 @@ interface PDFReaderProps {
     onAnnotationAdd?: (annotation: Partial<Annotation>) => void;
     onAnnotationChange?: (annotation: Annotation) => void;
     onAnnotationRemove?: (id: string) => void;
+    onZoomModeChange?: (mode: PdfZoomMode) => void;
 }
 
 // ============================================================================
@@ -160,6 +168,9 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             pdfPath,
             pdfData,
             originalFilename,
+            initialPage,
+            initialZoom,
+            initialZoomMode,
             theme = "light",
             onPageChange,
             onLoad,
@@ -172,7 +183,8 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             penWidth = 2,
             onAnnotationAdd,
             onAnnotationChange,
-            onAnnotationRemove
+            onAnnotationRemove,
+            onZoomModeChange,
         },
         ref
     ) {
@@ -182,9 +194,17 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
         // Local state for UI
         const [isLoading, setIsLoading] = useState(true);
         const [error, setError] = useState<string | null>(null);
-        const [currentPage, setCurrentPage] = useState(1);
+        const [currentPage, setCurrentPage] = useState(initialPage ?? 1);
         const [totalPages, setTotalPages] = useState(0);
-        const [scale, setScale] = useState(1);
+        const [scale, setScale] = useState(initialZoom ?? 1);
+
+        useEffect(() => {
+            setCurrentPage(initialPage ?? 1);
+        }, [initialPage]);
+
+        useEffect(() => {
+            setScale(initialZoom ?? 1);
+        }, [initialZoom]);
 
         // Expose the engine's imperative handle through our ref
         useImperativeHandle(ref, () => ({
@@ -300,7 +320,11 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                         pdfPath={pdfPath}
                         pdfData={pdfData}
                         originalFilename={originalFilename}
+                        initialPage={initialPage}
+                        initialZoom={initialZoom}
+                        initialZoomMode={initialZoomMode}
                         onPageChange={handlePageChange}
+                        onZoomModeChange={onZoomModeChange}
                         onLoad={handleLoad}
                         onError={handleError}
                         onViewportTap={onViewportTap}

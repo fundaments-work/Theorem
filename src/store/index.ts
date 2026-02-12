@@ -10,6 +10,7 @@ import type {
     UIState,
     AppRoute,
     HighlightColor,
+    PdfViewState,
 } from "@/types";
 import { applyReaderStyles, initReaderStyles } from "@/lib/reader-styles";
 
@@ -131,6 +132,7 @@ interface CachedBookMetadata {
         totalPages: number;
         range: string;
     };
+    pdfViewState?: PdfViewState;
     lastReadAt: Date;
 }
 
@@ -144,6 +146,7 @@ const createCacheEntry = (book: Book): CachedBookMetadata => ({
     progress: book.progress,
     lastClickFraction: book.lastClickFraction,
     pageProgress: book.pageProgress,
+    pdfViewState: book.pdfViewState,
     lastReadAt: book.lastReadAt || new Date(),
 });
 
@@ -208,6 +211,7 @@ interface LibraryStore {
     removeBook: (bookId: string) => void;
     updateBook: (bookId: string, updates: Partial<Book>) => void;
     updateProgress: (bookId: string, progress: number, location: string, lastClickFraction?: number, pageProgress?: { currentPage: number; endPage?: number; totalPages: number; range: string }) => void;
+    updatePdfReadingState: (bookId: string, state: PdfViewState) => void;
     toggleFavorite: (bookId: string) => void;
     updateBookMetadata: (bookId: string, metadata: Partial<Book>) => void;
     saveBookLocations: (bookId: string, locations: string) => void;
@@ -303,6 +307,45 @@ export const useLibraryStore = create<LibraryStore>()(
                     );
 
                     // Update cache as well for fast access
+                    if (updatedBook) {
+                        const existingCache = state.recentBooksCache.filter((book) => book.id !== bookId);
+                        const newCache = [createCacheEntry(updatedBook), ...existingCache].slice(0, 20);
+                        return { books: updatedBooks, recentBooksCache: newCache };
+                    }
+
+                    return { books: updatedBooks };
+                }),
+
+            updatePdfReadingState: (bookId, pdfState) =>
+                set((state) => {
+                    const safeTotalPages = Math.max(1, Math.floor(pdfState.totalPages || 1));
+                    const safePage = Math.max(1, Math.min(Math.floor(pdfState.page || 1), safeTotalPages));
+                    const safeZoom = Math.max(0.25, Math.min(5, Number.isFinite(pdfState.zoom) ? pdfState.zoom : 1));
+                    const safeProgress = Math.max(0, Math.min(1, safePage / safeTotalPages));
+                    const safePdfViewState: PdfViewState = {
+                        page: safePage,
+                        totalPages: safeTotalPages,
+                        zoom: safeZoom,
+                        zoomMode: pdfState.zoomMode,
+                    };
+
+                    const { books: updatedBooks, updatedBook } = updateBookById(
+                        state.books,
+                        bookId,
+                        (book) => ({
+                            ...book,
+                            currentLocation: `pdf:page:${safePage}`,
+                            progress: safeProgress,
+                            pageProgress: {
+                                currentPage: safePage,
+                                totalPages: safeTotalPages,
+                                range: `${safePage}`,
+                            },
+                            pdfViewState: safePdfViewState,
+                            lastReadAt: new Date(),
+                        }),
+                    );
+
                     if (updatedBook) {
                         const existingCache = state.recentBooksCache.filter((book) => book.id !== bookId);
                         const newCache = [createCacheEntry(updatedBook), ...existingCache].slice(0, 20);

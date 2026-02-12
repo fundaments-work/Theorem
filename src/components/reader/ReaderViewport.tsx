@@ -42,6 +42,7 @@ interface ReaderViewportProps {
     onTextSelected?: (cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => void;
     onLocationsSaved?: (locations: string) => void;
     onViewportTap?: () => void;
+    onZoomGestureChange?: (zoom: number) => void;
     initialLocation?: string;
     savedLocations?: string;
 }
@@ -57,6 +58,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     onTextSelected,
     onLocationsSaved,
     onViewportTap,
+    onZoomGestureChange,
     initialLocation,
     savedLocations,
 }, ref) => {
@@ -67,6 +69,15 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     // Engine update batching
     const pendingEngineUpdateRef = useRef<number | null>(null);
     const lastAppliedSettingsRef = useRef<ReaderSettings | null>(null);
+    const pinchAnimationFrameRef = useRef<number | null>(null);
+    const pendingPinchZoomRef = useRef<number | null>(null);
+    const pinchActiveRef = useRef(false);
+    const pinchStartDistanceRef = useRef(0);
+    const pinchStartZoomRef = useRef(settings.zoom);
+    const suppressSwipeRef = useRef(false);
+    const previousNonDefaultZoomRef = useRef(settings.zoom !== 100 ? settings.zoom : 130);
+    const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
+    const currentZoomRef = useRef(settings.zoom);
 
     const showNavFeedback = useCallback((direction: 'next' | 'prev') => {
         setNavDirection(direction);
@@ -142,9 +153,19 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
             if (pendingEngineUpdateRef.current) {
                 cancelAnimationFrame(pendingEngineUpdateRef.current);
             }
+            if (pinchAnimationFrameRef.current) {
+                cancelAnimationFrame(pinchAnimationFrameRef.current);
+            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => {
+        currentZoomRef.current = settings.zoom;
+        if (settings.zoom !== 100) {
+            previousNonDefaultZoomRef.current = settings.zoom;
+        }
+    }, [settings.zoom]);
 
     // Open file when it changes
     useEffect(() => {
@@ -371,28 +392,153 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         };
     }, [onTextSelected, getEngine, isInitialized]);
 
-    // Touch/Swipe navigation
+    // Touch gestures: swipe navigation, pinch zoom, and double-tap zoom toggle.
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
 
+        const MIN_ZOOM = settings.flow === "paged" ? 100 : 50;
+        const MAX_ZOOM = 200;
+        const SWIPE_THRESHOLD = 50;
+        const DOUBLE_TAP_MAX_DELAY = 280;
+        const DOUBLE_TAP_MAX_DISTANCE = 28;
+        const TAP_MOVE_THRESHOLD = 12;
+        const TAP_DURATION_THRESHOLD = 280;
+
         let touchStartX = 0;
         let touchStartY = 0;
-        const SWIPE_THRESHOLD = 50;
+        let touchStartTime = 0;
+
+        const clampZoom = (value: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
+        const getTouchDistance = (touchA: Touch, touchB: Touch) =>
+            Math.hypot(touchA.clientX - touchB.clientX, touchA.clientY - touchB.clientY);
+
+        const emitZoom = (nextZoom: number) => {
+            const clampedZoom = clampZoom(Math.round(nextZoom));
+            pendingPinchZoomRef.current = clampedZoom;
+            if (pinchAnimationFrameRef.current !== null) {
+                return;
+            }
+            pinchAnimationFrameRef.current = requestAnimationFrame(() => {
+                pinchAnimationFrameRef.current = null;
+                const pendingZoom = pendingPinchZoomRef.current;
+                pendingPinchZoomRef.current = null;
+                if (pendingZoom === null) {
+                    return;
+                }
+                if (pendingZoom !== 100) {
+                    previousNonDefaultZoomRef.current = pendingZoom;
+                }
+                onZoomGestureChange?.(pendingZoom);
+            });
+        };
 
         const handleTouchStart = (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                pinchActiveRef.current = true;
+                suppressSwipeRef.current = true;
+                pinchStartDistanceRef.current = getTouchDistance(e.touches[0], e.touches[1]);
+                pinchStartZoomRef.current = currentZoomRef.current;
+                return;
+            }
+
+            if (e.touches.length !== 1) {
+                return;
+            }
+
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
+            touchStartTime = performance.now();
+        };
+
+        const handleTouchMove = (e: TouchEvent) => {
+            if (e.touches.length !== 2) {
+                return;
+            }
+
+            if (!pinchActiveRef.current) {
+                pinchActiveRef.current = true;
+                pinchStartDistanceRef.current = getTouchDistance(e.touches[0], e.touches[1]);
+                pinchStartZoomRef.current = currentZoomRef.current;
+            }
+
+            const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
+            if (pinchStartDistanceRef.current <= 0) {
+                pinchStartDistanceRef.current = currentDistance;
+                return;
+            }
+
+            const scaleFactor = currentDistance / pinchStartDistanceRef.current;
+            suppressSwipeRef.current = true;
+            emitZoom(pinchStartZoomRef.current * scaleFactor);
+            e.preventDefault();
         };
 
         const handleTouchEnd = (e: TouchEvent) => {
+            if (pinchActiveRef.current) {
+                if (e.touches.length < 2) {
+                    pinchActiveRef.current = false;
+                    pinchStartDistanceRef.current = 0;
+                    pinchStartZoomRef.current = currentZoomRef.current;
+                    if (e.touches.length === 0) {
+                        setTimeout(() => {
+                            suppressSwipeRef.current = false;
+                        }, 0);
+                    }
+                }
+                return;
+            }
+
+            if (e.changedTouches.length !== 1) {
+                return;
+            }
+
             const touchEndX = e.changedTouches[0].clientX;
             const touchEndY = e.changedTouches[0].clientY;
-            
+            const now = performance.now();
             const deltaX = touchEndX - touchStartX;
             const deltaY = touchEndY - touchStartY;
-            
-            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > SWIPE_THRESHOLD) {
+
+            const absDeltaX = Math.abs(deltaX);
+            const absDeltaY = Math.abs(deltaY);
+            const isTap = absDeltaX <= TAP_MOVE_THRESHOLD
+                && absDeltaY <= TAP_MOVE_THRESHOLD
+                && (now - touchStartTime) <= TAP_DURATION_THRESHOLD;
+
+            if (isTap) {
+                const previousTap = lastTapRef.current;
+                if (previousTap) {
+                    const distanceSinceLastTap = Math.hypot(
+                        touchEndX - previousTap.x,
+                        touchEndY - previousTap.y,
+                    );
+                    if ((now - previousTap.time) <= DOUBLE_TAP_MAX_DELAY
+                        && distanceSinceLastTap <= DOUBLE_TAP_MAX_DISTANCE) {
+                        const targetZoom = currentZoomRef.current === 100
+                            ? previousNonDefaultZoomRef.current || 130
+                            : 100;
+                        emitZoom(targetZoom);
+                        suppressSwipeRef.current = true;
+                        lastTapRef.current = null;
+                        e.preventDefault();
+                        setTimeout(() => {
+                            suppressSwipeRef.current = false;
+                        }, 0);
+                        return;
+                    }
+                }
+
+                lastTapRef.current = { time: now, x: touchEndX, y: touchEndY };
+            } else {
+                lastTapRef.current = null;
+            }
+
+            if (suppressSwipeRef.current || settings.flow === "scroll") {
+                suppressSwipeRef.current = false;
+                return;
+            }
+
+            if (absDeltaX > absDeltaY && absDeltaX > SWIPE_THRESHOLD) {
                 e.preventDefault();
                 if (deltaX > 0) {
                     showNavFeedback('prev');
@@ -402,21 +548,34 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                     next();
                 }
             }
+
+            suppressSwipeRef.current = false;
+        };
+
+        const handleTouchCancel = () => {
+            pinchActiveRef.current = false;
+            pinchStartDistanceRef.current = 0;
+            suppressSwipeRef.current = false;
+            lastTapRef.current = null;
         };
 
         const parent = container.parentElement;
         if (parent) {
             parent.addEventListener('touchstart', handleTouchStart, { passive: true });
+            parent.addEventListener('touchmove', handleTouchMove, { passive: false });
             parent.addEventListener('touchend', handleTouchEnd, { passive: false });
+            parent.addEventListener('touchcancel', handleTouchCancel, { passive: true });
         }
         
         return () => {
             if (parent) {
                 parent.removeEventListener('touchstart', handleTouchStart);
+                parent.removeEventListener('touchmove', handleTouchMove);
                 parent.removeEventListener('touchend', handleTouchEnd);
+                parent.removeEventListener('touchcancel', handleTouchCancel);
             }
         };
-    }, [next, prev, showNavFeedback]);
+    }, [next, onZoomGestureChange, prev, settings.flow, showNavFeedback]);
 
     const displayError = error?.message?.replace(/\s+/g, " ").trim();
 

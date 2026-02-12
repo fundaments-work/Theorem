@@ -3,7 +3,7 @@
  * Full-screen reading experience with document viewer and controls
  */
 
-import { Suspense, lazy, useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { Suspense, lazy, useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, useLibraryStore, useSettingsStore } from '@/store';
 import { WindowTitlebar } from '@/components/reader/WindowTitlebar';
@@ -16,13 +16,41 @@ import { ReaderNavbar } from '@/components/reader/progress/ReaderNavbar';
 import { ReaderViewport } from '@/components/reader/ReaderViewport';
 import { HighlightColorPicker } from '@/components/reader/highlights/HighlightColorPicker';
 import { NoteEditor } from '@/components/reader/highlights/NoteEditor';
-import { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation } from '@/types';
+import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, PdfZoomMode, ReaderSettings as ReaderSettingsState } from '@/types';
 import { isTauri } from '@/lib/env';
 import { getBookBlob, getBookData } from '@/lib/storage';
 import type { PDFJsEngineRef } from '@/engines/pdfjs-engine';
 import type { ReaderViewportHandle } from '@/components/reader/ReaderViewport';
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
+const MIN_READER_ZOOM = 50;
+const MIN_PAGED_READER_ZOOM = 100;
+const MAX_READER_ZOOM = 200;
+const PDF_STATE_SAVE_DEBOUNCE_MS = 400;
+const DEFAULT_PDF_ZOOM = 1;
+const DEFAULT_PDF_ZOOM_MODE: PdfZoomMode = 'width-fit';
+
+function clampReaderZoomByFlow(zoom: number, flow: ReaderSettingsState['flow']): number {
+    const minZoom = flow === 'paged' ? MIN_PAGED_READER_ZOOM : MIN_READER_ZOOM;
+    return Math.max(minZoom, Math.min(MAX_READER_ZOOM, Math.round(zoom)));
+}
+
+function resolvePdfTargetPage(target: string): number | null {
+    const directMatch = target.match(/pdf:page:(\d+)/i);
+    if (directMatch) {
+        return Number(directMatch[1]);
+    }
+    const hashMatch = target.match(/[?#&]page=(\d+)/i);
+    if (hashMatch) {
+        return Number(hashMatch[1]);
+    }
+    const numericValue = Number(target);
+    if (Number.isFinite(numericValue) && numericValue > 0) {
+        return Math.floor(numericValue);
+    }
+    return null;
+}
+
 const LazyPDFReader = lazy(() =>
     import('@/components/reader/PDFReader').then((module) => ({ default: module.PDFReader })),
 );
@@ -33,6 +61,7 @@ export function ReaderPage() {
 
     const getBook = useLibraryStore((state) => state.getBook);
     const updateProgress = useLibraryStore((state) => state.updateProgress);
+    const updatePdfReadingState = useLibraryStore((state) => state.updatePdfReadingState);
     const saveBookLocations = useLibraryStore((state) => state.saveBookLocations);
     const addReadingTime = useLibraryStore((state) => state.addReadingTime);
     const markBookCompleted = useLibraryStore((state) => state.markBookCompleted);
@@ -41,6 +70,7 @@ export function ReaderPage() {
     const updateReaderSettings = useSettingsStore((state) => state.updateReaderSettings);
     const stats = useSettingsStore((state) => state.stats);
     const updateStats = useSettingsStore((state) => state.updateStats);
+    const readerZoomRef = useRef(settings.readerSettings.zoom);
     const readerRef = useRef<ReaderViewportHandle>(null);
     const pdfReaderRef = useRef<PDFJsEngineRef>(null);
     const loadedBookIdRef = useRef<string | null>(null);
@@ -50,8 +80,11 @@ export function ReaderPage() {
     // PDF-specific state for titlebar controls
     const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
     const [pdfTotalPages, setPdfTotalPages] = useState(0);
-    const [pdfZoom, setPdfZoom] = useState(1);
-    const [pdfZoomMode, setPdfZoomMode] = useState<'custom' | 'page-fit' | 'width-fit'>('custom');
+    const [pdfZoom, setPdfZoom] = useState(DEFAULT_PDF_ZOOM);
+    const [pdfZoomMode, setPdfZoomMode] = useState<PdfZoomMode>(DEFAULT_PDF_ZOOM_MODE);
+    const [pdfInitialPage, setPdfInitialPage] = useState(1);
+    const [pdfInitialZoom, setPdfInitialZoom] = useState(DEFAULT_PDF_ZOOM);
+    const [pdfInitialZoomMode, setPdfInitialZoomMode] = useState<PdfZoomMode>(DEFAULT_PDF_ZOOM_MODE);
     const [pdfAnnotationMode, setPdfAnnotationMode] = useState<'none' | 'highlight' | 'pen' | 'text' | 'erase'>('none');
     const [pdfHighlightColor, setPdfHighlightColor] = useState<HighlightColor>("yellow");
     const [pdfBrushColor, setPdfBrushColor] = useState<HighlightColor>("blue");
@@ -64,6 +97,9 @@ export function ReaderPage() {
     // Use ref to access latest stats without causing re-renders
     const statsRef = useRef(stats);
     statsRef.current = stats;
+    useEffect(() => {
+        readerZoomRef.current = settings.readerSettings.zoom;
+    }, [settings.readerSettings.zoom]);
 
     // File state
     const [file, setFile] = useState<File | Blob | null>(null);
@@ -91,6 +127,7 @@ export function ReaderPage() {
     const suppressProgressRef = useRef(false);
     const resumeTargetRef = useRef<string | null>(null);
     const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pdfProgressSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasAppliedInitialLocationRef = useRef(false);
     const debug = useCallback((...args: unknown[]) => {
         if (import.meta.env.DEV) {
@@ -105,6 +142,47 @@ export function ReaderPage() {
     // Get current book format
     const currentBook = currentBookId ? getBook(currentBookId) : null;
     const isPdfFormat = currentBook?.format === 'pdf';
+    const effectiveReaderSettings = useMemo<ReaderSettingsState>(() => {
+        if (isPdfFormat) {
+            return settings.readerSettings;
+        }
+
+        const effectiveLayout = isMobileViewport ? 'single' : settings.readerSettings.layout;
+        const effectiveZoom = clampReaderZoomByFlow(
+            settings.readerSettings.zoom,
+            settings.readerSettings.flow,
+        );
+
+        if (
+            effectiveLayout !== settings.readerSettings.layout
+            || effectiveZoom !== settings.readerSettings.zoom
+        ) {
+            return {
+                ...settings.readerSettings,
+                layout: effectiveLayout,
+                zoom: effectiveZoom,
+            };
+        }
+
+        return settings.readerSettings;
+    }, [isMobileViewport, isPdfFormat, settings.readerSettings]);
+
+    useEffect(() => {
+        if (isPdfFormat || settings.readerSettings.flow !== 'paged') {
+            return;
+        }
+
+        if (settings.readerSettings.zoom >= MIN_PAGED_READER_ZOOM) {
+            return;
+        }
+
+        updateReaderSettings({ zoom: MIN_PAGED_READER_ZOOM });
+    }, [
+        isPdfFormat,
+        settings.readerSettings.flow,
+        settings.readerSettings.zoom,
+        updateReaderSettings,
+    ]);
 
     useEffect(() => {
         if (typeof window === 'undefined') {
@@ -153,7 +231,6 @@ export function ReaderPage() {
         // Ensure titlebar page indicator has total pages immediately on load.
         setPdfCurrentPage((currentPage) => Math.max(1, currentPage));
         setPdfTotalPages(Math.max(0, info.totalPages || 0));
-        setPdfZoom(1);
         setIsBookReady(true);
     }, [currentBookId, getBook]);
 
@@ -207,23 +284,56 @@ export function ReaderPage() {
             setPdfData(null);
             setPdfCurrentPage(1);
             setPdfTotalPages(0);
-            setPdfZoom(1);
-            setPdfZoomMode('custom');
+            setPdfZoom(DEFAULT_PDF_ZOOM);
+            setPdfZoomMode(DEFAULT_PDF_ZOOM_MODE);
+            setPdfInitialPage(1);
+            setPdfInitialZoom(DEFAULT_PDF_ZOOM);
+            setPdfInitialZoomMode(DEFAULT_PDF_ZOOM_MODE);
             setPdfHasOutline(false);
             setMetadata(null);
             setToc([]);
             setLocation(null);
             setIsBookReady(false);
-            const nextLocation = book.currentLocation || undefined;
-            setInitialLocation(nextLocation);
-            // Use lastClickFraction if available, otherwise use progress but NOT if book is nearly complete
-            // This prevents jumping to the end when reopening a completed book
-            const progressFallback = book.progress !== undefined && book.progress < 0.95 ? book.progress : undefined;
-            const fractionToUse = book.lastClickFraction ?? progressFallback;
-            setInitialFraction(fractionToUse);
-            suppressProgressRef.current = !!nextLocation || fractionToUse !== undefined;
-            resumeTargetRef.current = nextLocation || null;
-            hasAppliedInitialLocationRef.current = false;
+            if (book.format === 'pdf') {
+                const fallbackPage = resolvePdfTargetPage(book.currentLocation || '') ?? 1;
+                const savedPdfState = book.pdfViewState;
+                const nextInitialPage = Math.max(
+                    1,
+                    Math.floor(savedPdfState?.page ?? fallbackPage),
+                );
+                const nextInitialZoom = Math.max(
+                    0.25,
+                    Math.min(
+                        5,
+                        savedPdfState?.zoom ?? DEFAULT_PDF_ZOOM,
+                    ),
+                );
+                const nextInitialZoomMode = savedPdfState?.zoomMode ?? DEFAULT_PDF_ZOOM_MODE;
+
+                setPdfInitialPage(nextInitialPage);
+                setPdfInitialZoom(nextInitialZoom);
+                setPdfInitialZoomMode(nextInitialZoomMode);
+                setPdfCurrentPage(nextInitialPage);
+                setPdfZoom(nextInitialZoom);
+                setPdfZoomMode(nextInitialZoomMode);
+
+                setInitialLocation(undefined);
+                setInitialFraction(undefined);
+                suppressProgressRef.current = false;
+                resumeTargetRef.current = null;
+                hasAppliedInitialLocationRef.current = true;
+            } else {
+                const nextLocation = book.currentLocation || undefined;
+                setInitialLocation(nextLocation);
+                // Use lastClickFraction if available, otherwise use progress but NOT if book is nearly complete
+                // This prevents jumping to the end when reopening a completed book
+                const progressFallback = book.progress !== undefined && book.progress < 0.95 ? book.progress : undefined;
+                const fractionToUse = book.lastClickFraction ?? progressFallback;
+                setInitialFraction(fractionToUse);
+                suppressProgressRef.current = !!nextLocation || fractionToUse !== undefined;
+                resumeTargetRef.current = nextLocation || null;
+                hasAppliedInitialLocationRef.current = false;
+            }
             if (resumeTimeoutRef.current) {
                 clearTimeout(resumeTimeoutRef.current);
             }
@@ -370,6 +480,9 @@ export function ReaderPage() {
             if (resumeTimeoutRef.current) {
                 clearTimeout(resumeTimeoutRef.current);
             }
+            if (pdfProgressSaveTimeoutRef.current) {
+                clearTimeout(pdfProgressSaveTimeoutRef.current);
+            }
         };
     }, []);
 
@@ -469,6 +582,25 @@ export function ReaderPage() {
     }, []);
 
     const lastClickFractionRef = useRef<number | null>(null);
+    const handleBookCompletionProgress = useCallback((bookId: string, progress: number) => {
+        if (progress < 0.99) {
+            return;
+        }
+
+        const result = markBookCompleted(bookId);
+        if (!result || result.wasAlreadyCompleted) {
+            return;
+        }
+
+        const currentYear = new Date().getFullYear();
+        const currentStats = statsRef.current;
+        updateStats({
+            booksCompleted: currentStats.booksCompleted + 1,
+            booksReadThisYear: result.completedYear === currentYear
+                ? currentStats.booksReadThisYear + 1
+                : currentStats.booksReadThisYear,
+        });
+    }, [markBookCompleted, updateStats]);
 
     const handleLocationChange = useCallback((loc: DocLocation) => {
         setLocation(loc);
@@ -546,42 +678,53 @@ export function ReaderPage() {
 
             queueMicrotask(() => {
                 updateProgress(currentBookId, safePercentage, safeCfi, lastClickFraction, pageProgress);
-
-                // Check if book is completed (>= 99% progress)
-                if (safePercentage >= 0.99 && currentBookId) {
-                    const result = markBookCompleted(currentBookId);
-                    if (result && !result.wasAlreadyCompleted) {
-                        const currentYear = new Date().getFullYear();
-                        const currentStats = statsRef.current;
-                        updateStats({
-                            booksCompleted: currentStats.booksCompleted + 1,
-                            booksReadThisYear: result.completedYear === currentYear
-                                ? currentStats.booksReadThisYear + 1
-                                : currentStats.booksReadThisYear
-                        });
-                    }
-                }
+                handleBookCompletionProgress(currentBookId, safePercentage);
             });
             lastClickFractionRef.current = null;
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentBookId, updateProgress, markBookCompleted, updateStats]);
+    }, [currentBookId, handleBookCompletionProgress, updateProgress]);
 
-    const resolvePdfTargetPage = useCallback((target: string): number | null => {
-        const directMatch = target.match(/pdf:page:(\d+)/i);
-        if (directMatch) {
-            return Number(directMatch[1]);
+    useEffect(() => {
+        if (!isPdfFormat || !currentBookId || pdfTotalPages <= 0) {
+            return;
         }
-        const hashMatch = target.match(/[?#&]page=(\d+)/i);
-        if (hashMatch) {
-            return Number(hashMatch[1]);
+
+        if (pdfProgressSaveTimeoutRef.current) {
+            clearTimeout(pdfProgressSaveTimeoutRef.current);
         }
-        const numericValue = Number(target);
-        if (Number.isFinite(numericValue) && numericValue > 0) {
-            return Math.floor(numericValue);
-        }
-        return null;
-    }, []);
+
+        pdfProgressSaveTimeoutRef.current = setTimeout(() => {
+            const safeTotalPages = Math.max(1, Math.floor(pdfTotalPages));
+            const safeCurrentPage = Math.max(1, Math.min(Math.floor(pdfCurrentPage), safeTotalPages));
+            const safeZoom = Math.max(0.25, Math.min(5, pdfZoom));
+
+            updatePdfReadingState(currentBookId, {
+                page: safeCurrentPage,
+                totalPages: safeTotalPages,
+                zoom: safeZoom,
+                zoomMode: pdfZoomMode,
+            });
+
+            handleBookCompletionProgress(currentBookId, safeCurrentPage / safeTotalPages);
+        }, PDF_STATE_SAVE_DEBOUNCE_MS);
+
+        return () => {
+            if (pdfProgressSaveTimeoutRef.current) {
+                clearTimeout(pdfProgressSaveTimeoutRef.current);
+                pdfProgressSaveTimeoutRef.current = null;
+            }
+        };
+    }, [
+        currentBookId,
+        handleBookCompletionProgress,
+        isPdfFormat,
+        pdfCurrentPage,
+        pdfTotalPages,
+        pdfZoom,
+        pdfZoomMode,
+        updatePdfReadingState,
+    ]);
 
     const goTo = useCallback(async (target: string) => {
         if (isPdfFormat) {
@@ -597,7 +740,7 @@ export function ReaderPage() {
             await readerRef.current.goTo(target);
         }
         setActivePanel(null);
-    }, [isPdfFormat, resolvePdfTargetPage]);
+    }, [isPdfFormat]);
 
     const handleSeek = useCallback((fraction: number) => {
         lastClickFractionRef.current = fraction;
@@ -621,6 +764,41 @@ export function ReaderPage() {
         }
         setShowToolbar((previous) => !previous);
     }, [activePanel, isMobileViewport]);
+
+    const handleZoomGestureChange = useCallback((zoom: number) => {
+        const clampedZoom = clampReaderZoomByFlow(zoom, settings.readerSettings.flow);
+        if (readerZoomRef.current === clampedZoom) {
+            return;
+        }
+        updateReaderSettings({ zoom: clampedZoom });
+    }, [settings.readerSettings.flow, updateReaderSettings]);
+
+    const handleReaderSettingsUpdate = useCallback((updates: Partial<ReaderSettingsState>) => {
+        const nextFlow = updates.flow ?? settings.readerSettings.flow;
+        const nextZoomInput = updates.zoom ?? settings.readerSettings.zoom;
+        const shouldNormalizeZoom =
+            updates.zoom !== undefined
+            || updates.flow !== undefined
+            || (nextFlow === 'paged' && settings.readerSettings.zoom < MIN_PAGED_READER_ZOOM);
+
+        if (!shouldNormalizeZoom) {
+            updateReaderSettings(updates);
+            return;
+        }
+
+        updateReaderSettings({
+            ...updates,
+            zoom: clampReaderZoomByFlow(nextZoomInput, nextFlow),
+        });
+    }, [
+        settings.readerSettings.flow,
+        settings.readerSettings.zoom,
+        updateReaderSettings,
+    ]);
+
+    const handlePdfZoomModeChange = useCallback((mode: PdfZoomMode) => {
+        setPdfZoomMode(mode);
+    }, []);
 
     const shouldShowReaderChrome = !isMobileViewport || showToolbar || activePanel !== null;
 
@@ -1366,8 +1544,12 @@ export function ReaderPage() {
                             pdfPath={currentBook?.storagePath || currentBook?.filePath || ''}
                             pdfData={pdfData ?? undefined}
                             originalFilename={currentBook?.title}
+                            initialPage={pdfInitialPage}
+                            initialZoom={pdfInitialZoom}
+                            initialZoomMode={pdfInitialZoomMode}
                             theme={settings.readerSettings.theme}
                             onPageChange={handlePdfPageChange}
+                            onZoomModeChange={handlePdfZoomModeChange}
                             onLoad={handlePdfLoad}
                             onError={handlePdfError}
                             onViewportTap={handleViewportTap}
@@ -1386,7 +1568,7 @@ export function ReaderPage() {
                         key={currentBookId || 'no-book'}
                         ref={readerRef}
                         file={file}
-                        settings={settings.readerSettings}
+                        settings={effectiveReaderSettings}
                         initialLocation={initialLocation}
                         savedLocations={getBook(currentBookId || '')?.locations}
                         onReady={handleReady}
@@ -1394,6 +1576,7 @@ export function ReaderPage() {
                         onLocationsSaved={handleLocationsSaved}
                         onTextSelected={handleTextSelected}
                         onViewportTap={handleViewportTap}
+                        onZoomGestureChange={handleZoomGestureChange}
                         className="w-full h-full"
                     />
                 )}
@@ -1443,10 +1626,10 @@ export function ReaderPage() {
             {!isPdfFormat && (
                 <>
                     <ReaderSettings
-                        settings={settings.readerSettings}
+                        settings={effectiveReaderSettings}
                         visible={activePanel === 'settings'}
                         onClose={() => setActivePanel(null)}
-                        onUpdate={updateReaderSettings}
+                        onUpdate={handleReaderSettingsUpdate}
                         format={getBook(currentBookId || '')?.format}
                     />
 

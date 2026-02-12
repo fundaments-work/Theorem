@@ -23,7 +23,7 @@ import { rankByFuzzyQuery } from "@/lib/search/fuzzy";
 import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import type { Annotation, HighlightColor, SearchResult, TocItem } from "@/types";
+import type { Annotation, HighlightColor, PdfZoomMode, SearchResult, TocItem } from "@/types";
 import { PDFAnnotationLayer } from "@/components/reader/PDFAnnotationLayer";
 
 // Import CSS (our custom styles only, not pdf_viewer.css which conflicts)
@@ -44,9 +44,12 @@ export interface PDFJsEngineProps {
     /** Original filename for display fallback (without extension) */
     originalFilename?: string;
     initialPage?: number;
+    initialZoom?: number;
+    initialZoomMode?: PdfZoomMode;
     onLoad?: (info: PDFDocumentInfo) => void;
     onError?: (error: Error) => void;
     onPageChange?: (page: number, totalPages: number, scale: number) => void;
+    onZoomModeChange?: (mode: PdfZoomMode) => void;
     onViewportTap?: () => void;
     className?: string;
     // Annotations
@@ -123,6 +126,7 @@ const PDF_SEARCH_FALLBACK_LIMIT = 12;
 const PDF_SEARCH_FALLBACK_PAGE_CHAR_LIMIT = 8_000;
 const PDF_SEARCH_EXCERPT_CONTEXT_CHARS = 80;
 const PDF_SEARCH_EXACT_SCAN_PROGRESS_WEIGHT = 0.9;
+const DEFAULT_ZOOM_MODE: PdfZoomMode = "width-fit";
 
 const activeTextLayers = new Map<HTMLDivElement, HTMLDivElement>();
 const pageTextContentCache = new Map<number, PageTextContent>();
@@ -513,6 +517,34 @@ function getNormalizedPageText(textContent: PageTextContent): string {
 
 function getPdfSearchLocation(pageNumber: number): string {
     return `pdf:page:${pageNumber}`;
+}
+
+function getFitWidthScale(container: HTMLElement, page: PDFPageProxy): number {
+    const viewportPadding = container.clientWidth < 768 ? 12 : 32;
+    const containerWidth = container.clientWidth - viewportPadding;
+    if (containerWidth <= 0) {
+        return DEFAULT_SCALE;
+    }
+    const viewport = page.getViewport({ scale: PDF_TO_CSS_UNITS });
+    if (viewport.width <= 0) {
+        return DEFAULT_SCALE;
+    }
+    return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, containerWidth / viewport.width));
+}
+
+function getFitPageScale(container: HTMLElement, page: PDFPageProxy): number {
+    const viewportPadding = container.clientWidth < 768 ? 12 : 32;
+    const containerHeight = container.clientHeight - viewportPadding;
+    const containerWidth = container.clientWidth - viewportPadding;
+    if (containerWidth <= 0 || containerHeight <= 0) {
+        return DEFAULT_SCALE;
+    }
+    const viewport = page.getViewport({ scale: PDF_TO_CSS_UNITS });
+    if (viewport.width <= 0 || viewport.height <= 0) {
+        return DEFAULT_SCALE;
+    }
+    const fitScale = Math.min(containerWidth / viewport.width, containerHeight / viewport.height);
+    return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
 }
 
 function createPdfSearchExcerpt(pageText: string, query: string, knownMatchIndex?: number): string {
@@ -1286,9 +1318,12 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         pdfData,
         originalFilename,
         initialPage = 1,
+        initialZoom = DEFAULT_SCALE,
+        initialZoomMode = DEFAULT_ZOOM_MODE,
         onLoad,
         onError,
         onPageChange,
+        onZoomModeChange,
         onViewportTap,
         className,
         annotations = [],
@@ -1309,10 +1344,13 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const [rotation, setRotation] = useState(0);
         const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
         const [pages, setPages] = useState<PDFPageProxy[]>([]);
-        const hasAppliedInitialFitRef = useRef(false);
+        const hasAppliedInitialViewStateRef = useRef(false);
+        const initialPageRestoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
         const currentPageRef = useRef(initialPage);
         const totalPagesRef = useRef(0);
         const scaleRef = useRef(DEFAULT_SCALE);
+        const initialPageToRestoreRef = useRef(initialPage);
+        const zoomModeRef = useRef<PdfZoomMode>(initialZoomMode);
         const searchSessionRef = useRef(0);
         const isDesktopWebKit = useMemo(
             () => isTauri(),
@@ -1322,10 +1360,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const useStreamTextLayer = !isDesktopWebKit;
 
         // Use refs for callbacks to avoid re-triggering the load effect
-        const callbacksRef = useRef({ onLoad, onError, onPageChange });
+        const callbacksRef = useRef({ onLoad, onError, onPageChange, onZoomModeChange });
         useEffect(() => {
-            callbacksRef.current = { onLoad, onError, onPageChange };
-        }, [onLoad, onError, onPageChange]);
+            callbacksRef.current = { onLoad, onError, onPageChange, onZoomModeChange };
+        }, [onLoad, onError, onPageChange, onZoomModeChange]);
 
         useEffect(() => {
             currentPageRef.current = currentPage;
@@ -1339,8 +1377,24 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             scaleRef.current = scale;
         }, [scale]);
 
-        const applyZoom = useCallback((requestedScale: number): number => {
+        const setZoomMode = useCallback((mode: PdfZoomMode, force = false) => {
+            if (!force && zoomModeRef.current === mode) {
+                return;
+            }
+            zoomModeRef.current = mode;
+            callbacksRef.current.onZoomModeChange?.(mode);
+        }, []);
+
+        const applyZoom = useCallback((
+            requestedScale: number,
+            options?: { mode?: PdfZoomMode; preserveMode?: boolean },
+        ): number => {
             const clampedScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, requestedScale));
+            if (options?.mode) {
+                setZoomMode(options.mode);
+            } else if (!options?.preserveMode) {
+                setZoomMode("custom");
+            }
             if (Math.abs(clampedScale - scaleRef.current) < 0.0001) {
                 return scaleRef.current;
             }
@@ -1352,10 +1406,46 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 clampedScale,
             );
             return clampedScale;
-        }, []);
+        }, [setZoomMode]);
 
         const clearSearch = useCallback(() => {
             searchSessionRef.current += 1;
+        }, []);
+
+        const restoreInitialPageWithRetry = useCallback((targetPage: number, attempts = 0) => {
+            const container = containerRef.current;
+            if (!container) {
+                return;
+            }
+
+            const pageNode = container.querySelector<HTMLElement>(
+                `.pdf-page-wrapper[data-page-number="${targetPage}"]`,
+            );
+            if (pageNode) {
+                container.scrollTo({
+                    top: Math.max(0, pageNode.offsetTop - 8),
+                    behavior: "auto",
+                });
+                currentPageRef.current = targetPage;
+                setCurrentPage(targetPage);
+                callbacksRef.current.onPageChange?.(
+                    targetPage,
+                    totalPagesRef.current,
+                    scaleRef.current,
+                );
+                return;
+            }
+
+            if (attempts >= 40) {
+                return;
+            }
+
+            if (initialPageRestoreTimeoutRef.current) {
+                clearTimeout(initialPageRestoreTimeoutRef.current);
+            }
+            initialPageRestoreTimeoutRef.current = setTimeout(() => {
+                restoreInitialPageWithRetry(targetPage, attempts + 1);
+            }, 75);
         }, []);
 
         const search = useCallback(
@@ -1533,7 +1623,12 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     setPages([]);
                     clearPageTextContentCache();
                     searchSessionRef.current += 1;
-                    hasAppliedInitialFitRef.current = false;
+                    hasAppliedInitialViewStateRef.current = false;
+                    if (initialPageRestoreTimeoutRef.current) {
+                        clearTimeout(initialPageRestoreTimeoutRef.current);
+                        initialPageRestoreTimeoutRef.current = null;
+                    }
+                    zoomModeRef.current = initialZoomMode;
 
                     // Get PDF data
                     let data: Uint8Array;
@@ -1595,13 +1690,15 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     };
 
                     const clampedInitialPage = Math.max(1, Math.min(initialPage, info.totalPages || 1));
+                    initialPageToRestoreRef.current = clampedInitialPage;
                     // Keep refs/state in sync before first callback so parent never receives 0 total pages.
                     currentPageRef.current = clampedInitialPage;
                     totalPagesRef.current = info.totalPages;
-                    scaleRef.current = DEFAULT_SCALE;
+                    scaleRef.current = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, initialZoom));
                     setCurrentPage(clampedInitialPage);
                     setTotalPages(info.totalPages);
-                    setScale(DEFAULT_SCALE);
+                    setScale(scaleRef.current);
+                    setZoomMode(initialZoomMode, true);
 
                     // Pre-load first few pages
                     const pagesToLoad = Math.min(INITIAL_PAGE_LOAD_SIZE, pdf.numPages);
@@ -1614,7 +1711,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         setIsLoading(false);
                         callbacksRef.current.onLoad?.(info);
                         // Also call onPageChange with initial page to update parent state
-                        callbacksRef.current.onPageChange?.(clampedInitialPage, info.totalPages, DEFAULT_SCALE);
+                        callbacksRef.current.onPageChange?.(
+                            clampedInitialPage,
+                            info.totalPages,
+                            scaleRef.current,
+                        );
                     } else {
                         // Cleanup if cancelled
                         initialPages.forEach(p => p.cleanup());
@@ -1637,6 +1738,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             return () => {
                 cancelled = true;
                 // Cleanup
+                if (initialPageRestoreTimeoutRef.current) {
+                    clearTimeout(initialPageRestoreTimeoutRef.current);
+                    initialPageRestoreTimeoutRef.current = null;
+                }
                 setPages((existingPages) => {
                     existingPages.forEach((page) => page.cleanup());
                     return [];
@@ -1648,14 +1753,14 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             };
             // Only reload when pdfPath, pdfData, or initialPage changes
             // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [pdfPath, pdfData, initialPage, originalFilename]);
+        }, [initialPage, initialZoom, initialZoomMode, pdfPath, pdfData, originalFilename, setZoomMode]);
 
         // Track loading state to prevent duplicate page loads
         const isLoadingPageRef = useRef(false);
 
-        // Apply an initial fit-width scale so PDF text is readable by default.
+        // Apply initial zoom strategy and restore initial page once first pages are rendered.
         useEffect(() => {
-            if (hasAppliedInitialFitRef.current) {
+            if (hasAppliedInitialViewStateRef.current) {
                 return;
             }
             if (!containerRef.current || pages.length === 0) {
@@ -1668,35 +1773,34 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     return;
                 }
 
-                const containerWidth = container.clientWidth - 32;
-                if (containerWidth <= 0) {
-                    return;
-                }
-
                 const firstPage = pages[0];
-                const viewport = firstPage.getViewport({ scale: PDF_TO_CSS_UNITS });
-                if (viewport.width <= 0) {
+                if (!firstPage) {
                     return;
                 }
 
-                const fitScale = containerWidth / viewport.width;
-                const nextScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
+                const normalizedMode = initialZoomMode;
+                const nextScale = normalizedMode === "page-fit"
+                    ? getFitPageScale(container, firstPage)
+                    : normalizedMode === "width-fit"
+                        ? getFitWidthScale(container, firstPage)
+                        : Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, initialZoom));
 
-                hasAppliedInitialFitRef.current = true;
-                applyZoom(nextScale);
-                if (totalPagesRef.current > 0) {
-                    callbacksRef.current.onPageChange?.(
-                        currentPageRef.current,
-                        totalPagesRef.current,
-                        nextScale,
-                    );
+                hasAppliedInitialViewStateRef.current = true;
+                applyZoom(nextScale, { mode: normalizedMode, preserveMode: normalizedMode !== "custom" });
+
+                const targetPage = Math.max(
+                    1,
+                    Math.min(initialPageToRestoreRef.current, totalPagesRef.current || 1),
+                );
+                if (targetPage > 1) {
+                    restoreInitialPageWithRetry(targetPage);
                 }
             });
 
             return () => {
                 cancelAnimationFrame(rafId);
             };
-        }, [pages, applyZoom]);
+        }, [pages, applyZoom, initialZoom, initialZoomMode, restoreInitialPageWithRetry]);
 
         // Load additional pages as needed
         useEffect(() => {
@@ -1890,10 +1994,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 applyZoom(scaleRef.current - ZOOM_STEP);
             },
             zoomReset: () => {
-                applyZoom(DEFAULT_SCALE);
+                applyZoom(DEFAULT_SCALE, { mode: "custom" });
             },
             setZoom: (newScale: number) => {
-                applyZoom(newScale);
+                applyZoom(newScale, { mode: "custom" });
             },
             getZoom: () => scaleRef.current,
             getCurrentPage: () => currentPageRef.current,
@@ -1908,24 +2012,15 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 if (!containerRef.current || pages.length === 0) return;
                 const container = containerRef.current;
                 const firstPage = pages[0];
-                const viewport = firstPage.getViewport({ scale: PDF_TO_CSS_UNITS });
-                const viewportPadding = container.clientWidth < 768 ? 12 : 32;
-                const containerH = container.clientHeight - viewportPadding;
-                const containerW = container.clientWidth - viewportPadding;
-                const fitScale = Math.min(containerW / viewport.width, containerH / viewport.height);
-                const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
-                applyZoom(newScale);
+                const newScale = getFitPageScale(container, firstPage);
+                applyZoom(newScale, { mode: "page-fit", preserveMode: true });
             },
             zoomFitWidth: () => {
                 if (!containerRef.current || pages.length === 0) return;
                 const container = containerRef.current;
                 const firstPage = pages[0];
-                const viewport = firstPage.getViewport({ scale: PDF_TO_CSS_UNITS });
-                const viewportPadding = container.clientWidth < 768 ? 12 : 32;
-                const containerW = container.clientWidth - viewportPadding;
-                const fitScale = containerW / viewport.width;
-                const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale));
-                applyZoom(newScale);
+                const newScale = getFitWidthScale(container, firstPage);
+                applyZoom(newScale, { mode: "width-fit", preserveMode: true });
             },
             search: (query: string) => search(query),
             clearSearch: () => clearSearch(),

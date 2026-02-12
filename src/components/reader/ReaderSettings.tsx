@@ -113,6 +113,7 @@ export function ReaderSettings({
     
     // Determine if current format is fixed layout (CBZ/PDF, plus legacy CBR entries)
     const isFixed = isFixedLayout(format);
+    const reflowZoomMin = settings.flow === "paged" ? 100 : 50;
 
     const brightnessSlider = useSmoothSlider(
         settings.brightness ?? 100,
@@ -135,7 +136,9 @@ export function ReaderSettings({
     const zoomSlider = useSmoothSlider(
         settings.zoom ?? 100,
         (v) => onUpdate({ zoom: v }),
-        50, 200, 10
+        isFixed ? 50 : reflowZoomMin,
+        200,
+        10,
     );
 
     const currentFontFamily = FONTS.find(f => f.id === settings.fontFamily)?.family;
@@ -144,7 +147,7 @@ export function ReaderSettings({
         onUpdate({
             theme: 'light', fontFamily: 'original', fontSize: 18, lineHeight: 1.6,
             letterSpacing: 0, wordSpacing: 0, paragraphSpacing: 1, textAlign: 'left',
-            hyphenation: false, margins: 10, zoom: 100, flow: 'paged', layout: 'double',
+            hyphenation: false, margins: 10, zoom: 100, flow: 'paged', layout: 'auto',
             brightness: 100, forcePublisherStyles: false,
         });
     }, [onUpdate]);
@@ -546,7 +549,10 @@ export function ReaderSettings({
                                         <Minus className="w-4 h-4" style={textStyle} />
                                     </button>
                                     <input
-                                        type="range" min="50" max="200" step="10"
+                                        type="range"
+                                        min={reflowZoomMin}
+                                        max="200"
+                                        step="10"
                                         value={zoomSlider.value}
                                         onChange={zoomSlider.handleChange}
                                         className="flex-1 h-1 rounded-full"

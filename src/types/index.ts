@@ -54,6 +54,15 @@ export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
     purple: "rgba(148, 148, 148, 0.16)",
 };
 
+export type PdfZoomMode = "custom" | "page-fit" | "width-fit";
+
+export interface PdfViewState {
+    page: number;
+    totalPages: number;
+    zoom: number;
+    zoomMode: PdfZoomMode;
+}
+
 // Book Entity
 export interface Book {
     id: string;
@@ -81,6 +90,7 @@ export interface Book {
         totalPages: number;
         range: string;
     };
+    pdfViewState?: PdfViewState;
     locations?: string; // Serialized locations JSON string
     category?: string;
     tags: string[];
