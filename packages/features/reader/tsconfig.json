@@ -1,0 +1,24 @@
+{
+    "extends": "../../../tsconfig.base.json",
+    "compilerOptions": {
+        "outDir": "./dist",
+        "rootDir": ".",
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "./src/*"
+            ],
+            "@/foliate-js/*": [
+                "./foliate-js/*"
+            ]
+        }
+    },
+    "include": [
+        "src",
+        "foliate-js"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
+}

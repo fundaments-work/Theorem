@@ -1,0 +1,13 @@
+{
+    "name": "@lionreader/feature-reader",
+    "version": "0.1.0",
+    "private": true,
+    "main": "src/index.ts",
+    "dependencies": {
+        "react": "^19.0.0",
+        "zustand": "^5.0.0",
+        "@lionreader/core": "*",
+        "@lionreader/ui": "*",
+        "pdfjs-dist": "^4.10.38"
+    }
+}

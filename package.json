@@ -1,51 +1,20 @@
 {
-  "name": "theorem",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "tauri": "tauri"
-  },
-  "dependencies": {
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-dialog": "^2.6.0",
-    "@tauri-apps/plugin-fs": "^2.4.5",
-    "@tauri-apps/plugin-opener": "^2",
-    "@tauri-apps/plugin-os": "^2.3.2",
-    "@tauri-apps/plugin-window": "^2.0.0-alpha.1",
-    "@tauri-controls/react": "^0.4.0",
-    "@types/uuid": "^10.0.0",
-    "@zip.js/zip.js": "^2.8.16",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "date-fns": "^4.1.0",
-    "fflate": "^0.8.2",
-    "fuse.js": "^7.1.0",
-    "idb-keyval": "^6.2.2",
-    "lucide-react": "^0.563.0",
-    "pdfjs-dist": "^4.10.38",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router-dom": "^7.13.0",
-    "tailwind-merge": "^3.4.0",
-    "ts-fsrs": "^5.2.3",
-    "uuid": "^13.0.0",
-    "zustand": "^5.0.10"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.1.18",
-    "@tauri-apps/cli": "^2",
-    "@types/node": "^25.1.0",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
-    "@types/react-router-dom": "^5.3.3",
-    "@vitejs/plugin-react": "^4.6.0",
-    "tailwindcss": "^4.1.18",
-    "typescript": "~5.8.3",
-    "vite": "^7.0.4",
-    "vite-plugin-static-copy": "^3.2.0"
-  }
+    "name": "lionreader-monorepo",
+    "private": true,
+    "workspaces": [
+        "apps/*",
+        "packages/*",
+        "packages/features/*"
+    ],
+    "scripts": {
+        "dev": "npm run dev --workspace=@lionreader/web",
+        "build": "npm run build --workspaces",
+        "test": "npm run test --workspaces",
+        "tauri": "npm run tauri --workspace=@lionreader/web"
+    },
+    "devDependencies": {
+        "typescript": "^5.0.0",
+        "@types/node": "^22.0.0",
+        "vite": "^7.0.0"
+    }
 }

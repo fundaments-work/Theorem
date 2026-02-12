@@ -1,0 +1,150 @@
+/**
+ * PDF.js Engine Styles
+ */
+
+/* Zoom container */
+.pdf-zoom-container {
+    width: 100%;
+}
+
+.pdf-page-wrapper {
+    position: relative;
+    margin: 0 auto;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Page container */
+.pdf-page-container {
+    position: relative;
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+}
+
+/* Text layer follows PDF.js viewer defaults for accurate hit-testing/selection */
+.textLayer {
+    position: absolute;
+    text-align: initial;
+    inset: 0;
+    overflow: clip;
+    opacity: 1;
+    line-height: 1;
+    -webkit-text-size-adjust: none;
+    -moz-text-size-adjust: none;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    caret-color: CanvasText;
+    z-index: 2;
+}
+
+.textLayer :is(span, br) {
+    position: absolute;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+    text-shadow: none;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+    z-index: 1;
+}
+
+.textLayer span.markedContent {
+    top: 0;
+    height: 0;
+}
+
+.textLayer span[role="img"] {
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+}
+
+.textLayer ::selection {
+    background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+.textLayer br::selection {
+    background: transparent;
+}
+
+.textLayer .endOfContent {
+    display: block;
+    position: absolute;
+    inset: 100% 0 0;
+    z-index: 0;
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.textLayer.selecting .endOfContent {
+    top: 0;
+}
+
+.textLayer.selecting {
+    touch-action: none;
+}
+
+[data-main-rotation="90"] {
+    transform: rotate(90deg) translateY(-100%);
+}
+
+[data-main-rotation="180"] {
+    transform: rotate(180deg) translate(-100%, -100%);
+}
+
+[data-main-rotation="270"] {
+    transform: rotate(270deg) translateX(-100%);
+}
+
+.hiddenCanvasElement {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    display: none;
+}
+
+/* Ensure canvas is below text layer */
+.pdf-page-container canvas {
+    position: absolute;
+    z-index: 1;
+}
+
+/* Theme support */
+.theme-dark .pdf-page-wrapper {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-md);
+}
+
+.theme-sepia .pdf-page-wrapper {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+}
+
+@media (max-width: 768px) {
+    .pdf-page-wrapper {
+        border-width: 0;
+        box-shadow: var(--shadow-xs);
+    }
+}
+
+/* Loading spinner */
+@keyframes pdfjs-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin {
+    animation: pdfjs-spin 1s linear infinite;
+}

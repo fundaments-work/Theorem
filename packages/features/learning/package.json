@@ -1,0 +1,13 @@
+{
+    "version": "0.1.0",
+    "private": true,
+    "main": "src/index.ts",
+    "dependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "@lionreader/core": "*",
+        "@lionreader/ui": "*",
+        "lucide-react": "^0.400.0"
+    },
+    "name": "@lionreader/feature-learning"
+}
