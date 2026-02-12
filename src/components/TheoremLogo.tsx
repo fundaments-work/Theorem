@@ -1,6 +1,6 @@
 /**
  * TheoremLogo Component
- * Simple SVG brand logo
+ * Geometric brand monogram for Theorem.
  */
 
 interface TheoremLogoProps {
@@ -10,70 +10,48 @@ interface TheoremLogoProps {
 
 export function TheoremLogo({ className, size = 32 }: TheoremLogoProps) {
     const logoColors = {
-        face: "var(--color-accent-light)",
-        mane: "var(--color-accent)",
-        feature: "var(--color-text-primary)",
-        eyeHighlight: "var(--color-surface)",
+        tile: "color-mix(in srgb, var(--color-surface) 82%, var(--color-accent-light))",
+        tileHighlight: "color-mix(in srgb, var(--color-accent) 9%, transparent)",
+        frame: "color-mix(in srgb, var(--color-accent) 42%, var(--color-border))",
+        glyph: "var(--color-accent)",
+        glyphSoft: "color-mix(in srgb, var(--color-accent) 68%, var(--color-text-primary))",
     };
 
     return (
         <svg
             width={size}
             height={size}
-            viewBox="0 0 100 100"
+            viewBox="0 0 96 96"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             className={className}
+            aria-hidden="true"
+            focusable="false"
         >
-            {/* Face circle */}
-            <circle
-                cx="50"
-                cy="50"
-                r="45"
-                fill={logoColors.face}
-                stroke={logoColors.feature}
-                strokeWidth="3"
+            <rect
+                x="8"
+                y="8"
+                width="80"
+                height="80"
+                rx="22"
+                fill={logoColors.tile}
+                stroke={logoColors.frame}
+                strokeWidth="2.5"
             />
-
-            {/* Mane - outer rays */}
-            {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, i) => (
-                <ellipse
-                    key={i}
-                    cx="50"
-                    cy="50"
-                    rx="12"
-                    ry="25"
-                    fill={logoColors.mane}
-                    transform={`rotate(${angle} 50 50)`}
-                />
-            ))}
-
-            {/* Inner face circle */}
-            <circle cx="50" cy="50" r="30" fill={logoColors.face}/>
-
-            {/* Eyes */}
-            <circle cx="38" cy="42" r="5" fill={logoColors.feature}/>
-            <circle cx="62" cy="42" r="5" fill={logoColors.feature}/>
-            <circle cx="40" cy="40" r="2" fill={logoColors.eyeHighlight}/>
-            <circle cx="64" cy="40" r="2" fill={logoColors.eyeHighlight}/>
-
-            {/* Nose */}
-            <ellipse cx="50" cy="55" rx="6" ry="4" fill={logoColors.feature}/>
-
-            {/* Mouth */}
             <path
-                d="M42 62 Q50 68 58 62"
-                stroke={logoColors.feature}
-                strokeWidth="2"
-                fill="none"
-                strokeLinecap="round"
+                d="M14 18C27 11 43 9 58 11C72 13 84 18 90 26V8H8V34C9 28 11 22 14 18Z"
+                fill={logoColors.tileHighlight}
+                opacity="0.95"
             />
 
-            {/* Whiskers */}
-            <line x1="25" y1="52" x2="35" y2="55" stroke={logoColors.feature} strokeWidth="1"/>
-            <line x1="25" y1="58" x2="35" y2="58" stroke={logoColors.feature} strokeWidth="1"/>
-            <line x1="75" y1="52" x2="65" y2="55" stroke={logoColors.feature} strokeWidth="1"/>
-            <line x1="75" y1="58" x2="65" y2="58" stroke={logoColors.feature} strokeWidth="1"/>
+            <path d="M28 32H68" stroke={logoColors.glyph} strokeWidth="8" strokeLinecap="round" />
+            <path d="M48 32V58" stroke={logoColors.glyph} strokeWidth="8" strokeLinecap="round" />
+            <path d="M31 66C36 62 42 60 48 60C54 60 60 62 65 66" stroke={logoColors.glyphSoft} strokeWidth="4.5" strokeLinecap="round" />
+
+            {/* "Therefore" three-dot motif */}
+            <circle cx="48" cy="70" r="3.5" fill={logoColors.glyph} />
+            <circle cx="40.5" cy="78" r="3.5" fill={logoColors.glyph} />
+            <circle cx="55.5" cy="78" r="3.5" fill={logoColors.glyph} />
         </svg>
     );
 }

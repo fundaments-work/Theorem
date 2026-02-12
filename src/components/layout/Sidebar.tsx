@@ -1,8 +1,4 @@
 import { useCallback, useRef, useEffect } from "react";
-import { cn } from "@/lib/utils";
-import { useUIStore, useSettingsStore } from "@/store";
-import type { AppRoute } from "@/types";
-import { TheoremLogo } from "@/components/TheoremLogo";
 import {
     Library,
     Bookmark,
@@ -13,6 +9,10 @@ import {
     FolderOpen,
     X,
 } from "lucide-react";
+import { TheoremLogo } from "@/components/TheoremLogo";
+import { cn } from "@/lib/utils";
+import { useUIStore, useSettingsStore } from "@/store";
+import type { AppRoute } from "@/types";
 
 interface SidebarItem {
     id: AppRoute;
@@ -84,18 +84,39 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
             )}
         >
             {/* Header - Logo + App Name (visible on all screens) */}
-            <div className={cn(
-                "flex items-center border-b border-[var(--color-border)] h-16",
-                isCollapsedDesktop ? "justify-center px-0" : "justify-between px-4"
-            )}>
-                <div className={cn("flex items-center overflow-hidden", isCollapsedDesktop ? "justify-center" : "gap-3")}>
-                    <TheoremLogo size={28} className="flex-shrink-0" />
-                    <span className={cn(
-                        "ui-brand-wordmark text-lg text-[color:var(--color-text-primary)] whitespace-nowrap",
-                        !isMobile && !sidebarOpen ? "opacity-0 w-0" : "opacity-100"
-                    )}>
-                        Theorem
-                    </span>
+            <div
+                className={cn(
+                    "flex items-center border-b border-[var(--color-border)] h-[4.5rem]",
+                    isCollapsedDesktop ? "justify-center px-0" : "justify-between pl-4 pr-3",
+                )}
+            >
+                <div
+                    className={cn(
+                        "min-w-0 flex items-center",
+                        isCollapsedDesktop ? "justify-center" : "gap-3.5",
+                    )}
+                >
+                    <div
+                        className={cn(
+                            "relative h-10 w-10 flex-shrink-0 rounded-2xl",
+                            "flex items-center justify-center",
+                            "border border-[color-mix(in_srgb,var(--color-accent)_24%,var(--color-border))]",
+                            "bg-[color-mix(in_srgb,var(--color-surface)_72%,var(--color-accent-light))]",
+                            "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--color-surface)_70%,white)]",
+                        )}
+                    >
+                        <TheoremLogo size={25} className="flex-shrink-0" />
+                    </div>
+                    {(sidebarOpen || isMobile) && (
+                        <div className="min-w-0 animate-fade-in">
+                            <span className="ui-brand-wordmark block text-[1.12rem] leading-tight tracking-[0.04em] text-[color:var(--color-text-primary)]">
+                                Theorem
+                            </span>
+                            <span className="mt-1 block text-[0.62rem] leading-none uppercase tracking-[0.22em] text-[color:var(--color-text-muted)]">
+                                Reading Studio
+                            </span>
+                        </div>
+                    )}
                 </div>
                 {/* Close button - only on mobile */}
                 {isMobile && onClose && (
