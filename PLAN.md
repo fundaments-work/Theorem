@@ -1,65 +1,86 @@
-# Theorem - Roadmap
+# Theorem Product Roadmap
 
-## Core Philosophy
+Last updated: 2026-02-12
 
-**"Read at the speed of thought. Absorb, retain, and master knowledge faster than ever before."**
+## Product Thesis
+Theorem is an all-in-one reading and learning system: read, capture, remember, and apply.
 
----
+## Delivery Strategy
+1. Build the data platform first (local-first, sync-ready).
+2. Layer learning workflows (dictionary + SRS) on top of the same data core.
+3. Expand content ingestion (RSS, newsletters, web, academic) without changing the core model.
+4. Keep one codebase for web, mobile, and desktop.
 
-## Features
+## Phase 1: Core Reading (Current state)
+- [x] EPUB support
+- [x] MOBI/AZW/AZW3 support
+- [x] FB2 support
+- [x] CBZ support
+- [x] PDF support
+- [x] Library management
+- [x] Reading progress tracking
+- [x] Highlights, notes, bookmarks
+- [x] Table of contents navigation
+- [x] Search in current document
+- [x] Reading statistics
 
-### Phase 1: Core Reading
-- [x] EPUB Support
-- [x] MOBI/AZW/AZW3 Support
-- [x] FB2 Support
-- [x] CBZ Support
-- [x] Library Management
-- [x] Book Progress Tracking
-- [x] Annotations & Highlights
-- [x] Bookmarks
-- [x] Table of Contents Navigation
-- [x] Search within Books
-- [x] Reading Statistics
+## Phase 2: Data Platform Foundation (Current priority)
+- [ ] Local SQLite canonical data core
+- [ ] Repository layer (`src/data/*`) replacing persisted domain Zustand state
+- [ ] Shared schema across desktop/mobile/web
+- [ ] Web SQLite WASM + OPFS driver
+- [ ] Tauri native SQLite command layer
+- [ ] Operation log + sync outbox
+- [ ] Automatic one-time migration from existing local state
+- [ ] Performance target validation for 10k docs / 500k annotations
 
-### Phase 2: Learning Tools
-- [ ] Dictionary Integration
-- [ ] Vocabulary Builder
-- [ ] Spaced Repetition System (SRS)
-- [ ] Daily Review System
+## Phase 3: Paid Sync Infrastructure
+- [ ] Cloudflare Workers sync API
+- [ ] JWT auth integration for account/device identity
+- [ ] Canonical cloud metadata store on Postgres (Supabase first)
+- [ ] Blob sync via S3-compatible adapter
+- [ ] R2 as primary blob provider
+- [ ] AWS S3 as secondary/fallback provider
+- [ ] End-to-end encryption (zero-knowledge)
+- [ ] Deterministic conflict resolution for offline multi-device edits
 
-### Phase 3: Content Discovery
-- [ ] RSS Feed Reader
-- [ ] Web Clipper (Browser Extension)
-- [ ] Article Saving & Reading
-- [ ] Newsletter Subscriptions
+## Phase 4: Learning Loop
+- [ ] Dictionary lookup and save-to-vocabulary
+- [ ] Personal dictionary management
+- [ ] Flashcards from highlights/notes
+- [ ] Spaced repetition scheduler and review workflow
+- [ ] Daily review session UX
 
-### Phase 4: Academic Features
-- [ ] arXiv Integration
-- [ ] PubMed Integration
-- [ ] Academic Paper Support (PDF reading exists, but no academic workflows)
-- [ ] Reference Management
-- [ ] Citation Export
+## Phase 5: Content Discovery and Capture
+- [ ] RSS feed reader
+- [ ] Newsletter ingestion
+- [ ] Web clipper
+- [ ] Saved web article reader mode
+- [ ] Unified content model across books/articles/web
 
-### Phase 5: Integrations
-- [ ] Obsidian Export (annotation-to-markdown export exists, no direct vault integration)
+## Phase 6: Academic Workflow
+- [ ] arXiv integration
+- [ ] PubMed integration
+- [ ] Reference manager
+- [ ] Citation export formats
+- [ ] Citation links on highlights and notes
+
+## Phase 7: Reading Acceleration
+- [ ] Velocity mode (speed reading)
+- [ ] TTS with local/open-source model support
+- [ ] Advanced continuation and session intelligence
+
+## Phase 8: Integrations and Platform
+- [ ] Obsidian export and sync-friendly markdown output
 - [ ] Public API
+- [ ] Launch readiness on web, mobile, and desktop
 
-### Phase 6: Advanced Features
-- [ ] Text-to-Speech (TTS)
-- [ ] Velocity Mode (Speed Reading)
-- [ ] Sync & Cross-Platform
-- [ ] Mobile Apps
+## Non-Negotiable Constraints
+1. Local-first always: app remains useful without network.
+2. Sync is optional and paid, not required for core reading.
+3. New features must use central data core; no new direct localStorage/Zustand persistence silos.
+4. Cloud architecture must remain portable across providers.
 
----
-
-## Technology Stack
-
-- React + TypeScript
-- Tauri (Rust backend)
-- Tailwind CSS
-- Zustand (state management)
-- Foliate-js (EPUB/MOBI/CBZ rendering)
-
----
-
-*"The future belongs to those who learn more skills and combine them in creative ways."*
+## Active Planning Docs
+1. `syncPLAN.md` - sync and data architecture (authoritative technical plan).
+2. `design-system/theorem/IMPLEMENTATION.md` - design token implementation status.

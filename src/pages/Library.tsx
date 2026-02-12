@@ -1010,7 +1010,6 @@ export function LibraryPage() {
             name,
             bookIds: addToShelfBookId ? [addToShelfBookId] : [],
             createdAt: new Date(),
-            isSmartCollection: false,
         };
         addCollection(newShelf);
         setIsAddToShelfModalOpen(false);

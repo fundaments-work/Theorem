@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MessageSquare, X, Check, Trash2 } from 'lucide-react';
+import { MessageSquare, X, Check, Trash2, Languages } from 'lucide-react';
 import { ask } from '@tauri-apps/plugin-dialog';
 import {
     HIGHLIGHT_COLOR_TOKENS,
@@ -18,10 +18,10 @@ import type { HighlightColor } from '@/types';
 interface HighlightColorPickerProps {
     isOpen: boolean;
     position: { x: number; y: number };
-    selectedText: string;
     currentColor?: HighlightColor | null;
     onSelectColor: (color: HighlightColor) => void;
     onAddNote: () => void;
+    onDefine?: () => void;
     onBookmark: () => void;
     onDelete?: () => void;
     onClose: () => void;
@@ -79,6 +79,7 @@ export function HighlightColorPicker({
     currentColor,
     onSelectColor,
     onAddNote,
+    onDefine,
     onBookmark,
     onDelete,
     onClose,
@@ -399,7 +400,7 @@ export function HighlightColorPicker({
                         </div>
 
                         {/* Action buttons */}
-                        <div className="flex gap-1">
+                        <div className="grid gap-1">
                             <button
                                 onClick={() => {
                                     onAddNote();
@@ -420,6 +421,31 @@ export function HighlightColorPicker({
                                 <MessageSquare className="w-3 h-3" />
                                 Add Note
                             </button>
+
+                            <div className="grid grid-cols-1 gap-1">
+                                <button
+                                    onClick={() => {
+                                        onDefine?.();
+                                        handleClose();
+                                    }}
+                                    className={cn(
+                                        "flex items-center justify-center gap-1.5",
+                                        "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
+                                        "rounded-lg",
+                                        "bg-[var(--color-surface-variant)]",
+                                        "text-[color:var(--color-text-secondary)]",
+                                        "hover:bg-[var(--color-surface-hover)]",
+                                        "hover:text-[color:var(--color-text-primary)]",
+                                        "transition-colors duration-150",
+                                        "active:scale-95",
+                                        !onDefine && "opacity-50 cursor-not-allowed"
+                                    )}
+                                    disabled={!onDefine}
+                                >
+                                    <Languages className="w-3 h-3" />
+                                    Define
+                                </button>
+                            </div>
                         </div>
 
                         {/* Delete button - only shown when onDelete is provided */}

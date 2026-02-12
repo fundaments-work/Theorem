@@ -1,18 +1,45 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { normalizeCardTextForDisplay } from "@/lib/learning-card-text";
+import { applyReaderStyles, initReaderStyles } from "@/lib/reader-styles";
+import {
+    lookupDictionaryTerm,
+    vocabularyTermFromLookup,
+    type DictionaryLookupResult,
+} from "@/services/DictionaryService";
+import {
+    importStarDictDictionary,
+    removeStarDictDictionary,
+} from "@/services/StarDictService";
+import {
+    createInitialReviewSchedulerState,
+    normalizeReviewSchedulerState,
+    reviewItemSchedulerState,
+} from "@/services/LearningSchedulerService";
 import type {
-    Book,
     Annotation,
-    Collection,
+    AppRoute,
     AppSettings,
+    Book,
+    Collection,
+    DailyReviewItem,
+    DailyReminderState,
+    HighlightColor,
+    InstalledDictionary,
+    LearningReviewRecord,
+    LearningSettings,
+    PdfViewState,
     ReaderSettings,
     ReadingStats,
+    ReviewEvent,
+    ReviewLaunchScope,
+    ReviewSourceType,
+    ReviewGrade,
     UIState,
-    AppRoute,
-    HighlightColor,
-    PdfViewState,
+    VocabularyContext,
+    VocabularyContextSourceType,
+    VocabularyTerm,
 } from "@/types";
-import { applyReaderStyles, initReaderStyles } from "@/lib/reader-styles";
 
 // Default reader settings - optimized for performance
 const defaultReaderSettings: ReaderSettings = {
@@ -42,6 +69,21 @@ const defaultReaderSettings: ReaderSettings = {
 };
 
 // Default app settings
+const defaultLearningSettings: LearningSettings = {
+    vocabularyEnabled: true,
+    reviewVocabularyEnabled: true,
+    reviewHighlightEnabled: true,
+    defaultReminderReviewScope: "all",
+    dictionaryMode: "auto",
+    preferredProviders: ["free_dictionary_api", "wiktionary", "stardict"],
+    dailyReviewTime: "09:00",
+    dailyReviewGoal: 20,
+    inAppReminder: true,
+    showPronunciation: true,
+    playPronunciationAudio: false,
+};
+
+// Default app settings
 const defaultAppSettings: AppSettings = {
     sidebarCollapsed: false,
     libraryViewMode: "grid",
@@ -51,6 +93,7 @@ const defaultAppSettings: AppSettings = {
     cacheSize: 500, // MB
     theme: "system",
     readerSettings: defaultReaderSettings,
+    learning: defaultLearningSettings,
 };
 
 // Default reading stats
@@ -196,6 +239,14 @@ function getCachedBookLookup(cache: CachedBookMetadata[]): Map<string, CachedBoo
     return nextLookup;
 }
 
+function toIsoDateString(date: Date = new Date()): string {
+    return date.toISOString().slice(0, 10);
+}
+
+function normalizeTermKey(term: string, language: string): string {
+    return `${term.trim().toLowerCase()}::${language.trim().toLowerCase()}`;
+}
+
 // Library Store
 interface LibraryStore {
     books: Book[];
@@ -276,7 +327,7 @@ export const useLibraryStore = create<LibraryStore>()(
             addBooks: (books) =>
                 set((state) => ({ books: [...state.books, ...books] })),
 
-            removeBook: (bookId) =>
+            removeBook: (bookId) => {
                 set((state) => ({
                     books: state.books.filter((b) => b.id !== bookId),
                     annotations: state.annotations.filter((a) => a.bookId !== bookId),
@@ -286,7 +337,9 @@ export const useLibraryStore = create<LibraryStore>()(
                         ...c,
                         bookIds: c.bookIds.filter((id) => id !== bookId),
                     })),
-                })),
+                }));
+                useLearningStore.getState().syncReviewRecords();
+            },
 
             updateBook: (bookId, updates) =>
                 set((state) => {
@@ -538,8 +591,10 @@ export const useLibraryStore = create<LibraryStore>()(
                 })),
 
             // Annotation actions
-            addAnnotation: (annotation) =>
-                set((state) => ({ annotations: [...state.annotations, annotation] })),
+            addAnnotation: (annotation) => {
+                set((state) => ({ annotations: [...state.annotations, annotation] }));
+                useLearningStore.getState().syncReviewRecords();
+            },
 
             addHighlightWithNote: (cfi, text, color, note) => {
                 const annotation: Annotation = {
@@ -553,22 +608,29 @@ export const useLibraryStore = create<LibraryStore>()(
                     createdAt: new Date(),
                 };
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
+                useLearningStore.getState().syncReviewRecords();
                 return annotation;
             },
 
             setCurrentBookId: (bookId) => set({ currentBookId: bookId }),
 
-            updateAnnotation: (annotationId, updates) =>
+            updateAnnotation: (annotationId, updates) => {
                 set((state) => ({
-                    annotations: state.annotations.map((a) =>
-                        a.id === annotationId ? { ...a, ...updates, updatedAt: new Date() } : a
-                    ),
-                })),
+                    annotations: state.annotations.map((a) => (
+                        a.id === annotationId
+                            ? { ...a, ...updates, updatedAt: new Date() }
+                            : a
+                    )),
+                }));
+                useLearningStore.getState().syncReviewRecords();
+            },
 
-            removeAnnotation: (annotationId) =>
+            removeAnnotation: (annotationId) => {
                 set((state) => ({
                     annotations: state.annotations.filter((a) => a.id !== annotationId),
-                })),
+                }));
+                useLearningStore.getState().syncReviewRecords();
+            },
 
             getBookAnnotations: (bookId) =>
                 get().annotations.filter((a) => a.bookId === bookId),
@@ -672,6 +734,7 @@ interface SettingsStore {
 
     updateSettings: (updates: Partial<AppSettings>) => void;
     updateReaderSettings: (updates: Partial<ReaderSettings>) => void;
+    updateLearningSettings: (updates: Partial<LearningSettings>) => void;
     updateStats: (updates: Partial<ReadingStats>) => void;
     resetSettings: () => void;
     resetReaderSettings: () => void;
@@ -703,6 +766,17 @@ export const useSettingsStore = create<SettingsStore>()(
                 }));
             },
 
+            updateLearningSettings: (updates) =>
+                set((state) => ({
+                    settings: {
+                        ...state.settings,
+                        learning: {
+                            ...state.settings.learning,
+                            ...updates,
+                        },
+                    },
+                })),
+
             updateStats: (updates) =>
                 set((state) => ({
                     stats: { ...state.stats, ...updates },
@@ -732,6 +806,15 @@ export const useSettingsStore = create<SettingsStore>()(
                 if (state?.settings.readerSettings) {
                     initReaderStyles(state.settings.readerSettings);
                 }
+
+                if (state && !state.settings.learning) {
+                    state.settings.learning = defaultLearningSettings;
+                } else if (state?.settings.learning) {
+                    state.settings.learning = {
+                        ...defaultLearningSettings,
+                        ...state.settings.learning,
+                    };
+                }
                 
                 // Migration: Ensure dailyActivity exists for old stored data
                 if (state && !state.stats.dailyActivity) {
@@ -740,4 +823,1042 @@ export const useSettingsStore = create<SettingsStore>()(
             },
         }
     )
+);
+
+interface LearningStore {
+    vocabularyTerms: VocabularyTerm[];
+    reviewRecords: LearningReviewRecord[];
+    reviewEvents: ReviewEvent[];
+    installedDictionaries: InstalledDictionary[];
+    lookupCache: Record<string, DictionaryLookupResult>;
+    dailyReminderState: DailyReminderState;
+    reviewSessionState: ReviewSessionState;
+
+    saveVocabularyTerm: (term: VocabularyTerm, context?: SaveVocabularyContextInput) => VocabularyTerm;
+    updateVocabularyTerm: (termId: string, updates: Partial<VocabularyTerm>) => void;
+    deleteVocabularyTerm: (termId: string) => void;
+    lookupTerm: (term: string, language?: string) => Promise<DictionaryLookupResult | null>;
+    lookupAndSaveTerm: (term: string, language?: string) => Promise<VocabularyTerm | null>;
+
+    syncReviewRecords: () => void;
+    getDueReviewItems: (now?: Date, scope?: ReviewLaunchScope) => DailyReviewItem[];
+    reviewItem: (
+        sourceType: ReviewSourceType,
+        sourceId: string,
+        grade: ReviewGrade,
+    ) => LearningReviewRecord | null;
+    suspendReviewItem: (
+        sourceType: ReviewSourceType,
+        sourceId: string,
+        suspended?: boolean,
+    ) => void;
+
+    importStarDict: (files: FileList | File[]) => Promise<InstalledDictionary>;
+    removeDictionary: (dictionaryId: string) => Promise<void>;
+
+    setReminderPromptVisible: (visible: boolean) => void;
+    dismissDailyReminderPrompt: () => void;
+    markDailyReviewCompleted: () => void;
+    openReviewSession: (scope: ReviewLaunchScope) => void;
+    closeReviewSession: () => void;
+    updateReviewSessionState: (updates: Partial<ReviewSessionState>) => void;
+}
+
+interface ReviewSourceSnapshot {
+    id: string;
+    sourceType: ReviewSourceType;
+    sourceId: string;
+    createdAt: Date;
+    front: string;
+    back: string;
+}
+
+interface SaveVocabularyContextInput {
+    sourceType: VocabularyContextSourceType;
+    sourceId: string;
+    label: string;
+}
+
+interface ReviewSessionState {
+    isOpen: boolean;
+    scope: ReviewLaunchScope;
+    sessionItemIds: string[];
+    cursor: number;
+    revealed: boolean;
+    reviewedCount: number;
+    gradeTally: Record<ReviewGrade, number>;
+}
+
+const MS_PER_DAY = 86_400_000;
+const LEGACY_VOCABULARY_CONTEXT_LABEL = "Legacy / Unknown source";
+
+const EMPTY_REVIEW_GRADE_TALLY: Record<ReviewGrade, number> = {
+    again: 0,
+    hard: 0,
+    good: 0,
+    easy: 0,
+};
+
+function createInitialReviewSessionState(
+    scope: ReviewLaunchScope = "all",
+): ReviewSessionState {
+    return {
+        isOpen: false,
+        scope,
+        sessionItemIds: [],
+        cursor: 0,
+        revealed: false,
+        reviewedCount: 0,
+        gradeTally: { ...EMPTY_REVIEW_GRADE_TALLY },
+    };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+}
+
+function toReviewRecordId(sourceType: ReviewSourceType, sourceId: string): string {
+    return `${sourceType}:${sourceId}`;
+}
+
+function isReviewSourceType(value: unknown): value is ReviewSourceType {
+    return value === "vocabulary" || value === "highlight";
+}
+
+function isVocabularyContextSourceType(value: unknown): value is VocabularyContextSourceType {
+    return value === "book" || value === "site" || value === "legacy";
+}
+
+function toValidDate(value: Date | string | number | undefined, fallback: Date): Date {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value;
+    }
+
+    if (value !== undefined) {
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+        }
+    }
+
+    return fallback;
+}
+
+function toVocabularyContextKey(
+    sourceType: VocabularyContextSourceType,
+    sourceId: string,
+): string {
+    return `${sourceType}:${sourceId}`;
+}
+
+function createLegacyVocabularyContext(
+    sourceDate: Date,
+): VocabularyContext {
+    return {
+        key: toVocabularyContextKey("legacy", "legacy"),
+        sourceType: "legacy",
+        sourceId: "legacy",
+        label: LEGACY_VOCABULARY_CONTEXT_LABEL,
+        firstSeenAt: sourceDate,
+        lastSeenAt: sourceDate,
+        occurrences: 1,
+    };
+}
+
+function normalizeVocabularyContext(
+    value: unknown,
+    fallbackDate: Date,
+): VocabularyContext | null {
+    if (!isRecord(value)) {
+        return null;
+    }
+
+    const sourceType = isVocabularyContextSourceType(value.sourceType)
+        ? value.sourceType
+        : null;
+    const rawSourceId = typeof value.sourceId === "string"
+        ? value.sourceId.trim()
+        : "";
+    if (!sourceType || !rawSourceId) {
+        return null;
+    }
+
+    const firstSeenAt = toValidDate(
+        value.firstSeenAt as Date | string | number | undefined,
+        fallbackDate,
+    );
+    const lastSeenAt = toValidDate(
+        value.lastSeenAt as Date | string | number | undefined,
+        firstSeenAt,
+    );
+    const rawOccurrences = Number(value.occurrences);
+    const occurrences = Number.isFinite(rawOccurrences)
+        ? Math.max(1, Math.trunc(rawOccurrences))
+        : 1;
+
+    const label = typeof value.label === "string" && value.label.trim()
+        ? value.label.trim()
+        : sourceType === "legacy"
+            ? LEGACY_VOCABULARY_CONTEXT_LABEL
+            : rawSourceId;
+
+    const keyFromState = typeof value.key === "string" && value.key.trim()
+        ? value.key.trim()
+        : "";
+    const key = keyFromState || toVocabularyContextKey(sourceType, rawSourceId);
+
+    return {
+        key,
+        sourceType,
+        sourceId: rawSourceId,
+        label,
+        firstSeenAt,
+        lastSeenAt,
+        occurrences,
+    };
+}
+
+function mergeVocabularyContexts(
+    existingContexts: VocabularyContext[],
+    incomingContexts: VocabularyContext[],
+): VocabularyContext[] {
+    const mergedByKey = new Map(existingContexts.map((context) => [context.key, context]));
+
+    for (const context of incomingContexts) {
+        const existing = mergedByKey.get(context.key);
+        if (!existing) {
+            mergedByKey.set(context.key, context);
+            continue;
+        }
+
+        mergedByKey.set(context.key, {
+            ...existing,
+            sourceType: context.sourceType,
+            sourceId: context.sourceId,
+            label: context.label || existing.label,
+            firstSeenAt: existing.firstSeenAt.getTime() <= context.firstSeenAt.getTime()
+                ? existing.firstSeenAt
+                : context.firstSeenAt,
+            lastSeenAt: existing.lastSeenAt.getTime() >= context.lastSeenAt.getTime()
+                ? existing.lastSeenAt
+                : context.lastSeenAt,
+            occurrences: Math.max(1, existing.occurrences + context.occurrences),
+        });
+    }
+
+    return Array.from(mergedByKey.values());
+}
+
+function isReviewableAnnotation(annotation: Annotation): boolean {
+    return annotation.type === "highlight" || annotation.type === "note";
+}
+
+function extractAnnotationNote(annotation: Annotation): string {
+    return normalizeCardTextForDisplay(
+        annotation.noteContent || annotation.textNoteContent || "",
+    );
+}
+
+function formatAnnotationLocation(annotation: Annotation): string {
+    if (typeof annotation.pageNumber === "number" && Number.isFinite(annotation.pageNumber)) {
+        return `Page ${annotation.pageNumber}`;
+    }
+    return annotation.location || "Unknown location";
+}
+
+function seedInitialDueAt(sourceCreatedAt: Date, now: Date): Date {
+    const sourceTime = sourceCreatedAt.getTime();
+    const nowTime = now.getTime();
+    const ageDays = Math.max(0, Math.floor((nowTime - sourceTime) / MS_PER_DAY));
+    const dueAt = new Date(nowTime);
+
+    if (ageDays >= 14) {
+        return dueAt;
+    }
+    if (ageDays >= 7) {
+        dueAt.setDate(dueAt.getDate() + 1);
+        return dueAt;
+    }
+    if (ageDays >= 3) {
+        dueAt.setDate(dueAt.getDate() + 2);
+        return dueAt;
+    }
+    if (ageDays >= 1) {
+        dueAt.setDate(dueAt.getDate() + 3);
+        return dueAt;
+    }
+
+    dueAt.setDate(dueAt.getDate() + 4);
+    return dueAt;
+}
+
+function buildVocabularyBack(term: VocabularyTerm): string {
+    const definitions = term.meanings
+        .flatMap((meaning) => meaning.definitions)
+        .map((definition) => normalizeCardTextForDisplay(definition))
+        .filter(Boolean)
+        .slice(0, 3);
+
+    if (definitions.length === 0) {
+        return "(No definition)";
+    }
+
+    return definitions.join("\n");
+}
+
+function buildHighlightBack(annotation: Annotation, bookTitle: string): string {
+    const noteContent = extractAnnotationNote(annotation);
+    const createdAt = toValidDate(annotation.createdAt, new Date());
+    const contextLines = [
+        `Book: ${bookTitle || "Unknown book"}`,
+        `Captured: ${createdAt.toLocaleDateString()}`,
+        `Location: ${formatAnnotationLocation(annotation)}`,
+    ];
+
+    return `${noteContent || "(No note)"}\n\n${contextLines.join("\n")}`;
+}
+
+function collectReviewSourceSnapshots(
+    vocabularyTerms: VocabularyTerm[],
+    annotations: Annotation[],
+    books: Book[],
+): Map<string, ReviewSourceSnapshot> {
+    const snapshots = new Map<string, ReviewSourceSnapshot>();
+    const bookTitleById = new Map(books.map((book) => [book.id, book.title]));
+
+    for (const term of vocabularyTerms) {
+        const sourceId = term.id;
+        const sourceType: ReviewSourceType = "vocabulary";
+        const id = toReviewRecordId(sourceType, sourceId);
+        const createdAt = toValidDate(term.createdAt, new Date());
+        const front = normalizeCardTextForDisplay(term.term) || "(Untitled term)";
+        const back = buildVocabularyBack(term);
+
+        snapshots.set(id, {
+            id,
+            sourceType,
+            sourceId,
+            createdAt,
+            front,
+            back,
+        });
+    }
+
+    for (const annotation of annotations) {
+        if (!isReviewableAnnotation(annotation)) {
+            continue;
+        }
+
+        const sourceId = annotation.id;
+        const sourceType: ReviewSourceType = "highlight";
+        const id = toReviewRecordId(sourceType, sourceId);
+        const createdAt = toValidDate(annotation.createdAt, new Date());
+        const front = normalizeCardTextForDisplay(annotation.selectedText || "")
+            || "Review this highlight";
+        const bookTitle = normalizeCardTextForDisplay(bookTitleById.get(annotation.bookId) || "Unknown book");
+        const back = buildHighlightBack(annotation, bookTitle);
+
+        snapshots.set(id, {
+            id,
+            sourceType,
+            sourceId,
+            createdAt,
+            front,
+            back,
+        });
+    }
+
+    return snapshots;
+}
+
+function normalizeLearningReviewRecord(record: LearningReviewRecord): LearningReviewRecord {
+    const now = new Date();
+    const dueAt = toValidDate(record.dueAt, now);
+    const schedulerDue = toValidDate(record.scheduler?.due, dueAt);
+    const schedulerLastReview = record.scheduler?.last_review
+        ? toValidDate(record.scheduler.last_review, dueAt)
+        : undefined;
+
+    return {
+        ...record,
+        id: toReviewRecordId(record.sourceType, record.sourceId),
+        createdAt: toValidDate(record.createdAt, now),
+        updatedAt: record.updatedAt ? toValidDate(record.updatedAt, now) : undefined,
+        lastReviewedAt: record.lastReviewedAt
+            ? toValidDate(record.lastReviewedAt, now)
+            : undefined,
+        dueAt,
+        scheduler: normalizeReviewSchedulerState({
+            ...record.scheduler,
+            due: schedulerDue,
+            last_review: schedulerLastReview,
+        }),
+    };
+}
+
+function normalizeVocabularyTerm(term: VocabularyTerm): VocabularyTerm {
+    const now = new Date();
+    const normalized = { ...term } as VocabularyTerm & { linkedCardId?: string };
+    if ("linkedCardId" in normalized) {
+        delete normalized.linkedCardId;
+    }
+    const createdAt = toValidDate(normalized.createdAt, now);
+    const sourceContexts = Array.isArray(normalized.contexts)
+        ? normalized.contexts
+            .map((context) => normalizeVocabularyContext(context, createdAt))
+            .filter((context): context is VocabularyContext => Boolean(context))
+        : [];
+    const contexts = sourceContexts.length > 0
+        ? sourceContexts
+        : [createLegacyVocabularyContext(createdAt)];
+
+    return {
+        ...normalized,
+        contexts,
+        createdAt,
+        updatedAt: normalized.updatedAt
+            ? toValidDate(normalized.updatedAt, now)
+            : undefined,
+        lastReviewedAt: normalized.lastReviewedAt
+            ? toValidDate(normalized.lastReviewedAt, now)
+            : undefined,
+    };
+}
+
+function normalizeReviewEvent(review: ReviewEvent): ReviewEvent | null {
+    if (!isReviewSourceType(review.sourceType) || !review.sourceId) {
+        return null;
+    }
+
+    const now = new Date();
+    return {
+        ...review,
+        reviewedAt: toValidDate(review.reviewedAt, now),
+        dueBefore: toValidDate(review.dueBefore, now),
+        dueAfter: toValidDate(review.dueAfter, now),
+    };
+}
+
+function normalizeLearningDailyReminderState(value: unknown): DailyReminderState {
+    const asRecord = isRecord(value) ? value : {};
+    return {
+        isPromptVisible: false,
+        lastPromptDate: typeof asRecord.lastPromptDate === "string"
+            ? asRecord.lastPromptDate
+            : undefined,
+        dismissedDate: typeof asRecord.dismissedDate === "string"
+            ? asRecord.dismissedDate
+            : undefined,
+        completedDate: typeof asRecord.completedDate === "string"
+            ? asRecord.completedDate
+            : undefined,
+    };
+}
+
+function normalizeLearningLookupCache(
+    value: unknown,
+): Record<string, DictionaryLookupResult> {
+    if (!isRecord(value)) {
+        return {};
+    }
+
+    return value as Record<string, DictionaryLookupResult>;
+}
+
+function normalizeReviewSessionState(value: unknown): ReviewSessionState {
+    if (!isRecord(value)) {
+        return createInitialReviewSessionState();
+    }
+
+    const scope = value.scope === "vocabulary" || value.scope === "highlight"
+        ? value.scope
+        : "all";
+    return {
+        ...createInitialReviewSessionState(scope),
+        isOpen: false,
+    };
+}
+
+function shouldIncludeReviewSourceInScope(
+    sourceType: ReviewSourceType,
+    scope: ReviewLaunchScope,
+    learningSettings: LearningSettings,
+): boolean {
+    if (scope === "vocabulary" && sourceType !== "vocabulary") {
+        return false;
+    }
+    if (scope === "highlight" && sourceType !== "highlight") {
+        return false;
+    }
+    if (sourceType === "vocabulary" && !learningSettings.reviewVocabularyEnabled) {
+        return false;
+    }
+    if (sourceType === "highlight" && !learningSettings.reviewHighlightEnabled) {
+        return false;
+    }
+    return true;
+}
+
+export const useLearningStore = create<LearningStore>()(
+    persist(
+        (set, get) => ({
+            vocabularyTerms: [],
+            reviewRecords: [],
+            reviewEvents: [],
+            installedDictionaries: [],
+            lookupCache: {},
+            dailyReminderState: {
+                isPromptVisible: false,
+            },
+            reviewSessionState: createInitialReviewSessionState(),
+
+            saveVocabularyTerm: (incomingTerm, context) => {
+                const now = new Date();
+                const incomingCreatedAt = toValidDate(incomingTerm.createdAt, now);
+                const incomingUpdatedAt = incomingTerm.updatedAt
+                    ? toValidDate(incomingTerm.updatedAt, now)
+                    : now;
+                const incomingContexts = Array.isArray(incomingTerm.contexts)
+                    ? incomingTerm.contexts
+                        .map((entry) => normalizeVocabularyContext(entry, incomingCreatedAt))
+                        .filter((entry): entry is VocabularyContext => Boolean(entry))
+                    : [];
+                const contextFromSave = context && context.sourceId.trim()
+                    ? {
+                        key: toVocabularyContextKey(context.sourceType, context.sourceId.trim()),
+                        sourceType: context.sourceType,
+                        sourceId: context.sourceId.trim(),
+                        label: context.label.trim() || context.sourceId.trim(),
+                        firstSeenAt: now,
+                        lastSeenAt: now,
+                        occurrences: 1,
+                    } satisfies VocabularyContext
+                    : null;
+                const contextEntriesToMerge = contextFromSave
+                    ? [...incomingContexts, contextFromSave]
+                    : incomingContexts;
+
+                const normalizedKey = normalizeTermKey(
+                    incomingTerm.normalizedTerm,
+                    incomingTerm.language,
+                );
+
+                const existing = get().vocabularyTerms.find((term) => (
+                    normalizeTermKey(term.normalizedTerm, term.language) === normalizedKey
+                ));
+
+                if (!existing) {
+                    const mergedContexts = mergeVocabularyContexts([], contextEntriesToMerge);
+                    const termToSave: VocabularyTerm = {
+                        ...incomingTerm,
+                        contexts: mergedContexts.length > 0
+                            ? mergedContexts
+                            : [createLegacyVocabularyContext(incomingCreatedAt)],
+                        createdAt: incomingCreatedAt,
+                        updatedAt: incomingUpdatedAt,
+                    };
+                    set((state) => ({
+                        vocabularyTerms: [...state.vocabularyTerms, termToSave],
+                    }));
+                    get().syncReviewRecords();
+                    return termToSave;
+                }
+
+                const mergedMeanings = [...existing.meanings];
+                for (const meaning of incomingTerm.meanings) {
+                    const signature = JSON.stringify({
+                        provider: meaning.provider,
+                        partOfSpeech: meaning.partOfSpeech,
+                        definitions: meaning.definitions,
+                    });
+                    const alreadyPresent = mergedMeanings.some((candidate) => JSON.stringify({
+                        provider: candidate.provider,
+                        partOfSpeech: candidate.partOfSpeech,
+                        definitions: candidate.definitions,
+                    }) === signature);
+                    if (!alreadyPresent) {
+                        mergedMeanings.push(meaning);
+                    }
+                }
+
+                const mergedProviderHistory = Array.from(new Set([
+                    ...existing.providerHistory,
+                    ...incomingTerm.providerHistory,
+                ]));
+                const mergedContexts = contextEntriesToMerge.length > 0
+                    ? mergeVocabularyContexts(existing.contexts, contextEntriesToMerge)
+                    : existing.contexts;
+
+                const mergedTerm: VocabularyTerm = {
+                    ...existing,
+                    term: incomingTerm.term || existing.term,
+                    normalizedTerm: incomingTerm.normalizedTerm || existing.normalizedTerm,
+                    language: incomingTerm.language || existing.language,
+                    phonetic: incomingTerm.phonetic || existing.phonetic,
+                    audioUrl: incomingTerm.audioUrl || existing.audioUrl,
+                    meanings: mergedMeanings,
+                    providerHistory: mergedProviderHistory,
+                    lookupCount: existing.lookupCount + Math.max(1, incomingTerm.lookupCount || 1),
+                    contexts: mergedContexts.length > 0
+                        ? mergedContexts
+                        : [createLegacyVocabularyContext(toValidDate(existing.createdAt, now))],
+                    updatedAt: now,
+                };
+
+                set((state) => ({
+                    vocabularyTerms: state.vocabularyTerms.map((term) => (
+                        term.id === existing.id ? mergedTerm : term
+                    )),
+                }));
+                get().syncReviewRecords();
+                return mergedTerm;
+            },
+
+            updateVocabularyTerm: (termId, updates) => {
+                const now = new Date();
+                set((state) => ({
+                    vocabularyTerms: state.vocabularyTerms.map((term) => (
+                        term.id === termId
+                            ? {
+                                ...term,
+                                ...updates,
+                                contexts: Array.isArray(updates.contexts)
+                                    ? updates.contexts
+                                        .map((entry) => normalizeVocabularyContext(entry, term.createdAt))
+                                        .filter((entry): entry is VocabularyContext => Boolean(entry))
+                                    : term.contexts,
+                                updatedAt: now,
+                            }
+                            : term
+                    )),
+                }));
+                get().syncReviewRecords();
+            },
+
+            deleteVocabularyTerm: (termId) => {
+                set((state) => ({
+                    vocabularyTerms: state.vocabularyTerms.filter((term) => term.id !== termId),
+                }));
+                get().syncReviewRecords();
+            },
+
+            lookupTerm: async (term, language = "en") => {
+                const normalizedQuery = term.trim().toLowerCase();
+                if (!normalizedQuery) {
+                    return null;
+                }
+
+                const cacheKey = normalizeTermKey(normalizedQuery, language);
+                const cached = get().lookupCache[cacheKey];
+                if (cached) {
+                    return cached;
+                }
+
+                const settings = useSettingsStore.getState().settings.learning;
+                const installedIds = get().installedDictionaries.map((dictionary) => dictionary.id);
+
+                const result = await lookupDictionaryTerm({
+                    term,
+                    language,
+                    mode: settings.dictionaryMode,
+                    installedDictionaryIds: installedIds,
+                });
+
+                if (result) {
+                    set((state) => ({
+                        lookupCache: {
+                            ...state.lookupCache,
+                            [cacheKey]: result,
+                        },
+                    }));
+                }
+
+                return result;
+            },
+
+            lookupAndSaveTerm: async (term, language = "en") => {
+                const result = await get().lookupTerm(term, language);
+                if (!result) {
+                    return null;
+                }
+
+                const vocabularyTerm = vocabularyTermFromLookup(result);
+                return get().saveVocabularyTerm(vocabularyTerm);
+            },
+
+            syncReviewRecords: () => {
+                const libraryState = useLibraryStore.getState();
+                const sourceSnapshots = collectReviewSourceSnapshots(
+                    get().vocabularyTerms,
+                    libraryState.annotations,
+                    libraryState.books,
+                );
+                const now = new Date();
+
+                set((state) => {
+                    const existingById = new Map<string, LearningReviewRecord>();
+                    for (const record of state.reviewRecords) {
+                        if (!isReviewSourceType(record.sourceType) || !record.sourceId) {
+                            continue;
+                        }
+                        const id = toReviewRecordId(record.sourceType, record.sourceId);
+                        existingById.set(id, {
+                            ...record,
+                            id,
+                        });
+                    }
+
+                    const nextRecords: LearningReviewRecord[] = [];
+                    const activeIds = new Set<string>();
+
+                    for (const [id, snapshot] of sourceSnapshots.entries()) {
+                        activeIds.add(id);
+                        const existingRecord = existingById.get(id);
+
+                        if (existingRecord) {
+                            nextRecords.push({
+                                ...existingRecord,
+                                id,
+                                sourceType: snapshot.sourceType,
+                                sourceId: snapshot.sourceId,
+                            });
+                            continue;
+                        }
+
+                        const seededDueAt = seedInitialDueAt(snapshot.createdAt, now);
+                        const scheduler = createInitialReviewSchedulerState(now);
+                        scheduler.due = seededDueAt;
+
+                        nextRecords.push({
+                            id,
+                            sourceType: snapshot.sourceType,
+                            sourceId: snapshot.sourceId,
+                            suspended: false,
+                            scheduler,
+                            dueAt: seededDueAt,
+                            createdAt: snapshot.createdAt,
+                            reviewCount: 0,
+                            lapseCount: 0,
+                        });
+                    }
+
+                    const nextEvents = state.reviewEvents.filter((event) => (
+                        activeIds.has(toReviewRecordId(event.sourceType, event.sourceId))
+                    ));
+
+                    return {
+                        reviewRecords: nextRecords,
+                        reviewEvents: nextEvents,
+                    };
+                });
+            },
+
+            getDueReviewItems: (now = new Date(), scope: ReviewLaunchScope = "all") => {
+                const learningState = get();
+                const libraryState = useLibraryStore.getState();
+                const learningSettings = useSettingsStore.getState().settings.learning;
+                const sourceSnapshots = collectReviewSourceSnapshots(
+                    learningState.vocabularyTerms,
+                    libraryState.annotations,
+                    libraryState.books,
+                );
+                const nowTime = now.getTime();
+
+                return learningState.reviewRecords
+                    .filter((record) => !record.suspended)
+                    .filter((record) => shouldIncludeReviewSourceInScope(
+                        record.sourceType,
+                        scope,
+                        learningSettings,
+                    ))
+                    .filter((record) => toValidDate(record.dueAt, now).getTime() <= nowTime)
+                    .map((record) => {
+                        const sourceSnapshot = sourceSnapshots.get(record.id);
+                        if (!sourceSnapshot) {
+                            return null;
+                        }
+                        return {
+                            id: record.id,
+                            sourceType: record.sourceType,
+                            sourceId: record.sourceId,
+                            front: sourceSnapshot.front,
+                            back: sourceSnapshot.back,
+                            dueAt: toValidDate(record.dueAt, now),
+                            createdAt: sourceSnapshot.createdAt,
+                            suspended: record.suspended,
+                            reviewCount: record.reviewCount,
+                            lapseCount: record.lapseCount,
+                        } satisfies DailyReviewItem;
+                    })
+                    .filter((item): item is DailyReviewItem => Boolean(item))
+                    .sort((a, b) => (
+                        a.dueAt.getTime() - b.dueAt.getTime()
+                        || a.sourceType.localeCompare(b.sourceType)
+                        || a.createdAt.getTime() - b.createdAt.getTime()
+                    ));
+            },
+
+            reviewItem: (sourceType, sourceId, grade) => {
+                const reviewRecordId = toReviewRecordId(sourceType, sourceId);
+                let currentRecord = get().reviewRecords.find((record) => record.id === reviewRecordId);
+
+                if (!currentRecord) {
+                    get().syncReviewRecords();
+                    currentRecord = get().reviewRecords.find((record) => record.id === reviewRecordId);
+                }
+
+                if (!currentRecord) {
+                    return null;
+                }
+
+                const now = new Date();
+                const reviewResult = reviewItemSchedulerState(currentRecord.scheduler, grade, now);
+
+                const nextRecord: LearningReviewRecord = {
+                    ...currentRecord,
+                    scheduler: reviewResult.scheduler,
+                    dueAt: reviewResult.dueAt,
+                    lastReviewedAt: now,
+                    reviewCount: currentRecord.reviewCount + 1,
+                    lapseCount: grade === "again"
+                        ? currentRecord.lapseCount + 1
+                        : currentRecord.lapseCount,
+                    updatedAt: now,
+                };
+
+                const reviewEvent: ReviewEvent = {
+                    id: crypto.randomUUID(),
+                    sourceType,
+                    sourceId,
+                    grade,
+                    reviewedAt: now,
+                    dueBefore: toValidDate(currentRecord.dueAt, now),
+                    dueAfter: toValidDate(reviewResult.dueAt, now),
+                    sourceState: reviewResult.sourceState,
+                    nextState: reviewResult.nextState,
+                };
+
+                set((state) => ({
+                    reviewRecords: state.reviewRecords.map((record) => (
+                        record.id === reviewRecordId ? nextRecord : record
+                    )),
+                    reviewEvents: [...state.reviewEvents, reviewEvent],
+                    vocabularyTerms: sourceType === "vocabulary"
+                        ? state.vocabularyTerms.map((term) => (
+                            term.id === sourceId
+                                ? {
+                                    ...term,
+                                    lastReviewedAt: now,
+                                    updatedAt: now,
+                                }
+                                : term
+                        ))
+                        : state.vocabularyTerms,
+                }));
+
+                return nextRecord;
+            },
+
+            suspendReviewItem: (sourceType, sourceId, suspended = true) => {
+                const recordId = toReviewRecordId(sourceType, sourceId);
+                const now = new Date();
+                set((state) => ({
+                    reviewRecords: state.reviewRecords.map((record) => (
+                        record.id === recordId
+                            ? {
+                                ...record,
+                                suspended,
+                                updatedAt: now,
+                            }
+                            : record
+                    )),
+                }));
+            },
+
+            importStarDict: async (files) => {
+                const dictionary = await importStarDictDictionary(files);
+                set((state) => ({
+                    installedDictionaries: [dictionary, ...state.installedDictionaries],
+                }));
+                return dictionary;
+            },
+
+            removeDictionary: async (dictionaryId) => {
+                await removeStarDictDictionary(dictionaryId);
+                set((state) => ({
+                    installedDictionaries: state.installedDictionaries.filter(
+                        (dictionary) => dictionary.id !== dictionaryId,
+                    ),
+                }));
+            },
+
+            setReminderPromptVisible: (visible) => {
+                set((state) => ({
+                    dailyReminderState: {
+                        ...state.dailyReminderState,
+                        isPromptVisible: visible,
+                        lastPromptDate: visible
+                            ? toIsoDateString()
+                            : state.dailyReminderState.lastPromptDate,
+                    },
+                }));
+            },
+
+            dismissDailyReminderPrompt: () => {
+                set((state) => ({
+                    dailyReminderState: {
+                        ...state.dailyReminderState,
+                        isPromptVisible: false,
+                        dismissedDate: toIsoDateString(),
+                    },
+                }));
+            },
+
+            markDailyReviewCompleted: () => {
+                set((state) => ({
+                    dailyReminderState: {
+                        ...state.dailyReminderState,
+                        isPromptVisible: false,
+                        completedDate: toIsoDateString(),
+                    },
+                }));
+            },
+
+            openReviewSession: (scope) => {
+                const queueIds = get().getDueReviewItems(new Date(), scope).map((item) => item.id);
+                if (queueIds.length === 0) {
+                    set({
+                        reviewSessionState: createInitialReviewSessionState(scope),
+                    });
+                    return;
+                }
+
+                set({
+                    reviewSessionState: {
+                        isOpen: true,
+                        scope,
+                        sessionItemIds: queueIds,
+                        cursor: 0,
+                        revealed: false,
+                        reviewedCount: 0,
+                        gradeTally: { ...EMPTY_REVIEW_GRADE_TALLY },
+                    },
+                });
+            },
+
+            closeReviewSession: () => {
+                const currentScope = get().reviewSessionState.scope;
+                set({
+                    reviewSessionState: createInitialReviewSessionState(currentScope),
+                });
+            },
+
+            updateReviewSessionState: (updates) => {
+                set((state) => ({
+                    reviewSessionState: {
+                        ...state.reviewSessionState,
+                        ...updates,
+                    },
+                }));
+            },
+        }),
+        {
+            name: "theorem-learning",
+            version: 3,
+            migrate: (persistedState, version) => {
+                const persisted = isRecord(persistedState) ? persistedState : {};
+                const { preferredTab: _preferredTab, ...persistedWithoutPreferredTab } = persisted;
+                const vocabularyTermsRaw = Array.isArray(persisted.vocabularyTerms)
+                    ? persisted.vocabularyTerms
+                    : [];
+                const vocabularyTerms = vocabularyTermsRaw.map((term) => {
+                    if (!isRecord(term)) {
+                        return term;
+                    }
+                    const { linkedCardId: _linkedCardId, ...rest } = term;
+                    return rest;
+                });
+                const installedDictionaries = Array.isArray(persisted.installedDictionaries)
+                    ? persisted.installedDictionaries
+                    : [];
+                const dailyReminderState = normalizeLearningDailyReminderState(
+                    persisted.dailyReminderState,
+                );
+                const lookupCache = normalizeLearningLookupCache(persisted.lookupCache);
+                const reviewSessionState = normalizeReviewSessionState(persisted.reviewSessionState);
+
+                if (version < 2) {
+                    return {
+                        vocabularyTerms,
+                        reviewRecords: [],
+                        reviewEvents: [],
+                        installedDictionaries,
+                        lookupCache,
+                        dailyReminderState,
+                        reviewSessionState,
+                    };
+                }
+
+                const reviewRecords = Array.isArray(persisted.reviewRecords)
+                    ? persisted.reviewRecords
+                    : [];
+                const reviewEvents = Array.isArray(persisted.reviewEvents)
+                    ? persisted.reviewEvents
+                    : [];
+
+                return {
+                    ...persistedWithoutPreferredTab,
+                    vocabularyTerms,
+                    reviewRecords,
+                    reviewEvents,
+                    installedDictionaries,
+                    lookupCache,
+                    dailyReminderState,
+                    reviewSessionState,
+                } as LearningStore;
+            },
+            onRehydrateStorage: () => (state) => {
+                if (!state) {
+                    return;
+                }
+
+                state.vocabularyTerms = (state.vocabularyTerms || []).map((term) => (
+                    normalizeVocabularyTerm(term)
+                ));
+
+                state.reviewRecords = (state.reviewRecords || []).map((record) => (
+                    normalizeLearningReviewRecord(record)
+                ));
+
+                state.reviewEvents = (state.reviewEvents || [])
+                    .map((review) => normalizeReviewEvent(review))
+                    .filter((review): review is ReviewEvent => Boolean(review));
+
+                state.installedDictionaries = (state.installedDictionaries || []).map((dictionary) => ({
+                    ...dictionary,
+                    importedAt: toValidDate(dictionary.importedAt, new Date()),
+                }));
+
+                state.lookupCache = normalizeLearningLookupCache(state.lookupCache);
+                state.dailyReminderState = normalizeLearningDailyReminderState(state.dailyReminderState);
+                state.reviewSessionState = normalizeReviewSessionState(state.reviewSessionState);
+
+                const runSync = () => state.syncReviewRecords();
+                const libraryPersist = (
+                    useLibraryStore as typeof useLibraryStore & {
+                        persist?: {
+                            hasHydrated?: () => boolean;
+                            onFinishHydration?: (callback: () => void) => () => void;
+                        };
+                    }
+                ).persist;
+
+                if (!libraryPersist || libraryPersist.hasHydrated?.()) {
+                    runSync();
+                } else {
+                    libraryPersist.onFinishHydration?.(runSync);
+                }
+            },
+        },
+    ),
 );

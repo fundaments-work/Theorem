@@ -593,7 +593,6 @@ export function ShelvesPage() {
                 description,
                 bookIds: [],
                 createdAt: new Date(),
-                isSmartCollection: false,
             });
         }
         setIsModalOpen(false);

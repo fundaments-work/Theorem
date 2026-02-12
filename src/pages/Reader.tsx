@@ -5,7 +5,7 @@
 
 import { Suspense, lazy, useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { useUIStore, useLibraryStore, useSettingsStore } from '@/store';
+import { useUIStore, useLibraryStore, useSettingsStore, useLearningStore } from '@/store';
 import { WindowTitlebar } from '@/components/reader/WindowTitlebar';
 import { TableOfContents } from '@/components/reader/TableOfContents';
 import { ReaderSettings } from '@/components/reader/ReaderSettings';
@@ -16,11 +16,16 @@ import { ReaderNavbar } from '@/components/reader/progress/ReaderNavbar';
 import { ReaderViewport } from '@/components/reader/ReaderViewport';
 import { HighlightColorPicker } from '@/components/reader/highlights/HighlightColorPicker';
 import { NoteEditor } from '@/components/reader/highlights/NoteEditor';
+import { DictionaryResultPopover } from '@/components/learning/DictionaryResultPopover';
 import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, PdfZoomMode, ReaderSettings as ReaderSettingsState } from '@/types';
 import { isTauri } from '@/lib/env';
 import { getBookBlob, getBookData } from '@/lib/storage';
 import type { PDFJsEngineRef } from '@/engines/pdfjs-engine';
 import type { ReaderViewportHandle } from '@/components/reader/ReaderViewport';
+import {
+    vocabularyTermFromLookup,
+    type DictionaryLookupResult,
+} from '@/services/DictionaryService';
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -65,6 +70,9 @@ export function ReaderPage() {
     const saveBookLocations = useLibraryStore((state) => state.saveBookLocations);
     const addReadingTime = useLibraryStore((state) => state.addReadingTime);
     const markBookCompleted = useLibraryStore((state) => state.markBookCompleted);
+    const lookupTerm = useLearningStore((state) => state.lookupTerm);
+    const saveVocabularyTerm = useLearningStore((state) => state.saveVocabularyTerm);
+    const installedDictionaryCount = useLearningStore((state) => state.installedDictionaries.length);
 
     const settings = useSettingsStore((state) => state.settings);
     const updateReaderSettings = useSettingsStore((state) => state.updateReaderSettings);
@@ -809,16 +817,28 @@ export function ReaderPage() {
     const [noteEditorPosition, setNoteEditorPosition] = useState({ x: 0, y: 0 });
     const [editingNote, setEditingNote] = useState('');
     const [pendingHighlightColor, setPendingHighlightColor] = useState<HighlightColor>('yellow');
+    const [showDictionaryPopover, setShowDictionaryPopover] = useState(false);
+    const [dictionaryPopoverPosition, setDictionaryPopoverPosition] = useState({ x: 0, y: 0 });
+    const [dictionaryLookupTerm, setDictionaryLookupTerm] = useState('');
+    const [dictionaryLookupResult, setDictionaryLookupResult] = useState<DictionaryLookupResult | null>(null);
+    const [dictionaryLookupError, setDictionaryLookupError] = useState<string | null>(null);
+    const [dictionaryLookupLoading, setDictionaryLookupLoading] = useState(false);
+    const [dictionaryLookupSaved, setDictionaryLookupSaved] = useState(false);
 
     const handleViewportTap = useCallback(() => {
-        if (showColorPicker || showNoteEditor) {
+        if (showColorPicker || showNoteEditor || showDictionaryPopover) {
             setShowColorPicker(false);
             setShowNoteEditor(false);
+            setShowDictionaryPopover(false);
             setEditingHighlightId(null);
             setActiveAnnotation(null);
             setSelectedText('');
             setSelectedCfi('');
             setEditingNote('');
+            setDictionaryLookupTerm('');
+            setDictionaryLookupResult(null);
+            setDictionaryLookupError(null);
+            setDictionaryLookupSaved(false);
             readerRef.current?.clearSelection?.();
             return;
         }
@@ -827,7 +847,7 @@ export function ReaderPage() {
             return;
         }
         setShowToolbar((previous) => !previous);
-    }, [activePanel, isMobileViewport, showColorPicker, showNoteEditor]);
+    }, [activePanel, isMobileViewport, showColorPicker, showDictionaryPopover, showNoteEditor]);
 
     const addAnnotation = useLibraryStore((state) => state.addAnnotation);
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
@@ -926,6 +946,7 @@ export function ReaderPage() {
             };
             return nextAnnotations;
         });
+
     }, [
         addAnnotation,
         currentBookId,
@@ -952,7 +973,11 @@ export function ReaderPage() {
                 ? { ...currentAnnotation, ...annotation, updatedAt: new Date() }
                 : currentAnnotation
         ));
-    }, [currentBookId, updateAnnotation]);
+
+    }, [
+        currentBookId,
+        updateAnnotation,
+    ]);
 
     const handlePdfAnnotationRemove = useCallback((annotationId: string) => {
         removeAnnotation(annotationId);
@@ -1142,6 +1167,68 @@ export function ReaderPage() {
         }
     }, [currentBookId, getBookAnnotations]); // Remove colorPickerPosition dependency
 
+    const handleDefineSelection = useCallback(async () => {
+        const term = selectedText.trim();
+        if (!term) {
+            return;
+        }
+
+        setShowColorPicker(false);
+        setShowDictionaryPopover(true);
+        setDictionaryPopoverPosition(colorPickerPosition);
+        setDictionaryLookupTerm(term);
+        setDictionaryLookupResult(null);
+        setDictionaryLookupError(null);
+        setDictionaryLookupSaved(false);
+        setDictionaryLookupLoading(true);
+
+        try {
+            const result = await lookupTerm(term, "en");
+            setDictionaryLookupResult(result);
+            if (!result) {
+                if (
+                    settings.learning.dictionaryMode === "offline"
+                    && installedDictionaryCount === 0
+                ) {
+                    setDictionaryLookupError(
+                        "Offline mode is enabled but no dictionaries are installed. Import a StarDict dictionary in Settings > Dictionary.",
+                    );
+                } else {
+                    setDictionaryLookupError("No dictionary result found for this selection.");
+                }
+            }
+        } catch (error) {
+            console.error("[Reader] Dictionary lookup failed:", error);
+            setDictionaryLookupError("Dictionary lookup failed. Try again when online or install offline dictionaries.");
+        } finally {
+            setDictionaryLookupLoading(false);
+        }
+    }, [
+        colorPickerPosition,
+        installedDictionaryCount,
+        lookupTerm,
+        selectedText,
+        settings.learning.dictionaryMode,
+    ]);
+
+    const handleSaveDictionaryResult = useCallback(() => {
+        if (!dictionaryLookupResult || !settings.learning.vocabularyEnabled) {
+            return;
+        }
+
+        saveVocabularyTerm(
+            vocabularyTermFromLookup(dictionaryLookupResult),
+            currentBook
+                ? {
+                    sourceType: "book",
+                    sourceId: currentBook.id,
+                    label: currentBook.title,
+                }
+                : undefined,
+        );
+        setDictionaryLookupSaved(true);
+    }, [currentBook, dictionaryLookupResult, saveVocabularyTerm, settings.learning.vocabularyEnabled]);
+
     const handleColorSelect = useCallback(async (color: HighlightColor) => {
         if (!selectedCfi || !currentBookId) return;
 
@@ -1297,14 +1384,14 @@ export function ReaderPage() {
 
             // Re-render in viewport to show note indicator
             // Must await to ensure remove completes before add
+            const updatedAnnotation: Annotation = {
+                ...existingHighlight,
+                type: noteContent ? 'note' : 'highlight',
+                noteContent: noteContent || undefined,
+                updatedAt: new Date()
+            };
             try {
                 await readerRef.current?.removeHighlight?.(existingHighlight.id);
-                const updatedAnnotation: Annotation = {
-                    ...existingHighlight,
-                    type: noteContent ? 'note' : 'highlight',
-                    noteContent: noteContent || undefined,
-                    updatedAt: new Date()
-                };
                 await readerRef.current?.addAnnotation?.(updatedAnnotation);
                 debug('[Reader] Re-rendered highlight with note in viewport');
             } catch (err) {
@@ -1345,7 +1432,16 @@ export function ReaderPage() {
 
         // Clear selection
         readerRef.current?.clearSelection?.();
-    }, [selectedCfi, selectedText, currentBookId, annotations, addAnnotation, updateAnnotation, editingHighlightId, pendingHighlightColor]);
+    }, [
+        selectedCfi,
+        selectedText,
+        currentBookId,
+        annotations,
+        addAnnotation,
+        editingHighlightId,
+        pendingHighlightColor,
+        updateAnnotation,
+    ]);
 
     const handleBookmarkFromSelection = useCallback(() => {
         if (!selectedCfi || !currentBookId) return;
@@ -1683,16 +1779,18 @@ export function ReaderPage() {
                     <HighlightColorPicker
                         isOpen={showColorPicker}
                         position={colorPickerPosition}
-                        selectedText={selectedText}
                         currentColor={activeAnnotation?.color}
                         onSelectColor={handleColorSelect}
                         onAddNote={handleAddNote}
+                        onDefine={handleDefineSelection}
                         onBookmark={handleBookmarkFromSelection}
                         onDelete={editingHighlightId ? handleDeleteFromColorPicker : undefined}
                         onClose={() => {
                             setShowColorPicker(false);
                             setEditingHighlightId(null);
                             setActiveAnnotation(null);
+                            setSelectedText('');
+                            setSelectedCfi('');
                             readerRef.current?.clearSelection?.();
                         }}
                     />
@@ -1713,6 +1811,26 @@ export function ReaderPage() {
                                 // Only clear selection if not editing an existing highlight
                                 readerRef.current?.clearSelection?.();
                             }
+                        }}
+                    />
+
+                    <DictionaryResultPopover
+                        isOpen={showDictionaryPopover}
+                        position={dictionaryPopoverPosition}
+                        term={dictionaryLookupTerm}
+                        result={dictionaryLookupResult}
+                        loading={dictionaryLookupLoading}
+                        error={dictionaryLookupError}
+                        saved={dictionaryLookupSaved}
+                        canSaveToVocabulary={settings.learning.vocabularyEnabled}
+                        saveDisabledMessage="Enable Vocabulary Builder in Settings to save terms."
+                        onSave={handleSaveDictionaryResult}
+                        onClose={() => {
+                            setShowDictionaryPopover(false);
+                            setDictionaryLookupTerm('');
+                            setDictionaryLookupResult(null);
+                            setDictionaryLookupError(null);
+                            setDictionaryLookupSaved(false);
                         }}
                     />
                 </>

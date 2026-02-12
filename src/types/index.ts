@@ -144,13 +144,6 @@ export interface Collection {
     description?: string;
     bookIds: string[];
     createdAt: Date;
-    isSmartCollection: boolean;
-    smartFilter?: SmartFilter;
-}
-
-export interface SmartFilter {
-    type: "recentlyAdded" | "currentlyReading" | "completed" | "abandoned";
-    daysThreshold?: number;
 }
 
 // Reader Settings
@@ -201,6 +194,137 @@ export interface AppSettings {
     cacheSize: number; // MB
     theme: "light" | "dark" | "system";
     readerSettings: ReaderSettings;
+    learning: LearningSettings;
+}
+
+export type DictionaryMode = "online" | "offline" | "auto";
+
+export type DictionaryProvider = "free_dictionary_api" | "wiktionary" | "stardict";
+
+export interface LearningSettings {
+    vocabularyEnabled: boolean;
+    reviewVocabularyEnabled: boolean;
+    reviewHighlightEnabled: boolean;
+    defaultReminderReviewScope: ReviewLaunchScope;
+    dictionaryMode: DictionaryMode;
+    preferredProviders: DictionaryProvider[];
+    dailyReviewTime: string; // HH:mm
+    dailyReviewGoal: number;
+    inAppReminder: boolean;
+    showPronunciation: boolean;
+    playPronunciationAudio: boolean;
+}
+
+export interface VocabularyMeaning {
+    partOfSpeech?: string;
+    definitions: string[];
+    examples?: string[];
+    synonyms?: string[];
+    antonyms?: string[];
+    provider: DictionaryProvider;
+}
+
+export type VocabularyContextSourceType = "book" | "site" | "legacy";
+
+export interface VocabularyContext {
+    key: string;
+    sourceType: VocabularyContextSourceType;
+    sourceId: string;
+    label: string;
+    firstSeenAt: Date;
+    lastSeenAt: Date;
+    occurrences: number;
+}
+
+export interface VocabularyTerm {
+    id: string;
+    term: string;
+    normalizedTerm: string;
+    language: string;
+    phonetic?: string;
+    audioUrl?: string;
+    meanings: VocabularyMeaning[];
+    providerHistory: DictionaryProvider[];
+    lookupCount: number;
+    personalNote?: string;
+    tags: string[];
+    contexts: VocabularyContext[];
+    createdAt: Date;
+    updatedAt?: Date;
+    lastReviewedAt?: Date;
+}
+
+export type ReviewSourceType = "vocabulary" | "highlight";
+export type ReviewLaunchScope = "all" | "vocabulary" | "highlight";
+
+export interface LearningReviewSchedulerState {
+    due: Date;
+    stability: number;
+    difficulty: number;
+    elapsed_days: number;
+    scheduled_days: number;
+    learning_steps: number;
+    reps: number;
+    lapses: number;
+    state: number;
+    last_review?: Date;
+}
+
+export interface LearningReviewRecord {
+    id: string;
+    sourceType: ReviewSourceType;
+    sourceId: string;
+    suspended: boolean;
+    scheduler: LearningReviewSchedulerState;
+    dueAt: Date;
+    createdAt: Date;
+    updatedAt?: Date;
+    lastReviewedAt?: Date;
+    reviewCount: number;
+    lapseCount: number;
+}
+
+export interface DailyReviewItem {
+    id: string;
+    sourceType: ReviewSourceType;
+    sourceId: string;
+    front: string;
+    back: string;
+    dueAt: Date;
+    createdAt: Date;
+    suspended: boolean;
+    reviewCount: number;
+    lapseCount: number;
+}
+
+export type ReviewGrade = "again" | "hard" | "good" | "easy";
+
+export interface ReviewEvent {
+    id: string;
+    sourceType: ReviewSourceType;
+    sourceId: string;
+    grade: ReviewGrade;
+    reviewedAt: Date;
+    dueBefore: Date;
+    dueAfter: Date;
+    sourceState: number;
+    nextState: number;
+}
+
+export interface InstalledDictionary {
+    id: string;
+    name: string;
+    language: string;
+    format: "stardict";
+    sizeBytes: number;
+    importedAt: Date;
+}
+
+export interface DailyReminderState {
+    isPromptVisible: boolean;
+    lastPromptDate?: string; // ISO date YYYY-MM-DD
+    dismissedDate?: string; // ISO date YYYY-MM-DD
+    completedDate?: string; // ISO date YYYY-MM-DD
 }
 
 // Daily reading activity entry
@@ -225,7 +349,7 @@ export interface ReadingStats {
 }
 
 // Navigation
-export type AppRoute = "library" | "reader" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks";
+export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks";
 
 // UI State
 export interface UIState {

@@ -3,9 +3,9 @@
  * App configuration with all planned features
  */
 
-import { useState } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 import { cn } from "@/lib/utils";
-import { useSettingsStore, useLibraryStore } from "@/store";
+import { useLearningStore, useSettingsStore, useLibraryStore } from "@/store";
 import { formatFileSize } from "@/lib/utils";
 import { confirmClearAllData } from "@/lib/dialogs";
 import { Dropdown } from "@/components/ui";
@@ -150,15 +150,21 @@ function ButtonSelect<T extends string>({
 
 // Main page component
 export function SettingsPage() {
-    const { settings, updateSettings, resetSettings, stats, updateStats } = useSettingsStore();
+    const {
+        settings,
+        updateSettings,
+        updateLearningSettings,
+        resetSettings,
+        stats,
+        updateStats,
+    } = useSettingsStore();
     const { books, annotations } = useLibraryStore();
+    const { installedDictionaries, importStarDict, removeDictionary } = useLearningStore();
     const [activeTab, setActiveTab] = useState<
         "general" | "dictionary" | "rss" | "integrations" | "tts" | "sync" | "storage"
     >("general");
 
     // Dummy states for planned features
-    const [dictionaryMode, setDictionaryMode] = useState<"online" | "offline" | "auto">("auto");
-    const [offlineDictInstalled, setOfflineDictInstalled] = useState(false);
     const [rssAutoSync, setRssAutoSync] = useState(true);
     const [rssSyncInterval, setRssSyncInterval] = useState(30);
     const [clipperEnabled, setClipperEnabled] = useState(false);
@@ -173,10 +179,13 @@ export function SettingsPage() {
     const [syncMode, setSyncMode] = useState<"off" | "cloud" | "selfhosted">("off");
     const [syncEncryption, setSyncEncryption] = useState(true);
     const [newsletterEmail, setNewsletterEmail] = useState("your-name@theorem.fundamentals.work");
-    const [vocabularyEnabled, setVocabularyEnabled] = useState(true);
-    const [dailyReviewTime, setDailyReviewTime] = useState("09:00");
+    const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
 
     const totalStorage = books.reduce((acc, b) => acc + b.fileSize, 0);
+    const offlineDictionarySize = installedDictionaries.reduce(
+        (acc, dictionary) => acc + dictionary.sizeBytes,
+        0,
+    );
 
     const handleClearData = async () => {
         const confirmed = await confirmClearAllData();
@@ -195,6 +204,22 @@ export function SettingsPage() {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
+    };
+
+    const handleDictionaryImport = async (event: ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) {
+            return;
+        }
+
+        try {
+            await importStarDict(files);
+        } catch (error) {
+            console.error("[Settings] Failed to import StarDict dictionary:", error);
+            alert(error instanceof Error ? error.message : "Failed to import dictionary files.");
+        } finally {
+            event.target.value = "";
+        }
     };
 
     const tabButtons = [
@@ -419,15 +444,38 @@ export function SettingsPage() {
                     </Section>
 
                     <Section
-                        title="Vocabulary & Learning"
-                        description="Spaced repetition and daily review settings"
+                        title="Vocabulary & Review"
+                        description="Vocabulary capture and FSRS review controls"
                         icon={<BrainCircuit className="w-5 h-5" />}
                     >
                         <SettingRow
                             label="Enable Vocabulary Builder"
                             description="Track and review words you look up"
                         >
-                            <Toggle checked={vocabularyEnabled} onChange={setVocabularyEnabled} />
+                            <Toggle
+                                checked={settings.learning.vocabularyEnabled}
+                                onChange={(checked) => updateLearningSettings({ vocabularyEnabled: checked })}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Review Vocabulary Items"
+                            description="Include vocabulary terms in due review queues"
+                        >
+                            <Toggle
+                                checked={settings.learning.reviewVocabularyEnabled}
+                                onChange={(checked) => updateLearningSettings({ reviewVocabularyEnabled: checked })}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Review Highlight Items"
+                            description="Include highlights and notes in due review queues"
+                        >
+                            <Toggle
+                                checked={settings.learning.reviewHighlightEnabled}
+                                onChange={(checked) => updateLearningSettings({ reviewHighlightEnabled: checked })}
+                            />
                         </SettingRow>
 
                         <SettingRow
@@ -436,8 +484,8 @@ export function SettingsPage() {
                         >
                             <input
                                 type="time"
-                                value={dailyReviewTime}
-                                onChange={(e) => setDailyReviewTime(e.target.value)}
+                                value={settings.learning.dailyReviewTime}
+                                onChange={(e) => updateLearningSettings({ dailyReviewTime: e.target.value })}
                                 className={cn(
                                     "px-3 py-1.5 rounded-md text-sm",
                                     "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
@@ -447,10 +495,53 @@ export function SettingsPage() {
                         </SettingRow>
 
                         <SettingRow
-                            label="Highlight Resurfacing"
-                            description="Resurface old highlights for memory reinforcement"
+                            label="Daily Review Goal"
+                            description="Target number of reviews per day"
                         >
-                            <Toggle checked={true} onChange={() => {}} />
+                            <input
+                                type="number"
+                                min={1}
+                                max={500}
+                                value={settings.learning.dailyReviewGoal}
+                                onChange={(e) => {
+                                    const parsed = Number.parseInt(e.target.value, 10) || 1;
+                                    updateLearningSettings({
+                                        dailyReviewGoal: Math.max(1, Math.min(500, parsed)),
+                                    });
+                                }}
+                                className={cn(
+                                    "w-20 px-3 py-1.5 rounded-md text-sm text-center",
+                                    "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
+                                    "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                )}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="In-App Daily Reminder"
+                            description="Show a reminder banner when your review time is reached"
+                        >
+                            <Toggle
+                                checked={settings.learning.inAppReminder}
+                                onChange={(checked) => updateLearningSettings({ inAppReminder: checked })}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Reminder Review Scope"
+                            description="Which due items are counted and launched from reminders"
+                        >
+                            <Dropdown
+                                value={settings.learning.defaultReminderReviewScope}
+                                onChange={(value) => updateLearningSettings({
+                                    defaultReminderReviewScope: value as typeof settings.learning.defaultReminderReviewScope,
+                                })}
+                                options={[
+                                    { value: "all", label: "All" },
+                                    { value: "vocabulary", label: "Vocabulary" },
+                                    { value: "highlight", label: "Highlights" },
+                                ]}
+                            />
                         </SettingRow>
                     </Section>
 
@@ -488,8 +579,8 @@ export function SettingsPage() {
                                     { value: "offline", label: "Offline" },
                                     { value: "auto", label: "Auto" },
                                 ]}
-                                value={dictionaryMode}
-                                onChange={setDictionaryMode}
+                                value={settings.learning.dictionaryMode}
+                                onChange={(value) => updateLearningSettings({ dictionaryMode: value })}
                             />
                         </SettingRow>
 
@@ -515,65 +606,83 @@ export function SettingsPage() {
                             label="Show Pronunciation"
                             description="Display phonetic pronunciation"
                         >
-                            <Toggle checked={true} onChange={() => {}} />
+                            <Toggle
+                                checked={settings.learning.showPronunciation}
+                                onChange={(checked) => updateLearningSettings({ showPronunciation: checked })}
+                            />
                         </SettingRow>
 
                         <SettingRow
                             label="Play Audio"
                             description="Auto-play pronunciation audio"
                         >
-                            <Toggle checked={false} onChange={() => {}} />
+                            <Toggle
+                                checked={settings.learning.playPronunciationAudio}
+                                onChange={(checked) => updateLearningSettings({ playPronunciationAudio: checked })}
+                            />
                         </SettingRow>
                     </Section>
 
                     <Section
                         title="Offline Dictionaries"
-                        description="Download dictionaries for offline use"
+                        description="Import StarDict files for offline dictionary lookups"
                         icon={<WifiOff className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="English (US)"
-                            description="StarDict format • 45 MB"
+                            label="Import StarDict"
+                            description="Select .ifo, .idx, and .dict.dz files"
                         >
-                            {offlineDictInstalled ? (
-                                <span className="text-sm text-[color:var(--color-success)] flex items-center gap-1">
-                                    <BookOpenCheck className="w-4 h-4" /> Installed
-                                </span>
-                            ) : (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    ref={dictionaryFileInputRef}
+                                    type="file"
+                                    multiple
+                                    onChange={handleDictionaryImport}
+                                    className="hidden"
+                                    accept=".ifo,.idx,.dict,.dict.dz,.dz,.syn"
+                                />
                                 <button
-                                    onClick={() => setOfflineDictInstalled(true)}
+                                    onClick={() => dictionaryFileInputRef.current?.click()}
                                     className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90 transition-opacity"
                                 >
-                                    <Download className="w-4 h-4" /> Download
+                                    <Download className="w-4 h-4" /> Import Files
                                 </button>
-                            )}
+                                <span className="text-xs text-[color:var(--color-text-muted)]">
+                                    {installedDictionaries.length} installed
+                                </span>
+                            </div>
                         </SettingRow>
 
-                        <SettingRow
-                            label="English (UK)"
-                            description="StarDict format • 42 MB"
-                        >
-                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors">
-                                <Download className="w-4 h-4" /> Download
-                            </button>
-                        </SettingRow>
+                        {installedDictionaries.length === 0 && (
+                            <p className="text-sm text-[color:var(--color-text-muted)]">
+                                No offline dictionaries installed yet.
+                            </p>
+                        )}
+
+                        {installedDictionaries.map((dictionary) => (
+                            <SettingRow
+                                key={dictionary.id}
+                                label={dictionary.name}
+                                description={`${dictionary.language.toUpperCase()} • StarDict • ${formatFileSize(dictionary.sizeBytes)}`}
+                            >
+                                <button
+                                    onClick={() => {
+                                        void removeDictionary(dictionary.id);
+                                    }}
+                                    className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-error)] hover:opacity-80 transition-opacity"
+                                >
+                                    Remove
+                                </button>
+                            </SettingRow>
+                        ))}
 
                         <SettingRow
-                            label="Spanish"
-                            description="StarDict format • 38 MB"
+                            label="Offline Mode Guard"
+                            description="When offline mode is enabled without dictionaries, lookups will show setup guidance"
                         >
-                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors">
-                                <Download className="w-4 h-4" /> Download
-                            </button>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="French"
-                            description="StarDict format • 35 MB"
-                        >
-                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors">
-                                <Download className="w-4 h-4" /> Download
-                            </button>
+                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md">
+                                Enabled
+                            </span>
                         </SettingRow>
                     </Section>
                 </div>
@@ -1195,12 +1304,14 @@ export function SettingsPage() {
                                     <div>
                                         <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Offline Dictionaries</p>
                                         <p className="text-xs text-[color:var(--color-text-muted)]">
-                                            {offlineDictInstalled ? "1 installed" : "None installed"}
+                                            {installedDictionaries.length > 0
+                                                ? `${installedDictionaries.length} installed`
+                                                : "None installed"}
                                         </p>
                                     </div>
                                 </div>
                                 <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
-                                    {offlineDictInstalled ? "45 MB" : "0 MB"}
+                                    {formatFileSize(offlineDictionarySize)}
                                 </span>
                             </div>
                         </div>

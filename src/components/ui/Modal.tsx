@@ -7,7 +7,7 @@ export interface ModalProps {
     onClose: () => void;
     children: React.ReactNode;
     className?: string;
-    size?: "sm" | "md" | "lg" | "xl";
+    size?: "sm" | "md" | "lg" | "xl" | "fullscreen";
     showCloseButton?: boolean;
 }
 
@@ -16,6 +16,7 @@ const sizeClasses = {
     md: "max-w-xl min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-md))]",
     lg: "max-w-2xl min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-lg))]",
     xl: "max-w-4xl min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-xl))]",
+    fullscreen: "max-w-none min-w-0 w-full h-full",
 };
 
 /**
@@ -67,7 +68,8 @@ export function Modal({
         <div
             ref={overlayRef}
             className={cn(
-                "fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4",
+                "fixed inset-0 z-[var(--z-modal)] flex items-center justify-center",
+                size === "fullscreen" ? "p-0" : "p-4",
                 "bg-[var(--color-overlay-strong)]",
                 "animate-fade-in"
             )}
@@ -79,11 +81,13 @@ export function Modal({
         >
             <div
                 className={cn(
-                    "ui-card bg-[var(--color-surface)] rounded-xl shadow-[var(--shadow-lg)]",
+                    "ui-card bg-[var(--color-surface)] shadow-[var(--shadow-lg)]",
+                    size === "fullscreen" ? "rounded-none shadow-none border-0" : "rounded-xl",
                     "flex flex-col max-h-[var(--layout-modal-max-height)]",
                     "overflow-hidden",
                     "w-full",
                     sizeClasses[size],
+                    size === "fullscreen" && "max-h-none",
                     className
                 )}
                 onClick={(e) => e.stopPropagation()}

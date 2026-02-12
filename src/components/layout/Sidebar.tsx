@@ -1,6 +1,7 @@
 import { useCallback, useRef, useEffect } from "react";
 import {
     Library,
+    BookOpenText,
     Bookmark,
     Settings,
     ChevronLeft,
@@ -11,7 +12,7 @@ import {
 } from "lucide-react";
 import { TheoremLogo } from "@/components/TheoremLogo";
 import { cn } from "@/lib/utils";
-import { useUIStore, useSettingsStore } from "@/store";
+import { useLearningStore, useUIStore, useSettingsStore } from "@/store";
 import type { AppRoute } from "@/types";
 
 interface SidebarItem {
@@ -22,6 +23,7 @@ interface SidebarItem {
 
 const mainNavItems: SidebarItem[] = [
     { id: "library", label: "Library", icon: <Library className="w-5 h-5" /> },
+    { id: "vocabulary", label: "Vocabulary", icon: <BookOpenText className="w-5 h-5" /> },
     { id: "annotations", label: "Highlights", icon: <Highlighter className="w-5 h-5" /> },
     { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="w-5 h-5" /> },
 ];
@@ -34,6 +36,12 @@ interface SidebarProps {
 export function Sidebar({ isMobile, onClose }: SidebarProps) {
     const { currentRoute, setRoute, sidebarOpen, toggleSidebar } = useUIStore();
     const { settings, updateSettings } = useSettingsStore();
+    const vocabularyDueCount = useLearningStore((state) => (
+        state.getDueReviewItems(new Date(), "vocabulary").length
+    ));
+    const highlightDueCount = useLearningStore((state) => (
+        state.getDueReviewItems(new Date(), "highlight").length
+    ));
     const sidebarRef = useRef<HTMLElement>(null);
     const touchStartX = useRef<number>(0);
     const isCollapsedDesktop = !isMobile && !sidebarOpen;
@@ -134,7 +142,11 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
             <nav className="flex-1 py-4 overflow-y-auto scrollbar-hide">
                 <ul className="space-y-1 px-2">
                     {/* Main Navigation */}
-                    {mainNavItems.map((item) => (
+                    {mainNavItems
+                        .filter((item) => (
+                            item.id !== "vocabulary" || settings.learning.vocabularyEnabled
+                        ))
+                        .map((item) => (
                         <li key={item.id}>
                             <button
                                 onClick={() => {
@@ -160,8 +172,18 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                             >
                                 <span className="flex-shrink-0">{item.icon}</span>
                                 {(sidebarOpen || isMobile) && (
-                                    <span className="font-medium text-sm animate-fade-in">
+                                    <span className="flex items-center gap-2 font-medium text-sm animate-fade-in">
                                         {item.label}
+                                        {item.id === "vocabulary" && vocabularyDueCount > 0 && (
+                                            <span className="rounded-full bg-[var(--color-error)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                                {vocabularyDueCount}
+                                            </span>
+                                        )}
+                                        {item.id === "annotations" && highlightDueCount > 0 && (
+                                            <span className="rounded-full bg-[var(--color-error)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                                {highlightDueCount}
+                                            </span>
+                                        )}
                                     </span>
                                 )}
                             </button>
