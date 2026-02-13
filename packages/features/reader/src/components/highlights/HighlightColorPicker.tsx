@@ -3,8 +3,8 @@
  * Modern, sleek popup for selecting highlight color with smooth animations
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { MessageSquare, X, Check, Trash2, Languages } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { MessageSquare, X, Check, Trash2, Languages, Loader2, ArrowLeft } from 'lucide-react';
 import { ask } from '@tauri-apps/plugin-dialog';
 import {
     cn,
@@ -12,8 +12,21 @@ import {
     HIGHLIGHT_PICKER_ACTIVE_COLORS,
     HIGHLIGHT_PICKER_COLORS,
     isTauri,
+    type DictionaryLookupResult,
     type HighlightColor,
 } from "@theorem/core";
+
+interface HighlightDictionaryViewState {
+    term: string;
+    result: DictionaryLookupResult | null;
+    loading: boolean;
+    error?: string | null;
+    saved: boolean;
+    canSaveToVocabulary?: boolean;
+    saveDisabledMessage?: string;
+    onSave: () => void;
+    onBack?: () => void;
+}
 
 interface HighlightColorPickerProps {
     isOpen: boolean;
@@ -24,6 +37,7 @@ interface HighlightColorPickerProps {
     onDefine?: () => void;
     onBookmark: () => void;
     onDelete?: () => void;
+    dictionary?: HighlightDictionaryViewState;
     onClose: () => void;
 }
 
@@ -82,12 +96,9 @@ export function HighlightColorPicker({
     onDefine,
     onBookmark,
     onDelete,
+    dictionary,
     onClose,
 }: HighlightColorPickerProps) {
-    // Only render if open or closing animation is active
-    // This optimization prevents any DOM work when closed
-    if (!isOpen) return null;
-
     const popupRef = useRef<HTMLDivElement>(null);
     const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasScheduledCloseRef = useRef(false);
@@ -95,6 +106,13 @@ export function HighlightColorPicker({
     const [isClosing, setIsClosing] = useState(false);
     const [selectedColor, setSelectedColor] = useState<HighlightColor | null>(currentColor || null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const isDictionaryView = Boolean(dictionary);
+    const handlePopupMouseDownCapture = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("button")) {
+            event.preventDefault();
+        }
+    }, []);
 
     // Sync selectedColor with currentColor when picker opens
     useEffect(() => {
@@ -109,6 +127,12 @@ export function HighlightColorPicker({
             }
         }
     }, [isOpen, currentColor]);
+
+    useEffect(() => {
+        if (isDictionaryView) {
+            setShowDeleteConfirm(false);
+        }
+    }, [isDictionaryView]);
 
     // Position calculation with viewport boundary detection
     useEffect(() => {
@@ -164,7 +188,14 @@ export function HighlightColorPicker({
 
         // Small delay to ensure popup is rendered for measurement
         requestAnimationFrame(calculatePosition);
-    }, [isOpen, position]);
+    }, [
+        dictionary?.error,
+        dictionary?.loading,
+        dictionary?.result,
+        dictionary?.saved,
+        isOpen,
+        position,
+    ]);
 
     // Close handlers with animation
     const handleClose = useCallback(() => {
@@ -233,7 +264,7 @@ export function HighlightColorPicker({
             }
             
             // Number keys 1-6 for quick color selection (only when not confirming delete)
-            if (!showDeleteConfirm) {
+            if (!showDeleteConfirm && !isDictionaryView) {
                 const num = parseInt(e.key);
                 if (num >= 1 && num <= 6) {
                     e.preventDefault();
@@ -244,7 +275,7 @@ export function HighlightColorPicker({
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, showDeleteConfirm, handleClose, handleColorClick]);
+    }, [isDictionaryView, isOpen, showDeleteConfirm, handleClose, handleColorClick]);
 
     // Click outside handler - also handles clicks in iframe
     useEffect(() => {
@@ -289,20 +320,22 @@ export function HighlightColorPicker({
         };
     }, []);
 
-    // Final safety check - redundant with early return but good for clarity
-
+    // Keep hook ordering stable: return null only after all hooks are declared.
+    if (!isOpen) return null;
 
     return (
         <>
             <style>{ANIMATION_STYLES}</style>
             <div
                 ref={popupRef}
+                onMouseDownCapture={handlePopupMouseDownCapture}
                 className={cn(
                     "fixed z-[100]",
                     "bg-[var(--color-surface)]",
                     "border border-[var(--color-border)]",
                     "rounded-xl shadow-[var(--shadow-md)]",
                     "p-2",
+                    isDictionaryView && "w-[20rem]",
                     isClosing ? "picker-animate-out" : "picker-animate-in"
                 )}
                 style={{
@@ -312,9 +345,16 @@ export function HighlightColorPicker({
             >
                 {/* Header with close button */}
                 <div className="flex items-center justify-between px-1 mb-2">
-                    <span className="text-xs font-semibold text-[color:var(--color-text-secondary)] uppercase tracking-wide">
-                        Highlight
-                    </span>
+                    <div className="min-w-0">
+                        <p className="text-xs font-semibold text-[color:var(--color-text-secondary)] uppercase tracking-wide">
+                            {isDictionaryView ? "Dictionary" : "Highlight"}
+                        </p>
+                        {isDictionaryView && dictionary?.term ? (
+                            <p className="truncate text-sm font-semibold text-[color:var(--color-text-primary)]">
+                                {dictionary.term}
+                            </p>
+                        ) : null}
+                    </div>
                     <button
                         onClick={handleClose}
                         className={cn(
@@ -329,8 +369,91 @@ export function HighlightColorPicker({
                     </button>
                 </div>
 
-                {/* Inline delete confirmation */}
-                {showDeleteConfirm ? (
+                {isDictionaryView && dictionary ? (
+                    <>
+                        <div className="max-h-60 overflow-y-auto px-1 py-1">
+                            {dictionary.loading && (
+                                <div className="flex items-center gap-2 text-sm text-[color:var(--color-text-secondary)]">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Looking up definitions...
+                                </div>
+                            )}
+
+                            {!dictionary.loading && dictionary.error && (
+                                <p className="text-sm text-[color:var(--color-error)]">{dictionary.error}</p>
+                            )}
+
+                            {!dictionary.loading && !dictionary.error && !dictionary.result && (
+                                <p className="text-sm text-[color:var(--color-text-secondary)]">No definition found.</p>
+                            )}
+
+                            {!dictionary.loading && dictionary.result && dictionary.result.meanings.length > 0 && (
+                                <div className="space-y-3">
+                                    {dictionary.result.phonetic && (
+                                        <p className="text-xs text-[color:var(--color-text-muted)]">/{dictionary.result.phonetic}/</p>
+                                    )}
+                                    {dictionary.result.meanings.slice(0, 3).map((meaning, idx) => (
+                                        <div key={`${meaning.provider}-${idx}`} className="space-y-1">
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                                                {meaning.partOfSpeech || "Meaning"}
+                                            </p>
+                                            <ul className="space-y-1 text-sm text-[color:var(--color-text-primary)]">
+                                                {meaning.definitions.slice(0, 3).map((definition) => (
+                                                    <li key={definition} className="leading-snug">
+                                                        • {definition}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-between border-t border-[var(--color-border)] pt-2">
+                            {dictionary.onBack ? (
+                                <button
+                                    onClick={dictionary.onBack}
+                                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[color:var(--color-text-primary)]"
+                                >
+                                    <ArrowLeft className="h-3.5 w-3.5" />
+                                    Back
+                                </button>
+                            ) : (
+                                <span />
+                            )}
+                            <button
+                                onClick={dictionary.onSave}
+                                disabled={
+                                    dictionary.loading
+                                    || !dictionary.result
+                                    || dictionary.saved
+                                    || dictionary.canSaveToVocabulary === false
+                                }
+                                className={cn(
+                                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium",
+                                    dictionary.saved
+                                        ? "bg-[var(--color-success)]/10 text-[color:var(--color-success)]"
+                                        : "bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90",
+                                    (
+                                        dictionary.loading
+                                        || !dictionary.result
+                                        || dictionary.canSaveToVocabulary === false
+                                    ) && "cursor-not-allowed opacity-60"
+                                )}
+                            >
+                                {dictionary.saved ? <Check className="h-3.5 w-3.5" /> : null}
+                                {dictionary.saved ? "Saved" : "Save to Vocabulary"}
+                            </button>
+                        </div>
+
+                        {dictionary.canSaveToVocabulary === false && (
+                            <div className="border-t border-[var(--color-border)] px-1 pt-2 text-xs text-[color:var(--color-text-muted)]">
+                                {dictionary.saveDisabledMessage || "Enable Vocabulary Builder in Settings to save terms."}
+                            </div>
+                        )}
+                    </>
+                ) : showDeleteConfirm ? (
                     <div className="px-1 py-2">
                         <p className="text-xs text-[color:var(--color-text-secondary)] text-center mb-2">
                             Delete this highlight and any associated notes?
@@ -426,7 +549,6 @@ export function HighlightColorPicker({
                                 <button
                                     onClick={() => {
                                         onDefine?.();
-                                        handleClose();
                                     }}
                                     className={cn(
                                         "flex items-center justify-center gap-1.5",

@@ -10,6 +10,7 @@
     },
     "dependencies": {
         "@theorem/core": "workspace:*",
+        "@theorem/feature-learning": "workspace:*",
         "@theorem/ui": "workspace:*",
         "pdfjs-dist": "^4.10.38",
         "react": "^19.1.0",

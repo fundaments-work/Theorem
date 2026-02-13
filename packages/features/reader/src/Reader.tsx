@@ -3,8 +3,7 @@
  * Full-screen reading experience with document viewer and controls
  */
 
-import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from "react";
-import { DictionaryResultPopover } from "@theorem/feature-learning";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
     cn,
     getBookBlob,
@@ -12,6 +11,7 @@ import {
     isTauri,
     useLearningStore,
     useLibraryStore,
+    useRssStore,
     useSettingsStore,
     useUIStore,
     vocabularyTermFromLookup,
@@ -35,6 +35,8 @@ import { ReaderViewport } from "./components/ReaderViewport";
 import { HighlightColorPicker } from "./components/highlights/HighlightColorPicker";
 import { NoteEditor } from "./components/highlights/NoteEditor";
 import { PDFReader } from "./components/PDFReader";
+import { ArticleViewer } from "./article-reader/ArticleViewer";
+import { useReaderFullscreen, useToolbarHeight } from "./hooks";
 import type { PDFJsEngineRef } from "./engines/pdfjs-engine";
 import type { ReaderViewportHandle } from "./components/ReaderViewport";
 
@@ -67,7 +69,7 @@ function resolvePdfTargetPage(target: string): number | null {
     return null;
 }
 
-export function ReaderPage() {
+function BookReaderPage() {
     const currentBookId = useUIStore((state) => state.currentBookId);
     const setRoute = useUIStore((state) => state.setRoute);
 
@@ -90,7 +92,10 @@ export function ReaderPage() {
     const pdfReaderRef = useRef<PDFJsEngineRef>(null);
     const loadedBookIdRef = useRef<string | null>(null);
     const toolbarContainerRef = useRef<HTMLDivElement>(null);
-    const [toolbarHeight, setToolbarHeight] = useState(56);
+    const toolbarHeight = useToolbarHeight(toolbarContainerRef, {
+        defaultHeight: 56,
+        minHeight: 44,
+    });
 
     // PDF-specific state for titlebar controls
     const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
@@ -501,31 +506,6 @@ export function ReaderPage() {
         };
     }, []);
 
-    useLayoutEffect(() => {
-        const toolbarNode = toolbarContainerRef.current;
-        if (!toolbarNode) {
-            return;
-        }
-
-        const updateToolbarHeight = () => {
-            const measuredHeight = Math.ceil(toolbarNode.getBoundingClientRect().height);
-            setToolbarHeight(Math.max(44, measuredHeight));
-        };
-
-        updateToolbarHeight();
-
-        const resizeObserver = new ResizeObserver(() => {
-            updateToolbarHeight();
-        });
-        resizeObserver.observe(toolbarNode);
-
-        window.addEventListener("resize", updateToolbarHeight, { passive: true });
-        return () => {
-            resizeObserver.disconnect();
-            window.removeEventListener("resize", updateToolbarHeight);
-        };
-    }, []);
-
     // Auto-hide toolbar
     useEffect(() => {
         if (isMobileViewport || !settings.readerSettings.toolbarAutoHide) return;
@@ -556,33 +536,15 @@ export function ReaderPage() {
         };
     }, [isMobileViewport, settings.readerSettings.toolbarAutoHide, settings.readerSettings.autoHideDelay, activePanel]);
 
-    // Fullscreen effect
-    useEffect(() => {
-        const handleFullscreen = async () => {
-            try {
-                if (settings.readerSettings.fullscreen) {
-                    if (!document.fullscreenElement) {
-                        await document.documentElement.requestFullscreen();
-                    }
-                } else {
-                    if (document.fullscreenElement) {
-                        await document.exitFullscreen();
-                    }
-                }
-            } catch (err) {
-                console.error('Fullscreen error:', err);
-            }
-        };
-        handleFullscreen();
+    const handleReaderExitFullscreen = useCallback(() => {
+        updateReaderSettings({ fullscreen: false });
+    }, [updateReaderSettings]);
 
-        const onFullscreenChange = () => {
-            if (!document.fullscreenElement && settings.readerSettings.fullscreen) {
-                updateReaderSettings({ fullscreen: false });
-            }
-        };
-        document.addEventListener('fullscreenchange', onFullscreenChange);
-        return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
-    }, [settings.readerSettings.fullscreen, updateReaderSettings]);
+    useReaderFullscreen({
+        fullscreen: settings.readerSettings.fullscreen,
+        onExitFullscreen: handleReaderExitFullscreen,
+        errorLabel: "[Reader]",
+    });
 
     const handleReady = useCallback((meta: DocMetadata, tocItems: TocItem[]) => {
         setMetadata(meta);
@@ -812,6 +774,7 @@ export function ReaderPage() {
 
     // Highlight state
     const [showColorPicker, setShowColorPicker] = useState(false);
+    const [colorPickerMode, setColorPickerMode] = useState<"actions" | "dictionary">("actions");
     const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
     const [selectedText, setSelectedText] = useState('');
     const [selectedCfi, setSelectedCfi] = useState('');
@@ -824,8 +787,6 @@ export function ReaderPage() {
     const [noteEditorPosition, setNoteEditorPosition] = useState({ x: 0, y: 0 });
     const [editingNote, setEditingNote] = useState('');
     const [pendingHighlightColor, setPendingHighlightColor] = useState<HighlightColor>('yellow');
-    const [showDictionaryPopover, setShowDictionaryPopover] = useState(false);
-    const [dictionaryPopoverPosition, setDictionaryPopoverPosition] = useState({ x: 0, y: 0 });
     const [dictionaryLookupTerm, setDictionaryLookupTerm] = useState('');
     const [dictionaryLookupResult, setDictionaryLookupResult] = useState<DictionaryLookupResult | null>(null);
     const [dictionaryLookupError, setDictionaryLookupError] = useState<string | null>(null);
@@ -833,10 +794,10 @@ export function ReaderPage() {
     const [dictionaryLookupSaved, setDictionaryLookupSaved] = useState(false);
 
     const handleViewportTap = useCallback(() => {
-        if (showColorPicker || showNoteEditor || showDictionaryPopover) {
+        if (showColorPicker || showNoteEditor) {
             setShowColorPicker(false);
+            setColorPickerMode("actions");
             setShowNoteEditor(false);
-            setShowDictionaryPopover(false);
             setEditingHighlightId(null);
             setActiveAnnotation(null);
             setSelectedText('');
@@ -845,6 +806,7 @@ export function ReaderPage() {
             setDictionaryLookupTerm('');
             setDictionaryLookupResult(null);
             setDictionaryLookupError(null);
+            setDictionaryLookupLoading(false);
             setDictionaryLookupSaved(false);
             readerRef.current?.clearSelection?.();
             return;
@@ -854,7 +816,7 @@ export function ReaderPage() {
             return;
         }
         setShowToolbar((previous) => !previous);
-    }, [activePanel, isMobileViewport, showColorPicker, showDictionaryPopover, showNoteEditor]);
+    }, [activePanel, isMobileViewport, showColorPicker, showNoteEditor]);
 
     const addAnnotation = useLibraryStore((state) => state.addAnnotation);
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
@@ -1141,6 +1103,12 @@ export function ReaderPage() {
                 setColorPickerPosition({ x: window.innerWidth / 2, y: window.innerHeight / 3 });
             }
 
+            setColorPickerMode("actions");
+            setDictionaryLookupTerm('');
+            setDictionaryLookupResult(null);
+            setDictionaryLookupError(null);
+            setDictionaryLookupLoading(false);
+            setDictionaryLookupSaved(false);
             setShowColorPicker(true);
         } else {
             // Show color picker for new text selection
@@ -1170,6 +1138,12 @@ export function ReaderPage() {
                 setColorPickerPosition({ x: window.innerWidth / 2, y: window.innerHeight / 3 });
             }
 
+            setColorPickerMode("actions");
+            setDictionaryLookupTerm('');
+            setDictionaryLookupResult(null);
+            setDictionaryLookupError(null);
+            setDictionaryLookupLoading(false);
+            setDictionaryLookupSaved(false);
             setShowColorPicker(true);
         }
     }, [currentBookId, getBookAnnotations]); // Remove colorPickerPosition dependency
@@ -1180,9 +1154,8 @@ export function ReaderPage() {
             return;
         }
 
-        setShowColorPicker(false);
-        setShowDictionaryPopover(true);
-        setDictionaryPopoverPosition(colorPickerPosition);
+        setColorPickerMode("dictionary");
+        setShowColorPicker(true);
         setDictionaryLookupTerm(term);
         setDictionaryLookupResult(null);
         setDictionaryLookupError(null);
@@ -1211,7 +1184,6 @@ export function ReaderPage() {
             setDictionaryLookupLoading(false);
         }
     }, [
-        colorPickerPosition,
         installedDictionaryCount,
         lookupTerm,
         selectedText,
@@ -1265,6 +1237,7 @@ export function ReaderPage() {
             }
 
             setShowColorPicker(false);
+            setColorPickerMode("actions");
             setEditingHighlightId(null);
             setActiveAnnotation(null);
             setSelectedText('');
@@ -1317,6 +1290,7 @@ export function ReaderPage() {
         }
 
         setShowColorPicker(false);
+        setColorPickerMode("actions");
         setEditingHighlightId(null);
         setActiveAnnotation(null);
         setSelectedText('');
@@ -1333,6 +1307,7 @@ export function ReaderPage() {
 
         // Close color picker and open note editor
         setShowColorPicker(false);
+        setColorPickerMode("actions");
         setNoteEditorPosition(colorPickerPosition);
 
         // If editing existing highlight, use its note content and color
@@ -1466,6 +1441,7 @@ export function ReaderPage() {
         setAnnotations(prev => [...prev, annotation]);
 
         setShowColorPicker(false);
+        setColorPickerMode("actions");
         setSelectedText('');
         setSelectedCfi('');
 
@@ -1525,6 +1501,7 @@ export function ReaderPage() {
 
         // Clear all related state
         setShowColorPicker(false);
+        setColorPickerMode("actions");
         setEditingHighlightId(null);
         setActiveAnnotation(null);
         setSelectedText('');
@@ -1784,12 +1761,33 @@ export function ReaderPage() {
                         onDefine={handleDefineSelection}
                         onBookmark={handleBookmarkFromSelection}
                         onDelete={editingHighlightId ? handleDeleteFromColorPicker : undefined}
+                        dictionary={colorPickerMode === "dictionary"
+                            ? {
+                                term: dictionaryLookupTerm,
+                                result: dictionaryLookupResult,
+                                loading: dictionaryLookupLoading,
+                                error: dictionaryLookupError,
+                                saved: dictionaryLookupSaved,
+                                canSaveToVocabulary: settings.learning.vocabularyEnabled,
+                                saveDisabledMessage: "Enable Vocabulary Builder in Settings to save terms.",
+                                onSave: handleSaveDictionaryResult,
+                                onBack: () => {
+                                    setColorPickerMode("actions");
+                                },
+                            }
+                            : undefined}
                         onClose={() => {
                             setShowColorPicker(false);
+                            setColorPickerMode("actions");
                             setEditingHighlightId(null);
                             setActiveAnnotation(null);
                             setSelectedText('');
                             setSelectedCfi('');
+                            setDictionaryLookupTerm('');
+                            setDictionaryLookupResult(null);
+                            setDictionaryLookupError(null);
+                            setDictionaryLookupLoading(false);
+                            setDictionaryLookupSaved(false);
                             readerRef.current?.clearSelection?.();
                         }}
                     />
@@ -1813,27 +1811,38 @@ export function ReaderPage() {
                         }}
                     />
 
-                    <DictionaryResultPopover
-                        isOpen={showDictionaryPopover}
-                        position={dictionaryPopoverPosition}
-                        term={dictionaryLookupTerm}
-                        result={dictionaryLookupResult}
-                        loading={dictionaryLookupLoading}
-                        error={dictionaryLookupError}
-                        saved={dictionaryLookupSaved}
-                        canSaveToVocabulary={settings.learning.vocabularyEnabled}
-                        saveDisabledMessage="Enable Vocabulary Builder in Settings to save terms."
-                        onSave={handleSaveDictionaryResult}
-                        onClose={() => {
-                            setShowDictionaryPopover(false);
-                            setDictionaryLookupTerm('');
-                            setDictionaryLookupResult(null);
-                            setDictionaryLookupError(null);
-                            setDictionaryLookupSaved(false);
-                        }}
-                    />
                 </>
             )}
         </div>
     );
+}
+
+export function ReaderPage() {
+    const currentRoute = useUIStore((state) => state.currentRoute);
+    const currentBookId = useUIStore((state) => state.currentBookId);
+    const setRoute = useUIStore((state) => state.setRoute);
+    const currentArticle = useRssStore((state) => state.currentArticle);
+    const feeds = useRssStore((state) => state.feeds);
+    const closeArticleViewer = useRssStore((state) => state.closeArticleViewer);
+
+    useEffect(() => {
+        if (currentRoute === "reader" && !currentArticle && !currentBookId) {
+            setRoute("feeds");
+        }
+    }, [currentArticle, currentBookId, currentRoute, setRoute]);
+
+    if (currentRoute === "reader" && currentArticle) {
+        const feedTitle = feeds.find((feed) => feed.id === currentArticle.feedId)?.title;
+
+        return (
+            <ArticleViewer
+                article={currentArticle}
+                feedTitle={feedTitle}
+                isOpen={true}
+                onClose={closeArticleViewer}
+            />
+        );
+    }
+
+    return <BookReaderPage />;
 }

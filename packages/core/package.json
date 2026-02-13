@@ -12,10 +12,12 @@
         "typecheck": "tsc --noEmit -p tsconfig.json"
     },
     "dependencies": {
+        "@mozilla/readability": "^0.6.0",
         "@tauri-apps/api": "^2.0.0",
         "@tauri-apps/plugin-dialog": "^2.0.0",
         "clsx": "^2.1.1",
         "date-fns": "^4.1.0",
+        "fast-xml-parser": "^5.3.5",
         "fflate": "^0.8.0",
         "idb-keyval": "^6.2.2",
         "tailwind-merge": "^3.0.0",

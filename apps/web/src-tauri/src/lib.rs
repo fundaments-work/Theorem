@@ -271,6 +271,92 @@ fn fetch_rss_feed(url: String) -> Result<String, String> {
         .map_err(|e| format!("Failed to read response: {}", e))
 }
 
+/**
+ * Fetches generic URL content using native HTTP client.
+ * Primarily used to fetch full article HTML for RSS items.
+ *
+ * # Arguments
+ * * `url` - The URL to fetch
+ *
+ * # Returns
+ * * `Ok(String)` - The response body as text
+ * * `Err(String)` - Error message if fetching fails
+ */
+#[tauri::command]
+fn fetch_url_content(url: String) -> Result<String, String> {
+    let parsed_url =
+        reqwest::Url::parse(&url).map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
+    let referer = {
+        let mut origin = parsed_url.clone();
+        origin.set_path("/");
+        origin.set_query(None);
+        origin.set_fragment(None);
+        origin.to_string()
+    };
+
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(45))
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:134.0) Gecko/20100101 Firefox/134.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15",
+    ];
+
+    let mut last_error: Option<String> = None;
+    for user_agent in user_agents {
+        let response = client
+            .get(parsed_url.clone())
+            .header("User-Agent", user_agent)
+            .header(
+                "Accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            )
+            .header("Accept-Language", "en-US,en;q=0.9")
+            .header("Referer", &referer)
+            .header("Upgrade-Insecure-Requests", "1")
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
+            .header("DNT", "1")
+            .send();
+
+        let response = match response {
+            Ok(response) => response,
+            Err(error) => {
+                last_error = Some(format!("Failed to fetch URL content: {}", error));
+                continue;
+            }
+        };
+
+        if response.status().is_success() {
+            return response
+                .text()
+                .map_err(|e| format!("Failed to read response: {}", e));
+        }
+
+        let status = response.status();
+        if status.as_u16() == 403 {
+            last_error = Some(format!(
+                "HTTP error: {} {}",
+                status,
+                status.canonical_reason().unwrap_or("Forbidden")
+            ));
+            continue;
+        }
+
+        return Err(format!(
+            "HTTP error: {} {}",
+            status,
+            status.canonical_reason().unwrap_or("Unknown")
+        ));
+    }
+
+    Err(last_error.unwrap_or_else(|| "Failed to fetch URL content".to_string()))
+}
+
 #[cfg(target_os = "linux")]
 fn apply_linux_webkit_workarounds() {
     // Allow advanced users to disable these workarounds for troubleshooting:
@@ -317,7 +403,8 @@ pub fn run() {
             read_file,
             read_pdf_file,
             get_pdf_metadata,
-            fetch_rss_feed
+            fetch_rss_feed,
+            fetch_url_content
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

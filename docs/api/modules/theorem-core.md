@@ -14,6 +14,7 @@ Shared workspace package.
 _none_
 
 **External packages**
+- `@mozilla/readability`
 - `@tauri-apps/api`
 - `@tauri-apps/plugin-dialog`
 - `clsx`
@@ -355,6 +356,20 @@ extractMetadata(data: ArrayBuffer, format: BookFormat, filename: string, bookId?
 | `slice` | `(begin: number, end?: number) => ArrayBuffer` | no |
 
 - Returns: `Promise<ExtractedMetadata>`
+
+### Function `fetchAndExtractArticleContent`
+
+Fetches the linked article URL and extracts full readable content. Falls back to feed content if extraction fails.
+
+```ts
+fetchAndExtractArticleContent(articleUrl: string): Promise<ExtractedArticleContent>
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `articleUrl` | `string` | no |
+
+- Returns: `Promise<ExtractedArticleContent>`
 
 ### Function `fetchAndParseFeed`
 
@@ -1994,6 +2009,21 @@ _No object fields detected._
 | `pubdate` | `string | undefined` | yes |
 | `publisher` | `string | undefined` | yes |
 | `title` | `string` | no |
+
+### Interface `ExtractedArticleContent`
+
+- Type: `ExtractedArticleContent`
+
+**Fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `author` | `string | undefined` | yes |
+| `content` | `string` | no |
+| `imageUrl` | `string | undefined` | yes |
+| `publishedAt` | `Date | undefined` | yes |
+| `summary` | `string | undefined` | yes |
+| `title` | `string | undefined` | yes |
 
 ### Interface `ExtractedMetadata`
 

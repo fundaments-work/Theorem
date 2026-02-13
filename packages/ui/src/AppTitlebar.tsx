@@ -129,8 +129,6 @@ export function AppTitlebar({
                 return "Library";
             case "reader":
                 return "Books";
-            case "articleReader":
-                return "Articles";
             case "vocabulary":
                 return "Vocabulary";
             case "settings":

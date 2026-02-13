@@ -156,6 +156,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@mozilla/readability':
+        specifier: ^0.6.0
+        version: 0.6.0
       '@tauri-apps/api':
         specifier: ^2.0.0
         version: 2.10.1
@@ -168,6 +171,9 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
+      fast-xml-parser:
+        specifier: ^5.3.5
+        version: 5.3.5
       fflate:
         specifier: ^0.8.0
         version: 0.8.2
@@ -246,6 +252,9 @@ importers:
       '@theorem/core':
         specifier: workspace:*
         version: link:../../core
+      '@theorem/feature-learning':
+        specifier: workspace:*
+        version: link:../learning
       '@theorem/ui':
         specifier: workspace:*
         version: link:../../ui
@@ -749,6 +758,10 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@mozilla/readability@0.6.0':
+    resolution: {integrity: sha512-juG5VWh4qAivzTAeMzvY9xs9HY5rAcr2E4I7tiSSCokRFi7XIZCAu92ZkSTsIj1OPceCifL3cpfteP3pDT9/QQ==}
+    engines: {node: '>=14.0.0'}
 
   '@napi-rs/canvas-android-arm64@0.1.92':
     resolution: {integrity: sha512-rDOtq53ujfOuevD5taxAuIFALuf1QsQWZe1yS/N4MtT+tNiDBEdjufvQRPWZ11FubL2uwgP8ApYU3YOaNu1ZsQ==}
@@ -1285,6 +1298,10 @@ packages:
     resolution: {integrity: sha512-7MptL8U0cqcFdzIzwOTHoilX9x5BrNqye7Z/LuC7kCMRio1EMSyqRK3BEAUD7sXRq4iT4AzTVuZdhgQ2TCvYLg==}
     engines: {node: '>=8.6.0'}
 
+  fast-xml-parser@5.3.5:
+    resolution: {integrity: sha512-JeaA2Vm9ffQKp9VjvfzObuMCjUYAp5WDYhRYL5LrBPY/jUDlUtOvDfot0vKSkB9tuX885BDHjtw4fZadD95wnA==}
+    hasBin: true
+
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
 
@@ -1556,6 +1573,9 @@ packages:
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
+
+  strnum@2.1.2:
+    resolution: {integrity: sha512-l63NF9y/cLROq/yqKXSLtcMeeyOfnSQlfMSlzFt/K73oIaD8DGaQWd7Z34X9GPiKqP5rbSh84Hl4bOlLcjiSrQ==}
 
   tailwind-merge@3.4.0:
     resolution: {integrity: sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g==}
@@ -2001,6 +2021,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@mozilla/readability@0.6.0': {}
 
   '@napi-rs/canvas-android-arm64@0.1.92':
     optional: true
@@ -2479,6 +2501,10 @@ snapshots:
       merge2: 1.4.1
       micromatch: 4.0.8
 
+  fast-xml-parser@5.3.5:
+    dependencies:
+      strnum: 2.1.2
+
   fastq@1.20.1:
     dependencies:
       reusify: 1.1.0
@@ -2707,6 +2733,8 @@ snapshots:
   set-cookie-parser@2.7.2: {}
 
   source-map-js@1.2.1: {}
+
+  strnum@2.1.2: {}
 
   tailwind-merge@3.4.0: {}
 

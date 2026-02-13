@@ -6,7 +6,6 @@ import { Sidebar } from "@theorem/ui";
 import {
     useLearningStore,
     useLibraryStore,
-    useRssStore,
     useUIStore,
     useSettingsStore,
 } from "@theorem/core";
@@ -42,9 +41,6 @@ const StatisticsPage = lazy(() =>
 const FeedsPage = lazy(() =>
     import("@theorem/feature-feeds").then((module) => ({ default: module.FeedsPage })),
 );
-const FeedArticleReader = lazy(() =>
-    import("@theorem/feature-feeds").then((module) => ({ default: module.ArticleViewer })),
-);
 const DESKTOP_STARTUP_MIN_WIDTH = 1024;
 const DESKTOP_STARTUP_MIN_HEIGHT = 720;
 
@@ -53,36 +49,6 @@ function PageFallback() {
         <div className="flex h-full w-full items-center justify-center text-[color:var(--color-text-secondary)]">
             Loading...
         </div>
-    );
-}
-
-function FeedArticleReaderScreen() {
-    const currentArticle = useRssStore((state) => state.currentArticle);
-    const feeds = useRssStore((state) => state.feeds);
-    const closeArticleViewer = useRssStore((state) => state.closeArticleViewer);
-    const toggleArticleFavorite = useRssStore((state) => state.toggleArticleFavorite);
-    const setRoute = useUIStore((state) => state.setRoute);
-
-    useEffect(() => {
-        if (!currentArticle) {
-            setRoute("feeds");
-        }
-    }, [currentArticle, setRoute]);
-
-    if (!currentArticle) {
-        return <PageFallback />;
-    }
-
-    const feedTitle = feeds.find((feed) => feed.id === currentArticle.feedId)?.title;
-
-    return (
-        <FeedArticleReader
-            article={currentArticle}
-            feedTitle={feedTitle}
-            isOpen={true}
-            onClose={closeArticleViewer}
-            onToggleFavorite={() => toggleArticleFavorite(currentArticle.id)}
-        />
     );
 }
 
@@ -175,7 +141,7 @@ function App() {
     }, [isTauriRuntime]);
 
     // Check if we're in reader mode (full screen, no sidebar)
-    const isReaderMode = currentRoute === "reader" || currentRoute === "articleReader";
+    const isReaderMode = currentRoute === "reader";
 
     // Reset scroll position when navigating between non-reader pages.
     useEffect(() => {
@@ -191,8 +157,6 @@ function App() {
                 return <LibraryPage />;
             case "reader":
                 return <ReaderPage />;
-            case "articleReader":
-                return <FeedArticleReaderScreen />;
             case "vocabulary":
                 return <VocabularyPage />;
             case "shelves":
@@ -216,7 +180,7 @@ function App() {
     if (isReaderMode) {
         return (
             <Suspense fallback={<PageFallback />}>
-                {currentRoute === "reader" ? <ReaderPage /> : <FeedArticleReaderScreen />}
+                <ReaderPage />
             </Suspense>
         );
     }

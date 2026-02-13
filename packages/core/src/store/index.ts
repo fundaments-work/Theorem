@@ -1863,6 +1863,7 @@ export const useLearningStore = create<LearningStore>()(
 
 import type { RssFeed, RssArticle } from '../types';
 import {
+    fetchAndExtractArticleContent,
     fetchAndParseFeed,
     materializeFeed,
 } from '../services/RssService';
@@ -2040,11 +2041,72 @@ export const useRssStore = create<RssStore>()(
                 // Mark article as read
                 get().markArticleRead(article.id);
 
-                // Open in dedicated full-screen article reader mode
+                // Open article in the unified reader route
                 set({
                     currentArticle: article,
                 });
-                useUIStore.getState().setRoute('articleReader');
+                useUIStore.getState().setRoute('reader');
+
+                // Try to fetch and extract the full article content from the source URL.
+                // If extraction fails, we keep using feed-provided content as a safe fallback.
+                if (!article.url) {
+                    return;
+                }
+
+                const plainTextLength = article.content
+                    .replace(/<[^>]*>/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .length;
+                if (plainTextLength >= 2200) {
+                    // Looks like a full-text article already; avoid unnecessary network fetches.
+                    return;
+                }
+
+                try {
+                    const extracted = await fetchAndExtractArticleContent(article.url);
+                    const articlePatch: Partial<RssArticle> = {
+                        content: extracted.content,
+                    };
+
+                    if (extracted.title) {
+                        articlePatch.title = extracted.title;
+                    }
+                    if (extracted.summary) {
+                        articlePatch.summary = extracted.summary;
+                    }
+                    if (extracted.author) {
+                        articlePatch.author = extracted.author;
+                    }
+                    if (extracted.imageUrl) {
+                        articlePatch.imageUrl = extracted.imageUrl;
+                    }
+                    if (extracted.publishedAt) {
+                        articlePatch.publishedAt = extracted.publishedAt;
+                    }
+
+                    const articleAnnotationBookId = `rss:${article.id}`;
+                    const hasExistingArticleAnnotations = useLibraryStore.getState().annotations
+                        .some((entry) => entry.bookId === articleAnnotationBookId);
+
+                    set((state) => ({
+                        articles: state.articles.map((entry) => (
+                            entry.id === article.id
+                                ? { ...entry, ...articlePatch }
+                                : entry
+                        )),
+                        // Do not replace currently-open reader content once annotations exist,
+                        // otherwise highlight render anchors can be invalidated mid-session.
+                        currentArticle: (
+                            !hasExistingArticleAnnotations
+                            && state.currentArticle?.id === article.id
+                        )
+                            ? { ...state.currentArticle, ...articlePatch }
+                            : state.currentArticle,
+                    }));
+                } catch (error) {
+                    console.warn('[RssStore] Failed to load full article content, using feed content fallback:', error);
+                }
             },
 
             closeArticleViewer: () => {
@@ -2053,7 +2115,7 @@ export const useRssStore = create<RssStore>()(
                 });
 
                 const ui = useUIStore.getState();
-                if (ui.currentRoute === 'articleReader') {
+                if (ui.currentRoute === 'reader') {
                     ui.setRoute('feeds');
                 }
             },

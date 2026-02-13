@@ -12,8 +12,6 @@ Feature package.
 
 **Internal packages**
 - `@theorem/core`
-- `@theorem/feature-learning`
-- `@theorem/feature-reader`
 - `@theorem/ui`
 
 **External packages**
@@ -24,28 +22,6 @@ Feature package.
 ## API Reference
 
 ### Functions
-
-### Function `ArticleViewer`
-
-```ts
-ArticleViewer({ article, feedTitle, isOpen, onClose, onToggleFavorite, }: ArticleViewerProps): JSX.Element | null
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `props` | `ArticleViewerProps` | no |
-
-**Parameter `props` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `article` | `RssArticle | null` | no |
-| `feedTitle` | `string | undefined` | yes |
-| `isOpen` | `boolean` | no |
-| `onClose` | `() => void` | no |
-| `onToggleFavorite` | `(() => void) | undefined` | yes |
-
-- Returns: `JSX.Element | null`
 
 ### Function `FeedsPage`
 

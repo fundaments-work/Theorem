@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useMemo, type RefObject } from "react";
-import { cn, type RssArticle } from "@theorem/core";
+import { useCallback, useEffect, useRef, useMemo, type RefObject } from "react";
+import {
+    cn,
+    type FontFamily,
+    type ReaderSettings as ReaderSettingsState,
+    type RssArticle,
+} from "@theorem/core";
 import type { ArticleHeading } from "./types";
 import { formatArticleDate, sanitizeArticleHtml } from "./utils";
 
@@ -8,10 +13,33 @@ interface ArticleReaderContentProps {
     feedTitle?: string;
     fontSize: number;
     lineHeight: number;
+    fontFamily: FontFamily;
+    textAlign: ReaderSettingsState["textAlign"];
+    letterSpacing: number;
+    wordSpacing: number;
     contentRef: RefObject<HTMLDivElement | null>;
     scrollContainerRef: RefObject<HTMLDivElement | null>;
     onTextSelect: (text: string, position: { x: number; y: number }, range: Range) => void;
     onHeadingsChange: (headings: ArticleHeading[]) => void;
+    /** Pre-sanitized HTML string. When provided, the component skips internal
+     *  sanitization and uses this value directly. This allows the parent to
+     *  control exactly when the HTML blob changes so that DOM-inserted
+     *  highlight marks are not destroyed by unnecessary innerHTML resets. */
+    sanitizedContent?: string;
+}
+
+function resolveFontFamily(fontFamily: FontFamily): string {
+    switch (fontFamily) {
+        case "serif":
+            return "var(--font-merriweather), Georgia, serif";
+        case "sans":
+            return "var(--font-sans), system-ui, sans-serif";
+        case "mono":
+            return "var(--font-mono), monospace";
+        case "original":
+        default:
+            return "inherit";
+    }
 }
 
 export function ArticleReaderContent({
@@ -19,15 +47,42 @@ export function ArticleReaderContent({
     feedTitle,
     fontSize,
     lineHeight,
+    fontFamily,
+    textAlign,
+    letterSpacing,
+    wordSpacing,
     contentRef,
     scrollContainerRef,
     onTextSelect,
     onHeadingsChange,
+    sanitizedContent: sanitizedContentProp,
 }: ArticleReaderContentProps) {
-    const sanitizedContent = useMemo(
+    const sanitizedContentFallback = useMemo(
         () => sanitizeArticleHtml(article.content || article.summary || ""),
         [article.content, article.summary],
     );
+
+    const sanitizedContent = sanitizedContentProp ?? sanitizedContentFallback;
+
+    // Track the last HTML string we wrote to innerHTML so we never reset the
+    // DOM when the content hasn't actually changed.  This is the key guard
+    // that prevents highlight <mark> elements from being destroyed.
+    const appliedHtmlRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        const contentElement = contentRef.current;
+        if (!contentElement) {
+            return;
+        }
+
+        // Only write innerHTML when the sanitized content has actually changed.
+        if (appliedHtmlRef.current === sanitizedContent) {
+            return;
+        }
+
+        contentElement.innerHTML = sanitizedContent;
+        appliedHtmlRef.current = sanitizedContent;
+    }, [contentRef, sanitizedContent]);
 
     useEffect(() => {
         const contentElement = contentRef.current;
@@ -86,8 +141,25 @@ export function ArticleReaderContent({
         }, range.cloneRange());
     }, [contentRef, onTextSelect]);
 
+    // Reset the applied-HTML ref when the article itself changes so the
+    // new article content is written on mount.
+    const articleIdRef = useRef(article.id);
+    useEffect(() => {
+        if (articleIdRef.current !== article.id) {
+            articleIdRef.current = article.id;
+            appliedHtmlRef.current = null;
+        }
+    }, [article.id]);
+
     return (
-        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+        <div
+            ref={scrollContainerRef}
+            className="h-full min-h-0 flex-1 overflow-y-auto custom-scrollbar"
+            style={{
+                WebkitOverflowScrolling: "touch",
+                overscrollBehaviorY: "contain",
+            }}
+        >
             <article className="w-full max-w-[74ch] mx-auto px-5 py-8 md:px-10 md:py-12" onMouseUp={handleMouseUp}>
                 <header className="mb-10 pb-6 border-b border-[var(--color-border-subtle)]">
                     <div className="flex flex-wrap items-center gap-2 mb-4 text-[var(--font-size-3xs)] font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">
@@ -148,9 +220,12 @@ export function ArticleReaderContent({
                     style={{
                         fontSize: `${fontSize}px`,
                         lineHeight,
+                        fontFamily: resolveFontFamily(fontFamily),
+                        textAlign,
+                        letterSpacing: `${letterSpacing}em`,
+                        wordSpacing: `${wordSpacing}em`,
                         color: "var(--color-text-primary)",
                     }}
-                    dangerouslySetInnerHTML={{ __html: sanitizedContent }}
                 />
             </article>
         </div>

@@ -23,36 +23,6 @@ Feature package.
 
 ### Functions
 
-### Function `DictionaryResultPopover`
-
-Lightweight contextual dictionary popover for reader text selections.
-
-```ts
-DictionaryResultPopover({ isOpen, position, term, result, loading, error, saved, canSaveToVocabulary, saveDisabledMessage, onSave, onClose, }: DictionaryResultPopoverProps): JSX.Element | null
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `props` | `DictionaryResultPopoverProps` | no |
-
-**Parameter `props` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `canSaveToVocabulary` | `boolean | undefined` | yes |
-| `error` | `string | null | undefined` | yes |
-| `isOpen` | `boolean` | no |
-| `loading` | `boolean` | no |
-| `onClose` | `() => void` | no |
-| `onSave` | `() => void` | no |
-| `position` | `{ x: number; y: number; }` | no |
-| `result` | `DictionaryLookupResult | null` | no |
-| `saved` | `boolean` | no |
-| `saveDisabledMessage` | `string | undefined` | yes |
-| `term` | `string` | no |
-
-- Returns: `JSX.Element | null`
-
 ### Function `ReviewSessionModal`
 
 Shared review session modal mounted globally and launched from multiple pages.

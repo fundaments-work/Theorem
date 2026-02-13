@@ -15,7 +15,6 @@ export type SearchDomain =
 const APP_TITLEBAR_DOMAIN_BY_ROUTE: Record<AppRoute, SearchDomain> = {
     library: "library",
     reader: "none",
-    articleReader: "none",
     vocabulary: "vocabulary",
     settings: "none",
     bookDetails: "none",

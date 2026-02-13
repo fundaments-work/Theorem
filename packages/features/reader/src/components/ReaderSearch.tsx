@@ -8,10 +8,16 @@ import { Search, X, Loader2, ChevronRight } from 'lucide-react';
 import { cn } from "@theorem/core";
 import { Backdrop, FloatingPanel } from "@theorem/ui";
 
-interface SearchMatch {
+export interface ReaderSearchMatch {
     cfi: string;
     excerpt: string;
 }
+
+export interface ReaderSearchProgress {
+    progress: number;
+}
+
+export type ReaderSearchEvent = ReaderSearchMatch | ReaderSearchProgress | 'done';
 
 const LIVE_SEARCH_DEBOUNCE_MS = 220;
 
@@ -51,7 +57,7 @@ interface ReaderSearchProps {
     visible: boolean;
     onClose: () => void;
     onNavigate: (location: string) => void;
-    onSearch: (query: string) => AsyncGenerator<any>;
+    onSearch: (query: string) => AsyncGenerator<ReaderSearchEvent>;
     onClearSearch: () => void;
     className?: string;
 }
@@ -65,7 +71,7 @@ export function ReaderSearch({
     className,
 }: ReaderSearchProps) {
     const [query, setQuery] = useState('');
-    const [results, setResults] = useState<SearchMatch[]>([]);
+    const [results, setResults] = useState<ReaderSearchMatch[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [progress, setProgress] = useState(0);
     const searchRef = useRef(0);
@@ -107,10 +113,10 @@ export function ReaderSearch({
                 if (result === 'done') {
                     setProgress(100);
                     break;
-                } else if (result.progress !== undefined) {
+                } else if (typeof result === 'object' && result !== null && 'progress' in result) {
                     setProgress(Math.round(result.progress * 100));
-                } else if (result.cfi) {
-                    setResults(prev => [...prev, result as SearchMatch]);
+                } else if (typeof result === 'object' && result !== null && 'cfi' in result) {
+                    setResults(prev => [...prev, result]);
                 }
             }
         } catch (err) {
@@ -206,7 +212,7 @@ export function ReaderSearch({
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search in book..."
+                            placeholder="Search in document..."
                             className="w-full h-10 pl-10 pr-10 bg-[var(--color-background)] rounded-xl text-sm border-2 border-transparent focus:border-[var(--color-accent)] transition-colors outline-none text-[color:var(--color-text-primary)]"
                         />
                         {query && (
@@ -243,7 +249,7 @@ export function ReaderSearch({
                     {query && isSearching && results.length === 0 && (
                         <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center">
                             <Loader2 className="w-6 h-6 animate-spin text-[color:var(--color-accent)] mb-3" />
-                            <p className="w-full max-w-[15rem] text-xs text-[color:var(--color-text-muted)] leading-relaxed">Scanning book... {progress}%</p>
+                            <p className="w-full max-w-[15rem] text-xs text-[color:var(--color-text-muted)] leading-relaxed">Scanning content... {progress}%</p>
                         </div>
                     )}
 
