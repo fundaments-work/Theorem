@@ -1,18 +1,22 @@
 {
+    "extends": "../../../tsconfig.base.json",
     "compilerOptions": {
-        "target": "ES2020",
-        "module": "ESNext",
-        "moduleResolution": "bundler",
-        "jsx": "react-jsx",
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
         "outDir": "./dist",
-        "rootDir": "./src",
+        "rootDir": ".",
+        "baseUrl": ".",
         "declaration": true,
-        "declarationMap": true
+        "declarationMap": true,
+        "paths": {
+            "@theorem/feature-learning": [
+                "../learning/src"
+            ]
+        }
     },
     "include": [
         "src"
     ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
 }

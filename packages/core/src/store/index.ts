@@ -1874,7 +1874,6 @@ interface RssStore {
     error?: string;
     // Article viewer state
     currentArticle: RssArticle | null;
-    isArticleViewerOpen: boolean;
 
     addFeed: (url: string) => Promise<RssFeed | null>;
     removeFeed: (feedId: string) => void;
@@ -1898,7 +1897,6 @@ export const useRssStore = create<RssStore>()(
             isLoading: false,
             error: undefined,
             currentArticle: null,
-            isArticleViewerOpen: false,
 
             addFeed: async (url: string) => {
                 set({ isLoading: true, error: undefined });
@@ -2041,24 +2039,23 @@ export const useRssStore = create<RssStore>()(
             openArticleInReader: async (article: RssArticle) => {
                 // Mark article as read
                 get().markArticleRead(article.id);
-                
-                // Open the article viewer instead of converting to EPUB
-                set({ 
-                    currentArticle: article, 
-                    isArticleViewerOpen: true 
+
+                // Open in dedicated full-screen article reader mode
+                set({
+                    currentArticle: article,
                 });
+                useUIStore.getState().setRoute('articleReader');
             },
 
             closeArticleViewer: () => {
-                set({ 
-                    isArticleViewerOpen: false,
-                    // Don't clear currentArticle immediately to allow for animations
+                set({
+                    currentArticle: null,
                 });
-                
-                // Clear currentArticle after animation
-                setTimeout(() => {
-                    set({ currentArticle: null });
-                }, 300);
+
+                const ui = useUIStore.getState();
+                if (ui.currentRoute === 'articleReader') {
+                    ui.setRoute('feeds');
+                }
             },
 
             setCurrentArticle: (article: RssArticle | null) => {

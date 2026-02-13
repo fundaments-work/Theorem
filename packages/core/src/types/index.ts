@@ -369,7 +369,7 @@ export interface RssArticle {
 }
 
 // Navigation
-export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds";
+export type AppRoute = "library" | "reader" | "articleReader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds";
 
 // UI State
 export interface UIState {

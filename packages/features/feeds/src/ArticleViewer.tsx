@@ -1,24 +1,42 @@
-/**
- * ArticleViewer Component
- * Side-panel HTML article viewer with full reader controls
- * Inspired by Notion's side-peek design
- */
-
-import { useState, useCallback, useEffect, useRef } from "react";
-import { cn, useSettingsStore, type RssArticle } from "@theorem/core";
-import { 
-    X, 
-    Maximize2, 
-    Minimize2, 
-    Type, 
-    Sun, 
-    Moon,
-    AlignLeft,
-    ExternalLink,
-    Share2,
-    Bookmark,
-    Check
-} from "lucide-react";
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
+import {
+    cn,
+    HIGHLIGHT_COLOR_TOKENS,
+    useLearningStore,
+    useSettingsStore,
+    vocabularyTermFromLookup,
+    type DictionaryLookupResult,
+    type DocLocation,
+    type DocMetadata,
+    type HighlightColor,
+    type ReaderSettings as ReaderSettingsState,
+    type ReaderTheme,
+    type RssArticle,
+} from "@theorem/core";
+import { Backdrop } from "@theorem/ui";
+import { DictionaryResultPopover } from "@theorem/feature-learning";
+import { WindowTitlebar } from "@theorem/feature-reader";
+import {
+    ArticleReaderContent,
+    ArticleReaderHighlightsPanel,
+    ArticleReaderInfoPanel,
+    ArticleReaderOutlinePanel,
+    ArticleReaderSearchPanel,
+    ArticleReaderSettingsPanel,
+    ArticleSelectionPopover,
+    type ArticleHeading,
+    type ArticleHighlight,
+    type ArticleReaderPanel,
+    type ArticleScrollBookmark,
+} from "./article-reader";
+import { buildArticleDescription, formatArticleDate } from "./article-reader/utils";
 
 interface ArticleViewerProps {
     article: RssArticle | null;
@@ -28,505 +46,725 @@ interface ArticleViewerProps {
     onToggleFavorite?: () => void;
 }
 
-// Font size options
-const FONT_SIZES = [
-    { label: "Small", value: 14 },
-    { label: "Normal", value: 16 },
-    { label: "Large", value: 18 },
-    { label: "X-Large", value: 20 },
-];
+const MIN_FONT_SIZE = 12;
+const MAX_FONT_SIZE = 32;
+const MIN_LINE_HEIGHT = 1.2;
+const MAX_LINE_HEIGHT = 2.2;
+const MIN_BRIGHTNESS = 20;
+const MAX_BRIGHTNESS = 100;
+const BOOKMARK_SNAP_THRESHOLD = 0.012;
 
-// Line height options
-const LINE_HEIGHTS = [
-    { label: "Compact", value: 1.4 },
-    { label: "Normal", value: 1.6 },
-    { label: "Relaxed", value: 1.8 },
-    { label: "Loose", value: 2.0 },
-];
-
-// Theme options
-const THEMES = [
-    { label: "Light", value: "light", icon: Sun },
-    { label: "Sepia", value: "sepia", icon: Sun },
-    { label: "Dark", value: "dark", icon: Moon },
-];
-
-function closestOptionValue<T extends { value: number }>(options: T[], value: number): number {
-    return options.reduce((closest, current) => {
-        return Math.abs(current.value - value) < Math.abs(closest - value) ? current.value : closest;
-    }, options[0]?.value ?? value);
+function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
 }
 
-export function ArticleViewer({ 
-    article, 
+function applyHighlightToRange(
+    range: Range,
+    contentRoot: HTMLElement,
+    highlightId: string,
+    color: HighlightColor,
+): boolean {
+    const workingRange = range.cloneRange();
+    const selectedText = workingRange.toString().trim();
+    if (!selectedText) {
+        return false;
+    }
+
+    const mark = document.createElement("mark");
+    mark.className = "article-highlight";
+    mark.dataset.highlightId = highlightId;
+    mark.dataset.highlightColor = color;
+    mark.style.backgroundColor = HIGHLIGHT_COLOR_TOKENS[color].soft;
+    mark.style.borderRadius = "2px";
+    mark.style.padding = "0 1px";
+    mark.style.color = "inherit";
+    mark.style.setProperty("box-decoration-break", "clone");
+    mark.style.setProperty("-webkit-box-decoration-break", "clone");
+
+    try {
+        // Fast path for simple inline selections.
+        workingRange.surroundContents(mark);
+        return true;
+    } catch {
+        // Fallback for complex selections (for example full paragraph selections).
+        try {
+            const fragment = workingRange.extractContents();
+            if (!fragment.textContent?.trim()) {
+                return false;
+            }
+            mark.appendChild(fragment);
+            workingRange.insertNode(mark);
+            return contentRoot.contains(mark);
+        } catch {
+            return false;
+        }
+    }
+}
+
+export function ArticleViewer({
+    article,
     feedTitle,
-    isOpen, 
+    isOpen,
     onClose,
     onToggleFavorite,
 }: ArticleViewerProps) {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [showSettings, setShowSettings] = useState(false);
-    const [fontSize, setFontSize] = useState(16);
+    const globalReaderSettings = useSettingsStore((state) => state.settings.readerSettings);
+    const updateReaderSettings = useSettingsStore((state) => state.updateReaderSettings);
+    const learningSettings = useSettingsStore((state) => state.settings.learning);
+    const lookupTerm = useLearningStore((state) => state.lookupTerm);
+    const saveVocabularyTerm = useLearningStore((state) => state.saveVocabularyTerm);
+
+    const [activePanel, setActivePanel] = useState<ArticleReaderPanel>(null);
+    const [fontSize, setFontSize] = useState(18);
     const [lineHeight, setLineHeight] = useState(1.6);
-    const [theme, setTheme] = useState<"light" | "sepia" | "dark">("light");
+    const [brightness, setBrightness] = useState(100);
+    const [theme, setTheme] = useState<ReaderTheme>("light");
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [readingProgress, setReadingProgress] = useState(0);
+    const [toolbarHeight, setToolbarHeight] = useState(56);
+    const [headings, setHeadings] = useState<ArticleHeading[]>([]);
+    const [highlights, setHighlights] = useState<ArticleHighlight[]>([]);
+    const [bookmarks, setBookmarks] = useState<ArticleScrollBookmark[]>([]);
+
+    const [selectionPopover, setSelectionPopover] = useState<{
+        isOpen: boolean;
+        text: string;
+        position: { x: number; y: number };
+    }>({ isOpen: false, text: "", position: { x: 0, y: 0 } });
+
+    const [dictionaryState, setDictionaryState] = useState<{
+        isOpen: boolean;
+        term: string;
+        position: { x: number; y: number };
+        result: DictionaryLookupResult | null;
+        loading: boolean;
+        error: string | null;
+        saved: boolean;
+    }>({
+        isOpen: false,
+        term: "",
+        position: { x: 0, y: 0 },
+        result: null,
+        loading: false,
+        error: null,
+        saved: false,
+    });
+
     const contentRef = useRef<HTMLDivElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const toolbarContainerRef = useRef<HTMLDivElement>(null);
+    const selectedRangeRef = useRef<Range | null>(null);
 
-    // Get global reader settings for defaults
-    const globalSettings = useSettingsStore((s) => s.settings.readerSettings);
-    
-    // Initialize from global settings
     useEffect(() => {
-        // Keep feed viewer typography in a readable range even when book reader settings are extreme.
-        setFontSize(closestOptionValue(FONT_SIZES, globalSettings.fontSize));
-        setLineHeight(closestOptionValue(LINE_HEIGHTS, globalSettings.lineHeight));
-        setTheme(globalSettings.theme);
-    }, [globalSettings]);
-
-    // Reset expanded state when closing
-    useEffect(() => {
-        if (!isOpen) {
-            setIsExpanded(false);
-            setShowSettings(false);
+        if (!isOpen || !article) {
+            return;
         }
-    }, [isOpen]);
 
-    // Handle escape key
+        setFontSize(clamp(globalReaderSettings.fontSize ?? 18, MIN_FONT_SIZE, MAX_FONT_SIZE));
+        setLineHeight(clamp(globalReaderSettings.lineHeight ?? 1.6, MIN_LINE_HEIGHT, MAX_LINE_HEIGHT));
+        setBrightness(clamp(globalReaderSettings.brightness ?? 100, MIN_BRIGHTNESS, MAX_BRIGHTNESS));
+        setTheme(globalReaderSettings.theme ?? "light");
+        setIsFullscreen(Boolean(globalReaderSettings.fullscreen));
+    }, [
+        article,
+        globalReaderSettings.brightness,
+        globalReaderSettings.fontSize,
+        globalReaderSettings.fullscreen,
+        globalReaderSettings.lineHeight,
+        globalReaderSettings.theme,
+        isOpen,
+    ]);
+
     useEffect(() => {
-        const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === "Escape" && isOpen) {
-                onClose();
+        setActivePanel(null);
+        setHeadings([]);
+        setHighlights([]);
+        setBookmarks([]);
+        setReadingProgress(0);
+        selectedRangeRef.current = null;
+        setSelectionPopover({ isOpen: false, text: "", position: { x: 0, y: 0 } });
+        setDictionaryState({
+            isOpen: false,
+            term: "",
+            position: { x: 0, y: 0 },
+            result: null,
+            loading: false,
+            error: null,
+            saved: false,
+        });
+
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = 0;
+        }
+    }, [article?.id]);
+
+    useLayoutEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        const element = toolbarContainerRef.current;
+        if (!element) {
+            return;
+        }
+
+        const updateToolbarHeight = () => {
+            const nextHeight = Math.round(element.getBoundingClientRect().height);
+            if (nextHeight > 0) {
+                setToolbarHeight(nextHeight);
             }
         };
-        window.addEventListener("keydown", handleEscape);
-        return () => window.removeEventListener("keydown", handleEscape);
-    }, [isOpen, onClose]);
 
-    // Handle click outside to close (only when not expanded)
-    const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-        if (!isExpanded && e.target === e.currentTarget) {
-            onClose();
+        updateToolbarHeight();
+
+        const windowResizeHandler = () => updateToolbarHeight();
+        window.addEventListener("resize", windowResizeHandler);
+
+        if (typeof ResizeObserver !== "undefined") {
+            const observer = new ResizeObserver(updateToolbarHeight);
+            observer.observe(element);
+            return () => {
+                observer.disconnect();
+                window.removeEventListener("resize", windowResizeHandler);
+            };
         }
-    }, [isExpanded, onClose]);
 
-    // Format date
-    const formatDate = (date: Date | string | undefined) => {
-        if (!date) return "";
-        const d = date instanceof Date ? date : new Date(date);
-        if (isNaN(d.getTime())) return "";
-        return d.toLocaleDateString("en-US", { 
-            year: "numeric", 
-            month: "long", 
-            day: "numeric" 
+        return () => {
+            window.removeEventListener("resize", windowResizeHandler);
+        };
+    }, [isOpen]);
+
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container || !isOpen) {
+            return;
+        }
+
+        const handleScroll = () => {
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            const denominator = scrollHeight - clientHeight;
+            const progress = denominator > 0 ? scrollTop / denominator : 0;
+            setReadingProgress(clamp(progress, 0, 1));
+        };
+
+        handleScroll();
+        container.addEventListener("scroll", handleScroll, { passive: true });
+        return () => {
+            container.removeEventListener("scroll", handleScroll);
+        };
+    }, [article?.id, isOpen]);
+
+    const updateReaderSetting = useCallback((updates: Partial<ReaderSettingsState>) => {
+        updateReaderSettings(updates);
+    }, [updateReaderSettings]);
+
+    const handleToggleFullscreen = useCallback(() => {
+        setIsFullscreen((current) => {
+            const next = !current;
+            updateReaderSetting({ fullscreen: next });
+            return next;
         });
-    };
+    }, [updateReaderSetting]);
 
-    // Get theme colors
-    const getThemeColors = () => {
-        switch (theme) {
-            case "dark":
-                return {
-                    bg: "#0b0b0b",
-                    text: "#f5f5f5",
-                    muted: "#c2c2c2",
-                    link: "#ffffff",
-                    border: "#424242",
-                    surface: "#121212",
-                };
-            case "sepia":
-                return {
-                    bg: "#f2f2f2",
-                    text: "#141414",
-                    muted: "#535353",
-                    link: "#111111",
-                    border: "#c8c8c8",
-                    surface: "#f8f8f8",
-                };
-            default:
-                return {
-                    bg: "#ffffff",
-                    text: "#111111",
-                    muted: "#4a4a4a",
-                    link: "#111111",
-                    border: "#cfcfcf",
-                    surface: "#ffffff",
-                };
+    useEffect(() => {
+        if (!isOpen) {
+            return;
         }
-    };
 
-    const colors = getThemeColors();
+        const runFullscreen = async () => {
+            try {
+                if (isFullscreen) {
+                    if (!document.fullscreenElement) {
+                        await document.documentElement.requestFullscreen();
+                    }
+                } else if (document.fullscreenElement) {
+                    await document.exitFullscreen();
+                }
+            } catch (error) {
+                console.error("[ArticleViewer] Fullscreen error:", error);
+            }
+        };
 
-    if (!article) return null;
+        void runFullscreen();
+
+        const onFullscreenChange = () => {
+            if (!document.fullscreenElement && isFullscreen) {
+                setIsFullscreen(false);
+                updateReaderSetting({ fullscreen: false });
+            }
+        };
+
+        document.addEventListener("fullscreenchange", onFullscreenChange);
+        return () => {
+            document.removeEventListener("fullscreenchange", onFullscreenChange);
+        };
+    }, [isFullscreen, isOpen, updateReaderSetting]);
+
+    const togglePanel = useCallback((panel: Exclude<ArticleReaderPanel, null>) => {
+        setActivePanel((current) => (current === panel ? null : panel));
+    }, []);
+
+    const closePanel = useCallback(() => {
+        setActivePanel(null);
+    }, []);
+
+    const clearBrowserSelection = useCallback(() => {
+        window.getSelection()?.removeAllRanges();
+    }, []);
+
+    const handleThemeChange = useCallback((nextTheme: ReaderTheme) => {
+        setTheme(nextTheme);
+        updateReaderSetting({ theme: nextTheme });
+    }, [updateReaderSetting]);
+
+    const handleFontSizeChange = useCallback((value: number) => {
+        const next = clamp(value, MIN_FONT_SIZE, MAX_FONT_SIZE);
+        setFontSize(next);
+        updateReaderSetting({ fontSize: next });
+    }, [updateReaderSetting]);
+
+    const handleLineHeightChange = useCallback((value: number) => {
+        const next = clamp(value, MIN_LINE_HEIGHT, MAX_LINE_HEIGHT);
+        setLineHeight(next);
+        updateReaderSetting({ lineHeight: next });
+    }, [updateReaderSetting]);
+
+    const handleBrightnessChange = useCallback((value: number) => {
+        const next = clamp(value, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
+        setBrightness(next);
+        updateReaderSetting({ brightness: next });
+    }, [updateReaderSetting]);
+
+    const scrollByViewport = useCallback((direction: -1 | 1) => {
+        const container = scrollContainerRef.current;
+        if (!container) {
+            return;
+        }
+
+        const step = Math.max(220, Math.floor(container.clientHeight * 0.86));
+        container.scrollBy({
+            top: direction * step,
+            behavior: "smooth",
+        });
+    }, []);
+
+    const getCurrentHeadingLabel = useCallback((): string => {
+        const contentElement = contentRef.current;
+        const container = scrollContainerRef.current;
+        if (!contentElement || !container) {
+            return `${Math.round(readingProgress * 100)}%`;
+        }
+
+        const headingElements = Array.from(contentElement.querySelectorAll<HTMLElement>("h1, h2, h3, h4"));
+        if (headingElements.length === 0) {
+            return `${Math.round(readingProgress * 100)}%`;
+        }
+
+        const containerTop = container.getBoundingClientRect().top;
+        let currentHeading: HTMLElement | null = null;
+
+        for (const heading of headingElements) {
+            const offset = heading.getBoundingClientRect().top - containerTop;
+            if (offset <= 72) {
+                currentHeading = heading;
+            } else {
+                break;
+            }
+        }
+
+        return currentHeading?.textContent?.trim() || `${Math.round(readingProgress * 100)}%`;
+    }, [readingProgress]);
+
+    const currentBookmark = useMemo(() => (
+        bookmarks.find((bookmark) => Math.abs(bookmark.progress - readingProgress) <= BOOKMARK_SNAP_THRESHOLD) || null
+    ), [bookmarks, readingProgress]);
+
+    const handleAddScrollBookmark = useCallback(() => {
+        const progress = clamp(readingProgress, 0, 1);
+
+        setBookmarks((current) => {
+            const existing = current.find(
+                (bookmark) => Math.abs(bookmark.progress - progress) <= BOOKMARK_SNAP_THRESHOLD,
+            );
+
+            if (existing) {
+                return current.filter((bookmark) => bookmark.id !== existing.id);
+            }
+
+            const bookmark: ArticleScrollBookmark = {
+                id: crypto.randomUUID(),
+                progress,
+                label: getCurrentHeadingLabel(),
+                createdAt: new Date(),
+            };
+
+            return [...current, bookmark].sort((left, right) => left.progress - right.progress);
+        });
+    }, [getCurrentHeadingLabel, readingProgress]);
+
+    const handleDeleteBookmark = useCallback((bookmarkId: string) => {
+        setBookmarks((current) => current.filter((bookmark) => bookmark.id !== bookmarkId));
+    }, []);
+
+    const handleJumpToBookmark = useCallback((bookmarkId: string) => {
+        const container = scrollContainerRef.current;
+        if (!container) {
+            return;
+        }
+
+        const bookmark = bookmarks.find((entry) => entry.id === bookmarkId);
+        if (!bookmark) {
+            return;
+        }
+
+        const maxScroll = container.scrollHeight - container.clientHeight;
+        container.scrollTo({
+            top: Math.max(0, Math.floor(maxScroll * bookmark.progress)),
+            behavior: "smooth",
+        });
+        setActivePanel(null);
+    }, [bookmarks]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+                event.preventDefault();
+                setActivePanel((current) => (current === "search" ? null : "search"));
+                return;
+            }
+
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d") {
+                event.preventDefault();
+                handleAddScrollBookmark();
+                return;
+            }
+
+            if (event.key !== "Escape") {
+                return;
+            }
+
+            if (activePanel) {
+                setActivePanel(null);
+                return;
+            }
+            if (selectionPopover.isOpen) {
+                selectedRangeRef.current = null;
+                setSelectionPopover((previous) => ({ ...previous, isOpen: false }));
+                clearBrowserSelection();
+                return;
+            }
+            if (dictionaryState.isOpen) {
+                setDictionaryState((previous) => ({ ...previous, isOpen: false }));
+                return;
+            }
+            onClose();
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [
+        activePanel,
+        clearBrowserSelection,
+        dictionaryState.isOpen,
+        handleAddScrollBookmark,
+        isOpen,
+        onClose,
+        selectionPopover.isOpen,
+    ]);
+
+    const handleTextSelect = useCallback((text: string, position: { x: number; y: number }, range: Range) => {
+        selectedRangeRef.current = range;
+        setSelectionPopover({ isOpen: true, text, position });
+    }, []);
+
+    const handleHighlight = useCallback((color: HighlightColor) => {
+        if (!selectionPopover.text.trim()) {
+            return;
+        }
+
+        const contentRoot = contentRef.current;
+        const selectedRange = selectedRangeRef.current;
+        if (!contentRoot || !selectedRange) {
+            return;
+        }
+        if (!contentRoot.contains(selectedRange.commonAncestorContainer)) {
+            return;
+        }
+
+        const highlightId = crypto.randomUUID();
+        const applied = applyHighlightToRange(selectedRange, contentRoot, highlightId, color);
+        if (!applied) {
+            return;
+        }
+
+        const nextHighlight: ArticleHighlight = {
+            id: highlightId,
+            text: selectionPopover.text.trim(),
+            color,
+            createdAt: new Date(),
+        };
+
+        setHighlights((current) => [...current, nextHighlight]);
+        selectedRangeRef.current = null;
+        setSelectionPopover((previous) => ({ ...previous, isOpen: false }));
+        clearBrowserSelection();
+    }, [clearBrowserSelection, selectionPopover.text]);
+
+    const handleDeleteHighlight = useCallback((highlightId: string) => {
+        setHighlights((current) => current.filter((highlight) => highlight.id !== highlightId));
+
+        const marks = contentRef.current?.querySelectorAll(`mark.article-highlight[data-highlight-id="${highlightId}"]`) || [];
+        marks.forEach((mark) => {
+            const parent = mark.parentNode;
+            if (parent) {
+                parent.replaceChild(document.createTextNode(mark.textContent || ""), mark);
+                parent.normalize();
+            }
+        });
+    }, []);
+
+    const handleJumpToHeading = useCallback((headingId: string) => {
+        const target = document.getElementById(headingId);
+        target?.scrollIntoView({ behavior: "smooth", block: "start" });
+        setActivePanel(null);
+    }, []);
+
+    const handleJumpToHighlight = useCallback((highlightId: string) => {
+        const target = contentRef.current?.querySelector<HTMLElement>(
+            `mark.article-highlight[data-highlight-id="${highlightId}"]`,
+        );
+        target?.scrollIntoView({ behavior: "smooth", block: "center" });
+        setActivePanel(null);
+    }, []);
+
+    const handleDefine = useCallback(async () => {
+        const term = selectionPopover.text.trim();
+        if (!term) {
+            return;
+        }
+
+        selectedRangeRef.current = null;
+        setSelectionPopover((previous) => ({ ...previous, isOpen: false }));
+        clearBrowserSelection();
+        setDictionaryState({
+            isOpen: true,
+            term,
+            position: selectionPopover.position,
+            result: null,
+            loading: true,
+            error: null,
+            saved: false,
+        });
+
+        try {
+            const result = await lookupTerm(term, "en");
+            setDictionaryState((previous) => ({
+                ...previous,
+                loading: false,
+                result,
+            }));
+        } catch (error) {
+            setDictionaryState((previous) => ({
+                ...previous,
+                loading: false,
+                error: error instanceof Error ? error.message : "Lookup failed",
+            }));
+        }
+    }, [clearBrowserSelection, lookupTerm, selectionPopover.position, selectionPopover.text]);
+
+    const handleCopy = useCallback(() => {
+        const text = selectionPopover.text.trim();
+        if (!text) {
+            return;
+        }
+
+        void navigator.clipboard.writeText(text).catch((error) => {
+            console.error("[ArticleViewer] Failed to copy selected text:", error);
+        });
+
+        selectedRangeRef.current = null;
+        setSelectionPopover((previous) => ({ ...previous, isOpen: false }));
+        clearBrowserSelection();
+    }, [clearBrowserSelection, selectionPopover.text]);
+
+    const handleSaveToVocabulary = useCallback(() => {
+        if (!dictionaryState.result || !article) {
+            return;
+        }
+
+        const term = vocabularyTermFromLookup(dictionaryState.result);
+        saveVocabularyTerm(term, {
+            sourceType: "site",
+            sourceId: article.id,
+            label: article.title,
+        });
+
+        setDictionaryState((previous) => ({ ...previous, saved: true }));
+    }, [article, dictionaryState.result, saveVocabularyTerm]);
+
+    const metadata = useMemo<DocMetadata | null>(() => {
+        if (!article) {
+            return null;
+        }
+
+        return {
+            title: article.title || "Untitled Article",
+            author: article.author || feedTitle || "Unknown Source",
+            description: buildArticleDescription(article),
+            publisher: feedTitle,
+            pubdate: formatArticleDate(article.publishedAt ?? article.fetchedAt) || undefined,
+        };
+    }, [article, feedTitle]);
+
+    const location = useMemo<DocLocation | null>(() => {
+        if (!article) {
+            return null;
+        }
+
+        return {
+            cfi: `rss:${article.id}`,
+            percentage: readingProgress,
+        };
+    }, [article, readingProgress]);
+
+    if (!article) {
+        return null;
+    }
 
     return (
         <div
-            ref={containerRef}
-            onClick={handleBackdropClick}
             className={cn(
-                "fixed inset-0 z-[var(--z-modal)] transition-opacity duration-300",
-                isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+                "fixed inset-0 z-[var(--z-modal)]",
+                isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
             )}
-            style={{
-                backgroundColor: isExpanded ? colors.bg : "rgba(0, 0, 0, 0.5)",
-            }}
         >
-            {/* Article Panel */}
             <div
                 className={cn(
-                    "h-full transition-all duration-300 ease-out",
-                    "flex flex-col shadow-2xl",
-                    isExpanded 
-                        ? "w-full" 
-                        : "w-full md:w-[600px] lg:w-[700px] xl:w-[800px] ml-auto"
+                    "absolute inset-0 flex flex-col overflow-hidden",
+                    `theme-${theme}`,
                 )}
                 style={{
-                    backgroundColor: colors.bg,
-                    color: colors.text,
+                    backgroundColor: "var(--reader-bg)",
+                    filter: `brightness(${brightness}%)`,
+                    overscrollBehavior: "none",
                 }}
+                data-reading-mode="scroll"
             >
-                {/* Toolbar */}
-                <div
-                    className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0"
-                    style={{ borderColor: colors.border }}
-                >
-                    {/* Left: Close button */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={onClose}
-                            className="p-2 rounded-lg transition-colors hover:opacity-70"
-                            style={{ color: colors.muted }}
-                            title="Close (Esc)"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-                        
-                        {!isExpanded && (
-                            <span 
-                                className="text-xs hidden md:block"
-                                style={{ color: colors.muted }}
-                            >
-                                Press Esc to close
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Center: Article info */}
-                    <div className="flex-1 mx-4 text-center min-w-0">
-                        <h2 
-                            className="text-sm font-medium truncate"
-                            style={{ color: colors.text }}
-                        >
-                            {article.title}
-                        </h2>
-                        {feedTitle && (
-                            <p 
-                                className="text-xs truncate"
-                                style={{ color: colors.muted }}
-                            >
-                                {feedTitle}
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Right: Actions */}
-                    <div className="flex items-center gap-1">
-                        {/* Expand/Collapse */}
-                        <button
-                            onClick={() => setIsExpanded(!isExpanded)}
-                            className="p-2 rounded-lg transition-colors hover:opacity-70"
-                            style={{ color: colors.muted }}
-                            title={isExpanded ? "Exit full screen" : "Full screen"}
-                        >
-                            {isExpanded ? (
-                                <Minimize2 className="w-5 h-5" />
-                            ) : (
-                                <Maximize2 className="w-5 h-5" />
-                            )}
-                        </button>
-
-                        {/* Settings toggle */}
-                        <button
-                            onClick={() => setShowSettings(!showSettings)}
-                            className={cn(
-                                "p-2 rounded-lg transition-colors",
-                                showSettings && "opacity-100"
-                            )}
-                            style={{ 
-                                color: showSettings ? colors.text : colors.muted,
-                                backgroundColor: showSettings ? colors.surface : "transparent",
-                            }}
-                            title="Reading settings"
-                        >
-                            <Type className="w-5 h-5" />
-                        </button>
-
-                        {/* Favorite */}
-                        {onToggleFavorite && (
-                            <button
-                                onClick={onToggleFavorite}
-                                className="p-2 rounded-lg transition-colors hover:opacity-70"
-                                style={{ color: article.isFavorite ? "var(--color-accent)" : colors.muted }}
-                                title={article.isFavorite ? "Remove from favorites" : "Add to favorites"}
-                            >
-                                {article.isFavorite ? (
-                                    <Bookmark className="w-5 h-5 fill-current" />
-                                ) : (
-                                    <Bookmark className="w-5 h-5" />
-                                )}
-                            </button>
-                        )}
-
-                        {/* Original link */}
-                        {article.url && (
-                            <a
-                                href={article.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-2 rounded-lg transition-colors hover:opacity-70"
-                                style={{ color: colors.muted }}
-                                title="Open original article"
-                            >
-                                <ExternalLink className="w-5 h-5" />
-                            </a>
-                        )}
-                    </div>
+                <div ref={toolbarContainerRef} className="absolute top-0 left-0 right-0 z-50">
+                    <WindowTitlebar
+                        metadata={metadata}
+                        location={location}
+                        onBack={onClose}
+                        onPrevPage={() => scrollByViewport(-1)}
+                        onNextPage={() => scrollByViewport(1)}
+                        onToggleToc={() => togglePanel("toc")}
+                        onToggleSettings={() => togglePanel("settings")}
+                        onToggleBookmarks={() => togglePanel("bookmarks")}
+                        onToggleSearch={() => togglePanel("search")}
+                        onToggleInfo={() => togglePanel("info")}
+                        onAddBookmark={handleAddScrollBookmark}
+                        isCurrentPageBookmarked={Boolean(currentBookmark)}
+                        activePanel={activePanel}
+                        fullscreen={isFullscreen}
+                        onToggleFullscreen={handleToggleFullscreen}
+                    />
                 </div>
 
-                {/* Settings Panel */}
-                {showSettings && (
-                    <div
-                        className="px-4 py-4 border-b flex flex-wrap gap-6"
-                        style={{ 
-                            borderColor: colors.border,
-                            backgroundColor: colors.surface,
-                        }}
-                    >
-                        {/* Font Size */}
-                        <div className="flex flex-col gap-2">
-                            <span className="text-xs font-medium" style={{ color: colors.muted }}>
-                                Font Size
-                            </span>
-                            <div className="flex gap-1">
-                                {FONT_SIZES.map((size) => (
-                                    <button
-                                        key={size.value}
-                                        onClick={() => setFontSize(size.value)}
-                                        className={cn(
-                                            "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                                            fontSize === size.value && "ring-1"
-                                        )}
-                                        style={{
-                                            color: fontSize === size.value ? colors.text : colors.muted,
-                                            backgroundColor: fontSize === size.value ? colors.bg : "transparent",
-                                            border: `1px solid ${fontSize === size.value ? colors.border : "transparent"}`,
-                                        }}
-                                    >
-                                        {size.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                <Backdrop visible={activePanel !== null} onClick={closePanel} blur />
 
-                        {/* Line Height */}
-                        <div className="flex flex-col gap-2">
-                            <span className="text-xs font-medium" style={{ color: colors.muted }}>
-                                Line Height
-                            </span>
-                            <div className="flex gap-1">
-                                {LINE_HEIGHTS.map((lh) => (
-                                    <button
-                                        key={lh.value}
-                                        onClick={() => setLineHeight(lh.value)}
-                                        className={cn(
-                                            "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                                            lineHeight === lh.value && "ring-1"
-                                        )}
-                                        style={{
-                                            color: lineHeight === lh.value ? colors.text : colors.muted,
-                                            backgroundColor: lineHeight === lh.value ? colors.bg : "transparent",
-                                            border: `1px solid ${lineHeight === lh.value ? colors.border : "transparent"}`,
-                                        }}
-                                    >
-                                        {lh.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                <ArticleReaderOutlinePanel
+                    visible={activePanel === "toc"}
+                    headings={headings}
+                    onJumpToHeading={handleJumpToHeading}
+                    onClose={closePanel}
+                />
 
-                        {/* Theme */}
-                        <div className="flex flex-col gap-2">
-                            <span className="text-xs font-medium" style={{ color: colors.muted }}>
-                                Theme
-                            </span>
-                            <div className="flex gap-1">
-                                {THEMES.map((t) => (
-                                    <button
-                                        key={t.value}
-                                        onClick={() => setTheme(t.value as any)}
-                                        className={cn(
-                                            "px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5",
-                                            theme === t.value && "ring-1"
-                                        )}
-                                        style={{
-                                            color: theme === t.value ? colors.text : colors.muted,
-                                            backgroundColor: theme === t.value ? colors.bg : "transparent",
-                                            border: `1px solid ${theme === t.value ? colors.border : "transparent"}`,
-                                        }}
-                                    >
-                                        <t.icon className="w-3.5 h-3.5" />
-                                        {t.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <ArticleReaderSearchPanel
+                    visible={activePanel === "search"}
+                    contentRef={contentRef}
+                    onClose={closePanel}
+                />
 
-                {/* Article Content */}
-                <div 
-                    ref={contentRef}
-                    className="flex-1 overflow-y-auto px-6 py-8 md:px-12 md:py-12"
-                >
-                    <article className="w-full max-w-2xl mx-auto">
-                        {/* Header */}
-                        <header className="mb-8">
-                            <h1 
-                                className="text-2xl md:text-3xl font-bold mb-4 leading-tight"
-                                style={{ 
-                                    color: colors.text,
-                                    fontSize: `${fontSize * 1.5}px`,
-                                    lineHeight: lineHeight * 0.9,
-                                }}
-                            >
-                                {article.title}
-                            </h1>
-                            
-                            <div 
-                                className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm"
-                                style={{ color: colors.muted }}
-                            >
-                                {article.author && (
-                                    <span>By {article.author}</span>
-                                )}
-                                {article.publishedAt && (
-                                    <span>{formatDate(article.publishedAt)}</span>
-                                )}
-                                {feedTitle && (
-                                    <span>in {feedTitle}</span>
-                                )}
-                            </div>
-                        </header>
+                <ArticleReaderHighlightsPanel
+                    visible={activePanel === "bookmarks"}
+                    bookmarks={bookmarks}
+                    highlights={highlights}
+                    articleUrl={article.url}
+                    isFavorite={Boolean(article.isFavorite)}
+                    onToggleFavorite={onToggleFavorite}
+                    onJumpToBookmark={handleJumpToBookmark}
+                    onDeleteBookmark={handleDeleteBookmark}
+                    onJumpToHighlight={handleJumpToHighlight}
+                    onDeleteHighlight={handleDeleteHighlight}
+                    onClose={closePanel}
+                />
 
-                        {/* Main Image */}
-                        {article.imageUrl && (
-                            <img
-                                src={article.imageUrl}
-                                alt=""
-                                className="w-full h-auto rounded-lg mb-8"
-                                style={{ maxHeight: "400px", objectFit: "cover" }}
-                            />
-                        )}
+                <ArticleReaderSettingsPanel
+                    visible={activePanel === "settings"}
+                    fontSize={fontSize}
+                    lineHeight={lineHeight}
+                    brightness={brightness}
+                    theme={theme}
+                    onFontSizeChange={handleFontSizeChange}
+                    onLineHeightChange={handleLineHeightChange}
+                    onBrightnessChange={handleBrightnessChange}
+                    onThemeChange={handleThemeChange}
+                    onClose={closePanel}
+                />
 
-                        {/* Content */}
-                        <div
-                            className="article-content prose prose-lg max-w-none"
-                            style={{
-                                fontSize: `${fontSize}px`,
-                                lineHeight: lineHeight,
-                                color: colors.text,
-                            }}
-                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(article.content) }}
-                        />
+                <ArticleReaderInfoPanel
+                    visible={activePanel === "info"}
+                    article={article}
+                    feedTitle={feedTitle}
+                    onClose={closePanel}
+                />
 
-                        {/* Footer */}
-                        <footer className="mt-12 pt-8 border-t" style={{ borderColor: colors.border }}>
-                            <div className="flex items-center justify-between">
-                                <span style={{ color: colors.muted }} className="text-sm">
-                                    {article.url && (
-                                        <a 
-                                            href={article.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="hover:underline flex items-center gap-2"
-                                            style={{ color: colors.link }}
-                                        >
-                                            <ExternalLink className="w-4 h-4" />
-                                            Read original article
-                                        </a>
-                                    )}
-                                </span>
-                                
-                                {onToggleFavorite && (
-                                    <button
-                                        onClick={onToggleFavorite}
-                                        className="flex items-center gap-2 text-sm transition-colors hover:opacity-70"
-                                        style={{ color: article.isFavorite ? "var(--color-accent)" : colors.muted }}
-                                    >
-                                        {article.isFavorite ? (
-                                            <>
-                                                <Check className="w-4 h-4" />
-                                                Saved
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Bookmark className="w-4 h-4" />
-                                                Save for later
-                                            </>
-                                        )}
-                                    </button>
-                                )}
-                            </div>
-                        </footer>
-                    </article>
+                <div className="flex-1 min-h-0 overflow-hidden" style={{ paddingTop: toolbarHeight }}>
+                    <ArticleReaderContent
+                        article={article}
+                        feedTitle={feedTitle}
+                        fontSize={fontSize}
+                        lineHeight={lineHeight}
+                        contentRef={contentRef}
+                        scrollContainerRef={scrollContainerRef}
+                        onTextSelect={handleTextSelect}
+                        onHeadingsChange={setHeadings}
+                    />
                 </div>
             </div>
+
+            <ArticleSelectionPopover
+                isOpen={selectionPopover.isOpen}
+                position={selectionPopover.position}
+                selectedText={selectionPopover.text}
+                onHighlight={handleHighlight}
+                onDefine={handleDefine}
+                onCopy={handleCopy}
+                onClose={() => {
+                    selectedRangeRef.current = null;
+                    setSelectionPopover((previous) => ({ ...previous, isOpen: false }));
+                    clearBrowserSelection();
+                }}
+            />
+
+            <DictionaryResultPopover
+                isOpen={dictionaryState.isOpen}
+                position={dictionaryState.position}
+                term={dictionaryState.term}
+                result={dictionaryState.result}
+                loading={dictionaryState.loading}
+                error={dictionaryState.error}
+                saved={dictionaryState.saved}
+                canSaveToVocabulary={learningSettings.vocabularyEnabled}
+                onSave={handleSaveToVocabulary}
+                onClose={() => setDictionaryState((previous) => ({ ...previous, isOpen: false }))}
+            />
         </div>
     );
-}
-
-/**
- * Basic HTML sanitization to prevent XSS
- */
-function sanitizeHtml(html: string): string {
-    if (!html) return "";
-    
-    // Create a temporary div to parse and clean HTML
-    const temp = document.createElement("div");
-    temp.innerHTML = html;
-    
-    // Remove potentially dangerous elements and attributes
-    const dangerous = temp.querySelectorAll("script, style, iframe, object, embed, form");
-    dangerous.forEach((el) => el.remove());
-    
-    // Clean attributes on all elements
-    const allElements = temp.querySelectorAll("*");
-    allElements.forEach((el) => {
-        // Remove event handlers and dangerous attributes
-        const attributes = Array.from(el.attributes);
-        attributes.forEach((attr) => {
-            const name = attr.name.toLowerCase();
-            if (
-                name.startsWith("on") || // Event handlers
-                name === "href" && attr.value.toLowerCase().startsWith("javascript:") ||
-                name === "src" && attr.value.toLowerCase().startsWith("javascript:")
-            ) {
-                el.removeAttribute(attr.name);
-            }
-        });
-    });
-    
-    // Make all links open in new tab
-    const links = temp.querySelectorAll("a");
-    links.forEach((link) => {
-        link.setAttribute("target", "_blank");
-        link.setAttribute("rel", "noopener noreferrer");
-    });
-    
-    // Make images lazy loaded
-    const images = temp.querySelectorAll("img");
-    images.forEach((img) => {
-        img.setAttribute("loading", "lazy");
-    });
-    
-    return temp.innerHTML;
 }

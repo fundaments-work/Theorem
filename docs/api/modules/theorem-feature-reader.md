@@ -56,6 +56,41 @@ ReaderSettings({ settings, visible, onClose, onUpdate, format, className, }: Rea
 
 - Returns: `JSX.Element`
 
+### Function `WindowTitlebar`
+
+```ts
+WindowTitlebar({ metadata, location, onBack, onPrevPage, onNextPage, onToggleToc, onToggleSettings, onToggleBookmarks, onToggleSearch, onToggleInfo, onAddBookmark, isCurrentPageBookmarked, activePanel, fullscreen, onToggleFullscreen, className, hideReaderControls, pdfControls, }: WindowTitlebarProps): JSX.Element
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `props` | `WindowTitlebarProps` | no |
+
+**Parameter `props` fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `activePanel` | `string | null` | no |
+| `className` | `string | undefined` | yes |
+| `fullscreen` | `boolean | undefined` | yes |
+| `hideReaderControls` | `boolean | undefined` | yes |
+| `isCurrentPageBookmarked` | `boolean | undefined` | yes |
+| `location` | `DocLocation | null | undefined` | yes |
+| `metadata` | `DocMetadata | null` | no |
+| `onAddBookmark` | `(() => void) | undefined` | yes |
+| `onBack` | `() => void` | no |
+| `onNextPage` | `(() => void) | undefined` | yes |
+| `onPrevPage` | `(() => void) | undefined` | yes |
+| `onToggleBookmarks` | `() => void` | no |
+| `onToggleFullscreen` | `(() => void) | undefined` | yes |
+| `onToggleInfo` | `() => void` | no |
+| `onToggleSearch` | `() => void` | no |
+| `onToggleSettings` | `() => void` | no |
+| `onToggleToc` | `() => void` | no |
+| `pdfControls` | `{ currentPage: number; totalPages: number; zoom: number; zoomMode?: "custom" | "page-fit" | "width-fit"; annotationMode?: "none" | "highlight" | "pen" | "text" | "erase"; highlightColor?: HighlightColor; penColor?: HighlightColor; penWidth?: number; onPrevPage: () => void; onNextPage: () => void; onZoomIn: () => void; onZoomOut: () => void; onZoomReset: () => void; onZoomFitPage?: () => void; onZoomFitWidth?: () => void; onRotate: () => void; onPageInput?: (page: number) => void; onAddBookmark?: () => void; onAnnotationModeChange?: (mode: "none" | "highlight" | "pen" | "text" | "erase") => void; onHighlightColorChange?: (color: HighlightColor) => void; onPenColorChange?: (color: HighlightColor) => void; onPenWidthChange?: (width: number) => void; isCurrentPageBookmarked?: boolean; } | undefined` | yes |
+
+- Returns: `JSX.Element`
+
 ## Validation
 
 - Uses workspace-level validation commands.

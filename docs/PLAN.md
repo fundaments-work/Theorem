@@ -33,7 +33,7 @@ Theorem is an all-in-one reading and learning system: read, capture, remember, a
 
 
 ## Phase 3: Content Discovery and Capture
-- [ ] RSS feed reader
+- [x] RSS feed reader
 - [ ] Newsletter ingestion
 - [ ] Web clipper
 - [ ] Saved web article reader mode

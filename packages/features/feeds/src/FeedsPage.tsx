@@ -13,9 +13,11 @@ import {
     AlertCircle, Globe, LayoutTemplate, ArrowLeft
 } from "lucide-react";
 import { AddFeedModal } from "./AddFeedModal";
-import { ArticleViewer } from "./ArticleViewer";
 
 // ── Helper ──
+
+const FEEDS_SELECTED_FEED_STORAGE_KEY = "theorem-feeds:selected-feed-id";
+const FEEDS_MOBILE_LIST_STORAGE_KEY = "theorem-feeds:show-mobile-list";
 
 function formatArticleDate(date: Date | string | undefined): string {
     if (!date) return "";
@@ -295,8 +297,6 @@ export function FeedsPage() {
     const articles = useRssStore((s) => s.articles);
     const isLoading = useRssStore((s) => s.isLoading);
     const error = useRssStore((s) => s.error);
-    const currentArticle = useRssStore((s) => s.currentArticle);
-    const isArticleViewerOpen = useRssStore((s) => s.isArticleViewerOpen);
     const addFeed = useRssStore((s) => s.addFeed);
     const removeFeed = useRssStore((s) => s.removeFeed);
     const refreshAll = useRssStore((s) => s.refreshAll);
@@ -304,17 +304,56 @@ export function FeedsPage() {
     const getAllArticles = useRssStore((s) => s.getAllArticles);
     const openArticleInReader = useRssStore((s) => s.openArticleInReader);
     const toggleArticleFavorite = useRssStore((s) => s.toggleArticleFavorite);
-    const closeArticleViewer = useRssStore((s) => s.closeArticleViewer);
     const setError = useRssStore((s) => s.setError);
 
-    const [selectedFeedId, setSelectedFeedId] = useState<string | null>(null);
+    const [selectedFeedId, setSelectedFeedId] = useState<string | null>(() => {
+        if (typeof window === "undefined") {
+            return null;
+        }
+        const value = window.sessionStorage.getItem(FEEDS_SELECTED_FEED_STORAGE_KEY);
+        return value && value.trim().length > 0 ? value : null;
+    });
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     // Mobile View State: 'feeds' (sidebar) or 'articles' (content)
-    const [showMobileList, setShowMobileList] = useState(true);
+    const [showMobileList, setShowMobileList] = useState(() => {
+        if (typeof window === "undefined") {
+            return true;
+        }
+        return window.sessionStorage.getItem(FEEDS_MOBILE_LIST_STORAGE_KEY) !== "false";
+    });
 
     const selectedFeed = selectedFeedId ? feeds.find(f => f.id === selectedFeedId) : null;
+
+    useEffect(() => {
+        if (selectedFeedId && !feeds.some((feed) => feed.id === selectedFeedId)) {
+            setSelectedFeedId(null);
+        }
+    }, [feeds, selectedFeedId]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        if (selectedFeedId) {
+            window.sessionStorage.setItem(FEEDS_SELECTED_FEED_STORAGE_KEY, selectedFeedId);
+            return;
+        }
+
+        window.sessionStorage.removeItem(FEEDS_SELECTED_FEED_STORAGE_KEY);
+    }, [selectedFeedId]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+        window.sessionStorage.setItem(
+            FEEDS_MOBILE_LIST_STORAGE_KEY,
+            showMobileList ? "true" : "false",
+        );
+    }, [showMobileList]);
 
     const displayedArticles = useMemo(() => {
         if (selectedFeedId) {
@@ -543,19 +582,6 @@ export function FeedsPage() {
                 onSubmit={handleAddFeed}
                 isLoading={isLoading}
                 error={error}
-            />
-
-            {/* Article Viewer */}
-            <ArticleViewer
-                article={currentArticle}
-                feedTitle={currentArticle ? feedTitleById.get(currentArticle.feedId) : undefined}
-                isOpen={isArticleViewerOpen}
-                onClose={closeArticleViewer}
-                onToggleFavorite={() => {
-                    if (currentArticle) {
-                        toggleArticleFavorite(currentArticle.id);
-                    }
-                }}
             />
         </div>
     );

@@ -23,7 +23,7 @@ theorem monorepo is a modular monorepo designed for AI-assisted development with
 - Path: `/packages/features/feeds`
 - Public entry: `/packages/features/feeds/src/index.ts`
 - Purpose: Feature package.
-- Internal deps: `@theorem/core`, `@theorem/ui`
+- Internal deps: `@theorem/core`, `@theorem/feature-learning`, `@theorem/feature-reader`, `@theorem/ui`
 
 ### @theorem/feature-learning
 - Path: `/packages/features/learning`

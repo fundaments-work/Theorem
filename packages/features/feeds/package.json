@@ -10,6 +10,8 @@
     },
     "dependencies": {
         "@theorem/core": "workspace:*",
+        "@theorem/feature-learning": "workspace:*",
+        "@theorem/feature-reader": "workspace:*",
         "@theorem/ui": "workspace:*",
         "lucide-react": "^0.563.0",
         "react": "^19.1.0",

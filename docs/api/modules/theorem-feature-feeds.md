@@ -12,6 +12,8 @@ Feature package.
 
 **Internal packages**
 - `@theorem/core`
+- `@theorem/feature-learning`
+- `@theorem/feature-reader`
 - `@theorem/ui`
 
 **External packages**
