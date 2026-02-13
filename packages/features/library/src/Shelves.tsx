@@ -537,15 +537,19 @@ export function ShelvesPage() {
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingShelf, setEditingShelf] = useState<{ id: string; name: string; description?: string } | undefined>();
+    const generalCollections = useMemo(
+        () => collections.filter((collection) => collection.kind !== "research"),
+        [collections],
+    );
 
     // Filter shelves by search query
     const filteredShelves = useMemo(() => {
         if (!searchQuery.trim()) {
-            return collections;
+            return generalCollections;
         }
 
         const rankedShelves = rankByFuzzyQuery(
-            collections.map((shelf) => ({
+            generalCollections.map((shelf) => ({
                 shelf,
                 name: shelf.name,
                 description: shelf.description || "",
@@ -559,7 +563,7 @@ export function ShelvesPage() {
             },
         );
         return rankedShelves.map(({ item }) => item.shelf);
-    }, [collections, searchQuery]);
+    }, [generalCollections, searchQuery]);
 
     // Helper to get actual books count (excluding deleted books)
     const getActualBookCount = (bookIds: string[]) => {
@@ -592,6 +596,7 @@ export function ShelvesPage() {
                 name,
                 description,
                 bookIds: [],
+                kind: "general",
                 createdAt: new Date(),
             });
         }
@@ -606,7 +611,7 @@ export function ShelvesPage() {
 
     // Show shelf detail view
     if (selectedShelfId) {
-        const shelf = collections.find((s) => s.id === selectedShelfId);
+        const shelf = generalCollections.find((s) => s.id === selectedShelfId);
         if (shelf) {
             return (
                 <div className="ui-page">
@@ -617,7 +622,7 @@ export function ShelvesPage() {
     }
 
     // Show shelves list
-    if (collections.length === 0) {
+    if (generalCollections.length === 0) {
         return (
             <div className="ui-page">
                 <EmptyShelves onCreate={handleCreateShelf} />
@@ -640,8 +645,8 @@ export function ShelvesPage() {
                         Shelves
                     </h1>
                     <p className="ui-page-subtitle">
-                        {collections.length} {collections.length === 1 ? "shelf" : "shelves"} •{" "}
-                        {collections.reduce((acc, s) => acc + getActualBookCount(s.bookIds), 0)} books
+                        {generalCollections.length} {generalCollections.length === 1 ? "shelf" : "shelves"} •{" "}
+                        {generalCollections.reduce((acc, s) => acc + getActualBookCount(s.bookIds), 0)} books
                     </p>
                 </div>
 

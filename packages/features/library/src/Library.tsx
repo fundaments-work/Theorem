@@ -67,7 +67,6 @@ function BookCard({
     onAddToShelf,
     onMarkAsRead,
     onMarkAsUnread,
-    collections
 }: {
     book: Book;
     viewMode: LibraryViewMode;
@@ -78,7 +77,6 @@ function BookCard({
     onAddToShelf: (bookId: string) => void;
     onMarkAsRead: (bookId: string) => void;
     onMarkAsUnread: (bookId: string) => void;
-    collections: Collection[];
 }) {
     const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const clickCountRef = useRef(0);
@@ -553,7 +551,8 @@ function AddToShelfModal({
     bookId,
     collections,
     onAddToShelf,
-    onCreateShelf
+    onCreateShelf,
+    onManageResearchShelves,
 }: {
     isOpen: boolean;
     onClose: () => void;
@@ -561,8 +560,17 @@ function AddToShelfModal({
     collections: Collection[];
     onAddToShelf: (bookId: string, shelfId: string) => void;
     onCreateShelf: (name: string) => void;
+    onManageResearchShelves: () => void;
 }) {
     const [newShelfName, setNewShelfName] = useState("");
+    const generalShelves = useMemo(
+        () => collections.filter((collection) => collection.kind === "general"),
+        [collections],
+    );
+    const researchShelves = useMemo(
+        () => collections.filter((collection) => collection.kind === "research"),
+        [collections],
+    );
 
     const handleCreateShelf = () => {
         if (newShelfName.trim()) {
@@ -570,6 +578,34 @@ function AddToShelfModal({
             setNewShelfName("");
         }
     };
+
+    const renderShelfItem = (shelf: Collection) => (
+        <button
+            key={shelf.id}
+            onClick={() => {
+                if (bookId) {
+                    onAddToShelf(bookId, shelf.id);
+                    onClose();
+                }
+            }}
+            className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors text-left"
+        >
+            <FolderOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
+            <div className="flex-1">
+                <p className="text-sm font-medium text-[color:var(--color-text-primary)]">
+                    {shelf.name}
+                </p>
+                <p className="text-xs text-[color:var(--color-text-muted)]">
+                    {shelf.bookIds.length} {shelf.bookIds.length === 1 ? "book" : "books"}
+                </p>
+            </div>
+            {shelf.kind === "research" && (
+                <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--color-text-secondary)]">
+                    Research
+                </span>
+            )}
+        </button>
+    );
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} size="sm" showCloseButton={true}>
@@ -580,29 +616,19 @@ function AddToShelfModal({
                     </h2>
 
                     {collections.length > 0 ? (
-                        <div className="space-y-2">
-                            {collections.map(shelf => (
-                                <button
-                                    key={shelf.id}
-                                    onClick={() => {
-                                        if (bookId) {
-                                            onAddToShelf(bookId, shelf.id);
-                                            onClose();
-                                        }
-                                    }}
-                                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors text-left"
-                                >
-                                    <FolderOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
-                                    <div className="flex-1">
-                                        <p className="text-sm font-medium text-[color:var(--color-text-primary)]">
-                                            {shelf.name}
-                                        </p>
-                                        <p className="text-xs text-[color:var(--color-text-muted)]">
-                                            {shelf.bookIds.length} {shelf.bookIds.length === 1 ? "book" : "books"}
-                                        </p>
-                                    </div>
-                                </button>
-                            ))}
+                        <div className="space-y-3">
+                            {generalShelves.length > 0 && (
+                                <div className="space-y-1">
+                                    <p className="text-xs text-[color:var(--color-text-muted)] uppercase px-1">General Shelves</p>
+                                    {generalShelves.map((shelf) => renderShelfItem(shelf))}
+                                </div>
+                            )}
+                            {researchShelves.length > 0 && (
+                                <div className="space-y-1">
+                                    <p className="text-xs text-[color:var(--color-text-muted)] uppercase px-1">Research Shelves</p>
+                                    {researchShelves.map((shelf) => renderShelfItem(shelf))}
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <p className="text-sm text-[color:var(--color-text-muted)] text-center py-4">
@@ -611,7 +637,7 @@ function AddToShelfModal({
                     )}
 
                     <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
-                        <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Create New Shelf</p>
+                        <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Create New General Shelf</p>
                         <div className="flex gap-2">
                             <input
                                 type="text"
@@ -640,6 +666,20 @@ function AddToShelfModal({
                                 Create
                             </button>
                         </div>
+                        {researchShelves.length > 0 && (
+                            <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                                Research shelves are managed in the References page.
+                            </p>
+                        )}
+                        <button
+                            onClick={() => {
+                                onClose();
+                                onManageResearchShelves();
+                            }}
+                            className="mt-2 text-xs text-[color:var(--color-accent)] hover:underline"
+                        >
+                            Manage research shelves
+                        </button>
                     </div>
                 </div>
             </ModalBody>
@@ -696,6 +736,14 @@ export function LibraryPage() {
 
     // Favorites filter state
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+    const generalCollections = useMemo(
+        () => collections.filter((collection) => collection.kind === "general"),
+        [collections],
+    );
+    const researchCollections = useMemo(
+        () => collections.filter((collection) => collection.kind === "research"),
+        [collections],
+    );
 
     // Initialize selected shelf from session storage on mount
     useEffect(() => {
@@ -704,6 +752,17 @@ export function LibraryPage() {
             setSelectedShelfId(shelfId);
         }
     }, []);
+
+    useEffect(() => {
+        if (!selectedShelfId) {
+            return;
+        }
+        if (collections.some((collection) => collection.id === selectedShelfId)) {
+            return;
+        }
+        sessionStorage.removeItem("theorem-selected-shelf");
+        setSelectedShelfId(null);
+    }, [collections, selectedShelfId]);
 
     const selectedShelf = selectedShelfId ? collections.find(c => c.id === selectedShelfId) : null;
     const selectedShelfBookIds = useMemo(() => {
@@ -1013,6 +1072,7 @@ export function LibraryPage() {
             id: crypto.randomUUID(),
             name,
             bookIds: addToShelfBookId ? [addToShelfBookId] : [],
+            kind: "general",
             createdAt: new Date(),
         };
         addCollection(newShelf);
@@ -1231,7 +1291,7 @@ export function LibraryPage() {
                                     {collections.length > 0 && (
                                         <div className="px-3 py-2 border-b border-[var(--color-border)]">
                                             <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Filter by Shelf</p>
-                                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                            <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
                                                 <button
                                                     onClick={() => {
                                                         sessionStorage.removeItem("theorem-selected-shelf");
@@ -1248,37 +1308,89 @@ export function LibraryPage() {
                                                     <BookOpen className="w-4 h-4" />
                                                     All Books
                                                 </button>
-                                                {collections.map((shelf) => {
-                                                    const colors = getShelfColor(shelf.id, shelf.name);
-                                                    const isSelected = selectedShelfId === shelf.id;
-                                                    return (
-                                                        <button
-                                                            key={shelf.id}
-                                                            onClick={() => {
-                                                                setSelectedShelfId(shelf.id);
-                                                                sessionStorage.setItem("theorem-selected-shelf", shelf.id);
-                                                                setShowFilterDropdown(false);
-                                                            }}
-                                                            className={cn(
-                                                                "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
-                                                                isSelected
-                                                                    ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
-                                                                    : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
-                                                            )}
-                                                        >
-                                                            <div
-                                                                className="w-4 h-4 rounded flex items-center justify-center ui-text-3xs font-semibold"
-                                                                style={{
-                                                                    backgroundColor: colors.bg,
-                                                                    color: colors.text,
-                                                                }}
-                                                            >
-                                                                {getShelfInitials(shelf.name)}
-                                                            </div>
-                                                            <span className="flex-1 truncate">{shelf.name}</span>
-                                                        </button>
-                                                    );
-                                                })}
+                                                {generalCollections.length > 0 && (
+                                                    <div>
+                                                        <p className="px-2 pb-1 text-[10px] font-semibold uppercase text-[color:var(--color-text-muted)]">
+                                                            General
+                                                        </p>
+                                                        <div className="space-y-1">
+                                                            {generalCollections.map((shelf) => {
+                                                                const colors = getShelfColor(shelf.id, shelf.name);
+                                                                const isSelected = selectedShelfId === shelf.id;
+                                                                return (
+                                                                    <button
+                                                                        key={shelf.id}
+                                                                        onClick={() => {
+                                                                            setSelectedShelfId(shelf.id);
+                                                                            sessionStorage.setItem("theorem-selected-shelf", shelf.id);
+                                                                            setShowFilterDropdown(false);
+                                                                        }}
+                                                                        className={cn(
+                                                                            "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
+                                                                            isSelected
+                                                                                ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
+                                                                                : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                                                        )}
+                                                                    >
+                                                                        <div
+                                                                            className="w-4 h-4 rounded flex items-center justify-center ui-text-3xs font-semibold"
+                                                                            style={{
+                                                                                backgroundColor: colors.bg,
+                                                                                color: colors.text,
+                                                                            }}
+                                                                        >
+                                                                            {getShelfInitials(shelf.name)}
+                                                                        </div>
+                                                                        <span className="flex-1 truncate">{shelf.name}</span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {researchCollections.length > 0 && (
+                                                    <div>
+                                                        <p className="px-2 pb-1 text-[10px] font-semibold uppercase text-[color:var(--color-text-muted)]">
+                                                            Research
+                                                        </p>
+                                                        <div className="space-y-1">
+                                                            {researchCollections.map((shelf) => {
+                                                                const colors = getShelfColor(shelf.id, shelf.name);
+                                                                const isSelected = selectedShelfId === shelf.id;
+                                                                return (
+                                                                    <button
+                                                                        key={shelf.id}
+                                                                        onClick={() => {
+                                                                            setSelectedShelfId(shelf.id);
+                                                                            sessionStorage.setItem("theorem-selected-shelf", shelf.id);
+                                                                            setShowFilterDropdown(false);
+                                                                        }}
+                                                                        className={cn(
+                                                                            "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
+                                                                            isSelected
+                                                                                ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
+                                                                                : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                                                        )}
+                                                                    >
+                                                                        <div
+                                                                            className="w-4 h-4 rounded flex items-center justify-center ui-text-3xs font-semibold"
+                                                                            style={{
+                                                                                backgroundColor: colors.bg,
+                                                                                color: colors.text,
+                                                                            }}
+                                                                        >
+                                                                            {getShelfInitials(shelf.name)}
+                                                                        </div>
+                                                                        <span className="flex-1 truncate">{shelf.name}</span>
+                                                                        <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[color:var(--color-text-secondary)]">
+                                                                            Research
+                                                                        </span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -1293,7 +1405,17 @@ export function LibraryPage() {
                                             className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
                                         >
                                             <Plus className="w-4 h-4" />
-                                            Manage Shelves...
+                                            Manage General Shelves...
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setRoute("references");
+                                                setShowFilterDropdown(false);
+                                            }}
+                                            className="mt-1 w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                        >
+                                            <BookMarked className="w-4 h-4" />
+                                            Manage Research Shelves...
                                         </button>
                                     </div>
                                 </div>
@@ -1333,7 +1455,6 @@ export function LibraryPage() {
                                 onAddToShelf={handleAddToShelf}
                                 onMarkAsRead={handleMarkAsRead}
                                 onMarkAsUnread={handleMarkAsUnread}
-                                collections={collections}
                             />
                         ))}
                     </div>
@@ -1351,7 +1472,6 @@ export function LibraryPage() {
                                 onAddToShelf={handleAddToShelf}
                                 onMarkAsRead={handleMarkAsRead}
                                 onMarkAsUnread={handleMarkAsUnread}
-                                collections={collections}
                             />
                         ))}
                     </div>
@@ -1369,7 +1489,6 @@ export function LibraryPage() {
                                 onAddToShelf={handleAddToShelf}
                                 onMarkAsRead={handleMarkAsRead}
                                 onMarkAsUnread={handleMarkAsUnread}
-                                collections={collections}
                             />
                         ))}
                     </div>
@@ -1397,6 +1516,7 @@ export function LibraryPage() {
                 collections={collections}
                 onAddToShelf={handleAddBookToShelf}
                 onCreateShelf={handleCreateShelf}
+                onManageResearchShelves={() => setRoute("references")}
             />
         </div>
     );

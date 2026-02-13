@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
+import type { KeyboardEvent } from "react";
 import {
     Minus,
     Square,
@@ -36,7 +37,7 @@ export function AppTitlebar({
 }: AppTitlebarProps) {
     const [isMaximized, setIsMaximized] = useState(false);
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-    const { currentRoute, searchQuery, setSearchQuery, setRoute } = useUIStore();
+    const { currentRoute, searchQuery, setSearchQuery, commitSearch, setRoute } = useUIStore();
     const isTauriRuntime = isTauri();
     const searchDomain = resolveSearchDomain({
         placement: "appTitlebar",
@@ -154,6 +155,12 @@ export function AppTitlebar({
         }
     };
 
+    const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === "Enter") {
+            commitSearch();
+        }
+    };
+
     return (
         <div
             className={cn(
@@ -193,6 +200,7 @@ export function AppTitlebar({
                                 placeholder={searchPlaceholder}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={handleSearchKeyDown}
                                 className={cn(
                                     "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-xl",
                                     "min-h-[var(--control-height-md)]"
@@ -271,6 +279,7 @@ export function AppTitlebar({
                             placeholder={searchPlaceholder}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={handleSearchKeyDown}
                             autoFocus
                             className={cn(
                                 "ui-input ui-input-search ui-input-with-leading-icon w-full pr-12 rounded-xl",
@@ -298,6 +307,7 @@ export function AppTitlebar({
                             placeholder={searchPlaceholder}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={handleSearchKeyDown}
                             className={cn(
                                 "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-xl",
                                 "min-h-[var(--control-height-md)]"

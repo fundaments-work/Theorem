@@ -18,6 +18,44 @@ import type {
 const ARXIV_API_URL = "https://export.arxiv.org/api/query";
 const PUBMED_ESEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi";
 const PUBMED_EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi";
+const OPENALEX_API_URL = "https://api.openalex.org";
+const DEFAULT_ACADEMIC_PROXY_BASE = "/api/academic";
+const PUBMED_MIN_INTERVAL_MS = 350;
+const ACADEMIC_SEARCH_CACHE_TTL_MS = 10 * 60 * 1000;
+const ACADEMIC_SEARCH_CACHE_MAX_ENTRIES = 120;
+const OPENALEX_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const OPENALEX_CACHE_MAX_ENTRIES = 800;
+const OPENALEX_ENRICHMENT_LIMIT = 8;
+const REQUEST_MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 500;
+const REQUEST_TIMEOUT_MS = 12000;
+const OPENALEX_REQUEST_TIMEOUT_MS = 6000;
+const BINARY_REQUEST_TIMEOUT_MS = 90000;
+const MAX_RETRY_AFTER_MS = 6000;
+
+interface AcademicSearchCacheEntry {
+    expiresAt: number;
+    data: AcademicPaper[];
+}
+
+const academicSearchCache = new Map<string, AcademicSearchCacheEntry>();
+const inFlightSearchCache = new Map<string, Promise<AcademicPaper[]>>();
+
+interface OpenAlexEnrichment {
+    citationCount?: number;
+    fieldTags?: string[];
+    openAccess?: boolean;
+    openAccessUrl?: string;
+}
+
+interface OpenAlexCacheEntry {
+    expiresAt: number;
+    data: OpenAlexEnrichment;
+}
+
+const openAlexCache = new Map<string, OpenAlexCacheEntry>();
+const openAlexInFlight = new Map<string, Promise<OpenAlexEnrichment | null>>();
+let pubmedNextAllowedAt = 0;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type XmlNode = Record<string, any>;
@@ -27,12 +65,22 @@ export interface AcademicSearchOptions {
     maxResults?: number;
     start?: number;
     sortBy?: "relevance" | "recent";
+    enrichCitations?: boolean;
 }
 
 export interface AcademicDiscoveryOptions {
     source?: "arxiv" | "pubmed" | "all";
     fieldQuery: string;
     maxResults?: number;
+    enrichCitations?: boolean;
+}
+
+export function clearAcademicSearchCache(): void {
+    academicSearchCache.clear();
+    inFlightSearchCache.clear();
+    openAlexCache.clear();
+    openAlexInFlight.clear();
+    pubmedNextAllowedAt = 0;
 }
 
 function str(value: unknown): string {
@@ -54,6 +102,170 @@ function ensureArray<T>(value: T | T[] | undefined | null): T[] {
 
 function normalizeWhitespace(value: string): string {
     return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeCacheToken(value: string): string {
+    return normalizeWhitespace(value).toLowerCase();
+}
+
+function pruneAcademicSearchCache(): void {
+    const now = Date.now();
+    for (const [key, entry] of academicSearchCache.entries()) {
+        if (entry.expiresAt <= now) {
+            academicSearchCache.delete(key);
+        }
+    }
+
+    if (academicSearchCache.size <= ACADEMIC_SEARCH_CACHE_MAX_ENTRIES) {
+        return;
+    }
+
+    const overflow = academicSearchCache.size - ACADEMIC_SEARCH_CACHE_MAX_ENTRIES;
+    const keysToDelete = academicSearchCache.keys();
+    for (let index = 0; index < overflow; index += 1) {
+        const next = keysToDelete.next();
+        if (next.done) break;
+        academicSearchCache.delete(next.value);
+    }
+}
+
+function getCachedAcademicResults(cacheKey: string): AcademicPaper[] | null {
+    const entry = academicSearchCache.get(cacheKey);
+    if (!entry) return null;
+    if (entry.expiresAt <= Date.now()) {
+        academicSearchCache.delete(cacheKey);
+        return null;
+    }
+    return entry.data;
+}
+
+function setCachedAcademicResults(cacheKey: string, data: AcademicPaper[]): void {
+    pruneAcademicSearchCache();
+    academicSearchCache.set(cacheKey, {
+        expiresAt: Date.now() + ACADEMIC_SEARCH_CACHE_TTL_MS,
+        data,
+    });
+}
+
+function pruneOpenAlexCache(): void {
+    const now = Date.now();
+    for (const [key, entry] of openAlexCache.entries()) {
+        if (entry.expiresAt <= now) {
+            openAlexCache.delete(key);
+        }
+    }
+
+    if (openAlexCache.size <= OPENALEX_CACHE_MAX_ENTRIES) {
+        return;
+    }
+
+    const overflow = openAlexCache.size - OPENALEX_CACHE_MAX_ENTRIES;
+    const keysToDelete = openAlexCache.keys();
+    for (let index = 0; index < overflow; index += 1) {
+        const next = keysToDelete.next();
+        if (next.done) break;
+        openAlexCache.delete(next.value);
+    }
+}
+
+function getOpenAlexCachedValue(cacheKey: string): OpenAlexEnrichment | null {
+    const entry = openAlexCache.get(cacheKey);
+    if (!entry) return null;
+    if (entry.expiresAt <= Date.now()) {
+        openAlexCache.delete(cacheKey);
+        return null;
+    }
+    return entry.data;
+}
+
+function setOpenAlexCachedValue(cacheKey: string, data: OpenAlexEnrichment): void {
+    pruneOpenAlexCache();
+    openAlexCache.set(cacheKey, {
+        expiresAt: Date.now() + OPENALEX_CACHE_TTL_MS,
+        data,
+    });
+}
+
+function getConfiguredProxyBase(): string {
+    const env = (import.meta as ImportMeta & {
+        env?: Record<string, string | undefined>;
+    }).env;
+    const configured = env?.VITE_ACADEMIC_PROXY_BASE?.trim();
+    if (configured) {
+        return configured.endsWith("/") ? configured.slice(0, -1) : configured;
+    }
+    return DEFAULT_ACADEMIC_PROXY_BASE;
+}
+
+function toAcademicRequestUrl(path: string, params?: URLSearchParams): string {
+    if (isTauri()) {
+        if (path === "arxiv") {
+            return `${ARXIV_API_URL}?${params?.toString() || ""}`;
+        }
+        if (path === "pubmed/esearch") {
+            return `${PUBMED_ESEARCH_URL}?${params?.toString() || ""}`;
+        }
+        if (path === "pubmed/efetch") {
+            return `${PUBMED_EFETCH_URL}?${params?.toString() || ""}`;
+        }
+        if (path.startsWith("openalex")) {
+            const suffix = path.replace(/^openalex/, "");
+            const base = `${OPENALEX_API_URL}${suffix}`;
+            return params ? `${base}?${params.toString()}` : base;
+        }
+    }
+
+    const base = getConfiguredProxyBase();
+    const withPath = /^https?:\/\//i.test(base)
+        ? `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`
+        : `${base}/${path}`.replace(/\/{2,}/g, "/");
+    return params ? `${withPath}?${params.toString()}` : withPath;
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
+function timeoutError(timeoutMs: number): Error {
+    return new Error(`Academic request timed out after ${Math.round(timeoutMs / 1000)}s.`);
+}
+
+function parseRetryAfter(value: string | null): number | null {
+    if (!value) return null;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) {
+        return Math.floor(numeric * 1000);
+    }
+
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) {
+        const delta = parsed - Date.now();
+        if (delta > 0) return delta;
+    }
+    return null;
+}
+
+function shouldRetryStatus(status: number): boolean {
+    return status === 429 || status >= 500;
+}
+
+function extractStatusCodeFromError(error: unknown): number | null {
+    if (!(error instanceof Error)) return null;
+    const match = error.message.match(/(?:HTTP\\s*error:?\\s*|HTTP\\s+)(\\d{3})/i);
+    if (!match) return null;
+    const statusCode = Number(match[1]);
+    return Number.isFinite(statusCode) ? statusCode : null;
+}
+
+async function waitForPubMedSlot(): Promise<void> {
+    const now = Date.now();
+    const waitTime = Math.max(0, pubmedNextAllowedAt - now);
+    if (waitTime > 0) {
+        await sleep(waitTime);
+    }
+    pubmedNextAllowedAt = Math.max(pubmedNextAllowedAt, Date.now()) + PUBMED_MIN_INTERVAL_MS;
 }
 
 function nodeText(node: unknown): string {
@@ -178,58 +390,204 @@ async function fetchBinaryWithTauri(url: string): Promise<ArrayBuffer> {
     return new Uint8Array(bytes).buffer;
 }
 
-async function fetchText(url: string): Promise<string> {
-    try {
-        const response = await fetch(url, {
-            headers: {
-                Accept: "application/atom+xml, application/xml, text/xml, application/json, */*",
-            },
-        });
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+function createProxyErrorHint(url: string): string {
+    if (!url.includes("/api/academic")) {
+        return "Academic search request failed.";
+    }
+    return (
+        "Academic search proxy is not reachable. " +
+        "Run the app with the configured dev proxy or set VITE_ACADEMIC_PROXY_BASE to a reachable API endpoint."
+    );
+}
+
+function retryDelayMs(attempt: number, retryAfterHeader?: string | null): number {
+    const retryAfterMs = parseRetryAfter(retryAfterHeader || null);
+    if (retryAfterMs != null) {
+        return Math.max(250, Math.min(MAX_RETRY_AFTER_MS, retryAfterMs));
+    }
+    const base = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+    const jitter = Math.floor(Math.random() * 120);
+    return base + jitter;
+}
+
+async function fetchText(
+    url: string,
+    options: {
+        preferNative?: boolean;
+        pacedPubMed?: boolean;
+        accept?: string;
+        timeoutMs?: number;
+        maxRetries?: number;
+    } = {},
+): Promise<string> {
+    const preferNative = options.preferNative ?? false;
+    const shouldPacePubMed = options.pacedPubMed ?? false;
+    const acceptHeader = options.accept
+        || "application/atom+xml, application/xml, text/xml, application/json, */*";
+    const timeoutMs = Math.max(1000, options.timeoutMs ?? REQUEST_TIMEOUT_MS);
+    const maxRetries = Math.max(0, options.maxRetries ?? REQUEST_MAX_RETRIES);
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        if (shouldPacePubMed) {
+            await waitForPubMedSlot();
         }
-        return await response.text();
-    } catch (error) {
-        if (!isTauri()) {
-            throw error;
+
+        if (preferNative && isTauri()) {
+            try {
+                return await Promise.race([
+                    fetchWithTauri(url),
+                    sleep(timeoutMs).then(() => {
+                        throw timeoutError(timeoutMs);
+                    }),
+                ]);
+            } catch (nativeError) {
+                const statusCode = extractStatusCodeFromError(nativeError);
+                const isTimedOut = nativeError instanceof Error && nativeError.message.includes("timed out");
+                const canRetry = (
+                    (statusCode != null && shouldRetryStatus(statusCode))
+                    || isTimedOut
+                ) && attempt < maxRetries;
+                if (canRetry) {
+                    await sleep(retryDelayMs(attempt));
+                    continue;
+                }
+                throw nativeError instanceof Error
+                    ? nativeError
+                    : new Error(String(nativeError));
+            }
         }
 
         try {
-            return await fetchWithTauri(url);
-        } catch (tauriError) {
-            if (isCorsLikeError(error)) {
-                throw tauriError;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+            }, timeoutMs);
+            let response: Response;
+            try {
+                response = await fetch(url, {
+                    headers: {
+                        Accept: acceptHeader,
+                    },
+                    signal: controller.signal,
+                });
+            } finally {
+                clearTimeout(timeoutId);
             }
-            throw error;
+
+            if (response.ok) {
+                return await response.text();
+            }
+
+            if (shouldRetryStatus(response.status) && attempt < maxRetries) {
+                await sleep(retryDelayMs(attempt, response.headers.get("Retry-After")));
+                continue;
+            }
+
+            if (!isTauri() && url.includes("/api/academic") && response.status === 404) {
+                throw new Error(createProxyErrorHint(url));
+            }
+
+            throw new Error(`HTTP ${response.status}`);
+        } catch (requestError) {
+            const timedOut = (
+                requestError instanceof DOMException
+                && requestError.name === "AbortError"
+            );
+            if (timedOut) {
+                if (attempt < maxRetries) {
+                    await sleep(retryDelayMs(attempt));
+                    continue;
+                }
+                throw timeoutError(timeoutMs);
+            }
+
+            const statusCode = extractStatusCodeFromError(requestError);
+            const canRetryByStatus = statusCode != null && shouldRetryStatus(statusCode) && attempt < maxRetries;
+            if (canRetryByStatus) {
+                await sleep(retryDelayMs(attempt));
+                continue;
+            }
+
+            if (requestError instanceof Error && isCorsLikeError(requestError) && !isTauri()) {
+                throw new Error(createProxyErrorHint(url));
+            }
+
+            throw requestError instanceof Error ? requestError : new Error(String(requestError));
         }
     }
+
+    throw new Error("Failed to fetch academic data after retries.");
 }
 
 async function fetchBinary(url: string): Promise<ArrayBuffer> {
-    try {
-        const response = await fetch(url, {
-            headers: {
-                Accept: "application/pdf, application/octet-stream, */*",
-            },
-        });
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        return await response.arrayBuffer();
-    } catch (error) {
-        if (!isTauri()) {
-            throw error;
+    for (let attempt = 0; attempt <= REQUEST_MAX_RETRIES; attempt += 1) {
+        if (isTauri()) {
+            try {
+                return await Promise.race([
+                    fetchBinaryWithTauri(url),
+                    sleep(BINARY_REQUEST_TIMEOUT_MS).then(() => {
+                        throw timeoutError(BINARY_REQUEST_TIMEOUT_MS);
+                    }),
+                ]);
+            } catch (nativeError) {
+                const statusCode = extractStatusCodeFromError(nativeError);
+                const isTimedOut = nativeError instanceof Error && nativeError.message.includes("timed out");
+                const canRetry = (
+                    (statusCode != null && shouldRetryStatus(statusCode))
+                    || isTimedOut
+                ) && attempt < REQUEST_MAX_RETRIES;
+                if (canRetry) {
+                    await sleep(retryDelayMs(attempt));
+                    continue;
+                }
+                throw nativeError instanceof Error
+                    ? nativeError
+                    : new Error(String(nativeError));
+            }
         }
 
         try {
-            return await fetchBinaryWithTauri(url);
-        } catch (tauriError) {
-            if (isCorsLikeError(error)) {
-                throw tauriError;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+            }, BINARY_REQUEST_TIMEOUT_MS);
+
+            let response: Response;
+            try {
+                response = await fetch(url, {
+                    headers: {
+                        Accept: "application/pdf, application/octet-stream, */*",
+                    },
+                    signal: controller.signal,
+                });
+            } finally {
+                clearTimeout(timeoutId);
             }
-            throw error;
+
+            if (response.ok) {
+                return await response.arrayBuffer();
+            }
+
+            if (shouldRetryStatus(response.status) && attempt < REQUEST_MAX_RETRIES) {
+                await sleep(retryDelayMs(attempt, response.headers.get("Retry-After")));
+                continue;
+            }
+
+            throw new Error(`HTTP ${response.status}`);
+        } catch (error) {
+            const timedOut = error instanceof DOMException && error.name === "AbortError";
+            if (timedOut && attempt < REQUEST_MAX_RETRIES) {
+                await sleep(retryDelayMs(attempt));
+                continue;
+            }
+            if (timedOut) {
+                throw timeoutError(BINARY_REQUEST_TIMEOUT_MS);
+            }
+            throw error instanceof Error ? error : new Error(String(error));
         }
     }
+
+    throw new Error("Failed to fetch binary paper data after retries.");
 }
 
 function normalizeArxivQuery(query: string): string {
@@ -417,6 +775,143 @@ function parsePubMedArticles(xml: string): AcademicPaper[] {
     });
 }
 
+function toOpenAlexCacheKey(paper: AcademicPaper): string {
+    if (paper.doi) {
+        return `doi:${paper.doi.toLowerCase()}`;
+    }
+    return `title:${normalizeCacheToken(paper.title || "")}`;
+}
+
+function parseOpenAlexWork(workNode: XmlNode): OpenAlexEnrichment {
+    const fieldValues = ensureArray(workNode?.x_concepts)
+        .slice(0, 4)
+        .map((entry) => str((entry as XmlNode)?.display_name))
+        .filter(Boolean);
+    const primaryField = str(workNode?.primary_topic?.field?.display_name);
+    if (primaryField && !fieldValues.includes(primaryField)) {
+        fieldValues.unshift(primaryField);
+    }
+
+    return {
+        citationCount: typeof workNode?.cited_by_count === "number"
+            ? workNode.cited_by_count
+            : undefined,
+        fieldTags: fieldValues.length > 0 ? fieldValues : undefined,
+        openAccess: typeof workNode?.open_access?.is_oa === "boolean"
+            ? workNode.open_access.is_oa
+            : undefined,
+        openAccessUrl: str(workNode?.open_access?.oa_url) || undefined,
+    };
+}
+
+async function fetchOpenAlexEnrichment(paper: AcademicPaper): Promise<OpenAlexEnrichment | null> {
+    if (!paper.doi && !paper.title) {
+        return null;
+    }
+
+    const cacheKey = toOpenAlexCacheKey(paper);
+    const cached = getOpenAlexCachedValue(cacheKey);
+    if (cached) {
+        return cached;
+    }
+
+    const inFlight = openAlexInFlight.get(cacheKey);
+    if (inFlight) {
+        return inFlight;
+    }
+
+    const request = (async (): Promise<OpenAlexEnrichment | null> => {
+        try {
+            let url: string;
+            if (paper.doi) {
+                const safeDoi = encodeURIComponent(`https://doi.org/${paper.doi}`);
+                url = toAcademicRequestUrl(`openalex/works/${safeDoi}`);
+            } else {
+                const params = new URLSearchParams({
+                    search: paper.title,
+                    "per-page": "1",
+                });
+                url = toAcademicRequestUrl("openalex/works", params);
+            }
+
+            const payload = await fetchText(url, {
+                preferNative: isTauri(),
+                accept: "application/json, */*",
+                timeoutMs: OPENALEX_REQUEST_TIMEOUT_MS,
+                maxRetries: 1,
+            });
+            let parsed: XmlNode;
+            try {
+                parsed = JSON.parse(payload) as XmlNode;
+            } catch {
+                return null;
+            }
+
+            const workNode = paper.doi
+                ? parsed
+                : (ensureArray(parsed.results)[0] as XmlNode | undefined);
+            if (!workNode) {
+                return null;
+            }
+
+            const enrichment = parseOpenAlexWork(workNode);
+            if (
+                enrichment.citationCount == null
+                && !enrichment.fieldTags
+                && enrichment.openAccess == null
+                && !enrichment.openAccessUrl
+            ) {
+                return null;
+            }
+
+            setOpenAlexCachedValue(cacheKey, enrichment);
+            return enrichment;
+        } catch (error) {
+            console.warn("[AcademicService] OpenAlex enrichment failed:", error);
+            return null;
+        }
+    })();
+
+    openAlexInFlight.set(cacheKey, request);
+    try {
+        return await request;
+    } finally {
+        openAlexInFlight.delete(cacheKey);
+    }
+}
+
+async function enrichPapersWithOpenAlex(papers: AcademicPaper[]): Promise<AcademicPaper[]> {
+    if (papers.length === 0) {
+        return papers;
+    }
+
+    const candidates = papers
+        .filter((paper) => !paper.citationCount || !paper.fieldTags || paper.openAccess == null)
+        .sort((a, b) => Number(Boolean(b.doi)) - Number(Boolean(a.doi)))
+        .slice(0, OPENALEX_ENRICHMENT_LIMIT);
+
+    await Promise.allSettled(candidates.map(async (paper) => {
+        const enrichment = await fetchOpenAlexEnrichment(paper);
+        if (!enrichment) {
+            return;
+        }
+        if (typeof enrichment.citationCount === "number") {
+            paper.citationCount = enrichment.citationCount;
+        }
+        if (enrichment.fieldTags?.length) {
+            paper.fieldTags = enrichment.fieldTags;
+        }
+        if (typeof enrichment.openAccess === "boolean") {
+            paper.openAccess = enrichment.openAccess;
+        }
+        if (enrichment.openAccessUrl) {
+            paper.openAccessUrl = enrichment.openAccessUrl;
+        }
+    }));
+
+    return papers;
+}
+
 function citationKey(paper: AcademicPaper): string {
     const firstAuthor = paper.authors[0] || "paper";
     const family = splitAuthorName(firstAuthor).family || "paper";
@@ -601,6 +1096,9 @@ export function toAcademicPaper(book: Book): AcademicPaper | null {
         journal: book.academic.journal,
         conference: book.academic.conference,
         citationCount: book.academic.citationCount,
+        fieldTags: book.academic.fieldTags,
+        openAccess: book.academic.openAccess,
+        openAccessUrl: book.academic.openAccessUrl,
         pdfUrl: book.academic.pdfUrl,
         url: book.filePath,
         publishedDate: book.publishedDate,
@@ -625,15 +1123,54 @@ export async function searchArxivPapers(
 
     const maxResults = Math.max(1, Math.min(50, options.maxResults ?? 20));
     const start = Math.max(0, options.start ?? 0);
-    const params = buildArxivParams({
-        query: normalizeArxivQuery(cleaned),
-        start,
-        maxResults,
-        sortBy: options.sortBy ?? "relevance",
-    });
+    const sortBy = options.sortBy ?? "relevance";
+    const cacheKey = [
+        "arxiv",
+        normalizeCacheToken(cleaned),
+        String(maxResults),
+        String(start),
+        sortBy,
+        options.enrichCitations === false ? "no-enrich" : "enrich",
+    ].join("|");
 
-    const response = await fetchText(`${ARXIV_API_URL}?${params.toString()}`);
-    return parseArxivFeed(response);
+    const cached = getCachedAcademicResults(cacheKey);
+    if (cached) {
+        return cached;
+    }
+
+    const inFlight = inFlightSearchCache.get(cacheKey);
+    if (inFlight) {
+        return inFlight;
+    }
+
+    const request = (async () => {
+        const params = buildArxivParams({
+            query: normalizeArxivQuery(cleaned),
+            start,
+            maxResults,
+            sortBy,
+        });
+
+        const response = await fetchText(
+            toAcademicRequestUrl("arxiv", params),
+            {
+                preferNative: isTauri(),
+            },
+        );
+        const results = parseArxivFeed(response);
+        if (options.enrichCitations !== false) {
+            await enrichPapersWithOpenAlex(results);
+        }
+        setCachedAcademicResults(cacheKey, results);
+        return results;
+    })();
+
+    inFlightSearchCache.set(cacheKey, request);
+    try {
+        return await request;
+    } finally {
+        inFlightSearchCache.delete(cacheKey);
+    }
 }
 
 export async function searchPubMedPapers(
@@ -645,35 +1182,93 @@ export async function searchPubMedPapers(
 
     const maxResults = Math.max(1, Math.min(50, options.maxResults ?? 20));
     const start = Math.max(0, options.start ?? 0);
-    const params = new URLSearchParams({
-        db: "pubmed",
-        retmode: "json",
-        retmax: String(maxResults),
-        retstart: String(start),
-        term: cleaned,
-        sort: options.sortBy === "recent" ? "pub+date" : "relevance",
-    });
+    const sortBy = options.sortBy ?? "relevance";
+    const cacheKey = [
+        "pubmed",
+        normalizeCacheToken(cleaned),
+        String(maxResults),
+        String(start),
+        sortBy,
+        options.enrichCitations === false ? "no-enrich" : "enrich",
+    ].join("|");
 
-    const searchText = await fetchText(`${PUBMED_ESEARCH_URL}?${params.toString()}`);
-    let searchPayload: { esearchresult?: { idlist?: string[] } } = {};
+    const cached = getCachedAcademicResults(cacheKey);
+    if (cached) {
+        return cached;
+    }
+
+    const inFlight = inFlightSearchCache.get(cacheKey);
+    if (inFlight) {
+        return inFlight;
+    }
+
+    const request = (async () => {
+        const params = new URLSearchParams({
+            db: "pubmed",
+            retmode: "json",
+            retmax: String(maxResults),
+            retstart: String(start),
+            term: cleaned,
+            sort: sortBy === "recent" ? "pub+date" : "relevance",
+        });
+
+        const searchText = await fetchText(
+            toAcademicRequestUrl("pubmed/esearch", params),
+            {
+                preferNative: isTauri(),
+                pacedPubMed: true,
+                accept: "application/json, */*",
+            },
+        );
+        let searchPayload: { esearchresult?: { idlist?: string[] } } = {};
+        try {
+            searchPayload = JSON.parse(searchText) as { esearchresult?: { idlist?: string[] } };
+        } catch (error) {
+            throw new Error(`Failed to parse PubMed search response: ${String(error)}`);
+        }
+
+        const ids = ensureArray(searchPayload.esearchresult?.idlist).map((id) => str(id)).filter(Boolean);
+        if (ids.length === 0) {
+            return [];
+        }
+
+        const fetchParams = new URLSearchParams({
+            db: "pubmed",
+            retmode: "xml",
+            id: ids.join(","),
+        });
+        const xml = await fetchText(
+            toAcademicRequestUrl("pubmed/efetch", fetchParams),
+            {
+                preferNative: isTauri(),
+                pacedPubMed: true,
+            },
+        );
+        const results = parsePubMedArticles(xml);
+        if (options.enrichCitations !== false) {
+            await enrichPapersWithOpenAlex(results);
+        }
+        setCachedAcademicResults(cacheKey, results);
+        return results;
+    })();
+
+    inFlightSearchCache.set(cacheKey, request);
     try {
-        searchPayload = JSON.parse(searchText) as { esearchresult?: { idlist?: string[] } };
-    } catch (error) {
-        throw new Error(`Failed to parse PubMed search response: ${String(error)}`);
+        return await request;
+    } finally {
+        inFlightSearchCache.delete(cacheKey);
     }
+}
 
-    const ids = ensureArray(searchPayload.esearchresult?.idlist).map((id) => str(id)).filter(Boolean);
-    if (ids.length === 0) {
-        return [];
+function dedupeAcademicPapers(papers: AcademicPaper[]): AcademicPaper[] {
+    const dedupe = new Map<string, AcademicPaper>();
+    for (const paper of papers) {
+        const key = paper.doi?.toLowerCase() || paper.id;
+        if (!dedupe.has(key)) {
+            dedupe.set(key, paper);
+        }
     }
-
-    const fetchParams = new URLSearchParams({
-        db: "pubmed",
-        retmode: "xml",
-        id: ids.join(","),
-    });
-    const xml = await fetchText(`${PUBMED_EFETCH_URL}?${fetchParams.toString()}`);
-    return parsePubMedArticles(xml);
+    return Array.from(dedupe.values());
 }
 
 export async function searchAcademicPapers(
@@ -685,6 +1280,7 @@ export async function searchAcademicPapers(
         maxResults: options.maxResults,
         start: options.start,
         sortBy: options.sortBy,
+        enrichCitations: options.enrichCitations,
     };
 
     if (source === "arxiv") {
@@ -694,19 +1290,26 @@ export async function searchAcademicPapers(
         return searchPubMedPapers(query, scopedOptions);
     }
 
-    const [arxiv, pubmed] = await Promise.all([
+    const settled = await Promise.allSettled([
         searchArxivPapers(query, scopedOptions),
         searchPubMedPapers(query, scopedOptions),
     ]);
 
-    const dedupe = new Map<string, AcademicPaper>();
-    for (const paper of [...arxiv, ...pubmed]) {
-        const key = paper.doi?.toLowerCase() || paper.id;
-        if (!dedupe.has(key)) {
-            dedupe.set(key, paper);
-        }
+    const successful = settled
+        .filter((result): result is PromiseFulfilledResult<AcademicPaper[]> => result.status === "fulfilled")
+        .flatMap((result) => result.value);
+    if (successful.length > 0) {
+        return dedupeAcademicPapers(successful);
     }
-    return Array.from(dedupe.values());
+
+    const failures = settled
+        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+        .map((result) => (
+            result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason)
+        ));
+    throw new Error(failures[0] || "Failed to fetch papers from arXiv and PubMed.");
 }
 
 export async function discoverAcademicPapers(
@@ -723,6 +1326,7 @@ export async function discoverAcademicPapers(
         maxResults,
         start: 0,
         sortBy: "recent",
+        enrichCitations: options.enrichCitations ?? true,
     };
 
     if (source === "arxiv") {
@@ -733,19 +1337,26 @@ export async function discoverAcademicPapers(
         return searchPubMedPapers(fieldQuery, scopedOptions);
     }
 
-    const [arxiv, pubmed] = await Promise.all([
+    const settled = await Promise.allSettled([
         searchArxivPapers(fieldQuery, scopedOptions),
         searchPubMedPapers(fieldQuery, scopedOptions),
     ]);
 
-    const dedupe = new Map<string, AcademicPaper>();
-    for (const paper of [...arxiv, ...pubmed]) {
-        const key = paper.doi?.toLowerCase() || paper.id;
-        if (!dedupe.has(key)) {
-            dedupe.set(key, paper);
-        }
+    const successful = settled
+        .filter((result): result is PromiseFulfilledResult<AcademicPaper[]> => result.status === "fulfilled")
+        .flatMap((result) => result.value);
+    if (successful.length > 0) {
+        return dedupeAcademicPapers(successful);
     }
-    return Array.from(dedupe.values());
+
+    const failures = settled
+        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+        .map((result) => (
+            result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason)
+        ));
+    throw new Error(failures[0] || "Failed to discover papers from arXiv and PubMed.");
 }
 
 export async function downloadPaper(url: string, paper?: AcademicPaper): Promise<Book> {
@@ -806,6 +1417,9 @@ export async function downloadPaper(url: string, paper?: AcademicPaper): Promise
             abstract: paper?.abstract,
             authors,
             citationCount: paper?.citationCount,
+            fieldTags: paper?.fieldTags,
+            openAccess: paper?.openAccess,
+            openAccessUrl: paper?.openAccessUrl,
             pdfUrl: paper?.pdfUrl || resolvedUrl,
             referenceData,
         },

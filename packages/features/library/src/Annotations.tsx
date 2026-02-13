@@ -210,7 +210,7 @@ const filterTabs = [
 // Main page component
 export function AnnotationsPage() {
     const { annotations, books, removeAnnotation, updateAnnotation } = useLibraryStore();
-    const { setRoute, searchQuery } = useUIStore();
+    const { currentBookId, setRoute, searchQuery } = useUIStore();
     const openReviewSession = useLearningStore((state) => state.openReviewSession);
     const dueHighlightCount = useLearningStore((state) => (
         state.getDueReviewItems(new Date(), "highlight").length
@@ -227,6 +227,10 @@ export function AnnotationsPage() {
     // Filter annotations (excluding bookmarks - they have their own page)
     const filteredAnnotations = useMemo(() => {
         let filtered = annotations.filter((a) => a.type !== "bookmark");
+
+        if (currentBookId) {
+            filtered = filtered.filter((annotation) => annotation.bookId === currentBookId);
+        }
 
         // Apply type filter
         if (activeFilter !== "all") {
@@ -282,7 +286,7 @@ export function AnnotationsPage() {
         });
 
         return filtered;
-    }, [annotations, activeFilter, searchQuery, sortBy, bookTitleLookup]);
+    }, [annotations, activeFilter, currentBookId, searchQuery, sortBy, bookTitleLookup]);
 
     const handleDelete = (id: string) => {
         if (confirm("Are you sure you want to delete this annotation?")) {
@@ -308,6 +312,9 @@ export function AnnotationsPage() {
 
     // Filter out bookmarks for the count
     const annotationCount = annotations.filter((a) => a.type !== "bookmark").length;
+    const selectedBookTitle = currentBookId
+        ? (bookTitleLookup.get(currentBookId) || "Selected reference")
+        : null;
 
     if (annotationCount === 0) {
         return (
@@ -347,6 +354,21 @@ export function AnnotationsPage() {
                     </span>
                 </button>
             </div>
+
+            {currentBookId && (
+                <div className="mb-6 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
+                    <span className="text-[color:var(--color-text-secondary)]">
+                        Showing annotations for:
+                    </span>
+                    <span className="font-medium text-[color:var(--color-text-primary)]">{selectedBookTitle}</span>
+                    <button
+                        onClick={() => setRoute("annotations")}
+                        className="ml-auto rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                    >
+                        Clear filter
+                    </button>
+                </div>
+            )}
 
             {/* Filters */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">

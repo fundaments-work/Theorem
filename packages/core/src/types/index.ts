@@ -63,6 +63,8 @@ export interface CitationReferenceData {
     cslJson?: Record<string, unknown>;
 }
 
+export type ReferenceType = "book" | "paper";
+
 export interface AcademicMetadata {
     source: AcademicSource;
     sourceId?: string;
@@ -72,6 +74,9 @@ export interface AcademicMetadata {
     abstract?: string;
     authors: string[];
     citationCount?: number;
+    fieldTags?: string[];
+    openAccess?: boolean;
+    openAccessUrl?: string;
     pdfUrl?: string;
     referenceData?: CitationReferenceData;
 }
@@ -132,9 +137,37 @@ export interface AcademicPaper {
     journal?: string;
     conference?: string;
     citationCount?: number;
+    fieldTags?: string[];
+    openAccess?: boolean;
+    openAccessUrl?: string;
     pdfUrl?: string;
     url?: string;
     publishedDate?: string;
+    referenceData?: CitationReferenceData;
+}
+
+export interface ReferenceItem {
+    id: string;
+    bookId: string;
+    type: ReferenceType;
+    source: AcademicSource | "library";
+    sourceId?: string;
+    title: string;
+    authors: string[];
+    abstract?: string;
+    doi?: string;
+    journal?: string;
+    conference?: string;
+    citationCount?: number;
+    fieldTags?: string[];
+    openAccess?: boolean;
+    openAccessUrl?: string;
+    url?: string;
+    publishedDate?: string;
+    addedAt: Date;
+    format: BookFormat;
+    tags: string[];
+    isAcademic: boolean;
     referenceData?: CitationReferenceData;
 }
 
@@ -165,6 +198,7 @@ export interface ReadingProgress {
 export interface Annotation {
     id: string;
     bookId: string;
+    referenceId?: string;
     type: "highlight" | "note" | "bookmark";
     location: string;
     selectedText?: string;
@@ -188,7 +222,7 @@ export interface Collection {
     name: string;
     description?: string;
     bookIds: string[];
-    kind?: "general" | "research";
+    kind: "general" | "research";
     createdAt: Date;
 }
 
@@ -230,6 +264,16 @@ export type LibraryViewMode = "grid" | "list" | "compact";
 export type LibrarySortBy = "title" | "author" | "dateAdded" | "lastRead" | "progress" | "rating";
 export type LibrarySortOrder = "asc" | "desc";
 
+export interface AcademicTopic {
+    id: string;
+    label: string;
+    query: string;
+}
+
+export interface AcademicSettings {
+    customTopics: AcademicTopic[];
+}
+
 // App Settings
 export interface AppSettings {
     sidebarCollapsed: boolean;
@@ -241,6 +285,7 @@ export interface AppSettings {
     theme: "light" | "dark" | "system";
     readerSettings: ReaderSettings;
     learning: LearningSettings;
+    academic: AcademicSettings;
 }
 
 export type DictionaryMode = "online" | "offline" | "auto";
@@ -433,6 +478,7 @@ export interface UIState {
     sidebarOpen: boolean;
     readerToolbarVisible: boolean;
     searchQuery: string;
+    searchCommittedQuery: string;
     selectedBooks: string[];
     isLoading: boolean;
     loadingMessage?: string;

@@ -76,6 +76,38 @@ export default defineConfig(async () => ({
         port: 1420,
         strictPort: true,
         host: host || false,
+        proxy: {
+            "/api/academic/arxiv": {
+                target: "https://export.arxiv.org",
+                changeOrigin: true,
+                secure: true,
+                rewrite: (path) => path.replace(/^\/api\/academic\/arxiv/, "/api/query"),
+            },
+            "/api/academic/pubmed/esearch": {
+                target: "https://eutils.ncbi.nlm.nih.gov",
+                changeOrigin: true,
+                secure: true,
+                rewrite: (path) => path.replace(
+                    /^\/api\/academic\/pubmed\/esearch/,
+                    "/entrez/eutils/esearch.fcgi",
+                ),
+            },
+            "/api/academic/pubmed/efetch": {
+                target: "https://eutils.ncbi.nlm.nih.gov",
+                changeOrigin: true,
+                secure: true,
+                rewrite: (path) => path.replace(
+                    /^\/api\/academic\/pubmed\/efetch/,
+                    "/entrez/eutils/efetch.fcgi",
+                ),
+            },
+            "/api/academic/openalex": {
+                target: "https://api.openalex.org",
+                changeOrigin: true,
+                secure: true,
+                rewrite: (path) => path.replace(/^\/api\/academic\/openalex/, ""),
+            },
+        },
         hmr: host
             ? {
                 protocol: "ws",

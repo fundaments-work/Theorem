@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     cn,
-    generateCitation,
-    isAcademicBook,
+    generateReferenceCitation,
     rankByFuzzyQuery,
-    toAcademicPaper,
+    sortReferenceItems,
+    toReferenceItem,
     useLibraryStore,
     useUIStore,
-    type AcademicPaper,
+    type Annotation,
     type Book,
     type CitationFormat,
     type Collection,
+    type ReferenceItem,
+    type ReferenceSortMode,
 } from "@theorem/core";
 import {
     Dropdown,
@@ -28,102 +30,140 @@ import {
     Filter,
     FolderPlus,
     Layers,
+    Link2,
     Pencil,
     Trash2,
 } from "lucide-react";
 import {
     copyToClipboard,
     formatDateLabel,
-    isBookInAcademicCollection,
-    sourceLabel,
 } from "./utils";
 
 type ShelfSelection = "all" | string;
-type SourceFilter = "all" | "arxiv" | "pubmed" | "manual";
+type SourceFilter = "all" | "arxiv" | "pubmed" | "manual" | "library";
+type TypeFilter = "all" | "book" | "paper";
+const MAX_VISIBLE_REFERENCES = 180;
 
-interface PaperEntry {
+interface ReferenceEntry {
     book: Book;
-    paper: AcademicPaper;
+    reference: ReferenceItem;
+    linkedAnnotations: Annotation[];
+    linkedNotes: Annotation[];
+    linkedBookmarks: Annotation[];
 }
+
+const TYPE_FILTER_OPTIONS: Array<DropdownOption<TypeFilter>> = [
+    { value: "all", label: "All Types" },
+    { value: "paper", label: "Papers" },
+    { value: "book", label: "Books / Docs" },
+];
 
 const SOURCE_FILTER_OPTIONS: Array<DropdownOption<SourceFilter>> = [
     { value: "all", label: "All Sources" },
     { value: "arxiv", label: "arXiv" },
     { value: "pubmed", label: "PubMed" },
     { value: "manual", label: "Manual" },
+    { value: "library", label: "Library" },
 ];
 
-function toFallbackPaper(book: Book): AcademicPaper {
-    return {
-        id: book.id,
-        source: "manual",
-        title: book.title,
-        authors: book.author
-            .split(",")
-            .map((entry) => entry.trim())
-            .filter(Boolean),
-        abstract: book.description,
-        journal: book.publisher,
-        doi: book.academic?.doi,
-        conference: book.academic?.conference,
-        citationCount: book.academic?.citationCount,
-        pdfUrl: book.academic?.pdfUrl || book.filePath,
-        url: book.filePath,
-        publishedDate: book.publishedDate,
-        referenceData: book.academic?.referenceData,
-    };
-}
+const SORT_OPTIONS: Array<DropdownOption<ReferenceSortMode>> = [
+    { value: "relevance", label: "Relevance" },
+    { value: "newest", label: "Newest" },
+    { value: "oldest", label: "Oldest" },
+    { value: "citations_desc", label: "Most Cited" },
+    { value: "citations_asc", label: "Least Cited" },
+    { value: "title_asc", label: "Title A-Z" },
+    { value: "title_desc", label: "Title Z-A" },
+];
 
-function getSafeExternalUrl(paper: AcademicPaper): string | undefined {
-    const url = paper.url || paper.pdfUrl;
-    if (!url) return undefined;
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-        return url;
+function sourceLabel(source: ReferenceItem["source"]): string {
+    switch (source) {
+        case "arxiv":
+            return "arXiv";
+        case "pubmed":
+            return "PubMed";
+        case "manual":
+            return "Manual";
+        default:
+            return "Library";
     }
-    return undefined;
 }
 
-function shelfBookCount(shelf: Collection, academicBookIds: Set<string>): number {
-    return shelf.bookIds.filter((bookId) => academicBookIds.has(bookId)).length;
+function resolveVenue(reference: ReferenceItem): string {
+    return (reference.journal || reference.conference || "").trim();
 }
 
-function ReferencePaperCard({
+function resolveExternalUrl(reference: ReferenceItem): string | undefined {
+    const value = (reference.url || "").trim();
+    if (!value) return undefined;
+    return value.startsWith("http://") || value.startsWith("https://")
+        ? value
+        : undefined;
+}
+
+function shelfReferenceCount(shelf: Collection, referenceBookIds: Set<string>): number {
+    return shelf.bookIds.filter((bookId) => referenceBookIds.has(bookId)).length;
+}
+
+function ReferenceCard({
     entry,
     copiedKey,
     shelfNames,
     onOpen,
     onManageShelves,
     onCopyCitation,
+    onJumpToNotes,
 }: {
-    entry: PaperEntry;
+    entry: ReferenceEntry;
     copiedKey: string | null;
     shelfNames: string[];
     onOpen: (bookId: string) => void;
     onManageShelves: (book: Book) => void;
-    onCopyCitation: (paper: AcademicPaper, format: CitationFormat) => void;
+    onCopyCitation: (reference: ReferenceItem, format: CitationFormat) => void;
+    onJumpToNotes: (bookId: string) => void;
 }) {
-    const { book, paper } = entry;
-    const publishedLabel = formatDateLabel(paper.publishedDate);
-    const externalUrl = getSafeExternalUrl(paper);
+    const { book, reference, linkedNotes, linkedBookmarks } = entry;
+    const externalUrl = resolveExternalUrl(reference);
+    const venue = resolveVenue(reference);
+    const fallbackAddedAt = (() => {
+        if (book.addedAt instanceof Date) {
+            return book.addedAt.toISOString();
+        }
+        if (typeof book.addedAt === "string") {
+            return book.addedAt;
+        }
+        return undefined;
+    })();
+    const publishedLabel = formatDateLabel(
+        reference.publishedDate || book.publishedDate || fallbackAddedAt,
+    );
 
     return (
         <article className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-5">
             <div className="flex flex-col gap-4">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1.5">
+                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
                             <span className="inline-flex items-center rounded-full bg-[var(--color-accent)]/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-[color:var(--color-accent)] uppercase">
-                                {sourceLabel(paper.source)}
+                                {reference.type === "paper" ? "Paper" : "Book"}
+                            </span>
+                            <span className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2 py-0.5 text-[10px] font-semibold tracking-wide text-[color:var(--color-text-secondary)] uppercase">
+                                {sourceLabel(reference.source)}
                             </span>
                             {publishedLabel && (
                                 <span className="text-xs text-[color:var(--color-text-muted)]">{publishedLabel}</span>
                             )}
+                            {typeof reference.citationCount === "number" && (
+                                <span className="text-xs text-[color:var(--color-text-muted)]">
+                                    {reference.citationCount} citations
+                                </span>
+                            )}
                         </div>
                         <h3 className="text-sm sm:text-base font-semibold text-[color:var(--color-text-primary)] leading-snug">
-                            {paper.title}
+                            {reference.title}
                         </h3>
                         <p className="mt-1 text-xs sm:text-sm text-[color:var(--color-text-secondary)] line-clamp-2">
-                            {paper.authors.length > 0 ? paper.authors.join(", ") : "Unknown authors"}
+                            {reference.authors.length > 0 ? reference.authors.join(", ") : "Unknown authors"}
                         </p>
                     </div>
 
@@ -137,15 +177,15 @@ function ReferencePaperCard({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[color:var(--color-text-muted)]">
-                    {(paper.journal || paper.conference) && (
-                        <span>{paper.journal || paper.conference}</span>
-                    )}
-                    {paper.doi && <span className="truncate max-w-full">DOI: {paper.doi}</span>}
+                    {venue && <span>{venue}</span>}
+                    {reference.doi && <span className="truncate max-w-full">DOI: {reference.doi}</span>}
+                    {linkedNotes.length > 0 && <span>{linkedNotes.length} linked note(s)</span>}
+                    {linkedBookmarks.length > 0 && <span>{linkedBookmarks.length} linked bookmark(s)</span>}
                 </div>
 
-                {paper.abstract && (
+                {reference.abstract && (
                     <p className="text-xs sm:text-sm text-[color:var(--color-text-secondary)] leading-relaxed line-clamp-3">
-                        {paper.abstract}
+                        {reference.abstract}
                     </p>
                 )}
 
@@ -176,19 +216,41 @@ function ReferencePaperCard({
                     </button>
 
                     <button
-                        onClick={() => onCopyCitation(paper, "apa")}
+                        onClick={() => onCopyCitation(reference, "apa")}
                         className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                     >
                         <Copy className="w-3.5 h-3.5" />
-                        {copiedKey === `${book.id}:apa` ? "Copied APA" : "Copy APA"}
+                        {copiedKey === `${reference.id}:apa` ? "Copied APA" : "Copy APA"}
                     </button>
 
                     <button
-                        onClick={() => onCopyCitation(paper, "bibtex")}
+                        onClick={() => onCopyCitation(reference, "bibtex")}
                         className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                     >
                         <Copy className="w-3.5 h-3.5" />
-                        {copiedKey === `${book.id}:bibtex` ? "Copied BibTeX" : "Copy BibTeX"}
+                        {copiedKey === `${reference.id}:bibtex` ? "Copied BibTeX" : "Copy BibTeX"}
+                    </button>
+
+                    <button
+                        onClick={() => onCopyCitation(reference, "mla")}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                    >
+                        <Copy className="w-3.5 h-3.5" />
+                        {copiedKey === `${reference.id}:mla` ? "Copied MLA" : "Copy MLA"}
+                    </button>
+
+                    <button
+                        onClick={() => onJumpToNotes(book.id)}
+                        disabled={linkedNotes.length === 0}
+                        className={cn(
+                            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border",
+                            linkedNotes.length === 0
+                                ? "border-[var(--color-border)] text-[color:var(--color-text-muted)] bg-[var(--color-surface-muted)] cursor-not-allowed"
+                                : "border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                        )}
+                    >
+                        <Link2 className="w-3.5 h-3.5" />
+                        {linkedNotes.length > 0 ? `Linked Notes (${linkedNotes.length})` : "No Linked Notes"}
                     </button>
 
                     {externalUrl && (
@@ -210,6 +272,7 @@ function ReferencePaperCard({
 
 export function AcademicReferencesPage() {
     const books = useLibraryStore((state) => state.books);
+    const annotations = useLibraryStore((state) => state.annotations);
     const collections = useLibraryStore((state) => state.collections);
     const addCollection = useLibraryStore((state) => state.addCollection);
     const updateCollection = useLibraryStore((state) => state.updateCollection);
@@ -220,37 +283,57 @@ export function AcademicReferencesPage() {
     const searchQuery = useUIStore((state) => state.searchQuery);
 
     const [selectedShelfId, setSelectedShelfId] = useState<ShelfSelection>("all");
-    const [authorFilter, setAuthorFilter] = useState<string>("all");
-    const [venueFilter, setVenueFilter] = useState<string>("all");
+    const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
     const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+    const [authorQuery, setAuthorQuery] = useState("");
+    const [venueQuery, setVenueQuery] = useState("");
+    const [sortBy, setSortBy] = useState<ReferenceSortMode>("relevance");
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
     const [isShelfModalOpen, setIsShelfModalOpen] = useState(false);
     const [editingShelf, setEditingShelf] = useState<{ id: string; name: string; description?: string } | undefined>();
     const [organizingBook, setOrganizingBook] = useState<Book | null>(null);
 
-    const academicBooks = useMemo(
-        () => books
-            .filter((book) => isBookInAcademicCollection(book) || isAcademicBook(book))
-            .sort((a, b) => {
-                const aTime = new Date(a.addedAt).getTime();
-                const bTime = new Date(b.addedAt).getTime();
-                return bTime - aTime;
-            }),
-        [books],
-    );
+    const entries = useMemo<ReferenceEntry[]>(() => {
+        const annotationsByReference = new Map<string, Annotation[]>();
+        for (const annotation of annotations) {
+            const referenceId = annotation.referenceId || annotation.bookId;
+            if (!referenceId) {
+                continue;
+            }
+            if (!annotationsByReference.has(referenceId)) {
+                annotationsByReference.set(referenceId, []);
+            }
+            annotationsByReference.get(referenceId)?.push(annotation);
+        }
 
-    const academicBookIds = useMemo(
-        () => new Set(academicBooks.map((book) => book.id)),
-        [academicBooks],
+        return books
+            .map((book) => {
+                const reference = toReferenceItem(book);
+                const linkedAnnotations = annotationsByReference.get(reference.bookId) || [];
+                const linkedNotes = linkedAnnotations.filter((annotation) => (
+                    annotation.type === "highlight" || annotation.type === "note"
+                ));
+                const linkedBookmarks = linkedAnnotations.filter((annotation) => annotation.type === "bookmark");
+                return {
+                    book,
+                    reference,
+                    linkedAnnotations,
+                    linkedNotes,
+                    linkedBookmarks,
+                };
+            })
+            .sort((a, b) => new Date(b.book.addedAt).getTime() - new Date(a.book.addedAt).getTime());
+    }, [annotations, books]);
+
+    const referenceBookIds = useMemo(
+        () => new Set(entries.map((entry) => entry.book.id)),
+        [entries],
     );
 
     const researchShelves = useMemo(
-        () => collections.filter((collection) => (
-            collection.kind === "research"
-            || collection.bookIds.some((bookId) => academicBookIds.has(bookId))
-        )),
-        [collections, academicBookIds],
+        () => collections.filter((collection) => collection.kind === "research"),
+        [collections],
     );
 
     useEffect(() => {
@@ -262,107 +345,105 @@ export function AcademicReferencesPage() {
         }
     }, [selectedShelfId, researchShelves]);
 
-    const entries = useMemo<PaperEntry[]>(() => {
-        return academicBooks.map((book) => ({
-            book,
-            paper: toAcademicPaper(book) || toFallbackPaper(book),
-        }));
-    }, [academicBooks]);
-
-    const authorOptions = useMemo<Array<DropdownOption<string>>>(() => {
-        const values = new Set<string>();
-        for (const { paper } of entries) {
-            for (const author of paper.authors) {
-                if (author.trim()) {
-                    values.add(author.trim());
-                }
-            }
-        }
-
-        return [
-            { value: "all", label: "All Authors" },
-            ...Array.from(values)
-                .sort((a, b) => a.localeCompare(b))
-                .map((author) => ({ value: author, label: author })),
-        ];
-    }, [entries]);
-
-    const venueOptions = useMemo<Array<DropdownOption<string>>>(() => {
-        const values = new Set<string>();
-        for (const { paper } of entries) {
-            const venue = (paper.journal || paper.conference || "").trim();
-            if (venue) {
-                values.add(venue);
-            }
-        }
-
-        return [
-            { value: "all", label: "All Journals / Conferences" },
-            ...Array.from(values)
-                .sort((a, b) => a.localeCompare(b))
-                .map((venue) => ({ value: venue, label: venue })),
-        ];
-    }, [entries]);
-
-    const filteredEntries = useMemo(() => {
-        let scopedEntries = entries;
+    const filteredEntries = useMemo<ReferenceEntry[]>(() => {
+        let scoped = entries;
+        const normalizedAuthorQuery = authorQuery.trim().toLowerCase();
+        const normalizedVenueQuery = venueQuery.trim().toLowerCase();
 
         if (selectedShelfId !== "all") {
             const selectedShelf = researchShelves.find((shelf) => shelf.id === selectedShelfId);
             if (!selectedShelf) {
-                scopedEntries = [];
+                scoped = [];
             } else {
                 const allowedBookIds = new Set(selectedShelf.bookIds);
-                scopedEntries = scopedEntries.filter(({ book }) => allowedBookIds.has(book.id));
+                scoped = scoped.filter((entry) => allowedBookIds.has(entry.book.id));
             }
         }
 
-        if (authorFilter !== "all") {
-            scopedEntries = scopedEntries.filter(({ paper }) => paper.authors.includes(authorFilter));
-        }
-
-        if (venueFilter !== "all") {
-            scopedEntries = scopedEntries.filter(({ paper }) => (
-                (paper.journal || paper.conference || "") === venueFilter
-            ));
+        if (typeFilter !== "all") {
+            scoped = scoped.filter((entry) => entry.reference.type === typeFilter);
         }
 
         if (sourceFilter !== "all") {
-            scopedEntries = scopedEntries.filter(({ paper }) => paper.source === sourceFilter);
+            scoped = scoped.filter((entry) => entry.reference.source === sourceFilter);
+        }
+
+        if (normalizedAuthorQuery) {
+            scoped = scoped.filter((entry) => (
+                entry.reference.authors.some((author) => author.toLowerCase().includes(normalizedAuthorQuery))
+            ));
+        }
+
+        if (normalizedVenueQuery) {
+            scoped = scoped.filter((entry) => (
+                resolveVenue(entry.reference).toLowerCase().includes(normalizedVenueQuery)
+            ));
         }
 
         const trimmedQuery = searchQuery.trim();
-        if (!trimmedQuery) {
-            return scopedEntries;
+        if (trimmedQuery) {
+            const ranked = rankByFuzzyQuery(
+                scoped.map((entry) => ({
+                    entry,
+                    title: entry.reference.title,
+                    authors: entry.reference.authors.join(" "),
+                    venue: resolveVenue(entry.reference),
+                    doi: entry.reference.doi || "",
+                    tags: entry.reference.tags.join(" "),
+                })),
+                trimmedQuery,
+                {
+                    keys: [
+                        { name: "title", weight: 0.45 },
+                        { name: "authors", weight: 0.25 },
+                        { name: "venue", weight: 0.15 },
+                        { name: "doi", weight: 0.1 },
+                        { name: "tags", weight: 0.05 },
+                    ],
+                },
+            ).map(({ item }) => item.entry);
+
+            if (sortBy === "relevance") {
+                return ranked;
+            }
+
+            scoped = ranked;
         }
 
-        const ranked = rankByFuzzyQuery(
-            scopedEntries.map((entry) => ({
-                entry,
-                title: entry.paper.title,
-                authors: entry.paper.authors.join(" "),
-                venue: `${entry.paper.journal || ""} ${entry.paper.conference || ""}`.trim(),
-                doi: entry.paper.doi || "",
-            })),
-            trimmedQuery,
-            {
-                keys: [
-                    { name: "title", weight: 0.45 },
-                    { name: "authors", weight: 0.3 },
-                    { name: "venue", weight: 0.15 },
-                    { name: "doi", weight: 0.1 },
-                ],
-            },
+        const effectiveSort: ReferenceSortMode = sortBy === "relevance" ? "newest" : sortBy;
+        const entryById = new Map(scoped.map((entry) => [entry.reference.id, entry]));
+        const sortedReferences = sortReferenceItems(
+            scoped.map((entry) => entry.reference),
+            effectiveSort,
         );
 
-        return ranked.map(({ item }) => item.entry);
-    }, [entries, selectedShelfId, researchShelves, authorFilter, venueFilter, sourceFilter, searchQuery]);
+        return sortedReferences
+            .map((reference) => entryById.get(reference.id))
+            .filter((entry): entry is ReferenceEntry => Boolean(entry));
+    }, [
+        authorQuery,
+        entries,
+        researchShelves,
+        searchQuery,
+        selectedShelfId,
+        sortBy,
+        sourceFilter,
+        typeFilter,
+        venueQuery,
+    ]);
+
+    const visibleEntries = useMemo(() => {
+        if (filteredEntries.length <= MAX_VISIBLE_REFERENCES) {
+            return filteredEntries;
+        }
+        return filteredEntries.slice(0, MAX_VISIBLE_REFERENCES);
+    }, [filteredEntries]);
 
     const shelfNamesByBookId = useMemo(() => {
         const map = new Map<string, string[]>();
         for (const shelf of researchShelves) {
             for (const bookId of shelf.bookIds) {
-                if (!academicBookIds.has(bookId)) {
+                if (!referenceBookIds.has(bookId)) {
                     continue;
                 }
                 if (!map.has(bookId)) {
@@ -372,19 +453,34 @@ export function AcademicReferencesPage() {
             }
         }
         return map;
-    }, [researchShelves, academicBookIds]);
+    }, [researchShelves, referenceBookIds]);
+
+    const organizingBookShelfIds = useMemo(() => {
+        if (!organizingBook) {
+            return new Set<string>();
+        }
+        return new Set(
+            researchShelves
+                .filter((shelf) => shelf.bookIds.includes(organizingBook.id))
+                .map((shelf) => shelf.id),
+        );
+    }, [organizingBook, researchShelves]);
 
     const handleOpenBook = useCallback((bookId: string) => {
         setRoute("reader", bookId);
     }, [setRoute]);
 
-    const handleCopyCitation = useCallback(async (paper: AcademicPaper, format: CitationFormat) => {
+    const handleJumpToNotes = useCallback((bookId: string) => {
+        setRoute("annotations", bookId);
+    }, [setRoute]);
+
+    const handleCopyCitation = useCallback(async (reference: ReferenceItem, format: CitationFormat) => {
         try {
-            const citation = generateCitation(paper, format);
+            const citation = generateReferenceCitation(reference, format);
             await copyToClipboard(citation);
-            setCopiedKey(`${paper.id}:${format}`);
+            setCopiedKey(`${reference.id}:${format}`);
             window.setTimeout(() => {
-                setCopiedKey((current) => (current === `${paper.id}:${format}` ? null : current));
+                setCopiedKey((current) => (current === `${reference.id}:${format}` ? null : current));
             }, 1800);
         } catch (copyError) {
             console.error("[AcademicReferencesPage] Failed to copy citation:", copyError);
@@ -425,7 +521,7 @@ export function AcademicReferencesPage() {
 
         setIsShelfModalOpen(false);
         setEditingShelf(undefined);
-    }, [editingShelf, addCollection, updateCollection]);
+    }, [addCollection, editingShelf, updateCollection]);
 
     const handleDeleteShelf = useCallback((shelf: Collection) => {
         if (window.confirm(`Delete research shelf "${shelf.name}"?`)) {
@@ -441,23 +537,12 @@ export function AcademicReferencesPage() {
         removeBookFromCollection(bookId, shelfId);
     }, [addBookToCollection, removeBookFromCollection]);
 
-    const organizingBookShelfIds = useMemo(() => {
-        if (!organizingBook) {
-            return new Set<string>();
-        }
-        return new Set(
-            researchShelves
-                .filter((shelf) => shelf.bookIds.includes(organizingBook.id))
-                .map((shelf) => shelf.id),
-        );
-    }, [organizingBook, researchShelves]);
-
     return (
         <div className="ui-page animate-fade-in">
             <div className="mb-8">
                 <h1 className="ui-page-title">References</h1>
                 <p className="ui-page-subtitle">
-                    Organize papers into research shelves and use the top search bar to instantly filter your references.
+                    Manage citations for all library books and papers, then organize active workstreams in research shelves.
                 </p>
             </div>
 
@@ -486,17 +571,17 @@ export function AcademicReferencesPage() {
                             "rounded-xl border p-3 text-left transition-colors",
                             selectedShelfId === "all"
                                 ? "border-[color-mix(in_srgb,var(--color-accent)_45%,var(--color-border))] bg-[var(--color-accent-light)]"
-                                : "border-[var(--color-border)] bg-[var(--color-background)] hover:bg-[var(--color-surface-muted)]",
+                                : "border-[var(--color-border)] bg-[var(--color-background)] hover:bg-[var(--color-surface-muted)]"
                         )}
                     >
-                        <p className="text-sm font-semibold text-[color:var(--color-text-primary)]">All Papers</p>
+                        <p className="text-sm font-semibold text-[color:var(--color-text-primary)]">All References</p>
                         <p className="text-xs text-[color:var(--color-text-secondary)] mt-1">
-                            {academicBooks.length} paper{academicBooks.length === 1 ? "" : "s"}
+                            {entries.length} item{entries.length === 1 ? "" : "s"}
                         </p>
                     </button>
 
                     {researchShelves.map((shelf) => {
-                        const paperCount = shelfBookCount(shelf, academicBookIds);
+                        const itemCount = shelfReferenceCount(shelf, referenceBookIds);
                         const isActive = selectedShelfId === shelf.id;
 
                         return (
@@ -506,7 +591,7 @@ export function AcademicReferencesPage() {
                                     "rounded-xl border p-3",
                                     isActive
                                         ? "border-[color-mix(in_srgb,var(--color-accent)_45%,var(--color-border))] bg-[var(--color-accent-light)]"
-                                        : "border-[var(--color-border)] bg-[var(--color-background)]",
+                                        : "border-[var(--color-border)] bg-[var(--color-background)]"
                                 )}
                             >
                                 <button
@@ -520,7 +605,7 @@ export function AcademicReferencesPage() {
                                         {shelf.description || "No description"}
                                     </p>
                                     <p className="text-xs text-[color:var(--color-text-muted)] mt-2">
-                                        {paperCount} paper{paperCount === 1 ? "" : "s"}
+                                        {itemCount} item{itemCount === 1 ? "" : "s"}
                                     </p>
                                 </button>
 
@@ -547,7 +632,7 @@ export function AcademicReferencesPage() {
 
                 {researchShelves.length === 0 && (
                     <p className="mt-3 text-sm text-[color:var(--color-text-muted)]">
-                        No research shelves yet. Create one to group papers by topic.
+                        No research shelves yet. Create one to group books and papers for each project.
                     </p>
                 )}
             </section>
@@ -560,19 +645,11 @@ export function AcademicReferencesPage() {
                     </h2>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 mb-4">
                     <Dropdown
-                        options={authorOptions}
-                        value={authorFilter}
-                        onChange={setAuthorFilter}
-                        className="w-full"
-                        dropdownClassName="w-full"
-                        variant="default"
-                    />
-                    <Dropdown
-                        options={venueOptions}
-                        value={venueFilter}
-                        onChange={setVenueFilter}
+                        options={TYPE_FILTER_OPTIONS}
+                        value={typeFilter}
+                        onChange={setTypeFilter}
                         className="w-full"
                         dropdownClassName="w-full"
                         variant="default"
@@ -585,28 +662,57 @@ export function AcademicReferencesPage() {
                         dropdownClassName="w-full"
                         variant="default"
                     />
+                    <Dropdown
+                        options={SORT_OPTIONS}
+                        value={sortBy}
+                        onChange={setSortBy}
+                        className="w-full"
+                        dropdownClassName="w-full"
+                        variant="default"
+                    />
+                    <input
+                        type="text"
+                        value={authorQuery}
+                        onChange={(event) => setAuthorQuery(event.target.value)}
+                        placeholder="Filter author (contains)"
+                        className="ui-input w-full"
+                    />
+                    <input
+                        type="text"
+                        value={venueQuery}
+                        onChange={(event) => setVenueQuery(event.target.value)}
+                        placeholder="Filter venue/publisher"
+                        className="ui-input w-full"
+                    />
                 </div>
 
                 <div className="mb-4 text-xs sm:text-sm text-[color:var(--color-text-secondary)]">
-                    {filteredEntries.length} paper{filteredEntries.length === 1 ? "" : "s"}
+                    {filteredEntries.length} reference{filteredEntries.length === 1 ? "" : "s"}
                     {searchQuery.trim() ? ` matching "${searchQuery.trim()}"` : ""}
                 </div>
 
+                {filteredEntries.length > MAX_VISIBLE_REFERENCES && (
+                    <div className="mb-4 rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-3 py-2 text-sm text-[color:var(--color-text-secondary)]">
+                        Showing latest {MAX_VISIBLE_REFERENCES} results. Narrow with shelf, top search, or filters.
+                    </div>
+                )}
+
                 {filteredEntries.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-background)] py-10 text-center text-sm text-[color:var(--color-text-muted)]">
-                        No papers match the current shelf and filters.
+                        No references match the current shelf and filters.
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {filteredEntries.map((entry) => (
-                            <ReferencePaperCard
-                                key={entry.book.id}
+                        {visibleEntries.map((entry) => (
+                            <ReferenceCard
+                                key={entry.reference.id}
                                 entry={entry}
                                 copiedKey={copiedKey}
                                 shelfNames={shelfNamesByBookId.get(entry.book.id) || []}
                                 onOpen={handleOpenBook}
                                 onManageShelves={setOrganizingBook}
                                 onCopyCitation={handleCopyCitation}
+                                onJumpToNotes={handleJumpToNotes}
                             />
                         ))}
                     </div>
@@ -629,7 +735,7 @@ export function AcademicReferencesPage() {
                 size="md"
             >
                 <ModalHeader
-                    title={organizingBook ? `Organize Shelves` : "Organize Shelves"}
+                    title={organizingBook ? "Organize Shelves" : "Organize Shelves"}
                     onClose={() => setOrganizingBook(null)}
                 />
                 <ModalBody>
@@ -641,7 +747,7 @@ export function AcademicReferencesPage() {
 
                             {researchShelves.length === 0 ? (
                                 <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-background)] p-4 text-sm text-[color:var(--color-text-muted)]">
-                                    Create a research shelf first, then assign this paper.
+                                    Create a research shelf first, then assign this reference.
                                 </div>
                             ) : (
                                 <div className="space-y-2">

@@ -17,6 +17,7 @@ import {
     reviewItemSchedulerState,
 } from "../services/LearningSchedulerService";
 import type {
+    AcademicSettings,
     Annotation,
     AppRoute,
     AppSettings,
@@ -83,6 +84,10 @@ const defaultLearningSettings: LearningSettings = {
     playPronunciationAudio: false,
 };
 
+const defaultAcademicSettings: AcademicSettings = {
+    customTopics: [],
+};
+
 // Default app settings
 const defaultAppSettings: AppSettings = {
     sidebarCollapsed: false,
@@ -94,6 +99,7 @@ const defaultAppSettings: AppSettings = {
     theme: "system",
     readerSettings: defaultReaderSettings,
     learning: defaultLearningSettings,
+    academic: defaultAcademicSettings,
 };
 
 // Default reading stats
@@ -114,6 +120,8 @@ interface UIStore extends UIState {
     setRoute: (route: AppRoute, bookId?: string) => void;
     toggleSidebar: () => void;
     setSearchQuery: (query: string) => void;
+    commitSearch: () => void;
+    clearSearch: () => void;
     setSelectedBooks: (bookIds: string[]) => void;
     toggleBookSelection: (bookId: string) => void;
     clearSelection: () => void;
@@ -130,6 +138,7 @@ export const useUIStore = create<UIStore>((set) => ({
     sidebarOpen: true,
     readerToolbarVisible: true,
     searchQuery: "",
+    searchCommittedQuery: "",
     selectedBooks: [],
     isLoading: false,
     loadingMessage: undefined,
@@ -140,9 +149,14 @@ export const useUIStore = create<UIStore>((set) => ({
             currentRoute: route,
             currentBookId: bookId,
             searchQuery: "",
+            searchCommittedQuery: "",
         }),
     toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
     setSearchQuery: (query) => set({ searchQuery: query }),
+    commitSearch: () => set((state) => ({
+        searchCommittedQuery: state.searchQuery.trim(),
+    })),
+    clearSearch: () => set({ searchQuery: "", searchCommittedQuery: "" }),
     setSelectedBooks: (bookIds) => set({ selectedBooks: bookIds }),
     toggleBookSelection: (bookId) =>
         set((state) => ({
@@ -247,6 +261,32 @@ function normalizeTermKey(term: string, language: string): string {
     return `${term.trim().toLowerCase()}::${language.trim().toLowerCase()}`;
 }
 
+type LegacyCollection = Omit<Collection, "kind"> & {
+    kind?: Collection["kind"];
+};
+
+function inferCollectionKind(
+    collection: LegacyCollection,
+    booksById: Map<string, Book>,
+): Collection["kind"] {
+    if (collection.kind) {
+        return collection.kind;
+    }
+
+    const containsAcademicBook = collection.bookIds.some((bookId) => {
+        const book = booksById.get(bookId);
+        if (!book) return false;
+        if (book.academic) return true;
+        if (book.category?.toLowerCase() === "academic") return true;
+        return book.tags.some((tag) => {
+            const normalizedTag = tag.toLowerCase();
+            return normalizedTag === "academic" || normalizedTag === "paper";
+        });
+    });
+
+    return containsAcademicBook ? "research" : "general";
+}
+
 // Library Store
 interface LibraryStore {
     books: Book[];
@@ -311,6 +351,11 @@ interface LibraryStore {
     setCurrentBookId: (bookId: string | undefined) => void;
 
 }
+
+type PersistedLibraryState = Pick<
+    LibraryStore,
+    "books" | "collections" | "annotations" | "lastScannedAt" | "recentBooksCache"
+>;
 
 export const useLibraryStore = create<LibraryStore>()(
     persist(
@@ -597,9 +642,11 @@ export const useLibraryStore = create<LibraryStore>()(
             },
 
             addHighlightWithNote: (cfi, text, color, note) => {
+                const currentBookId = get().currentBookId || '';
                 const annotation: Annotation = {
                     id: crypto.randomUUID(),
-                    bookId: get().currentBookId || '',
+                    bookId: currentBookId,
+                    referenceId: currentBookId || undefined,
                     type: note ? 'note' : 'highlight',
                     location: cfi,
                     selectedText: text,
@@ -716,6 +763,57 @@ export const useLibraryStore = create<LibraryStore>()(
         }),
         {
             name: "theorem-library",
+            version: 2,
+            migrate: (persistedState, version) => {
+                const persisted = (
+                    typeof persistedState === "object" && persistedState !== null
+                        ? persistedState
+                        : {}
+                ) as Partial<PersistedLibraryState>;
+
+                const books = Array.isArray(persisted.books)
+                    ? persisted.books as Book[]
+                    : [];
+                const booksById = new Map(books.map((book) => [book.id, book]));
+                const collections = Array.isArray(persisted.collections)
+                    ? (persisted.collections as LegacyCollection[]).map((collection) => ({
+                        ...collection,
+                        kind: inferCollectionKind(collection, booksById),
+                    }))
+                    : [];
+                const annotations = Array.isArray(persisted.annotations)
+                    ? (persisted.annotations as Annotation[]).map((annotation) => ({
+                        ...annotation,
+                        referenceId: typeof annotation.referenceId === "string"
+                            ? annotation.referenceId
+                            : undefined,
+                    }))
+                    : [];
+                const lastScannedAt = persisted.lastScannedAt
+                    ? new Date(persisted.lastScannedAt)
+                    : undefined;
+                const recentBooksCache = Array.isArray(persisted.recentBooksCache)
+                    ? persisted.recentBooksCache as CachedBookMetadata[]
+                    : [];
+
+                if (version < 2) {
+                    return {
+                        books,
+                        collections,
+                        annotations,
+                        lastScannedAt,
+                        recentBooksCache,
+                    } as PersistedLibraryState;
+                }
+
+                return {
+                    books,
+                    collections,
+                    annotations,
+                    lastScannedAt,
+                    recentBooksCache,
+                } as PersistedLibraryState;
+            },
             partialize: (state) => ({
                 books: state.books,
                 collections: state.collections,
@@ -723,6 +821,23 @@ export const useLibraryStore = create<LibraryStore>()(
                 lastScannedAt: state.lastScannedAt,
                 recentBooksCache: state.recentBooksCache,
             }),
+            onRehydrateStorage: () => (state) => {
+                if (!state) {
+                    return;
+                }
+
+                const booksById = new Map(state.books.map((book) => [book.id, book]));
+                state.collections = state.collections.map((collection) => ({
+                    ...collection,
+                    kind: inferCollectionKind(collection, booksById),
+                }));
+                state.annotations = state.annotations.map((annotation) => ({
+                    ...annotation,
+                    referenceId: typeof annotation.referenceId === "string"
+                        ? annotation.referenceId
+                        : undefined,
+                }));
+            },
         }
     )
 );
@@ -813,6 +928,18 @@ export const useSettingsStore = create<SettingsStore>()(
                     state.settings.learning = {
                         ...defaultLearningSettings,
                         ...state.settings.learning,
+                    };
+                }
+
+                if (state && !state.settings.academic) {
+                    state.settings.academic = defaultAcademicSettings;
+                } else if (state?.settings.academic) {
+                    state.settings.academic = {
+                        ...defaultAcademicSettings,
+                        ...state.settings.academic,
+                        customTopics: Array.isArray(state.settings.academic.customTopics)
+                            ? state.settings.academic.customTopics
+                            : [],
                     };
                 }
 

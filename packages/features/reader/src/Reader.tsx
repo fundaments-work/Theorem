@@ -964,6 +964,7 @@ function BookReaderPage() {
         const normalizedAnnotation: Annotation = {
             id: annotationId,
             bookId: currentBookId,
+            referenceId: partialAnnotation.referenceId || currentBookId,
             type: partialAnnotation.type
                 || (partialAnnotation.pdfAnnotationType === "highlight" ? "highlight" : "note"),
             location: partialAnnotation.location || `pdf:page:${pageNumber}`,
@@ -1059,6 +1060,7 @@ function BookReaderPage() {
             const bookmark: Annotation = {
                 id: crypto.randomUUID(),
                 bookId: currentBookId,
+                referenceId: currentBookId,
                 type: 'bookmark',
                 location: pageLocation,
                 pageNumber: pdfCurrentPage,
@@ -1365,7 +1367,11 @@ function BookReaderPage() {
                 const annotation = await readerRef.current?.addHighlight?.(selectedCfi, selectedText, color);
                 if (annotation) {
                     // Ensure the annotation has the correct bookId
-                    const annotationWithBookId = { ...annotation, bookId: currentBookId };
+                    const annotationWithBookId = {
+                        ...annotation,
+                        bookId: currentBookId,
+                        referenceId: annotation.referenceId || currentBookId,
+                    };
                     // Use the annotation from the engine (which has the correct ID)
                     addAnnotation(annotationWithBookId);
                     setAnnotations(prev => [...prev, annotationWithBookId]);
@@ -1474,6 +1480,7 @@ function BookReaderPage() {
             const annotation: Annotation = {
                 id: crypto.randomUUID(),
                 bookId: currentBookId,
+                referenceId: currentBookId,
                 type: noteContent ? 'note' : 'highlight',
                 location: selectedCfi,
                 selectedText,
@@ -1520,6 +1527,7 @@ function BookReaderPage() {
         const annotation: Annotation = {
             id: crypto.randomUUID(),
             bookId: currentBookId,
+            referenceId: currentBookId,
             type: 'bookmark',
             location: selectedCfi,
             selectedText,
@@ -1554,6 +1562,7 @@ function BookReaderPage() {
             const annotation: Annotation = {
                 id: crypto.randomUUID(),
                 bookId: currentBookId,
+                referenceId: currentBookId,
                 type: 'bookmark',
                 location: location.cfi || '',
                 selectedText: location.tocItem?.label || `Page ${location.pageInfo?.currentPage || 0}`,

@@ -717,6 +717,7 @@ export function ArticleViewer({
         addAnnotation({
             id: crypto.randomUUID(),
             bookId: articleAnnotationBookId,
+            referenceId: articleAnnotationBookId,
             type: "bookmark",
             location: `${ARTICLE_BOOKMARK_LOCATION_PREFIX}${progress.toFixed(6)}`,
             selectedText: getCurrentHeadingLabel(),
@@ -911,6 +912,7 @@ export function ArticleViewer({
         addAnnotation({
             id: highlightId,
             bookId: articleAnnotationBookId,
+            referenceId: articleAnnotationBookId,
             type: "highlight",
             location: buildArticleHighlightLocation(highlightId, locationSnapshot),
             selectedText: selectionText,
