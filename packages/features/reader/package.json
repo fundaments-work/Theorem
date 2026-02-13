@@ -1,5 +1,5 @@
 {
-    "name": "@lionreader/feature-reader",
+    "name": "@theorem/feature-reader",
     "version": "0.1.0",
     "private": true,
     "type": "module",
@@ -9,8 +9,8 @@
         ".": "./src/index.ts"
     },
     "dependencies": {
-        "@lionreader/core": "workspace:*",
-        "@lionreader/ui": "workspace:*",
+        "@theorem/core": "workspace:*",
+        "@theorem/ui": "workspace:*",
         "pdfjs-dist": "^4.10.38",
         "react": "^19.1.0",
         "zustand": "^5.0.10"

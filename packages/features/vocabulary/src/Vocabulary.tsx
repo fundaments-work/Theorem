@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { BookOpenText, BrainCircuit, ChevronDown, Save, Trash2 } from "lucide-react";
-import { cn } from "@lionreader/core";
-import { useLearningStore, useUIStore } from "@lionreader/core";
-import type { VocabularyContext, VocabularyTerm } from "@lionreader/core";
+import { cn } from "@theorem/core";
+import { useLearningStore, useUIStore } from "@theorem/core";
+import type { VocabularyContext, VocabularyTerm } from "@theorem/core";
 
 interface SourceFilterOption {
     key: string;

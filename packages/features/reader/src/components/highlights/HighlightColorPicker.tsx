@@ -13,7 +13,7 @@ import {
     HIGHLIGHT_PICKER_COLORS,
     isTauri,
     type HighlightColor,
-} from "@lionreader/core";
+} from "@theorem/core";
 
 interface HighlightColorPickerProps {
     isOpen: boolean;

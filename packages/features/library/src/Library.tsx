@@ -4,26 +4,26 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { cn, normalizeAuthor } from "@lionreader/core";
-import { useLibraryStore, useUIStore, useSettingsStore } from "@lionreader/core";
-import { formatProgress, formatFileSize, formatRelativeDate } from "@lionreader/core";
-import { importBooks, pickAndImportBooks, scanFolderForBooks } from "@lionreader/core";
-import { rankByFuzzyQuery } from "@lionreader/core";
+import { cn, normalizeAuthor } from "@theorem/core";
+import { useLibraryStore, useUIStore, useSettingsStore } from "@theorem/core";
+import { formatProgress, formatFileSize, formatRelativeDate } from "@theorem/core";
+import { importBooks, pickAndImportBooks, scanFolderForBooks } from "@theorem/core";
+import { rankByFuzzyQuery } from "@theorem/core";
 import {
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
     ChevronDown, Star, X, ArrowUpDown
 } from "lucide-react";
-import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "@lionreader/core";
-import { FORMAT_DISPLAY_NAMES } from "@lionreader/core";
-import { isTauri } from "@lionreader/core";
-import { getBookData } from "@lionreader/core";
-import { ContextMenu } from "@lionreader/ui";
-import type { ContextMenuItem } from "@lionreader/ui";
-import { Dropdown } from "@lionreader/ui";
-import { Modal, ModalBody, ModalFooter } from "@lionreader/ui";
-import { confirmDeleteBook } from "@lionreader/core";
-import { getShelfColor, getShelfInitials } from "@lionreader/core";
+import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "@theorem/core";
+import { FORMAT_DISPLAY_NAMES } from "@theorem/core";
+import { isTauri } from "@theorem/core";
+import { getBookData } from "@theorem/core";
+import { ContextMenu } from "@theorem/ui";
+import type { ContextMenuItem } from "@theorem/ui";
+import { Dropdown } from "@theorem/ui";
+import { Modal, ModalBody, ModalFooter } from "@theorem/ui";
+import { confirmDeleteBook } from "@theorem/core";
+import { getShelfColor, getShelfInitials } from "@theorem/core";
 
 // View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
@@ -32,14 +32,14 @@ const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
     compact: <Grid3X3 className="w-4 h-4" />,
 };
 
-type ExtractMetadataFn = typeof import("@lionreader/core").extractMetadata;
+type ExtractMetadataFn = typeof import("@theorem/core").extractMetadata;
 
 const COVER_EXTRACTION_BATCH_SIZE = 3;
 let extractMetadataPromise: Promise<ExtractMetadataFn> | null = null;
 
 async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
     if (!extractMetadataPromise) {
-        extractMetadataPromise = import("@lionreader/core").then(
+        extractMetadataPromise = import("@theorem/core").then(
             (module) => module.extractMetadata,
         );
     }

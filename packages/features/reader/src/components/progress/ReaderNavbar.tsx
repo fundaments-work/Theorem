@@ -5,8 +5,8 @@
  */
 
 import { useCallback, useMemo, useState, useRef, useEffect, memo } from "react";
-import { cn } from "@lionreader/core";
-import type { TocItem, DocLocation } from "@lionreader/core";
+import { cn } from "@theorem/core";
+import type { TocItem, DocLocation } from "@theorem/core";
 
 interface ReaderNavbarProps {
     location: DocLocation | null;

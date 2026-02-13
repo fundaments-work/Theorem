@@ -12,16 +12,16 @@ import {
     Search,
     BarChart3,
 } from "lucide-react";
-import { cn } from "@lionreader/core";
+import { cn } from "@theorem/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { isTauri } from "@lionreader/core";
+import { isTauri } from "@theorem/core";
 import {
     getSearchPlaceholder,
     hasSearchDomain,
     resolveSearchDomain,
-} from "@lionreader/core";
+} from "@theorem/core";
 
-import { useUIStore } from "@lionreader/core";
+import { useUIStore } from "@theorem/core";
 
 interface AppTitlebarProps {
     title: string;

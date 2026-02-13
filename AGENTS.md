@@ -1,4 +1,4 @@
-# Agent Guidelines for LionReader Monorepo
+# Agent Guidelines for Theorem Monorepo
 
 Tauri-based desktop e-book reader built with React, TypeScript, Vite, Tailwind CSS v4, Zustand, and Foliate-js.
 
@@ -55,7 +55,7 @@ cd apps/web/src-tauri && cargo build --release
 
 ## Monorepo Boundary Rules
 
-- Import across modules only via package entrypoints (`@lionreader/core`, `@lionreader/ui`, `@lionreader/feature-*`).
+- Import across modules only via package entrypoints (`@theorem/core`, `@theorem/ui`, `@theorem/feature-*`).
 - Do not import via cross-package source-relative paths (for example `../../../core/src/...`).
 - Keep each package’s public API in `src/index.ts`.
 - New features should be created under `packages/features/<feature-name>`.

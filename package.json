@@ -1,16 +1,16 @@
 {
-    "name": "lionreader-monorepo",
+    "name": "theorem-monorepo",
     "private": true,
     "packageManager": "pnpm@10.18.1",
     "scripts": {
         "dev": "node ./scripts/dev.mjs",
-        "dev:web": "pnpm --filter @lionreader/web dev",
-        "dev:tauri": "pnpm --filter @lionreader/web tauri dev",
-        "build": "pnpm run typecheck && pnpm --filter @lionreader/web build",
-        "typecheck": "pnpm --filter @lionreader/core typecheck && pnpm --filter @lionreader/ui typecheck",
+        "dev:web": "pnpm --filter @theorem/web dev",
+        "dev:tauri": "pnpm --filter @theorem/web tauri dev",
+        "build": "pnpm run typecheck && pnpm --filter @theorem/web build",
+        "typecheck": "pnpm --filter @theorem/core typecheck && pnpm --filter @theorem/ui typecheck",
         "test": "pnpm -r --if-present test",
-        "preview": "pnpm --filter @lionreader/web preview",
-        "tauri": "pnpm --filter @lionreader/web tauri"
+        "preview": "pnpm --filter @theorem/web preview",
+        "tauri": "pnpm --filter @theorem/web tauri"
     },
     "devDependencies": {
         "@types/node": "^22.0.0",

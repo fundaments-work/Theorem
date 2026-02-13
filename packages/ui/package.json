@@ -1,5 +1,5 @@
 {
-    "name": "@lionreader/ui",
+    "name": "@theorem/ui",
     "version": "0.1.0",
     "private": true,
     "type": "module",
@@ -12,7 +12,7 @@
         "typecheck": "tsc --noEmit -p tsconfig.json"
     },
     "dependencies": {
-        "@lionreader/core": "workspace:*",
+        "@theorem/core": "workspace:*",
         "clsx": "^2.1.1",
         "lucide-react": "^0.563.0",
         "react": "^19.1.0",

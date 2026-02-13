@@ -1,42 +1,42 @@
 import { Suspense, lazy, useEffect, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { AppTitlebar } from "@lionreader/ui";
-import { ReviewSessionModal } from "@lionreader/feature-learning";
-import { Sidebar } from "@lionreader/ui";
+import { AppTitlebar } from "@theorem/ui";
+import { ReviewSessionModal } from "@theorem/feature-learning";
+import { Sidebar } from "@theorem/ui";
 import {
     useLearningStore,
     useLibraryStore,
     useUIStore,
     useSettingsStore,
-} from "@lionreader/core";
-import { isTauri } from "@lionreader/core";
-import { cn } from "@lionreader/core";
-import { initReaderStyles } from "@lionreader/core";
-import { useDailyReviewReminder } from "@lionreader/core";
+} from "@theorem/core";
+import { isTauri } from "@theorem/core";
+import { cn } from "@theorem/core";
+import { initReaderStyles } from "@theorem/core";
+import { useDailyReviewReminder } from "@theorem/core";
 
 const LibraryPage = lazy(() =>
-    import("@lionreader/feature-library").then((module) => ({ default: module.LibraryPage })),
+    import("@theorem/feature-library").then((module) => ({ default: module.LibraryPage })),
 );
 const ReaderPage = lazy(() =>
-    import("@lionreader/feature-reader").then((module) => ({ default: module.ReaderPage })),
+    import("@theorem/feature-reader").then((module) => ({ default: module.ReaderPage })),
 );
 const VocabularyPage = lazy(() =>
-    import("@lionreader/feature-vocabulary").then((module) => ({ default: module.VocabularyPage })),
+    import("@theorem/feature-vocabulary").then((module) => ({ default: module.VocabularyPage })),
 );
 const ShelvesPage = lazy(() =>
-    import("@lionreader/feature-library").then((module) => ({ default: module.ShelvesPage })),
+    import("@theorem/feature-library").then((module) => ({ default: module.ShelvesPage })),
 );
 const AnnotationsPage = lazy(() =>
-    import("@lionreader/feature-library").then((module) => ({ default: module.AnnotationsPage })),
+    import("@theorem/feature-library").then((module) => ({ default: module.AnnotationsPage })),
 );
 const BookmarksPage = lazy(() =>
-    import("@lionreader/feature-library").then((module) => ({ default: module.BookmarksPage })),
+    import("@theorem/feature-library").then((module) => ({ default: module.BookmarksPage })),
 );
 const SettingsPage = lazy(() =>
-    import("@lionreader/feature-settings").then((module) => ({ default: module.SettingsPage })),
+    import("@theorem/feature-settings").then((module) => ({ default: module.SettingsPage })),
 );
 const StatisticsPage = lazy(() =>
-    import("@lionreader/feature-statistics").then((module) => ({ default: module.StatisticsPage })),
+    import("@theorem/feature-statistics").then((module) => ({ default: module.StatisticsPage })),
 );
 const DESKTOP_STARTUP_MIN_WIDTH = 1024;
 const DESKTOP_STARTUP_MIN_HEIGHT = 720;

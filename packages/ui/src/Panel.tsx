@@ -4,7 +4,7 @@
  * Theme-aware - adapts to reader theme colors
  */
 
-import { cn } from '@lionreader/core';
+import { cn } from '@theorem/core';
 import { ReactNode } from 'react';
 
 export type PanelPosition = 'left' | 'right';

@@ -11,9 +11,9 @@ import {
     X,
 } from "lucide-react";
 import { TheoremLogo } from "../TheoremLogo";
-import { cn } from "@lionreader/core";
-import { useLearningStore, useUIStore, useSettingsStore } from "@lionreader/core";
-import type { AppRoute } from "@lionreader/core";
+import { cn } from "@theorem/core";
+import { useLearningStore, useUIStore, useSettingsStore } from "@theorem/core";
+import type { AppRoute } from "@theorem/core";
 
 interface SidebarItem {
     id: AppRoute;

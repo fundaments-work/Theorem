@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from "react";
-import { DictionaryResultPopover } from "@lionreader/feature-learning";
+import { DictionaryResultPopover } from "@theorem/feature-learning";
 import {
     cn,
     getBookBlob,
@@ -23,7 +23,7 @@ import {
     type PdfZoomMode,
     type ReaderSettings as ReaderSettingsState,
     type TocItem,
-} from "@lionreader/core";
+} from "@theorem/core";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import { TableOfContents } from "./components/TableOfContents";
 import { ReaderSettings } from "./components/ReaderSettings";

@@ -5,8 +5,8 @@ const hasTauriFlag = rawArgs.includes("--tauri") || process.env.npm_config_tauri
 const forwardedArgs = rawArgs.filter((arg) => arg !== "--tauri" && arg !== "--");
 
 const pnpmArgs = hasTauriFlag
-    ? ["--filter", "@lionreader/web", "tauri", "dev", ...forwardedArgs]
-    : ["--filter", "@lionreader/web", "dev", ...forwardedArgs];
+    ? ["--filter", "@theorem/web", "tauri", "dev", ...forwardedArgs]
+    : ["--filter", "@theorem/web", "dev", ...forwardedArgs];
 
 const child = spawn("pnpm", pnpmArgs, {
     stdio: "inherit",

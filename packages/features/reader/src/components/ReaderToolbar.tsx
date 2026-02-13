@@ -12,8 +12,8 @@ import {
     Maximize2,
     Minimize2,
 } from 'lucide-react';
-import { cn, normalizeAuthor } from '@lionreader/core';
-import type { DocMetadata, DocLocation } from '@lionreader/core';
+import { cn, normalizeAuthor } from '@theorem/core';
+import type { DocMetadata, DocLocation } from '@theorem/core';
 
 interface ReaderToolbarProps {
     metadata: DocMetadata | null;

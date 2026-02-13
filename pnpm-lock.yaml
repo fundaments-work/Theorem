@@ -20,30 +20,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@lionreader/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@lionreader/feature-learning':
-        specifier: workspace:*
-        version: link:../../packages/features/learning
-      '@lionreader/feature-library':
-        specifier: workspace:*
-        version: link:../../packages/features/library
-      '@lionreader/feature-reader':
-        specifier: workspace:*
-        version: link:../../packages/features/reader
-      '@lionreader/feature-settings':
-        specifier: workspace:*
-        version: link:../../packages/features/settings
-      '@lionreader/feature-statistics':
-        specifier: workspace:*
-        version: link:../../packages/features/statistics
-      '@lionreader/feature-vocabulary':
-        specifier: workspace:*
-        version: link:../../packages/features/vocabulary
-      '@lionreader/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       '@tauri-apps/api':
         specifier: ^2.0.0
         version: 2.10.1
@@ -65,6 +41,30 @@ importers:
       '@tauri-controls/react':
         specifier: ^0.4.0
         version: 0.4.0(clsx@2.1.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwind-merge@3.4.0)
+      '@theorem/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@theorem/feature-learning':
+        specifier: workspace:*
+        version: link:../../packages/features/learning
+      '@theorem/feature-library':
+        specifier: workspace:*
+        version: link:../../packages/features/library
+      '@theorem/feature-reader':
+        specifier: workspace:*
+        version: link:../../packages/features/reader
+      '@theorem/feature-settings':
+        specifier: workspace:*
+        version: link:../../packages/features/settings
+      '@theorem/feature-statistics':
+        specifier: workspace:*
+        version: link:../../packages/features/statistics
+      '@theorem/feature-vocabulary':
+        specifier: workspace:*
+        version: link:../../packages/features/vocabulary
+      '@theorem/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@types/uuid':
         specifier: ^10.0.0
         version: 10.0.0
@@ -186,10 +186,10 @@ importers:
 
   packages/features/learning:
     dependencies:
-      '@lionreader/core':
+      '@theorem/core':
         specifier: workspace:*
         version: link:../../core
-      '@lionreader/ui':
+      '@theorem/ui':
         specifier: workspace:*
         version: link:../../ui
       lucide-react:
@@ -204,10 +204,10 @@ importers:
 
   packages/features/library:
     dependencies:
-      '@lionreader/core':
+      '@theorem/core':
         specifier: workspace:*
         version: link:../../core
-      '@lionreader/ui':
+      '@theorem/ui':
         specifier: workspace:*
         version: link:../../ui
       lucide-react:
@@ -222,10 +222,10 @@ importers:
 
   packages/features/reader:
     dependencies:
-      '@lionreader/core':
+      '@theorem/core':
         specifier: workspace:*
         version: link:../../core
-      '@lionreader/ui':
+      '@theorem/ui':
         specifier: workspace:*
         version: link:../../ui
       pdfjs-dist:
@@ -240,10 +240,10 @@ importers:
 
   packages/features/settings:
     dependencies:
-      '@lionreader/core':
+      '@theorem/core':
         specifier: workspace:*
         version: link:../../core
-      '@lionreader/ui':
+      '@theorem/ui':
         specifier: workspace:*
         version: link:../../ui
       lucide-react:
@@ -258,10 +258,10 @@ importers:
 
   packages/features/statistics:
     dependencies:
-      '@lionreader/core':
+      '@theorem/core':
         specifier: workspace:*
         version: link:../../core
-      '@lionreader/ui':
+      '@theorem/ui':
         specifier: workspace:*
         version: link:../../ui
       lucide-react:
@@ -276,10 +276,10 @@ importers:
 
   packages/features/vocabulary:
     dependencies:
-      '@lionreader/core':
+      '@theorem/core':
         specifier: workspace:*
         version: link:../../core
-      '@lionreader/ui':
+      '@theorem/ui':
         specifier: workspace:*
         version: link:../../ui
       lucide-react:
@@ -294,7 +294,7 @@ importers:
 
   packages/ui:
     dependencies:
-      '@lionreader/core':
+      '@theorem/core':
         specifier: workspace:*
         version: link:../core
       clsx:

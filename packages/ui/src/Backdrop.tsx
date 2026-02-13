@@ -3,7 +3,7 @@
  * Reusable backdrop for panels and modals
  */
 
-import { cn } from '@lionreader/core';
+import { cn } from '@theorem/core';
 
 interface BackdropProps {
     visible: boolean;

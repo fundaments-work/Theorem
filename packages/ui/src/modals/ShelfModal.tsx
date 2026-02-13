@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { cn } from "@lionreader/core";
+import { cn } from "@theorem/core";
 import { Modal, ModalBody, ModalFooter } from "../Modal";
 
 interface ShelfModalProps {

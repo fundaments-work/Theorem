@@ -1,6 +1,6 @@
 import { Check, Loader2, X } from "lucide-react";
-import { cn } from "@lionreader/core";
-import type { DictionaryLookupResult } from "@lionreader/core";
+import { cn } from "@theorem/core";
+import type { DictionaryLookupResult } from "@theorem/core";
 
 interface DictionaryResultPopoverProps {
     isOpen: boolean;

@@ -4,11 +4,11 @@
  */
 
 import { useState, useMemo } from "react";
-import { cn } from "@lionreader/core";
-import { rankByFuzzyQuery } from "@lionreader/core";
-import { useLibraryStore, useUIStore } from "@lionreader/core";
-import { confirmDeleteBookmark } from "@lionreader/core";
-import { Dropdown } from "@lionreader/ui";
+import { cn } from "@theorem/core";
+import { rankByFuzzyQuery } from "@theorem/core";
+import { useLibraryStore, useUIStore } from "@theorem/core";
+import { confirmDeleteBookmark } from "@theorem/core";
+import { Dropdown } from "@theorem/ui";
 import {
     Bookmark,
     Trash2,

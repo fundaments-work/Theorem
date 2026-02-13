@@ -4,13 +4,13 @@
  */
 
 import { useState, useMemo } from "react";
-import { HIGHLIGHT_SOLID_COLORS } from "@lionreader/core";
-import { cn } from "@lionreader/core";
-import { rankByFuzzyQuery } from "@lionreader/core";
-import { useLearningStore, useLibraryStore, useUIStore } from "@lionreader/core";
-import type { HighlightColor } from "@lionreader/core";
-import { EditNoteModal } from "@lionreader/ui";
-import { Dropdown } from "@lionreader/ui";
+import { HIGHLIGHT_SOLID_COLORS } from "@theorem/core";
+import { cn } from "@theorem/core";
+import { rankByFuzzyQuery } from "@theorem/core";
+import { useLearningStore, useLibraryStore, useUIStore } from "@theorem/core";
+import type { HighlightColor } from "@theorem/core";
+import { EditNoteModal } from "@theorem/ui";
+import { Dropdown } from "@theorem/ui";
 import {
     Highlighter,
     StickyNote,

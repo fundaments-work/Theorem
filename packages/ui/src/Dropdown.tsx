@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
-import { cn } from "@lionreader/core";
+import { cn } from "@theorem/core";
 
 export interface DropdownOption<T = string> {
     value: T;

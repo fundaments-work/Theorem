@@ -4,10 +4,10 @@
  */
 
 import { useMemo } from "react";
-import { cn, normalizeAuthor } from "@lionreader/core";
-import { useLibraryStore, useSettingsStore, useUIStore } from "@lionreader/core";
-import { formatReadingTime } from "@lionreader/core";
-import type { DailyReadingActivity } from "@lionreader/core";
+import { cn, normalizeAuthor } from "@theorem/core";
+import { useLibraryStore, useSettingsStore, useUIStore } from "@theorem/core";
+import { formatReadingTime } from "@theorem/core";
+import type { DailyReadingActivity } from "@theorem/core";
 import {
     BookOpen,
     Clock,

@@ -236,8 +236,8 @@ fn decode_hex_string(hex: &str) -> Option<String> {
 #[cfg(target_os = "linux")]
 fn apply_linux_webkit_workarounds() {
     // Allow advanced users to disable these workarounds for troubleshooting:
-    // LIONREADER_WEBKIT_WORKAROUNDS=0
-    if env::var("LIONREADER_WEBKIT_WORKAROUNDS")
+    // THEOREM_WEBKIT_WORKAROUNDS=0
+    if env::var("THEOREM_WEBKIT_WORKAROUNDS")
         .map(|value| value == "0")
         .unwrap_or(false)
     {

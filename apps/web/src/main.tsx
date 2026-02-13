@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { ErrorBoundary } from "@lionreader/ui";
+import { ErrorBoundary } from "@theorem/ui";
 import "./index.css";
 
 const rootElement = document.getElementById("root");

@@ -20,31 +20,31 @@
             "@/*": [
                 "./src/*"
             ],
-            "@lionreader/core": [
+            "@theorem/core": [
                 "../../packages/core/src"
             ],
-            "@lionreader/ui": [
+            "@theorem/ui": [
                 "../../packages/ui/src"
             ],
-            "@lionreader/feature-reader": [
+            "@theorem/feature-reader": [
                 "../../packages/features/reader/src"
             ],
             "@foliate-js/*": [
                 "../../packages/features/reader/foliate-js/*"
             ],
-            "@lionreader/feature-library": [
+            "@theorem/feature-library": [
                 "../../packages/features/library/src"
             ],
-            "@lionreader/feature-settings": [
+            "@theorem/feature-settings": [
                 "../../packages/features/settings/src"
             ],
-            "@lionreader/feature-statistics": [
+            "@theorem/feature-statistics": [
                 "../../packages/features/statistics/src"
             ],
-            "@lionreader/feature-vocabulary": [
+            "@theorem/feature-vocabulary": [
                 "../../packages/features/vocabulary/src"
             ],
-            "@lionreader/feature-learning": [
+            "@theorem/feature-learning": [
                 "../../packages/features/learning/src"
             ]
         },

@@ -4,11 +4,11 @@
  */
 
 import { useState, useMemo } from "react";
-import { cn, normalizeAuthor } from "@lionreader/core";
-import { rankByFuzzyQuery } from "@lionreader/core";
-import { useLibraryStore, useUIStore, useSettingsStore } from "@lionreader/core";
-import { ShelfModal } from "@lionreader/ui";
-import { getShelfColor, getShelfInitials } from "@lionreader/core";
+import { cn, normalizeAuthor } from "@theorem/core";
+import { rankByFuzzyQuery } from "@theorem/core";
+import { useLibraryStore, useUIStore, useSettingsStore } from "@theorem/core";
+import { ShelfModal } from "@theorem/ui";
+import { getShelfColor, getShelfInitials } from "@theorem/core";
 import {
     FolderOpen,
     Plus,
@@ -22,8 +22,8 @@ import {
     ArrowLeft,
     LayoutGrid,
 } from "lucide-react";
-import type { Book, Collection, LibraryViewMode } from "@lionreader/core";
-import { confirmDeleteBook, confirmRemoveFromShelf } from "@lionreader/core";
+import type { Book, Collection, LibraryViewMode } from "@theorem/core";
+import { confirmDeleteBook, confirmRemoveFromShelf } from "@theorem/core";
 
 // View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {

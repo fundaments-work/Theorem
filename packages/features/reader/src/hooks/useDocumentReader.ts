@@ -16,7 +16,7 @@ import type {
     SearchResult,
     ThemeSettings,
     TocItem,
-} from "@lionreader/core";
+} from "@theorem/core";
 
 export interface UseDocumentReaderOptions {
     onLocationChange?: (location: DocLocation) => void;

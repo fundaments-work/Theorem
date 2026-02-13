@@ -20,17 +20,17 @@ import type {
     ThemeSettings,
     ReaderTheme,
     BookFormat,
-} from '@lionreader/core';
-import { isFixedLayout, isReflowable } from '@lionreader/core';
+} from '@theorem/core';
+import { isFixedLayout, isReflowable } from '@theorem/core';
 import { getTheme } from '../foliate/themes';
 import { 
     registerEngineStyleCallback,
     getCurrentReaderSettings,
     getThemeColors,
-} from '@lionreader/core';
-import { HIGHLIGHT_SOLID_COLORS } from "@lionreader/core";
-import { rankByFuzzyQuery } from "@lionreader/core";
-import { normalizeAuthor } from '@lionreader/core';
+} from '@theorem/core';
+import { HIGHLIGHT_SOLID_COLORS } from "@theorem/core";
+import { rankByFuzzyQuery } from "@theorem/core";
+import { normalizeAuthor } from '@theorem/core';
 
 const READER_SEARCH_EXACT_LIMIT = 120;
 const READER_SEARCH_FALLBACK_TRIGGER_THRESHOLD = 3;

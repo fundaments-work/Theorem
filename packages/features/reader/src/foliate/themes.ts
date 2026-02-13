@@ -3,7 +3,7 @@
  * Ported from Foliate GTK app
  */
 
-import { APP_THEME_PALETTES } from "@lionreader/core";
+import { APP_THEME_PALETTES } from "@theorem/core";
 
 export interface ThemeColors {
     fg: string;

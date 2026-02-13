@@ -22,8 +22,8 @@ import {
     type FontFamily,
     type ReaderSettings as ReaderSettingsType,
     type ReaderTheme,
-} from "@lionreader/core";
-import { Backdrop, FloatingPanel } from "@lionreader/ui";
+} from "@theorem/core";
+import { Backdrop, FloatingPanel } from "@theorem/ui";
 
 interface ReaderSettingsProps {
     settings: ReaderSettingsType;

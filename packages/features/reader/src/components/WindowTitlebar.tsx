@@ -28,11 +28,11 @@ import {
     Eraser,
     ChevronDown,
 } from "lucide-react";
-import { HIGHLIGHT_SOLID_COLORS } from "@lionreader/core";
-import { cn, normalizeAuthor } from "@lionreader/core";
-import { isTauri } from "@lionreader/core";
+import { HIGHLIGHT_SOLID_COLORS } from "@theorem/core";
+import { cn, normalizeAuthor } from "@theorem/core";
+import { isTauri } from "@theorem/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import type { DocMetadata, DocLocation, HighlightColor } from "@lionreader/core";
+import type { DocMetadata, DocLocation, HighlightColor } from "@theorem/core";
 
 interface WindowTitlebarProps {
     metadata: DocMetadata | null;

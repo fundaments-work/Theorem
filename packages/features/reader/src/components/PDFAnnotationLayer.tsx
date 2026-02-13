@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     HIGHLIGHT_COLORS,
     HIGHLIGHT_SOLID_COLORS,
-} from "@lionreader/core";
-import { cn } from "@lionreader/core";
-import type { Annotation, HighlightColor } from "@lionreader/core";
+} from "@theorem/core";
+import { cn } from "@theorem/core";
+import type { Annotation, HighlightColor } from "@theorem/core";
 
 interface Point {
     x: number;

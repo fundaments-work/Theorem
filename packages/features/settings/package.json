@@ -1,5 +1,5 @@
 {
-    "name": "@lionreader/feature-settings",
+    "name": "@theorem/feature-settings",
     "version": "0.1.0",
     "private": true,
     "type": "module",
@@ -9,8 +9,8 @@
         ".": "./src/index.ts"
     },
     "dependencies": {
-        "@lionreader/core": "workspace:*",
-        "@lionreader/ui": "workspace:*",
+        "@theorem/core": "workspace:*",
+        "@theorem/ui": "workspace:*",
         "lucide-react": "^0.563.0",
         "react": "^19.1.0",
         "react-dom": "^19.1.0"

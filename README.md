@@ -1,4 +1,4 @@
-# LionReader Monorepo
+# Theorem Monorepo
 
 Tauri-based desktop e-book reader built as a monorepo:
 - `apps/web`: React + Vite frontend and Tauri host app
@@ -33,5 +33,5 @@ pnpm tauri build
 ## Monorepo Conventions
 
 - Internal dependencies use `workspace:*`.
-- Import other modules only through package public APIs (for example `@lionreader/core`), not via source-relative paths.
+- Import other modules only through package public APIs (for example `@theorem/core`), not via source-relative paths.
 - Keep new code inside the relevant feature package and expose entry points from each package `src/index.ts`.

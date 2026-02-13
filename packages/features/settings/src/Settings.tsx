@@ -4,11 +4,11 @@
  */
 
 import { useRef, useState, type ChangeEvent } from "react";
-import { cn } from "@lionreader/core";
-import { useLearningStore, useSettingsStore, useLibraryStore } from "@lionreader/core";
-import { formatFileSize } from "@lionreader/core";
-import { confirmClearAllData } from "@lionreader/core";
-import { Dropdown } from "@lionreader/ui";
+import { cn } from "@theorem/core";
+import { useLearningStore, useSettingsStore, useLibraryStore } from "@theorem/core";
+import { formatFileSize } from "@theorem/core";
+import { confirmClearAllData } from "@theorem/core";
+import { Dropdown } from "@theorem/ui";
 import {
     Settings,
     Layout,

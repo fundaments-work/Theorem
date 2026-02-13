@@ -4,16 +4,16 @@ This guide defines how to add and evolve modules without coupling breakage.
 
 ## Current Module Graph
 
-- `@lionreader/web` depends on `@lionreader/core`, `@lionreader/ui`, and `@lionreader/feature-*`.
-- `@lionreader/ui` depends on `@lionreader/core`.
-- `@lionreader/feature-*` depends on `@lionreader/core` and optionally `@lionreader/ui`.
-- `@lionreader/core` must not depend on feature packages.
+- `@theorem/web` depends on `@theorem/core`, `@theorem/ui`, and `@theorem/feature-*`.
+- `@theorem/ui` depends on `@theorem/core`.
+- `@theorem/feature-*` depends on `@theorem/core` and optionally `@theorem/ui`.
+- `@theorem/core` must not depend on feature packages.
 
 ## Add a New Feature Package
 
 1. Create `packages/features/<feature-name>/src/index.ts`.
 2. Add `packages/features/<feature-name>/package.json`:
-   - `name`: `@lionreader/feature-<feature-name>`
+   - `name`: `@theorem/feature-<feature-name>`
    - `private`: `true`
    - `type`: `module`
    - `exports`: `{ ".": "./src/index.ts" }`
@@ -32,7 +32,7 @@ This guide defines how to add and evolve modules without coupling breakage.
 ## Recommended Workflows
 
 - Work on one feature with workspace filter:
-  - `pnpm --filter @lionreader/web dev`
+  - `pnpm --filter @theorem/web dev`
 - Run full checks before merge:
   - `pnpm typecheck`
   - `pnpm build`

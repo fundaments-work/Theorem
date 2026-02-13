@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "@lionreader/core";
+import { cn } from "@theorem/core";
 
 export interface ModalProps {
     isOpen: boolean;

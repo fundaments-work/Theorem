@@ -1,9 +1,9 @@
 import { useEffect, useMemo } from "react";
 import { RotateCcw } from "lucide-react";
-import { Modal } from "@lionreader/ui";
-import { normalizeCardTextForDisplay } from "@lionreader/core";
-import { useLearningStore, useSettingsStore } from "@lionreader/core";
-import type { ReviewGrade, ReviewLaunchScope } from "@lionreader/core";
+import { Modal } from "@theorem/ui";
+import { normalizeCardTextForDisplay } from "@theorem/core";
+import { useLearningStore, useSettingsStore } from "@theorem/core";
+import type { ReviewGrade, ReviewLaunchScope } from "@theorem/core";
 
 const REVIEW_GRADES: Array<{ key: ReviewGrade; label: string; shortcut: string }> = [
     { key: "again", label: "Again", shortcut: "1" },
