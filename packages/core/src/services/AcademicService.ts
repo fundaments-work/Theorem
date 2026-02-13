@@ -26,6 +26,13 @@ export interface AcademicSearchOptions {
     source?: "arxiv" | "pubmed" | "all";
     maxResults?: number;
     start?: number;
+    sortBy?: "relevance" | "recent";
+}
+
+export interface AcademicDiscoveryOptions {
+    source?: "arxiv" | "pubmed" | "all";
+    fieldQuery: string;
+    maxResults?: number;
 }
 
 function str(value: unknown): string {
@@ -230,6 +237,28 @@ function normalizeArxivQuery(query: string): string {
     if (!cleaned) return "";
     if (cleaned.includes(":")) return cleaned;
     return `all:${cleaned}`;
+}
+
+function buildArxivParams({
+    query,
+    start,
+    maxResults,
+    sortBy = "relevance",
+}: {
+    query: string;
+    start: number;
+    maxResults: number;
+    sortBy?: "relevance" | "recent";
+}): URLSearchParams {
+    const apiSortBy = sortBy === "recent" ? "lastUpdatedDate" : "relevance";
+    const apiSortOrder = "descending";
+    return new URLSearchParams({
+        search_query: query,
+        start: String(start),
+        max_results: String(maxResults),
+        sortBy: apiSortBy,
+        sortOrder: apiSortOrder,
+    });
 }
 
 function extractArxivId(rawId: string): string | undefined {
@@ -596,13 +625,11 @@ export async function searchArxivPapers(
 
     const maxResults = Math.max(1, Math.min(50, options.maxResults ?? 20));
     const start = Math.max(0, options.start ?? 0);
-
-    const params = new URLSearchParams({
-        search_query: normalizeArxivQuery(cleaned),
-        start: String(start),
-        max_results: String(maxResults),
-        sortBy: "relevance",
-        sortOrder: "descending",
+    const params = buildArxivParams({
+        query: normalizeArxivQuery(cleaned),
+        start,
+        maxResults,
+        sortBy: options.sortBy ?? "relevance",
     });
 
     const response = await fetchText(`${ARXIV_API_URL}?${params.toString()}`);
@@ -624,6 +651,7 @@ export async function searchPubMedPapers(
         retmax: String(maxResults),
         retstart: String(start),
         term: cleaned,
+        sort: options.sortBy === "recent" ? "pub+date" : "relevance",
     });
 
     const searchText = await fetchText(`${PUBMED_ESEARCH_URL}?${params.toString()}`);
@@ -656,6 +684,7 @@ export async function searchAcademicPapers(
     const scopedOptions = {
         maxResults: options.maxResults,
         start: options.start,
+        sortBy: options.sortBy,
     };
 
     if (source === "arxiv") {
@@ -668,6 +697,45 @@ export async function searchAcademicPapers(
     const [arxiv, pubmed] = await Promise.all([
         searchArxivPapers(query, scopedOptions),
         searchPubMedPapers(query, scopedOptions),
+    ]);
+
+    const dedupe = new Map<string, AcademicPaper>();
+    for (const paper of [...arxiv, ...pubmed]) {
+        const key = paper.doi?.toLowerCase() || paper.id;
+        if (!dedupe.has(key)) {
+            dedupe.set(key, paper);
+        }
+    }
+    return Array.from(dedupe.values());
+}
+
+export async function discoverAcademicPapers(
+    options: AcademicDiscoveryOptions,
+): Promise<AcademicPaper[]> {
+    const source = options.source ?? "all";
+    const fieldQuery = options.fieldQuery.trim();
+    if (!fieldQuery) {
+        return [];
+    }
+
+    const maxResults = Math.max(1, Math.min(50, options.maxResults ?? 24));
+    const scopedOptions: Omit<AcademicSearchOptions, "source"> = {
+        maxResults,
+        start: 0,
+        sortBy: "recent",
+    };
+
+    if (source === "arxiv") {
+        return searchArxivPapers(fieldQuery, scopedOptions);
+    }
+
+    if (source === "pubmed") {
+        return searchPubMedPapers(fieldQuery, scopedOptions);
+    }
+
+    const [arxiv, pubmed] = await Promise.all([
+        searchArxivPapers(fieldQuery, scopedOptions),
+        searchPubMedPapers(fieldQuery, scopedOptions),
     ]);
 
     const dedupe = new Map<string, AcademicPaper>();

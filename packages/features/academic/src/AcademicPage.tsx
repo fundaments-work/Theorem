@@ -1,94 +1,111 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     cn,
+    discoverAcademicPapers,
     downloadPaper,
     generateCitation,
     isAcademicBook,
     searchAcademicPapers,
-    toAcademicPaper,
     useLibraryStore,
     useUIStore,
     type AcademicPaper,
-    type Book,
     type CitationFormat,
 } from "@theorem/core";
+import { Dropdown, type DropdownOption } from "@theorem/ui";
 import {
-    BookOpenText,
+    Compass,
     Copy,
     Download,
     ExternalLink,
-    FileSearch,
-    Filter,
     Loader2,
-    Search,
+    RefreshCw,
+    Sparkles,
 } from "lucide-react";
+import {
+    copyToClipboard,
+    formatDateLabel,
+    getBookIdentityKey,
+    getPaperIdentityKey,
+    isBookInAcademicCollection,
+    sourceLabel,
+} from "./utils";
 
 type SearchSource = "arxiv" | "pubmed" | "all";
+type SortMode = "recent" | "relevance";
 
-const SEARCH_SOURCE_OPTIONS: Array<{ value: SearchSource; label: string }> = [
+interface FieldOption {
+    id: string;
+    label: string;
+    query: string;
+    description: string;
+}
+
+const SOURCE_OPTIONS: Array<DropdownOption<SearchSource>> = [
+    { value: "all", label: "All Sources" },
     { value: "arxiv", label: "arXiv" },
     { value: "pubmed", label: "PubMed" },
-    { value: "all", label: "All Sources" },
 ];
 
-function formatDateLabel(value?: string): string {
-    if (!value) return "";
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return "";
-    return parsed.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-}
+const SORT_OPTIONS: Array<DropdownOption<SortMode>> = [
+    { value: "recent", label: "Newest First" },
+    { value: "relevance", label: "Most Relevant" },
+];
 
-async function copyToClipboard(text: string): Promise<void> {
-    if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return;
-    }
+const FIELD_OPTIONS: FieldOption[] = [
+    {
+        id: "ml",
+        label: "Machine Learning",
+        query: "machine learning",
+        description: "Representation learning, LLMs, multimodal systems, and evaluation.",
+    },
+    {
+        id: "ai-safety",
+        label: "AI Safety",
+        query: "AI alignment safety",
+        description: "Alignment methods, robustness, and trustworthy model behavior.",
+    },
+    {
+        id: "systems",
+        label: "Systems",
+        query: "distributed systems",
+        description: "Scalability, storage systems, architecture, and reliability.",
+    },
+    {
+        id: "security",
+        label: "Security",
+        query: "computer security",
+        description: "Applied cryptography, software security, and threat modeling.",
+    },
+    {
+        id: "biomed",
+        label: "Biomedicine",
+        query: "biomedical research",
+        description: "Translational medicine, diagnostics, and clinical studies.",
+    },
+    {
+        id: "neuro",
+        label: "Neuroscience",
+        query: "neuroscience",
+        description: "Cognitive systems, neural circuits, and computational neuroscience.",
+    },
+    {
+        id: "materials",
+        label: "Materials Science",
+        query: "materials science",
+        description: "Novel materials, simulation, and structure-property relationships.",
+    },
+    {
+        id: "climate",
+        label: "Climate",
+        query: "climate science",
+        description: "Earth systems, climate modeling, and mitigation technologies.",
+    },
+];
 
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "true");
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    document.body.removeChild(textarea);
-}
-
-function getPaperIdentityKey(paper: AcademicPaper): string {
-    if (paper.doi) {
-        return `doi:${paper.doi.toLowerCase()}`;
-    }
-    if (paper.sourceId) {
-        return `${paper.source}:${paper.sourceId}`;
-    }
-    return `${paper.source}:${paper.id}`;
-}
-
-function getBookIdentityKey(book: Book): string {
-    if (book.academic?.doi) {
-        return `doi:${book.academic.doi.toLowerCase()}`;
-    }
-    if (book.academic?.source && book.academic?.sourceId) {
-        return `${book.academic.source}:${book.academic.sourceId}`;
-    }
-    if (book.filePath) {
-        return `url:${book.filePath}`;
-    }
-    return `book:${book.id}`;
-}
-
-function isBookInAcademicCollection(book: Book): boolean {
-    if (book.academic) return true;
-    if (book.category?.toLowerCase() === "academic") return true;
-    return book.tags.some((tag) => {
-        const lowered = tag.toLowerCase();
-        return lowered === "academic" || lowered === "paper";
-    });
+function sourceSummary(source: SearchSource): string {
+    if (source === "arxiv") return "Showing arXiv papers";
+    if (source === "pubmed") return "Showing PubMed papers";
+    return "Showing arXiv + PubMed papers";
 }
 
 function AcademicSearchResultCard({
@@ -106,7 +123,6 @@ function AcademicSearchResultCard({
     onDownload: (paper: AcademicPaper) => void;
     onCopyCitation: (paper: AcademicPaper, format: CitationFormat) => void;
 }) {
-    const sourceLabel = paper.source === "arxiv" ? "arXiv" : "PubMed";
     const publishedLabel = formatDateLabel(paper.publishedDate);
     const hasPdfUrl = Boolean(paper.pdfUrl);
 
@@ -116,7 +132,7 @@ function AcademicSearchResultCard({
                 <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-1.5">
                         <span className="inline-flex items-center rounded-full bg-[var(--color-accent)]/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-[color:var(--color-accent)] uppercase">
-                            {sourceLabel}
+                            {sourceLabel(paper.source)}
                         </span>
                         {publishedLabel && (
                             <span className="text-xs text-[color:var(--color-text-muted)]">
@@ -136,11 +152,11 @@ function AcademicSearchResultCard({
             </div>
 
             <p className="text-xs sm:text-sm text-[color:var(--color-text-secondary)] line-clamp-2">
-                {(paper.authors.length > 0 ? paper.authors.join(", ") : "Unknown authors")}
+                {paper.authors.length > 0 ? paper.authors.join(", ") : "Unknown authors"}
             </p>
 
             {(paper.journal || paper.conference) && (
-                <p className="text-xs text-[color:var(--color-text-muted)]">
+                <p className="text-xs text-[color:var(--color-text-muted)] line-clamp-1">
                     {paper.journal || paper.conference}
                 </p>
             )}
@@ -197,117 +213,25 @@ function AcademicSearchResultCard({
     );
 }
 
-function ReferencePaperCard({
-    book,
-    copiedKey,
-    onOpen,
-    onCopyCitation,
-}: {
-    book: Book;
-    copiedKey: string | null;
-    onOpen: (bookId: string) => void;
-    onCopyCitation: (paper: AcademicPaper, format: CitationFormat) => void;
-}) {
-    const paper = toAcademicPaper(book);
-    const reference = paper || {
-        id: book.id,
-        source: "manual" as const,
-        title: book.title,
-        authors: book.author
-            .split(",")
-            .map((entry) => entry.trim())
-            .filter(Boolean),
-        abstract: book.description,
-        journal: book.publisher,
-        publishedDate: book.publishedDate,
-        pdfUrl: book.academic?.pdfUrl || book.filePath,
-        url: book.filePath,
-    };
-    const publishedLabel = formatDateLabel(reference.publishedDate);
-
-    return (
-        <article className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-5">
-            <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <h3 className="text-sm sm:text-base font-semibold text-[color:var(--color-text-primary)] leading-snug">
-                        {reference.title}
-                    </h3>
-                    <p className="mt-1 text-xs sm:text-sm text-[color:var(--color-text-secondary)] line-clamp-2">
-                        {reference.authors.length > 0 ? reference.authors.join(", ") : "Unknown authors"}
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[color:var(--color-text-muted)]">
-                        {(reference.journal || reference.conference) && (
-                            <span>{reference.journal || reference.conference}</span>
-                        )}
-                        {publishedLabel && <span>{publishedLabel}</span>}
-                        {reference.doi && <span className="truncate max-w-full">DOI: {reference.doi}</span>}
-                    </div>
-                </div>
-
-                <button
-                    onClick={() => onOpen(book.id)}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90"
-                >
-                    <BookOpenText className="w-3.5 h-3.5" />
-                    Open
-                </button>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-                <button
-                    onClick={() => onCopyCitation(reference, "apa")}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
-                >
-                    <Copy className="w-3.5 h-3.5" />
-                    {copiedKey === `${book.id}:apa` ? "Copied APA" : "Copy APA"}
-                </button>
-
-                <button
-                    onClick={() => onCopyCitation(reference, "mla")}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
-                >
-                    <Copy className="w-3.5 h-3.5" />
-                    {copiedKey === `${book.id}:mla` ? "Copied MLA" : "Copy MLA"}
-                </button>
-
-                <button
-                    onClick={() => onCopyCitation(reference, "bibtex")}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
-                >
-                    <Copy className="w-3.5 h-3.5" />
-                    {copiedKey === `${book.id}:bibtex` ? "Copied BibTeX" : "Copy BibTeX"}
-                </button>
-
-                {reference.url && (
-                    <a
-                        href={reference.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
-                    >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        Source
-                    </a>
-                )}
-            </div>
-        </article>
-    );
-}
-
 export function AcademicPage() {
     const books = useLibraryStore((state) => state.books);
     const addBook = useLibraryStore((state) => state.addBook);
-    const setRoute = useUIStore((state) => state.setRoute);
+    const searchQuery = useUIStore((state) => state.searchQuery);
 
-    const [query, setQuery] = useState("");
-    const [source, setSource] = useState<SearchSource>("arxiv");
+    const [source, setSource] = useState<SearchSource>("all");
+    const [sortBy, setSortBy] = useState<SortMode>("recent");
+    const [selectedFieldId, setSelectedFieldId] = useState<string>(FIELD_OPTIONS[0].id);
     const [results, setResults] = useState<AcademicPaper[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [downloadingIds, setDownloadingIds] = useState<Record<string, boolean>>({});
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
-    const [authorFilter, setAuthorFilter] = useState("");
-    const [journalFilter, setJournalFilter] = useState("");
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const selectedField = useMemo(
+        () => FIELD_OPTIONS.find((field) => field.id === selectedFieldId) || FIELD_OPTIONS[0],
+        [selectedFieldId],
+    );
 
     const academicBooks = useMemo(
         () => books.filter((book) => isBookInAcademicCollection(book) || isAcademicBook(book)),
@@ -322,59 +246,68 @@ export function AcademicPage() {
         return keys;
     }, [academicBooks]);
 
-    const filteredAcademicBooks = useMemo(() => {
-        const authorNeedle = authorFilter.trim().toLowerCase();
-        const journalNeedle = journalFilter.trim().toLowerCase();
+    const normalizedQuery = searchQuery.trim();
+    const isSearchMode = normalizedQuery.length > 0;
 
-        return academicBooks
-            .filter((book) => {
-                const paper = toAcademicPaper(book);
-                const authorHaystack = (
-                    paper?.authors.join(" ")
-                    || book.author
-                    || ""
-                ).toLowerCase();
-                const journalHaystack = (
-                    paper?.journal
-                    || paper?.conference
-                    || book.publisher
-                    || ""
-                ).toLowerCase();
+    useEffect(() => {
+        let cancelled = false;
 
-                const authorMatch = !authorNeedle || authorHaystack.includes(authorNeedle);
-                const journalMatch = !journalNeedle || journalHaystack.includes(journalNeedle);
-                return authorMatch && journalMatch;
-            })
-            .sort((a, b) => {
-                const aTime = new Date(a.addedAt).getTime();
-                const bTime = new Date(b.addedAt).getTime();
-                return bTime - aTime;
-            });
-    }, [academicBooks, authorFilter, journalFilter]);
-
-    const handleSearch = useCallback(async () => {
-        const trimmed = query.trim();
-        if (!trimmed) {
-            setResults([]);
+        const fetchPapers = async () => {
+            setIsLoading(true);
             setError(null);
-            return;
-        }
 
-        setIsSearching(true);
-        setError(null);
-        try {
-            const papers = await searchAcademicPapers(trimmed, {
-                source,
-                maxResults: 20,
-            });
-            setResults(papers);
-        } catch (searchError) {
-            console.error("[AcademicPage] Search failed:", searchError);
-            setError(searchError instanceof Error ? searchError.message : "Search failed.");
-        } finally {
-            setIsSearching(false);
-        }
-    }, [query, source]);
+            try {
+                let papers: AcademicPaper[] = [];
+                if (isSearchMode) {
+                    papers = await searchAcademicPapers(normalizedQuery, {
+                        source,
+                        maxResults: 28,
+                        sortBy,
+                    });
+                } else if (sortBy === "recent") {
+                    papers = await discoverAcademicPapers({
+                        source,
+                        fieldQuery: selectedField.query,
+                        maxResults: 28,
+                    });
+                } else {
+                    papers = await searchAcademicPapers(selectedField.query, {
+                        source,
+                        maxResults: 28,
+                        sortBy: "relevance",
+                    });
+                }
+
+                if (!cancelled) {
+                    setResults(papers);
+                }
+            } catch (searchError) {
+                if (!cancelled) {
+                    console.error("[AcademicPage] Failed to load papers:", searchError);
+                    setError(searchError instanceof Error ? searchError.message : "Failed to load papers.");
+                    setResults([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        const delay = isSearchMode ? 360 : 120;
+        const timer = window.setTimeout(() => {
+            void fetchPapers();
+        }, delay);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, [normalizedQuery, isSearchMode, source, sortBy, selectedField.query, refreshKey]);
+
+    const handleRefresh = useCallback(() => {
+        setRefreshKey((current) => current + 1);
+    }, []);
 
     const handleDownload = useCallback(async (paper: AcademicPaper) => {
         if (!paper.pdfUrl) {
@@ -418,67 +351,102 @@ export function AcademicPage() {
         }
     }, []);
 
-    const handleOpenBook = useCallback((bookId: string) => {
-        setRoute("reader", bookId);
-    }, [setRoute]);
+    const headingText = isSearchMode
+        ? `Results for "${normalizedQuery}"`
+        : `Latest in ${selectedField.label}`;
+
+    const helperText = isSearchMode
+        ? `${sourceSummary(source)} using the top search bar.`
+        : selectedField.description;
 
     return (
         <div className="ui-page animate-fade-in">
             <div className="mb-8">
                 <h1 className="ui-page-title">Papers</h1>
                 <p className="ui-page-subtitle">
-                    Search arXiv and PubMed, download papers, and manage references in one place.
+                    Discover new research by field and use the top search bar to query titles, authors, or DOI.
                 </p>
             </div>
 
-            <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6 mb-8">
-                <div className="flex items-center gap-2 mb-4">
-                    <FileSearch className="w-5 h-5 text-[color:var(--color-accent)]" />
+            <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6 mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                    <Compass className="w-5 h-5 text-[color:var(--color-accent)]" />
                     <h2 className="text-base sm:text-lg font-semibold text-[color:var(--color-text-primary)]">
-                        Academic Search
+                        Explore Fields
                     </h2>
                 </div>
 
-                <div className="flex flex-col lg:flex-row gap-3 mb-4">
-                    <input
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                                void handleSearch();
-                            }
-                        }}
-                        placeholder="Search papers by title, author, topic..."
-                        className="flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm text-[color:var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
-                    />
+                <p className="text-sm text-[color:var(--color-text-secondary)] mb-4">
+                    Choose a field to surface new papers. Your top-bar search instantly switches this view to direct search.
+                </p>
 
-                    <select
-                        value={source}
-                        onChange={(event) => setSource(event.target.value as SearchSource)}
-                        className="rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm text-[color:var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
-                    >
-                        {SEARCH_SOURCE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
+                <div className="flex flex-wrap gap-2">
+                    {FIELD_OPTIONS.map((field) => {
+                        const isActive = field.id === selectedField.id;
+                        return (
+                            <button
+                                key={field.id}
+                                onClick={() => setSelectedFieldId(field.id)}
+                                className={cn(
+                                    "rounded-full px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors border",
+                                    isActive
+                                        ? "border-[color-mix(in_srgb,var(--color-accent)_55%,var(--color-border))] bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
+                                        : "border-[var(--color-border)] bg-[var(--color-background)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]",
+                                )}
+                            >
+                                {field.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            </section>
 
-                    <button
-                        onClick={() => {
-                            void handleSearch();
-                        }}
-                        disabled={isSearching}
-                        className={cn(
-                            "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
-                            isSearching
-                                ? "bg-[var(--color-surface-muted)] text-[color:var(--color-text-muted)] cursor-not-allowed"
-                                : "bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90",
-                        )}
-                    >
-                        {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                        Search
-                    </button>
+            <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
+                <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <Sparkles className="w-5 h-5 text-[color:var(--color-accent)]" />
+                            <h2 className="text-base sm:text-lg font-semibold text-[color:var(--color-text-primary)]">
+                                {headingText}
+                            </h2>
+                        </div>
+                        <p className="text-sm text-[color:var(--color-text-secondary)]">
+                            {helperText}
+                        </p>
+                    </div>
+
+                    <div className="w-full xl:w-auto flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <Dropdown
+                            options={SOURCE_OPTIONS}
+                            value={source}
+                            onChange={setSource}
+                            className="w-full sm:w-[12rem]"
+                            dropdownClassName="w-full"
+                            variant="default"
+                        />
+                        <Dropdown
+                            options={SORT_OPTIONS}
+                            value={sortBy}
+                            onChange={setSortBy}
+                            className="w-full sm:w-[12rem]"
+                            dropdownClassName="w-full"
+                            variant="default"
+                        />
+                        <button
+                            onClick={handleRefresh}
+                            disabled={isLoading}
+                            className={cn(
+                                "inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm border border-[var(--color-border)] transition-colors",
+                                isLoading
+                                    ? "text-[color:var(--color-text-muted)] bg-[var(--color-surface-muted)] cursor-not-allowed"
+                                    : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]",
+                            )}
+                            title="Refresh papers"
+                        >
+                            <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+                            Refresh
+                        </button>
+                    </div>
                 </div>
 
                 {error && (
@@ -487,9 +455,15 @@ export function AcademicPage() {
                     </div>
                 )}
 
-                {results.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-background)] py-8 text-center text-sm text-[color:var(--color-text-muted)]">
-                        {isSearching ? "Searching papers..." : "Run a search to see papers from arXiv and PubMed."}
+                {isLoading ? (
+                    <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-background)] py-10 text-center text-sm text-[color:var(--color-text-muted)]">
+                        Loading papers...
+                    </div>
+                ) : results.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-background)] py-10 text-center text-sm text-[color:var(--color-text-muted)]">
+                        {isSearchMode
+                            ? "No papers found for the current query and source filters."
+                            : "No papers found for this field yet. Try another field or source."}
                     </div>
                 ) : (
                     <div className="space-y-3">
@@ -507,53 +481,6 @@ export function AcademicPage() {
                                 />
                             );
                         })}
-                    </div>
-                )}
-            </section>
-
-            <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                    <div className="flex items-center gap-2">
-                        <Filter className="w-5 h-5 text-[color:var(--color-accent)]" />
-                        <h2 className="text-base sm:text-lg font-semibold text-[color:var(--color-text-primary)]">
-                            Reference Manager
-                        </h2>
-                    </div>
-                    <span className="text-xs sm:text-sm text-[color:var(--color-text-secondary)]">
-                        {filteredAcademicBooks.length} paper{filteredAcademicBooks.length === 1 ? "" : "s"}
-                    </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
-                    <input
-                        value={authorFilter}
-                        onChange={(event) => setAuthorFilter(event.target.value)}
-                        placeholder="Filter by author"
-                        className="rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm text-[color:var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
-                    />
-                    <input
-                        value={journalFilter}
-                        onChange={(event) => setJournalFilter(event.target.value)}
-                        placeholder="Filter by journal or conference"
-                        className="rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm text-[color:var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
-                    />
-                </div>
-
-                {filteredAcademicBooks.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-background)] py-10 text-center text-sm text-[color:var(--color-text-muted)]">
-                        No academic papers in your library yet.
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {filteredAcademicBooks.map((book) => (
-                            <ReferencePaperCard
-                                key={book.id}
-                                book={book}
-                                copiedKey={copiedKey}
-                                onOpen={handleOpenBook}
-                                onCopyCitation={handleCopyCitation}
-                            />
-                        ))}
                     </div>
                 )}
             </section>

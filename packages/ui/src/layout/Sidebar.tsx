@@ -8,6 +8,7 @@ import {
     ChevronRight,
     Highlighter,
     FolderOpen,
+    Folders,
     Rss,
     GraduationCap,
     X,
@@ -26,6 +27,7 @@ interface SidebarItem {
 const mainNavItems: SidebarItem[] = [
     { id: "library", label: "Library", icon: <Library className="w-5 h-5" /> },
     { id: "academic", label: "Papers", icon: <GraduationCap className="w-5 h-5" /> },
+    { id: "references", label: "References", icon: <Folders className="w-5 h-5" /> },
     { id: "vocabulary", label: "Vocabulary", icon: <BookOpenText className="w-5 h-5" /> },
     { id: "annotations", label: "Highlights", icon: <Highlighter className="w-5 h-5" /> },
     { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="w-5 h-5" /> },

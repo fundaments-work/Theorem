@@ -188,6 +188,7 @@ export interface Collection {
     name: string;
     description?: string;
     bookIds: string[];
+    kind?: "general" | "research";
     createdAt: Date;
 }
 
@@ -423,7 +424,7 @@ export interface RssArticle {
 }
 
 // Navigation
-export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds" | "academic";
+export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds" | "academic" | "references";
 
 // UI State
 export interface UIState {
