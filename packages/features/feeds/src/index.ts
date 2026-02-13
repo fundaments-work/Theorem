@@ -1,0 +1,1 @@
+export { FeedsPage } from './FeedsPage';

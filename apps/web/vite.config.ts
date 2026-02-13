@@ -36,6 +36,7 @@ export default defineConfig(async () => ({
             "@theorem/feature-statistics": fileURLToPath(new URL("../../packages/features/statistics/src", import.meta.url)),
             "@theorem/feature-vocabulary": fileURLToPath(new URL("../../packages/features/vocabulary/src", import.meta.url)),
             "@theorem/feature-learning": fileURLToPath(new URL("../../packages/features/learning/src", import.meta.url)),
+            "@theorem/feature-feeds": fileURLToPath(new URL("../../packages/features/feeds/src", import.meta.url)),
             "@foliate-js": fileURLToPath(new URL("../../packages/features/reader/foliate-js", import.meta.url)),
         },
     },

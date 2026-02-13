@@ -39,7 +39,8 @@ Theorem is an all-in-one reading and learning system: read, capture, remember, a
 - [ ] Saved web article reader mode
 - [ ] Unified content model across books/articles/web
 
-## Phase 4: Academic Workflow
+## Phase 4: Academic Workflow- [ ] Advanced continuation and session intelligence
+
 - [ ] arXiv integration
 - [ ] PubMed integration
 - [ ] Reference manager
@@ -49,7 +50,6 @@ Theorem is an all-in-one reading and learning system: read, capture, remember, a
 ## Phase 5: Reading Acceleration
 - [ ] Velocity mode (speed reading)
 - [ ] TTS with local/open-source model support
-- [ ] Advanced continuation and session intelligence
 
 ## Phase 6: Data Platform Foundation
 - [ ] Local SQLite canonical data core

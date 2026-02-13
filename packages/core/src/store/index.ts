@@ -268,10 +268,10 @@ interface LibraryStore {
     toggleFavorite: (bookId: string) => void;
     updateBookMetadata: (bookId: string, metadata: Partial<Book>) => void;
     saveBookLocations: (bookId: string, locations: string) => void;
-    
+
     // Reading time tracking
     addReadingTime: (bookId: string, minutes: number) => void;
-    
+
     // Book completion
     markBookCompleted: (
         bookId: string,
@@ -655,15 +655,15 @@ export const useLibraryStore = create<LibraryStore>()(
 
                 if (highlights.length > 0) {
                     markdown += `## Highlights (${highlights.length})\n\n`;
-                    
+
                     highlights.forEach((annotation, index) => {
                         markdown += `### ${index + 1}. ${annotation.color || 'Highlight'}\n\n`;
                         markdown += `> ${annotation.selectedText?.replace(/\n/g, ' ') || ''}\n\n`;
-                        
+
                         if (annotation.noteContent) {
                             markdown += `**Note:** ${annotation.noteContent}\n\n`;
                         }
-                        
+
                         markdown += `\`\`\`\nLocation: ${annotation.location}\n\`\`\`\n\n`;
                         markdown += `---\n\n`;
                     });
@@ -671,7 +671,7 @@ export const useLibraryStore = create<LibraryStore>()(
 
                 if (bookmarks.length > 0) {
                     markdown += `## Bookmarks (${bookmarks.length})\n\n`;
-                    
+
                     bookmarks.forEach((bookmark, index) => {
                         markdown += `${index + 1}. ${bookmark.selectedText || 'Bookmark'}\n`;
                         markdown += `   - Location: ${bookmark.location}\n\n`;
@@ -753,11 +753,11 @@ export const useSettingsStore = create<SettingsStore>()(
 
             updateReaderSettings: (updates) => {
                 const newSettings = { ...get().settings.readerSettings, ...updates };
-                
+
                 // Apply CSS variables immediately for instant visual feedback
                 // This is synchronous and extremely fast
                 applyReaderStyles(newSettings);
-                
+
                 set((state) => ({
                     settings: {
                         ...state.settings,
@@ -790,7 +790,7 @@ export const useSettingsStore = create<SettingsStore>()(
             resetReaderSettings: () => {
                 // Apply default styles immediately
                 applyReaderStyles(defaultReaderSettings);
-                
+
                 set((state) => ({
                     settings: {
                         ...state.settings,
@@ -815,7 +815,7 @@ export const useSettingsStore = create<SettingsStore>()(
                         ...state.settings.learning,
                     };
                 }
-                
+
                 // Migration: Ensure dailyActivity exists for old stored data
                 if (state && !state.stats.dailyActivity) {
                     state.stats.dailyActivity = [];
@@ -1855,6 +1855,242 @@ export const useLearningStore = create<LearningStore>()(
                     libraryPersist.onFinishHydration?.(runSync);
                 }
             },
+        },
+    ),
+);
+
+// ── RSS Feed Store ──
+
+import type { RssFeed, RssArticle } from '../types';
+import {
+    fetchAndParseFeed,
+    materializeFeed,
+    articleToEpub,
+} from '../services/RssService';
+
+interface RssStore {
+    feeds: RssFeed[];
+    articles: RssArticle[];
+    isLoading: boolean;
+    error?: string;
+
+    addFeed: (url: string) => Promise<RssFeed | null>;
+    removeFeed: (feedId: string) => void;
+    refreshFeed: (feedId: string) => Promise<void>;
+    refreshAll: () => Promise<void>;
+    markArticleRead: (articleId: string) => void;
+    toggleArticleFavorite: (articleId: string) => void;
+    getArticlesForFeed: (feedId: string) => RssArticle[];
+    getAllArticles: () => RssArticle[];
+    openArticleInReader: (article: RssArticle) => Promise<void>;
+    setError: (error?: string) => void;
+}
+
+export const useRssStore = create<RssStore>()(
+    persist(
+        (set, get) => ({
+            feeds: [],
+            articles: [],
+            isLoading: false,
+            error: undefined,
+
+            addFeed: async (url: string) => {
+                set({ isLoading: true, error: undefined });
+                try {
+                    const parsed = await fetchAndParseFeed(url);
+                    const { feed, articles } = materializeFeed(url, parsed);
+
+                    // Check for duplicate feed URL
+                    const existing = get().feeds.find(f => f.url === url);
+                    if (existing) {
+                        set({ isLoading: false, error: 'This feed is already subscribed.' });
+                        return null;
+                    }
+
+                    set(state => ({
+                        feeds: [...state.feeds, feed],
+                        articles: [...state.articles, ...articles],
+                        isLoading: false,
+                    }));
+                    return feed;
+                } catch (err) {
+                    const message = err instanceof Error ? err.message : 'Failed to add feed';
+                    set({ isLoading: false, error: message });
+                    console.error('[RssStore] addFeed error:', err);
+                    return null;
+                }
+            },
+
+            removeFeed: (feedId: string) => {
+                set(state => ({
+                    feeds: state.feeds.filter(f => f.id !== feedId),
+                    articles: state.articles.filter(a => a.feedId !== feedId),
+                }));
+            },
+
+            refreshFeed: async (feedId: string) => {
+                const feed = get().feeds.find(f => f.id === feedId);
+                if (!feed) return;
+
+                try {
+                    const parsed = await fetchAndParseFeed(feed.url);
+                    const now = new Date();
+
+                    // Get existing article URLs to avoid duplicates
+                    const existingUrls = new Set(
+                        get().articles.filter(a => a.feedId === feedId).map(a => a.url),
+                    );
+
+                    const newArticles: RssArticle[] = parsed.articles
+                        .filter(a => !existingUrls.has(a.url))
+                        .map(a => ({
+                            id: crypto.randomUUID(),
+                            feedId,
+                            title: a.title,
+                            author: a.author,
+                            url: a.url,
+                            content: a.content,
+                            summary: a.summary,
+                            imageUrl: a.imageUrl,
+                            publishedAt: a.publishedAt,
+                            fetchedAt: now,
+                            isRead: false,
+                            isFavorite: false,
+                        }));
+
+                    set(state => {
+                        const feedArticles = state.articles.filter(a => a.feedId === feedId);
+                        const unreadCount = feedArticles.filter(a => !a.isRead).length + newArticles.length;
+                        return {
+                            articles: [...newArticles, ...state.articles],
+                            feeds: state.feeds.map(f =>
+                                f.id === feedId
+                                    ? { ...f, lastFetched: now, errorMessage: undefined, unreadCount, title: parsed.feed.title || f.title }
+                                    : f,
+                            ),
+                        };
+                    });
+                } catch (err) {
+                    const message = err instanceof Error ? err.message : 'Refresh failed';
+                    set(state => ({
+                        feeds: state.feeds.map(f =>
+                            f.id === feedId ? { ...f, errorMessage: message } : f,
+                        ),
+                    }));
+                }
+            },
+
+            refreshAll: async () => {
+                set({ isLoading: true });
+                const feeds = get().feeds;
+                await Promise.allSettled(feeds.map(f => get().refreshFeed(f.id)));
+                set({ isLoading: false });
+            },
+
+            markArticleRead: (articleId: string) => {
+                set(state => {
+                    const article = state.articles.find(a => a.id === articleId);
+                    if (!article) return state;
+                    const wasRead = article.isRead;
+                    return {
+                        articles: state.articles.map(a =>
+                            a.id === articleId ? { ...a, isRead: true } : a,
+                        ),
+                        feeds: wasRead ? state.feeds : state.feeds.map(f =>
+                            f.id === article.feedId
+                                ? { ...f, unreadCount: Math.max(0, f.unreadCount - 1) }
+                                : f,
+                        ),
+                    };
+                });
+            },
+
+            toggleArticleFavorite: (articleId: string) => {
+                set(state => ({
+                    articles: state.articles.map(a =>
+                        a.id === articleId ? { ...a, isFavorite: !a.isFavorite } : a,
+                    ),
+                }));
+            },
+
+            getArticlesForFeed: (feedId: string) => {
+                return get().articles
+                    .filter(a => a.feedId === feedId)
+                    .sort((a, b) => {
+                        const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : new Date(a.fetchedAt).getTime();
+                        const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : new Date(b.fetchedAt).getTime();
+                        return dateB - dateA;
+                    });
+            },
+
+            getAllArticles: () => {
+                return get().articles
+                    .sort((a, b) => {
+                        const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : new Date(a.fetchedAt).getTime();
+                        const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : new Date(b.fetchedAt).getTime();
+                        return dateB - dateA;
+                    });
+            },
+
+            openArticleInReader: async (article: RssArticle) => {
+                const feed = get().feeds.find(f => f.id === article.feedId);
+                const feedTitle = feed?.title;
+
+                // Convert article to EPUB blob
+                const epubBlob = articleToEpub(article, feedTitle);
+
+                // Prepare IDs
+                const bookId = `rss-${article.id}`;
+                const now = new Date();
+
+                // Save the EPUB blob to storage FIRST to get the correct path
+                const arrayBuffer = await epubBlob.arrayBuffer();
+                const { saveBookData } = await import('../lib/storage');
+                const savedPath = await saveBookData(bookId, arrayBuffer);
+
+                const libraryStore = useLibraryStore.getState();
+
+                // Check if this article already has a book entry
+                const existingBook = libraryStore.getBook(bookId);
+                if (existingBook) {
+                    // Update storage path if needed
+                    libraryStore.updateBook(bookId, { storagePath: savedPath });
+                } else {
+                    const bookEntry: Book = {
+                        id: bookId,
+                        title: article.title,
+                        author: article.author || feedTitle || 'Unknown',
+                        filePath: `rss://${article.id}`,
+                        storagePath: savedPath, // Crucial for Reader to find the file
+                        format: 'epub',
+                        fileSize: epubBlob.size,
+                        addedAt: now,
+                        progress: 0,
+                        tags: ['rss'],
+                        isFavorite: false,
+                        readingTime: 0,
+                    };
+                    libraryStore.addBook(bookEntry);
+                }
+
+                // Mark article as read
+                get().markArticleRead(article.id);
+
+                // Navigate to reader
+                useUIStore.getState().setRoute('reader', bookId);
+            },
+
+            setError: (error?: string) => {
+                set({ error });
+            },
+        }),
+        {
+            name: 'theorem-rss',
+            version: 1,
+            partialize: (state) => ({
+                feeds: state.feeds,
+                articles: state.articles,
+            }),
         },
     ),
 );

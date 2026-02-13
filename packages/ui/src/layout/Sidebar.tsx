@@ -8,6 +8,7 @@ import {
     ChevronRight,
     Highlighter,
     FolderOpen,
+    Rss,
     X,
 } from "lucide-react";
 import { TheoremLogo } from "../TheoremLogo";
@@ -147,48 +148,48 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                             item.id !== "vocabulary" || settings.learning.vocabularyEnabled
                         ))
                         .map((item) => (
-                        <li key={item.id}>
-                            <button
-                                onClick={() => {
-                                    setRoute(item.id);
-                                    // Clear shelf filter when navigating away from library
-                                    if (item.id !== "library") {
-                                        sessionStorage.removeItem("theorem-selected-shelf");
-                                    }
-                                    // Close mobile sidebar on navigation
-                                    if (isMobile && onClose) {
-                                        onClose();
-                                    }
-                                }}
-                                className={cn(
-                                    "w-full flex items-center rounded-xl ui-clickable",
-                                    isCollapsedDesktop ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
-                                    "hover:bg-[var(--color-surface-muted)]",
-                                    currentRoute === item.id
-                                        ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
-                                        : "text-[color:var(--color-text-secondary)]"
-                                )}
-                                title={!sidebarOpen ? item.label : undefined}
-                            >
-                                <span className="flex-shrink-0">{item.icon}</span>
-                                {(sidebarOpen || isMobile) && (
-                                    <span className="flex items-center gap-2 font-medium text-sm animate-fade-in">
-                                        {item.label}
-                                        {item.id === "vocabulary" && vocabularyDueCount > 0 && (
-                                            <span className="rounded-full bg-[var(--color-error)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                                {vocabularyDueCount}
-                                            </span>
-                                        )}
-                                        {item.id === "annotations" && highlightDueCount > 0 && (
-                                            <span className="rounded-full bg-[var(--color-error)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                                {highlightDueCount}
-                                            </span>
-                                        )}
-                                    </span>
-                                )}
-                            </button>
-                        </li>
-                    ))}
+                            <li key={item.id}>
+                                <button
+                                    onClick={() => {
+                                        setRoute(item.id);
+                                        // Clear shelf filter when navigating away from library
+                                        if (item.id !== "library") {
+                                            sessionStorage.removeItem("theorem-selected-shelf");
+                                        }
+                                        // Close mobile sidebar on navigation
+                                        if (isMobile && onClose) {
+                                            onClose();
+                                        }
+                                    }}
+                                    className={cn(
+                                        "w-full flex items-center rounded-xl ui-clickable",
+                                        isCollapsedDesktop ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
+                                        "hover:bg-[var(--color-surface-muted)]",
+                                        currentRoute === item.id
+                                            ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
+                                            : "text-[color:var(--color-text-secondary)]"
+                                    )}
+                                    title={!sidebarOpen ? item.label : undefined}
+                                >
+                                    <span className="flex-shrink-0">{item.icon}</span>
+                                    {(sidebarOpen || isMobile) && (
+                                        <span className="flex items-center gap-2 font-medium text-sm animate-fade-in">
+                                            {item.label}
+                                            {item.id === "vocabulary" && vocabularyDueCount > 0 && (
+                                                <span className="rounded-full bg-[var(--color-error)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                                    {vocabularyDueCount}
+                                                </span>
+                                            )}
+                                            {item.id === "annotations" && highlightDueCount > 0 && (
+                                                <span className="rounded-full bg-[var(--color-error)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                                    {highlightDueCount}
+                                                </span>
+                                            )}
+                                        </span>
+                                    )}
+                                </button>
+                            </li>
+                        ))}
 
                     {/* Shelves Link - navigates to dedicated shelves page */}
                     <li>
@@ -215,6 +216,36 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                             {(sidebarOpen || isMobile) && (
                                 <span className="font-medium text-sm animate-fade-in flex-1 text-left">
                                     Shelves
+                                </span>
+                            )}
+                        </button>
+                    </li>
+
+                    {/* Feeds Link */}
+                    <li>
+                        <button
+                            onClick={() => {
+                                setRoute("feeds");
+                                if (isMobile && onClose) {
+                                    onClose();
+                                }
+                            }}
+                            className={cn(
+                                "w-full flex items-center rounded-xl ui-clickable",
+                                isCollapsedDesktop ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
+                                "hover:bg-[var(--color-surface-muted)]",
+                                currentRoute === "feeds"
+                                    ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
+                                    : "text-[color:var(--color-text-secondary)]"
+                            )}
+                            title={!sidebarOpen ? "Feeds" : undefined}
+                        >
+                            <span className="flex-shrink-0">
+                                <Rss className="w-5 h-5" />
+                            </span>
+                            {(sidebarOpen || isMobile) && (
+                                <span className="font-medium text-sm animate-fade-in flex-1 text-left">
+                                    Feeds
                                 </span>
                             )}
                         </button>

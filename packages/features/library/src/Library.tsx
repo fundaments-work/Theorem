@@ -720,6 +720,10 @@ export function LibraryPage() {
         // Filter by shelf if selected
         if (selectedShelfBookIds) {
             result = result.filter((book) => selectedShelfBookIds.has(book.id));
+        } else {
+            // In main view (no shelf selected), hide RSS articles
+            // They should only be accessible via the Feeds page or potentially a specific "Feeds" shelf if we made one
+            result = result.filter(b => !b.tags.includes('rss'));
         }
 
         // Filter by favorites

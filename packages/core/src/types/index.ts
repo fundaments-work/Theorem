@@ -339,8 +339,37 @@ export interface ReadingStats {
     lastReadDate?: string; // ISO date of last reading session
 }
 
+// ── RSS Types ──
+export interface RssFeed {
+    id: string;
+    title: string;
+    url: string;           // Feed URL
+    siteUrl?: string;      // Website URL
+    description?: string;
+    iconUrl?: string;
+    lastFetched?: Date;
+    addedAt: Date;
+    errorMessage?: string;
+    unreadCount: number;
+}
+
+export interface RssArticle {
+    id: string;
+    feedId: string;
+    title: string;
+    author?: string;
+    url: string;           // Article link
+    content: string;       // HTML content
+    summary?: string;
+    imageUrl?: string;
+    publishedAt?: Date;
+    fetchedAt: Date;
+    isRead: boolean;
+    isFavorite: boolean;
+}
+
 // Navigation
-export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks";
+export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds";
 
 // UI State
 export interface UIState {
