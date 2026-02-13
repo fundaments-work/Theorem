@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpenText, BrainCircuit, ChevronDown, Save, Trash2 } from "lucide-react";
+import {
+    BookOpenText,
+    BrainCircuit,
+    CalendarClock,
+    Clock3,
+    Hash,
+    NotebookPen,
+    Save,
+    Trash2,
+} from "lucide-react";
 import { cn } from "@theorem/core";
 import { useLearningStore, useUIStore } from "@theorem/core";
 import type { VocabularyContext, VocabularyTerm } from "@theorem/core";
@@ -53,12 +62,24 @@ function getContextLabel(context: VocabularyContext): string {
     return context.label || context.sourceId;
 }
 
+function toDisplayDate(value: Date | string | null | undefined): string {
+    if (!value) {
+        return "Never";
+    }
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "Never";
+    }
+    return date.toLocaleDateString();
+}
+
 /**
  * Standalone vocabulary workspace with source-based organization and scoped review launcher.
  */
 export function VocabularyPage() {
     const searchQuery = useUIStore((state) => state.searchQuery);
     const vocabularyTerms = useLearningStore((state) => state.vocabularyTerms);
+    const reviewRecords = useLearningStore((state) => state.reviewRecords);
     const updateVocabularyTerm = useLearningStore((state) => state.updateVocabularyTerm);
     const deleteVocabularyTerm = useLearningStore((state) => state.deleteVocabularyTerm);
     const openReviewSession = useLearningStore((state) => state.openReviewSession);
@@ -67,14 +88,33 @@ export function VocabularyPage() {
     ));
 
     const [sourceFilter, setSourceFilter] = useState<string>("all");
-    const [expandedTermId, setExpandedTermId] = useState<string | null>(null);
+    const [selectedTermId, setSelectedTermId] = useState<string | null>(null);
     const [draftNote, setDraftNote] = useState("");
     const [draftTags, setDraftTags] = useState("");
+
+    const now = new Date();
 
     const sourceOptions = useMemo(
         () => buildSourceFilterOptions(vocabularyTerms),
         [vocabularyTerms],
     );
+
+    const reviewRecordByTermId = useMemo(() => {
+        const map = new Map<string, (typeof reviewRecords)[number]>();
+        for (const record of reviewRecords) {
+            if (record.sourceType === "vocabulary") {
+                map.set(record.sourceId, record);
+            }
+        }
+        return map;
+    }, [reviewRecords]);
+
+    const reviewedTermCount = useMemo(
+        () => Array.from(reviewRecordByTermId.values()).filter((record) => record.reviewCount > 0).length,
+        [reviewRecordByTermId],
+    );
+    const scheduledTermCount = reviewRecordByTermId.size;
+    const unscheduledTermCount = Math.max(0, vocabularyTerms.length - scheduledTermCount);
 
     const filteredTerms = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -121,21 +161,11 @@ export function VocabularyPage() {
             });
     }, [searchQuery, sourceFilter, vocabularyTerms]);
 
-    const expandedTerm = useMemo(() => (
-        expandedTermId
-            ? vocabularyTerms.find((term) => term.id === expandedTermId) || null
+    const selectedTerm = useMemo(() => (
+        selectedTermId
+            ? filteredTerms.find((term) => term.id === selectedTermId) || null
             : null
-    ), [expandedTermId, vocabularyTerms]);
-
-    useEffect(() => {
-        if (!expandedTerm) {
-            setDraftNote("");
-            setDraftTags("");
-            return;
-        }
-        setDraftNote(expandedTerm.personalNote || "");
-        setDraftTags(expandedTerm.tags.join(", "));
-    }, [expandedTerm?.id]);
+    ), [filteredTerms, selectedTermId]);
 
     useEffect(() => {
         if (sourceFilter === "all") {
@@ -147,13 +177,27 @@ export function VocabularyPage() {
         }
     }, [sourceFilter, sourceOptions]);
 
-    function toggleExpanded(term: VocabularyTerm) {
-        if (expandedTermId === term.id) {
-            setExpandedTermId(null);
+    /* Removed auto-select logic to keep the UI cleaner/minimal – only select if user interactions demands it or we want a default state. 
+       Actually, for a Master-Detail view, it's often nice to not have anything selected initially, or select the first one. 
+       The user said "when clicked it should open detail". Does it mean it's closed initially?
+       I'll leave it null initially unless user clicks, essentially making the detail pane closable or empty.
+       But I'll keep the `useEffect` that clears selection if the validated term is gone.
+    */
+    useEffect(() => {
+        if (selectedTermId && !filteredTerms.some((t) => t.id === selectedTermId)) {
+            setSelectedTermId(null);
+        }
+    }, [filteredTerms, selectedTermId]);
+
+    useEffect(() => {
+        if (!selectedTerm) {
+            setDraftNote("");
+            setDraftTags("");
             return;
         }
-        setExpandedTermId(term.id);
-    }
+        setDraftNote(selectedTerm.personalNote || "");
+        setDraftTags(selectedTerm.tags.join(", "));
+    }, [selectedTerm?.id]);
 
     function handleSaveMetadata(termId: string) {
         const tags = draftTags
@@ -169,18 +213,21 @@ export function VocabularyPage() {
 
     function handleDeleteTerm(termId: string) {
         deleteVocabularyTerm(termId);
-        if (expandedTermId === termId) {
-            setExpandedTermId(null);
+        if (selectedTermId === termId) {
+            setSelectedTermId(null);
         }
     }
 
     return (
-        <div className="ui-page animate-fade-in space-y-6">
-            <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="ui-page animate-fade-in flex h-[calc(100vh-6rem)] flex-col gap-6 pb-4 md:pb-0">
+            {/* Unified Header */}
+            <header className="shrink-0 flex items-center justify-between">
                 <div>
-                    <h1 className="ui-page-title">Vocabulary</h1>
+                    <h1 className="ui-page-title">
+                        Vocabulary
+                    </h1>
                     <p className="ui-page-subtitle">
-                        {vocabularyTerms.length} term{vocabularyTerms.length === 1 ? "" : "s"} tracked across sources.
+                        {vocabularyTerms.length} {vocabularyTerms.length === 1 ? 'term' : 'terms'} captured
                     </p>
                 </div>
 
@@ -188,174 +235,302 @@ export function VocabularyPage() {
                     onClick={() => openReviewSession("vocabulary")}
                     disabled={dueVocabularyCount === 0}
                     className={cn(
-                        "inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
-                        dueVocabularyCount > 0
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
-                            : "bg-[var(--color-surface-muted)] text-[color:var(--color-text-muted)]",
+                        "ui-btn ui-btn-primary",
+                        dueVocabularyCount === 0 && "opacity-50 cursor-not-allowed bg-[var(--color-surface-muted)] text-[color:var(--color-text-muted)]"
                     )}
                 >
                     <BrainCircuit className="h-4 w-4" />
-                    Review Vocabulary
-                    <span className="rounded-full bg-[var(--color-overlay-subtle)] px-2 py-0.5 text-xs">
-                        {dueVocabularyCount}
-                    </span>
+                    <span className="hidden sm:inline">Review ({dueVocabularyCount})</span>
+                    <span className="sm:hidden">Review</span>
                 </button>
             </header>
 
-            <section className="ui-card p-4">
-                <div className="mb-4 flex flex-wrap items-center gap-2">
+            {/* Main Content Layout */}
+            <div className="flex min-h-0 flex-1 md:gap-6">
+
+                {/* Column 1: Sources (Desktop Sidebar) */}
+                <aside className="hidden md:flex w-48 shrink-0 flex-col gap-1 overflow-y-auto pr-2 lg:w-56">
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">
+                        Sources
+                    </h3>
                     <button
                         onClick={() => setSourceFilter("all")}
                         className={cn(
-                            "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                            "flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors",
                             sourceFilter === "all"
-                                ? "border-[var(--color-accent)] bg-[var(--color-accent)] ui-text-accent-contrast"
-                                : "border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)]",
+                                ? "bg-[var(--color-surface-elevated)] text-[color:var(--color-text-primary)] font-medium shadow-sm"
+                                : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
                         )}
                     >
-                        All Sources ({vocabularyTerms.length})
+                        <span>All Sources</span>
+                        <span className="text-xs text-[color:var(--color-text-muted)] opacity-70">{vocabularyTerms.length}</span>
                     </button>
 
-                    {sourceOptions.map((option) => (
-                        <button
-                            key={option.key}
-                            onClick={() => setSourceFilter(option.key)}
-                            className={cn(
-                                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                                sourceFilter === option.key
-                                    ? "border-[var(--color-accent)] bg-[var(--color-accent)] ui-text-accent-contrast"
-                                    : "border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)]",
-                            )}
-                            title={option.label}
-                        >
-                            {option.label} ({option.count})
-                        </button>
-                    ))}
-                </div>
-
-                <div className="space-y-2">
-                    {filteredTerms.map((term) => {
-                        const isExpanded = expandedTermId === term.id;
-                        return (
-                            <article
-                                key={term.id}
+                    <div className="space-y-0.5">
+                        {sourceOptions.map((option) => (
+                            <button
+                                key={option.key}
+                                onClick={() => setSourceFilter(option.key)}
                                 className={cn(
-                                    "rounded-xl border px-4 py-3 transition-colors",
-                                    isExpanded
-                                        ? "border-[var(--color-accent)] bg-[var(--color-accent)]/8"
-                                        : "border-[var(--color-border)] bg-[var(--color-surface)]",
+                                    "flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors group",
+                                    sourceFilter === option.key
+                                        ? "bg-[var(--color-surface-elevated)] text-[color:var(--color-text-primary)] font-medium shadow-sm"
+                                        : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
+                                )}
+                                title={option.label}
+                            >
+                                <span className="truncate pr-2 text-left">{option.label}</span>
+                                <span className={cn(
+                                    "text-xs",
+                                    sourceFilter === option.key ? "text-[color:var(--color-text-primary)]" : "text-[color:var(--color-text-muted)]"
+                                )}>
+                                    {option.count}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </aside>
+
+                {/* Column 2: Vocabulary List (Mobile: Main View, Desktop: Middle Col) */}
+                <main className={cn(
+                    "flex flex-1 flex-col min-w-0 transition-all",
+                    "md:w-72 md:flex-none md:border-l md:border-[var(--color-border-subtle)] md:pl-6"
+                )}>
+                    {/* Mobile Source Filters (Horizontal Scroll) */}
+                    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 no-scrollbar md:hidden">
+                        <button
+                            onClick={() => setSourceFilter("all")}
+                            className={cn(
+                                "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                                sourceFilter === "all"
+                                    ? "border-[var(--color-accent)] bg-[var(--color-accent)] ui-text-accent-contrast"
+                                    : "border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)]"
+                            )}
+                        >
+                            All ({vocabularyTerms.length})
+                        </button>
+                        {sourceOptions.map((option) => (
+                            <button
+                                key={option.key}
+                                onClick={() => setSourceFilter(option.key)}
+                                className={cn(
+                                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                                    sourceFilter === option.key
+                                        ? "border-[var(--color-accent)] bg-[var(--color-accent)] ui-text-accent-contrast"
+                                        : "border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)]"
                                 )}
                             >
-                                <button
-                                    onClick={() => toggleExpanded(term)}
-                                    className="flex w-full items-start justify-between gap-3 text-left"
-                                >
-                                    <div className="min-w-0">
-                                        <p className="truncate font-semibold text-[color:var(--color-text-primary)]">
-                                            {term.term}
-                                        </p>
-                                        <p className="truncate text-xs text-[color:var(--color-text-muted)]">
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="mb-2 hidden items-center justify-between md:flex">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">
+                            Terms
+                        </h3>
+                        {searchQuery && (
+                            <span className="text-xs text-[color:var(--color-text-muted)]">
+                                {filteredTerms.length} matches
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto pr-1 space-y-1">
+                        {filteredTerms.length > 0 ? (
+                            filteredTerms.map((term) => {
+                                const isSelected = selectedTermId === term.id;
+                                const reviewRecord = reviewRecordByTermId.get(term.id);
+                                const dueAt = reviewRecord?.dueAt ? new Date(reviewRecord.dueAt) : null;
+                                const isDue = Boolean(dueAt && dueAt.getTime() <= now.getTime());
+
+                                return (
+                                    <button
+                                        key={term.id}
+                                        onClick={() => setSelectedTermId(term.id)}
+                                        className={cn(
+                                            "w-full rounded-lg px-3 py-3 text-left transition-all md:py-2.5",
+                                            isSelected
+                                                ? "bg-[var(--color-surface-elevated)] shadow-sm ring-1 ring-[var(--color-border-subtle)]"
+                                                : "hover:bg-[var(--color-surface-hover)] border-b border-[var(--color-border-subtle)] md:border-b-transparent"
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className={cn(
+                                                "font-medium truncate text-sm md:text-base",
+                                                isSelected ? "text-[color:var(--color-text-primary)]" : "text-[color:var(--color-text-primary)]"
+                                            )}>
+                                                {term.term}
+                                            </span>
+                                            {isDue && (
+                                                <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-warning)] shrink-0" title="Due" />
+                                            )}
+                                        </div>
+                                        <p className="mt-0.5 truncate text-xs text-[color:var(--color-text-secondary)] opacity-80">
                                             {getTermPrimaryDefinition(term)}
                                         </p>
-                                        <div className="mt-2 flex flex-wrap gap-1.5">
-                                            {term.contexts.map((context) => (
-                                                <span
-                                                    key={context.key}
-                                                    className="rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-secondary)]"
-                                                >
+                                    </button>
+                                );
+                            })
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-12 text-center opacity-60">
+                                <BookOpenText className="mb-2 h-8 w-8 text-[color:var(--color-text-muted)]" />
+                                <p className="text-xs text-[color:var(--color-text-secondary)]">No terms found.</p>
+                            </div>
+                        )}
+                    </div>
+                </main>
+
+                {/* Column 3: Detail Panel (Mobile Overlay / Desktop Flex) */}
+                <aside className={cn(
+                    "bg-[var(--color-background)]",
+                    // Mobile Styles: Fixed overlay
+                    "fixed inset-0 z-50 flex flex-col transition-transform duration-300 ease-in-out",
+                    selectedTermId ? "translate-x-0" : "translate-x-full",
+                    // Desktop Styles: Static column
+                    "md:static md:flex-1 md:translate-x-0 md:border-l md:border-[var(--color-border-subtle)] md:pl-6 md:bg-transparent"
+                )}>
+                    {selectedTerm ? (
+                        <div className="flex flex-col h-full overflow-y-auto p-4 md:p-0 animate-fade-in">
+                            {/* Mobile Nav */}
+                            <div className="mb-4 flex items-center gap-2 md:hidden">
+                                <button
+                                    onClick={() => setSelectedTermId(null)}
+                                    className="p-1 -ml-1 text-[color:var(--color-text-secondary)]"
+                                >
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+                                </button>
+                                <span className="text-sm font-medium text-[color:var(--color-text-secondary)]">Back to list</span>
+                            </div>
+
+                            <div className="space-y-6">
+                                {/* Header */}
+                                <div>
+                                    <h2 className="text-3xl font-bold text-[color:var(--color-text-primary)] sm:text-2xl">
+                                        {selectedTerm.term}
+                                    </h2>
+                                    <div className="mt-2 flex items-center gap-3">
+                                        {selectedTerm.phonetic && (
+                                            <span className="font-mono text-sm text-[color:var(--color-text-secondary)] bg-[var(--color-surface-muted)] px-1.5 py-0.5 rounded">
+                                                /{selectedTerm.phonetic}/
+                                            </span>
+                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {reviewRecordByTermId.get(selectedTerm.id) && (
+                                                <span className={cn(
+                                                    "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                                                    reviewRecordByTermId.get(selectedTerm.id)?.dueAt && new Date(reviewRecordByTermId.get(selectedTerm.id)!.dueAt).getTime() <= now.getTime()
+                                                        ? "bg-[var(--color-warning)]/20 text-[color:var(--color-warning)]"
+                                                        : "bg-[var(--color-success)]/10 text-[color:var(--color-success)]"
+                                                )}>
+                                                    {reviewRecordByTermId.get(selectedTerm.id)?.dueAt && new Date(reviewRecordByTermId.get(selectedTerm.id)!.dueAt).getTime() <= now.getTime()
+                                                        ? "Due Now"
+                                                        : "Learned"}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Definitions */}
+                                <div className="space-y-4">
+                                    {selectedTerm.meanings.map((meaning, idx) => (
+                                        <div key={`${meaning.provider}-${idx}`} className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--color-accent)] bg-[var(--color-accent)]/5 px-1.5 py-0.5 rounded">
+                                                    {meaning.partOfSpeech}
+                                                </span>
+                                                <span className="text-[10px] uppercase text-[color:var(--color-text-muted)] tracking-wider">
+                                                    {meaning.provider}
+                                                </span>
+                                            </div>
+                                            <ul className="space-y-3">
+                                                {meaning.definitions.slice(0, 3).map((def) => (
+                                                    <li key={def} className="flex gap-2.5 text-sm text-[color:var(--color-text-primary)] leading-relaxed">
+                                                        <span className="shrink-0 text-[color:var(--color-text-muted)] mt-1.5 h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+                                                        <span>{def}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <hr className="border-[var(--color-border-subtle)]" />
+
+                                {/* Metadata Inputs */}
+                                <div className="space-y-4 rounded-xl bg-[var(--color-surface-muted)]/30 p-4">
+                                    <div className="space-y-1.5">
+                                        <label className="flex items-center gap-1.5 text-xs font-semibold text-[color:var(--color-text-muted)]">
+                                            <NotebookPen className="h-3 w-3" />
+                                            Notes
+                                        </label>
+                                        <textarea
+                                            value={draftNote}
+                                            onChange={(e) => setDraftNote(e.target.value)}
+                                            placeholder="Write your personal mnemonics or context..."
+                                            className="w-full rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-background)] px-3 py-2 text-sm placeholder:text-[color:var(--color-text-muted)]/50 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] min-h-[80px]"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="flex items-center gap-1.5 text-xs font-semibold text-[color:var(--color-text-muted)]">
+                                            <Hash className="h-3 w-3" />
+                                            Tags
+                                        </label>
+                                        <input
+                                            value={draftTags}
+                                            onChange={(e) => setDraftTags(e.target.value)}
+                                            placeholder="e.g. difficult, french-origin..."
+                                            className="w-full rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-background)] px-3 py-2 text-sm placeholder:text-[color:var(--color-text-muted)]/50 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                                        />
+                                    </div>
+
+                                    <div className="pt-2">
+                                        <button
+                                            onClick={() => handleSaveMetadata(selectedTerm.id)}
+                                            className="w-full ui-btn ui-btn-primary"
+                                        >
+                                            Save Changes
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Contexts */}
+                                <div>
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">Found in sources</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {selectedTerm.contexts.map((context) => (
+                                            <div key={context.key} className="ui-chip inline-flex max-w-full items-center gap-1.5 px-2.5 py-1.5">
+                                                <BookOpenText className="h-3.5 w-3.5 text-[color:var(--color-text-muted)]" />
+                                                <span className="truncate text-xs text-[color:var(--color-text-secondary)] font-medium">
                                                     {getContextLabel(context)}
                                                 </span>
-                                            ))}
-                                        </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <ChevronDown
-                                        className={cn(
-                                            "mt-1 h-4 w-4 flex-shrink-0 text-[color:var(--color-text-muted)] transition-transform",
-                                            isExpanded && "rotate-180",
-                                        )}
-                                    />
-                                </button>
+                                </div>
 
-                                {isExpanded && (
-                                    <div className="mt-4 space-y-4 border-t border-[var(--color-border)] pt-4 animate-fade-in">
-                                        {term.phonetic && (
-                                            <p className="text-xs text-[color:var(--color-text-muted)]">/{term.phonetic}/</p>
-                                        )}
-
-                                        <div className="space-y-2">
-                                            {term.meanings.map((meaning, idx) => (
-                                                <div
-                                                    key={`${meaning.provider}-${idx}`}
-                                                    className="rounded-lg bg-[var(--color-surface-muted)] p-3"
-                                                >
-                                                    <p className="text-xs font-semibold uppercase text-[color:var(--color-text-muted)]">
-                                                        {meaning.partOfSpeech || "Meaning"} • {meaning.provider}
-                                                    </p>
-                                                    <ul className="mt-1 space-y-1 text-sm text-[color:var(--color-text-primary)]">
-                                                        {meaning.definitions.slice(0, 4).map((definition) => (
-                                                            <li key={definition}>• {definition}</li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-medium text-[color:var(--color-text-secondary)]">
-                                                Personal note
-                                            </label>
-                                            <textarea
-                                                value={draftNote}
-                                                onChange={(event) => setDraftNote(event.target.value)}
-                                                className="min-h-24 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm"
-                                            />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-medium text-[color:var(--color-text-secondary)]">
-                                                Tags
-                                            </label>
-                                            <input
-                                                value={draftTags}
-                                                onChange={(event) => setDraftTags(event.target.value)}
-                                                placeholder="root, noun, essay"
-                                                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm"
-                                            />
-                                        </div>
-
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <button
-                                                onClick={() => handleSaveMetadata(term.id)}
-                                                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm ui-text-accent-contrast"
-                                            >
-                                                <Save className="h-4 w-4" />
-                                                Save Metadata
-                                            </button>
-
-                                            <button
-                                                onClick={() => handleDeleteTerm(term.id)}
-                                                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-error)]/10 px-3 py-1.5 text-sm text-[color:var(--color-error)]"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                                Delete Term
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </article>
-                        );
-                    })}
-
-                    {filteredTerms.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-10 text-center">
-                            <BookOpenText className="mb-3 h-8 w-8 text-[color:var(--color-text-muted)]" />
-                            <p className="text-sm text-[color:var(--color-text-secondary)]">
-                                No vocabulary terms match this view yet.
-                            </p>
+                                <div className="flex justify-center pt-4 pb-8 md:pb-0">
+                                    <button
+                                        onClick={() => handleDeleteTerm(selectedTerm.id)}
+                                        className="ui-btn ui-btn-ghost text-[color:var(--color-error)] hover:bg-[color:var(--color-error)]/10 hover:text-[color:var(--color-error)]"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                        Delete this term
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="hidden h-full flex-col items-center justify-center text-center opacity-40 md:flex">
+                            <BookOpenText className="mb-2 h-12 w-12 text-[color:var(--color-text-muted)]" />
+                            <p className="text-sm font-medium text-[color:var(--color-text-secondary)]">Select a term to view details</p>
+                            <p className="text-xs text-[color:var(--color-text-muted)]">Definitions, notes, and sources will appear here.</p>
                         </div>
                     )}
-                </div>
-            </section>
+                </aside>
+            </div>
         </div>
     );
 }

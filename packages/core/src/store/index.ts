@@ -889,7 +889,6 @@ interface ReviewSessionState {
     gradeTally: Record<ReviewGrade, number>;
 }
 
-const MS_PER_DAY = 86_400_000;
 const LEGACY_VOCABULARY_CONTEXT_LABEL = "Legacy / Unknown source";
 
 const EMPTY_REVIEW_GRADE_TALLY: Record<ReviewGrade, number> = {
@@ -1068,27 +1067,10 @@ function formatAnnotationLocation(annotation: Annotation): string {
 
 function seedInitialDueAt(sourceCreatedAt: Date, now: Date): Date {
     const sourceTime = sourceCreatedAt.getTime();
-    const nowTime = now.getTime();
-    const ageDays = Math.max(0, Math.floor((nowTime - sourceTime) / MS_PER_DAY));
-    const dueAt = new Date(nowTime);
-
-    if (ageDays >= 14) {
+    const dueAt = new Date(now);
+    if (Number.isNaN(sourceTime)) {
         return dueAt;
     }
-    if (ageDays >= 7) {
-        dueAt.setDate(dueAt.getDate() + 1);
-        return dueAt;
-    }
-    if (ageDays >= 3) {
-        dueAt.setDate(dueAt.getDate() + 2);
-        return dueAt;
-    }
-    if (ageDays >= 1) {
-        dueAt.setDate(dueAt.getDate() + 3);
-        return dueAt;
-    }
-
-    dueAt.setDate(dueAt.getDate() + 4);
     return dueAt;
 }
 
@@ -1494,6 +1476,7 @@ export const useLearningStore = create<LearningStore>()(
                     libraryState.books,
                 );
                 const now = new Date();
+                const nowTime = now.getTime();
 
                 set((state) => {
                     const existingById = new Map<string, LearningReviewRecord>();
@@ -1516,11 +1499,24 @@ export const useLearningStore = create<LearningStore>()(
                         const existingRecord = existingById.get(id);
 
                         if (existingRecord) {
+                            const existingDueAt = toValidDate(existingRecord.dueAt, now);
+                            const shouldPullForward = existingRecord.reviewCount === 0
+                                && existingDueAt.getTime() > nowTime;
+
+                            const scheduler = shouldPullForward
+                                ? {
+                                    ...existingRecord.scheduler,
+                                    due: new Date(now),
+                                }
+                                : existingRecord.scheduler;
                             nextRecords.push({
                                 ...existingRecord,
                                 id,
                                 sourceType: snapshot.sourceType,
                                 sourceId: snapshot.sourceId,
+                                scheduler,
+                                dueAt: shouldPullForward ? new Date(now) : existingDueAt,
+                                updatedAt: shouldPullForward ? now : existingRecord.updatedAt,
                             });
                             continue;
                         }

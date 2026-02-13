@@ -42,6 +42,12 @@ import {
     Target,
 } from "lucide-react";
 
+type PersistableStore = {
+    persist?: {
+        clearStorage?: () => void | Promise<void>;
+    };
+};
+
 // Section component
 interface SectionProps {
     title: string;
@@ -190,7 +196,25 @@ export function SettingsPage() {
     const handleClearData = async () => {
         const confirmed = await confirmClearAllData();
         if (confirmed) {
-            localStorage.clear();
+            const storesToClear: PersistableStore[] = [
+                useSettingsStore as unknown as PersistableStore,
+                useLibraryStore as unknown as PersistableStore,
+                useLearningStore as unknown as PersistableStore,
+            ];
+
+            await Promise.allSettled(
+                storesToClear.map(async (store) => {
+                    try {
+                        await store.persist?.clearStorage?.();
+                    } catch (error) {
+                        console.error("[Settings] Failed to clear persisted store:", error);
+                    }
+                }),
+            );
+
+            localStorage.removeItem("theorem-settings");
+            localStorage.removeItem("theorem-library");
+            localStorage.removeItem("theorem-learning");
             window.location.reload();
         }
     };
@@ -1336,7 +1360,7 @@ export function SettingsPage() {
                                 <div className="flex-1">
                                     <p className="font-medium text-sm">Clear All Data</p>
                                     <p className="text-xs opacity-80">
-                                        Delete all books, highlights, and settings. This cannot be undone.
+                                        Delete all books, highlights, vocabulary, review progress, and settings. This cannot be undone.
                                     </p>
                                 </div>
                                 <ChevronRight className="w-4 h-4" />

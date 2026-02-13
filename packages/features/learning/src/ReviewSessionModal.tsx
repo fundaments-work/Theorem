@@ -199,7 +199,7 @@ export function ReviewSessionModal() {
                 <main className="flex-1 overflow-y-auto px-6 py-8">
                     <div className="mx-auto flex h-full w-full max-w-6xl flex-col items-center justify-center">
                         {isSessionComplete ? (
-                            <div className="ui-card w-full max-w-2xl space-y-4 p-8 text-center">
+                            <div className="ui-card w-full  space-y-4 p-8 text-center">
                                 <h4 className="text-xl font-semibold text-[color:var(--color-text-primary)]">
                                     Session Complete
                                 </h4>
@@ -241,7 +241,7 @@ export function ReviewSessionModal() {
                                         {reviewSessionState.revealed ? "Back" : "Front"}
                                     </p>
                                     <div className="flex min-h-[300px] w-full items-center justify-center px-4">
-                                        <div className="w-full max-w-4xl">
+                                        <div className="w-full">
                                             <p className="block w-full break-words whitespace-pre-wrap text-center text-3xl leading-relaxed text-[color:var(--color-text-primary)]">
                                                 {reviewFaceText}
                                             </p>
