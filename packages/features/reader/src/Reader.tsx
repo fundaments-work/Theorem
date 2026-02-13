@@ -145,7 +145,7 @@ export function ReaderPage() {
     const pdfProgressSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasAppliedInitialLocationRef = useRef(false);
     const debug = useCallback((...args: unknown[]) => {
-        if (import.meta.env.MODE === 'development') {
+        if (import.meta.env.DEV) {
             console.debug(...args);
         }
     }, []);
