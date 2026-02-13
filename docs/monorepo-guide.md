@@ -36,3 +36,10 @@ This guide defines how to add and evolve modules without coupling breakage.
 - Run full checks before merge:
   - `pnpm typecheck`
   - `pnpm build`
+  - `pnpm docs:build`
+
+## Documentation Automation
+
+- API reference generation: `pnpm docs:api` (outputs to `docs/api/`).
+- AI context generation: `pnpm docs:context` (outputs `docs/ai/module-index.md`, `llms.txt`, `llms-full.txt`).
+- Use `pnpm docs:build` to run both commands in sequence.

@@ -25,6 +25,9 @@ pnpm typecheck
 # Production build (typecheck + web build)
 pnpm build
 
+# Generate API and AI-context docs
+pnpm docs:build
+
 # Run Tauri commands (examples)
 pnpm tauri dev
 pnpm tauri build
@@ -35,3 +38,12 @@ pnpm tauri build
 - Internal dependencies use `workspace:*`.
 - Import other modules only through package public APIs (for example `@theorem/core`), not via source-relative paths.
 - Keep new code inside the relevant feature package and expose entry points from each package `src/index.ts`.
+
+## AI Documentation System
+
+- `pnpm docs:api` generates API reference docs from public package entry points into `docs/api/`.
+- `pnpm docs:context` generates AI-oriented indexes:
+  - `docs/ai/module-index.md`
+  - `llms.txt`
+  - `llms-full.txt`
+- `pnpm docs:build` runs both doc generation steps.

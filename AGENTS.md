@@ -42,6 +42,9 @@ pnpm typecheck
 # Production build (typecheck + app build)
 pnpm build
 
+# Generate API and AI-context docs
+pnpm docs:build
+
 # App preview
 pnpm preview
 
@@ -60,6 +63,13 @@ cd apps/web/src-tauri && cargo build --release
 - Keep each package’s public API in `src/index.ts`.
 - New features should be created under `packages/features/<feature-name>`.
 - Shared logic belongs in `packages/core`; shared UI primitives belong in `packages/ui`.
+
+## AI Context Files
+
+- `docs/ai/module-index.md` is the package/dependency map for targeted edits.
+- `docs/api/` is generated from public exports and should be treated as reference documentation.
+- `llms.txt` and `llms-full.txt` are generated context entrypoints for AI retrieval workflows.
+- Regenerate these files after API surface changes with `pnpm docs:build`.
 
 ## TypeScript Standards
 
