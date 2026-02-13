@@ -8,8 +8,20 @@
  */
 
 import { APP_THEME_PALETTES, READER_THEME_PREVIEWS } from "./design-tokens";
-import { getTheme } from '@lionreader/feature-reader/foliate/themes';
 import type { ReaderSettings, ReaderTheme, FontFamily, ReadingFlow, PageLayout } from '../types';
+
+interface FoliateThemeColor {
+    fg: string;
+    bg: string;
+    link: string;
+}
+
+interface FoliateTheme {
+    name: ReaderTheme;
+    label: string;
+    light: FoliateThemeColor;
+    dark: FoliateThemeColor;
+}
 
 // CSS Variable names mapping
 const CSS_VARS = {
@@ -63,6 +75,55 @@ const THEME_COLORS: Record<ReaderTheme, { bg: string; fg: string; link: string }
         link: APP_THEME_PALETTES.dark.readerLink,
     },
 };
+
+const FOLIATE_THEMES: Record<ReaderTheme, FoliateTheme> = {
+    light: {
+        name: "light",
+        label: "Light",
+        light: {
+            fg: APP_THEME_PALETTES.light.readerFg,
+            bg: APP_THEME_PALETTES.light.readerBg,
+            link: APP_THEME_PALETTES.light.readerLink,
+        },
+        dark: {
+            fg: APP_THEME_PALETTES.light.readerFg,
+            bg: APP_THEME_PALETTES.light.readerBg,
+            link: APP_THEME_PALETTES.light.readerLink,
+        },
+    },
+    sepia: {
+        name: "sepia",
+        label: "Sepia",
+        light: {
+            fg: APP_THEME_PALETTES.sepia.readerFg,
+            bg: APP_THEME_PALETTES.sepia.readerBg,
+            link: APP_THEME_PALETTES.sepia.readerLink,
+        },
+        dark: {
+            fg: APP_THEME_PALETTES.sepia.readerFg,
+            bg: APP_THEME_PALETTES.sepia.readerBg,
+            link: APP_THEME_PALETTES.sepia.readerLink,
+        },
+    },
+    dark: {
+        name: "dark",
+        label: "Dark",
+        light: {
+            fg: APP_THEME_PALETTES.dark.readerFg,
+            bg: APP_THEME_PALETTES.dark.readerBg,
+            link: APP_THEME_PALETTES.dark.readerLink,
+        },
+        dark: {
+            fg: APP_THEME_PALETTES.dark.readerFg,
+            bg: APP_THEME_PALETTES.dark.readerBg,
+            link: APP_THEME_PALETTES.dark.readerLink,
+        },
+    },
+};
+
+function getFoliateTheme(name: ReaderTheme): FoliateTheme {
+    return FOLIATE_THEMES[name] ?? FOLIATE_THEMES.light;
+}
 
 // Cache for current settings to avoid recomputation
 let currentSettings: ReaderSettings | null = null;
@@ -145,7 +206,7 @@ function notifyEnginesOfStyleChange(): void {
  * These are the settings that require iframe re-rendering
  */
 export function getEngineSettings(settings: ReaderSettings) {
-    const theme = getTheme(settings.theme);
+    const theme = getFoliateTheme(settings.theme);
     
     return {
         style: {

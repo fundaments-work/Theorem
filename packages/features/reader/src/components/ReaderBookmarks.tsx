@@ -4,9 +4,9 @@
  */
 
 import { Bookmark, X, Trash2, ExternalLink } from 'lucide-react';
-import { useLibraryStore } from '../store';
+import { useLibraryStore } from "@lionreader/core";
 import { format } from 'date-fns';
-import { Backdrop, FloatingPanel } from './ui';
+import { Backdrop, FloatingPanel } from "@lionreader/ui";
 
 interface ReaderBookmarksProps {
     bookId: string;

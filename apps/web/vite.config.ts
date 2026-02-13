@@ -57,6 +57,7 @@ export default defineConfig(async () => ({
 
     // Build configuration
     build: {
+        target: "esnext",
         assetsInlineLimit: 0,
         rollupOptions: {
             output: {

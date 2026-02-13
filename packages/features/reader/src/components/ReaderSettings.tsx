@@ -14,11 +14,16 @@ import {
     AlignLeft, AlignJustify, AlignCenter, Type,
     Palette, Maximize2, Zap, Settings2, ZoomIn
 } from 'lucide-react';
-import { READER_THEME_PREVIEWS } from "@lionreader/core";
-import { cn } from '../lib/utils';
-import { ReaderSettings as ReaderSettingsType, ReaderTheme, FontFamily, BookFormat } from '../types';
-import { isFixedLayout } from '../types';
-import { Backdrop, FloatingPanel } from './ui';
+import {
+    cn,
+    isFixedLayout,
+    READER_THEME_PREVIEWS,
+    type BookFormat,
+    type FontFamily,
+    type ReaderSettings as ReaderSettingsType,
+    type ReaderTheme,
+} from "@lionreader/core";
+import { Backdrop, FloatingPanel } from "@lionreader/ui";
 
 interface ReaderSettingsProps {
     settings: ReaderSettingsType;

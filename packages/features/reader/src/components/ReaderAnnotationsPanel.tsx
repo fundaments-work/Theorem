@@ -6,11 +6,10 @@
 import { useState } from 'react';
 import { Bookmark, X, Trash2, ExternalLink, Highlighter, MessageSquare } from 'lucide-react';
 import { HIGHLIGHT_PICKER_COLORS } from "@lionreader/core";
-import { useLibraryStore } from '../store';
+import { cn, useLibraryStore } from "@lionreader/core";
 import { format } from 'date-fns';
-import { Backdrop, FloatingPanel } from './ui';
-import type { Annotation, HighlightColor } from '../types';
-import { cn } from '../lib/utils';
+import { Backdrop, FloatingPanel } from "@lionreader/ui";
+import type { Annotation, HighlightColor } from "@lionreader/core";
 
 interface ReaderAnnotationsPanelProps {
     bookId: string;

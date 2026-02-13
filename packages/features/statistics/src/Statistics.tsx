@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { cn, normalizeAuthor } from "@lionreader/core";
 import { useLibraryStore, useSettingsStore, useUIStore } from "@lionreader/core";
 import { formatReadingTime } from "@lionreader/core";
+import type { DailyReadingActivity } from "@lionreader/core";
 import {
     BookOpen,
     Clock,
@@ -144,7 +145,7 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
 }
 
 // Activity heatmap with real data
-function ActivityHeatmap({ dailyActivity }: { dailyActivity: import('./types').DailyReadingActivity[] | undefined }) {
+function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivity[] | undefined }) {
     // Generate last 12 weeks of data
     const weeks = useMemo(() => {
         const data: number[][] = [];

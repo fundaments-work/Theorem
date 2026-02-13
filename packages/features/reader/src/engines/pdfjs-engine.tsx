@@ -1,9 +1,7 @@
 /**
- * PDF.js Engine Component - Simplified Stable Version
+ * PDF.js Engine Component
  *
  * A React component that renders PDF documents using PDF.js.
- * This version uses a simpler, more stable rendering approach
- * without the full PDFViewer class to avoid initialization issues.
  */
 
 import {
@@ -24,7 +22,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import type { Annotation, HighlightColor, PdfZoomMode, SearchResult, TocItem } from "@lionreader/core";
-import { PDFAnnotationLayer } from "../components/reader/PDFAnnotationLayer";
+import { PDFAnnotationLayer } from "../components/PDFAnnotationLayer";
 
 // Import CSS (our custom styles only, not pdf_viewer.css which conflicts)
 import "./pdfjs-engine.css";

@@ -32,14 +32,14 @@ const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
     compact: <Grid3X3 className="w-4 h-4" />,
 };
 
-type ExtractMetadataFn = typeof import("../../../core/src/lib/cover-extractor").extractMetadata;
+type ExtractMetadataFn = typeof import("@lionreader/core").extractMetadata;
 
 const COVER_EXTRACTION_BATCH_SIZE = 3;
 let extractMetadataPromise: Promise<ExtractMetadataFn> | null = null;
 
 async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
     if (!extractMetadataPromise) {
-        extractMetadataPromise = import("../../../core/src/lib/cover-extractor").then(
+        extractMetadataPromise = import("@lionreader/core").then(
             (module) => module.extractMetadata,
         );
     }

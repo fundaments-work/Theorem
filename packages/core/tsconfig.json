@@ -1,15 +1,10 @@
 {
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
-        "outDir": "./dist",
-        "rootDir": "./src",
         "baseUrl": ".",
         "paths": {
             "@/*": [
                 "./src/*"
-            ],
-            "@lionreader/feature-reader/*": [
-                "../../packages/features/reader/src/*"
             ],
             "@foliate-js/*": [
                 "../../packages/features/reader/foliate-js/*"

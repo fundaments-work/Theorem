@@ -6,17 +6,17 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { FoliateEngine } from '../engines';
 import type {
+    Annotation,
+    BookFormat,
     DocLocation,
     DocMetadata,
-    TocItem,
     HighlightColor,
-    Annotation,
-    SearchResult,
-    ReadingFlow,
     PageLayout,
+    ReadingFlow,
+    SearchResult,
     ThemeSettings,
-    BookFormat,
-} from '../types';
+    TocItem,
+} from "@lionreader/core";
 
 export interface UseDocumentReaderOptions {
     onLocationChange?: (location: DocLocation) => void;

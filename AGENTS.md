@@ -1,168 +1,120 @@
-# Agent Guidelines for Theorem
+# Agent Guidelines for LionReader Monorepo
 
-Tauri-based desktop e-book reader built with React, TypeScript, Vite, and Tailwind CSS v4. Uses Zustand for state management and Foliate-js for EPUB rendering.
+Tauri-based desktop e-book reader built with React, TypeScript, Vite, Tailwind CSS v4, Zustand, and Foliate-js.
+
+## Workspace Layout
+
+```
+apps/
+└── web/                        # Main app (Vite + React + Tauri)
+    ├── src/                    # App entry + routing shell
+    └── src-tauri/              # Rust backend
+
+packages/
+├── core/                       # Shared domain logic, stores, types, services
+├── ui/                         # Shared UI components
+└── features/
+    ├── reader/                 # Reader feature module
+    ├── library/                # Library feature module
+    ├── settings/               # Settings feature module
+    ├── statistics/             # Statistics feature module
+    ├── vocabulary/             # Vocabulary feature module
+    └── learning/               # Learning/review feature module
+```
+
+## Package Manager
+
+- Use `pnpm` workspaces.
+- Internal package dependencies must use `workspace:*`.
 
 ## Build Commands
 
 ```bash
-# Frontend Development
-npm run dev              # Start Vite dev server (web mode)
-npm run build            # Build TypeScript + Vite for production
-cd src-tauri && cargo build --release  # Build Rust backend only
+# Install deps for all workspaces
+pnpm install
 
-# Full Desktop App
-npm run tauri dev        # Start Tauri dev mode (desktop app with hot reload)
-npm run tauri build      # Build complete Tauri desktop application
+# App development (web)
+pnpm dev
 
-# Preview
-npm run preview          # Preview production build locally
+# Core/UI typecheck
+pnpm typecheck
+
+# Production build (typecheck + app build)
+pnpm build
+
+# App preview
+pnpm preview
+
+# Tauri desktop mode
+pnpm tauri dev
+pnpm tauri build
+
+# Rust backend only
+cd apps/web/src-tauri && cargo build --release
 ```
 
-**Testing:** No test framework configured yet. Add Vitest for unit tests and Playwright for E2E.
+## Monorepo Boundary Rules
 
-## Project Structure
+- Import across modules only via package entrypoints (`@lionreader/core`, `@lionreader/ui`, `@lionreader/feature-*`).
+- Do not import via cross-package source-relative paths (for example `../../../core/src/...`).
+- Keep each package’s public API in `src/index.ts`.
+- New features should be created under `packages/features/<feature-name>`.
+- Shared logic belongs in `packages/core`; shared UI primitives belong in `packages/ui`.
 
-```
-src/                     # React frontend
-├── components/          # React components by feature
-│   ├── layout/          # App layout (Sidebar, TopNav)
-│   ├── reader/          # Reader UI components
-│   └── ui/              # Shared UI primitives
-├── pages/               # Page-level components
-├── store/               # Zustand stores (UI, Library, Settings)
-├── types/               # TypeScript type definitions
-├── lib/                 # Utility functions and helpers
-├── hooks/               # Custom React hooks
-├── engines/             # Document rendering engines
-└── foliate/            # Foliate-js integration
+## TypeScript Standards
 
-src-tauri/               # Rust backend
-├── src/
-│   ├── lib.rs          # Tauri command handlers
-│   └── main.rs         # Application entry point
-├── Cargo.toml          # Rust dependencies
-└── tauri.conf.json     # Tauri configuration
-```
+- Strict mode enabled.
+- Path alias in app package: `@/*` maps to `apps/web/src/*`.
+- Use `type` imports where applicable.
+- Avoid `any`; prefer explicit interfaces in `packages/core/src/types`.
 
-## Code Style Guidelines
+## Naming Conventions
 
-### TypeScript Configuration
-- Strict mode enabled with ES2020 target
-- Path alias: `@/` maps to `./src/`
-- JSX: `react-jsx` (automatic runtime)
-- Module: ESNext with bundler resolution
+- Components: PascalCase (`ReaderToolbar`, `BookCard`)
+- Hooks: camelCase with `use` prefix (`useDocumentReader`)
+- Types/Interfaces: PascalCase (`Book`, `DocLocation`)
+- Constants: UPPER_SNAKE_CASE
+- Zustand stores: `use...Store`
 
-### Naming Conventions
-- **Components:** PascalCase (e.g., `ReaderToolbar`, `BookCard`)
-- **Hooks:** camelCase with `use` prefix (e.g., `useDocumentReader`)
-- **Types/Interfaces:** PascalCase (e.g., `Book`, `DocLocation`)
-- **Constants:** UPPER_SNAKE_CASE
-- **Zustand stores:** camelCase with `use` prefix + `Store` suffix
-- **Files:** Match default export name
+## Component Patterns
 
-### Imports (Strict Order)
-1. React imports
-2. Third-party libraries (lucide-react, zustand, etc.)
-3. Absolute imports with `@/` alias
-4. Relative imports
-5. Type-only imports with `type` keyword
+- Prefer named exports.
+- Use function declarations for components.
+- Keep package-level barrel exports (`src/index.ts`).
+- Use `cn()` utility for conditional class names.
 
-Example:
-```typescript
-import { useState, useCallback } from "react";
-import { Plus, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useLibraryStore } from "@/store";
-import type { Book, DocLocation } from "@/types";
-```
+## Styling
 
-### Formatting
-- **Indentation:** 4 spaces (no tabs)
-- **Quotes:** Double quotes for strings
-- **Trailing commas:** Required in multi-line objects/arrays
-- **Semicolons:** Required
-- **Line length:** ~100 chars max, keep readable
+- Tailwind CSS v4 with CSS variables.
+- Theme variables live in `apps/web/src/index.css` and `packages/core/src/lib/design-tokens.ts`.
+- Reader-specific variables: `--reader-*`.
 
-### Component Patterns
-- Use function declarations, not arrow functions
-- Add JSDoc header describing purpose
-- Destructure props in function parameters
-- Use `cn()` utility for conditional Tailwind classes
-- Prefer named exports
+## State and Data
 
-```typescript
-/**
- * Component description here
- */
-export function ComponentName({ prop1, prop2 }: ComponentProps) {
-    return <div className={cn("base", conditional && "conditional")} />;
-}
-```
+- Zustand stores and shared state contracts live in `packages/core/src/store`.
+- Persistence via `persist` middleware for reload-safe data.
+- Storage helpers live in `packages/core/src/lib/storage.ts`.
 
-### Styling (Tailwind CSS v4)
-- **CSS Variables:** Use theme variables from `@theme` in `src/index.css`
-- **Pattern:** `bg-[var(--color-surface)]`, `text-[var(--color-text-primary)]`
-- **Color scheme:** Monochrome base (#1a1a1a) with single accent
-- **Themes:** Light, Sepia, Dark themes via CSS classes (`.theme-light`, `.theme-dark`)
-- **Animation:** Use `animate-fade-in` for transitions
-- **Reader styling:** Uses separate CSS variables (`--reader-bg`, `--reader-fg`)
+## Error Handling
 
-### State Management (Zustand)
-- Store files in `src/store/index.ts`
-- Use separate stores per domain (UI, Library, Settings)
-- Enable persistence with `persist` middleware for data that should survive reloads
-- Use selectors to prevent unnecessary re-renders
+- Use try/catch for async operations.
+- Emit descriptive `console.error` messages.
+- Return safe fallbacks for missing/corrupt data.
 
-### Error Handling
-- Use try/catch for async operations
-- Set error state through Zustand stores
-- Console.error with descriptive messages
-- Graceful fallbacks for missing data
+## Performance
 
-### Performance Guidelines
-- Use `useCallback` for event handlers passed to children
-- Use `useMemo` for expensive computations
-- Store callbacks in refs to avoid dependency array issues
-- Batch state updates where possible
-- Lazy load heavy components with dynamic imports
-
-### File Organization
-- **Components:** Group by feature (reader/, layout/, ui/)
-- **Barrel exports:** Each folder has `index.ts` exporting public API
-- **Types:** Centralized in `src/types/index.ts`
-- **Utilities:** Shared helpers in `src/lib/`
-
-### Type Safety
-- Define interfaces for all data structures in `src/types/index.ts`
-- Use strict TypeScript checking
-- Use type assertions sparingly
-
-## Key Libraries
-
-- **State:** Zustand with persist middleware
-- **Icons:** Lucide React
-- **Styling:** Tailwind CSS v4 with CSS variables
-- **Routing:** React Router DOM (memory router for desktop)
-- **E-book Rendering:** Foliate-js (EPUB), PDF.js (PDF)
-- **Storage:** IndexedDB via idb-keyval
-- **Date:** date-fns
+- Use `useMemo` for expensive derivations.
+- Use `useCallback` for handlers passed to children.
+- Lazy-load feature routes where appropriate.
 
 ## Rust/Tauri Backend
 
-Located in `src-tauri/`:
-- Standard Rust formatting (`cargo fmt`)
-- Use serde for JSON serialization
-- Keep commands simple and focused
-- Tauri plugins used: fs, dialog, os, opener
+Located in `apps/web/src-tauri/`:
+- Keep Tauri commands focused and serializable.
+- Use serde for JSON payloads.
+- Run `cargo fmt` before Rust commits.
 
 ## Git
 
-- No pre-commit hooks configured
-- Follow conventional commit messages: `feat:`, `fix:`, `refactor:`, `docs:`
-
-## Environment Notes
-
-- Development uses Vite dev server (web mode)
-- Tauri dev mode runs full desktop app with Rust backend
-- Some features (file import) require Tauri and won't work in web-only mode
-- Check `isTauri()` from `@/lib/env` before calling Tauri APIs
+- Conventional commit types: `feat:`, `fix:`, `refactor:`, `docs:`.
+- Keep monorepo changes scoped: avoid touching unrelated packages in one commit.

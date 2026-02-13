@@ -3,29 +3,40 @@
  * Full-screen reading experience with document viewer and controls
  */
 
-import { Suspense, lazy, useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from 'react';
-import { cn } from './lib/utils';
-import { useUIStore, useLibraryStore, useSettingsStore, useLearningStore } from './store';
-import { WindowTitlebar } from './components/WindowTitlebar';
-import { TableOfContents } from './components/TableOfContents';
-import { ReaderSettings } from './components/ReaderSettings';
-import { ReaderAnnotationsPanel } from './components/ReaderAnnotationsPanel';
-import { ReaderSearch } from './components/ReaderSearch';
-import { BookInfoPopover } from './components/BookInfoPopover';
-import { ReaderNavbar } from './components/progress/ReaderNavbar';
-import { ReaderViewport } from './components/ReaderViewport';
-import { HighlightColorPicker } from './components/highlights/HighlightColorPicker';
-import { NoteEditor } from './components/highlights/NoteEditor';
-import { DictionaryResultPopover } from './components/learning/DictionaryResultPopover';
-import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, PdfZoomMode, ReaderSettings as ReaderSettingsState } from './types';
-import { isTauri } from './lib/env';
-import { getBookBlob, getBookData } from './lib/storage';
-import type { PDFJsEngineRef } from './engines/pdfjs-engine';
-import type { ReaderViewportHandle } from './components/ReaderViewport';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from "react";
+import { DictionaryResultPopover } from "@lionreader/feature-learning";
 import {
+    cn,
+    getBookBlob,
+    getBookData,
+    isTauri,
+    useLearningStore,
+    useLibraryStore,
+    useSettingsStore,
+    useUIStore,
     vocabularyTermFromLookup,
+    type Annotation,
     type DictionaryLookupResult,
-} from './services/DictionaryService';
+    type DocLocation,
+    type DocMetadata,
+    type HighlightColor,
+    type PdfZoomMode,
+    type ReaderSettings as ReaderSettingsState,
+    type TocItem,
+} from "@lionreader/core";
+import { WindowTitlebar } from "./components/WindowTitlebar";
+import { TableOfContents } from "./components/TableOfContents";
+import { ReaderSettings } from "./components/ReaderSettings";
+import { ReaderAnnotationsPanel } from "./components/ReaderAnnotationsPanel";
+import { ReaderSearch } from "./components/ReaderSearch";
+import { BookInfoPopover } from "./components/BookInfoPopover";
+import { ReaderNavbar } from "./components/progress/ReaderNavbar";
+import { ReaderViewport } from "./components/ReaderViewport";
+import { HighlightColorPicker } from "./components/highlights/HighlightColorPicker";
+import { NoteEditor } from "./components/highlights/NoteEditor";
+import { PDFReader } from "./components/PDFReader";
+import type { PDFJsEngineRef } from "./engines/pdfjs-engine";
+import type { ReaderViewportHandle } from "./components/ReaderViewport";
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -55,10 +66,6 @@ function resolvePdfTargetPage(target: string): number | null {
     }
     return null;
 }
-
-const LazyPDFReader = lazy(() =>
-    import('./components/reader/PDFReader').then((module) => ({ default: module.PDFReader })),
-);
 
 export function ReaderPage() {
     const currentBookId = useUIStore((state) => state.currentBookId);
@@ -138,7 +145,7 @@ export function ReaderPage() {
     const pdfProgressSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasAppliedInitialLocationRef = useRef(false);
     const debug = useCallback((...args: unknown[]) => {
-        if (import.meta.env.DEV) {
+        if (import.meta.env.MODE === 'development') {
             console.debug(...args);
         }
     }, []);
@@ -1640,37 +1647,29 @@ export function ReaderPage() {
                 style={{ paddingTop: `${shouldShowReaderChrome ? toolbarHeight : 0}px` }}
             >
                 {isPdfFormat ? (
-                    <Suspense
-                        fallback={(
-                            <div className="flex h-full w-full items-center justify-center text-[color:var(--color-text-secondary)]">
-                                Loading PDF engine...
-                            </div>
-                        )}
-                    >
-                        <LazyPDFReader
-                            ref={pdfReaderRef}
-                            pdfPath={currentBook?.storagePath || currentBook?.filePath || ''}
-                            pdfData={pdfData ?? undefined}
-                            originalFilename={currentBook?.title}
-                            initialPage={pdfInitialPage}
-                            initialZoom={pdfInitialZoom}
-                            initialZoomMode={pdfInitialZoomMode}
-                            theme={settings.readerSettings.theme}
-                            onPageChange={handlePdfPageChange}
-                            onZoomModeChange={handlePdfZoomModeChange}
-                            onLoad={handlePdfLoad}
-                            onError={handlePdfError}
-                            onViewportTap={handleViewportTap}
-                            annotations={annotations}
-                            annotationMode={pdfAnnotationMode}
-                            highlightColor={pdfHighlightColor}
-                            penColor={pdfBrushColor}
-                            penWidth={pdfBrushWidth}
-                            onAnnotationAdd={handlePdfAnnotationAdd}
-                            onAnnotationChange={handlePdfAnnotationChange}
-                            onAnnotationRemove={handlePdfAnnotationRemove}
-                        />
-                    </Suspense>
+                    <PDFReader
+                        ref={pdfReaderRef}
+                        pdfPath={currentBook?.storagePath || currentBook?.filePath || ""}
+                        pdfData={pdfData ?? undefined}
+                        originalFilename={currentBook?.title}
+                        initialPage={pdfInitialPage}
+                        initialZoom={pdfInitialZoom}
+                        initialZoomMode={pdfInitialZoomMode}
+                        theme={settings.readerSettings.theme}
+                        onPageChange={handlePdfPageChange}
+                        onZoomModeChange={handlePdfZoomModeChange}
+                        onLoad={handlePdfLoad}
+                        onError={handlePdfError}
+                        onViewportTap={handleViewportTap}
+                        annotations={annotations}
+                        annotationMode={pdfAnnotationMode}
+                        highlightColor={pdfHighlightColor}
+                        penColor={pdfBrushColor}
+                        penWidth={pdfBrushWidth}
+                        onAnnotationAdd={handlePdfAnnotationAdd}
+                        onAnnotationChange={handlePdfAnnotationChange}
+                        onAnnotationRemove={handlePdfAnnotationRemove}
+                    />
                 ) : (
                     <ReaderViewport
                         key={currentBookId || 'no-book'}

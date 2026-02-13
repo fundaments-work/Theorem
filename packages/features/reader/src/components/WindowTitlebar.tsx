@@ -17,7 +17,7 @@ import {
     Minus,
     Square,
     X,
-    LineSquiggle,
+    PenLine,
     ChevronLeft,
     ChevronRight,
     ZoomIn,
@@ -456,7 +456,7 @@ export function WindowTitlebar({
                         style={{ color: 'var(--reader-fg)' }}
                         title="Annotations & bookmarks"
                     >
-                        <LineSquiggle className="w-4 h-4" />
+                        <PenLine className="w-4 h-4" />
                     </button>
 
                     <div 
@@ -846,7 +846,7 @@ export function WindowTitlebar({
                             active={activePanel === "bookmarks"}
                             title="View Annotations"
                         >
-                            <LineSquiggle className="w-4 h-4" />
+                            <PenLine className="w-4 h-4" />
                         </ToolbarButton>
 
                         <ToolbarButton

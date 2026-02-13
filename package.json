@@ -1,20 +1,20 @@
 {
     "name": "lionreader-monorepo",
     "private": true,
-    "workspaces": [
-        "apps/*",
-        "packages/*",
-        "packages/features/*"
-    ],
+    "packageManager": "pnpm@10.18.1",
     "scripts": {
-        "dev": "npm run dev --workspace=@lionreader/web",
-        "build": "npm run build --workspaces",
-        "test": "npm run test --workspaces",
-        "tauri": "npm run tauri --workspace=@lionreader/web"
+        "dev": "node ./scripts/dev.mjs",
+        "dev:web": "pnpm --filter @lionreader/web dev",
+        "dev:tauri": "pnpm --filter @lionreader/web tauri dev",
+        "build": "pnpm run typecheck && pnpm --filter @lionreader/web build",
+        "typecheck": "pnpm --filter @lionreader/core typecheck && pnpm --filter @lionreader/ui typecheck",
+        "test": "pnpm -r --if-present test",
+        "preview": "pnpm --filter @lionreader/web preview",
+        "tauri": "pnpm --filter @lionreader/web tauri"
     },
     "devDependencies": {
-        "typescript": "^5.0.0",
         "@types/node": "^22.0.0",
+        "typescript": "^5.0.0",
         "vite": "^7.0.0"
     }
 }

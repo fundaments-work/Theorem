@@ -7,13 +7,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquare, X, Check, Trash2, Languages } from 'lucide-react';
 import { ask } from '@tauri-apps/plugin-dialog';
 import {
+    cn,
     HIGHLIGHT_COLOR_TOKENS,
     HIGHLIGHT_PICKER_ACTIVE_COLORS,
     HIGHLIGHT_PICKER_COLORS,
+    isTauri,
+    type HighlightColor,
 } from "@lionreader/core";
-import { cn } from '../../lib/utils';
-import { isTauri } from '../../lib/env';
-import type { HighlightColor } from '../../types';
 
 interface HighlightColorPickerProps {
     isOpen: boolean;
