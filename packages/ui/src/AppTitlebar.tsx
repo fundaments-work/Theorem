@@ -57,8 +57,8 @@ export function AppTitlebar({
                 setIsMaximized(maximized);
             } catch (err) {
                 // Fallback to window size detection if Tauri API fails
-                const isMax = window.innerWidth === window.screen.availWidth && 
-                             window.innerHeight === window.screen.availHeight;
+                const isMax = window.innerWidth === window.screen.availWidth &&
+                    window.innerHeight === window.screen.availHeight;
                 setIsMaximized(isMax);
             }
         };
@@ -143,6 +143,8 @@ export function AppTitlebar({
                 return "Shelves";
             case "bookDetails":
                 return "Book Details";
+            case "feeds":
+                return "Feeds";
             default:
                 return title;
         }

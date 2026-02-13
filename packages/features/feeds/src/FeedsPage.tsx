@@ -393,17 +393,17 @@ export function FeedsPage() {
                 // Desktop: always flex, fixed width
                 "md:flex md:w-64"
             )}>
-                {/* Sidebar Header */}
-                <div className="h-14 flex items-center justify-between px-4 border-b border-[var(--color-border)]">
-                    <h2 className="font-semibold text-[color:var(--color-text-primary)]">
-                        Feeds
+                {/* Sidebar Header (Simplified) */}
+                <div className="px-4 pt-8 pb-4 flex items-center justify-between">
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">
+                        Subscriptions
                     </h2>
                     <button
                         onClick={() => setIsAddModalOpen(true)}
                         className="p-1.5 rounded-lg text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                         title="Add Feed"
                     >
-                        <Plus className="w-5 h-5" />
+                        <Plus className="w-4 h-4" />
                     </button>
                 </div>
 
@@ -429,11 +429,6 @@ export function FeedsPage() {
                         <span className="text-sm font-medium">All Articles</span>
                     </button>
 
-                    <div className="px-3 mb-2">
-                        <span className="text-[10px] uppercase font-bold text-[color:var(--color-text-muted)] tracking-wider">
-                            Subscriptions
-                        </span>
-                    </div>
 
                     <div className="space-y-0.5">
                         {feeds.map(feed => (
@@ -459,8 +454,8 @@ export function FeedsPage() {
                 // Desktop: always flex
                 "md:flex"
             )}>
-                {/* Content Header */}
-                <div className="h-14 flex items-center justify-between px-4 sm:px-6 border-b border-[var(--color-border)] flex-shrink-0">
+                {/* Page Header Area */}
+                <header className="shrink-0 px-6 pt-8 pb-4 flex items-center justify-between">
                     <div className="flex items-center gap-3 overflow-hidden">
                         {/* Mobile Back Button */}
                         <button
@@ -470,23 +465,28 @@ export function FeedsPage() {
                             <ArrowLeft className="w-5 h-5" />
                         </button>
 
-                        <h1 className="text-lg font-semibold text-[color:var(--color-text-primary)] truncate">
-                            {selectedFeed ? selectedFeed.title : "All Articles"}
-                        </h1>
-                        {!selectedFeed && (
-                            <span className="hidden sm:inline text-sm text-[color:var(--color-text-muted)]">
-                                {displayedArticles.length} articles
-                            </span>
-                        )}
+                        <div>
+                            <h1 className="ui-page-title truncate">
+                                {selectedFeed ? selectedFeed.title : "All Articles"}
+                            </h1>
+                            {!selectedFeed && (
+                                <p className="ui-page-subtitle">
+                                    {displayedArticles.length} articles
+                                </p>
+                            )}
+                            {selectedFeed && (
+                                <p className="ui-page-subtitle">
+                                    {selectedFeed.url}
+                                </p>
+                            )}
+                        </div>
                     </div>
 
                     <button
                         onClick={handleRefreshAll}
                         disabled={isRefreshing}
                         className={cn(
-                            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium",
-                            "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]",
-                            "hover:bg-[var(--color-surface-muted)] transition-colors",
+                            "ui-btn ui-btn-secondary",
                             "disabled:opacity-50",
                         )}
                         title="Refresh feeds"
@@ -494,7 +494,7 @@ export function FeedsPage() {
                         <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
                         <span className="hidden sm:inline">Refresh</span>
                     </button>
-                </div>
+                </header>
 
                 {/* Scrollable Article List */}
                 <div className="flex-1 overflow-y-auto">
