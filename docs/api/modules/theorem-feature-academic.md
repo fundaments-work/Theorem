@@ -12,6 +12,7 @@ Feature package.
 
 **Internal packages**
 - `@theorem/core`
+- `@theorem/ui`
 
 **External packages**
 - `lucide-react`
@@ -26,6 +27,16 @@ Feature package.
 
 ```ts
 AcademicPage(): JSX.Element
+```
+
+- Parameters: _none_
+
+- Returns: `JSX.Element`
+
+### Function `AcademicReferencesPage`
+
+```ts
+AcademicReferencesPage(): JSX.Element
 ```
 
 - Parameters: _none_
