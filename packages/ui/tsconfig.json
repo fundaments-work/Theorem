@@ -9,7 +9,8 @@
             "@foliate-js/*": [
                 "../features/reader/foliate-js/*"
             ]
-        }
+        },
+        "composite": true
     },
     "include": [
         "src"

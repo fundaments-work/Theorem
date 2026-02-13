@@ -93,7 +93,9 @@ export function AddFeedModal({ isOpen, onClose, onSubmit, isLoading, error }: Ad
                         {error && (
                             <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--color-error)]/10">
                                 <AlertCircle className="w-4 h-4 text-[color:var(--color-error)] mt-0.5 flex-shrink-0" />
-                                <p className="text-xs text-[color:var(--color-error)]">{error}</p>
+                                <div className="text-xs text-[color:var(--color-error)] whitespace-pre-wrap leading-relaxed">
+                                    {error}
+                                </div>
                             </div>
                         )}
 

@@ -356,6 +356,20 @@ extractMetadata(data: ArrayBuffer, format: BookFormat, filename: string, bookId?
 
 - Returns: `Promise<ExtractedMetadata>`
 
+### Function `fetchAndParseFeed`
+
+Fetch and parse an RSS or Atom feed from a URL.
+
+```ts
+fetchAndParseFeed(url: string): Promise<{ feed: Omit<ParsedFeed, "articles">; articles: ParsedFeed["articles"]; }>
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `url` | `string` | no |
+
+- Returns: `Promise<{ feed: Omit<ParsedFeed, "articles">; articles: ParsedFeed["articles"]; }>`
+
 ### Function `findSectionAtFraction`
 
 Find a section at a specific fraction position
@@ -927,6 +941,28 @@ lookupInStarDictDictionary(id: string, term: string): Promise<VocabularyMeaning[
 
 - Returns: `Promise<VocabularyMeaning[]>`
 
+### Function `materializeFeed`
+
+Convert parsed feed results into store-ready objects.
+
+```ts
+materializeFeed(url: string, parsed: Awaited<ReturnType<typeof fetchAndParseFeed>>): { feed: RssFeed; articles: RssArticle[]; }
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `url` | `string` | no |
+| `parsed` | `{ feed: Omit<ParsedFeed, "articles">; articles: ParsedFeed["articles"]; }` | no |
+
+**Parameter `parsed` fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `articles` | `Omit<RssArticle, "id" | "feedId" | "fetchedAt" | "isRead" | "isFavorite">[]` | no |
+| `feed` | `Omit<ParsedFeed, "articles">` | no |
+
+- Returns: `{ feed: RssFeed; articles: RssArticle[]; }`
+
 ### Function `normalizeAuthor`
 
 Normalize author field which might be a string, object, or array EPUB metadata can have author as: string | {name, sortAs, role} | Array<string|object>
@@ -1449,6 +1485,30 @@ useLibraryStore<U>(selector: (state: LibraryStore) => U): U
 | Parameter | Type | Optional |
 | --- | --- | --- |
 | `selector` | `(state: LibraryStore) => U` | no |
+
+- Returns: `U`
+
+### Function `useRssStore`
+
+**Overload 1**
+
+```ts
+useRssStore(): RssStore
+```
+
+- Parameters: _none_
+
+- Returns: `RssStore`
+
+**Overload 2**
+
+```ts
+useRssStore<U>(selector: (state: RssStore) => U): U
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `selector` | `(state: RssStore) => U` | no |
 
 - Returns: `U`
 
@@ -2292,6 +2352,46 @@ _No object fields detected._
 **Fields**
 
 _No object fields detected._
+
+### Interface `RssArticle`
+
+- Type: `RssArticle`
+
+**Fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `author` | `string | undefined` | yes |
+| `content` | `string` | no |
+| `feedId` | `string` | no |
+| `fetchedAt` | `Date` | no |
+| `id` | `string` | no |
+| `imageUrl` | `string | undefined` | yes |
+| `isFavorite` | `boolean` | no |
+| `isRead` | `boolean` | no |
+| `publishedAt` | `Date | undefined` | yes |
+| `summary` | `string | undefined` | yes |
+| `title` | `string` | no |
+| `url` | `string` | no |
+
+### Interface `RssFeed`
+
+- Type: `RssFeed`
+
+**Fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `addedAt` | `Date` | no |
+| `description` | `string | undefined` | yes |
+| `errorMessage` | `string | undefined` | yes |
+| `iconUrl` | `string | undefined` | yes |
+| `id` | `string` | no |
+| `lastFetched` | `Date | undefined` | yes |
+| `siteUrl` | `string | undefined` | yes |
+| `title` | `string` | no |
+| `unreadCount` | `number` | no |
+| `url` | `string` | no |
 
 ### Interface `SchedulerReviewResult`
 

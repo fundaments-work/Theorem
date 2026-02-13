@@ -25,7 +25,7 @@ Feature package.
 
 ### Function `VocabularyPage`
 
-Standalone vocabulary workspace with source-based organization and scoped review launcher.
+Standalone vocabulary workspace with source-based organization and scoped review launcher. Refactored to match FeedsPage layout.
 
 ```ts
 VocabularyPage(): JSX.Element

@@ -1,10 +1,10 @@
+use reqwest::blocking::Client;
+use serde::Serialize;
+use std::env;
 /**
  * Tauri Library Module
  */
-
 use std::fs;
-use std::env;
-use serde::Serialize;
 
 /**
  * Metadata structure for PDF documents.
@@ -74,8 +74,8 @@ fn read_pdf_file(path: String) -> Result<Vec<u8>, String> {
  */
 #[tauri::command]
 fn get_pdf_metadata(path: String) -> Result<PdfMetadata, String> {
-    let bytes = fs::read(&path)
-        .map_err(|e| format!("Failed to read PDF file '{}': {}", path, e))?;
+    let bytes =
+        fs::read(&path).map_err(|e| format!("Failed to read PDF file '{}': {}", path, e))?;
 
     // Basic PDF metadata extraction by parsing the header and info dictionary
     let metadata = extract_pdf_metadata(&bytes);
@@ -233,6 +233,44 @@ fn decode_hex_string(hex: &str) -> Option<String> {
         .and_then(|bytes| String::from_utf8(bytes).ok())
 }
 
+/**
+ * Fetches RSS feed content from a URL using native HTTP client.
+ * This bypasses browser CORS restrictions.
+ *
+ * # Arguments
+ * * `url` - The URL of the RSS feed to fetch
+ *
+ * # Returns
+ * * `Ok(String)` - The feed content as a string
+ * * `Err(String)` - Error message if fetching fails
+ */
+#[tauri::command]
+fn fetch_rss_feed(url: String) -> Result<String, String> {
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get(&url)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .header("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml, */*")
+        .send()
+        .map_err(|e| format!("Failed to fetch feed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "HTTP error: {} {}",
+            response.status(),
+            response.status().canonical_reason().unwrap_or("Unknown")
+        ));
+    }
+
+    response
+        .text()
+        .map_err(|e| format!("Failed to read response: {}", e))
+}
+
 #[cfg(target_os = "linux")]
 fn apply_linux_webkit_workarounds() {
     // Allow advanced users to disable these workarounds for troubleshooting:
@@ -251,7 +289,10 @@ fn apply_linux_webkit_workarounds() {
 
     // Helps with fractional-scaling blur regressions in GTK/WebKit paths.
     let existing_gdk_debug = env::var("GDK_DEBUG").unwrap_or_default();
-    if existing_gdk_debug.split(',').all(|flag| flag.trim() != "gl-no-fractional") {
+    if existing_gdk_debug
+        .split(',')
+        .all(|flag| flag.trim() != "gl-no-fractional")
+    {
         let merged = if existing_gdk_debug.trim().is_empty() {
             "gl-no-fractional".to_string()
         } else {
@@ -271,10 +312,12 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![
             read_file,
             read_pdf_file,
-            get_pdf_metadata
+            get_pdf_metadata,
+            fetch_rss_feed
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

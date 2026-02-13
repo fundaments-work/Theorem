@@ -13,6 +13,7 @@ import {
     AlertCircle, Globe, LayoutTemplate, ArrowLeft
 } from "lucide-react";
 import { AddFeedModal } from "./AddFeedModal";
+import { ArticleViewer } from "./ArticleViewer";
 
 // ── Helper ──
 
@@ -246,25 +247,25 @@ function ArticleCard({
 
 function EmptyFeeds({ onAddFeed }: { onAddFeed: () => void }) {
     return (
-        <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in p-6">
-            <div className="w-20 h-20 rounded-2xl bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
-                <Rss className="w-8 h-8 text-[color:var(--color-text-muted)]" />
+        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+            <div className="ui-empty-icon">
+                <Rss className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-semibold text-[color:var(--color-text-primary)] mb-3">
+            <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 Your Feed Reader
             </h2>
-            <p className="text-[color:var(--color-text-secondary)] mb-8 text-base leading-relaxed max-w-md">
+            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 Subscribe to your favorite blogs, news sites, and newsletters to read them right here in Theorem.
             </p>
             <button
                 onClick={onAddFeed}
                 className={cn(
-                    "flex items-center gap-2 px-6 py-3 rounded-xl",
-                    "bg-[var(--color-accent)] ui-text-accent-contrast text-base font-medium",
+                    "ui-empty-state-action flex items-center gap-2 px-6 py-2.5 rounded-full",
+                    "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
                     "hover:opacity-90 transition-opacity shadow-sm",
                 )}
             >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-4 h-4" />
                 <span>Add First Feed</span>
             </button>
         </div>
@@ -273,15 +274,15 @@ function EmptyFeeds({ onAddFeed }: { onAddFeed: () => void }) {
 
 function EmptyArticles({ feedTitle }: { feedTitle?: string }) {
     return (
-        <div className="flex flex-col items-center justify-center h-full text-center p-12">
-            <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-4">
-                <LayoutTemplate className="w-6 h-6 text-[color:var(--color-text-muted)]" />
+        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-24 text-center animate-fade-in">
+            <div className="ui-empty-icon">
+                <LayoutTemplate className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-medium text-[color:var(--color-text-primary)] mb-1">
-                No articles yet
+            <h3 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+                No Articles Yet
             </h3>
-            <p className="text-sm text-[color:var(--color-text-muted)]">
-                {feedTitle ? `We couldn't find any articles for ${feedTitle}.` : "Select a feed from the sidebar to start reading."}
+            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] text-sm leading-relaxed">
+                {feedTitle ? `We couldn't find any new articles for "${feedTitle}".` : "Select a feed from the sidebar to start reading."}
             </p>
         </div>
     );
@@ -294,6 +295,8 @@ export function FeedsPage() {
     const articles = useRssStore((s) => s.articles);
     const isLoading = useRssStore((s) => s.isLoading);
     const error = useRssStore((s) => s.error);
+    const currentArticle = useRssStore((s) => s.currentArticle);
+    const isArticleViewerOpen = useRssStore((s) => s.isArticleViewerOpen);
     const addFeed = useRssStore((s) => s.addFeed);
     const removeFeed = useRssStore((s) => s.removeFeed);
     const refreshAll = useRssStore((s) => s.refreshAll);
@@ -301,6 +304,7 @@ export function FeedsPage() {
     const getAllArticles = useRssStore((s) => s.getAllArticles);
     const openArticleInReader = useRssStore((s) => s.openArticleInReader);
     const toggleArticleFavorite = useRssStore((s) => s.toggleArticleFavorite);
+    const closeArticleViewer = useRssStore((s) => s.closeArticleViewer);
     const setError = useRssStore((s) => s.setError);
 
     const [selectedFeedId, setSelectedFeedId] = useState<string | null>(null);
@@ -368,7 +372,7 @@ export function FeedsPage() {
     // Initial Empty State
     if (feeds.length === 0 && !isLoading) {
         return (
-            <div className="h-full w-full flex flex-col items-center justify-center bg-[var(--color-background)]">
+            <div className="ui-page animate-fade-in">
                 <EmptyFeeds onAddFeed={() => setIsAddModalOpen(true)} />
                 <AddFeedModal
                     isOpen={isAddModalOpen}
@@ -539,6 +543,19 @@ export function FeedsPage() {
                 onSubmit={handleAddFeed}
                 isLoading={isLoading}
                 error={error}
+            />
+
+            {/* Article Viewer */}
+            <ArticleViewer
+                article={currentArticle}
+                feedTitle={currentArticle ? feedTitleById.get(currentArticle.feedId) : undefined}
+                isOpen={isArticleViewerOpen}
+                onClose={closeArticleViewer}
+                onToggleFavorite={() => {
+                    if (currentArticle) {
+                        toggleArticleFavorite(currentArticle.id);
+                    }
+                }}
             />
         </div>
     );

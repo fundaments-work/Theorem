@@ -9,10 +9,12 @@
             "@foliate-js/*": [
                 "../../packages/features/reader/foliate-js/*"
             ]
-        }
+        },
+        "composite": true
     },
     "include": [
-        "src"
+        "src",
+        "../../packages/features/reader/foliate-js"
     ],
     "exclude": [
         "node_modules",

@@ -12,6 +12,7 @@ Application package.
 
 **Internal packages**
 - `@theorem/core`
+- `@theorem/feature-feeds`
 - `@theorem/feature-learning`
 - `@theorem/feature-library`
 - `@theorem/feature-reader`

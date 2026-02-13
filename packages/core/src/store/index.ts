@@ -1865,7 +1865,6 @@ import type { RssFeed, RssArticle } from '../types';
 import {
     fetchAndParseFeed,
     materializeFeed,
-    articleToEpub,
 } from '../services/RssService';
 
 interface RssStore {
@@ -1873,6 +1872,9 @@ interface RssStore {
     articles: RssArticle[];
     isLoading: boolean;
     error?: string;
+    // Article viewer state
+    currentArticle: RssArticle | null;
+    isArticleViewerOpen: boolean;
 
     addFeed: (url: string) => Promise<RssFeed | null>;
     removeFeed: (feedId: string) => void;
@@ -1883,6 +1885,8 @@ interface RssStore {
     getArticlesForFeed: (feedId: string) => RssArticle[];
     getAllArticles: () => RssArticle[];
     openArticleInReader: (article: RssArticle) => Promise<void>;
+    closeArticleViewer: () => void;
+    setCurrentArticle: (article: RssArticle | null) => void;
     setError: (error?: string) => void;
 }
 
@@ -1893,6 +1897,8 @@ export const useRssStore = create<RssStore>()(
             articles: [],
             isLoading: false,
             error: undefined,
+            currentArticle: null,
+            isArticleViewerOpen: false,
 
             addFeed: async (url: string) => {
                 set({ isLoading: true, error: undefined });
@@ -2033,51 +2039,30 @@ export const useRssStore = create<RssStore>()(
             },
 
             openArticleInReader: async (article: RssArticle) => {
-                const feed = get().feeds.find(f => f.id === article.feedId);
-                const feedTitle = feed?.title;
-
-                // Convert article to EPUB blob
-                const epubBlob = articleToEpub(article, feedTitle);
-
-                // Prepare IDs
-                const bookId = `rss-${article.id}`;
-                const now = new Date();
-
-                // Save the EPUB blob to storage FIRST to get the correct path
-                const arrayBuffer = await epubBlob.arrayBuffer();
-                const { saveBookData } = await import('../lib/storage');
-                const savedPath = await saveBookData(bookId, arrayBuffer);
-
-                const libraryStore = useLibraryStore.getState();
-
-                // Check if this article already has a book entry
-                const existingBook = libraryStore.getBook(bookId);
-                if (existingBook) {
-                    // Update storage path if needed
-                    libraryStore.updateBook(bookId, { storagePath: savedPath });
-                } else {
-                    const bookEntry: Book = {
-                        id: bookId,
-                        title: article.title,
-                        author: article.author || feedTitle || 'Unknown',
-                        filePath: `rss://${article.id}`,
-                        storagePath: savedPath, // Crucial for Reader to find the file
-                        format: 'epub',
-                        fileSize: epubBlob.size,
-                        addedAt: now,
-                        progress: 0,
-                        tags: ['rss'],
-                        isFavorite: false,
-                        readingTime: 0,
-                    };
-                    libraryStore.addBook(bookEntry);
-                }
-
                 // Mark article as read
                 get().markArticleRead(article.id);
+                
+                // Open the article viewer instead of converting to EPUB
+                set({ 
+                    currentArticle: article, 
+                    isArticleViewerOpen: true 
+                });
+            },
 
-                // Navigate to reader
-                useUIStore.getState().setRoute('reader', bookId);
+            closeArticleViewer: () => {
+                set({ 
+                    isArticleViewerOpen: false,
+                    // Don't clear currentArticle immediately to allow for animations
+                });
+                
+                // Clear currentArticle after animation
+                setTimeout(() => {
+                    set({ currentArticle: null });
+                }, 300);
+            },
+
+            setCurrentArticle: (article: RssArticle | null) => {
+                set({ currentArticle: article });
             },
 
             setError: (error?: string) => {

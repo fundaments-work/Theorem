@@ -15,12 +15,4 @@
     "include": [
         "src"
     ],
-    "references": [
-        {
-            "path": "../../core"
-        },
-        {
-            "path": "../../ui"
-        }
-    ]
 }

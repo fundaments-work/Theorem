@@ -118,6 +118,7 @@
     "dialog:allow-open",
     "dialog:allow-ask",
     "dialog:allow-confirm",
-    "dialog:allow-message"
+    "dialog:allow-message",
+    "http:default"
   ]
 }

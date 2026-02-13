@@ -8,6 +8,7 @@ export type SearchDomain =
     | "annotations"
     | "bookmarks"
     | "shelves"
+    | "feeds"
     | "reader"
     | "none";
 
@@ -21,6 +22,7 @@ const APP_TITLEBAR_DOMAIN_BY_ROUTE: Record<AppRoute, SearchDomain> = {
     statistics: "none",
     shelves: "shelves",
     bookmarks: "bookmarks",
+    feeds: "feeds",
 };
 
 const SEARCH_PLACEHOLDER_BY_DOMAIN: Record<Exclude<SearchDomain, "none">, string> = {
@@ -29,6 +31,7 @@ const SEARCH_PLACEHOLDER_BY_DOMAIN: Record<Exclude<SearchDomain, "none">, string
     annotations: "Search highlights, notes, or books...",
     bookmarks: "Search bookmarks, books, or authors...",
     shelves: "Search shelves...",
+    feeds: "Search articles...",
     reader: "Search in book...",
 };
 
