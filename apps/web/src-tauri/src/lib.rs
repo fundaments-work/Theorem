@@ -357,6 +357,57 @@ fn fetch_url_content(url: String) -> Result<String, String> {
     Err(last_error.unwrap_or_else(|| "Failed to fetch URL content".to_string()))
 }
 
+/**
+ * Fetches binary URL content (for example PDF files) using native HTTP client.
+ * Returns raw bytes so the frontend can store the document in app storage.
+ */
+#[tauri::command]
+fn fetch_binary_content(url: String) -> Result<Vec<u8>, String> {
+    let parsed_url =
+        reqwest::Url::parse(&url).map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
+    let referer = {
+        let mut origin = parsed_url.clone();
+        origin.set_path("/");
+        origin.set_query(None);
+        origin.set_fragment(None);
+        origin.to_string()
+    };
+
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(90))
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get(parsed_url)
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+             (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+        )
+        .header("Accept", "application/pdf,application/octet-stream,*/*")
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .header("Referer", &referer)
+        .header("Cache-Control", "no-cache")
+        .header("Pragma", "no-cache")
+        .send()
+        .map_err(|e| format!("Failed to fetch binary content: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "HTTP error: {} {}",
+            response.status(),
+            response.status().canonical_reason().unwrap_or("Unknown")
+        ));
+    }
+
+    let bytes = response
+        .bytes()
+        .map_err(|e| format!("Failed to read binary response: {}", e))?;
+    Ok(bytes.to_vec())
+}
+
 #[cfg(target_os = "linux")]
 fn apply_linux_webkit_workarounds() {
     // Allow advanced users to disable these workarounds for troubleshooting:
@@ -404,7 +455,8 @@ pub fn run() {
             read_pdf_file,
             get_pdf_metadata,
             fetch_rss_feed,
-            fetch_url_content
+            fetch_url_content,
+            fetch_binary_content
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -41,6 +41,9 @@ const StatisticsPage = lazy(() =>
 const FeedsPage = lazy(() =>
     import("@theorem/feature-feeds").then((module) => ({ default: module.FeedsPage })),
 );
+const AcademicPage = lazy(() =>
+    import("@theorem/feature-academic").then((module) => ({ default: module.AcademicPage })),
+);
 const DESKTOP_STARTUP_MIN_WIDTH = 1024;
 const DESKTOP_STARTUP_MIN_HEIGHT = 720;
 
@@ -171,6 +174,8 @@ function App() {
                 return <StatisticsPage />;
             case "feeds":
                 return <FeedsPage />;
+            case "academic":
+                return <AcademicPage />;
             default:
                 return <LibraryPage />;
         }

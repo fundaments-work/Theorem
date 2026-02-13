@@ -6,9 +6,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
     cn,
+    generateCitation,
     getBookBlob,
     getBookData,
     isTauri,
+    toAcademicPaper,
     useLearningStore,
     useLibraryStore,
     useRssStore,
@@ -21,6 +23,7 @@ import {
     type DocMetadata,
     type HighlightColor,
     type PdfZoomMode,
+    type CitationFormat,
     type ReaderSettings as ReaderSettingsState,
     type TocItem,
 } from "@theorem/core";
@@ -67,6 +70,23 @@ function resolvePdfTargetPage(target: string): number | null {
         return Math.floor(numericValue);
     }
     return null;
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
 }
 
 function BookReaderPage() {
@@ -128,6 +148,8 @@ function BookReaderPage() {
     const [toc, setToc] = useState<TocItem[]>([]);
     const [location, setLocation] = useState<DocLocation | null>(null);
     const [sectionFractions, setSectionFractions] = useState<number[]>([]);
+    const [copiedCitationFormat, setCopiedCitationFormat] = useState<CitationFormat | null>(null);
+    const citationResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // UI state
     const [isMobileViewport, setIsMobileViewport] = useState(() => (
         typeof window !== 'undefined'
@@ -161,7 +183,39 @@ function BookReaderPage() {
 
     // Get current book format
     const currentBook = currentBookId ? getBook(currentBookId) : null;
+    const currentAcademicPaper = useMemo(
+        () => (currentBook ? toAcademicPaper(currentBook) : null),
+        [currentBook],
+    );
     const isPdfFormat = currentBook?.format === 'pdf';
+    const handleCopyCitation = useCallback(async (format: CitationFormat = "apa") => {
+        if (!currentAcademicPaper) {
+            return;
+        }
+
+        try {
+            const citation = generateCitation(currentAcademicPaper, format);
+            await copyTextToClipboard(citation);
+            setCopiedCitationFormat(format);
+            if (citationResetTimeoutRef.current) {
+                clearTimeout(citationResetTimeoutRef.current);
+            }
+            citationResetTimeoutRef.current = setTimeout(() => {
+                setCopiedCitationFormat(null);
+            }, 1800);
+        } catch (error) {
+            console.error("[Reader] Failed to copy citation:", error);
+        }
+    }, [currentAcademicPaper]);
+
+    useEffect(() => {
+        setCopiedCitationFormat(null);
+        if (citationResetTimeoutRef.current) {
+            clearTimeout(citationResetTimeoutRef.current);
+            citationResetTimeoutRef.current = null;
+        }
+    }, [currentBookId]);
+
     const effectiveReaderSettings = useMemo<ReaderSettingsState>(() => {
         if (isPdfFormat) {
             return settings.readerSettings;
@@ -231,6 +285,7 @@ function BookReaderPage() {
     const handlePdfLoad = useCallback((info: import('./engines/pdfjs-engine').PDFDocumentInfo) => {
         // Get current book data for fallback
         const currentBookData = currentBookId ? getBook(currentBookId) : null;
+        const academic = currentBookData?.academic;
 
         // Priority: 1. PDF metadata title, 2. Book title from library, 3. Filename, 4. 'Untitled'
         // Only use PDF title if it differs from the filename (meaning it came from actual metadata)
@@ -238,13 +293,25 @@ function BookReaderPage() {
         const displayTitle = (isPdfTitleFromMetadata
             ? info.title
             : (currentBookData?.title || info.title || 'Untitled')) || 'Untitled';
+        const displayAuthor = (
+            academic?.authors?.length
+                ? academic.authors.join(", ")
+                : (info.author || currentBookData?.author || 'Unknown')
+        );
 
         setMetadata({
             title: displayTitle,
-            author: info.author || currentBookData?.author || 'Unknown',
-            description: '',
+            author: displayAuthor,
+            description: academic?.abstract || '',
             language: '',
-            publisher: '',
+            publisher: academic?.journal || academic?.conference || '',
+            pubdate: currentBookData?.publishedDate,
+            identifier: academic?.doi,
+            doi: academic?.doi,
+            journal: academic?.journal,
+            conference: academic?.conference,
+            citationCount: academic?.citationCount,
+            pdfUrl: academic?.pdfUrl || currentBookData?.filePath,
         });
         setToc(Array.isArray(info.toc) ? info.toc : []);
         setPdfHasOutline(Boolean(info.hasOutline ?? ((info.toc?.length || 0) > 0)));
@@ -503,6 +570,9 @@ function BookReaderPage() {
             if (pdfProgressSaveTimeoutRef.current) {
                 clearTimeout(pdfProgressSaveTimeoutRef.current);
             }
+            if (citationResetTimeoutRef.current) {
+                clearTimeout(citationResetTimeoutRef.current);
+            }
         };
     }, []);
 
@@ -547,7 +617,26 @@ function BookReaderPage() {
     });
 
     const handleReady = useCallback((meta: DocMetadata, tocItems: TocItem[]) => {
-        setMetadata(meta);
+        const loadedBook = currentBookId ? getBook(currentBookId) : null;
+        const academic = loadedBook?.academic;
+
+        const mergedMetadata: DocMetadata = {
+            ...meta,
+            author: academic?.authors?.length
+                ? academic.authors.join(", ")
+                : meta.author,
+            description: academic?.abstract || meta.description,
+            publisher: academic?.journal || academic?.conference || meta.publisher,
+            pubdate: loadedBook?.publishedDate || meta.pubdate,
+            identifier: academic?.doi || meta.identifier,
+            doi: academic?.doi || meta.doi,
+            journal: academic?.journal || meta.journal,
+            conference: academic?.conference || meta.conference,
+            citationCount: academic?.citationCount ?? meta.citationCount,
+            pdfUrl: academic?.pdfUrl || meta.pdfUrl,
+        };
+
+        setMetadata(mergedMetadata);
         setToc(Array.isArray(tocItems) ? tocItems : []);
         setIsBookReady(true);
         // Get section fractions from the reader after it's ready
@@ -556,7 +645,7 @@ function BookReaderPage() {
             const fractions = readerRef.current?.getSectionFractions() ?? [];
             setSectionFractions(fractions);
         }, 100);
-    }, []);
+    }, [currentBookId, getBook]);
 
     const lastClickFractionRef = useRef<number | null>(null);
     const handleBookCompletionProgress = useCallback((bookId: string, progress: number) => {
@@ -1579,6 +1668,8 @@ function BookReaderPage() {
                     onToggleBookmarks={() => togglePanel('bookmarks')}
                     onToggleSearch={() => togglePanel('search')}
                     onToggleInfo={() => togglePanel('info')}
+                    onCopyCitation={currentAcademicPaper ? () => { void handleCopyCitation("apa"); } : undefined}
+                    isCitationCopied={copiedCitationFormat === "apa"}
                     onAddBookmark={handleAddPageBookmark}
                     isCurrentPageBookmarked={isCurrentPageBookmarked}
                     activePanel={activePanel}
@@ -1708,22 +1799,26 @@ function BookReaderPage() {
 
             {/* Reader settings/info panels */}
             {!isPdfFormat && (
-                <>
-                    <ReaderSettings
-                        settings={effectiveReaderSettings}
-                        visible={activePanel === 'settings'}
-                        onClose={() => setActivePanel(null)}
-                        onUpdate={handleReaderSettingsUpdate}
-                        format={getBook(currentBookId || '')?.format}
-                    />
-
-                    <BookInfoPopover
-                        metadata={metadata}
-                        visible={activePanel === 'info'}
-                        onClose={() => setActivePanel(null)}
-                    />
-                </>
+                <ReaderSettings
+                    settings={effectiveReaderSettings}
+                    visible={activePanel === 'settings'}
+                    onClose={() => setActivePanel(null)}
+                    onUpdate={handleReaderSettingsUpdate}
+                    format={getBook(currentBookId || '')?.format}
+                />
             )}
+
+            <BookInfoPopover
+                metadata={metadata}
+                visible={activePanel === 'info'}
+                onClose={() => setActivePanel(null)}
+                onCopyCitation={currentAcademicPaper
+                    ? (format) => {
+                        void handleCopyCitation(format);
+                    }
+                    : undefined}
+                copiedCitationFormat={copiedCitationFormat}
+            />
 
             {/* Search panel available for EPUB/PDF */}
             <ReaderSearch

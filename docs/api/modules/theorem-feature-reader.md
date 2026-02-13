@@ -177,7 +177,7 @@ useToolbarHeight(containerRef: RefObject<HTMLElement | null>, options?: UseToolb
 ### Function `WindowTitlebar`
 
 ```ts
-WindowTitlebar({ metadata, location, onBack, onPrevPage, onNextPage, onToggleToc, onToggleSettings, onToggleBookmarks, onToggleSearch, onToggleInfo, onAddBookmark, isCurrentPageBookmarked, activePanel, fullscreen, onToggleFullscreen, className, hideReaderControls, pdfControls, }: WindowTitlebarProps): JSX.Element
+WindowTitlebar({ metadata, location, onBack, onPrevPage, onNextPage, onToggleToc, onToggleSettings, onToggleBookmarks, onToggleSearch, onToggleInfo, onCopyCitation, isCitationCopied, onAddBookmark, isCurrentPageBookmarked, activePanel, fullscreen, onToggleFullscreen, className, hideReaderControls, pdfControls, }: WindowTitlebarProps): JSX.Element
 ```
 
 | Parameter | Type | Optional |
@@ -192,11 +192,13 @@ WindowTitlebar({ metadata, location, onBack, onPrevPage, onNextPage, onToggleToc
 | `className` | `string | undefined` | yes |
 | `fullscreen` | `boolean | undefined` | yes |
 | `hideReaderControls` | `boolean | undefined` | yes |
+| `isCitationCopied` | `boolean | undefined` | yes |
 | `isCurrentPageBookmarked` | `boolean | undefined` | yes |
 | `location` | `DocLocation | null | undefined` | yes |
 | `metadata` | `DocMetadata | null` | no |
 | `onAddBookmark` | `(() => void) | undefined` | yes |
 | `onBack` | `() => void` | no |
+| `onCopyCitation` | `(() => void) | undefined` | yes |
 | `onNextPage` | `(() => void) | undefined` | yes |
 | `onPrevPage` | `(() => void) | undefined` | yes |
 | `onToggleBookmarks` | `() => void` | no |

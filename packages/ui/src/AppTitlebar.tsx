@@ -145,6 +145,8 @@ export function AppTitlebar({
                 return "Book Details";
             case "feeds":
                 return "Feeds";
+            case "academic":
+                return "Papers";
             default:
                 return title;
         }

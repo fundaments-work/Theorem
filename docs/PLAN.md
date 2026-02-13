@@ -39,7 +39,7 @@ Theorem is an all-in-one reading and learning system: read, capture, remember, a
 - [ ] Saved web article reader mode
 - [ ] Unified content model across books/articles/web
 
-## Phase 4: Academic Workflow- [ ] Advanced continuation and session intelligence
+## Phase 4: Academic Workflow
 
 - [ ] arXiv integration
 - [ ] PubMed integration

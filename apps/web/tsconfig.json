@@ -46,6 +46,9 @@
             ],
             "@theorem/feature-learning": [
                 "../../packages/features/learning/src"
+            ],
+            "@theorem/feature-academic": [
+                "../../packages/features/academic/src"
             ]
         },
         "strict": true,

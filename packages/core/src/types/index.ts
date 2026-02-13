@@ -54,6 +54,28 @@ export interface PdfViewState {
     zoomMode: PdfZoomMode;
 }
 
+export type AcademicSource = "arxiv" | "pubmed" | "manual";
+
+export type CitationFormat = "apa" | "bibtex" | "mla";
+
+export interface CitationReferenceData {
+    bibtex?: string;
+    cslJson?: Record<string, unknown>;
+}
+
+export interface AcademicMetadata {
+    source: AcademicSource;
+    sourceId?: string;
+    doi?: string;
+    journal?: string;
+    conference?: string;
+    abstract?: string;
+    authors: string[];
+    citationCount?: number;
+    pdfUrl?: string;
+    referenceData?: CitationReferenceData;
+}
+
 // Book Entity
 export interface Book {
     id: string;
@@ -95,6 +117,38 @@ export interface Book {
     // Statistics
     readingTime: number; // in minutes
     completedAt?: Date; // When the book was marked completed (auto or manual)
+    // Academic metadata attached to papers imported from sources like arXiv/PubMed.
+    academic?: AcademicMetadata;
+}
+
+export interface AcademicPaper {
+    id: string;
+    source: AcademicSource;
+    sourceId?: string;
+    title: string;
+    authors: string[];
+    abstract?: string;
+    doi?: string;
+    journal?: string;
+    conference?: string;
+    citationCount?: number;
+    pdfUrl?: string;
+    url?: string;
+    publishedDate?: string;
+    referenceData?: CitationReferenceData;
+}
+
+export interface Citation {
+    id: string;
+    paperId: string;
+    annotationId?: string;
+    note?: string;
+    quote?: string;
+    location?: string;
+    pageNumber?: number;
+    createdAt: Date;
+    updatedAt?: Date;
+    format?: CitationFormat;
 }
 
 // Reading Progress
@@ -369,7 +423,7 @@ export interface RssArticle {
 }
 
 // Navigation
-export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds";
+export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds" | "academic";
 
 // UI State
 export interface UIState {
@@ -420,6 +474,11 @@ export interface DocMetadata {
     pubdate?: string;
     identifier?: string;
     cover?: string;
+    doi?: string;
+    journal?: string;
+    conference?: string;
+    citationCount?: number;
+    pdfUrl?: string;
 }
 
 export interface SearchResult {

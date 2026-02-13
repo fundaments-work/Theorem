@@ -19,6 +19,7 @@ _none_
 - `@tauri-apps/plugin-dialog`
 - `clsx`
 - `date-fns`
+- `fast-xml-parser`
 - `fflate`
 - `idb-keyval`
 - `tailwind-merge`
@@ -295,6 +296,19 @@ deleteCoverImage(bookId: string): Promise<void>
 
 - Returns: `Promise<void>`
 
+### Function `downloadPaper`
+
+```ts
+downloadPaper(url: string, paper?: AcademicPaper): Promise<Book>
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `url` | `string` | no |
+| `paper` | `AcademicPaper | undefined` | yes |
+
+- Returns: `Promise<Book>`
+
 ### Function `extractCover`
 
 Extract cover only from a book file (for batch processing)
@@ -373,7 +387,7 @@ fetchAndExtractArticleContent(articleUrl: string): Promise<ExtractedArticleConte
 
 ### Function `fetchAndParseFeed`
 
-Fetch and parse an RSS or Atom feed from a URL.
+Fetch and parse an RSS or Atom feed from a URL. If the URL returns HTML, attempts auto-discovery of feed URLs and follows them.
 
 ```ts
 fetchAndParseFeed(url: string): Promise<{ feed: Omit<ParsedFeed, "articles">; articles: ParsedFeed["articles"]; }>
@@ -476,6 +490,38 @@ formatRelativeDate(date: Date): string
 | `toString` | `() => string` | no |
 | `toTimeString` | `() => string` | no |
 | `valueOf` | `() => number` | no |
+
+- Returns: `string`
+
+### Function `generateCitation`
+
+```ts
+generateCitation(paper: AcademicPaper, format: CitationFormat): string
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `paper` | `AcademicPaper` | no |
+| `format` | `CitationFormat` | no |
+
+**Parameter `paper` fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `abstract` | `string | undefined` | yes |
+| `authors` | `string[]` | no |
+| `citationCount` | `number | undefined` | yes |
+| `conference` | `string | undefined` | yes |
+| `doi` | `string | undefined` | yes |
+| `id` | `string` | no |
+| `journal` | `string | undefined` | yes |
+| `pdfUrl` | `string | undefined` | yes |
+| `publishedDate` | `string | undefined` | yes |
+| `referenceData` | `CitationReferenceData | undefined` | yes |
+| `source` | `AcademicSource` | no |
+| `sourceId` | `string | undefined` | yes |
+| `title` | `string` | no |
+| `url` | `string | undefined` | yes |
 
 - Returns: `string`
 
@@ -828,6 +874,53 @@ initReaderStyles(settings: ReaderSettings): void
 | `zoom` | `number` | no |
 
 - Returns: `void`
+
+### Function `isAcademicBook`
+
+```ts
+isAcademicBook(book: Book): boolean
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `book` | `Book` | no |
+
+**Parameter `book` fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `academic` | `AcademicMetadata | undefined` | yes |
+| `addedAt` | `Date` | no |
+| `author` | `string` | no |
+| `category` | `string | undefined` | yes |
+| `completedAt` | `Date | undefined` | yes |
+| `coverPath` | `string | undefined` | yes |
+| `currentLocation` | `string | undefined` | yes |
+| `description` | `string | undefined` | yes |
+| `filePath` | `string` | no |
+| `fileSize` | `number` | no |
+| `format` | `BookFormat` | no |
+| `id` | `string` | no |
+| `isbn` | `string | undefined` | yes |
+| `isFavorite` | `boolean` | no |
+| `language` | `string | undefined` | yes |
+| `lastClickFraction` | `number | undefined` | yes |
+| `lastReadAt` | `Date | undefined` | yes |
+| `locations` | `string | undefined` | yes |
+| `manualCompletionState` | `"read" | "unread" | undefined` | yes |
+| `pageProgress` | `{ currentPage: number; endPage?: number; totalPages: number; range: string; } | undefined` | yes |
+| `pdfViewState` | `PdfViewState | undefined` | yes |
+| `progress` | `number` | no |
+| `progressBeforeFinish` | `number | undefined` | yes |
+| `publishedDate` | `string | undefined` | yes |
+| `publisher` | `string | undefined` | yes |
+| `rating` | `number | undefined` | yes |
+| `readingTime` | `number` | no |
+| `storagePath` | `string | undefined` | yes |
+| `tags` | `string[]` | no |
+| `title` | `string` | no |
+
+- Returns: `boolean`
 
 ### Function `isFixedLayout`
 
@@ -1314,6 +1407,67 @@ scanFolderForBooks(folderPath: string): Promise<string[]>
 
 - Returns: `Promise<string[]>`
 
+### Function `searchAcademicPapers`
+
+```ts
+searchAcademicPapers(query: string, options?: AcademicSearchOptions): Promise<AcademicPaper[]>
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `query` | `string` | no |
+| `options` | `AcademicSearchOptions` | yes |
+
+**Parameter `options` fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `maxResults` | `number | undefined` | yes |
+| `source` | `"all" | "arxiv" | "pubmed" | undefined` | yes |
+| `start` | `number | undefined` | yes |
+
+- Returns: `Promise<AcademicPaper[]>`
+
+### Function `searchArxivPapers`
+
+```ts
+searchArxivPapers(query: string, options?: Omit<AcademicSearchOptions, "source">): Promise<AcademicPaper[]>
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `query` | `string` | no |
+| `options` | `Omit<AcademicSearchOptions, "source">` | yes |
+
+**Parameter `options` fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `maxResults` | `number | undefined` | yes |
+| `start` | `number | undefined` | yes |
+
+- Returns: `Promise<AcademicPaper[]>`
+
+### Function `searchPubMedPapers`
+
+```ts
+searchPubMedPapers(query: string, options?: Omit<AcademicSearchOptions, "source">): Promise<AcademicPaper[]>
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `query` | `string` | no |
+| `options` | `Omit<AcademicSearchOptions, "source">` | yes |
+
+**Parameter `options` fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `maxResults` | `number | undefined` | yes |
+| `start` | `number | undefined` | yes |
+
+- Returns: `Promise<AcademicPaper[]>`
+
 ### Function `showAsk`
 
 Shows a native ask dialog (Yes/No) and waits for user choice
@@ -1429,6 +1583,53 @@ showSaveFileDialog(options?: SaveDialogOptions): Promise<string | null>
 | `title` | `string | undefined` | yes |
 
 - Returns: `Promise<string | null>`
+
+### Function `toAcademicPaper`
+
+```ts
+toAcademicPaper(book: Book): AcademicPaper | null
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `book` | `Book` | no |
+
+**Parameter `book` fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `academic` | `AcademicMetadata | undefined` | yes |
+| `addedAt` | `Date` | no |
+| `author` | `string` | no |
+| `category` | `string | undefined` | yes |
+| `completedAt` | `Date | undefined` | yes |
+| `coverPath` | `string | undefined` | yes |
+| `currentLocation` | `string | undefined` | yes |
+| `description` | `string | undefined` | yes |
+| `filePath` | `string` | no |
+| `fileSize` | `number` | no |
+| `format` | `BookFormat` | no |
+| `id` | `string` | no |
+| `isbn` | `string | undefined` | yes |
+| `isFavorite` | `boolean` | no |
+| `language` | `string | undefined` | yes |
+| `lastClickFraction` | `number | undefined` | yes |
+| `lastReadAt` | `Date | undefined` | yes |
+| `locations` | `string | undefined` | yes |
+| `manualCompletionState` | `"read" | "unread" | undefined` | yes |
+| `pageProgress` | `{ currentPage: number; endPage?: number; totalPages: number; range: string; } | undefined` | yes |
+| `pdfViewState` | `PdfViewState | undefined` | yes |
+| `progress` | `number` | no |
+| `progressBeforeFinish` | `number | undefined` | yes |
+| `publishedDate` | `string | undefined` | yes |
+| `publisher` | `string | undefined` | yes |
+| `rating` | `number | undefined` | yes |
+| `readingTime` | `number` | no |
+| `storagePath` | `string | undefined` | yes |
+| `tags` | `string[]` | no |
+| `title` | `string` | no |
+
+- Returns: `AcademicPaper | null`
 
 ### Function `truncate`
 
@@ -1744,6 +1945,68 @@ _No object fields detected._
 
 ### Types and Interfaces
 
+### Interface `AcademicMetadata`
+
+- Type: `AcademicMetadata`
+
+**Fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `abstract` | `string | undefined` | yes |
+| `authors` | `string[]` | no |
+| `citationCount` | `number | undefined` | yes |
+| `conference` | `string | undefined` | yes |
+| `doi` | `string | undefined` | yes |
+| `journal` | `string | undefined` | yes |
+| `pdfUrl` | `string | undefined` | yes |
+| `referenceData` | `CitationReferenceData | undefined` | yes |
+| `source` | `AcademicSource` | no |
+| `sourceId` | `string | undefined` | yes |
+
+### Interface `AcademicPaper`
+
+- Type: `AcademicPaper`
+
+**Fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `abstract` | `string | undefined` | yes |
+| `authors` | `string[]` | no |
+| `citationCount` | `number | undefined` | yes |
+| `conference` | `string | undefined` | yes |
+| `doi` | `string | undefined` | yes |
+| `id` | `string` | no |
+| `journal` | `string | undefined` | yes |
+| `pdfUrl` | `string | undefined` | yes |
+| `publishedDate` | `string | undefined` | yes |
+| `referenceData` | `CitationReferenceData | undefined` | yes |
+| `source` | `AcademicSource` | no |
+| `sourceId` | `string | undefined` | yes |
+| `title` | `string` | no |
+| `url` | `string | undefined` | yes |
+
+### Interface `AcademicSearchOptions`
+
+- Type: `AcademicSearchOptions`
+
+**Fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `maxResults` | `number | undefined` | yes |
+| `source` | `"all" | "arxiv" | "pubmed" | undefined` | yes |
+| `start` | `number | undefined` | yes |
+
+### Type `AcademicSource`
+
+- Type: `AcademicSource`
+
+**Fields**
+
+_No object fields detected._
+
 ### Interface `Annotation`
 
 - Type: `Annotation`
@@ -1803,6 +2066,7 @@ _No object fields detected._
 
 | Property | Type | Optional |
 | --- | --- | --- |
+| `academic` | `AcademicMetadata | undefined` | yes |
 | `addedAt` | `Date` | no |
 | `author` | `string` | no |
 | `category` | `string | undefined` | yes |
@@ -1855,6 +2119,44 @@ _No object fields detected._
 | `href` | `string` | no |
 | `index` | `number` | no |
 | `label` | `string` | no |
+
+### Interface `Citation`
+
+- Type: `Citation`
+
+**Fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `annotationId` | `string | undefined` | yes |
+| `createdAt` | `Date` | no |
+| `format` | `CitationFormat | undefined` | yes |
+| `id` | `string` | no |
+| `location` | `string | undefined` | yes |
+| `note` | `string | undefined` | yes |
+| `pageNumber` | `number | undefined` | yes |
+| `paperId` | `string` | no |
+| `quote` | `string | undefined` | yes |
+| `updatedAt` | `Date | undefined` | yes |
+
+### Type `CitationFormat`
+
+- Type: `CitationFormat`
+
+**Fields**
+
+_No object fields detected._
+
+### Interface `CitationReferenceData`
+
+- Type: `CitationReferenceData`
+
+**Fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `bibtex` | `string | undefined` | yes |
+| `cslJson` | `Record<string, unknown> | undefined` | yes |
 
 ### Interface `Collection`
 
@@ -2002,10 +2304,15 @@ _No object fields detected._
 | Property | Type | Optional |
 | --- | --- | --- |
 | `author` | `string` | no |
+| `citationCount` | `number | undefined` | yes |
+| `conference` | `string | undefined` | yes |
 | `cover` | `string | undefined` | yes |
 | `description` | `string | undefined` | yes |
+| `doi` | `string | undefined` | yes |
 | `identifier` | `string | undefined` | yes |
+| `journal` | `string | undefined` | yes |
 | `language` | `string | undefined` | yes |
+| `pdfUrl` | `string | undefined` | yes |
 | `pubdate` | `string | undefined` | yes |
 | `publisher` | `string | undefined` | yes |
 | `title` | `string` | no |
