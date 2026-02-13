@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
+@source "../../../packages";
 
 /* Theorem Design System - Token Based */
 
@@ -46,7 +47,7 @@
     --reader-margin-y: 2%;
     --reader-brightness: 100%;
     --reader-zoom: 1;
-    
+
     /* Spacing scale */
     --spacing-xxs: 0.125rem;
     --spacing-xs: 0.25rem;
@@ -412,8 +413,13 @@ button:disabled {
 
 /* Animations */
 @keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .animate-fade-in {
@@ -434,6 +440,7 @@ button:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
     *,
     *::before,
     *::after {
@@ -632,23 +639,23 @@ foliate-view * {
     padding: 0.15rem;
 }
 
-[data-reading-mode] .reader-toolbar [data-toolbar-group] > button,
-[data-reading-mode] .reader-toolbar [data-toolbar-group] > form > button {
+[data-reading-mode] .reader-toolbar [data-toolbar-group]>button,
+[data-reading-mode] .reader-toolbar [data-toolbar-group]>form>button {
     border-radius: 0.7rem;
 }
 
-[data-reading-mode] .reader-toolbar [data-toolbar-group] > button:hover,
-[data-reading-mode] .reader-toolbar [data-toolbar-group] > form > button:hover {
+[data-reading-mode] .reader-toolbar [data-toolbar-group]>button:hover,
+[data-reading-mode] .reader-toolbar [data-toolbar-group]>form>button:hover {
     background: var(--color-surface-hover);
 }
 
-[data-reading-mode] .reader-toolbar [data-toolbar-group] > button[class*="opacity-60"],
-[data-reading-mode] .reader-toolbar [data-toolbar-group] > form > button[class*="opacity-60"] {
+[data-reading-mode] .reader-toolbar [data-toolbar-group]>button[class*="opacity-60"],
+[data-reading-mode] .reader-toolbar [data-toolbar-group]>form>button[class*="opacity-60"] {
     opacity: 0.84 !important;
 }
 
-[data-reading-mode] .reader-toolbar [data-toolbar-group] > button[class*="opacity-60"]:hover,
-[data-reading-mode] .reader-toolbar [data-toolbar-group] > form > button[class*="opacity-60"]:hover {
+[data-reading-mode] .reader-toolbar [data-toolbar-group]>button[class*="opacity-60"]:hover,
+[data-reading-mode] .reader-toolbar [data-toolbar-group]>form>button[class*="opacity-60"]:hover {
     opacity: 1 !important;
 }
 
@@ -668,7 +675,7 @@ foliate-view * {
         gap: 0.42rem;
     }
 
-    [data-reading-mode] .reader-toolbar [data-toolbar-group="epub"] > button {
+    [data-reading-mode] .reader-toolbar [data-toolbar-group="epub"]>button {
         min-width: 2.45rem;
         min-height: 2.45rem;
     }
@@ -740,20 +747,47 @@ foliate-view * {
    =============================== */
 
 /* Text colors using CSS variables */
-.text-theme-primary { color: var(--color-text-primary); }
-.text-theme-secondary { color: var(--color-text-secondary); }
-.text-theme-muted { color: var(--color-text-muted); }
-.text-theme-accent { color: var(--color-accent); }
+.text-theme-primary {
+    color: var(--color-text-primary);
+}
+
+.text-theme-secondary {
+    color: var(--color-text-secondary);
+}
+
+.text-theme-muted {
+    color: var(--color-text-muted);
+}
+
+.text-theme-accent {
+    color: var(--color-accent);
+}
 
 /* Background colors using CSS variables */
-.bg-theme { background-color: var(--color-background); }
-.bg-theme-surface { background-color: var(--color-surface); }
-.bg-theme-elevated { background-color: var(--color-surface-elevated); }
-.bg-theme-accent { background-color: var(--color-accent); }
+.bg-theme {
+    background-color: var(--color-background);
+}
+
+.bg-theme-surface {
+    background-color: var(--color-surface);
+}
+
+.bg-theme-elevated {
+    background-color: var(--color-surface-elevated);
+}
+
+.bg-theme-accent {
+    background-color: var(--color-accent);
+}
 
 /* Border colors using CSS variables */
-.border-theme { border-color: var(--color-border); }
-.border-theme-subtle { border-color: var(--color-border-subtle); }
+.border-theme {
+    border-color: var(--color-border);
+}
+
+.border-theme-subtle {
+    border-color: var(--color-border-subtle);
+}
 
 /* Layout primitives */
 .ui-page {

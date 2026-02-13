@@ -7,9 +7,9 @@
  * - No debouncing for visual changes - they're instant via CSS
  */
 
-import { APP_THEME_PALETTES, READER_THEME_PREVIEWS } from "@/lib/design-tokens";
-import { getTheme } from '@/foliate/themes';
-import type { ReaderSettings, ReaderTheme, FontFamily, ReadingFlow, PageLayout } from '@/types';
+import { APP_THEME_PALETTES, READER_THEME_PREVIEWS } from "./design-tokens";
+import { getTheme } from '@lionreader/feature-reader/foliate/themes';
+import type { ReaderSettings, ReaderTheme, FontFamily, ReadingFlow, PageLayout } from '../types';
 
 // CSS Variable names mapping
 const CSS_VARS = {

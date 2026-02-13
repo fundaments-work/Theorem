@@ -8,11 +8,11 @@
  */
 
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useMemo, useState } from 'react';
-import { useDocumentReader } from '@/hooks';
-import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, BookFormat } from '@/types';
-import type { ReaderSettings } from '@/types';
-import { cn } from '@/lib/utils';
-import { getSettingsChanges } from '@/lib/reader-styles';
+import { useDocumentReader } from '../hooks/useDocumentReader';
+import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, BookFormat } from '@lionreader/core';
+import type { ReaderSettings } from '@lionreader/core';
+import { cn } from '@lionreader/core';
+import { getSettingsChanges } from '@lionreader/core';
 
 export interface ReaderViewportHandle {
     next: () => void;
@@ -265,7 +265,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                     changedKeys.includes('forcePublisherStyles');
 
                 if (needsThemeUpdate) {
-                    const { getThemeColors } = await import('@/lib/reader-styles');
+                    const { getThemeColors } = await import('@lionreader/core');
                     const themeColors = getThemeColors(settings.theme);
 
                     applyTheme({

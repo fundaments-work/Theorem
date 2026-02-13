@@ -7,7 +7,7 @@ import { useState, useMemo } from "react";
 import { cn, normalizeAuthor } from "@lionreader/core";
 import { rankByFuzzyQuery } from "@lionreader/core";
 import { useLibraryStore, useUIStore, useSettingsStore } from "@lionreader/core";
-import { ShelfModal } from "@/components/modals";
+import { ShelfModal } from "@lionreader/ui";
 import { getShelfColor, getShelfInitials } from "@lionreader/core";
 import {
     FolderOpen,
@@ -316,7 +316,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                     >
                         {getShelfInitials(shelf.name)}
                     </div>
-                    
+
                     <div className="flex-1 min-w-0 overflow-hidden">
                         <button onClick={onClick} className="text-left w-full">
                             <h3 className="font-semibold text-[color:var(--color-text-primary)] truncate group-hover:text-[color:var(--color-accent)] transition-colors">
@@ -525,13 +525,13 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
 
 // Main page component
 export function ShelvesPage() {
-    const { 
-        collections, 
-        books, 
-        addCollection, 
-        removeCollection, 
+    const {
+        collections,
+        books,
+        addCollection,
+        removeCollection,
         updateCollection,
-        removeBook 
+        removeBook
     } = useLibraryStore();
     const { setRoute, searchQuery } = useUIStore();
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);

@@ -3,7 +3,7 @@
  * Extracts book cover images and metadata using foliate-js and PDF.js
  */
 
-import type { BookFormat } from "@/types";
+import type { BookFormat } from "../types";
 import { saveCoverImage } from "./storage";
 import { normalizeAuthor } from "./utils";
 
@@ -158,7 +158,7 @@ export async function extractMetadata(
     // Import foliate-js makeBook for EPUB and other formats
     try {
         // Use relative path to avoid MIME type issues with Vite dynamic imports
-        const { makeBook } = await import("../foliate-js/view.js");
+        const { makeBook } = await import("@foliate-js/view.js");
         const mimeType = getMimeType(format);
         const file = new File([data], filename, { type: mimeType });
 

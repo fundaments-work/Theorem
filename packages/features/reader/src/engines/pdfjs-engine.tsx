@@ -24,7 +24,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import type { Annotation, HighlightColor, PdfZoomMode, SearchResult, TocItem } from "@lionreader/core";
-import { PDFAnnotationLayer } from "@/components/reader/PDFAnnotationLayer";
+import { PDFAnnotationLayer } from "../components/reader/PDFAnnotationLayer";
 
 // Import CSS (our custom styles only, not pdf_viewer.css which conflicts)
 import "./pdfjs-engine.css";

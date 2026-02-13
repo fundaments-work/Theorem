@@ -42,17 +42,8 @@ export const FORMAT_COLORS: Record<BookFormat, string> = {
     pdf: "#7a7a7a",
 };
 
-// Highlight Colors - single source of truth
+// Highlight Colors type - values are defined in design-tokens
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'red' | 'orange' | 'purple';
-
-export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
-    yellow: "rgba(17, 17, 17, 0.28)",
-    green: "rgba(43, 43, 43, 0.24)",
-    blue: "rgba(69, 69, 69, 0.22)",
-    red: "rgba(95, 95, 95, 0.2)",
-    orange: "rgba(122, 122, 122, 0.18)",
-    purple: "rgba(148, 148, 148, 0.16)",
-};
 
 export type PdfZoomMode = "custom" | "page-fit" | "width-fit";
 

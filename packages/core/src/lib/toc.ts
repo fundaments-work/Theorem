@@ -3,7 +3,7 @@
  * Shared functions for handling Table of Contents operations
  */
 
-import type { TocItem, BookSection } from '@/types';
+import type { TocItem, BookSection } from '../types';
 
 /**
  * Flatten a nested TOC structure into a single-level array

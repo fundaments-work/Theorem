@@ -11,9 +11,9 @@ import {
     HIGHLIGHT_PICKER_ACTIVE_COLORS,
     HIGHLIGHT_PICKER_COLORS,
 } from "@lionreader/core";
-import { cn } from '@/lib/utils';
-import { isTauri } from '@/lib/env';
-import type { HighlightColor } from '@/types';
+import { cn } from '../../lib/utils';
+import { isTauri } from '../../lib/env';
+import type { HighlightColor } from '../../types';
 
 interface HighlightColorPickerProps {
     isOpen: boolean;

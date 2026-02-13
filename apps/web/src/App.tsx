@@ -1,8 +1,8 @@
 import { Suspense, lazy, useEffect, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { AppTitlebar } from "@lionreader/ui";
-import { ReviewSessionModal } from "@/components/learning";
-import { Sidebar } from "@/components/layout";
+import { ReviewSessionModal } from "@lionreader/feature-learning";
+import { Sidebar } from "@lionreader/ui";
 import {
     useLearningStore,
     useLibraryStore,
@@ -15,28 +15,28 @@ import { initReaderStyles } from "@lionreader/core";
 import { useDailyReviewReminder } from "@lionreader/core";
 
 const LibraryPage = lazy(() =>
-    import("@/pages/Library").then((module) => ({ default: module.LibraryPage })),
+    import("@lionreader/feature-library").then((module) => ({ default: module.LibraryPage })),
 );
 const ReaderPage = lazy(() =>
     import("@lionreader/feature-reader").then((module) => ({ default: module.ReaderPage })),
 );
 const VocabularyPage = lazy(() =>
-    import("@/pages/Vocabulary").then((module) => ({ default: module.VocabularyPage })),
+    import("@lionreader/feature-vocabulary").then((module) => ({ default: module.VocabularyPage })),
 );
 const ShelvesPage = lazy(() =>
-    import("@/pages/Shelves").then((module) => ({ default: module.ShelvesPage })),
+    import("@lionreader/feature-library").then((module) => ({ default: module.ShelvesPage })),
 );
 const AnnotationsPage = lazy(() =>
-    import("@/pages/Annotations").then((module) => ({ default: module.AnnotationsPage })),
+    import("@lionreader/feature-library").then((module) => ({ default: module.AnnotationsPage })),
 );
 const BookmarksPage = lazy(() =>
-    import("@/pages/Bookmarks").then((module) => ({ default: module.BookmarksPage })),
+    import("@lionreader/feature-library").then((module) => ({ default: module.BookmarksPage })),
 );
 const SettingsPage = lazy(() =>
-    import("@/pages/Settings").then((module) => ({ default: module.SettingsPage })),
+    import("@lionreader/feature-settings").then((module) => ({ default: module.SettingsPage })),
 );
 const StatisticsPage = lazy(() =>
-    import("@/pages/Statistics").then((module) => ({ default: module.StatisticsPage })),
+    import("@lionreader/feature-statistics").then((module) => ({ default: module.StatisticsPage })),
 );
 const DESKTOP_STARTUP_MIN_WIDTH = 1024;
 const DESKTOP_STARTUP_MIN_HEIGHT = 720;

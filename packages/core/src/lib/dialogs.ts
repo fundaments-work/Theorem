@@ -1,5 +1,5 @@
 import { ask, confirm, message, open, save } from "@tauri-apps/plugin-dialog";
-import { isTauri } from "@/lib/env";
+import { isTauri } from "./env";
 
 /**
  * Native Tauri Dialog Utilities

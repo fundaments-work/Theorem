@@ -4,7 +4,7 @@ import type {
     DictionaryProvider,
     InstalledDictionary,
     VocabularyMeaning,
-} from "@/types";
+} from "../types";
 
 interface StoredStarDictManifest {
     id: string;
@@ -104,7 +104,7 @@ async function createRuntimeDictionary(buffers: {
     dict: ArrayBuffer;
     syn?: ArrayBuffer;
 }): Promise<LoadedStarDict> {
-    const { StarDict } = await import("@/foliate-js/dict.js");
+    const { StarDict } = await import("@foliate-js/dict.js");
     const dictionary = new StarDict();
 
     await dictionary.loadIfo(new Blob([buffers.ifo]));

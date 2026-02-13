@@ -15,10 +15,10 @@ import {
     Palette, Maximize2, Zap, Settings2, ZoomIn
 } from 'lucide-react';
 import { READER_THEME_PREVIEWS } from "@lionreader/core";
-import { cn } from '@/lib/utils';
-import { ReaderSettings as ReaderSettingsType, ReaderTheme, FontFamily, BookFormat } from '@/types';
-import { isFixedLayout } from '@/types';
-import { Backdrop, FloatingPanel } from '@/components/ui';
+import { cn } from '../lib/utils';
+import { ReaderSettings as ReaderSettingsType, ReaderTheme, FontFamily, BookFormat } from '../types';
+import { isFixedLayout } from '../types';
+import { Backdrop, FloatingPanel } from './ui';
 
 interface ReaderSettingsProps {
     settings: ReaderSettingsType;

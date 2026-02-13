@@ -7,6 +7,12 @@
         "paths": {
             "@/*": [
                 "./src/*"
+            ],
+            "@lionreader/feature-reader/*": [
+                "../../packages/features/reader/src/*"
+            ],
+            "@foliate-js/*": [
+                "../../packages/features/reader/foliate-js/*"
             ]
         }
     },

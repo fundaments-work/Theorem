@@ -8,7 +8,7 @@ import {
 import type {
     LearningReviewSchedulerState,
     ReviewGrade,
-} from "@/types";
+} from "../types";
 
 const scheduler = fsrs({
     enable_fuzz: true,

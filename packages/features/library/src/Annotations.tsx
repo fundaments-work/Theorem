@@ -9,7 +9,7 @@ import { cn } from "@lionreader/core";
 import { rankByFuzzyQuery } from "@lionreader/core";
 import { useLearningStore, useLibraryStore, useUIStore } from "@lionreader/core";
 import type { HighlightColor } from "@lionreader/core";
-import { EditNoteModal } from "@/components/modals";
+import { EditNoteModal } from "@lionreader/ui";
 import { Dropdown } from "@lionreader/ui";
 import {
     Highlighter,

@@ -3,8 +3,8 @@ import type {
     DictionaryProvider,
     VocabularyMeaning,
     VocabularyTerm,
-} from "@/types";
-import { lookupInStarDictDictionaries } from "@/services/StarDictService";
+} from "../types";
+import { lookupInStarDictDictionaries } from "./StarDictService";
 
 export interface DictionaryLookupInput {
     term: string;

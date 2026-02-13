@@ -4,28 +4,28 @@
  */
 
 import { Suspense, lazy, useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from 'react';
-import { cn } from '@/lib/utils';
-import { useUIStore, useLibraryStore, useSettingsStore, useLearningStore } from '@/store';
-import { WindowTitlebar } from '@/components/reader/WindowTitlebar';
-import { TableOfContents } from '@/components/reader/TableOfContents';
-import { ReaderSettings } from '@/components/reader/ReaderSettings';
-import { ReaderAnnotationsPanel } from '@/components/reader/ReaderAnnotationsPanel';
-import { ReaderSearch } from '@/components/reader/ReaderSearch';
-import { BookInfoPopover } from '@/components/reader/BookInfoPopover';
-import { ReaderNavbar } from '@/components/reader/progress/ReaderNavbar';
-import { ReaderViewport } from '@/components/reader/ReaderViewport';
-import { HighlightColorPicker } from '@/components/reader/highlights/HighlightColorPicker';
-import { NoteEditor } from '@/components/reader/highlights/NoteEditor';
-import { DictionaryResultPopover } from '@/components/learning/DictionaryResultPopover';
-import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, PdfZoomMode, ReaderSettings as ReaderSettingsState } from '@/types';
-import { isTauri } from '@/lib/env';
-import { getBookBlob, getBookData } from '@/lib/storage';
-import type { PDFJsEngineRef } from '@/engines/pdfjs-engine';
-import type { ReaderViewportHandle } from '@/components/reader/ReaderViewport';
+import { cn } from './lib/utils';
+import { useUIStore, useLibraryStore, useSettingsStore, useLearningStore } from './store';
+import { WindowTitlebar } from './components/WindowTitlebar';
+import { TableOfContents } from './components/TableOfContents';
+import { ReaderSettings } from './components/ReaderSettings';
+import { ReaderAnnotationsPanel } from './components/ReaderAnnotationsPanel';
+import { ReaderSearch } from './components/ReaderSearch';
+import { BookInfoPopover } from './components/BookInfoPopover';
+import { ReaderNavbar } from './components/progress/ReaderNavbar';
+import { ReaderViewport } from './components/ReaderViewport';
+import { HighlightColorPicker } from './components/highlights/HighlightColorPicker';
+import { NoteEditor } from './components/highlights/NoteEditor';
+import { DictionaryResultPopover } from './components/learning/DictionaryResultPopover';
+import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, PdfZoomMode, ReaderSettings as ReaderSettingsState } from './types';
+import { isTauri } from './lib/env';
+import { getBookBlob, getBookData } from './lib/storage';
+import type { PDFJsEngineRef } from './engines/pdfjs-engine';
+import type { ReaderViewportHandle } from './components/ReaderViewport';
 import {
     vocabularyTermFromLookup,
     type DictionaryLookupResult,
-} from '@/services/DictionaryService';
+} from './services/DictionaryService';
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -57,7 +57,7 @@ function resolvePdfTargetPage(target: string): number | null {
 }
 
 const LazyPDFReader = lazy(() =>
-    import('@/components/reader/PDFReader').then((module) => ({ default: module.PDFReader })),
+    import('./components/reader/PDFReader').then((module) => ({ default: module.PDFReader })),
 );
 
 export function ReaderPage() {
@@ -216,7 +216,7 @@ export function ReaderPage() {
     }, [activePanel]);
 
     // PDF callbacks - memoized to prevent infinite re-renders
-    const handlePdfLoad = useCallback((info: import('@/engines/pdfjs-engine').PDFDocumentInfo) => {
+    const handlePdfLoad = useCallback((info: import('./engines/pdfjs-engine').PDFDocumentInfo) => {
         // Get current book data for fallback
         const currentBookData = currentBookId ? getBook(currentBookId) : null;
 

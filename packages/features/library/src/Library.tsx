@@ -9,8 +9,8 @@ import { useLibraryStore, useUIStore, useSettingsStore } from "@lionreader/core"
 import { formatProgress, formatFileSize, formatRelativeDate } from "@lionreader/core";
 import { importBooks, pickAndImportBooks, scanFolderForBooks } from "@lionreader/core";
 import { rankByFuzzyQuery } from "@lionreader/core";
-import { 
-    Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw, 
+import {
+    Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
     ChevronDown, Star, X, ArrowUpDown
 } from "lucide-react";
@@ -32,14 +32,14 @@ const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
     compact: <Grid3X3 className="w-4 h-4" />,
 };
 
-type ExtractMetadataFn = typeof import("@/lib/cover-extractor").extractMetadata;
+type ExtractMetadataFn = typeof import("../../../core/src/lib/cover-extractor").extractMetadata;
 
 const COVER_EXTRACTION_BATCH_SIZE = 3;
 let extractMetadataPromise: Promise<ExtractMetadataFn> | null = null;
 
 async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
     if (!extractMetadataPromise) {
-        extractMetadataPromise = import("@/lib/cover-extractor").then(
+        extractMetadataPromise = import("../../../core/src/lib/cover-extractor").then(
             (module) => module.extractMetadata,
         );
     }
@@ -57,9 +57,9 @@ function isBookMarkedRead(book: Book): boolean {
 }
 
 // Book Card Component with Context Menu
-function BookCard({ 
-    book, 
-    viewMode, 
+function BookCard({
+    book,
+    viewMode,
     onOpenBook,
     onToggleFavorite,
     onDeleteBook,
@@ -68,8 +68,8 @@ function BookCard({
     onMarkAsRead,
     onMarkAsUnread,
     collections
-}: { 
-    book: Book; 
+}: {
+    book: Book;
     viewMode: LibraryViewMode;
     onOpenBook: (book: Book) => void;
     onToggleFavorite: (bookId: string) => void;
@@ -168,12 +168,12 @@ function BookCard({
     if (viewMode === "grid") {
         return (
             <ContextMenu items={contextMenuItems}>
-                <div 
+                <div
                     className="group flex flex-col text-left w-full select-none"
                     onClick={handleCardClick}
                 >
                     {/* Cover Image */}
-                    <div 
+                    <div
                         className={cn(
                             "relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden rounded-lg",
                             "border border-[var(--color-border)]",
@@ -207,8 +207,8 @@ function BookCard({
                         <div
                             className={cn(
                                 "absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-colors pointer-events-none",
-                                book.isFavorite 
-                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast" 
+                                book.isFavorite
+                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast"
                                     : "opacity-0"
                             )}
                         >
@@ -239,7 +239,7 @@ function BookCard({
     if (viewMode === "list") {
         return (
             <ContextMenu items={contextMenuItems}>
-                <div 
+                <div
                     className="group flex items-center gap-4 p-3 w-full rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors cursor-pointer select-none"
                     onClick={handleCardClick}
                 >
@@ -274,8 +274,8 @@ function BookCard({
                             <div
                                 className={cn(
                                     "transition-colors pointer-events-none",
-                                    book.isFavorite 
-                                        ? "text-[color:var(--color-accent)]" 
+                                    book.isFavorite
+                                        ? "text-[color:var(--color-accent)]"
                                         : "opacity-0"
                                 )}
                             >
@@ -339,8 +339,8 @@ function BookCard({
                 <div
                     className={cn(
                         "absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center transition-colors pointer-events-none",
-                        book.isFavorite 
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast" 
+                        book.isFavorite
+                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
                             : "opacity-0"
                     )}
                 >
@@ -386,11 +386,11 @@ function EmptyLibrary({ onAddBooks, isLoading }: { onAddBooks: () => void; isLoa
 }
 
 // Import Button Component
-function ImportButton({ 
-    onImport, 
-    isLoading 
-}: { 
-    onImport: () => void; 
+function ImportButton({
+    onImport,
+    isLoading
+}: {
+    onImport: () => void;
     isLoading: boolean;
 }) {
     return (
@@ -547,16 +547,16 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
 }
 
 // Add to Shelf Modal using Portal
-function AddToShelfModal({ 
-    isOpen, 
-    onClose, 
-    bookId, 
+function AddToShelfModal({
+    isOpen,
+    onClose,
+    bookId,
     collections,
     onAddToShelf,
     onCreateShelf
-}: { 
-    isOpen: boolean; 
-    onClose: () => void; 
+}: {
+    isOpen: boolean;
+    onClose: () => void;
     bookId: string | null;
     collections: Collection[];
     onAddToShelf: (bookId: string, shelfId: string) => void;
@@ -578,7 +578,7 @@ function AddToShelfModal({
                     <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">
                         Add to Shelf
                     </h2>
-                    
+
                     {collections.length > 0 ? (
                         <div className="space-y-2">
                             {collections.map(shelf => (
@@ -667,36 +667,36 @@ export function LibraryPage() {
     const markBookUnread = useLibraryStore((state) => state.markBookUnread);
     const addBookToCollection = useLibraryStore((state) => state.addBookToCollection);
     const addCollection = useLibraryStore((state) => state.addCollection);
-    
+
     const { setRoute, searchQuery } = useUIStore();
     const { settings, updateSettings } = useSettingsStore();
-    
+
     const [isImporting, setIsImporting] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [isExtractingCovers, setIsExtractingCovers] = useState(false);
     const [extractionProgress, setExtractionProgress] = useState({ current: 0, total: 0 });
-    
+
     // Filter dropdown state
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
     const filterDropdownRef = useRef<HTMLDivElement>(null);
-    
 
-    
+
+
     // Modal states
     const [infoModalBook, setInfoModalBook] = useState<Book | null>(null);
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
     const [addToShelfBookId, setAddToShelfBookId] = useState<string | null>(null);
     const [isAddToShelfModalOpen, setIsAddToShelfModalOpen] = useState(false);
-    
+
     // Track if we've already started extraction to avoid duplicate runs
     const extractionStartedRef = useRef(false);
-    
+
     // Selected shelf state (safely initialized from session storage)
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
-    
+
     // Favorites filter state
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-    
+
     // Initialize selected shelf from session storage on mount
     useEffect(() => {
         const shelfId = sessionStorage.getItem("theorem-selected-shelf");
@@ -704,7 +704,7 @@ export function LibraryPage() {
             setSelectedShelfId(shelfId);
         }
     }, []);
-    
+
     const selectedShelf = selectedShelfId ? collections.find(c => c.id === selectedShelfId) : null;
     const selectedShelfBookIds = useMemo(() => {
         if (!selectedShelf) {
@@ -716,17 +716,17 @@ export function LibraryPage() {
     // Filter books based on search query, selected shelf, and favorites
     const filteredBooks = useMemo(() => {
         let result = books;
-        
+
         // Filter by shelf if selected
         if (selectedShelfBookIds) {
             result = result.filter((book) => selectedShelfBookIds.has(book.id));
         }
-        
+
         // Filter by favorites
         if (showFavoritesOnly) {
             result = result.filter(b => b.isFavorite);
         }
-        
+
         // Filter by search query
         if (searchQuery.trim()) {
             const rankedBooks = rankByFuzzyQuery(
@@ -749,7 +749,7 @@ export function LibraryPage() {
             );
             result = rankedBooks.map(({ item }) => item.book);
         }
-        
+
         return result;
     }, [books, searchQuery, selectedShelfBookIds, showFavoritesOnly]);
 
@@ -765,7 +765,7 @@ export function LibraryPage() {
 
         sorted.sort((a, b) => {
             let comparison = 0;
-            
+
             switch (sortBy) {
                 case "title":
                     comparison = a.title.localeCompare(b.title);
@@ -794,7 +794,7 @@ export function LibraryPage() {
                     comparison = aRating - bRating;
                     break;
             }
-            
+
             return sortOrder === "asc" ? comparison : -comparison;
         });
 
@@ -804,11 +804,11 @@ export function LibraryPage() {
     // Auto-extract covers for books that don't have them
     useEffect(() => {
         if (extractionStartedRef.current || books.length === 0) return;
-        
+
         const booksWithoutCovers = books.filter(book => !book.coverPath);
-        
+
         if (booksWithoutCovers.length === 0) return;
-        
+
         extractionStartedRef.current = true;
 
         let isCancelled = false;
@@ -890,11 +890,11 @@ export function LibraryPage() {
                 }
             }
         };
-        
+
         const timeoutId = setTimeout(() => {
             void extractCovers();
         }, 300);
-        
+
         return () => {
             isCancelled = true;
             clearTimeout(timeoutId);
@@ -917,7 +917,7 @@ export function LibraryPage() {
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, [showFilterDropdown]);
-    
+
 
 
     // Handle importing books (works in both Tauri and browser)
@@ -949,11 +949,11 @@ export function LibraryPage() {
                 directory: true,
                 multiple: false,
             });
-            
+
             if (folder && typeof folder === 'string') {
                 const bookPaths = await scanFolderForBooks(folder);
                 const importedBooks = await importBooks(bookPaths);
-                
+
                 if (importedBooks.length > 0) {
                     addBooks(importedBooks);
                 }
@@ -1116,7 +1116,7 @@ export function LibraryPage() {
 
                         {showFilterDropdown && (
                             <>
-                                <div 
+                                <div
                                     className="fixed inset-0 z-10"
                                     onClick={() => setShowFilterDropdown(false)}
                                 />

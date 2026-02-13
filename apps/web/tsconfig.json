@@ -29,7 +29,7 @@
             "@lionreader/feature-reader": [
                 "../../packages/features/reader/src"
             ],
-            "@/foliate-js/*": [
+            "@foliate-js/*": [
                 "../../packages/features/reader/foliate-js/*"
             ],
             "@lionreader/feature-library": [

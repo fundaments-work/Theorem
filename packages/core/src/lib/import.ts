@@ -4,7 +4,7 @@
  * Works in both Tauri and browser environments
  */
 
-import type { Book, BookFormat } from '@/types';
+import type { Book, BookFormat } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { isTauri } from './env';
 import { saveBookData, getBookData } from './storage';

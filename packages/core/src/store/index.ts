@@ -1,21 +1,21 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { normalizeCardTextForDisplay } from "@/lib/learning-card-text";
-import { applyReaderStyles, initReaderStyles } from "@/lib/reader-styles";
+import { normalizeCardTextForDisplay } from "../lib/learning-card-text";
+import { applyReaderStyles, initReaderStyles } from "../lib/reader-styles";
 import {
     lookupDictionaryTerm,
     vocabularyTermFromLookup,
     type DictionaryLookupResult,
-} from "@/services/DictionaryService";
+} from "../services/DictionaryService";
 import {
     importStarDictDictionary,
     removeStarDictDictionary,
-} from "@/services/StarDictService";
+} from "../services/StarDictService";
 import {
     createInitialReviewSchedulerState,
     normalizeReviewSchedulerState,
     reviewItemSchedulerState,
-} from "@/services/LearningSchedulerService";
+} from "../services/LearningSchedulerService";
 import type {
     Annotation,
     AppRoute,
@@ -39,7 +39,7 @@ import type {
     VocabularyContext,
     VocabularyContextSourceType,
     VocabularyTerm,
-} from "@/types";
+} from "../types";
 
 // Default reader settings - optimized for performance
 const defaultReaderSettings: ReaderSettings = {

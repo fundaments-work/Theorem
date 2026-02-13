@@ -16,7 +16,7 @@ import {
     useImperativeHandle,
 } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
-import { PDFJsEngine, type PDFJsEngineRef, type PDFDocumentInfo } from "@/engines/pdfjs-engine";
+import { PDFJsEngine, type PDFJsEngineRef, type PDFDocumentInfo } from "../engines/pdfjs-engine";
 import { cn } from "@lionreader/core";
 import type { ReaderTheme, Annotation, HighlightColor, PdfZoomMode } from "@lionreader/core";
 

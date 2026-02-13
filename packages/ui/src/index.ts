@@ -8,4 +8,6 @@ export type { ModalProps } from "./Modal";
 export { Dropdown } from "./Dropdown";
 export type { DropdownOption, DropdownProps } from "./Dropdown";
 export { Sidebar } from "./layout/Sidebar";
+export { AppTitlebar } from "./AppTitlebar";
+export { ErrorBoundary } from "./ErrorBoundary";
 export * from "./modals";

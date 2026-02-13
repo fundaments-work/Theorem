@@ -1,4 +1,4 @@
-import type { HighlightColor, ReaderTheme } from "@lionreader/core";
+import type { HighlightColor, ReaderTheme } from "../types";
 
 export interface ThemeSemanticPalette {
     appBg: string;

@@ -36,7 +36,7 @@ export default defineConfig(async () => ({
             "@lionreader/feature-statistics": fileURLToPath(new URL("../../packages/features/statistics/src", import.meta.url)),
             "@lionreader/feature-vocabulary": fileURLToPath(new URL("../../packages/features/vocabulary/src", import.meta.url)),
             "@lionreader/feature-learning": fileURLToPath(new URL("../../packages/features/learning/src", import.meta.url)),
-            "@/foliate-js": fileURLToPath(new URL("../../packages/features/reader/foliate-js", import.meta.url)),
+            "@foliate-js": fileURLToPath(new URL("../../packages/features/reader/foliate-js", import.meta.url)),
         },
     },
 
@@ -82,6 +82,16 @@ export default defineConfig(async () => ({
             : undefined,
         watch: {
             ignored: ["**/src-tauri/**"],
+        },
+        fs: {
+            allow: [
+                // Allow serving files from the app's own root (index.html, src/, etc.)
+                ".",
+                // Allow serving files from the packages directory
+                "../../packages",
+                // Allow serving files from the monorepo root (node_modules, etc.)
+                "../..",
+            ],
         },
     },
 

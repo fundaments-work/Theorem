@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { useLearningStore, useSettingsStore } from "@/store";
+import { useLearningStore, useSettingsStore } from "../store/index";
 
 function toIsoDateString(date: Date): string {
     return date.toISOString().slice(0, 10);

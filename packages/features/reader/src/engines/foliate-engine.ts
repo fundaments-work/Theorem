@@ -20,17 +20,17 @@ import type {
     ThemeSettings,
     ReaderTheme,
     BookFormat,
-} from '@/types';
-import { isFixedLayout, isReflowable } from '@/types';
-import { getTheme } from '@/foliate/themes';
+} from '@lionreader/core';
+import { isFixedLayout, isReflowable } from '@lionreader/core';
+import { getTheme } from '../foliate/themes';
 import { 
     registerEngineStyleCallback,
     getCurrentReaderSettings,
     getThemeColors,
-} from '@/lib/reader-styles';
+} from '@lionreader/core';
 import { HIGHLIGHT_SOLID_COLORS } from "@lionreader/core";
 import { rankByFuzzyQuery } from "@lionreader/core";
-import { normalizeAuthor } from '@/lib/utils';
+import { normalizeAuthor } from '@lionreader/core';
 
 const READER_SEARCH_EXACT_LIMIT = 120;
 const READER_SEARCH_FALLBACK_TRIGGER_THRESHOLD = 3;
@@ -144,7 +144,7 @@ export class FoliateEngine {
 
         try {
             // Dynamically import foliate-js
-            const { makeBook } = await import('../foliate-js/view.js');
+            const { makeBook } = await import('../../foliate-js/view.js');
 
             // Open book - ensure we pass a File object with name for foliate-js
             let file: File | Blob;

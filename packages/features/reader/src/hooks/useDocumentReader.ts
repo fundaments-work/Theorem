@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { FoliateEngine } from '@/engines';
+import { FoliateEngine } from '../engines';
 import type {
     DocLocation,
     DocMetadata,
@@ -16,7 +16,7 @@ import type {
     PageLayout,
     ThemeSettings,
     BookFormat,
-} from '@/types';
+} from '../types';
 
 export interface UseDocumentReaderOptions {
     onLocationChange?: (location: DocLocation) => void;

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { SHELF_COLOR_PALETTE } from "@/lib/design-tokens";
+import { SHELF_COLOR_PALETTE } from "./design-tokens";
 
 // Generate a color from shelf name for consistent colors across sessions
 export function getShelfColor(shelfId: string, shelfName: string): {

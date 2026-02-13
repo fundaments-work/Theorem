@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { cn } from "@lionreader/core";
-import { Modal, ModalBody, ModalFooter } from "@/components/ui/Modal";
+import { Modal, ModalBody, ModalFooter } from "../Modal";
 
 interface EditNoteModalProps {
     isOpen: boolean;

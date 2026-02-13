@@ -144,7 +144,7 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
 }
 
 // Activity heatmap with real data
-function ActivityHeatmap({ dailyActivity }: { dailyActivity: import('@/types').DailyReadingActivity[] | undefined }) {
+function ActivityHeatmap({ dailyActivity }: { dailyActivity: import('./types').DailyReadingActivity[] | undefined }) {
     // Generate last 12 weeks of data
     const weeks = useMemo(() => {
         const data: number[][] = [];

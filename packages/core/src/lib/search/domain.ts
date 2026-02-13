@@ -1,4 +1,4 @@
-import type { AppRoute } from "@/types";
+import type { AppRoute } from "../../types";
 
 export type SearchPlacement = "appTitlebar" | "readerPanel";
 
