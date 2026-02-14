@@ -5,12 +5,7 @@
         "rootDir": ".",
         "baseUrl": ".",
         "declaration": true,
-        "declarationMap": true,
-        "paths": {
-            "@theorem/feature-learning": [
-                "../learning/src"
-            ]
-        }
+        "declarationMap": true
     },
     "include": [
         "src"

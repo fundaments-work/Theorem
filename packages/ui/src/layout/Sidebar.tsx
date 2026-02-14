@@ -8,14 +8,12 @@ import {
     ChevronRight,
     Highlighter,
     FolderOpen,
-    Folders,
     Rss,
-    GraduationCap,
     X,
 } from "lucide-react";
 import { TheoremLogo } from "../TheoremLogo";
 import { cn } from "@theorem/core";
-import { useLearningStore, useUIStore, useSettingsStore } from "@theorem/core";
+import { useUIStore, useSettingsStore } from "@theorem/core";
 import type { AppRoute } from "@theorem/core";
 
 interface SidebarItem {
@@ -26,8 +24,6 @@ interface SidebarItem {
 
 const mainNavItems: SidebarItem[] = [
     { id: "library", label: "Library", icon: <Library className="w-5 h-5" /> },
-    { id: "academic", label: "Papers", icon: <GraduationCap className="w-5 h-5" /> },
-    { id: "references", label: "References", icon: <Folders className="w-5 h-5" /> },
     { id: "vocabulary", label: "Vocabulary", icon: <BookOpenText className="w-5 h-5" /> },
     { id: "annotations", label: "Highlights", icon: <Highlighter className="w-5 h-5" /> },
     { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="w-5 h-5" /> },
@@ -41,12 +37,6 @@ interface SidebarProps {
 export function Sidebar({ isMobile, onClose }: SidebarProps) {
     const { currentRoute, setRoute, sidebarOpen, toggleSidebar } = useUIStore();
     const { settings, updateSettings } = useSettingsStore();
-    const vocabularyDueCount = useLearningStore((state) => (
-        state.getDueReviewItems(new Date(), "vocabulary").length
-    ));
-    const highlightDueCount = useLearningStore((state) => (
-        state.getDueReviewItems(new Date(), "highlight").length
-    ));
     const sidebarRef = useRef<HTMLElement>(null);
     const touchStartX = useRef<number>(0);
     const isCollapsedDesktop = !isMobile && !sidebarOpen;
@@ -179,16 +169,6 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                     {(sidebarOpen || isMobile) && (
                                         <span className="flex items-center gap-2 font-medium text-sm animate-fade-in">
                                             {item.label}
-                                            {item.id === "vocabulary" && vocabularyDueCount > 0 && (
-                                                <span className="rounded-full bg-[var(--color-error)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                                    {vocabularyDueCount}
-                                                </span>
-                                            )}
-                                            {item.id === "annotations" && highlightDueCount > 0 && (
-                                                <span className="rounded-full bg-[var(--color-error)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                                    {highlightDueCount}
-                                                </span>
-                                            )}
                                         </span>
                                     )}
                                 </button>

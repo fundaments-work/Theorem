@@ -54,33 +54,6 @@ export interface PdfViewState {
     zoomMode: PdfZoomMode;
 }
 
-export type AcademicSource = "arxiv" | "pubmed" | "manual";
-
-export type CitationFormat = "apa" | "bibtex" | "mla";
-
-export interface CitationReferenceData {
-    bibtex?: string;
-    cslJson?: Record<string, unknown>;
-}
-
-export type ReferenceType = "book" | "paper";
-
-export interface AcademicMetadata {
-    source: AcademicSource;
-    sourceId?: string;
-    doi?: string;
-    journal?: string;
-    conference?: string;
-    abstract?: string;
-    authors: string[];
-    citationCount?: number;
-    fieldTags?: string[];
-    openAccess?: boolean;
-    openAccessUrl?: string;
-    pdfUrl?: string;
-    referenceData?: CitationReferenceData;
-}
-
 // Book Entity
 export interface Book {
     id: string;
@@ -122,66 +95,6 @@ export interface Book {
     // Statistics
     readingTime: number; // in minutes
     completedAt?: Date; // When the book was marked completed (auto or manual)
-    // Academic metadata attached to papers imported from sources like arXiv/PubMed.
-    academic?: AcademicMetadata;
-}
-
-export interface AcademicPaper {
-    id: string;
-    source: AcademicSource;
-    sourceId?: string;
-    title: string;
-    authors: string[];
-    abstract?: string;
-    doi?: string;
-    journal?: string;
-    conference?: string;
-    citationCount?: number;
-    fieldTags?: string[];
-    openAccess?: boolean;
-    openAccessUrl?: string;
-    pdfUrl?: string;
-    url?: string;
-    publishedDate?: string;
-    referenceData?: CitationReferenceData;
-}
-
-export interface ReferenceItem {
-    id: string;
-    bookId: string;
-    type: ReferenceType;
-    source: AcademicSource | "library";
-    sourceId?: string;
-    title: string;
-    authors: string[];
-    abstract?: string;
-    doi?: string;
-    journal?: string;
-    conference?: string;
-    citationCount?: number;
-    fieldTags?: string[];
-    openAccess?: boolean;
-    openAccessUrl?: string;
-    url?: string;
-    publishedDate?: string;
-    addedAt: Date;
-    format: BookFormat;
-    tags: string[];
-    isAcademic: boolean;
-    referenceData?: CitationReferenceData;
-}
-
-export interface Citation {
-    id: string;
-    paperId: string;
-    annotationId?: string;
-    note?: string;
-    quote?: string;
-    location?: string;
-    pageNumber?: number;
-    createdAt: Date;
-    updatedAt?: Date;
-    format?: CitationFormat;
 }
 
 // Reading Progress
@@ -222,7 +135,7 @@ export interface Collection {
     name: string;
     description?: string;
     bookIds: string[];
-    kind: "general" | "research";
+    kind: "general";
     createdAt: Date;
 }
 
@@ -264,16 +177,6 @@ export type LibraryViewMode = "grid" | "list" | "compact";
 export type LibrarySortBy = "title" | "author" | "dateAdded" | "lastRead" | "progress" | "rating";
 export type LibrarySortOrder = "asc" | "desc";
 
-export interface AcademicTopic {
-    id: string;
-    label: string;
-    query: string;
-}
-
-export interface AcademicSettings {
-    customTopics: AcademicTopic[];
-}
-
 // App Settings
 export interface AppSettings {
     sidebarCollapsed: boolean;
@@ -285,7 +188,6 @@ export interface AppSettings {
     theme: "light" | "dark" | "system";
     readerSettings: ReaderSettings;
     learning: LearningSettings;
-    academic: AcademicSettings;
 }
 
 export type DictionaryMode = "online" | "offline" | "auto";
@@ -294,14 +196,8 @@ export type DictionaryProvider = "free_dictionary_api" | "wiktionary" | "stardic
 
 export interface LearningSettings {
     vocabularyEnabled: boolean;
-    reviewVocabularyEnabled: boolean;
-    reviewHighlightEnabled: boolean;
-    defaultReminderReviewScope: ReviewLaunchScope;
     dictionaryMode: DictionaryMode;
     preferredProviders: DictionaryProvider[];
-    dailyReviewTime: string; // HH:mm
-    dailyReviewGoal: number;
-    inAppReminder: boolean;
     showPronunciation: boolean;
     playPronunciationAudio: boolean;
 }
@@ -342,64 +238,6 @@ export interface VocabularyTerm {
     contexts: VocabularyContext[];
     createdAt: Date;
     updatedAt?: Date;
-    lastReviewedAt?: Date;
-}
-
-export type ReviewSourceType = "vocabulary" | "highlight";
-export type ReviewLaunchScope = "all" | "vocabulary" | "highlight";
-
-export interface LearningReviewSchedulerState {
-    due: Date;
-    stability: number;
-    difficulty: number;
-    elapsed_days: number;
-    scheduled_days: number;
-    learning_steps: number;
-    reps: number;
-    lapses: number;
-    state: number;
-    last_review?: Date;
-}
-
-export interface LearningReviewRecord {
-    id: string;
-    sourceType: ReviewSourceType;
-    sourceId: string;
-    suspended: boolean;
-    scheduler: LearningReviewSchedulerState;
-    dueAt: Date;
-    createdAt: Date;
-    updatedAt?: Date;
-    lastReviewedAt?: Date;
-    reviewCount: number;
-    lapseCount: number;
-}
-
-export interface DailyReviewItem {
-    id: string;
-    sourceType: ReviewSourceType;
-    sourceId: string;
-    front: string;
-    back: string;
-    dueAt: Date;
-    createdAt: Date;
-    suspended: boolean;
-    reviewCount: number;
-    lapseCount: number;
-}
-
-export type ReviewGrade = "again" | "hard" | "good" | "easy";
-
-export interface ReviewEvent {
-    id: string;
-    sourceType: ReviewSourceType;
-    sourceId: string;
-    grade: ReviewGrade;
-    reviewedAt: Date;
-    dueBefore: Date;
-    dueAfter: Date;
-    sourceState: number;
-    nextState: number;
 }
 
 export interface InstalledDictionary {
@@ -409,13 +247,6 @@ export interface InstalledDictionary {
     format: "stardict";
     sizeBytes: number;
     importedAt: Date;
-}
-
-export interface DailyReminderState {
-    isPromptVisible: boolean;
-    lastPromptDate?: string; // ISO date YYYY-MM-DD
-    dismissedDate?: string; // ISO date YYYY-MM-DD
-    completedDate?: string; // ISO date YYYY-MM-DD
 }
 
 // Daily reading activity entry
@@ -469,7 +300,7 @@ export interface RssArticle {
 }
 
 // Navigation
-export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds" | "academic" | "references";
+export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds";
 
 // UI State
 export interface UIState {
@@ -521,11 +352,6 @@ export interface DocMetadata {
     pubdate?: string;
     identifier?: string;
     cover?: string;
-    doi?: string;
-    journal?: string;
-    conference?: string;
-    citationCount?: number;
-    pdfUrl?: string;
 }
 
 export interface SearchResult {

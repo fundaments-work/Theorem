@@ -987,8 +987,8 @@ export async function fetchAndParseFeed(
     } else {
         if (isLikelyCorsRestricted(url)) {
             throw new Error(
-                `This URL appears to be from an academic publisher that blocks browser requests (CORS). ` +
-                `Academic publishers typically require authentication and block direct feed access from web browsers. ` +
+                `This URL appears to be from a publisher that blocks browser requests (CORS). ` +
+                `Some publishers require authentication and block direct feed access from web browsers. ` +
                 `Try using a different feed source or accessing through the publisher's official RSS page.`
             );
         }

@@ -21,7 +21,6 @@
         "fflate": "^0.8.0",
         "idb-keyval": "^6.2.2",
         "tailwind-merge": "^3.0.0",
-        "ts-fsrs": "^5.2.3",
         "uuid": "^13.0.0",
         "zustand": "^5.0.10"
     }

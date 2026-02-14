@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
     BookOpenText,
-    BrainCircuit,
-    CalendarClock,
-    Clock3,
     Hash,
     NotebookPen,
     Save,
@@ -11,7 +8,6 @@ import {
     Plus,
     ArrowLeft,
     LayoutTemplate,
-    ChevronRight,
     ChevronLeft,
 } from "lucide-react";
 import { cn } from "@theorem/core";
@@ -79,19 +75,14 @@ function toDisplayDate(value: Date | string | null | undefined): string {
 }
 
 /**
- * Standalone vocabulary workspace with source-based organization and scoped review launcher.
+ * Standalone vocabulary workspace with source-based organization.
  * Refactored to match FeedsPage layout.
  */
 export function VocabularyPage() {
     const searchQuery = useUIStore((state) => state.searchQuery);
     const vocabularyTerms = useLearningStore((state) => state.vocabularyTerms);
-    const reviewRecords = useLearningStore((state) => state.reviewRecords);
     const updateVocabularyTerm = useLearningStore((state) => state.updateVocabularyTerm);
     const deleteVocabularyTerm = useLearningStore((state) => state.deleteVocabularyTerm);
-    const openReviewSession = useLearningStore((state) => state.openReviewSession);
-    const dueVocabularyCount = useLearningStore((state) => (
-        state.getDueReviewItems(new Date(), "vocabulary").length
-    ));
 
     const [sourceFilter, setSourceFilter] = useState<string>("all");
     const [selectedTermId, setSelectedTermId] = useState<string | null>(null);
@@ -101,22 +92,10 @@ export function VocabularyPage() {
     // Mobile View State: 'sources' (sidebar) or 'terms' (content)
     const [showMobileList, setShowMobileList] = useState(true);
 
-    const now = new Date();
-
     const sourceOptions = useMemo(
         () => buildSourceFilterOptions(vocabularyTerms),
         [vocabularyTerms],
     );
-
-    const reviewRecordByTermId = useMemo(() => {
-        const map = new Map<string, (typeof reviewRecords)[number]>();
-        for (const record of reviewRecords) {
-            if (record.sourceType === "vocabulary") {
-                map.set(record.sourceId, record);
-            }
-        }
-        return map;
-    }, [reviewRecords]);
 
     const filteredTerms = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -357,18 +336,6 @@ export function VocabularyPage() {
                         </div>
                     </div>
 
-                    <button
-                        onClick={() => openReviewSession("vocabulary")}
-                        disabled={dueVocabularyCount === 0}
-                        className={cn(
-                            "ui-btn ui-btn-primary",
-                            dueVocabularyCount === 0 && "opacity-50 cursor-not-allowed bg-[var(--color-surface-muted)] text-[color:var(--color-text-muted)]"
-                        )}
-                    >
-                        <BrainCircuit className="w-4 h-4" />
-                        <span className="hidden sm:inline">Review ({dueVocabularyCount})</span>
-                        <span className="sm:hidden">Review</span>
-                    </button>
                 </header>
 
                 {/* Main Content Area: List + Details */}
@@ -382,9 +349,6 @@ export function VocabularyPage() {
                             {filteredTerms.length > 0 ? (
                                 filteredTerms.map((term) => {
                                     const isSelected = selectedTermId === term.id;
-                                    const reviewRecord = reviewRecordByTermId.get(term.id);
-                                    const dueAt = reviewRecord?.dueAt ? new Date(reviewRecord.dueAt) : null;
-                                    const isDue = Boolean(dueAt && dueAt.getTime() <= now.getTime());
 
                                     return (
                                         <button
@@ -404,9 +368,6 @@ export function VocabularyPage() {
                                                 )}>
                                                     {term.term}
                                                 </span>
-                                                {isDue && (
-                                                    <span className="h-2 w-2 rounded-full bg-[var(--color-warning)] shrink-0" title="Due" />
-                                                )}
                                             </div>
                                             <p className="mt-1 truncate text-xs text-[color:var(--color-text-secondary)] opacity-80 leading-snug">
                                                 {getTermPrimaryDefinition(term)}
@@ -456,18 +417,6 @@ export function VocabularyPage() {
                                             {selectedTerm.phonetic && (
                                                 <span className="font-mono text-sm text-[color:var(--color-text-secondary)] bg-[var(--color-surface-muted)] px-2 py-1 rounded-md">
                                                     /{selectedTerm.phonetic}/
-                                                </span>
-                                            )}
-                                            {reviewRecordByTermId.get(selectedTerm.id) && (
-                                                <span className={cn(
-                                                    "rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider",
-                                                    reviewRecordByTermId.get(selectedTerm.id)?.dueAt && new Date(reviewRecordByTermId.get(selectedTerm.id)!.dueAt).getTime() <= now.getTime()
-                                                        ? "bg-[var(--color-warning)]/20 text-[color:var(--color-warning)]"
-                                                        : "bg-[var(--color-success)]/10 text-[color:var(--color-success)]"
-                                                )}>
-                                                    {reviewRecordByTermId.get(selectedTerm.id)?.dueAt && new Date(reviewRecordByTermId.get(selectedTerm.id)!.dueAt).getTime() <= now.getTime()
-                                                        ? "Due Now"
-                                                        : "Learned"}
                                                 </span>
                                             )}
                                         </div>

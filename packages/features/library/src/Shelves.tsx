@@ -537,10 +537,7 @@ export function ShelvesPage() {
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingShelf, setEditingShelf] = useState<{ id: string; name: string; description?: string } | undefined>();
-    const generalCollections = useMemo(
-        () => collections.filter((collection) => collection.kind !== "research"),
-        [collections],
-    );
+    const generalCollections = useMemo(() => collections, [collections]);
 
     // Filter shelves by search query
     const filteredShelves = useMemo(() => {

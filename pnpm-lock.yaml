@@ -44,15 +44,9 @@ importers:
       '@theorem/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@theorem/feature-academic':
-        specifier: workspace:*
-        version: link:../../packages/features/academic
       '@theorem/feature-feeds':
         specifier: workspace:*
         version: link:../../packages/features/feeds
-      '@theorem/feature-learning':
-        specifier: workspace:*
-        version: link:../../packages/features/learning
       '@theorem/feature-library':
         specifier: workspace:*
         version: link:../../packages/features/library
@@ -113,9 +107,6 @@ importers:
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.4.0
-      ts-fsrs:
-        specifier: ^5.2.3
-        version: 5.2.3
       uuid:
         specifier: ^13.0.0
         version: 13.0.0
@@ -186,9 +177,6 @@ importers:
       tailwind-merge:
         specifier: ^3.0.0
         version: 3.4.0
-      ts-fsrs:
-        specifier: ^5.2.3
-        version: 5.2.3
       uuid:
         specifier: ^13.0.0
         version: 13.0.0
@@ -196,40 +184,7 @@ importers:
         specifier: ^5.0.10
         version: 5.0.11(@types/react@19.2.14)(react@19.2.4)
 
-  packages/features/academic:
-    dependencies:
-      '@theorem/core':
-        specifier: workspace:*
-        version: link:../../core
-      lucide-react:
-        specifier: ^0.563.0
-        version: 0.563.0(react@19.2.4)
-      react:
-        specifier: ^19.1.0
-        version: 19.2.4
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.4(react@19.2.4)
-
   packages/features/feeds:
-    dependencies:
-      '@theorem/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@theorem/ui':
-        specifier: workspace:*
-        version: link:../../ui
-      lucide-react:
-        specifier: ^0.563.0
-        version: 0.563.0(react@19.2.4)
-      react:
-        specifier: ^19.1.0
-        version: 19.2.4
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.4(react@19.2.4)
-
-  packages/features/learning:
     dependencies:
       '@theorem/core':
         specifier: workspace:*
@@ -270,9 +225,6 @@ importers:
       '@theorem/core':
         specifier: workspace:*
         version: link:../../core
-      '@theorem/feature-learning':
-        specifier: workspace:*
-        version: link:../learning
       '@theorem/ui':
         specifier: workspace:*
         version: link:../../ui
@@ -1613,10 +1565,6 @@ packages:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
     engines: {node: '>=8.0'}
 
-  ts-fsrs@5.2.3:
-    resolution: {integrity: sha512-R3IjceC9WfnvUin6Nx+DwqEzh3Qil6Gg2yEHqvocUcC7Nbi+xDrFg/1fKaYBT0tJedDnDAguXMSX0hijhi859w==}
-    engines: {node: '>=18.0.0'}
-
   typescript@5.6.3:
     resolution: {integrity: sha512-hjcS1mhfuyi4WW8IWtjP7brDrG2cuDZukyrYrSauoXGNgx0S7zceP07adYkJycEr56BOUTNPzbInooiN3fn1qw==}
     engines: {node: '>=14.17'}
@@ -2768,8 +2716,6 @@ snapshots:
   to-regex-range@5.0.1:
     dependencies:
       is-number: 7.0.0
-
-  ts-fsrs@5.2.3: {}
 
   typescript@5.6.3: {}
 

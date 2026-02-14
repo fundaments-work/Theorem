@@ -1,18 +1,14 @@
 import { Suspense, lazy, useEffect, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { AppTitlebar } from "@theorem/ui";
-import { ReviewSessionModal } from "@theorem/feature-learning";
 import { Sidebar } from "@theorem/ui";
 import {
-    useLearningStore,
-    useLibraryStore,
     useUIStore,
     useSettingsStore,
 } from "@theorem/core";
 import { isTauri } from "@theorem/core";
 import { cn } from "@theorem/core";
 import { initReaderStyles } from "@theorem/core";
-import { useDailyReviewReminder } from "@theorem/core";
 
 const LibraryPage = lazy(() =>
     import("@theorem/feature-library").then((module) => ({ default: module.LibraryPage })),
@@ -41,12 +37,6 @@ const StatisticsPage = lazy(() =>
 const FeedsPage = lazy(() =>
     import("@theorem/feature-feeds").then((module) => ({ default: module.FeedsPage })),
 );
-const AcademicPage = lazy(() =>
-    import("@theorem/feature-academic").then((module) => ({ default: module.AcademicPage })),
-);
-const ReferencesPage = lazy(() =>
-    import("@theorem/feature-academic").then((module) => ({ default: module.AcademicReferencesPage })),
-);
 const DESKTOP_STARTUP_MIN_WIDTH = 1024;
 const DESKTOP_STARTUP_MIN_HEIGHT = 720;
 
@@ -65,43 +55,8 @@ function App() {
     const toggleSidebar = useUIStore((state) => state.toggleSidebar);
     const isTauriRuntime = isTauri();
     const mainScrollRef = useRef<HTMLElement>(null);
-    const reminderVisible = useLearningStore((state) => state.dailyReminderState.isPromptVisible);
-    const dismissDailyReminderPrompt = useLearningStore((state) => state.dismissDailyReminderPrompt);
-    const openReviewSession = useLearningStore((state) => state.openReviewSession);
-    const syncReviewRecords = useLearningStore((state) => state.syncReviewRecords);
     const learningSettings = useSettingsStore((state) => state.settings.learning);
     const vocabularyEnabled = learningSettings.vocabularyEnabled;
-    const reminderScope = learningSettings.defaultReminderReviewScope;
-    const dueCount = useLearningStore((state) => (
-        state.getDueReviewItems(new Date(), reminderScope).length
-    ));
-
-    useDailyReviewReminder();
-
-    useEffect(() => {
-        const runSync = () => {
-            syncReviewRecords();
-        };
-
-        const libraryPersist = (
-            useLibraryStore as typeof useLibraryStore & {
-                persist?: {
-                    hasHydrated?: () => boolean;
-                    onFinishHydration?: (callback: () => void) => () => void;
-                };
-            }
-        ).persist;
-
-        if (!libraryPersist || libraryPersist.hasHydrated?.()) {
-            runSync();
-            return;
-        }
-
-        const unsubscribe = libraryPersist.onFinishHydration?.(runSync);
-        return () => {
-            unsubscribe?.();
-        };
-    }, [syncReviewRecords]);
 
     useEffect(() => {
         if (currentRoute === "vocabulary" && !vocabularyEnabled) {
@@ -177,10 +132,6 @@ function App() {
                 return <StatisticsPage />;
             case "feeds":
                 return <FeedsPage />;
-            case "academic":
-                return <AcademicPage />;
-            case "references":
-                return <ReferencesPage />;
             default:
                 return <LibraryPage />;
         }
@@ -231,36 +182,7 @@ function App() {
                         {renderPage()}
                     </Suspense>
                 </main>
-
-                {reminderVisible && dueCount > 0 && (
-                    <div className="pointer-events-none absolute bottom-4 right-4 z-[var(--z-toast)]">
-                        <div className="pointer-events-auto flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 shadow-[var(--shadow-lg)]">
-                            <div className="text-sm">
-                                <p className="font-semibold text-[color:var(--color-text-primary)]">Daily review ready</p>
-                                <p className="text-[color:var(--color-text-secondary)]">
-                                    {dueCount} review item{dueCount === 1 ? "" : "s"} are due now.
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    openReviewSession(reminderScope);
-                                    dismissDailyReminderPrompt();
-                                }}
-                                className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium ui-text-accent-contrast"
-                            >
-                                Start
-                            </button>
-                            <button
-                                onClick={dismissDailyReminderPrompt}
-                                className="rounded-md bg-[var(--color-surface-muted)] px-2 py-1 text-xs text-[color:var(--color-text-secondary)]"
-                            >
-                                Dismiss
-                            </button>
-                        </div>
-                    </div>
-                )}
             </div>
-            <ReviewSessionModal />
         </div>
     );
 }

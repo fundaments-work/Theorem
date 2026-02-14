@@ -35,9 +35,7 @@ export default defineConfig(async () => ({
             "@theorem/feature-settings": fileURLToPath(new URL("../../packages/features/settings/src", import.meta.url)),
             "@theorem/feature-statistics": fileURLToPath(new URL("../../packages/features/statistics/src", import.meta.url)),
             "@theorem/feature-vocabulary": fileURLToPath(new URL("../../packages/features/vocabulary/src", import.meta.url)),
-            "@theorem/feature-learning": fileURLToPath(new URL("../../packages/features/learning/src", import.meta.url)),
             "@theorem/feature-feeds": fileURLToPath(new URL("../../packages/features/feeds/src", import.meta.url)),
-            "@theorem/feature-academic": fileURLToPath(new URL("../../packages/features/academic/src", import.meta.url)),
             "@foliate-js": fileURLToPath(new URL("../../packages/features/reader/foliate-js", import.meta.url)),
         },
     },
@@ -76,38 +74,7 @@ export default defineConfig(async () => ({
         port: 1420,
         strictPort: true,
         host: host || false,
-        proxy: {
-            "/api/academic/arxiv": {
-                target: "https://export.arxiv.org",
-                changeOrigin: true,
-                secure: true,
-                rewrite: (path) => path.replace(/^\/api\/academic\/arxiv/, "/api/query"),
-            },
-            "/api/academic/pubmed/esearch": {
-                target: "https://eutils.ncbi.nlm.nih.gov",
-                changeOrigin: true,
-                secure: true,
-                rewrite: (path) => path.replace(
-                    /^\/api\/academic\/pubmed\/esearch/,
-                    "/entrez/eutils/esearch.fcgi",
-                ),
-            },
-            "/api/academic/pubmed/efetch": {
-                target: "https://eutils.ncbi.nlm.nih.gov",
-                changeOrigin: true,
-                secure: true,
-                rewrite: (path) => path.replace(
-                    /^\/api\/academic\/pubmed\/efetch/,
-                    "/entrez/eutils/efetch.fcgi",
-                ),
-            },
-            "/api/academic/openalex": {
-                target: "https://api.openalex.org",
-                changeOrigin: true,
-                secure: true,
-                rewrite: (path) => path.replace(/^\/api\/academic\/openalex/, ""),
-            },
-        },
+        proxy: {},
         hmr: host
             ? {
                 protocol: "ws",

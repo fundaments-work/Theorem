@@ -189,7 +189,7 @@ export async function confirmDeleteBook(bookTitle: string): Promise<boolean> {
 export async function confirmClearAllData(): Promise<boolean> {
     return showConfirm({
         title: "Clear All Data",
-        message: "This will permanently delete all your books, highlights, notes, vocabulary, review history, shelves, and settings. This action cannot be undone.",
+        message: "This will permanently delete all your books, highlights, notes, vocabulary, shelves, and settings. This action cannot be undone.",
         okLabel: "Clear Everything",
         cancelLabel: "Cancel",
         kind: "error",

@@ -27,7 +27,6 @@ import {
     Type,
     Eraser,
     ChevronDown,
-    Copy,
 } from "lucide-react";
 import { HIGHLIGHT_SOLID_COLORS } from "@theorem/core";
 import { cn, normalizeAuthor } from "@theorem/core";
@@ -46,8 +45,6 @@ interface WindowTitlebarProps {
     onToggleBookmarks: () => void;
     onToggleSearch: () => void;
     onToggleInfo: () => void;
-    onCopyCitation?: () => void;
-    isCitationCopied?: boolean;
     onAddBookmark?: () => void;
     isCurrentPageBookmarked?: boolean;
     activePanel: string | null;
@@ -166,8 +163,6 @@ export function WindowTitlebar({
     onToggleBookmarks,
     onToggleSearch,
     onToggleInfo,
-    onCopyCitation,
-    isCitationCopied,
     onAddBookmark,
     isCurrentPageBookmarked,
     activePanel,
@@ -781,19 +776,6 @@ export function WindowTitlebar({
                         <RotateCw className="w-4 h-4" />
                     </button>
 
-                    {onCopyCitation && (
-                        <button
-                            onClick={onCopyCitation}
-                            className={cn(
-                                ICON_BUTTON_CLASS,
-                                isCitationCopied ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
-                            )}
-                            style={{ color: "var(--reader-fg)" }}
-                            title={isCitationCopied ? "Citation copied" : "Copy APA citation"}
-                        >
-                            <Copy className="w-4 h-4" />
-                        </button>
-                    )}
                     </div>
                 </div>
             ) : (
@@ -889,15 +871,6 @@ export function WindowTitlebar({
                             <MoreVertical className="w-4 h-4" />
                         </ToolbarButton>
 
-                        {onCopyCitation && (
-                            <ToolbarButton
-                                onClick={onCopyCitation}
-                                active={Boolean(isCitationCopied)}
-                                title={isCitationCopied ? "Citation copied" : "Copy APA citation"}
-                            >
-                                <Copy className="w-4 h-4" />
-                            </ToolbarButton>
-                        )}
                     </div>
                 </div>
             )}

@@ -3,8 +3,8 @@
  * Displays book metadata and additional document information
  */
 
-import { X, Info, Calendar, Hash, Globe, FileText, User, Copy } from 'lucide-react';
-import type { CitationFormat, DocMetadata } from '@theorem/core';
+import { X, Info, Calendar, Hash, Globe, FileText, User } from 'lucide-react';
+import type { DocMetadata } from '@theorem/core';
 import { Backdrop, FloatingPanel } from '@theorem/ui';
 import { cn, normalizeAuthor } from '@theorem/core';
 
@@ -12,8 +12,6 @@ interface BookInfoPopoverProps {
     metadata: DocMetadata | null;
     visible: boolean;
     onClose: () => void;
-    onCopyCitation?: (format: CitationFormat) => void;
-    copiedCitationFormat?: CitationFormat | null;
     className?: string;
 }
 
@@ -29,8 +27,6 @@ export function BookInfoPopover({
     metadata,
     visible,
     onClose,
-    onCopyCitation,
-    copiedCitationFormat,
     className,
 }: BookInfoPopoverProps) {
     if (!metadata) return null;
@@ -112,37 +108,6 @@ export function BookInfoPopover({
                             <p className="text-xs text-[color:var(--color-text-secondary)] leading-relaxed italic line-clamp-[8]">
                                 {metadata.description}
                             </p>
-                        </div>
-                    )}
-
-                    {onCopyCitation && (
-                        <div className="space-y-2 pt-2 border-t border-[var(--color-border-subtle)]">
-                            <span className="text-[var(--font-size-3xs)] font-bold text-[color:var(--color-text-muted)] uppercase tracking-wider">
-                                Citation
-                            </span>
-                            <div className="flex flex-wrap gap-2">
-                                <button
-                                    onClick={() => onCopyCitation("apa")}
-                                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                                >
-                                    <Copy className="w-3.5 h-3.5" />
-                                    {copiedCitationFormat === "apa" ? "Copied APA" : "Copy APA"}
-                                </button>
-                                <button
-                                    onClick={() => onCopyCitation("mla")}
-                                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                                >
-                                    <Copy className="w-3.5 h-3.5" />
-                                    {copiedCitationFormat === "mla" ? "Copied MLA" : "Copy MLA"}
-                                </button>
-                                <button
-                                    onClick={() => onCopyCitation("bibtex")}
-                                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                                >
-                                    <Copy className="w-3.5 h-3.5" />
-                                    {copiedCitationFormat === "bibtex" ? "Copied BibTeX" : "Copy BibTeX"}
-                                </button>
-                            </div>
                         </div>
                     )}
                 </div>

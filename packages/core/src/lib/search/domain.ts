@@ -4,8 +4,6 @@ export type SearchPlacement = "appTitlebar" | "readerPanel";
 
 export type SearchDomain =
     | "library"
-    | "academic"
-    | "references"
     | "vocabulary"
     | "annotations"
     | "bookmarks"
@@ -16,7 +14,6 @@ export type SearchDomain =
 
 const APP_TITLEBAR_DOMAIN_BY_ROUTE: Record<AppRoute, SearchDomain> = {
     library: "library",
-    academic: "academic",
     reader: "none",
     vocabulary: "vocabulary",
     settings: "none",
@@ -26,13 +23,10 @@ const APP_TITLEBAR_DOMAIN_BY_ROUTE: Record<AppRoute, SearchDomain> = {
     shelves: "shelves",
     bookmarks: "bookmarks",
     feeds: "feeds",
-    references: "references",
 };
 
 const SEARCH_PLACEHOLDER_BY_DOMAIN: Record<Exclude<SearchDomain, "none">, string> = {
     library: "Search books, authors, or tags...",
-    academic: "Search papers, authors, journals, or DOI...",
-    references: "Search references, authors, venues, or DOI...",
     vocabulary: "Search terms, definitions, notes, or sources...",
     annotations: "Search highlights, notes, or books...",
     bookmarks: "Search bookmarks, books, or authors...",

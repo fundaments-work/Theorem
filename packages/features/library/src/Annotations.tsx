@@ -7,7 +7,7 @@ import { useState, useMemo } from "react";
 import { HIGHLIGHT_SOLID_COLORS } from "@theorem/core";
 import { cn } from "@theorem/core";
 import { rankByFuzzyQuery } from "@theorem/core";
-import { useLearningStore, useLibraryStore, useUIStore } from "@theorem/core";
+import { useLibraryStore, useUIStore } from "@theorem/core";
 import type { HighlightColor } from "@theorem/core";
 import { EditNoteModal } from "@theorem/ui";
 import { Dropdown } from "@theorem/ui";
@@ -17,7 +17,6 @@ import {
     Trash2,
     Edit3,
     BookOpen,
-    BrainCircuit,
     MoreVertical,
 } from "lucide-react";
 
@@ -211,10 +210,6 @@ const filterTabs = [
 export function AnnotationsPage() {
     const { annotations, books, removeAnnotation, updateAnnotation } = useLibraryStore();
     const { currentBookId, setRoute, searchQuery } = useUIStore();
-    const openReviewSession = useLearningStore((state) => state.openReviewSession);
-    const dueHighlightCount = useLearningStore((state) => (
-        state.getDueReviewItems(new Date(), "highlight").length
-    ));
     const [activeFilter, setActiveFilter] = useState<"all" | "highlights" | "notes">("all");
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -337,22 +332,6 @@ export function AnnotationsPage() {
                         {new Set(filteredAnnotations.map((a) => a.bookId)).size} books
                     </p>
                 </div>
-                <button
-                    onClick={() => openReviewSession("highlight")}
-                    disabled={dueHighlightCount === 0}
-                    className={cn(
-                        "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-                        dueHighlightCount > 0
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
-                            : "bg-[var(--color-surface-muted)] text-[color:var(--color-text-muted)]",
-                    )}
-                >
-                    <BrainCircuit className="h-4 w-4" />
-                    Review Highlights
-                    <span className="rounded-full bg-[var(--color-overlay-subtle)] px-2 py-0.5 text-xs">
-                        {dueHighlightCount}
-                    </span>
-                </button>
             </div>
 
             {currentBookId && (

@@ -22,8 +22,6 @@ import {
     Languages,
     Rss,
     Puzzle,
-    Volume2,
-    Cloud,
     Download,
     Globe,
     Wifi,
@@ -31,14 +29,9 @@ import {
     Key,
     ExternalLink,
     Copy,
-    RefreshCw,
-    Smartphone,
-    Laptop,
     Moon,
     Sun,
     BookOpenCheck,
-    BrainCircuit,
-    Mail,
     Target,
 } from "lucide-react";
 
@@ -167,24 +160,16 @@ export function SettingsPage() {
     const { books, annotations } = useLibraryStore();
     const { installedDictionaries, importStarDict, removeDictionary } = useLearningStore();
     const [activeTab, setActiveTab] = useState<
-        "general" | "dictionary" | "rss" | "integrations" | "tts" | "sync" | "storage"
+        "general" | "dictionary" | "rss" | "integrations" | "storage"
     >("general");
 
     // Dummy states for planned features
     const [rssAutoSync, setRssAutoSync] = useState(true);
     const [rssSyncInterval, setRssSyncInterval] = useState(30);
-    const [clipperEnabled, setClipperEnabled] = useState(false);
     const [obsidianVaultPath, setObsidianVaultPath] = useState("");
     const [obsidianAutoExport, setObsidianAutoExport] = useState(false);
     const [apiEnabled, setApiEnabled] = useState(false);
     const [apiKey, setApiKey] = useState("");
-    const [ttsEnabled, setTtsEnabled] = useState(false);
-    const [ttsSpeed, setTtsSpeed] = useState(1.0);
-    const [ttsVoice, setTtsVoice] = useState<"native" | "elevenlabs" | "azure">("native");
-    const [ttsHighlightWords, setTtsHighlightWords] = useState(true);
-    const [syncMode, setSyncMode] = useState<"off" | "cloud" | "selfhosted">("off");
-    const [syncEncryption, setSyncEncryption] = useState(true);
-    const [newsletterEmail, setNewsletterEmail] = useState("your-name@theorem.fundamentals.work");
     const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
 
     const totalStorage = books.reduce((acc, b) => acc + b.fileSize, 0);
@@ -249,10 +234,8 @@ export function SettingsPage() {
     const tabButtons = [
         { id: "general" as const, label: "General", icon: Settings },
         { id: "dictionary" as const, label: "Dictionary", icon: Languages },
-        { id: "rss" as const, label: "RSS & Web", icon: Rss },
+        { id: "rss" as const, label: "RSS", icon: Rss },
         { id: "integrations" as const, label: "Integrations", icon: Puzzle },
-        { id: "tts" as const, label: "TTS", icon: Volume2 },
-        { id: "sync" as const, label: "Sync", icon: Cloud },
         { id: "storage" as const, label: "Storage", icon: Database },
     ];
 
@@ -468,103 +451,17 @@ export function SettingsPage() {
                     </Section>
 
                     <Section
-                        title="Vocabulary & Review"
-                        description="Vocabulary capture and FSRS review controls"
-                        icon={<BrainCircuit className="w-5 h-5" />}
+                        title="Vocabulary"
+                        description="Vocabulary capture controls"
+                        icon={<BookOpenCheck className="w-5 h-5" />}
                     >
                         <SettingRow
                             label="Enable Vocabulary Builder"
-                            description="Track and review words you look up"
+                            description="Track words you look up while reading"
                         >
                             <Toggle
                                 checked={settings.learning.vocabularyEnabled}
                                 onChange={(checked) => updateLearningSettings({ vocabularyEnabled: checked })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Review Vocabulary Items"
-                            description="Include vocabulary terms in due review queues"
-                        >
-                            <Toggle
-                                checked={settings.learning.reviewVocabularyEnabled}
-                                onChange={(checked) => updateLearningSettings({ reviewVocabularyEnabled: checked })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Review Highlight Items"
-                            description="Include highlights and notes in due review queues"
-                        >
-                            <Toggle
-                                checked={settings.learning.reviewHighlightEnabled}
-                                onChange={(checked) => updateLearningSettings({ reviewHighlightEnabled: checked })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Daily Review Time"
-                            description="When to show your daily vocabulary review"
-                        >
-                            <input
-                                type="time"
-                                value={settings.learning.dailyReviewTime}
-                                onChange={(e) => updateLearningSettings({ dailyReviewTime: e.target.value })}
-                                className={cn(
-                                    "px-3 py-1.5 rounded-md text-sm",
-                                    "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
-                                    "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                )}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Daily Review Goal"
-                            description="Target number of reviews per day"
-                        >
-                            <input
-                                type="number"
-                                min={1}
-                                max={500}
-                                value={settings.learning.dailyReviewGoal}
-                                onChange={(e) => {
-                                    const parsed = Number.parseInt(e.target.value, 10) || 1;
-                                    updateLearningSettings({
-                                        dailyReviewGoal: Math.max(1, Math.min(500, parsed)),
-                                    });
-                                }}
-                                className={cn(
-                                    "w-20 px-3 py-1.5 rounded-md text-sm text-center",
-                                    "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
-                                    "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                )}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="In-App Daily Reminder"
-                            description="Show a reminder banner when your review time is reached"
-                        >
-                            <Toggle
-                                checked={settings.learning.inAppReminder}
-                                onChange={(checked) => updateLearningSettings({ inAppReminder: checked })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Reminder Review Scope"
-                            description="Which due items are counted and launched from reminders"
-                        >
-                            <Dropdown
-                                value={settings.learning.defaultReminderReviewScope}
-                                onChange={(value) => updateLearningSettings({
-                                    defaultReminderReviewScope: value as typeof settings.learning.defaultReminderReviewScope,
-                                })}
-                                options={[
-                                    { value: "all", label: "All" },
-                                    { value: "vocabulary", label: "Vocabulary" },
-                                    { value: "highlight", label: "Highlights" },
-                                ]}
                             />
                         </SettingRow>
                     </Section>
@@ -712,7 +609,7 @@ export function SettingsPage() {
                 </div>
             )}
 
-            {/* RSS & Web Settings */}
+            {/* RSS Settings */}
             {activeTab === "rss" && (
                 <div className="space-y-6">
                     <Section
@@ -761,80 +658,6 @@ export function SettingsPage() {
                         </SettingRow>
                     </Section>
 
-                    <Section
-                        title="Web Clipper"
-                        description="Browser extension settings"
-                        icon={<ExternalLink className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Enable Web Clipper"
-                            description="Browser extension integration"
-                        >
-                            <Toggle checked={clipperEnabled} onChange={setClipperEnabled} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Default Tags"
-                            description="Auto-apply tags to clipped content"
-                        >
-                            <input
-                                type="text"
-                                placeholder="reading, later, web"
-                                className={cn(
-                                    "px-3 py-1.5 rounded-md text-sm w-48",
-                                    "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
-                                    "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                )}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Download Images"
-                            description="Save images from clipped articles"
-                        >
-                            <Toggle checked={false} onChange={() => {}} />
-                        </SettingRow>
-                    </Section>
-
-                    <Section
-                        title="Newsletter Inbox"
-                        description="Email-to-reader settings"
-                        icon={<Mail className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Your Newsletter Email"
-                            description="Subscribe to newsletters with this address"
-                        >
-                            <div className="flex items-center gap-2">
-                                <code className="px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md text-sm text-[color:var(--color-text-secondary)]">
-                                    {newsletterEmail}
-                                </code>
-                                <button
-                                    onClick={() => copyToClipboard(newsletterEmail)}
-                                    className="p-1.5 rounded-md hover:bg-[var(--color-surface-muted)] transition-colors"
-                                    title="Copy to clipboard"
-                                >
-                                    <Copy className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Auto-archive Newsletters"
-                            description="Move old newsletters to archive after 30 days"
-                        >
-                            <Toggle checked={true} onChange={() => {}} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Sender Filtering"
-                            description="Block unwanted newsletter senders"
-                        >
-                            <button className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors">
-                                Manage Senders
-                            </button>
-                        </SettingRow>
-                    </Section>
                 </div>
             )}
 
@@ -978,299 +801,6 @@ export function SettingsPage() {
                 </div>
             )}
 
-            {/* TTS Settings */}
-            {activeTab === "tts" && (
-                <div className="space-y-6">
-                    <Section
-                        title="Text-to-Speech"
-                        description="Voice reading settings"
-                        icon={<Volume2 className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Enable TTS"
-                            description="Read content aloud"
-                        >
-                            <Toggle checked={ttsEnabled} onChange={setTtsEnabled} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Voice Source"
-                            description="Choose TTS engine"
-                        >
-                            <ButtonSelect
-                                options={[
-                                    { value: "native", label: "Native" },
-                                    { value: "elevenlabs", label: "ElevenLabs" },
-                                    { value: "azure", label: "Azure" },
-                                ]}
-                                value={ttsVoice}
-                                onChange={setTtsVoice}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Speaking Speed"
-                            description={`${ttsSpeed.toFixed(1)}x`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs text-[color:var(--color-text-muted)]">0.5x</span>
-                                <input
-                                    type="range"
-                                    min={0.5}
-                                    max={3}
-                                    step={0.1}
-                                    value={ttsSpeed}
-                                    onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
-                                    className="w-32"
-                                />
-                                <span className="text-xs text-[color:var(--color-text-muted)]">3x</span>
-                            </div>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Highlight Words"
-                            description="Highlight words as they are spoken"
-                        >
-                            <Toggle checked={ttsHighlightWords} onChange={setTtsHighlightWords} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Sleep Timer"
-                            description="Automatically stop after"
-                        >
-                            <Dropdown
-                                options={[
-                                    { value: "off", label: "Off" },
-                                    { value: "15", label: "15 minutes" },
-                                    { value: "30", label: "30 minutes" },
-                                    { value: "45", label: "45 minutes" },
-                                    { value: "60", label: "60 minutes" },
-                                ]}
-                                variant="filled"
-                                size="sm"
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Background Playback"
-                            description="Continue reading when app is in background"
-                        >
-                            <Toggle checked={true} onChange={() => {}} />
-                        </SettingRow>
-                    </Section>
-
-                    {ttsVoice !== "native" && (
-                        <Section
-                            title="Premium Voice Settings"
-                            description={`${ttsVoice === "elevenlabs" ? "ElevenLabs" : "Azure"} configuration`}
-                            icon={<Key className="w-5 h-5" />}
-                        >
-                            <SettingRow
-                                label="API Key"
-                                description={`Your ${ttsVoice === "elevenlabs" ? "ElevenLabs" : "Azure"} API key`}
-                            >
-                                <input
-                                    type="password"
-                                    placeholder="sk-..."
-                                    className={cn(
-                                        "px-3 py-1.5 rounded-md text-sm w-48",
-                                        "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
-                                        "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                    )}
-                                />
-                            </SettingRow>
-
-                            <SettingRow
-                                label="Voice Quality"
-                                description="Higher quality uses more credits"
-                            >
-                                <ButtonSelect
-                                    options={[
-                                        { value: "standard", label: "Standard" },
-                                        { value: "high", label: "High" },
-                                        { value: "ultra", label: "Ultra" },
-                                    ]}
-                                    value="high"
-                                    onChange={() => {}}
-                                />
-                            </SettingRow>
-                        </Section>
-                    )}
-                </div>
-            )}
-
-            {/* Sync Settings */}
-            {activeTab === "sync" && (
-                <div className="space-y-6">
-                    <Section
-                        title="Sync Mode"
-                        description="Choose how to sync your data"
-                        icon={<Cloud className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Sync Provider"
-                            description="Where to sync your data"
-                        >
-                            <ButtonSelect
-                                options={[
-                                    { value: "off", label: "Off" },
-                                    { value: "cloud", label: "Cloud" },
-                                    { value: "selfhosted", label: "Self-hosted" },
-                                ]}
-                                value={syncMode}
-                                onChange={setSyncMode}
-                            />
-                        </SettingRow>
-
-                        {syncMode === "cloud" && (
-                            <>
-                                <SettingRow
-                                    label="Account"
-                                    description="Signed in as"
-                                >
-                                    <span className="text-sm text-[color:var(--color-text-muted)]">
-                                        Not signed in
-                                    </span>
-                                </SettingRow>
-
-                                <div className="mt-4 p-4 bg-[var(--color-accent)]/10 rounded-lg border border-[var(--color-accent)]/20">
-                                    <p className="text-sm font-medium text-[color:var(--color-text-primary)] mb-2">
-                                        Theorem Cloud
-                                    </p>
-                                    <p className="text-xs text-[color:var(--color-text-muted)] mb-3">
-                                        Sync your library, highlights, and vocabulary across all devices.
-                                        End-to-end encryption included.
-                                    </p>
-                                    <button className="px-4 py-2 rounded-md text-sm bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90 transition-opacity">
-                                        Sign In / Create Account
-                                    </button>
-                                </div>
-                            </>
-                        )}
-
-                        {syncMode === "selfhosted" && (
-                            <>
-                                <SettingRow
-                                    label="Server URL"
-                                    description="Your self-hosted sync server"
-                                >
-                                    <input
-                                        type="text"
-                                        placeholder="https://sync.your-domain.com"
-                                        className={cn(
-                                            "px-3 py-1.5 rounded-md text-sm w-56",
-                                            "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
-                                            "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                        )}
-                                    />
-                                </SettingRow>
-
-                                <SettingRow
-                                    label="Server Status"
-                                    description="Connection health"
-                                >
-                                    <span className="text-sm text-[color:var(--color-text-muted)] flex items-center gap-1">
-                                        <span className="w-2 h-2 rounded-full bg-[var(--color-error)]" />
-                                        Disconnected
-                                    </span>
-                                </SettingRow>
-
-                                <div className="mt-4 p-4 bg-[var(--color-surface-muted)] rounded-lg">
-                                    <p className="text-sm font-medium text-[color:var(--color-text-primary)] mb-2">
-                                        Self-hosted Server
-                                    </p>
-                                    <p className="text-xs text-[color:var(--color-text-muted)] mb-3">
-                                        Run your own sync server for complete privacy.
-                                        Docker image available.
-                                    </p>
-                                    <a
-                                        href="#"
-                                        className="text-xs text-[color:var(--color-accent)] hover:underline flex items-center gap-1"
-                                    >
-                                        Setup Guide <ExternalLink className="w-3 h-3" />
-                                    </a>
-                                </div>
-                            </>
-                        )}
-                    </Section>
-
-                    {syncMode !== "off" && (
-                        <Section
-                            title="Sync Options"
-                            description="Configure what gets synced"
-                            icon={<RefreshCw className="w-5 h-5" />}
-                        >
-                            <SettingRow
-                                label="End-to-end Encryption"
-                                description="Encrypt data before syncing"
-                            >
-                                <Toggle checked={syncEncryption} onChange={setSyncEncryption} />
-                            </SettingRow>
-
-                            <SettingRow
-                                label="Sync Library"
-                                description="Book files and metadata"
-                            >
-                                <Toggle checked={true} onChange={() => {}} />
-                            </SettingRow>
-
-                            <SettingRow
-                                label="Sync Highlights"
-                                description="Annotations and notes"
-                            >
-                                <Toggle checked={true} onChange={() => {}} />
-                            </SettingRow>
-
-                            <SettingRow
-                                label="Sync Vocabulary"
-                                description="Saved words and review progress"
-                            >
-                                <Toggle checked={true} onChange={() => {}} />
-                            </SettingRow>
-
-                            <SettingRow
-                                label="Sync RSS Feeds"
-                                description="Feed subscriptions and articles"
-                            >
-                                <Toggle checked={false} onChange={() => {}} />
-                            </SettingRow>
-
-                            <SettingRow
-                                label="Background Sync"
-                                description="Sync when app is in background"
-                            >
-                                <Toggle checked={true} onChange={() => {}} />
-                            </SettingRow>
-                        </Section>
-                    )}
-
-                    <Section
-                        title="Devices"
-                        description="Manage connected devices"
-                        icon={<Smartphone className="w-5 h-5" />}
-                    >
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-[var(--color-surface-muted)] rounded-lg">
-                                <div className="flex items-center gap-3">
-                                    <Laptop className="w-5 h-5 text-[color:var(--color-text-muted)]" />
-                                    <div>
-                                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">
-                                            This Device
-                                        </p>
-                                        <p className="text-xs text-[color:var(--color-text-muted)]">
-                                            Last synced: Never
-                                        </p>
-                                    </div>
-                                </div>
-                                <span className="text-xs px-2 py-1 bg-[var(--color-success)]/10 text-[color:var(--color-success)] rounded-full">
-                                    Online
-                                </span>
-                            </div>
-                        </div>
-                    </Section>
-                </div>
-            )}
-
             {/* Storage Settings */}
             {activeTab === "storage" && (
                 <div className="space-y-6">
@@ -1360,7 +890,7 @@ export function SettingsPage() {
                                 <div className="flex-1">
                                     <p className="font-medium text-sm">Clear All Data</p>
                                     <p className="text-xs opacity-80">
-                                        Delete all books, highlights, vocabulary, review progress, and settings. This cannot be undone.
+                                        Delete all books, highlights, vocabulary, and settings. This cannot be undone.
                                     </p>
                                 </div>
                                 <ChevronRight className="w-4 h-4" />

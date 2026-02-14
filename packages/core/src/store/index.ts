@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { normalizeCardTextForDisplay } from "../lib/learning-card-text";
 import { applyReaderStyles, initReaderStyles } from "../lib/reader-styles";
 import {
     lookupDictionaryTerm,
@@ -11,31 +10,18 @@ import {
     importStarDictDictionary,
     removeStarDictDictionary,
 } from "../services/StarDictService";
-import {
-    createInitialReviewSchedulerState,
-    normalizeReviewSchedulerState,
-    reviewItemSchedulerState,
-} from "../services/LearningSchedulerService";
 import type {
-    AcademicSettings,
     Annotation,
     AppRoute,
     AppSettings,
     Book,
     Collection,
-    DailyReviewItem,
-    DailyReminderState,
     HighlightColor,
     InstalledDictionary,
-    LearningReviewRecord,
     LearningSettings,
     PdfViewState,
     ReaderSettings,
     ReadingStats,
-    ReviewEvent,
-    ReviewLaunchScope,
-    ReviewSourceType,
-    ReviewGrade,
     UIState,
     VocabularyContext,
     VocabularyContextSourceType,
@@ -72,20 +58,10 @@ const defaultReaderSettings: ReaderSettings = {
 // Default app settings
 const defaultLearningSettings: LearningSettings = {
     vocabularyEnabled: true,
-    reviewVocabularyEnabled: true,
-    reviewHighlightEnabled: true,
-    defaultReminderReviewScope: "all",
     dictionaryMode: "auto",
     preferredProviders: ["free_dictionary_api", "wiktionary", "stardict"],
-    dailyReviewTime: "09:00",
-    dailyReviewGoal: 20,
-    inAppReminder: true,
     showPronunciation: true,
     playPronunciationAudio: false,
-};
-
-const defaultAcademicSettings: AcademicSettings = {
-    customTopics: [],
 };
 
 // Default app settings
@@ -99,7 +75,6 @@ const defaultAppSettings: AppSettings = {
     theme: "system",
     readerSettings: defaultReaderSettings,
     learning: defaultLearningSettings,
-    academic: defaultAcademicSettings,
 };
 
 // Default reading stats
@@ -253,38 +228,23 @@ function getCachedBookLookup(cache: CachedBookMetadata[]): Map<string, CachedBoo
     return nextLookup;
 }
 
-function toIsoDateString(date: Date = new Date()): string {
-    return date.toISOString().slice(0, 10);
-}
-
 function normalizeTermKey(term: string, language: string): string {
     return `${term.trim().toLowerCase()}::${language.trim().toLowerCase()}`;
 }
 
 type LegacyCollection = Omit<Collection, "kind"> & {
-    kind?: Collection["kind"];
+    kind?: "general" | "research";
 };
 
-function inferCollectionKind(
-    collection: LegacyCollection,
-    booksById: Map<string, Book>,
-): Collection["kind"] {
-    if (collection.kind) {
-        return collection.kind;
+function normalizeCollectionKind(collection: LegacyCollection): Collection | null {
+    if (collection.kind === "research") {
+        return null;
     }
 
-    const containsAcademicBook = collection.bookIds.some((bookId) => {
-        const book = booksById.get(bookId);
-        if (!book) return false;
-        if (book.academic) return true;
-        if (book.category?.toLowerCase() === "academic") return true;
-        return book.tags.some((tag) => {
-            const normalizedTag = tag.toLowerCase();
-            return normalizedTag === "academic" || normalizedTag === "paper";
-        });
-    });
-
-    return containsAcademicBook ? "research" : "general";
+    return {
+        ...collection,
+        kind: "general",
+    };
 }
 
 // Library Store
@@ -383,7 +343,6 @@ export const useLibraryStore = create<LibraryStore>()(
                         bookIds: c.bookIds.filter((id) => id !== bookId),
                     })),
                 }));
-                useLearningStore.getState().syncReviewRecords();
             },
 
             updateBook: (bookId, updates) =>
@@ -638,7 +597,6 @@ export const useLibraryStore = create<LibraryStore>()(
             // Annotation actions
             addAnnotation: (annotation) => {
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
-                useLearningStore.getState().syncReviewRecords();
             },
 
             addHighlightWithNote: (cfi, text, color, note) => {
@@ -655,7 +613,6 @@ export const useLibraryStore = create<LibraryStore>()(
                     createdAt: new Date(),
                 };
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
-                useLearningStore.getState().syncReviewRecords();
                 return annotation;
             },
 
@@ -669,14 +626,12 @@ export const useLibraryStore = create<LibraryStore>()(
                             : a
                     )),
                 }));
-                useLearningStore.getState().syncReviewRecords();
             },
 
             removeAnnotation: (annotationId) => {
                 set((state) => ({
                     annotations: state.annotations.filter((a) => a.id !== annotationId),
                 }));
-                useLearningStore.getState().syncReviewRecords();
             },
 
             getBookAnnotations: (bookId) =>
@@ -763,7 +718,7 @@ export const useLibraryStore = create<LibraryStore>()(
         }),
         {
             name: "theorem-library",
-            version: 2,
+            version: 3,
             migrate: (persistedState, version) => {
                 const persisted = (
                     typeof persistedState === "object" && persistedState !== null
@@ -774,12 +729,10 @@ export const useLibraryStore = create<LibraryStore>()(
                 const books = Array.isArray(persisted.books)
                     ? persisted.books as Book[]
                     : [];
-                const booksById = new Map(books.map((book) => [book.id, book]));
                 const collections = Array.isArray(persisted.collections)
-                    ? (persisted.collections as LegacyCollection[]).map((collection) => ({
-                        ...collection,
-                        kind: inferCollectionKind(collection, booksById),
-                    }))
+                    ? (persisted.collections as LegacyCollection[])
+                        .map((collection) => normalizeCollectionKind(collection))
+                        .filter((collection): collection is Collection => Boolean(collection))
                     : [];
                 const annotations = Array.isArray(persisted.annotations)
                     ? (persisted.annotations as Annotation[]).map((annotation) => ({
@@ -796,7 +749,7 @@ export const useLibraryStore = create<LibraryStore>()(
                     ? persisted.recentBooksCache as CachedBookMetadata[]
                     : [];
 
-                if (version < 2) {
+                if (version < 3) {
                     return {
                         books,
                         collections,
@@ -826,11 +779,9 @@ export const useLibraryStore = create<LibraryStore>()(
                     return;
                 }
 
-                const booksById = new Map(state.books.map((book) => [book.id, book]));
-                state.collections = state.collections.map((collection) => ({
-                    ...collection,
-                    kind: inferCollectionKind(collection, booksById),
-                }));
+                state.collections = state.collections
+                    .map((collection) => normalizeCollectionKind(collection as LegacyCollection))
+                    .filter((collection): collection is Collection => Boolean(collection));
                 state.annotations = state.annotations.map((annotation) => ({
                     ...annotation,
                     referenceId: typeof annotation.referenceId === "string"
@@ -931,18 +882,6 @@ export const useSettingsStore = create<SettingsStore>()(
                     };
                 }
 
-                if (state && !state.settings.academic) {
-                    state.settings.academic = defaultAcademicSettings;
-                } else if (state?.settings.academic) {
-                    state.settings.academic = {
-                        ...defaultAcademicSettings,
-                        ...state.settings.academic,
-                        customTopics: Array.isArray(state.settings.academic.customTopics)
-                            ? state.settings.academic.customTopics
-                            : [],
-                    };
-                }
-
                 // Migration: Ensure dailyActivity exists for old stored data
                 if (state && !state.stats.dailyActivity) {
                     state.stats.dailyActivity = [];
@@ -954,12 +893,8 @@ export const useSettingsStore = create<SettingsStore>()(
 
 interface LearningStore {
     vocabularyTerms: VocabularyTerm[];
-    reviewRecords: LearningReviewRecord[];
-    reviewEvents: ReviewEvent[];
     installedDictionaries: InstalledDictionary[];
     lookupCache: Record<string, DictionaryLookupResult>;
-    dailyReminderState: DailyReminderState;
-    reviewSessionState: ReviewSessionState;
 
     saveVocabularyTerm: (term: VocabularyTerm, context?: SaveVocabularyContextInput) => VocabularyTerm;
     updateVocabularyTerm: (termId: string, updates: Partial<VocabularyTerm>) => void;
@@ -967,37 +902,8 @@ interface LearningStore {
     lookupTerm: (term: string, language?: string) => Promise<DictionaryLookupResult | null>;
     lookupAndSaveTerm: (term: string, language?: string) => Promise<VocabularyTerm | null>;
 
-    syncReviewRecords: () => void;
-    getDueReviewItems: (now?: Date, scope?: ReviewLaunchScope) => DailyReviewItem[];
-    reviewItem: (
-        sourceType: ReviewSourceType,
-        sourceId: string,
-        grade: ReviewGrade,
-    ) => LearningReviewRecord | null;
-    suspendReviewItem: (
-        sourceType: ReviewSourceType,
-        sourceId: string,
-        suspended?: boolean,
-    ) => void;
-
     importStarDict: (files: FileList | File[]) => Promise<InstalledDictionary>;
     removeDictionary: (dictionaryId: string) => Promise<void>;
-
-    setReminderPromptVisible: (visible: boolean) => void;
-    dismissDailyReminderPrompt: () => void;
-    markDailyReviewCompleted: () => void;
-    openReviewSession: (scope: ReviewLaunchScope) => void;
-    closeReviewSession: () => void;
-    updateReviewSessionState: (updates: Partial<ReviewSessionState>) => void;
-}
-
-interface ReviewSourceSnapshot {
-    id: string;
-    sourceType: ReviewSourceType;
-    sourceId: string;
-    createdAt: Date;
-    front: string;
-    back: string;
 }
 
 interface SaveVocabularyContextInput {
@@ -1006,49 +912,10 @@ interface SaveVocabularyContextInput {
     label: string;
 }
 
-interface ReviewSessionState {
-    isOpen: boolean;
-    scope: ReviewLaunchScope;
-    sessionItemIds: string[];
-    cursor: number;
-    revealed: boolean;
-    reviewedCount: number;
-    gradeTally: Record<ReviewGrade, number>;
-}
-
 const LEGACY_VOCABULARY_CONTEXT_LABEL = "Legacy / Unknown source";
-
-const EMPTY_REVIEW_GRADE_TALLY: Record<ReviewGrade, number> = {
-    again: 0,
-    hard: 0,
-    good: 0,
-    easy: 0,
-};
-
-function createInitialReviewSessionState(
-    scope: ReviewLaunchScope = "all",
-): ReviewSessionState {
-    return {
-        isOpen: false,
-        scope,
-        sessionItemIds: [],
-        cursor: 0,
-        revealed: false,
-        reviewedCount: 0,
-        gradeTally: { ...EMPTY_REVIEW_GRADE_TALLY },
-    };
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
-}
-
-function toReviewRecordId(sourceType: ReviewSourceType, sourceId: string): string {
-    return `${sourceType}:${sourceId}`;
-}
-
-function isReviewSourceType(value: unknown): value is ReviewSourceType {
-    return value === "vocabulary" || value === "highlight";
 }
 
 function isVocabularyContextSourceType(value: unknown): value is VocabularyContextSourceType {
@@ -1175,141 +1042,16 @@ function mergeVocabularyContexts(
     return Array.from(mergedByKey.values());
 }
 
-function isReviewableAnnotation(annotation: Annotation): boolean {
-    return annotation.type === "highlight" || annotation.type === "note";
-}
-
-function extractAnnotationNote(annotation: Annotation): string {
-    return normalizeCardTextForDisplay(
-        annotation.noteContent || annotation.textNoteContent || "",
-    );
-}
-
-function formatAnnotationLocation(annotation: Annotation): string {
-    if (typeof annotation.pageNumber === "number" && Number.isFinite(annotation.pageNumber)) {
-        return `Page ${annotation.pageNumber}`;
-    }
-    return annotation.location || "Unknown location";
-}
-
-function seedInitialDueAt(sourceCreatedAt: Date, now: Date): Date {
-    const sourceTime = sourceCreatedAt.getTime();
-    const dueAt = new Date(now);
-    if (Number.isNaN(sourceTime)) {
-        return dueAt;
-    }
-    return dueAt;
-}
-
-function buildVocabularyBack(term: VocabularyTerm): string {
-    const definitions = term.meanings
-        .flatMap((meaning) => meaning.definitions)
-        .map((definition) => normalizeCardTextForDisplay(definition))
-        .filter(Boolean)
-        .slice(0, 3);
-
-    if (definitions.length === 0) {
-        return "(No definition)";
-    }
-
-    return definitions.join("\n");
-}
-
-function buildHighlightBack(annotation: Annotation, bookTitle: string): string {
-    const noteContent = extractAnnotationNote(annotation);
-    const createdAt = toValidDate(annotation.createdAt, new Date());
-    const contextLines = [
-        `Book: ${bookTitle || "Unknown book"}`,
-        `Captured: ${createdAt.toLocaleDateString()}`,
-        `Location: ${formatAnnotationLocation(annotation)}`,
-    ];
-
-    return `${noteContent || "(No note)"}\n\n${contextLines.join("\n")}`;
-}
-
-function collectReviewSourceSnapshots(
-    vocabularyTerms: VocabularyTerm[],
-    annotations: Annotation[],
-    books: Book[],
-): Map<string, ReviewSourceSnapshot> {
-    const snapshots = new Map<string, ReviewSourceSnapshot>();
-    const bookTitleById = new Map(books.map((book) => [book.id, book.title]));
-
-    for (const term of vocabularyTerms) {
-        const sourceId = term.id;
-        const sourceType: ReviewSourceType = "vocabulary";
-        const id = toReviewRecordId(sourceType, sourceId);
-        const createdAt = toValidDate(term.createdAt, new Date());
-        const front = normalizeCardTextForDisplay(term.term) || "(Untitled term)";
-        const back = buildVocabularyBack(term);
-
-        snapshots.set(id, {
-            id,
-            sourceType,
-            sourceId,
-            createdAt,
-            front,
-            back,
-        });
-    }
-
-    for (const annotation of annotations) {
-        if (!isReviewableAnnotation(annotation)) {
-            continue;
-        }
-
-        const sourceId = annotation.id;
-        const sourceType: ReviewSourceType = "highlight";
-        const id = toReviewRecordId(sourceType, sourceId);
-        const createdAt = toValidDate(annotation.createdAt, new Date());
-        const front = normalizeCardTextForDisplay(annotation.selectedText || "")
-            || "Review this highlight";
-        const bookTitle = normalizeCardTextForDisplay(bookTitleById.get(annotation.bookId) || "Unknown book");
-        const back = buildHighlightBack(annotation, bookTitle);
-
-        snapshots.set(id, {
-            id,
-            sourceType,
-            sourceId,
-            createdAt,
-            front,
-            back,
-        });
-    }
-
-    return snapshots;
-}
-
-function normalizeLearningReviewRecord(record: LearningReviewRecord): LearningReviewRecord {
-    const now = new Date();
-    const dueAt = toValidDate(record.dueAt, now);
-    const schedulerDue = toValidDate(record.scheduler?.due, dueAt);
-    const schedulerLastReview = record.scheduler?.last_review
-        ? toValidDate(record.scheduler.last_review, dueAt)
-        : undefined;
-
-    return {
-        ...record,
-        id: toReviewRecordId(record.sourceType, record.sourceId),
-        createdAt: toValidDate(record.createdAt, now),
-        updatedAt: record.updatedAt ? toValidDate(record.updatedAt, now) : undefined,
-        lastReviewedAt: record.lastReviewedAt
-            ? toValidDate(record.lastReviewedAt, now)
-            : undefined,
-        dueAt,
-        scheduler: normalizeReviewSchedulerState({
-            ...record.scheduler,
-            due: schedulerDue,
-            last_review: schedulerLastReview,
-        }),
-    };
-}
-
 function normalizeVocabularyTerm(term: VocabularyTerm): VocabularyTerm {
     const now = new Date();
-    const normalized = { ...term } as VocabularyTerm & { linkedCardId?: string };
+    const normalized = {
+        ...term,
+    } as VocabularyTerm & { linkedCardId?: string; lastReviewedAt?: Date | string | number };
     if ("linkedCardId" in normalized) {
         delete normalized.linkedCardId;
+    }
+    if ("lastReviewedAt" in normalized) {
+        delete normalized.lastReviewedAt;
     }
     const createdAt = toValidDate(normalized.createdAt, now);
     const sourceContexts = Array.isArray(normalized.contexts)
@@ -1328,39 +1070,6 @@ function normalizeVocabularyTerm(term: VocabularyTerm): VocabularyTerm {
         updatedAt: normalized.updatedAt
             ? toValidDate(normalized.updatedAt, now)
             : undefined,
-        lastReviewedAt: normalized.lastReviewedAt
-            ? toValidDate(normalized.lastReviewedAt, now)
-            : undefined,
-    };
-}
-
-function normalizeReviewEvent(review: ReviewEvent): ReviewEvent | null {
-    if (!isReviewSourceType(review.sourceType) || !review.sourceId) {
-        return null;
-    }
-
-    const now = new Date();
-    return {
-        ...review,
-        reviewedAt: toValidDate(review.reviewedAt, now),
-        dueBefore: toValidDate(review.dueBefore, now),
-        dueAfter: toValidDate(review.dueAfter, now),
-    };
-}
-
-function normalizeLearningDailyReminderState(value: unknown): DailyReminderState {
-    const asRecord = isRecord(value) ? value : {};
-    return {
-        isPromptVisible: false,
-        lastPromptDate: typeof asRecord.lastPromptDate === "string"
-            ? asRecord.lastPromptDate
-            : undefined,
-        dismissedDate: typeof asRecord.dismissedDate === "string"
-            ? asRecord.dismissedDate
-            : undefined,
-        completedDate: typeof asRecord.completedDate === "string"
-            ? asRecord.completedDate
-            : undefined,
     };
 }
 
@@ -1374,52 +1083,12 @@ function normalizeLearningLookupCache(
     return value as Record<string, DictionaryLookupResult>;
 }
 
-function normalizeReviewSessionState(value: unknown): ReviewSessionState {
-    if (!isRecord(value)) {
-        return createInitialReviewSessionState();
-    }
-
-    const scope = value.scope === "vocabulary" || value.scope === "highlight"
-        ? value.scope
-        : "all";
-    return {
-        ...createInitialReviewSessionState(scope),
-        isOpen: false,
-    };
-}
-
-function shouldIncludeReviewSourceInScope(
-    sourceType: ReviewSourceType,
-    scope: ReviewLaunchScope,
-    learningSettings: LearningSettings,
-): boolean {
-    if (scope === "vocabulary" && sourceType !== "vocabulary") {
-        return false;
-    }
-    if (scope === "highlight" && sourceType !== "highlight") {
-        return false;
-    }
-    if (sourceType === "vocabulary" && !learningSettings.reviewVocabularyEnabled) {
-        return false;
-    }
-    if (sourceType === "highlight" && !learningSettings.reviewHighlightEnabled) {
-        return false;
-    }
-    return true;
-}
-
 export const useLearningStore = create<LearningStore>()(
     persist(
         (set, get) => ({
             vocabularyTerms: [],
-            reviewRecords: [],
-            reviewEvents: [],
             installedDictionaries: [],
             lookupCache: {},
-            dailyReminderState: {
-                isPromptVisible: false,
-            },
-            reviewSessionState: createInitialReviewSessionState(),
 
             saveVocabularyTerm: (incomingTerm, context) => {
                 const now = new Date();
@@ -1469,7 +1138,6 @@ export const useLearningStore = create<LearningStore>()(
                     set((state) => ({
                         vocabularyTerms: [...state.vocabularyTerms, termToSave],
                     }));
-                    get().syncReviewRecords();
                     return termToSave;
                 }
 
@@ -1519,7 +1187,6 @@ export const useLearningStore = create<LearningStore>()(
                         term.id === existing.id ? mergedTerm : term
                     )),
                 }));
-                get().syncReviewRecords();
                 return mergedTerm;
             },
 
@@ -1541,14 +1208,12 @@ export const useLearningStore = create<LearningStore>()(
                             : term
                     )),
                 }));
-                get().syncReviewRecords();
             },
 
             deleteVocabularyTerm: (termId) => {
                 set((state) => ({
                     vocabularyTerms: state.vocabularyTerms.filter((term) => term.id !== termId),
                 }));
-                get().syncReviewRecords();
             },
 
             lookupTerm: async (term, language = "en") => {
@@ -1595,209 +1260,6 @@ export const useLearningStore = create<LearningStore>()(
                 return get().saveVocabularyTerm(vocabularyTerm);
             },
 
-            syncReviewRecords: () => {
-                const libraryState = useLibraryStore.getState();
-                const sourceSnapshots = collectReviewSourceSnapshots(
-                    get().vocabularyTerms,
-                    libraryState.annotations,
-                    libraryState.books,
-                );
-                const now = new Date();
-                const nowTime = now.getTime();
-
-                set((state) => {
-                    const existingById = new Map<string, LearningReviewRecord>();
-                    for (const record of state.reviewRecords) {
-                        if (!isReviewSourceType(record.sourceType) || !record.sourceId) {
-                            continue;
-                        }
-                        const id = toReviewRecordId(record.sourceType, record.sourceId);
-                        existingById.set(id, {
-                            ...record,
-                            id,
-                        });
-                    }
-
-                    const nextRecords: LearningReviewRecord[] = [];
-                    const activeIds = new Set<string>();
-
-                    for (const [id, snapshot] of sourceSnapshots.entries()) {
-                        activeIds.add(id);
-                        const existingRecord = existingById.get(id);
-
-                        if (existingRecord) {
-                            const existingDueAt = toValidDate(existingRecord.dueAt, now);
-                            const shouldPullForward = existingRecord.reviewCount === 0
-                                && existingDueAt.getTime() > nowTime;
-
-                            const scheduler = shouldPullForward
-                                ? {
-                                    ...existingRecord.scheduler,
-                                    due: new Date(now),
-                                }
-                                : existingRecord.scheduler;
-                            nextRecords.push({
-                                ...existingRecord,
-                                id,
-                                sourceType: snapshot.sourceType,
-                                sourceId: snapshot.sourceId,
-                                scheduler,
-                                dueAt: shouldPullForward ? new Date(now) : existingDueAt,
-                                updatedAt: shouldPullForward ? now : existingRecord.updatedAt,
-                            });
-                            continue;
-                        }
-
-                        const seededDueAt = seedInitialDueAt(snapshot.createdAt, now);
-                        const scheduler = createInitialReviewSchedulerState(now);
-                        scheduler.due = seededDueAt;
-
-                        nextRecords.push({
-                            id,
-                            sourceType: snapshot.sourceType,
-                            sourceId: snapshot.sourceId,
-                            suspended: false,
-                            scheduler,
-                            dueAt: seededDueAt,
-                            createdAt: snapshot.createdAt,
-                            reviewCount: 0,
-                            lapseCount: 0,
-                        });
-                    }
-
-                    const nextEvents = state.reviewEvents.filter((event) => (
-                        activeIds.has(toReviewRecordId(event.sourceType, event.sourceId))
-                    ));
-
-                    return {
-                        reviewRecords: nextRecords,
-                        reviewEvents: nextEvents,
-                    };
-                });
-            },
-
-            getDueReviewItems: (now = new Date(), scope: ReviewLaunchScope = "all") => {
-                const learningState = get();
-                const libraryState = useLibraryStore.getState();
-                const learningSettings = useSettingsStore.getState().settings.learning;
-                const sourceSnapshots = collectReviewSourceSnapshots(
-                    learningState.vocabularyTerms,
-                    libraryState.annotations,
-                    libraryState.books,
-                );
-                const nowTime = now.getTime();
-
-                return learningState.reviewRecords
-                    .filter((record) => !record.suspended)
-                    .filter((record) => shouldIncludeReviewSourceInScope(
-                        record.sourceType,
-                        scope,
-                        learningSettings,
-                    ))
-                    .filter((record) => toValidDate(record.dueAt, now).getTime() <= nowTime)
-                    .map((record) => {
-                        const sourceSnapshot = sourceSnapshots.get(record.id);
-                        if (!sourceSnapshot) {
-                            return null;
-                        }
-                        return {
-                            id: record.id,
-                            sourceType: record.sourceType,
-                            sourceId: record.sourceId,
-                            front: sourceSnapshot.front,
-                            back: sourceSnapshot.back,
-                            dueAt: toValidDate(record.dueAt, now),
-                            createdAt: sourceSnapshot.createdAt,
-                            suspended: record.suspended,
-                            reviewCount: record.reviewCount,
-                            lapseCount: record.lapseCount,
-                        } satisfies DailyReviewItem;
-                    })
-                    .filter((item): item is DailyReviewItem => Boolean(item))
-                    .sort((a, b) => (
-                        a.dueAt.getTime() - b.dueAt.getTime()
-                        || a.sourceType.localeCompare(b.sourceType)
-                        || a.createdAt.getTime() - b.createdAt.getTime()
-                    ));
-            },
-
-            reviewItem: (sourceType, sourceId, grade) => {
-                const reviewRecordId = toReviewRecordId(sourceType, sourceId);
-                let currentRecord = get().reviewRecords.find((record) => record.id === reviewRecordId);
-
-                if (!currentRecord) {
-                    get().syncReviewRecords();
-                    currentRecord = get().reviewRecords.find((record) => record.id === reviewRecordId);
-                }
-
-                if (!currentRecord) {
-                    return null;
-                }
-
-                const now = new Date();
-                const reviewResult = reviewItemSchedulerState(currentRecord.scheduler, grade, now);
-
-                const nextRecord: LearningReviewRecord = {
-                    ...currentRecord,
-                    scheduler: reviewResult.scheduler,
-                    dueAt: reviewResult.dueAt,
-                    lastReviewedAt: now,
-                    reviewCount: currentRecord.reviewCount + 1,
-                    lapseCount: grade === "again"
-                        ? currentRecord.lapseCount + 1
-                        : currentRecord.lapseCount,
-                    updatedAt: now,
-                };
-
-                const reviewEvent: ReviewEvent = {
-                    id: crypto.randomUUID(),
-                    sourceType,
-                    sourceId,
-                    grade,
-                    reviewedAt: now,
-                    dueBefore: toValidDate(currentRecord.dueAt, now),
-                    dueAfter: toValidDate(reviewResult.dueAt, now),
-                    sourceState: reviewResult.sourceState,
-                    nextState: reviewResult.nextState,
-                };
-
-                set((state) => ({
-                    reviewRecords: state.reviewRecords.map((record) => (
-                        record.id === reviewRecordId ? nextRecord : record
-                    )),
-                    reviewEvents: [...state.reviewEvents, reviewEvent],
-                    vocabularyTerms: sourceType === "vocabulary"
-                        ? state.vocabularyTerms.map((term) => (
-                            term.id === sourceId
-                                ? {
-                                    ...term,
-                                    lastReviewedAt: now,
-                                    updatedAt: now,
-                                }
-                                : term
-                        ))
-                        : state.vocabularyTerms,
-                }));
-
-                return nextRecord;
-            },
-
-            suspendReviewItem: (sourceType, sourceId, suspended = true) => {
-                const recordId = toReviewRecordId(sourceType, sourceId);
-                const now = new Date();
-                set((state) => ({
-                    reviewRecords: state.reviewRecords.map((record) => (
-                        record.id === recordId
-                            ? {
-                                ...record,
-                                suspended,
-                                updatedAt: now,
-                            }
-                            : record
-                    )),
-                }));
-            },
-
             importStarDict: async (files) => {
                 const dictionary = await importStarDictDictionary(files);
                 set((state) => ({
@@ -1814,83 +1276,20 @@ export const useLearningStore = create<LearningStore>()(
                     ),
                 }));
             },
-
-            setReminderPromptVisible: (visible) => {
-                set((state) => ({
-                    dailyReminderState: {
-                        ...state.dailyReminderState,
-                        isPromptVisible: visible,
-                        lastPromptDate: visible
-                            ? toIsoDateString()
-                            : state.dailyReminderState.lastPromptDate,
-                    },
-                }));
-            },
-
-            dismissDailyReminderPrompt: () => {
-                set((state) => ({
-                    dailyReminderState: {
-                        ...state.dailyReminderState,
-                        isPromptVisible: false,
-                        dismissedDate: toIsoDateString(),
-                    },
-                }));
-            },
-
-            markDailyReviewCompleted: () => {
-                set((state) => ({
-                    dailyReminderState: {
-                        ...state.dailyReminderState,
-                        isPromptVisible: false,
-                        completedDate: toIsoDateString(),
-                    },
-                }));
-            },
-
-            openReviewSession: (scope) => {
-                const queueIds = get().getDueReviewItems(new Date(), scope).map((item) => item.id);
-                if (queueIds.length === 0) {
-                    set({
-                        reviewSessionState: createInitialReviewSessionState(scope),
-                    });
-                    return;
-                }
-
-                set({
-                    reviewSessionState: {
-                        isOpen: true,
-                        scope,
-                        sessionItemIds: queueIds,
-                        cursor: 0,
-                        revealed: false,
-                        reviewedCount: 0,
-                        gradeTally: { ...EMPTY_REVIEW_GRADE_TALLY },
-                    },
-                });
-            },
-
-            closeReviewSession: () => {
-                const currentScope = get().reviewSessionState.scope;
-                set({
-                    reviewSessionState: createInitialReviewSessionState(currentScope),
-                });
-            },
-
-            updateReviewSessionState: (updates) => {
-                set((state) => ({
-                    reviewSessionState: {
-                        ...state.reviewSessionState,
-                        ...updates,
-                    },
-                }));
-            },
         }),
         {
             name: "theorem-learning",
-            version: 3,
-            migrate: (persistedState, version) => {
+            version: 4,
+            migrate: (persistedState, _version) => {
                 const persisted = isRecord(persistedState) ? persistedState : {};
-                const { preferredTab: _preferredTab, ...persistedWithoutPreferredTab } = persisted;
+                const {
+                    preferredTab: _preferredTab,
+                    reviewRecords: _reviewRecords,
+                    reviewEvents: _reviewEvents,
+                    dailyReminderState: _dailyReminderState,
+                    reviewSessionState: _reviewSessionState,
+                    ...persistedWithoutLegacyReviewFields
+                } = persisted;
                 const vocabularyTermsRaw = Array.isArray(persisted.vocabularyTerms)
                     ? persisted.vocabularyTerms
                     : [];
@@ -1898,46 +1297,23 @@ export const useLearningStore = create<LearningStore>()(
                     if (!isRecord(term)) {
                         return term;
                     }
-                    const { linkedCardId: _linkedCardId, ...rest } = term;
+                    const {
+                        linkedCardId: _linkedCardId,
+                        lastReviewedAt: _lastReviewedAt,
+                        ...rest
+                    } = term;
                     return rest;
                 });
                 const installedDictionaries = Array.isArray(persisted.installedDictionaries)
                     ? persisted.installedDictionaries
                     : [];
-                const dailyReminderState = normalizeLearningDailyReminderState(
-                    persisted.dailyReminderState,
-                );
                 const lookupCache = normalizeLearningLookupCache(persisted.lookupCache);
-                const reviewSessionState = normalizeReviewSessionState(persisted.reviewSessionState);
-
-                if (version < 2) {
-                    return {
-                        vocabularyTerms,
-                        reviewRecords: [],
-                        reviewEvents: [],
-                        installedDictionaries,
-                        lookupCache,
-                        dailyReminderState,
-                        reviewSessionState,
-                    };
-                }
-
-                const reviewRecords = Array.isArray(persisted.reviewRecords)
-                    ? persisted.reviewRecords
-                    : [];
-                const reviewEvents = Array.isArray(persisted.reviewEvents)
-                    ? persisted.reviewEvents
-                    : [];
 
                 return {
-                    ...persistedWithoutPreferredTab,
+                    ...persistedWithoutLegacyReviewFields,
                     vocabularyTerms,
-                    reviewRecords,
-                    reviewEvents,
                     installedDictionaries,
                     lookupCache,
-                    dailyReminderState,
-                    reviewSessionState,
                 } as LearningStore;
             },
             onRehydrateStorage: () => (state) => {
@@ -1949,38 +1325,12 @@ export const useLearningStore = create<LearningStore>()(
                     normalizeVocabularyTerm(term)
                 ));
 
-                state.reviewRecords = (state.reviewRecords || []).map((record) => (
-                    normalizeLearningReviewRecord(record)
-                ));
-
-                state.reviewEvents = (state.reviewEvents || [])
-                    .map((review) => normalizeReviewEvent(review))
-                    .filter((review): review is ReviewEvent => Boolean(review));
-
                 state.installedDictionaries = (state.installedDictionaries || []).map((dictionary) => ({
                     ...dictionary,
                     importedAt: toValidDate(dictionary.importedAt, new Date()),
                 }));
 
                 state.lookupCache = normalizeLearningLookupCache(state.lookupCache);
-                state.dailyReminderState = normalizeLearningDailyReminderState(state.dailyReminderState);
-                state.reviewSessionState = normalizeReviewSessionState(state.reviewSessionState);
-
-                const runSync = () => state.syncReviewRecords();
-                const libraryPersist = (
-                    useLibraryStore as typeof useLibraryStore & {
-                        persist?: {
-                            hasHydrated?: () => boolean;
-                            onFinishHydration?: (callback: () => void) => () => void;
-                        };
-                    }
-                ).persist;
-
-                if (!libraryPersist || libraryPersist.hasHydrated?.()) {
-                    runSync();
-                } else {
-                    libraryPersist.onFinishHydration?.(runSync);
-                }
             },
         },
     ),

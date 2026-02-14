@@ -146,10 +146,6 @@ export function AppTitlebar({
                 return "Book Details";
             case "feeds":
                 return "Feeds";
-            case "academic":
-                return "Papers";
-            case "references":
-                return "References";
             default:
                 return title;
         }
