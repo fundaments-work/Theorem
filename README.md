@@ -1,14 +1,15 @@
-# Theorem Monorepo
+# Theorem
 
-Tauri-based desktop e-book reader built as a monorepo:
-- `apps/web`: React + Vite frontend and Tauri host app
-- `packages/core`: shared types, stores, services, and utilities
-- `packages/ui`: reusable UI components
-- `packages/features/*`: feature modules (reader, library, settings, statistics, vocabulary, learning)
+Tauri-based desktop e-book reader using a single root `pnpm` project.
 
-## Package Manager
+## Layout
 
-This repository uses `pnpm` workspaces.
+- `src`: React frontend entry and UI
+- `src/core`: shared domain models, stores, and services
+- `src/shell`: app shell components (titlebar, sidebar, branding, error boundary)
+- `src/ui`: reusable UI primitives
+- `src/features/*`: reader, library, settings, statistics, vocabulary, and feeds modules
+- `src-tauri`: Rust backend and desktop packaging config
 
 ## Commands
 
@@ -16,34 +17,28 @@ This repository uses `pnpm` workspaces.
 # Install dependencies
 pnpm install
 
-# Start web dev app
+# Start web app (Vite)
 pnpm dev
 
-# Typecheck shared contracts (core + ui)
+# Start desktop app (Tauri + Vite)
+pnpm dev:tauri
+# or
+pnpm tauri dev
+
+# Typecheck app + imported modules
 pnpm typecheck
 
-# Production build (typecheck + web build)
+# Production build
 pnpm build
 
-# Generate API and AI-context docs
-pnpm docs:build
-
-# Run Tauri commands (examples)
-pnpm tauri dev
-pnpm tauri build
+# Preview web build
+pnpm preview
 ```
 
-## Monorepo Conventions
+## Module Conventions
 
-- Internal dependencies use `workspace:*`.
-- Import other modules only through package public APIs (for example `@theorem/core`), not via source-relative paths.
-- Keep new code inside the relevant feature package and expose entry points from each package `src/index.ts`.
-
-## AI Documentation System
-
-- `pnpm docs:api` generates API reference docs from public package entry points into `docs/api/`.
-- `pnpm docs:context` generates AI-oriented indexes:
-  - `docs/ai/module-index.md`
-  - `llms.txt`
-  - `llms-full.txt`
-- `pnpm docs:build` runs both doc generation steps.
+- Keep shared logic in `src/core`.
+- Keep shell/layout in `src/shell`.
+- Keep generic UI primitives in `src/ui`.
+- Keep feature-specific logic/UI in `src/features/<feature-name>`.
+- Continue importing modules through aliases like `@theorem/core`, `@theorem/shell`, and `@theorem/feature-*`.

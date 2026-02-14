@@ -1,45 +1,46 @@
-# Monorepo Guide
+# Repository Guide
 
-This guide defines how to add and evolve modules without coupling breakage.
+This repository uses one root `pnpm` project with a standard Tauri app layout.
 
 ## Current Module Graph
 
-- `@theorem/web` depends on `@theorem/core`, `@theorem/ui`, and `@theorem/feature-*`.
-- `@theorem/ui` depends on `@theorem/core`.
-- `@theorem/feature-*` depends on `@theorem/core` and optionally `@theorem/ui`.
-- `@theorem/core` must not depend on feature packages.
+- App entrypoint is `src`.
+- `@theorem/core` contains shared domain/store/service logic.
+- `@theorem/shell` contains app chrome and framing UI.
+- `@theorem/ui` contains reusable primitives.
+- `@theorem/feature-*` contains route-level feature modules.
+- `@theorem/core` must not depend on feature modules.
 
-## Add a New Feature Package
+## Add a New Feature Module
 
-1. Create `packages/features/<feature-name>/src/index.ts`.
-2. Add `packages/features/<feature-name>/package.json`:
-   - `name`: `@theorem/feature-<feature-name>`
-   - `private`: `true`
-   - `type`: `module`
-   - `exports`: `{ ".": "./src/index.ts" }`
-   - internal deps with `workspace:*`
-3. Add `packages/features/<feature-name>/tsconfig.json` extending `../../../tsconfig.base.json`.
-4. Add feature routes/imports in `apps/web/src/App.tsx`.
-5. Add path alias in `apps/web/tsconfig.json` and `apps/web/vite.config.ts`.
+1. Create `src/features/<feature-name>/index.ts`.
+2. Implement feature components/hooks under `src/features/<feature-name>`.
+3. Export public feature API from `src/features/<feature-name>/index.ts`.
+4. Add route/import wiring in `src/App.tsx`.
+5. Add alias mapping in:
+   - `tsconfig.json`
+   - `vite.config.ts`
+
+## Module Boundaries
+
+- `src/core`: domain models, stores, services, and cross-feature business logic.
+- `src/shell`: app-level layout, chrome, and app framing components.
+- `src/ui`: generic UI primitives reusable across features.
+- `src/features/*`: feature-specific routes and UI.
 
 ## Rules for AI-Assisted Changes
 
-- Prefer editing one package at a time.
-- Expose shared behavior through public package APIs before cross-package usage.
-- Never add cross-package relative imports.
+- Prefer editing one module at a time.
+- Expose shared behavior through module public APIs before cross-module usage.
+- Never add cross-module relative imports.
 - Run `pnpm typecheck` before submitting changes.
 
-## Recommended Workflows
+## Recommended Workflow
 
-- Work on one feature with workspace filter:
-  - `pnpm --filter @theorem/web dev`
+- Run dev server:
+  - `pnpm dev`
+- Run desktop mode:
+  - `pnpm dev:tauri` or `pnpm tauri dev`
 - Run full checks before merge:
   - `pnpm typecheck`
   - `pnpm build`
-  - `pnpm docs:build`
-
-## Documentation Automation
-
-- API reference generation: `pnpm docs:api` (outputs to `docs/api/`).
-- AI context generation: `pnpm docs:context` (outputs `docs/ai/module-index.md`, `llms.txt`, `llms-full.txt`).
-- Use `pnpm docs:build` to run both commands in sequence.

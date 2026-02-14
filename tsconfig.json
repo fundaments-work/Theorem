@@ -1,0 +1,69 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "useDefineForClassFields": true,
+        "lib": [
+            "ES2020",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "module": "ESNext",
+        "skipLibCheck": true,
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "jsx": "react-jsx",
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "./src/*"
+            ],
+            "@theorem/core": [
+                "./src/core"
+            ],
+            "@theorem/shell": [
+                "./src/shell"
+            ],
+            "@theorem/ui": [
+                "./src/ui"
+            ],
+            "@theorem/feature-reader": [
+                "./src/features/reader"
+            ],
+            "@foliate-js/*": [
+                "./src/features/reader/foliate-js/*"
+            ],
+            "@theorem/feature-library": [
+                "./src/features/library"
+            ],
+            "@theorem/feature-settings": [
+                "./src/features/settings"
+            ],
+            "@theorem/feature-statistics": [
+                "./src/features/statistics"
+            ],
+            "@theorem/feature-vocabulary": [
+                "./src/features/vocabulary"
+            ],
+            "@theorem/feature-feeds": [
+                "./src/features/feeds"
+            ]
+        },
+        "strict": true,
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "noFallthroughCasesInSwitch": true,
+        "allowJs": true,
+        "checkJs": false
+    },
+    "include": [
+        "src"
+    ],
+    "references": [
+        {
+            "path": "./tsconfig.node.json"
+        }
+    ]
+}
