@@ -35,21 +35,21 @@ const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
 // Empty state component
 function EmptyShelves({ onCreate }: { onCreate: () => void }) {
     return (
-        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+        <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <FolderOpen className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+            <h2 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 No Shelves Yet
             </h2>
-            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
+            <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 Create shelves to organize your books your way.
             </p>
             <button
                 onClick={onCreate}
                 className={cn(
-                    "ui-empty-state-action flex items-center gap-2 px-6 py-2.5 rounded-full",
-                    "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
+                    "min-w-[10.5rem] whitespace-nowrap flex items-center gap-2 px-6 py-2.5 rounded-full",
+                    "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-sm font-medium",
                     "hover:opacity-90 transition-opacity"
                 )}
             >
@@ -63,21 +63,21 @@ function EmptyShelves({ onCreate }: { onCreate: () => void }) {
 // Empty shelf detail state
 function EmptyShelfDetail({ shelfName, onAddBooks }: { shelfName: string; onAddBooks: () => void }) {
     return (
-        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+        <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <BookOpen className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+            <h2 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 "{shelfName}" is Empty
             </h2>
-            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
+            <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 Add books from your library to this shelf.
             </p>
             <button
                 onClick={onAddBooks}
                 className={cn(
-                    "ui-empty-state-action flex items-center gap-2 px-6 py-2.5 rounded-full",
-                    "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
+                    "min-w-[10.5rem] whitespace-nowrap flex items-center gap-2 px-6 py-2.5 rounded-full",
+                    "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-sm font-medium",
                     "hover:opacity-90 transition-opacity"
                 )}
             >
@@ -157,7 +157,7 @@ function BookCard({
     // List view
     if (viewMode === "list") {
         return (
-            <div className="group flex items-center gap-4 p-3 ui-surface hover:border-[var(--color-text-muted)] transition-colors">
+            <div className="group flex items-center gap-4 p-3 border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-text-muted)] transition-colors">
                 <button
                     onClick={() => onOpenBook(book)}
                     className="flex-shrink-0"
@@ -259,7 +259,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
     const displayBooks = books.slice(0, 4);
 
     return (
-        <div className="group relative ui-card hover:border-[var(--color-text-muted)] transition-colors">
+        <div className="group relative border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-text-muted)] transition-colors">
             {/* Cover Grid Preview */}
             <button onClick={onClick} className="block w-full">
                 <div className="aspect-[16/10] bg-[var(--color-surface-muted)] p-4">
@@ -345,7 +345,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                                     className="fixed inset-0 z-10"
                                     onClick={() => setShowMenu(false)}
                                 />
-                                <div className="absolute right-0 top-full mt-1 w-36 ui-surface shadow-lg z-20 py-1">
+                                <div className="absolute right-0 top-full mt-1 w-36 border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg z-20 py-1">
                                     <button
                                         onClick={() => {
                                             onEdit();
@@ -455,7 +455,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                         {getShelfInitials(shelf.name)}
                     </div>
                     <div>
-                        <h1 className="ui-page-title">
+                        <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                             {shelf.name}
                         </h1>
                         <p className="text-sm text-[color:var(--color-text-muted)] mt-0.5">
@@ -611,7 +611,7 @@ export function ShelvesPage() {
         const shelf = generalCollections.find((s) => s.id === selectedShelfId);
         if (shelf) {
             return (
-                <div className="ui-page">
+                <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
                     <ShelfDetail shelf={shelf} onBack={() => setSelectedShelfId(null)} />
                 </div>
             );
@@ -621,7 +621,7 @@ export function ShelvesPage() {
     // Show shelves list
     if (generalCollections.length === 0) {
         return (
-            <div className="ui-page">
+            <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
                 <EmptyShelves onCreate={handleCreateShelf} />
                 <ShelfModal
                     isOpen={isModalOpen}
@@ -634,14 +634,14 @@ export function ShelvesPage() {
     }
 
     return (
-        <div className="ui-page animate-fade-in">
+        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             {/* Header */}
             <div className="flex items-center justify-between mb-10">
                 <div>
-                    <h1 className="ui-page-title">
+                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         Shelves
                     </h1>
-                    <p className="ui-page-subtitle">
+                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
                         {generalCollections.length} {generalCollections.length === 1 ? "shelf" : "shelves"} •{" "}
                         {generalCollections.reduce((acc, s) => acc + getActualBookCount(s.bookIds), 0)} books
                     </p>
@@ -651,7 +651,7 @@ export function ShelvesPage() {
                     onClick={handleCreateShelf}
                     className={cn(
                         "flex items-center gap-2 px-4 py-2.5 rounded-lg",
-                        "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
+                        "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-sm font-medium",
                         "hover:opacity-90 transition-opacity"
                     )}
                 >

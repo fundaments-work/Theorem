@@ -25,6 +25,7 @@ interface ContextMenuProps {
 /**
  * Context Menu Component using React Portal
  * Renders outside the main DOM tree to avoid z-index conflicts with titlebar
+ * Swiss Design Standard
  */
 export function ContextMenu({ items, children, className }: ContextMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
@@ -128,13 +129,6 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
     }, [isOpen, handleClickOutside]);
 
     useEffect(() => {
-        return () => {
-            clearLongPress();
-        };
-    }, [clearLongPress]);
-
-    // Adjust position to keep menu on screen
-    useEffect(() => {
         if (isOpen && menuRef.current) {
             const menu = menuRef.current;
             const rect = menu.getBoundingClientRect();
@@ -156,6 +150,12 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
         }
     }, [isOpen, position]);
 
+    useEffect(() => {
+        return () => {
+            clearLongPress();
+        };
+    }, [clearLongPress]);
+
     const handleItemClick = (item: ContextMenuItem) => {
         if (!item.disabled && !item.separator) {
             item.onClick?.();
@@ -175,11 +175,7 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
             {/* Menu - even higher z-index */}
             <div
                 ref={menuRef}
-                className={cn(
-                    "fixed z-[calc(var(--z-dropdown)+1)] min-w-[var(--layout-dropdown-menu-min-width)] max-w-[var(--layout-dropdown-menu-max-width)]",
-                    "ui-overlay-surface py-1",
-                    "animate-fade-in"
-                )}
+                className="fixed z-[calc(var(--z-dropdown)+1)] min-w-[var(--layout-dropdown-menu-min-width)] max-w-[var(--layout-dropdown-menu-max-width)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1"
                 style={{
                     left: position.x,
                     top: position.y,
@@ -193,7 +189,7 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                             return null;
                         }
                         return (
-                            <div key={item.id} className="my-1 border-t-2 border-[var(--color-border)]" />
+                            <div key={item.id} className="mx-3 my-1 h-px bg-[var(--color-border)]" />
                         );
                     }
 
@@ -202,15 +198,9 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                             key={item.id}
                             onClick={() => handleItemClick(item)}
                             disabled={item.disabled}
-                            className={cn(
-                                "w-full flex items-center gap-3 px-3 py-2 text-left",
-                                "font-sans text-[11px] font-medium transition-colors",
-                                item.disabled
-                                    ? "opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]"
-                                    : item.danger
-                                        ? "text-[color:var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_10%,transparent)]"
-                                        : "text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
-                            )}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs text-[color:var(--color-text-primary)] transition-colors duration-200 ease-out hover:bg-[var(--color-surface-muted)] data-[danger=true]:text-[color:var(--color-error)] data-[danger=true]:hover:bg-[color:color-mix(in_srgb,var(--color-error)_10%,var(--color-surface))] data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50"
+                            data-danger={item.danger}
+                            data-disabled={item.disabled}
                         >
                             {item.icon && (
                                 <span className="flex-shrink-0 w-4 h-4">
@@ -219,7 +209,7 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                             )}
                             <span className="flex-1">{item.label}</span>
                             {item.shortcut && (
-                                <span className="text-xs text-[color:var(--color-text-muted)]">
+                                <span className="ml-auto text-[0.6875rem] text-[color:var(--color-text-muted)]">
                                     {item.shortcut}
                                 </span>
                             )}
@@ -246,3 +236,5 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
         </div>
     );
 }
+
+export default ContextMenu;

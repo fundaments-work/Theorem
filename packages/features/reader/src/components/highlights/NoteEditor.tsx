@@ -141,7 +141,7 @@ export function NoteEditor({
                     className={cn(
                         "p-1 rounded-md",
                         "text-[color:var(--color-text-muted)]",
-                        "hover:bg-[var(--color-surface-hover)]",
+                        "hover:bg-[var(--color-surface-muted)]",
                         "transition-colors"
                     )}
                 >
@@ -187,7 +187,7 @@ export function NoteEditor({
                         "px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em]",
                         "rounded-sm",
                         "bg-[var(--color-accent)]",
-                        "ui-text-accent-contrast",
+                        "text-[color:var(--color-accent-contrast)]",
                         "hover:opacity-90",
                         "transition-opacity"
                     )}

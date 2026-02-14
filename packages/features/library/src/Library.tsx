@@ -4,7 +4,12 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { cn, normalizeAuthor } from "@theorem/core";
+import {
+    cn,
+    normalizeAuthor,
+    UI_BUTTON_BASE_CLASS,
+    UI_BUTTON_PRIMARY_CLASS,
+} from "@theorem/core";
 import { useLibraryStore, useUIStore, useSettingsStore } from "@theorem/core";
 import { formatProgress, formatFileSize, formatRelativeDate } from "@theorem/core";
 import { importBooks, pickAndImportBooks, scanFolderForBooks } from "@theorem/core";
@@ -31,6 +36,12 @@ const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
     list: <List className="w-4 h-4" />,
     compact: <Grid3X3 className="w-4 h-4" />,
 };
+
+const TOOLBAR_BUTTON_BASE =
+    `${UI_BUTTON_BASE_CLASS} disabled:opacity-50`;
+const TOOLBAR_BUTTON_PRIMARY =
+    `${UI_BUTTON_PRIMARY_CLASS} disabled:opacity-50`;
+const TOOLBAR_ICON_BUTTON = "h-10 w-10 px-0";
 
 type ExtractMetadataFn = typeof import("@theorem/core").extractMetadata;
 
@@ -206,7 +217,7 @@ function BookCard({
                             className={cn(
                                 "absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-colors pointer-events-none",
                                 book.isFavorite
-                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                                     : "opacity-0"
                             )}
                         >
@@ -254,7 +265,7 @@ function BookCard({
                                 loading="lazy"
                             />
                         ) : (
-                            <div className="book-cover-placeholder w-full h-full ui-text-3xs p-1 flex items-center justify-center">
+                            <div className="book-cover-placeholder w-full h-full text-[0.625rem] leading-tight p-1 flex items-center justify-center">
                                 <span className="line-clamp-2 text-center">{book.title}</span>
                             </div>
                         )}
@@ -338,7 +349,7 @@ function BookCard({
                     className={cn(
                         "absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center transition-colors pointer-events-none",
                         book.isFavorite
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                            ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                             : "opacity-0"
                     )}
                 >
@@ -352,23 +363,20 @@ function BookCard({
 // Empty State Component
 function EmptyLibrary({ onAddBooks, isLoading }: { onAddBooks: () => void; isLoading: boolean }) {
     return (
-        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-24 text-center animate-fade-in">
+        <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-24 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <BookOpen className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+            <h2 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 No books yet
             </h2>
-            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
+            <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 Import books to start reading
             </p>
             <button
                 onClick={onAddBooks}
                 disabled={isLoading}
-                className={cn(
-                    "ui-empty-state-action ui-btn ui-btn-primary px-6 py-2.5 text-sm font-medium",
-                    "disabled:opacity-50 disabled:cursor-not-allowed"
-                )}
+                className={cn(TOOLBAR_BUTTON_PRIMARY, "min-w-[10.5rem] whitespace-nowrap px-6 py-2.5")}
             >
                 {isLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -393,17 +401,15 @@ function ImportButton({
         <button
             onClick={onImport}
             disabled={isLoading}
-            className={cn(
-                "ui-btn ui-btn-primary px-4 py-2 text-sm font-medium",
-                "disabled:opacity-50 disabled:cursor-not-allowed"
-            )}
+            className={cn(TOOLBAR_BUTTON_PRIMARY, "px-4 py-2")}
         >
             {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
                 <Plus className="w-4 h-4" />
             )}
-            <span>Add</span>
+            <span className="hidden sm:inline">Add Books</span>
+            <span className="sm:hidden">Add</span>
         </button>
     );
 }
@@ -628,7 +634,7 @@ function AddToShelfModal({
                                 onClick={handleCreateShelf}
                                 disabled={!newShelfName.trim()}
                                 className={cn(
-                                    "px-4 py-2 rounded-lg bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
+                                    "px-4 py-2 rounded-lg bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-sm font-medium",
                                     "hover:opacity-90 transition-opacity",
                                     "disabled:opacity-50 disabled:cursor-not-allowed"
                                 )}
@@ -1045,14 +1051,14 @@ export function LibraryPage() {
     }
 
     return (
-        <div className="ui-page animate-fade-in">
+        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             {/* Header */}
             <div className="flex items-center justify-between mb-10">
                 <div>
-                    <h1 className="ui-page-title">
+                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         {selectedShelf ? selectedShelf.name : showFavoritesOnly ? "Favorites" : "Library"}
                     </h1>
-                    <p className="ui-page-subtitle">
+                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
                         {sortedBooks.length} {sortedBooks.length === 1 ? 'book' : 'books'}
                         {(selectedShelf || showFavoritesOnly) && (
                             <button
@@ -1078,12 +1084,7 @@ export function LibraryPage() {
                     {/* View Mode Toggle */}
                     <button
                         onClick={toggleViewMode}
-                        className={cn(
-                            "flex items-center justify-center w-10 h-10 rounded-lg",
-                            "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                            "text-[color:var(--color-text-secondary)]",
-                            "hover:bg-[var(--color-surface-muted)] transition-colors"
-                        )}
+                        className={cn(TOOLBAR_BUTTON_BASE, TOOLBAR_ICON_BUTTON)}
                         title={`View: ${settings.libraryViewMode}`}
                     >
                         {viewModeIcons[settings.libraryViewMode]}
@@ -1095,13 +1096,7 @@ export function LibraryPage() {
                         <button
                             onClick={handleScanFolder}
                             disabled={isScanning}
-                            className={cn(
-                                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                                "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                                "text-[color:var(--color-text-secondary)] text-sm",
-                                "hover:bg-[var(--color-surface-muted)] transition-colors",
-                                "disabled:opacity-50 disabled:cursor-not-allowed"
-                            )}
+                            className={cn(TOOLBAR_BUTTON_BASE, "px-4 py-2")}
                             title="Scan Folder"
                         >
                             {isScanning ? (
@@ -1118,11 +1113,9 @@ export function LibraryPage() {
                         <button
                             onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                             className={cn(
-                                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                                "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                                "text-[color:var(--color-text-secondary)] text-sm",
-                                "hover:bg-[var(--color-surface-muted)] transition-colors",
-                                showFilterDropdown && "bg-[var(--color-surface-muted)]"
+                                TOOLBAR_BUTTON_BASE,
+                                "px-4 py-2",
+                                showFilterDropdown && "border-[var(--color-accent)] bg-[var(--color-accent-light)] text-[color:var(--color-text-primary)]"
                             )}
                         >
                             <Filter className="w-4 h-4" />
@@ -1136,7 +1129,7 @@ export function LibraryPage() {
                                     className="fixed inset-0 z-10"
                                     onClick={() => setShowFilterDropdown(false)}
                                 />
-                                <div className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] ui-surface shadow-lg z-20 py-2">
+                                <div className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg z-20 py-2">
                                     {/* Sort By */}
                                     <div className="px-3 py-2 border-b border-[var(--color-border)]">
                                         <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Sort By</p>
@@ -1281,7 +1274,7 @@ export function LibraryPage() {
                                                                     )}
                                                                 >
                                                                     <div
-                                                                        className="w-4 h-4 rounded flex items-center justify-center ui-text-3xs font-semibold"
+                                                                        className="w-4 h-4 rounded flex items-center justify-center text-[0.625rem] leading-tight font-semibold"
                                                                         style={{
                                                                             backgroundColor: colors.bg,
                                                                             color: colors.text,

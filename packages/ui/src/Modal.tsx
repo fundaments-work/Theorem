@@ -12,16 +12,17 @@ export interface ModalProps {
 }
 
 const sizeClasses = {
-    sm: "max-w-md min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-sm))]",
-    md: "max-w-xl min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-md))]",
-    lg: "max-w-2xl min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-lg))]",
-    xl: "max-w-4xl min-w-[min(var(--layout-modal-width-fluid),var(--layout-modal-width-xl))]",
-    fullscreen: "max-w-none min-w-0 w-full h-full",
+    sm: "max-w-[var(--layout-modal-width-sm)]",
+    md: "",
+    lg: "max-w-[var(--layout-modal-width-lg)]",
+    xl: "max-w-[var(--layout-modal-width-xl)]",
+    fullscreen: "h-screen max-h-none w-screen max-w-none border-0",
 };
 
 /**
  * Reusable Modal Component using React Portal
  * Renders outside the main DOM tree for proper z-index stacking
+ * Swiss Design Standard
  */
 export function Modal({
     isOpen,
@@ -67,12 +68,7 @@ export function Modal({
     return createPortal(
         <div
             ref={overlayRef}
-            className={cn(
-                "fixed inset-0 z-[var(--z-modal)] flex items-center justify-center",
-                size === "fullscreen" ? "p-0" : "p-4",
-                "bg-[var(--color-overlay-strong)]",
-                "animate-fade-in"
-            )}
+            className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-[var(--color-overlay-strong)] p-4"
             onClick={(e) => {
                 if (e.target === overlayRef.current) {
                     onClose();
@@ -81,12 +77,8 @@ export function Modal({
         >
             <div
                 className={cn(
-                    size === "fullscreen" ? "ui-card rounded-none shadow-none border-0" : "ui-overlay-surface",
-                    "flex flex-col max-h-[var(--layout-modal-max-height)]",
-                    "overflow-hidden",
-                    "w-full",
+                    "flex w-full max-h-[var(--layout-modal-max-height)] max-w-[var(--layout-modal-width-md)] flex-col overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)]",
                     sizeClasses[size],
-                    size === "fullscreen" && "max-h-none",
                     className
                 )}
                 onClick={(e) => e.stopPropagation()}
@@ -106,14 +98,14 @@ interface ModalHeaderProps {
 
 export function ModalHeader({ title, onClose, showCloseButton = true }: ModalHeaderProps) {
     return (
-        <div className="flex items-center justify-between p-6 border-b-2 border-[var(--color-border)]">
-            <h2 className="font-sans text-sm font-semibold text-[color:var(--color-text-primary)]">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
+            <h2 className="text-base font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-primary)]">
                 {title}
             </h2>
             {showCloseButton && onClose && (
                 <button
                     onClick={onClose}
-                    className="ui-icon-btn w-8 h-8 text-[color:var(--color-text-muted)]"
+                    className="inline-flex h-9 w-9 items-center justify-center border border-[color:var(--color-border-subtle)] bg-transparent text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color,opacity] duration-200 ease-out hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)] data-[active=true]:border-[var(--color-accent)] data-[active=true]:bg-[var(--color-accent)] data-[active=true]:text-[color:var(--color-accent-contrast)]"
                     aria-label="Close"
                 >
                     <svg
@@ -137,7 +129,7 @@ export function ModalHeader({ title, onClose, showCloseButton = true }: ModalHea
 
 export function ModalBody({ children, className }: { children: React.ReactNode; className?: string }) {
     return (
-        <div className={cn("p-6 overflow-y-auto flex-1", className)}>
+        <div className={cn("flex-1 overflow-y-auto px-5 py-5", className)}>
             {children}
         </div>
     );
@@ -150,9 +142,8 @@ interface ModalFooterProps {
 
 export function ModalFooter({ children, className }: ModalFooterProps) {
     return (
-        <div className={cn("p-4 border-t-2 border-[var(--color-border)] flex justify-end gap-2", className)}>
+        <div className={cn("flex shrink-0 items-center justify-end gap-2 border-t border-[var(--color-border)] px-5 py-4", className)}>
             {children}
         </div>
     );
 }
-/* Modal Portal Implementation v2 - Mon Feb  2 04:41:48 PM +0545 2026 */

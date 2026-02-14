@@ -1,4 +1,5 @@
 import { Component, ReactNode } from "react";
+import { UI_BUTTON_PRIMARY_CLASS } from "@theorem/core";
 
 interface Props {
     children: ReactNode;
@@ -33,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
         if (this.state.hasError) {
             return (
                 <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)] p-8">
-                    <div className="ui-card w-full max-w-4xl p-8">
+                    <div className="border border-[var(--color-border)] bg-[var(--color-surface)] w-full max-w-4xl p-8">
                         <h1 className="text-2xl font-bold text-[color:var(--color-error)] mb-4">
                             Application Error
                         </h1>
@@ -60,7 +61,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         )}
                         <button
                             onClick={() => window.location.reload()}
-                            className="ui-btn ui-btn-primary"
+                            className={UI_BUTTON_PRIMARY_CLASS}
                         >
                             Reload Page
                         </button>

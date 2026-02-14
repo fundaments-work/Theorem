@@ -4,7 +4,7 @@
  */
 
 import { useRef, useState, type ChangeEvent } from "react";
-import { cn } from "@theorem/core";
+import { cn, UI_BUTTON_BASE_CLASS, UI_INPUT_BASE_CLASS } from "@theorem/core";
 import {
     showOpenDirectoryDialog,
     useLearningStore,
@@ -113,7 +113,7 @@ function Toggle({
                 className={cn(
                     "px-3 py-1.5 font-sans text-[11px] font-medium",
                     checked
-                        ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                        ? "bg-[var(--color-accent)] text-white !text-white"
                         : "text-[color:var(--color-text-secondary)]"
                 )}
             >
@@ -124,7 +124,7 @@ function Toggle({
                 className={cn(
                     "border-l border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium",
                     !checked
-                        ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                        ? "bg-[var(--color-accent)] text-white !text-white"
                         : "text-[color:var(--color-text-secondary)]"
                 )}
             >
@@ -153,7 +153,7 @@ function ButtonSelect<T extends string>({
                     className={cn(
                         "border border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium transition-colors",
                         value === opt.value
-                            ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                            ? "bg-[var(--color-accent)] text-white !text-white"
                             : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                     )}
                 >
@@ -283,14 +283,14 @@ export function SettingsPage() {
     ];
 
     return (
-        <div className="ui-page animate-fade-in">
+        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             {/* Header */}
             <div className="flex items-center justify-between mb-10">
                 <div>
-                    <h1 className="ui-page-title">
+                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         Settings
                     </h1>
-                    <p className="ui-page-subtitle">
+                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
                         Customize your reading experience
                     </p>
                 </div>
@@ -307,7 +307,7 @@ export function SettingsPage() {
                                 className={cn(
                                     "snap-start flex min-w-[10rem] items-center justify-center border border-[var(--color-border)] px-3 py-2.5 font-sans text-[11px] font-medium transition-colors",
                                     activeTab === tab.id
-                                        ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                                        ? "bg-[var(--color-accent)] text-white !text-white"
                                         : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)]"
                                 )}
                             >
@@ -325,7 +325,7 @@ export function SettingsPage() {
                             className={cn(
                                 "flex items-center border border-[var(--color-border)] px-4 py-2 font-sans text-[11px] font-medium transition-colors",
                                 activeTab === tab.id
-                                    ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                                    ? "bg-[var(--color-accent)] text-white !text-white"
                                     : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                             )}
                         >
@@ -604,7 +604,7 @@ export function SettingsPage() {
                                 />
                                 <button
                                     onClick={() => dictionaryFileInputRef.current?.click()}
-                                    className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white ui-force-on-accent hover:opacity-90 transition-opacity"
+                                    className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white !text-white hover:opacity-90 transition-opacity"
                                 >
                                     <Download className="w-4 h-4" /> Import Files
                                 </button>
@@ -730,14 +730,15 @@ export function SettingsPage() {
                                     onChange={(e) => updateVaultSettings({ vaultPath: e.target.value })}
                                     placeholder="/Users/you/Documents/ObsidianVault"
                                     className={cn(
-                                        "ui-input w-full min-w-[20rem] sm:w-[28rem]"
+                                        UI_INPUT_BASE_CLASS,
+                                        "min-w-[20rem] sm:w-[28rem]"
                                     )}
                                 />
                                 <button
                                     onClick={() => {
                                         void handlePickVaultDirectory();
                                     }}
-                                    className="ui-btn ui-btn-secondary"
+                                    className={UI_BUTTON_BASE_CLASS}
                                 >
                                     Pick folder
                                 </button>
@@ -763,7 +764,7 @@ export function SettingsPage() {
                                 value={settings.vault.highlightsFileName}
                                 onChange={(e) => updateVaultSettings({ highlightsFileName: e.target.value })}
                                 placeholder="theorem-highlights.md"
-                                className="ui-input w-full min-w-[16rem]"
+                                className={cn(UI_INPUT_BASE_CLASS, "min-w-[16rem]")}
                             />
                         </SettingRow>
 
@@ -814,7 +815,7 @@ export function SettingsPage() {
                                         ) : (
                                             <button
                                                 onClick={generateApiKey}
-                                                className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white ui-force-on-accent hover:opacity-90 transition-opacity"
+                                                className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white !text-white hover:opacity-90 transition-opacity"
                                             >
                                                 Generate
                                             </button>

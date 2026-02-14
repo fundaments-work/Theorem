@@ -1,6 +1,7 @@
 /**
  * ReaderToolbar Component
- * Auto-hiding top toolbar with navigation and settings
+ * Auto-hiding top toolbar with navigation and controls
+ * Swiss Design Standard - Consistent across PDF, EPUB, and Article readers
  */
 
 import {
@@ -30,6 +31,9 @@ interface ReaderToolbarProps {
     onToggleFullscreen?: () => void;
     className?: string;
 }
+
+const READER_BUTTON_CLASS =
+    "inline-flex h-9 w-9 items-center justify-center border border-transparent bg-transparent text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)] data-[active=true]:border-[var(--color-accent)] data-[active=true]:bg-[var(--color-accent)] data-[active=true]:text-[color:var(--color-accent-contrast)] data-[active=true]:hover:border-[var(--color-accent-hover)] data-[active=true]:hover:bg-[var(--color-accent-hover)]";
 
 export function ReaderToolbar({
     metadata,
@@ -69,43 +73,39 @@ export function ReaderToolbar({
     return (
         <div
             className={cn(
-                'relative w-full z-20',
-                'h-14 px-4 flex items-center justify-between flex-shrink-0',
-                'bg-[var(--color-surface)]/95',
-                'border-b border-[var(--color-border)]',
+                'flex h-[var(--layout-reader-toolbar-height)] items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 sm:px-4',
                 className
             )}
         >
             {/* Left Section: Back + Navigation */}
-            <div className="flex items-center gap-1.5">
-                {/* Back to Library */}
+            <div className="flex items-center gap-1">
                 <button
                     onClick={onBack}
-                    className="p-2 rounded-lg hover:bg-[var(--color-background)] transition-colors"
+                    className={READER_BUTTON_CLASS}
                     title="Back to Library"
+                    aria-label="Back to Library"
                 >
-                    <ArrowLeft className="w-5 h-5 text-[color:var(--color-text)]" />
+                    <ArrowLeft className="w-5 h-5" />
                 </button>
-
             </div>
 
             {/* Center: Book Title, Chapter & Location */}
             <div className="flex-1 mx-4 text-center overflow-hidden">
-                <h1 className="text-sm font-medium text-[color:var(--color-text)] truncate">
+                <h1 className="truncate text-sm font-medium text-[color:var(--color-text-primary)]">
                     {metadata?.title || 'Loading...'}
                 </h1>
-                <div className="flex items-center justify-center gap-2 text-xs">
+                <div className="flex items-center justify-center gap-2">
                     {currentChapter ? (
-                        <span className="text-[color:var(--color-accent)] font-medium truncate">
+                        <span className="text-[color:var(--color-accent)] text-xs font-medium truncate">
                             {currentChapter}
                         </span>
                     ) : metadata?.author ? (
-                        <span className="text-[color:var(--color-text-muted)] truncate">
+                        <span className="text-xs text-[color:var(--color-text-secondary)] truncate">
                             {normalizeAuthor(metadata.author)}
                         </span>
                     ) : null}
                     {formatLocation() && (
-                        <span className="text-[color:var(--color-text-muted)]">
+                        <span className="text-xs text-[color:var(--color-text-secondary)]">
                             • {formatLocation()}
                         </span>
                     )}
@@ -113,17 +113,14 @@ export function ReaderToolbar({
             </div>
 
             {/* Right Section */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
                 {/* Table of Contents */}
                 <button
                     onClick={onToggleToc}
-                    className={cn(
-                        "p-2 rounded-xl transition-colors duration-150",
-                        activePanel === 'toc'
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
-                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
-                    )}
+                    className={READER_BUTTON_CLASS}
+                    data-active={activePanel === 'toc'}
                     title="Table of Contents"
+                    aria-label="Table of Contents"
                 >
                     <List className="w-5 h-5" />
                 </button>
@@ -131,13 +128,10 @@ export function ReaderToolbar({
                 {/* Search */}
                 <button
                     onClick={onToggleSearch}
-                    className={cn(
-                        "p-2 rounded-xl transition-colors duration-150",
-                        activePanel === 'search'
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
-                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
-                    )}
+                    className={READER_BUTTON_CLASS}
+                    data-active={activePanel === 'search'}
                     title="Search"
+                    aria-label="Search"
                 >
                     <Search className="w-5 h-5" />
                 </button>
@@ -146,11 +140,9 @@ export function ReaderToolbar({
                 {onAddBookmark && (
                     <button
                         onClick={onAddBookmark}
-                        className={cn(
-                            "p-2 rounded-xl transition-colors duration-150",
-                            "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
-                        )}
+                        className={READER_BUTTON_CLASS}
                         title="Bookmark current page (Ctrl+D)"
+                        aria-label="Bookmark current page"
                     >
                         <BookmarkIcon className="w-5 h-5" />
                     </button>
@@ -159,13 +151,10 @@ export function ReaderToolbar({
                 {/* Bookmarks Panel Toggle */}
                 <button
                     onClick={onToggleBookmarks}
-                    className={cn(
-                        "p-2 rounded-xl transition-colors duration-150",
-                        activePanel === 'bookmarks'
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
-                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
-                    )}
+                    className={READER_BUTTON_CLASS}
+                    data-active={activePanel === 'bookmarks'}
                     title="View Bookmarks & Highlights"
+                    aria-label="View Bookmarks and Highlights"
                 >
                     <BookmarkIcon className="w-5 h-5 fill-current" />
                 </button>
@@ -173,13 +162,10 @@ export function ReaderToolbar({
                 {/* Settings (Aa) */}
                 <button
                     onClick={onToggleSettings}
-                    className={cn(
-                        "p-2 rounded-xl transition-colors duration-150 min-w-[var(--control-icon-button-size)] flex items-center justify-center",
-                        activePanel === 'settings'
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
-                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
-                    )}
+                    className={cn(READER_BUTTON_CLASS, "min-w-[var(--control-icon-button-size)]")}
+                    data-active={activePanel === 'settings'}
                     title="Reading Settings"
+                    aria-label="Reading Settings"
                 >
                     <span className="text-base font-serif font-bold">Aa</span>
                 </button>
@@ -187,29 +173,24 @@ export function ReaderToolbar({
                 {/* Fullscreen */}
                 <button
                     onClick={onToggleFullscreen}
-                    className={cn(
-                        "p-2 rounded-xl transition-colors duration-150",
-                        fullscreen
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
-                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
-                    )}
+                    className={READER_BUTTON_CLASS}
+                    data-active={fullscreen}
                     title={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                    aria-label={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                 >
                     {fullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
                 </button>
 
+                {/* Divider */}
                 <div className="w-px h-6 bg-[var(--color-border)] mx-1" />
 
                 {/* More Options */}
                 <button
                     onClick={onToggleInfo}
-                    className={cn(
-                        "p-2 rounded-xl transition-colors duration-150",
-                        activePanel === 'info'
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast"
-                            : "hover:bg-[var(--color-background)] text-[color:var(--color-text)]"
-                    )}
+                    className={READER_BUTTON_CLASS}
+                    data-active={activePanel === 'info'}
                     title="Book Information"
+                    aria-label="Book Information"
                 >
                     <MoreVertical className="w-5 h-5" />
                 </button>

@@ -8,7 +8,13 @@ import {
     ArrowLeft,
     ChevronLeft,
 } from "lucide-react";
-import { cn } from "@theorem/core";
+import {
+    cn,
+    UI_BUTTON_BASE_CLASS,
+    UI_BUTTON_DANGER_CLASS,
+    UI_BUTTON_PRIMARY_CLASS,
+    UI_INPUT_BASE_CLASS,
+} from "@theorem/core";
 import { useLearningStore, useUIStore } from "@theorem/core";
 import type { VocabularyContext, VocabularyTerm } from "@theorem/core";
 
@@ -18,6 +24,11 @@ interface SourceFilterOption {
     count: number;
     lastSeenAt: Date | null;
 }
+
+const VOCAB_BUTTON_BASE = UI_BUTTON_BASE_CLASS;
+const VOCAB_BUTTON_PRIMARY = UI_BUTTON_PRIMARY_CLASS;
+const VOCAB_BUTTON_DANGER = UI_BUTTON_DANGER_CLASS;
+const VOCAB_INPUT_CLASS = UI_INPUT_BASE_CLASS;
 
 function getTermPrimaryDefinition(term: VocabularyTerm): string {
     const firstMeaning = term.meanings[0];
@@ -126,10 +137,10 @@ function getNoResultsMessage(searchQuery: string, sourceFilter: string): string 
 
 function getSourceButtonClass(isActive: boolean): string {
     return cn(
-        "w-full border-2 px-4 py-3 text-left transition-colors",
+        "w-full border px-4 py-3 text-left transition-[background-color,border-color,color] duration-200 ease-out",
         isActive
-            ? "border-[var(--color-text-primary)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]"
-            : "border-transparent text-[color:var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)]",
+            ? "border-[var(--color-accent)] bg-[var(--color-accent-light)] text-[color:var(--color-text-primary)]"
+            : "border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]",
     );
 }
 
@@ -291,15 +302,15 @@ export function VocabularyPage() {
 
     if (vocabularyTerms.length === 0) {
         return (
-            <div className="ui-page animate-fade-in">
-                <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center">
-                    <div className="ui-empty-icon">
+            <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
+                <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center">
+                    <div className="mb-5 inline-flex h-16 w-16 items-center justify-center border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]">
                         <BookOpenText className="w-6 h-6" />
                     </div>
-                    <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+                    <h2 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                         No Vocabulary Yet
                     </h2>
-                    <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
+                    <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                         Words and phrases you capture while reading will appear here.
                     </p>
                     <div className="w-full border-2 border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-xs text-[color:var(--color-text-secondary)]">
@@ -374,10 +385,10 @@ export function VocabularyPage() {
                         </button>
 
                         <div>
-                            <h1 className="ui-page-title truncate">
+                            <h1 className="truncate text-[2rem] font-semibold leading-[1.08] tracking-[0.02em] text-[color:var(--color-text-primary)] sm:text-[2.2rem]">
                                 {selectedSourceLabel}
                             </h1>
-                            <p className="ui-page-subtitle">
+                            <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
                                 {subtitleText}
                             </p>
                         </div>
@@ -427,7 +438,7 @@ export function VocabularyPage() {
                                     {hasActiveFilters && (
                                         <button
                                             onClick={handleClearFilters}
-                                            className="mt-4 ui-btn ui-btn-ghost px-4 py-2 text-xs"
+                                            className={cn(VOCAB_BUTTON_BASE, "mt-4 px-4 py-2 text-xs")}
                                         >
                                             Clear search and filters
                                         </button>
@@ -505,7 +516,7 @@ export function VocabularyPage() {
                                                     value={draftNote}
                                                     onChange={(e) => setDraftNote(e.target.value)}
                                                     placeholder="Add mnemonics, examples, or context..."
-                                                    className="ui-input w-full min-h-[120px] px-4 py-3 text-sm placeholder:text-[color:var(--color-text-muted)]/40"
+                                                    className={cn(VOCAB_INPUT_CLASS, "min-h-[120px] px-4 py-3 placeholder:text-[color:var(--color-text-muted)]/40")}
                                                 />
                                             </div>
 
@@ -518,13 +529,13 @@ export function VocabularyPage() {
                                                     value={draftTags}
                                                     onChange={(e) => setDraftTags(e.target.value)}
                                                     placeholder="difficult, medical, etc."
-                                                    className="ui-input w-full px-4 py-3 text-sm placeholder:text-[color:var(--color-text-muted)]/40"
+                                                    className={cn(VOCAB_INPUT_CLASS, "px-4 py-3 placeholder:text-[color:var(--color-text-muted)]/40")}
                                                 />
                                             </div>
 
                                             <button
                                                 onClick={() => handleSaveMetadata(selectedTerm.id)}
-                                                className="w-full ui-btn ui-btn-primary py-3"
+                                                className={cn(VOCAB_BUTTON_PRIMARY, "w-full py-3")}
                                             >
                                                 <Save className="w-4 h-4" />
                                                 <span>Save Changes</span>
@@ -549,7 +560,7 @@ export function VocabularyPage() {
                                             <div className="pt-4 border-t border-[var(--color-border-subtle)]/50">
                                                 <button
                                                     onClick={() => handleDeleteTerm(selectedTerm.id)}
-                                                    className="w-full ui-btn ui-btn-danger py-3 text-xs font-bold uppercase tracking-wider"
+                                                    className={cn(VOCAB_BUTTON_DANGER, "w-full py-3 text-xs font-bold uppercase tracking-wider")}
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                     Delete this term

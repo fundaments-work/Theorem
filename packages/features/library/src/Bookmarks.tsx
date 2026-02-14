@@ -23,14 +23,14 @@ import {
 // Empty state component
 function EmptyBookmarks() {
     return (
-        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+        <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <Bookmark className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+            <h2 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 No Bookmarks Yet
             </h2>
-            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
+            <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 Bookmark pages while reading to quickly return to them later.
             </p>
         </div>
@@ -62,7 +62,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
         return (
             <div 
                 onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
-                className="group flex items-center gap-4 p-4 ui-surface hover:border-[var(--color-text-muted)] transition-colors cursor-pointer"
+                className="group flex items-center gap-4 p-4 border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-text-muted)] transition-colors cursor-pointer"
             >
                 {/* Cover */}
                 <div className="flex-shrink-0">
@@ -123,7 +123,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
     }
 
     return (
-        <div className="group ui-surface overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+        <div className="group border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
             {/* Book Cover Section */}
             <div
                 onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
@@ -285,21 +285,21 @@ export function BookmarksPage() {
 
     if (bookmarks.length === 0) {
         return (
-            <div className="ui-page">
+            <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
                 <EmptyBookmarks />
             </div>
         );
     }
 
     return (
-        <div className="ui-page animate-fade-in">
+        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             {/* Header */}
             <div className="flex items-start justify-between mb-10">
                 <div>
-                    <h1 className="ui-page-title">
+                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         Bookmarks
                     </h1>
-                    <p className="ui-page-subtitle">
+                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
                         {filteredBookmarks.length} {filteredBookmarks.length === 1 ? "bookmark" : "bookmarks"} across{" "}
                         {new Set(filteredBookmarks.map((b) => b.bookId)).size} books
                     </p>

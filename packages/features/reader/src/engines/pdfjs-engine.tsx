@@ -2040,10 +2040,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 {displayError && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)] p-8">
                         <div className="text-[color:var(--color-error)] text-4xl mb-4">⚠️</div>
-                        <h3 className="ui-empty-state-title text-lg font-semibold text-[color:var(--color-text-primary)] mb-2">
+                        <h3 className="w-full break-words text-balance text-lg font-semibold text-[color:var(--color-text-primary)] mb-2">
                             Failed to load PDF
                         </h3>
-                        <p className="ui-empty-state-copy text-[color:var(--color-text-secondary)] text-center leading-relaxed">
+                        <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-secondary)] text-center leading-relaxed">
                             {displayError}
                         </p>
                     </div>

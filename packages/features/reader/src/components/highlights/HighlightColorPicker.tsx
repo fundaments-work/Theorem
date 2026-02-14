@@ -360,7 +360,7 @@ export function HighlightColorPicker({
                         className={cn(
                             "p-1 rounded-md",
                             "text-[color:var(--color-text-muted)]",
-                            "hover:bg-[var(--color-surface-hover)]",
+                            "hover:bg-[var(--color-surface-muted)]",
                             "hover:text-[color:var(--color-text-primary)]",
                             "transition-colors duration-150"
                         )}
@@ -414,7 +414,7 @@ export function HighlightColorPicker({
                             {dictionary.onBack ? (
                                 <button
                                     onClick={dictionary.onBack}
-                                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[color:var(--color-text-primary)]"
+                                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
                                 >
                                     <ArrowLeft className="h-3.5 w-3.5" />
                                     Back
@@ -434,7 +434,7 @@ export function HighlightColorPicker({
                                     "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium",
                                     dictionary.saved
                                         ? "bg-[var(--color-success)]/10 text-[color:var(--color-success)]"
-                                        : "bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90",
+                                        : "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] hover:opacity-90",
                                     (
                                         dictionary.loading
                                         || !dictionary.result
@@ -466,7 +466,7 @@ export function HighlightColorPicker({
                                     "rounded-lg",
                                     "bg-[var(--color-surface-variant)]",
                                     "text-[color:var(--color-text-secondary)]",
-                                    "hover:bg-[var(--color-surface-hover)]",
+                                    "hover:bg-[var(--color-surface-muted)]",
                                     "hover:text-[color:var(--color-text-primary)]",
                                     "transition-colors duration-150",
                                     "active:scale-95"
@@ -535,7 +535,7 @@ export function HighlightColorPicker({
                                     "rounded-lg",
                                     "bg-[var(--color-surface-variant)]",
                                     "text-[color:var(--color-text-secondary)]",
-                                    "hover:bg-[var(--color-surface-hover)]",
+                                    "hover:bg-[var(--color-surface-muted)]",
                                     "hover:text-[color:var(--color-text-primary)]",
                                     "transition-colors duration-150",
                                     "active:scale-95"
@@ -550,18 +550,18 @@ export function HighlightColorPicker({
                                     onClick={() => {
                                         onDefine?.();
                                     }}
-                                    className={cn(
-                                        "flex items-center justify-center gap-1.5",
-                                        "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                        "rounded-lg",
-                                        "bg-[var(--color-surface-variant)]",
-                                        "text-[color:var(--color-text-secondary)]",
-                                        "hover:bg-[var(--color-surface-hover)]",
-                                        "hover:text-[color:var(--color-text-primary)]",
-                                        "transition-colors duration-150",
-                                        "active:scale-95",
-                                        !onDefine && "opacity-50 cursor-not-allowed"
-                                    )}
+                                className={cn(
+                                    "flex items-center justify-center gap-1.5",
+                                    "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
+                                    "rounded-lg",
+                                    "bg-[var(--color-surface-variant)]",
+                                    "text-[color:var(--color-text-secondary)]",
+                                    "hover:bg-[var(--color-surface-muted)]",
+                                    "hover:text-[color:var(--color-text-primary)]",
+                                    "transition-colors duration-150",
+                                    "active:scale-95",
+                                    !onDefine && "opacity-50 cursor-not-allowed"
+                                )}
                                     disabled={!onDefine}
                                 >
                                     <Languages className="w-3 h-3" />

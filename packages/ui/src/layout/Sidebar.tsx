@@ -125,7 +125,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                             "font-sans text-[12px] font-medium",
                                             "transition-colors",
                                             isActive
-                                                ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                                                ? "bg-[var(--color-accent)] text-white !text-white"
                                                 : "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]",
                                         )}
                                         title={isCollapsedDesktop ? item.label : undefined}
@@ -157,7 +157,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                 "relative flex h-11 flex-1 items-center border-r border-[var(--color-border-subtle)] px-4 text-left",
                                 "font-sans text-[12px] font-medium text-[color:var(--color-text-secondary)]",
                                 "hover:text-[color:var(--color-text-primary)]",
-                                currentRoute === "settings" && "bg-[var(--color-accent)] text-white ui-force-on-accent",
+                                currentRoute === "settings" && "bg-[var(--color-accent)] text-white !text-white",
                             )}
                             title="Settings"
                         >
@@ -188,7 +188,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                 "relative flex h-11 w-full items-center border-b border-[var(--color-border-subtle)] px-4 text-left",
                                 "font-sans text-[12px] font-medium text-[color:var(--color-text-secondary)]",
                                 "hover:text-[color:var(--color-text-primary)]",
-                                currentRoute === "settings" && "bg-[var(--color-accent)] text-white ui-force-on-accent",
+                                currentRoute === "settings" && "bg-[var(--color-accent)] text-white !text-white",
                             )}
                             title={isCollapsedDesktop ? "Settings" : undefined}
                         >

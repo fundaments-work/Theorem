@@ -125,6 +125,88 @@ function getFoliateTheme(name: ReaderTheme): FoliateTheme {
     return FOLIATE_THEMES[name] ?? FOLIATE_THEMES.light;
 }
 
+function parseCssColorToRgb(color: string): { r: number; g: number; b: number } | null {
+    const normalized = color.trim().toLowerCase();
+
+    if (!normalized) {
+        return null;
+    }
+
+    const hex = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+    if (hex) {
+        const value = hex[1];
+        if (value.length === 3) {
+            return {
+                r: parseInt(value[0] + value[0], 16),
+                g: parseInt(value[1] + value[1], 16),
+                b: parseInt(value[2] + value[2], 16),
+            };
+        }
+        if (value.length === 6 || value.length === 8) {
+            return {
+                r: parseInt(value.slice(0, 2), 16),
+                g: parseInt(value.slice(2, 4), 16),
+                b: parseInt(value.slice(4, 6), 16),
+            };
+        }
+    }
+
+    const rgb = normalized.match(
+        /^rgba?\(\s*([0-9]{1,3})(?:\s*,\s*|\s+)([0-9]{1,3})(?:\s*,\s*|\s+)([0-9]{1,3})(?:\s*[,/]\s*[0-9.]+)?\s*\)$/,
+    );
+    if (rgb) {
+        return {
+            r: Math.max(0, Math.min(255, Number(rgb[1]))),
+            g: Math.max(0, Math.min(255, Number(rgb[2]))),
+            b: Math.max(0, Math.min(255, Number(rgb[3]))),
+        };
+    }
+
+    return null;
+}
+
+function relativeLuminance({ r, g, b }: { r: number; g: number; b: number }): number {
+    const channel = (value: number) => {
+        const srgb = value / 255;
+        return srgb <= 0.03928 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+    };
+
+    return (0.2126 * channel(r)) + (0.7152 * channel(g)) + (0.0722 * channel(b));
+}
+
+function getContrastRatio(a: number, b: number): number {
+    const lighter = Math.max(a, b);
+    const darker = Math.min(a, b);
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+function resolveAccessibleAccentContrast(accentCssColor: string): string {
+    const rgb = parseCssColorToRgb(accentCssColor);
+
+    // Fallback to white if the browser returns an unsupported format.
+    if (!rgb) {
+        return "#ffffff";
+    }
+
+    const accentLuminance = relativeLuminance(rgb);
+    const whiteContrast = getContrastRatio(accentLuminance, 1);
+    const blackContrast = getContrastRatio(accentLuminance, 0);
+
+    return whiteContrast >= blackContrast ? "#ffffff" : "#000000";
+}
+
+function syncAccentContrastToken(root: HTMLElement): void {
+    const styles = getComputedStyle(root);
+    const accent = styles.getPropertyValue("--color-accent").trim();
+    if (!accent) {
+        return;
+    }
+
+    const contrast = resolveAccessibleAccentContrast(accent);
+    root.style.setProperty("--app-accent-contrast", contrast);
+    root.style.setProperty("--color-accent-contrast", contrast);
+}
+
 // Cache for current settings to avoid recomputation
 let currentSettings: ReaderSettings | null = null;
 
@@ -169,6 +251,9 @@ export function applyReaderStyles(settings: ReaderSettings): void {
     // Update body classes for theme
     document.body.classList.remove('theme-light', 'theme-sepia', 'theme-dark');
     document.body.classList.add(`theme-${settings.theme}`);
+
+    // Keep on-accent labels/icons legible for the active accent color.
+    syncAccentContrastToken(root);
     
     // Update color scheme for native UI elements
     root.style.colorScheme = isDark ? 'dark' : 'light';

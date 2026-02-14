@@ -117,7 +117,7 @@ export function AddFeedModal({ isOpen, onClose, onSubmit, isLoading, error }: Ad
                     disabled={isLoading || !url.trim()}
                     className={cn(
                         "flex items-center gap-2 px-4 py-2 rounded-lg",
-                        "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
+                        "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-sm font-medium",
                         "hover:opacity-90 transition-opacity",
                         "disabled:opacity-50 disabled:cursor-not-allowed",
                     )}

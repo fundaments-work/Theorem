@@ -30,6 +30,15 @@ interface AppTitlebarProps {
     className?: string;
 }
 
+const TITLEBAR_ICON_BUTTON =
+    "inline-flex h-9 w-9 items-center justify-center border border-transparent bg-transparent text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
+const TITLEBAR_ICON_ACTIVE = "border-2 border-[var(--color-accent)] text-[color:var(--color-text-primary)]";
+const TITLEBAR_WINDOW_BUTTON =
+    "hidden sm:inline-flex h-8 w-8 items-center justify-center border border-transparent bg-transparent text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
+const TITLEBAR_CLOSE_BUTTON = `${TITLEBAR_WINDOW_BUTTON} hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]`;
+const TITLEBAR_SEARCH_INPUT =
+    "min-h-[var(--control-height-md)] w-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-2 pl-[calc(var(--control-padding-x)+var(--icon-size-sm)+var(--spacing-md))] text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] transition-[background-color,border-color,color,box-shadow] duration-200 ease-out hover:border-[color:color-mix(in_srgb,var(--color-accent)_32%,var(--color-border))] focus-visible:border-[color:color-mix(in_srgb,var(--color-accent)_58%,var(--color-border))] focus-visible:outline-2 focus-visible:outline-[color:color-mix(in_srgb,var(--color-accent)_28%,transparent)] focus-visible:outline-offset-0";
+
 export function AppTitlebar({
     title,
     onMenuClick,
@@ -160,7 +169,7 @@ export function AppTitlebar({
     return (
         <div
             className={cn(
-                "w-full z-50 select-none border-b-2 border-[var(--color-border)] ui-panel",
+                "w-full z-50 select-none border-b-2 border-[var(--color-border)] bg-[var(--color-surface)]",
                 "px-4 sm:px-5 py-3 lg:h-16",
                 className
             )}
@@ -173,7 +182,7 @@ export function AppTitlebar({
                         <div className="md:hidden">
                             <button
                                 onClick={onMenuClick}
-                                className="ui-icon-btn w-9 h-9 text-[color:var(--color-text-primary)]"
+                                className={TITLEBAR_ICON_BUTTON}
                                 title="Toggle Sidebar"
                             >
                                 <Menu className="w-5 h-5" />
@@ -198,8 +207,8 @@ export function AppTitlebar({
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 onKeyDown={handleSearchKeyDown}
                                 className={cn(
-                                    "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4",
-                                    "min-h-[var(--control-height-md)]"
+                                    TITLEBAR_SEARCH_INPUT,
+                                    "pr-4"
                                 )}
                             />
                         </div>
@@ -212,10 +221,11 @@ export function AppTitlebar({
                         <button
                             onClick={() => setIsMobileSearchOpen((prev) => !prev)}
                             className={cn(
-                                "lg:!hidden ui-icon-btn w-9 h-9",
+                                "lg:!hidden",
+                                TITLEBAR_ICON_BUTTON,
                                 isMobileSearchOpen
-                                    ? "border-2 border-[var(--color-accent)] text-[color:var(--color-text-primary)]"
-                                    : "text-[color:var(--color-text-secondary)]"
+                                    ? TITLEBAR_ICON_ACTIVE
+                                    : null
                             )}
                             title={isMobileSearchOpen ? "Hide search" : "Search"}
                         >
@@ -226,10 +236,10 @@ export function AppTitlebar({
                     <button
                         onClick={() => setRoute("statistics")}
                         className={cn(
-                            "ui-icon-btn w-9 h-9",
+                            TITLEBAR_ICON_BUTTON,
                             currentRoute === "statistics"
-                                ? "border-2 border-[var(--color-accent)] text-[color:var(--color-text-primary)]"
-                                : "text-[color:var(--color-text-secondary)]"
+                                ? TITLEBAR_ICON_ACTIVE
+                                : null
                         )}
                         title="Statistics"
                     >
@@ -241,21 +251,21 @@ export function AppTitlebar({
                             <div className="hidden sm:block w-px h-5 bg-[var(--color-border)] mx-1" />
                             <button
                                 onClick={handleMinimize}
-                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 text-[color:var(--color-text-primary)]"
+                                className={TITLEBAR_WINDOW_BUTTON}
                                 title="Minimize"
                             >
                                 <Minus className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={handleMaximize}
-                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 text-[color:var(--color-text-primary)]"
+                                className={TITLEBAR_WINDOW_BUTTON}
                                 title={isMaximized ? "Restore" : "Maximize"}
                             >
                                 <Square className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={handleClose}
-                                className="hidden sm:inline-flex ui-icon-btn ui-icon-btn-danger w-8 h-8 text-[color:var(--color-text-primary)]"
+                                className={TITLEBAR_CLOSE_BUTTON}
                                 title="Close"
                             >
                                 <X className="w-4 h-4" />
@@ -278,13 +288,16 @@ export function AppTitlebar({
                             onKeyDown={handleSearchKeyDown}
                             autoFocus
                             className={cn(
-                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-12",
-                                "min-h-[var(--control-height-md)]"
+                                TITLEBAR_SEARCH_INPUT,
+                                "pr-12"
                             )}
                         />
                         <button
                             onClick={() => setIsMobileSearchOpen(false)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 ui-icon-btn w-7 h-7 text-[color:var(--color-text-muted)]"
+                            className={cn(
+                                "absolute right-2 top-1/2 -translate-y-1/2 !h-7 !w-7 text-[color:var(--color-text-muted)]",
+                                TITLEBAR_ICON_BUTTON
+                            )}
                             title="Close search"
                         >
                             <X className="w-4 h-4" />
@@ -305,8 +318,8 @@ export function AppTitlebar({
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onKeyDown={handleSearchKeyDown}
                             className={cn(
-                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4",
-                                "min-h-[var(--control-height-md)]"
+                                TITLEBAR_SEARCH_INPUT,
+                                "pr-4"
                             )}
                         />
                     </div>

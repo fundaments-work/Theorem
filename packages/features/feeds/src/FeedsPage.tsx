@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { cn } from "@theorem/core";
+import { cn, UI_BUTTON_BASE_CLASS } from "@theorem/core";
 import { useRssStore } from "@theorem/core";
 import type { RssFeed, RssArticle } from "@theorem/core";
 import {
@@ -101,7 +101,7 @@ function FeedListItem({
                 <span className={cn(
                     "text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0",
                     isSelected
-                        ? "bg-[var(--color-accent)] ui-text-accent-contrast"
+                        ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                         : "bg-[var(--color-surface-muted)] text-[color:var(--color-text-muted)]",
                 )}>
                     {feed.unreadCount}
@@ -249,21 +249,21 @@ function ArticleCard({
 
 function EmptyFeeds({ onAddFeed }: { onAddFeed: () => void }) {
     return (
-        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
-            <div className="ui-empty-icon">
+        <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+            <div className="mb-5 inline-flex h-16 w-16 items-center justify-center border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]">
                 <Rss className="w-6 h-6" />
             </div>
-            <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+            <h2 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 Your Feed Reader
             </h2>
-            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
+            <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 Subscribe to your favorite blogs, news sites, and newsletters to read them right here in Theorem.
             </p>
             <button
                 onClick={onAddFeed}
                 className={cn(
-                    "ui-empty-state-action flex items-center gap-2 px-6 py-2.5 rounded-full",
-                    "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
+                    "min-w-[10.5rem] whitespace-nowrap flex items-center gap-2 px-6 py-2.5 rounded-full",
+                    "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-sm font-medium",
                     "hover:opacity-90 transition-opacity shadow-sm",
                 )}
             >
@@ -276,14 +276,14 @@ function EmptyFeeds({ onAddFeed }: { onAddFeed: () => void }) {
 
 function EmptyArticles({ feedTitle }: { feedTitle?: string }) {
     return (
-        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-24 text-center animate-fade-in">
-            <div className="ui-empty-icon">
+        <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-24 text-center animate-fade-in">
+            <div className="mb-5 inline-flex h-16 w-16 items-center justify-center border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]">
                 <LayoutTemplate className="w-6 h-6" />
             </div>
-            <h3 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+            <h3 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 No Articles Yet
             </h3>
-            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] text-sm leading-relaxed">
+            <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-muted)] text-sm leading-relaxed">
                 {feedTitle ? `We couldn't find any new articles for "${feedTitle}".` : "Select a feed from the sidebar to start reading."}
             </p>
         </div>
@@ -411,7 +411,7 @@ export function FeedsPage() {
     // Initial Empty State
     if (feeds.length === 0 && !isLoading) {
         return (
-            <div className="ui-page animate-fade-in">
+            <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
                 <EmptyFeeds onAddFeed={() => setIsAddModalOpen(true)} />
                 <AddFeedModal
                     isOpen={isAddModalOpen}
@@ -509,16 +509,16 @@ export function FeedsPage() {
                         </button>
 
                         <div>
-                            <h1 className="ui-page-title truncate">
+                            <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem] truncate">
                                 {selectedFeed ? selectedFeed.title : "All Articles"}
                             </h1>
                             {!selectedFeed && (
-                                <p className="ui-page-subtitle">
+                                <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
                                     {displayedArticles.length} articles
                                 </p>
                             )}
                             {selectedFeed && (
-                                <p className="ui-page-subtitle">
+                                <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
                                     {selectedFeed.url}
                                 </p>
                             )}
@@ -529,7 +529,7 @@ export function FeedsPage() {
                         onClick={handleRefreshAll}
                         disabled={isRefreshing}
                         className={cn(
-                            "ui-btn ui-btn-secondary",
+                            UI_BUTTON_BASE_CLASS,
                             "disabled:opacity-50",
                         )}
                         title="Refresh feeds"

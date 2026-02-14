@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react";
-import { cn } from "@theorem/core";
+import {
+    cn,
+    UI_BUTTON_GHOST_CLASS,
+    UI_BUTTON_PRIMARY_CLASS,
+    UI_INPUT_BASE_CLASS,
+} from "@theorem/core";
 import { Modal, ModalBody, ModalFooter } from "../Modal";
 
 interface ShelfModalProps {
@@ -57,9 +62,7 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                                 onChange={(e) => setName(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 placeholder="e.g., To Read, Favorites, Sci-Fi"
-                                className={cn(
-                                    "ui-input w-full"
-                                )}
+                                className={UI_INPUT_BASE_CLASS}
                                 autoFocus
                             />
                         </div>
@@ -72,7 +75,8 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Add a description for this shelf..."
                                 className={cn(
-                                    "ui-input w-full resize-none min-h-[calc(var(--control-height-md)_*_2.1)]"
+                                    UI_INPUT_BASE_CLASS,
+                                    "resize-none min-h-[calc(var(--control-height-md)_*_2.1)]"
                                 )}
                                 rows={3}
                             />
@@ -83,7 +87,7 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                     <button
                         type="button"
                         onClick={onClose}
-                        className="ui-btn ui-btn-ghost"
+                        className={UI_BUTTON_GHOST_CLASS}
                     >
                         Cancel
                     </button>
@@ -91,7 +95,7 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                         type="submit"
                         disabled={!name.trim()}
                         className={cn(
-                            "ui-btn ui-btn-primary",
+                            UI_BUTTON_PRIMARY_CLASS,
                             "disabled:opacity-50 disabled:cursor-not-allowed"
                         )}
                     >

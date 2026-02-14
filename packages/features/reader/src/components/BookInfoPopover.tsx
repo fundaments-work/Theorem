@@ -47,14 +47,14 @@ export function BookInfoPopover({
                 {/* Header */}
                 <div className="reader-panel-header flex items-center justify-between p-4 sm:p-5">
                     <div className="flex items-center gap-2.5">
-                        <div className="p-1.5 rounded-lg bg-[var(--color-background)] text-[color:var(--color-accent)]">
+                        <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-1.5 text-[color:var(--color-accent)]">
                             <Info className="w-4 h-4" />
                         </div>
                         <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">Book Information</h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="reader-chip w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors hover:opacity-80 text-[color:var(--color-text-secondary)]"
+                        className="inline-flex h-9 w-9 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-secondary)] transition-colors duration-200 ease-out hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
                     >
                         <X className="w-4 h-4" />
                     </button>
@@ -67,10 +67,10 @@ export function BookInfoPopover({
                             <img
                                 src={metadata.cover}
                                 alt={metadata.title}
-                                className="w-20 aspect-[2/3] object-cover rounded-lg shadow-md border border-[var(--color-border)]"
+                                className="w-20 aspect-[2/3] object-cover border border-[var(--color-border)]"
                             />
                         ) : (
-                            <div className="w-20 aspect-[2/3] bg-[var(--color-surface-muted)] rounded-lg flex items-center justify-center text-[color:var(--color-text-muted)] border border-[var(--color-border)]">
+                            <div className="w-20 aspect-[2/3] border border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-muted)] flex items-center justify-center">
                                 <FileText className="w-6 h-6" />
                             </div>
                         )}

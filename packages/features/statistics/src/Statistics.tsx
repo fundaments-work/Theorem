@@ -33,7 +33,7 @@ interface StatCardProps {
 
 function StatCard({ icon, label, value, subtext }: StatCardProps) {
     return (
-        <div className="ui-card p-5 hover:border-[var(--color-text-muted)] transition-colors">
+        <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-5 hover:border-[var(--color-text-muted)] transition-colors">
             <div className="flex items-start justify-between">
                 <div className="p-2.5 rounded-lg bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]">
                     {icon}
@@ -109,7 +109,7 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
     return (
         <button
             onClick={onClick}
-            className="flex items-center gap-4 p-3 ui-surface hover:border-[var(--color-text-muted)] transition-colors text-left w-full"
+            className="flex items-center gap-4 p-3 border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-text-muted)] transition-colors text-left w-full"
         >
             {book.coverPath ? (
                 <img
@@ -281,14 +281,14 @@ export function StatisticsPage() {
     };
 
     return (
-        <div className="ui-page animate-fade-in">
+        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             {/* Header */}
             <div className="flex items-center justify-between mb-10">
                 <div>
-                    <h1 className="ui-page-title">
+                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         Statistics
                     </h1>
-                    <p className="ui-page-subtitle">
+                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
                         Track your reading progress and achievements
                     </p>
                 </div>
@@ -327,7 +327,7 @@ export function StatisticsPage() {
                 {/* Left Column - Goals & Activity */}
                 <div className="lg:col-span-2 space-y-8">
                     {/* Reading Goals */}
-                    <section className="ui-card p-6">
+                    <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="p-2 rounded-lg bg-[var(--color-surface-muted)]">
                                 <Target className="w-5 h-5 text-[color:var(--color-text-primary)]" />
@@ -349,7 +349,7 @@ export function StatisticsPage() {
                     </section>
 
                     {/* Activity Heatmap */}
-                    <section className="ui-card p-6">
+                    <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
                         <ActivityHeatmap dailyActivity={stats.dailyActivity} />
                     </section>
 
@@ -382,7 +382,7 @@ export function StatisticsPage() {
                 {/* Right Column - Annotations & Favorites */}
                 <div className="space-y-8">
                     {/* Annotations Summary */}
-                    <section className="ui-card p-6">
+                    <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="p-2 rounded-lg bg-[var(--color-surface-muted)]">
                                 <Highlighter className="w-5 h-5 text-[color:var(--color-text-primary)]" />
@@ -416,7 +416,7 @@ export function StatisticsPage() {
 
                     {/* Favorites */}
                     {favoriteBooks.length > 0 && (
-                        <section className="ui-card p-6">
+                        <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
                             <div className="flex items-center gap-3 mb-6">
                                 <div className="p-2 rounded-lg bg-[var(--color-surface-muted)]">
                                     <Star className="w-5 h-5 text-[color:var(--color-text-primary)]" />
@@ -456,7 +456,7 @@ export function StatisticsPage() {
                     )}
 
                     {/* Achievements */}
-                    <section className="ui-card p-6">
+                    <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="p-2 rounded-lg bg-[var(--color-surface-muted)]">
                                 <Trophy className="w-5 h-5 text-[color:var(--color-text-primary)]" />

@@ -28,6 +28,10 @@ import {
     cn,
     isFixedLayout,
     READER_THEME_PREVIEWS,
+    UI_BUTTON_BASE_CLASS,
+    UI_CHIP_BUTTON_BASE_CLASS,
+    UI_ICON_BUTTON_BASE_CLASS,
+    UI_TAB_BUTTON_BASE_CLASS,
     type BookFormat,
     type FontFamily,
     type ReaderSettings as ReaderSettingsType,
@@ -94,10 +98,10 @@ const ALIGN_OPTIONS = [
     { id: "center", label: "Center", icon: AlignCenter },
 ] as const;
 
-const TAB_BUTTON_CLASS = "ui-chip ui-clickable ui-focus-ring min-h-10 w-full px-2 text-xs transition-colors";
-const CHIP_CONTROL_CLASS =
-    "ui-chip ui-clickable ui-focus-ring w-full px-3 py-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-45";
-const ICON_CONTROL_BUTTON_CLASS = "ui-icon-btn ui-focus-ring w-8 h-8 disabled:cursor-not-allowed disabled:opacity-45";
+const SECONDARY_BUTTON_CLASS = UI_BUTTON_BASE_CLASS;
+const TAB_BUTTON_CLASS = UI_TAB_BUTTON_BASE_CLASS;
+const CHIP_CONTROL_CLASS = UI_CHIP_BUTTON_BASE_CLASS;
+const ICON_CONTROL_BUTTON_CLASS = UI_ICON_BUTTON_BASE_CLASS;
 
 function useSmoothSlider(
     initialValue: number,
@@ -162,7 +166,7 @@ function useSmoothSlider(
 }
 
 function sectionLabel(label: string) {
-    return <label className="ui-caption">{label}</label>;
+    return <label className="text-xs font-medium leading-snug text-[color:var(--color-text-muted)]">{label}</label>;
 }
 
 function panelToggleClass(disabled = false) {
@@ -258,13 +262,13 @@ export function ReaderSettings({
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleReset}
-                            className="ui-btn ui-btn-secondary min-h-8 px-3 py-1 text-xs"
+                            className={cn(SECONDARY_BUTTON_CLASS, "min-h-8 px-3 py-1 text-xs")}
                         >
                             Reset
                         </button>
                         <button
                             onClick={onClose}
-                            className="ui-icon-btn ui-focus-ring w-8 h-8"
+                            className={ICON_CONTROL_BUTTON_CLASS}
                             aria-label="Close settings"
                         >
                             <X className="w-5 h-5" />
@@ -297,7 +301,7 @@ export function ReaderSettings({
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     {sectionLabel("Brightness")}
-                                    <span className="ui-mono-number text-xs text-[color:var(--color-text-primary)]">
+                                    <span className="[font-variant-numeric:tabular-nums] text-xs text-[color:var(--color-text-primary)]">
                                         {brightnessSlider.value}%
                                     </span>
                                 </div>
@@ -342,7 +346,7 @@ export function ReaderSettings({
                                             <button
                                                 key={theme.id}
                                                 onClick={() => onUpdate({ theme: theme.id })}
-                                                className="ui-chip ui-clickable ui-focus-ring p-3 text-center transition-colors"
+                                                className={cn(CHIP_CONTROL_CLASS, "p-3 text-center")}
                                                 data-active={active}
                                                 aria-pressed={active}
                                             >
@@ -369,7 +373,7 @@ export function ReaderSettings({
                                             <button
                                                 key={font.id}
                                                 onClick={() => onUpdate({ fontFamily: font.id })}
-                                                className="ui-chip ui-clickable ui-focus-ring px-3 py-2.5 text-left transition-colors"
+                                                className={cn(CHIP_CONTROL_CLASS, "px-3 py-2.5 text-left")}
                                                 data-active={active}
                                                 aria-pressed={active}
                                                 style={{ fontFamily: font.family }}
@@ -381,7 +385,7 @@ export function ReaderSettings({
                                     })}
                                 </div>
 
-                                <div className="ui-muted-surface mt-3 border p-3 text-center text-base text-[color:var(--color-text-primary)]" style={{ fontFamily: currentFontFamily }}>
+                                <div className="mt-3 border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] p-3 text-center text-base text-[color:var(--color-text-primary)]" style={{ fontFamily: currentFontFamily }}>
                                     The quick brown fox jumps over the lazy dog
                                 </div>
                             </div>
@@ -389,7 +393,7 @@ export function ReaderSettings({
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     {sectionLabel("Size")}
-                                    <span className="ui-mono-number text-xs text-[color:var(--color-text-primary)]">{fontSizeSlider.value}</span>
+                                    <span className="[font-variant-numeric:tabular-nums] text-xs text-[color:var(--color-text-primary)]">{fontSizeSlider.value}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button
@@ -425,7 +429,7 @@ export function ReaderSettings({
 
                             <button
                                 onClick={() => setShowAdvancedType((prev) => !prev)}
-                                className="ui-btn ui-btn-ghost w-full py-2 text-xs"
+                                className={cn(SECONDARY_BUTTON_CLASS, "w-full py-2 text-xs")}
                             >
                                 {showAdvancedType ? "Less options" : "More options"}
                             </button>
@@ -435,7 +439,7 @@ export function ReaderSettings({
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             {sectionLabel("Line spacing")}
-                                            <span className="ui-mono-number text-xs text-[color:var(--color-text-primary)]">{lineHeightSlider.value.toFixed(1)}</span>
+                                            <span className="[font-variant-numeric:tabular-nums] text-xs text-[color:var(--color-text-primary)]">{lineHeightSlider.value.toFixed(1)}</span>
                                         </div>
                                         <input
                                             type="range"
@@ -483,7 +487,7 @@ export function ReaderSettings({
                                         <ZoomIn className="w-4 h-4" />
                                         Zoom level
                                     </span>
-                                    <span className="ui-mono-number text-xs text-[color:var(--color-text-primary)]">{zoomSlider.value}%</span>
+                                    <span className="[font-variant-numeric:tabular-nums] text-xs text-[color:var(--color-text-primary)]">{zoomSlider.value}%</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button
@@ -539,7 +543,7 @@ export function ReaderSettings({
                                 </div>
                             </div>
 
-                            <div className="ui-muted-surface border p-3 text-xs text-[color:var(--color-text-secondary)]">
+                            <div className="border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] p-3 text-xs text-[color:var(--color-text-secondary)]">
                                 This document has a fixed layout. Zoom controls replace text-size options.
                             </div>
                         </div>
@@ -579,7 +583,7 @@ export function ReaderSettings({
                                         <Zap className="w-4 h-4" />
                                         Zoom
                                     </span>
-                                    <span className="ui-mono-number text-xs text-[color:var(--color-text-primary)]">{zoomSlider.value}%</span>
+                                    <span className="[font-variant-numeric:tabular-nums] text-xs text-[color:var(--color-text-primary)]">{zoomSlider.value}%</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button

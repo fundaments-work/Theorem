@@ -81,9 +81,9 @@ interface WindowTitlebarProps {
     };
 }
 
-const ICON_BUTTON_CLASS = "ui-icon-btn w-9 h-9 p-0 shrink-0";
+const ICON_BUTTON_CLASS = "inline-flex h-9 w-9 shrink-0 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
 const ICON_BUTTON_ACTIVE_CLASS = "border-[var(--color-text-primary)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]";
-const ICON_BUTTON_INACTIVE_CLASS = "border-transparent text-[color:var(--color-text-secondary)] hover:border-[var(--color-border)] hover:text-[color:var(--color-text-primary)]";
+const ICON_BUTTON_INACTIVE_CLASS = "border-transparent text-[color:var(--color-text-secondary)]";
 
 function ToolbarButton({
     onClick,
@@ -129,10 +129,10 @@ function WindowControlButton({
         <button
             onClick={onClick}
             className={cn(
-                "ui-icon-btn w-8 h-8 p-0",
+                "inline-flex h-8 w-8 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]",
                 danger
-                    ? "ui-icon-btn-danger"
-                    : "border-transparent text-[color:var(--color-text-secondary)] hover:border-[var(--color-border)] hover:text-[color:var(--color-text-primary)]",
+                    ? "hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]"
+                    : "text-[color:var(--color-text-secondary)]",
             )}
             style={{ color: "var(--reader-fg)" }}
             title={title}
@@ -291,7 +291,7 @@ export function WindowTitlebar({
             <div className="flex items-center gap-2 w-full min-w-0 lg:flex-1">
                 <button
                     onClick={onBack}
-                    className="ui-icon-btn w-9 h-9 p-0 shrink-0 border-transparent text-[color:var(--color-text-secondary)] hover:border-[var(--color-border)] hover:text-[color:var(--color-text-primary)]"
+                    className={ICON_BUTTON_CLASS}
                     style={{ color: 'var(--reader-fg, var(--color-text))' }}
                     title="Back to Library"
                 >
@@ -494,7 +494,7 @@ export function WindowTitlebar({
                                     onClick={() => setShowZoomMenu(false)}
                                 />
                                 <div 
-                                    className="absolute top-full right-0 mt-1 py-1 ui-overlay-surface z-50 min-w-[var(--layout-popover-min-width)]"
+                                    className="absolute top-full right-0 mt-1 py-1 border border-[var(--color-border)] bg-[var(--color-surface)] z-50 min-w-[var(--layout-popover-min-width)]"
                                     style={{
                                         backgroundColor: 'var(--color-surface)',
                                         borderColor: 'var(--color-border)',
@@ -604,7 +604,7 @@ export function WindowTitlebar({
                                         pdfControls!.onAnnotationModeChange?.("highlight");
                                     }}
                                     className={cn(
-                                        "w-3.5 h-3.5 rounded-full border transition-transform",
+                                        "w-3.5 h-3.5 rounded-full  transition-transform",
                                         activeHighlightColor === swatch.color
                                             ? "scale-110"
                                             : "hover:scale-110",

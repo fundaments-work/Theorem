@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react";
-import { cn } from "@theorem/core";
+import {
+    cn,
+    UI_BUTTON_GHOST_CLASS,
+    UI_BUTTON_PRIMARY_CLASS,
+    UI_INPUT_BASE_CLASS,
+} from "@theorem/core";
 import { Modal, ModalBody, ModalFooter } from "../Modal";
 
 interface EditNoteModalProps {
@@ -44,7 +49,8 @@ export function EditNoteModal({ isOpen, content, onClose, onSave }: EditNoteModa
                     onChange={(e) => setEditContent(e.target.value)}
                     onKeyDown={handleKeyDown}
                     className={cn(
-                        "ui-input w-full h-40 p-3 resize-none"
+                        UI_INPUT_BASE_CLASS,
+                        "h-40 p-3 resize-none"
                     )}
                     placeholder="Add your note..."
                     autoFocus
@@ -53,13 +59,13 @@ export function EditNoteModal({ isOpen, content, onClose, onSave }: EditNoteModa
             <ModalFooter>
                 <button
                     onClick={onClose}
-                    className="ui-btn ui-btn-ghost"
+                    className={UI_BUTTON_GHOST_CLASS}
                 >
                     Cancel
                 </button>
                 <button
                     onClick={handleSave}
-                    className={cn("ui-btn ui-btn-primary")}
+                    className={UI_BUTTON_PRIMARY_CLASS}
                 >
                     Save
                 </button>

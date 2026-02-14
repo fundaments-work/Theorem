@@ -48,14 +48,14 @@ function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" }) {
     const Icon = icons[type];
 
     return (
-        <div className="ui-empty-state-stack px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+        <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <Icon className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
-            <h2 className="ui-empty-state-title text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+            <h2 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
                 {titles[type]}
             </h2>
-            <p className="ui-empty-state-copy text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
+            <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 {descriptions[type]}
             </p>
         </div>
@@ -300,21 +300,21 @@ export function AnnotationsPage() {
 
     if (annotationCount === 0) {
         return (
-            <div className="ui-page">
+            <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
                 <EmptyAnnotations type="all" />
             </div>
         );
     }
 
     return (
-        <div className="ui-page animate-fade-in">
+        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             {/* Header */}
             <div className="mb-8 flex items-start justify-between">
                 <div>
-                    <h1 className="ui-page-title">
+                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         Workbench
                     </h1>
-                    <p className="ui-page-subtitle">
+                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
                         {filteredAnnotations.length} {filteredAnnotations.length === 1 ? "annotation" : "annotations"} across{" "}
                         {new Set(filteredAnnotations.map((a) => a.bookId)).size} books
                     </p>
@@ -355,7 +355,7 @@ export function AnnotationsPage() {
                             className={cn(
                                 "border border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium transition-colors",
                                 activeFilter === tab.id
-                                    ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                                    ? "bg-[var(--color-accent)] text-white !text-white"
                                     : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                             )}
                         >

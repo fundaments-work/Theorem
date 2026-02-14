@@ -23,7 +23,7 @@ interface ReaderAnnotationsPanelProps {
 type TabType = 'bookmarks' | 'highlights';
 
 const TAB_BUTTON_CLASS =
-    "ui-chip ui-clickable ui-focus-ring flex w-full min-h-10 items-center justify-between px-3 py-2 text-xs font-medium transition-colors";
+    "border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)] data-[active=true]:border-[var(--color-accent)] data-[active=true]:bg-[var(--color-accent)] data-[active=true]:text-[color:var(--color-accent-contrast)] cursor-pointer focus-visible:outline-2 focus-visible:outline-[color:var(--color-focus-ring)] focus-visible:outline-offset-2 flex w-full min-h-10 items-center justify-between px-3 py-2 text-xs font-medium transition-colors";
 
 export function ReaderAnnotationsPanel({
     bookId,
@@ -172,13 +172,13 @@ export function ReaderAnnotationsPanel({
                         <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">Annotations</h2>
                         <button
                             onClick={onClose}
-                            className="ui-icon-btn ui-focus-ring w-8 h-8"
+                            className="inline-flex h-9 w-9 items-center justify-center border border-[color:var(--color-border-subtle)] bg-transparent text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color,opacity] duration-200 ease-out hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)] data-[active=true]:border-[var(--color-accent)] data-[active=true]:bg-[var(--color-accent)] data-[active=true]:text-[color:var(--color-accent-contrast)] focus-visible:outline-2 focus-visible:outline-[color:var(--color-focus-ring)] focus-visible:outline-offset-2 w-8 h-8"
                             aria-label="Close annotations"
                         >
                             <X className="w-4 h-4" />
                         </button>
                     </div>
-                    <div className="ui-muted-surface mx-4 mb-3 border px-3 py-1.5 text-xs text-[color:var(--color-text-secondary)]">
+                    <div className="border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] mx-4 mb-3 border px-3 py-1.5 text-xs text-[color:var(--color-text-secondary)]">
                         {vaultStatusText}
                     </div>
 
@@ -194,7 +194,7 @@ export function ReaderAnnotationsPanel({
                                 <Bookmark className="w-3.5 h-3.5" />
                                 <span>Bookmarks</span>
                             </span>
-                            <span className="ui-mono-number text-[10px]">{bookmarks.length}</span>
+                            <span className="[font-variant-numeric:tabular-nums] text-[10px]">{bookmarks.length}</span>
                         </button>
                         <button
                             onClick={() => setActiveTab('highlights')}
@@ -206,7 +206,7 @@ export function ReaderAnnotationsPanel({
                                 <Highlighter className="w-3.5 h-3.5" />
                                 <span>Highlights</span>
                             </span>
-                            <span className="ui-mono-number text-[10px]">{highlights.length}</span>
+                            <span className="[font-variant-numeric:tabular-nums] text-[10px]">{highlights.length}</span>
                         </button>
                     </div>
                 </div>
