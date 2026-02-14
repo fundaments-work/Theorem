@@ -85,9 +85,9 @@ export const APP_THEME_PALETTES: Record<ReaderTheme, ThemeSemanticPalette> = {
         appOverlayMedium: "color-mix(in srgb, #000000 14%, transparent)",
         appOverlayStrong: "color-mix(in srgb, #000000 25%, transparent)",
         appOverlayStrongHover: "color-mix(in srgb, #000000 33%, transparent)",
-        readerBg: "#ffffff",
-        readerFg: "#1a1a1a",
-        readerLink: "#1a1a1a",
+        readerBg: "#f4ecd8",
+        readerFg: "#3d3025",
+        readerLink: "#3d3025",
     },
     dark: {
         appBg: "#ffffff",
@@ -114,9 +114,9 @@ export const APP_THEME_PALETTES: Record<ReaderTheme, ThemeSemanticPalette> = {
         appOverlayMedium: "color-mix(in srgb, #000000 14%, transparent)",
         appOverlayStrong: "color-mix(in srgb, #000000 25%, transparent)",
         appOverlayStrongHover: "color-mix(in srgb, #000000 33%, transparent)",
-        readerBg: "#ffffff",
-        readerFg: "#1a1a1a",
-        readerLink: "#1a1a1a",
+        readerBg: "#121212",
+        readerFg: "#e8e6e3",
+        readerLink: "#e8e6e3",
     },
 };
 
@@ -445,8 +445,8 @@ export const SHELF_COLOR_PALETTE: ShelfColorToken[] = [
 
 export const READER_THEME_PREVIEWS: Record<ReaderTheme, { bg: string; fg: string }> = {
     light: { bg: "#ffffff", fg: "#1a1a1a" },
-    sepia: { bg: "#ffffff", fg: "#1a1a1a" },
-    dark: { bg: "#ffffff", fg: "#1a1a1a" },
+    sepia: { bg: "#f4ecd8", fg: "#3d3025" },
+    dark: { bg: "#121212", fg: "#e8e6e3" },
 };
 
 export const DESIGN_TOKENS = {

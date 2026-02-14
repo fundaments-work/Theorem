@@ -1,19 +1,29 @@
 /**
- * ReaderSettings Component - Minimal Design
- * 
- * - Black & white only (no blue)
- * - Sepia theme for warmth
- * - Minimal theme selection
- * - Instant brightness for whole screen
+ * ReaderSettings Component
+ *
+ * Unified visual language with app-wide primitives.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
-    X, Sun, Moon, Sunrise, Plus, Minus,
-    Layers, ArrowUpDown,
-    AlignLeft, AlignJustify, AlignCenter, Type,
-    Palette, Maximize2, Zap, Settings2, ZoomIn
-} from 'lucide-react';
+    X,
+    Sun,
+    Moon,
+    Sunrise,
+    Plus,
+    Minus,
+    Layers,
+    ArrowUpDown,
+    AlignLeft,
+    AlignJustify,
+    AlignCenter,
+    Type,
+    Palette,
+    Maximize2,
+    Zap,
+    Settings2,
+    ZoomIn,
+} from "lucide-react";
 import {
     cn,
     isFixedLayout,
@@ -34,75 +44,129 @@ interface ReaderSettingsProps {
     className?: string;
 }
 
-type TabId = 'themes' | 'typography' | 'zoom' | 'layout';
+type TabId = "themes" | "typography" | "zoom" | "layout";
 
-const THEMES: Array<{ id: ReaderTheme; label: string; icon: React.ReactNode; previewBg: string; previewFg: string }> = [
-    { id: "light", label: "Light", icon: <Sun className="w-5 h-5" />, previewBg: READER_THEME_PREVIEWS.light.bg, previewFg: READER_THEME_PREVIEWS.light.fg },
-    { id: "sepia", label: "Sepia", icon: <Sunrise className="w-5 h-5" />, previewBg: READER_THEME_PREVIEWS.sepia.bg, previewFg: READER_THEME_PREVIEWS.sepia.fg },
-    { id: "dark", label: "Dark", icon: <Moon className="w-5 h-5" />, previewBg: READER_THEME_PREVIEWS.dark.bg, previewFg: READER_THEME_PREVIEWS.dark.fg },
+const THEMES: Array<{
+    id: ReaderTheme;
+    label: string;
+    icon: React.ReactNode;
+    previewBg: string;
+    previewFg: string;
+}> = [
+    {
+        id: "light",
+        label: "Light",
+        icon: <Sun className="w-5 h-5" />,
+        previewBg: READER_THEME_PREVIEWS.light.bg,
+        previewFg: READER_THEME_PREVIEWS.light.fg,
+    },
+    {
+        id: "sepia",
+        label: "Sepia",
+        icon: <Sunrise className="w-5 h-5" />,
+        previewBg: READER_THEME_PREVIEWS.sepia.bg,
+        previewFg: READER_THEME_PREVIEWS.sepia.fg,
+    },
+    {
+        id: "dark",
+        label: "Dark",
+        icon: <Moon className="w-5 h-5" />,
+        previewBg: READER_THEME_PREVIEWS.dark.bg,
+        previewFg: READER_THEME_PREVIEWS.dark.fg,
+    },
 ];
 
 const FONTS: Array<{ id: FontFamily; label: string; family: string }> = [
-    { id: 'original', label: 'Original', family: 'inherit' },
-    { id: 'serif', label: 'Serif', family: 'var(--font-merriweather), Georgia, serif' },
-    { id: 'sans', label: 'Sans', family: 'var(--font-sans), system-ui, sans-serif' },
-    { id: 'mono', label: 'Mono', family: 'var(--font-mono), monospace' },
+    { id: "original", label: "Original", family: "inherit" },
+    { id: "serif", label: "Serif", family: 'var(--font-merriweather), Georgia, serif' },
+    { id: "sans", label: "Sans", family: 'var(--font-sans), system-ui, sans-serif' },
+    { id: "mono", label: "Mono", family: 'var(--font-mono), monospace' },
 ];
 
 const FLOW_OPTIONS = [
-    { id: 'paged', label: 'Paged', icon: Layers },
-    { id: 'scroll', label: 'Scroll', icon: ArrowUpDown },
+    { id: "paged", label: "Paged", icon: Layers },
+    { id: "scroll", label: "Scroll", icon: ArrowUpDown },
 ] as const;
 
 const ALIGN_OPTIONS = [
-    { id: 'left', label: 'Left', icon: AlignLeft },
-    { id: 'justify', label: 'Justify', icon: AlignJustify },
-    { id: 'center', label: 'Center', icon: AlignCenter },
+    { id: "left", label: "Left", icon: AlignLeft },
+    { id: "justify", label: "Justify", icon: AlignJustify },
+    { id: "center", label: "Center", icon: AlignCenter },
 ] as const;
+
+const TAB_BUTTON_CLASS = "ui-chip ui-clickable ui-focus-ring min-h-10 w-full px-2 text-xs transition-colors";
+const CHIP_CONTROL_CLASS =
+    "ui-chip ui-clickable ui-focus-ring w-full px-3 py-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-45";
+const ICON_CONTROL_BUTTON_CLASS = "ui-icon-btn ui-focus-ring w-8 h-8 disabled:cursor-not-allowed disabled:opacity-45";
 
 function useSmoothSlider(
     initialValue: number,
     onChange: (value: number) => void,
     min: number,
     max: number,
-    step: number = 1
+    step: number = 1,
 ) {
     const [localValue, setLocalValue] = useState(initialValue);
     const isDraggingRef = useRef(false);
-    
+
     useEffect(() => {
         if (!isDraggingRef.current) {
             setLocalValue(initialValue);
         }
     }, [initialValue]);
-    
+
     const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = step < 1 ? parseFloat(e.target.value) : parseInt(e.target.value);
-        setLocalValue(val);
-        onChange(val);
-    }, [onChange, step]);
-    
+        const value = step < 1 ? Number.parseFloat(e.target.value) : Number.parseInt(e.target.value, 10);
+        const clamped = Math.max(min, Math.min(max, value));
+        setLocalValue(clamped);
+        onChange(clamped);
+    }, [max, min, onChange, step]);
+
     const handleMouseDown = useCallback(() => {
         isDraggingRef.current = true;
     }, []);
-    
+
     const handleMouseUp = useCallback(() => {
         isDraggingRef.current = false;
     }, []);
-    
+
     const increment = useCallback(() => {
-        const newVal = Math.min(max, localValue + step);
-        setLocalValue(newVal);
-        onChange(newVal);
+        const next = Math.min(max, localValue + step);
+        setLocalValue(next);
+        onChange(next);
     }, [localValue, max, step, onChange]);
-    
+
     const decrement = useCallback(() => {
-        const newVal = Math.max(min, localValue - step);
-        setLocalValue(newVal);
-        onChange(newVal);
+        const next = Math.max(min, localValue - step);
+        setLocalValue(next);
+        onChange(next);
     }, [localValue, min, step, onChange]);
-    
-    return { value: localValue, handleChange, handleMouseDown, handleMouseUp, increment, decrement };
+
+    const epsilon = Math.max(0.0001, step / 1000);
+    const canDecrement = localValue > min + epsilon;
+    const canIncrement = localValue < max - epsilon;
+
+    return {
+        value: localValue,
+        min,
+        max,
+        step,
+        handleChange,
+        handleMouseDown,
+        handleMouseUp,
+        increment,
+        decrement,
+        canDecrement,
+        canIncrement,
+    };
+}
+
+function sectionLabel(label: string) {
+    return <label className="ui-caption">{label}</label>;
+}
+
+function panelToggleClass(disabled = false) {
+    return cn(CHIP_CONTROL_CLASS, disabled && "pointer-events-none");
 }
 
 export function ReaderSettings({
@@ -110,318 +174,298 @@ export function ReaderSettings({
     visible,
     onClose,
     onUpdate,
-    format = 'epub',
+    format = "epub",
     className,
 }: ReaderSettingsProps) {
-    const [activeTab, setActiveTab] = useState<TabId>('themes');
+    const [activeTab, setActiveTab] = useState<TabId>("themes");
     const [showAdvancedType, setShowAdvancedType] = useState(false);
-    
-    // Determine if current format is fixed layout (CBZ/PDF, plus legacy CBR entries)
+
     const isFixed = isFixedLayout(format);
     const reflowZoomMin = settings.flow === "paged" ? 100 : 50;
 
     const brightnessSlider = useSmoothSlider(
         settings.brightness ?? 100,
-        (v) => onUpdate({ brightness: v }),
-        20, 100, 1
+        (value) => onUpdate({ brightness: value }),
+        20,
+        100,
+        1,
     );
-    
+
     const fontSizeSlider = useSmoothSlider(
         settings.fontSize ?? 18,
-        (v) => onUpdate({ fontSize: v }),
-        12, 32, 1
+        (value) => onUpdate({ fontSize: value }),
+        12,
+        32,
+        1,
     );
-    
+
     const lineHeightSlider = useSmoothSlider(
         settings.lineHeight ?? 1.6,
-        (v) => onUpdate({ lineHeight: v }),
-        1.0, 2.2, 0.1
+        (value) => onUpdate({ lineHeight: value }),
+        1.0,
+        2.2,
+        0.1,
     );
-    
+
     const zoomSlider = useSmoothSlider(
         settings.zoom ?? 100,
-        (v) => onUpdate({ zoom: v }),
+        (value) => onUpdate({ zoom: value }),
         isFixed ? 50 : reflowZoomMin,
         200,
         10,
     );
 
-    const currentFontFamily = FONTS.find(f => f.id === settings.fontFamily)?.family;
+    const currentFontFamily = FONTS.find((font) => font.id === settings.fontFamily)?.family;
 
     const handleReset = useCallback(() => {
         onUpdate({
-            theme: 'light', fontFamily: 'original', fontSize: 18, lineHeight: 1.6,
-            letterSpacing: 0, wordSpacing: 0, paragraphSpacing: 1, textAlign: 'left',
-            hyphenation: false, margins: 10, zoom: 100, flow: 'paged', layout: 'auto',
-            brightness: 100, forcePublisherStyles: false,
+            theme: "light",
+            fontFamily: "original",
+            fontSize: 18,
+            lineHeight: 1.6,
+            letterSpacing: 0,
+            wordSpacing: 0,
+            paragraphSpacing: 1,
+            textAlign: "left",
+            hyphenation: false,
+            margins: 10,
+            zoom: 100,
+            flow: "paged",
+            layout: "auto",
+            brightness: 100,
+            forcePublisherStyles: false,
         });
     }, [onUpdate]);
 
     const tabs = [
-        { id: 'themes' as TabId, label: 'Theme', icon: <Palette className="w-4 h-4" /> },
-        isFixed 
-            ? { id: 'zoom' as TabId, label: 'Zoom', icon: <Zap className="w-4 h-4" /> }
-            : { id: 'typography' as TabId, label: 'Type', icon: <Type className="w-4 h-4" /> },
-        { id: 'layout' as TabId, label: 'Layout', icon: <Maximize2 className="w-4 h-4" /> },
+        { id: "themes" as TabId, label: "Theme", icon: <Palette className="w-4 h-4" /> },
+        isFixed
+            ? { id: "zoom" as TabId, label: "Zoom", icon: <Zap className="w-4 h-4" /> }
+            : { id: "typography" as TabId, label: "Type", icon: <Type className="w-4 h-4" /> },
+        { id: "layout" as TabId, label: "Layout", icon: <Maximize2 className="w-4 h-4" /> },
     ];
-
-    // Common styles using semantic design tokens
-    const textStyle = { color: 'var(--color-text-primary)' };
-    const textMutedStyle = { color: 'var(--color-text-muted)' };
-    const borderStyle = { borderColor: 'var(--color-border)' };
-    const surfaceStyle = { backgroundColor: 'var(--color-surface-muted)' };
 
     return (
         <>
             <Backdrop visible={visible} onClick={onClose} />
 
-            <FloatingPanel visible={visible} className={cn("overflow-hidden", className)}>
-                {/* Header */}
-                <div className="reader-panel-header flex items-center justify-between p-4" style={borderStyle}>
+            <FloatingPanel visible={visible} className={cn("overflow-hidden bg-[var(--color-surface)]", className)}>
+                <div className="reader-panel-header flex items-center justify-between border-b border-[var(--color-border)] p-4">
                     <div className="flex items-center gap-2">
-                        <Settings2 className="w-5 h-5" style={textStyle} />
-                        <h2 className="text-base font-medium" style={textStyle}>Settings</h2>
+                        <Settings2 className="w-5 h-5 text-[color:var(--color-text-primary)]" />
+                        <h2 className="text-base font-medium text-[color:var(--color-text-primary)]">Settings</h2>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleReset}
-                            className="reader-chip px-3 py-1.5 text-xs rounded-full transition-opacity hover:opacity-80"
-                            style={textMutedStyle}
+                            className="ui-btn ui-btn-secondary min-h-8 px-3 py-1 text-xs"
                         >
                             Reset
                         </button>
                         <button
                             onClick={onClose}
-                            className="reader-chip w-8 h-8 rounded-full inline-flex items-center justify-center transition-opacity hover:opacity-80"
-                            style={surfaceStyle}
+                            className="ui-icon-btn ui-focus-ring w-8 h-8"
+                            aria-label="Close settings"
                         >
-                            <X className="w-5 h-5" style={textStyle} />
+                            <X className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="reader-panel-header px-4 py-3" style={borderStyle}>
+                <div className="reader-panel-header border-b border-[var(--color-border)] px-4 py-3">
                     <div className="grid grid-cols-3 gap-2">
                         {tabs.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={cn(
-                                    'reader-chip w-full min-h-9 flex items-center justify-center gap-1.5 px-2 text-xs rounded-lg transition-colors duration-150',
-                                    activeTab === tab.id ? 'opacity-100' : 'opacity-70 hover:opacity-100',
-                                )}
+                                className={TAB_BUTTON_CLASS}
                                 data-active={activeTab === tab.id}
+                                aria-pressed={activeTab === tab.id}
                             >
-                                {tab.icon}
-                                {tab.label}
+                                <span className="inline-flex items-center justify-center gap-1.5">
+                                    {tab.icon}
+                                    <span>{tab.label}</span>
+                                </span>
                             </button>
                         ))}
                     </div>
                 </div>
 
-                {/* Tab Content */}
-                <div className="p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto">
-                    {/* THEMES TAB */}
-                    {activeTab === 'themes' && (
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
+                    {activeTab === "themes" && (
                         <div className="space-y-6">
-                            {/* Brightness - Instant whole screen */}
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-xs" style={textMutedStyle}>Brightness</label>
-                                    <span className="text-xs font-mono tabular-nums" style={textStyle}>{brightnessSlider.value}%</span>
+                                    {sectionLabel("Brightness")}
+                                    <span className="ui-mono-number text-xs text-[color:var(--color-text-primary)]">
+                                        {brightnessSlider.value}%
+                                    </span>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <Sun className="w-4 h-4 opacity-40" style={textStyle} />
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={brightnessSlider.decrement}
+                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        aria-label="Decrease brightness"
+                                        disabled={!brightnessSlider.canDecrement}
+                                    >
+                                        <Minus className="w-4 h-4" />
+                                    </button>
                                     <input
-                                        type="range" min="20" max="100"
+                                        type="range"
+                                        min={brightnessSlider.min}
+                                        max={brightnessSlider.max}
+                                        step={brightnessSlider.step}
                                         value={brightnessSlider.value}
                                         onChange={brightnessSlider.handleChange}
                                         onMouseDown={brightnessSlider.handleMouseDown}
                                         onMouseUp={brightnessSlider.handleMouseUp}
-                                        className="flex-1 h-1 rounded-full"
-                                        style={{ accentColor: 'var(--color-accent)' }}
+                                        className="flex-1"
+                                        style={{ accentColor: "var(--color-accent)" }}
                                     />
-                                    <Sun className="w-5 h-5" style={textStyle} />
+                                    <button
+                                        onClick={brightnessSlider.increment}
+                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        aria-label="Increase brightness"
+                                        disabled={!brightnessSlider.canIncrement}
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* Theme Presets */}
                             <div className="space-y-3">
-                                <label className="text-xs" style={textMutedStyle}>Theme</label>
+                                {sectionLabel("Theme")}
                                 <div className="grid grid-cols-3 gap-2">
-                                    {THEMES.map((theme) => (
-                                        <button
-                                            key={theme.id}
-                                            onClick={() => onUpdate({ theme: theme.id })}
-                                            className="reader-chip rounded-2xl p-3 flex flex-col items-center gap-2 group transition-colors duration-150"
-                                            data-active={settings.theme === theme.id}
-                                        >
-                                            <div
-                                                className={cn(
-                                                    'w-9 h-9 rounded-full flex items-center justify-center transition-opacity duration-150',
-                                                    settings.theme === theme.id ? 'scale-105' : 'opacity-65 group-hover:opacity-90'
-                                                )}
-                                                style={{ backgroundColor: theme.previewBg, color: theme.previewFg }}
+                                    {THEMES.map((theme) => {
+                                        const active = settings.theme === theme.id;
+                                        return (
+                                            <button
+                                                key={theme.id}
+                                                onClick={() => onUpdate({ theme: theme.id })}
+                                                className="ui-chip ui-clickable ui-focus-ring p-3 text-center transition-colors"
+                                                data-active={active}
+                                                aria-pressed={active}
                                             >
-                                                {theme.icon}
-                                            </div>
-                                            <span className={cn(
-                                                "text-[var(--font-size-3xs)] uppercase tracking-wide",
-                                                settings.theme === theme.id ? "opacity-100" : "opacity-70"
-                                            )} style={textStyle}>
-                                                {theme.label}
-                                            </span>
-                                        </button>
-                                    ))}
+                                                <span className="mx-auto mb-2 inline-flex h-9 w-9 items-center justify-center border border-[var(--color-border)]" style={{ backgroundColor: theme.previewBg, color: theme.previewFg }}>
+                                                    {theme.icon}
+                                                </span>
+                                                <span className="block text-[10px] font-medium tracking-wide">{theme.label}</span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* TYPOGRAPHY TAB */}
-                    {activeTab === 'typography' && (
+                    {activeTab === "typography" && (
                         <div className="space-y-5">
-                            {/* Font Family Dropdown */}
                             <div className="space-y-2">
-                                <label className="text-xs" style={textMutedStyle}>Font</label>
-                                
-                                {/* Font Family Selection - Grid of buttons */}
+                                {sectionLabel("Font")}
                                 <div className="grid grid-cols-2 gap-2">
-                                    {FONTS.map((font) => (
-                                        <button
-                                            key={font.id}
-                                            onClick={() => onUpdate({ fontFamily: font.id })}
-                                            className={cn(
-                                                'py-3 px-3 rounded-lg flex flex-col items-center gap-1.5 transition-colors duration-150 border text-left',
-                                                settings.fontFamily === font.id
-                                                    ? 'opacity-100'
-                                                    : 'opacity-40 hover:opacity-70'
-                                            )}
-                                            style={{
-                                                backgroundColor: settings.fontFamily === font.id
-                                                    ? 'var(--color-accent-light)'
-                                                    : 'transparent',
-                                                borderColor: settings.fontFamily === font.id
-                                                    ? 'color-mix(in srgb, var(--color-accent) 35%, var(--color-border))'
-                                                    : 'var(--color-border)',
-                                                color: settings.fontFamily === font.id
-                                                    ? 'var(--color-accent)'
-                                                    : 'var(--color-text-secondary)',
-                                                fontFamily: font.family,
-                                            }}
-                                        >
-                                            <span className="text-sm font-medium w-full">{font.label}</span>
-                                            <span className="text-xs opacity-60 w-full truncate" style={{ fontFamily: font.family }}>
-                                                Aa Bb Cc
-                                            </span>
-                                        </button>
-                                    ))}
+                                    {FONTS.map((font) => {
+                                        const active = settings.fontFamily === font.id;
+                                        return (
+                                            <button
+                                                key={font.id}
+                                                onClick={() => onUpdate({ fontFamily: font.id })}
+                                                className="ui-chip ui-clickable ui-focus-ring px-3 py-2.5 text-left transition-colors"
+                                                data-active={active}
+                                                aria-pressed={active}
+                                                style={{ fontFamily: font.family }}
+                                            >
+                                                <span className="block text-sm font-medium">{font.label}</span>
+                                                <span className="mt-1 block text-xs opacity-80">Aa Bb Cc</span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
-                                
-                                {/* Font preview showing sample in selected font */}
-                                <div
-                                    className="p-3 text-center text-base rounded-lg border mt-3 transition-colors duration-150"
-                                    style={{
-                                        borderColor: 'var(--color-border)',
-                                        fontFamily: currentFontFamily,
-                                        color: 'var(--color-text-primary)',
-                                        backgroundColor: 'var(--color-surface-muted)',
-                                    }}
-                                >
+
+                                <div className="ui-muted-surface mt-3 border p-3 text-center text-base text-[color:var(--color-text-primary)]" style={{ fontFamily: currentFontFamily }}>
                                     The quick brown fox jumps over the lazy dog
                                 </div>
-                                
-                                {/* Font family indicator */}
-                                <div className="text-[var(--font-size-3xs)] text-center uppercase tracking-wider opacity-50" style={textStyle}>
-                                    {settings.fontFamily === 'original' ? 'Book default' : settings.fontFamily}
-                                </div>
                             </div>
 
-                            {/* Font Size */}
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-xs" style={textMutedStyle}>Size</label>
-                                    <span className="text-xs font-mono tabular-nums" style={textStyle}>{fontSizeSlider.value}</span>
+                                    {sectionLabel("Size")}
+                                    <span className="ui-mono-number text-xs text-[color:var(--color-text-primary)]">{fontSizeSlider.value}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button onClick={fontSizeSlider.decrement} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
-                                        <Minus className="w-4 h-4" style={textStyle} />
+                                    <button
+                                        onClick={fontSizeSlider.decrement}
+                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        aria-label="Decrease font size"
+                                        disabled={!fontSizeSlider.canDecrement}
+                                    >
+                                        <Minus className="w-4 h-4" />
                                     </button>
                                     <input
-                                        type="range" min="12" max="32"
+                                        type="range"
+                                        min={fontSizeSlider.min}
+                                        max={fontSizeSlider.max}
+                                        step={fontSizeSlider.step}
                                         value={fontSizeSlider.value}
                                         onChange={fontSizeSlider.handleChange}
-                                        className="flex-1 h-1 rounded-full"
-                                        style={{ accentColor: 'var(--color-accent)' }}
+                                        onMouseDown={fontSizeSlider.handleMouseDown}
+                                        onMouseUp={fontSizeSlider.handleMouseUp}
+                                        className="flex-1"
+                                        style={{ accentColor: "var(--color-accent)" }}
                                     />
-                                    <button onClick={fontSizeSlider.increment} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
-                                        <Plus className="w-4 h-4" style={textStyle} />
+                                    <button
+                                        onClick={fontSizeSlider.increment}
+                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        aria-label="Increase font size"
+                                        disabled={!fontSizeSlider.canIncrement}
+                                    >
+                                        <Plus className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
 
-                            {/* More/Less Button - Same tab */}
-                            <button 
-                                onClick={() => setShowAdvancedType(!showAdvancedType)} 
-                                className="w-full py-3 text-xs rounded-lg border transition-opacity hover:opacity-70 flex items-center justify-center gap-2"
-                                style={{ ...borderStyle, color: 'var(--color-text-secondary)' }}
+                            <button
+                                onClick={() => setShowAdvancedType((prev) => !prev)}
+                                className="ui-btn ui-btn-ghost w-full py-2 text-xs"
                             >
-                                <span>{showAdvancedType ? 'Less options' : 'More options'}</span>
-                                <svg 
-                                    width="10" height="6" viewBox="0 0 10 6" fill="currentColor" 
-                                    className={cn("transition-transform", showAdvancedType ? "rotate-180" : "")}
-                                >
-                                    <path d="M0 0h10L5 6z"/>
-                                </svg>
+                                {showAdvancedType ? "Less options" : "More options"}
                             </button>
 
-                            {/* Advanced Options */}
                             {showAdvancedType && (
-                                <div className="space-y-4 pt-2 border-t animate-fade-in" style={borderStyle}>
-                                    {/* Line Height */}
+                                <div className="animate-fade-in space-y-4 border-t border-[var(--color-border)] pt-4">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
-                                            <label className="text-xs" style={textMutedStyle}>Line spacing</label>
-                                            <span className="text-xs font-mono" style={textMutedStyle}>{lineHeightSlider.value.toFixed(1)}</span>
+                                            {sectionLabel("Line spacing")}
+                                            <span className="ui-mono-number text-xs text-[color:var(--color-text-primary)]">{lineHeightSlider.value.toFixed(1)}</span>
                                         </div>
                                         <input
-                                            type="range" min="1.0" max="2.2" step="0.1"
+                                            type="range"
+                                            min={lineHeightSlider.min}
+                                            max={lineHeightSlider.max}
+                                            step={lineHeightSlider.step}
                                             value={lineHeightSlider.value}
                                             onChange={lineHeightSlider.handleChange}
-                                            className="w-full h-1 rounded-full"
-                                            style={{ accentColor: 'var(--color-accent)' }}
+                                            onMouseDown={lineHeightSlider.handleMouseDown}
+                                            onMouseUp={lineHeightSlider.handleMouseUp}
+                                            className="w-full"
+                                            style={{ accentColor: "var(--color-accent)" }}
                                         />
                                     </div>
 
-                                    {/* Text Alignment */}
                                     <div className="space-y-2">
-                                        <label className="text-xs" style={textMutedStyle}>Alignment</label>
+                                        {sectionLabel("Alignment")}
                                         <div className="grid grid-cols-3 gap-2">
                                             {ALIGN_OPTIONS.map(({ id, label, icon: Icon }) => (
                                                 <button
                                                     key={id}
                                                     onClick={() => onUpdate({ textAlign: id })}
-                                                    className={cn(
-                                                        'py-2.5 rounded-lg flex flex-col items-center gap-1.5 transition-colors duration-150 border',
-                                                        settings.textAlign === id 
-                                                            ? 'opacity-100' 
-                                                            : 'opacity-40 hover:opacity-70'
-                                                    )}
-                                                    style={{ 
-                                                        backgroundColor: settings.textAlign === id 
-                                                            ? 'var(--color-accent-light)' 
-                                                            : 'transparent',
-                                                        borderColor: settings.textAlign === id
-                                                            ? 'color-mix(in srgb, var(--color-accent) 35%, var(--color-border))'
-                                                            : 'var(--color-border)',
-                                                        color: settings.textAlign === id
-                                                            ? 'var(--color-accent)'
-                                                            : 'var(--color-text-secondary)',
-                                                    }}
+                                                    className={panelToggleClass()}
+                                                    data-active={settings.textAlign === id}
+                                                    aria-pressed={settings.textAlign === id}
                                                 >
-                                                    <Icon className="w-4 h-4" />
-                                                    <span className="text-[var(--font-size-3xs)]">{label}</span>
+                                                    <span className="flex flex-col items-center gap-1">
+                                                        <Icon className="w-4 h-4" />
+                                                        <span className="text-[10px] font-medium">{label}</span>
+                                                    </span>
                                                 </button>
                                             ))}
                                         </div>
@@ -431,140 +475,140 @@ export function ReaderSettings({
                         </div>
                     )}
 
-                    {/* ZOOM TAB - For fixed layouts (CBZ/PDF, plus legacy CBR entries) */}
-                    {activeTab === 'zoom' && (
+                    {activeTab === "zoom" && (
                         <div className="space-y-5">
-                            {/* Zoom Level */}
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <ZoomIn className="w-4 h-4 opacity-50" style={textStyle} />
-                                        <label className="text-xs" style={textMutedStyle}>Zoom Level</label>
-                                    </div>
-                                    <span className="text-xs font-mono tabular-nums" style={textStyle}>{zoomSlider.value}%</span>
+                                    <span className="inline-flex items-center gap-2 text-xs font-medium tracking-wide text-[color:var(--color-text-muted)]">
+                                        <ZoomIn className="w-4 h-4" />
+                                        Zoom level
+                                    </span>
+                                    <span className="ui-mono-number text-xs text-[color:var(--color-text-primary)]">{zoomSlider.value}%</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button onClick={zoomSlider.decrement} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
-                                        <Minus className="w-4 h-4" style={textStyle} />
+                                    <button
+                                        onClick={zoomSlider.decrement}
+                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        aria-label="Decrease zoom"
+                                        disabled={!zoomSlider.canDecrement}
+                                    >
+                                        <Minus className="w-4 h-4" />
                                     </button>
                                     <input
-                                        type="range" min="50" max="300" step="10"
+                                        type="range"
+                                        min={zoomSlider.min}
+                                        max={zoomSlider.max}
+                                        step={zoomSlider.step}
                                         value={zoomSlider.value}
                                         onChange={zoomSlider.handleChange}
-                                        className="flex-1 h-1 rounded-full"
-                                        style={{ accentColor: 'var(--color-accent)' }}
+                                        onMouseDown={zoomSlider.handleMouseDown}
+                                        onMouseUp={zoomSlider.handleMouseUp}
+                                        className="flex-1"
+                                        style={{ accentColor: "var(--color-accent)" }}
                                     />
-                                    <button onClick={zoomSlider.increment} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
-                                        <Plus className="w-4 h-4" style={textStyle} />
+                                    <button
+                                        onClick={zoomSlider.increment}
+                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        aria-label="Increase zoom"
+                                        disabled={!zoomSlider.canIncrement}
+                                    >
+                                        <Plus className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Quick Zoom Presets */}
                             <div className="space-y-2">
-                                <label className="text-xs" style={textMutedStyle}>Presets</label>
-                                <div className="grid grid-cols-3 gap-2">
+                                {sectionLabel("Presets")}
+                                <div className="grid grid-cols-2 gap-2">
                                     {[
-                                        { id: 'fit-width', label: 'Fit Width', value: 100 },
-                                        { id: 'fit-page', label: 'Fit Page', value: 100 },
-                                        { id: 'actual', label: '100%', value: 100 },
-                                        { id: '125', label: '125%', value: 125 },
-                                        { id: '150', label: '150%', value: 150 },
-                                        { id: '200', label: '200%', value: 200 },
+                                        { id: "actual", label: "100%", value: 100 },
+                                        { id: "125", label: "125%", value: 125 },
+                                        { id: "150", label: "150%", value: 150 },
+                                        { id: "200", label: "200%", value: 200 },
                                     ].map((preset) => (
                                         <button
                                             key={preset.id}
                                             onClick={() => onUpdate({ zoom: preset.value })}
-                                            className={cn(
-                                                'py-2 rounded-lg text-xs transition-colors duration-150 border',
-                                                settings.zoom === preset.value
-                                                    ? 'opacity-100'
-                                                    : 'opacity-40 hover:opacity-70'
-                                            )}
-                                            style={{
-                                                backgroundColor: settings.zoom === preset.value
-                                                    ? 'var(--color-accent-light)'
-                                                    : 'transparent',
-                                                borderColor: settings.zoom === preset.value
-                                                    ? 'color-mix(in srgb, var(--color-accent) 35%, var(--color-border))'
-                                                    : 'var(--color-border)',
-                                                color: settings.zoom === preset.value
-                                                    ? 'var(--color-accent)'
-                                                    : 'var(--color-text-secondary)',
-                                            }}
+                                            className={panelToggleClass()}
+                                            data-active={settings.zoom === preset.value}
+                                            aria-pressed={settings.zoom === preset.value}
                                         >
-                                            {preset.label}
+                                            <span className="text-xs font-medium">{preset.label}</span>
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Note about fixed layout */}
-                            <div className="p-3 rounded-lg text-xs" style={surfaceStyle}>
-                                <p style={textMutedStyle}>
-                                    This document has a fixed layout. Zoom controls replace text size options for comics.
-                                </p>
+                            <div className="ui-muted-surface border p-3 text-xs text-[color:var(--color-text-secondary)]">
+                                This document has a fixed layout. Zoom controls replace text-size options.
                             </div>
                         </div>
                     )}
 
-                    {/* LAYOUT TAB */}
-                    {activeTab === 'layout' && (
+                    {activeTab === "layout" && (
                         <div className="space-y-5">
                             <div className="space-y-3">
-                                <label className="text-xs" style={textMutedStyle}>Mode</label>
+                                {sectionLabel("Mode")}
                                 <div className="grid grid-cols-2 gap-2">
-                                    {FLOW_OPTIONS.map(({ id, label, icon: Icon }) => (
-                                        <button
-                                            key={id}
-                                            onClick={() => onUpdate({ flow: id })}
-                                            className={cn(
-                                                'py-3 rounded-lg flex flex-col items-center gap-2 transition-colors duration-150 border',
-                                                settings.flow === id ? 'opacity-100' : 'opacity-40 hover:opacity-70'
-                                            )}
-                                            style={{ 
-                                                backgroundColor: settings.flow === id 
-                                                    ? 'var(--color-accent-light)' 
-                                                    : 'transparent',
-                                                borderColor: settings.flow === id
-                                                    ? 'color-mix(in srgb, var(--color-accent) 35%, var(--color-border))'
-                                                    : 'var(--color-border)',
-                                                color: settings.flow === id
-                                                    ? 'var(--color-accent)'
-                                                    : 'var(--color-text-secondary)',
-                                            }}
-                                        >
-                                            <Icon className="w-5 h-5" />
-                                            <span className="text-xs">{label}</span>
-                                        </button>
-                                    ))}
+                                    {FLOW_OPTIONS.map(({ id, label, icon: Icon }) => {
+                                        const disabled = isFixed && id === "scroll";
+                                        const active = !disabled && settings.flow === id;
+
+                                        return (
+                                            <button
+                                                key={id}
+                                                onClick={() => onUpdate({ flow: id })}
+                                                className={panelToggleClass(disabled)}
+                                                data-active={active}
+                                                aria-pressed={active}
+                                                disabled={disabled}
+                                            >
+                                                <span className="flex flex-col items-center gap-2">
+                                                    <Icon className="w-5 h-5" />
+                                                    <span className="text-xs font-medium">{label}</span>
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Zap className="w-4 h-4 opacity-50" style={textStyle} />
-                                        <label className="text-xs" style={textMutedStyle}>Zoom</label>
-                                    </div>
-                                    <span className="text-xs font-mono" style={textStyle}>{zoomSlider.value}%</span>
+                                    <span className="inline-flex items-center gap-2 text-xs font-medium tracking-wide text-[color:var(--color-text-muted)]">
+                                        <Zap className="w-4 h-4" />
+                                        Zoom
+                                    </span>
+                                    <span className="ui-mono-number text-xs text-[color:var(--color-text-primary)]">{zoomSlider.value}%</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button onClick={zoomSlider.decrement} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
-                                        <Minus className="w-4 h-4" style={textStyle} />
+                                    <button
+                                        onClick={zoomSlider.decrement}
+                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        aria-label="Decrease zoom"
+                                        disabled={!zoomSlider.canDecrement}
+                                    >
+                                        <Minus className="w-4 h-4" />
                                     </button>
                                     <input
                                         type="range"
-                                        min={reflowZoomMin}
-                                        max="200"
-                                        step="10"
+                                        min={zoomSlider.min}
+                                        max={zoomSlider.max}
+                                        step={zoomSlider.step}
                                         value={zoomSlider.value}
                                         onChange={zoomSlider.handleChange}
-                                        className="flex-1 h-1 rounded-full"
-                                        style={{ accentColor: 'var(--color-accent)' }}
+                                        onMouseDown={zoomSlider.handleMouseDown}
+                                        onMouseUp={zoomSlider.handleMouseUp}
+                                        className="flex-1"
+                                        style={{ accentColor: "var(--color-accent)" }}
                                     />
-                                    <button onClick={zoomSlider.increment} className="p-1.5 rounded-lg hover:opacity-60 transition-opacity" style={surfaceStyle}>
-                                        <Plus className="w-4 h-4" style={textStyle} />
+                                    <button
+                                        onClick={zoomSlider.increment}
+                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        aria-label="Increase zoom"
+                                        disabled={!zoomSlider.canIncrement}
+                                    >
+                                        <Plus className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>

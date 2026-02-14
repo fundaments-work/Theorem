@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { Bookmark, X, Trash2, ExternalLink, Highlighter, MessageSquare } from 'lucide-react';
+import { Bookmark, X, Trash2, ExternalLink, Highlighter } from 'lucide-react';
 import { HIGHLIGHT_PICKER_COLORS } from "@theorem/core";
 import { cn, useLibraryStore, useUIStore } from "@theorem/core";
 import { format } from 'date-fns';
@@ -22,6 +22,9 @@ interface ReaderAnnotationsPanelProps {
 
 type TabType = 'bookmarks' | 'highlights';
 
+const TAB_BUTTON_CLASS =
+    "ui-chip ui-clickable ui-focus-ring flex w-full min-h-10 items-center justify-between px-3 py-2 text-xs font-medium transition-colors";
+
 export function ReaderAnnotationsPanel({
     bookId,
     visible,
@@ -37,6 +40,12 @@ export function ReaderAnnotationsPanel({
     
     const bookmarks = annotations.filter(a => a.type === 'bookmark');
     const highlights = annotations.filter(a => a.type === 'highlight' || a.type === 'note');
+    const vaultStatusText = {
+        synced: "Synced to vault",
+        syncing: "Appending to markdown",
+        error: "Sync error",
+        idle: "Idle",
+    }[vaultSyncStatus];
 
     const handleNavigate = (annotation: Annotation) => {
         onNavigate(annotation.location);
@@ -163,43 +172,41 @@ export function ReaderAnnotationsPanel({
                         <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">Annotations</h2>
                         <button
                             onClick={onClose}
-                            className="reader-chip w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors hover:opacity-80 text-[color:var(--color-text-secondary)]"
+                            className="ui-icon-btn ui-focus-ring w-8 h-8"
+                            aria-label="Close annotations"
                         >
                             <X className="w-4 h-4" />
                         </button>
                     </div>
-                    <div className="mx-4 mb-3 border border-[var(--color-border)] px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-[color:var(--color-text-secondary)]">
-                        {vaultSyncStatus === "synced" && "STATUS: SYNCED_TO_VAULT"}
-                        {vaultSyncStatus === "syncing" && "STATUS: APPENDING_TO_MARKDOWN"}
-                        {vaultSyncStatus === "error" && "STATUS: SYNC_ERROR"}
-                        {vaultSyncStatus === "idle" && "STATUS: IDLE"}
+                    <div className="ui-muted-surface mx-4 mb-3 border px-3 py-1.5 text-xs text-[color:var(--color-text-secondary)]">
+                        {vaultStatusText}
                     </div>
-                    
+
                     {/* Tabs */}
-                    <div className="flex px-4 pb-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2 px-4 pb-3">
                         <button
                             onClick={() => setActiveTab('bookmarks')}
-                            className={cn(
-                                "reader-chip px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] transition-colors",
-                                activeTab === 'bookmarks'
-                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast border-[var(--color-accent)]"
-                                    : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-background)]"
-                            )}
+                            className={TAB_BUTTON_CLASS}
                             data-active={activeTab === "bookmarks"}
+                            aria-pressed={activeTab === "bookmarks"}
                         >
-                            [ BOOKMARKS: {bookmarks.length} ]
+                            <span className="inline-flex items-center gap-1.5">
+                                <Bookmark className="w-3.5 h-3.5" />
+                                <span>Bookmarks</span>
+                            </span>
+                            <span className="ui-mono-number text-[10px]">{bookmarks.length}</span>
                         </button>
                         <button
                             onClick={() => setActiveTab('highlights')}
-                            className={cn(
-                                "reader-chip px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] transition-colors",
-                                activeTab === 'highlights'
-                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast border-[var(--color-accent)]"
-                                    : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-background)]"
-                            )}
+                            className={TAB_BUTTON_CLASS}
                             data-active={activeTab === "highlights"}
+                            aria-pressed={activeTab === "highlights"}
                         >
-                            [ HIGHLIGHTS: {highlights.length} ]
+                            <span className="inline-flex items-center gap-1.5">
+                                <Highlighter className="w-3.5 h-3.5" />
+                                <span>Highlights</span>
+                            </span>
+                            <span className="ui-mono-number text-[10px]">{highlights.length}</span>
                         </button>
                     </div>
                 </div>
