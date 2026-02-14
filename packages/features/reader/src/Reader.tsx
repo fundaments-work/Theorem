@@ -134,11 +134,7 @@ function BookReaderPage() {
             ? window.matchMedia(MOBILE_READER_MEDIA_QUERY).matches
             : false
     ));
-    const [showToolbar, setShowToolbar] = useState(() => (
-        typeof window !== 'undefined'
-            ? !window.matchMedia(MOBILE_READER_MEDIA_QUERY).matches
-            : true
-    ));
+    const [showToolbar, setShowToolbar] = useState(false);
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | null;
     const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -213,7 +209,7 @@ function BookReaderPage() {
         const mediaQuery = window.matchMedia(MOBILE_READER_MEDIA_QUERY);
         const updateViewportState = (matches: boolean) => {
             setIsMobileViewport(matches);
-            setShowToolbar(!matches || activePanel !== null);
+            setShowToolbar(activePanel !== null);
         };
 
         updateViewportState(mediaQuery.matches);
@@ -512,7 +508,7 @@ function BookReaderPage() {
 
     // Auto-hide toolbar
     useEffect(() => {
-        if (isMobileViewport || !settings.readerSettings.toolbarAutoHide) return;
+        if (isMobileViewport) return;
         let timeout: ReturnType<typeof setTimeout>;
         let lastActivity = Date.now();
 
@@ -538,7 +534,7 @@ function BookReaderPage() {
             window.removeEventListener('mousemove', showToolbarAndReset);
             window.removeEventListener('touchstart', showToolbarAndReset);
         };
-    }, [isMobileViewport, settings.readerSettings.toolbarAutoHide, settings.readerSettings.autoHideDelay, activePanel]);
+    }, [isMobileViewport, settings.readerSettings.autoHideDelay, activePanel]);
 
     const handleReaderExitFullscreen = useCallback(() => {
         updateReaderSettings({ fullscreen: false });
@@ -780,7 +776,7 @@ function BookReaderPage() {
         setPdfZoomMode(mode);
     }, []);
 
-    const shouldShowReaderChrome = !isMobileViewport || showToolbar || activePanel !== null;
+    const shouldShowReaderChrome = showToolbar || activePanel !== null;
 
     // Highlight state
     const [showColorPicker, setShowColorPicker] = useState(false);

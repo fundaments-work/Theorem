@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { Bookmark, X, Trash2, ExternalLink, Highlighter, MessageSquare } from 'lucide-react';
 import { HIGHLIGHT_PICKER_COLORS } from "@theorem/core";
-import { cn, useLibraryStore } from "@theorem/core";
+import { cn, useLibraryStore, useUIStore } from "@theorem/core";
 import { format } from 'date-fns';
 import { Backdrop, FloatingPanel } from "@theorem/ui";
 import type { Annotation, HighlightColor } from "@theorem/core";
@@ -32,6 +32,7 @@ export function ReaderAnnotationsPanel({
 }: ReaderAnnotationsPanelProps) {
     const [activeTab, setActiveTab] = useState<TabType>('bookmarks');
     const { getBookAnnotations, removeAnnotation } = useLibraryStore();
+    const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
     const annotations = getBookAnnotations(bookId);
     
     const bookmarks = annotations.filter(a => a.type === 'bookmark');
@@ -45,7 +46,7 @@ export function ReaderAnnotationsPanel({
     const renderBookmarkItem = (bookmark: Annotation) => (
         <div
             key={bookmark.id}
-            className="group flex flex-col gap-2 p-3 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors cursor-pointer"
+            className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-black"
             onClick={() => handleNavigate(bookmark)}
         >
             <div className="flex items-start justify-between gap-3">
@@ -61,12 +62,12 @@ export function ReaderAnnotationsPanel({
                         removeAnnotation(bookmark.id);
                         onDelete?.(bookmark.id);
                     }}
-                    className="reader-danger-action p-1.5 rounded-lg text-[color:var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
+                    className="reader-danger-action border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
                 >
                     <Trash2 className="w-3.5 h-3.5" />
                 </button>
             </div>
-            <div className="flex items-center justify-between text-[var(--font-size-3xs)] text-[color:var(--color-text-muted)] font-medium pl-6">
+            <div className="flex items-center justify-between pl-6 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
                 <span>{format(new Date(bookmark.createdAt), 'MMM d, yyyy')}</span>
                 <div className="flex items-center gap-1 text-[color:var(--color-accent)] opacity-0 group-hover:opacity-100 transition-opacity">
                     <span>Jump to</span>
@@ -79,27 +80,26 @@ export function ReaderAnnotationsPanel({
     const renderHighlightItem = (highlight: Annotation) => (
         <div
             key={highlight.id}
-            className="group flex flex-col gap-2 p-3 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors cursor-pointer"
+            className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-black"
             onClick={() => handleNavigate(highlight)}
         >
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2 flex-1 min-w-0">
                     {/* Color indicator */}
                     <div 
-                        className="w-4 h-4 rounded flex-shrink-0 mt-0.5"
+                        className="mt-0.5 h-3 w-3 flex-shrink-0 border border-[var(--color-border)]"
                         style={{ 
                             backgroundColor: getHighlightColor(highlight.color),
                             opacity: 0.6 
                         }}
                     />
                     <div className="flex-1 min-w-0">
-                        <p className="text-[var(--font-size-caption)] text-[color:var(--color-text-primary)] line-clamp-2 leading-snug">
-                            &ldquo;{highlight.selectedText || 'Highlight'}&rdquo;
+                        <p className="font-serif text-sm leading-relaxed text-[color:var(--color-text-primary)] line-clamp-3">
+                            {highlight.selectedText || 'Highlight'}
                         </p>
                         {highlight.noteContent && (
-                            <div className="flex items-center gap-1 mt-1 text-[var(--font-size-3xs)] text-[color:var(--color-text-muted)]">
-                                <MessageSquare className="w-3 h-3" />
-                                <span className="line-clamp-1">{highlight.noteContent}</span>
+                            <div className="mt-1 border-l border-[var(--color-border)] pl-2 font-serif text-[13px] text-[color:var(--color-text-secondary)]">
+                                <span className="line-clamp-2">{highlight.noteContent}</span>
                             </div>
                         )}
                     </div>
@@ -110,12 +110,12 @@ export function ReaderAnnotationsPanel({
                         removeAnnotation(highlight.id);
                         onDelete?.(highlight.id);
                     }}
-                    className="reader-danger-action p-1.5 rounded-lg text-[color:var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
+                    className="reader-danger-action border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
                 >
                     <Trash2 className="w-3.5 h-3.5" />
                 </button>
             </div>
-            <div className="flex items-center justify-between text-[var(--font-size-3xs)] text-[color:var(--color-text-muted)] font-medium pl-6">
+            <div className="flex items-center justify-between pl-6 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
                 <span>{format(new Date(highlight.createdAt), 'MMM d, yyyy')}</span>
                 <div className="flex items-center gap-1 text-[color:var(--color-accent)] opacity-0 group-hover:opacity-100 transition-opacity">
                     <span>Jump to</span>
@@ -168,34 +168,38 @@ export function ReaderAnnotationsPanel({
                             <X className="w-4 h-4" />
                         </button>
                     </div>
+                    <div className="mx-4 mb-3 border border-[var(--color-border)] px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-[color:var(--color-text-secondary)]">
+                        {vaultSyncStatus === "synced" && "STATUS: SYNCED_TO_VAULT"}
+                        {vaultSyncStatus === "syncing" && "STATUS: APPENDING_TO_MARKDOWN"}
+                        {vaultSyncStatus === "error" && "STATUS: SYNC_ERROR"}
+                        {vaultSyncStatus === "idle" && "STATUS: IDLE"}
+                    </div>
                     
                     {/* Tabs */}
                     <div className="flex px-4 pb-3 gap-2">
                         <button
                             onClick={() => setActiveTab('bookmarks')}
                             className={cn(
-                                "reader-chip flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-full transition-colors",
+                                "reader-chip px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] transition-colors",
                                 activeTab === 'bookmarks'
-                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast border-transparent"
+                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast border-[var(--color-accent)]"
                                     : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-background)]"
                             )}
                             data-active={activeTab === "bookmarks"}
                         >
-                            <Bookmark className="w-3.5 h-3.5" />
-                            Bookmarks ({bookmarks.length})
+                            [ BOOKMARKS: {bookmarks.length} ]
                         </button>
                         <button
                             onClick={() => setActiveTab('highlights')}
                             className={cn(
-                                "reader-chip flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-full transition-colors",
+                                "reader-chip px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] transition-colors",
                                 activeTab === 'highlights'
-                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast border-transparent"
+                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast border-[var(--color-accent)]"
                                     : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-background)]"
                             )}
                             data-active={activeTab === "highlights"}
                         >
-                            <Highlighter className="w-3.5 h-3.5" />
-                            Highlights ({highlights.length})
+                            [ HIGHLIGHTS: {highlights.length} ]
                         </button>
                     </div>
                 </div>

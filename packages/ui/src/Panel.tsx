@@ -35,8 +35,8 @@ export function Panel({
                 'transform transition-transform duration-240 ease-[cubic-bezier(0.16,1,0.3,1)]',
                 isLeft ? 'left-0 border-r' : 'right-0 border-l',
                 visible
-                    ? 'translate-x-0 shadow-[var(--shadow-md)]'
-                    : isLeft ? '-translate-x-full shadow-none' : 'translate-x-full shadow-none',
+                    ? 'translate-x-0'
+                    : isLeft ? '-translate-x-full' : 'translate-x-full',
                 width,
                 className
             )}
@@ -75,8 +75,8 @@ export function FloatingPanel({
         <div
             className={cn(
                 'fixed z-[var(--z-dropdown)] flex flex-col reader-sheet border',
-                'left-0 right-0 bottom-0 rounded-t-2xl max-h-[var(--layout-floating-panel-max-height)]',
-                'sm:bottom-auto sm:top-[var(--layout-floating-panel-top-offset)] sm:max-h-[var(--layout-floating-panel-max-height-desktop)] sm:w-[var(--layout-floating-panel-width)] sm:rounded-2xl',
+                'left-0 right-0 bottom-0 max-h-[var(--layout-floating-panel-max-height)]',
+                'sm:bottom-auto sm:top-[var(--layout-floating-panel-top-offset)] sm:max-h-[var(--layout-floating-panel-max-height-desktop)] sm:w-[var(--layout-floating-panel-width)]',
                 anchor === 'top-right' && 'sm:left-auto sm:right-5',
                 anchor === 'top-left' && 'sm:left-5 sm:right-auto',
                 'transform transition-[transform,opacity] duration-240 ease-[cubic-bezier(0.22,1,0.36,1)]',

@@ -8,7 +8,9 @@ export function sanitizeArticleHtml(html: string): string {
     const temp = document.createElement("div");
     temp.innerHTML = html;
 
-    temp.querySelectorAll("script, style, iframe, object, embed, form").forEach((el) => el.remove());
+    temp
+        .querySelectorAll("script, style, link[rel='stylesheet'], iframe, object, embed, form")
+        .forEach((el) => el.remove());
 
     temp.querySelectorAll("*").forEach((el) => {
         Array.from(el.attributes).forEach((attr) => {
@@ -18,6 +20,13 @@ export function sanitizeArticleHtml(html: string): string {
                 name.startsWith("on")
                 || (name === "href" && value.startsWith("javascript:"))
                 || (name === "src" && value.startsWith("javascript:"))
+                || name === "style"
+                || name === "class"
+                || name === "width"
+                || name === "height"
+                || name === "bgcolor"
+                || name === "color"
+                || name === "face"
             ) {
                 el.removeAttribute(attr.name);
             }

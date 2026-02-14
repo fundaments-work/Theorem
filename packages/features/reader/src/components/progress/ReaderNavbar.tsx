@@ -273,6 +273,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
             className={cn(
                 "flex flex-col gap-1.5 px-3 py-2 sm:px-4",
                 "bg-[var(--color-surface)] border-t border-[var(--color-border)]",
+                "font-mono",
                 className
             )}
             style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
@@ -305,11 +306,11 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                 onPointerLeave={handlePointerLeave}
             >
                 {/* Track background */}
-                <div className="absolute inset-x-0 h-1 bg-[var(--color-surface-variant)] rounded-full overflow-hidden">
+                <div className="absolute inset-x-0 h-1 bg-[var(--color-surface-variant)] overflow-hidden">
                     {/* Progress fill */}
                     <div
                         className={cn(
-                            "h-full bg-[var(--color-accent)] rounded-full",
+                            "h-full bg-[var(--color-accent)]",
                             !isDragging && "transition-[width] duration-150"
                         )}
                         style={{ width: `${displayFraction * 100}%` }}
@@ -323,10 +324,9 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                 <div
                     className={cn(
                         "absolute top-1/2 -translate-y-1/2 -translate-x-1/2",
-                        "w-3 h-3 rounded-full",
+                        "w-3 h-3",
                         "bg-[var(--color-accent)]",
                         "border-2 border-[var(--color-surface)]",
-                        "shadow-sm",
                         isDragging ? "scale-125" : "transition-transform",
                         "pointer-events-none"
                     )}
@@ -348,7 +348,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                             "absolute bottom-full mb-2 -translate-x-1/2",
                             "px-2 py-1.5",
                             "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                            "rounded-md shadow-lg text-xs",
+                            "text-xs",
                             "pointer-events-none z-50",
                             "whitespace-nowrap"
                         )}

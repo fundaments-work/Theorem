@@ -502,6 +502,7 @@ export function ArticleViewer({
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
 
     const [activePanel, setActivePanel] = useState<ArticleReaderPanel>(null);
+    const [showChrome, setShowChrome] = useState(false);
     const [readingProgress, setReadingProgress] = useState(0);
     const [headings, setHeadings] = useState<ArticleHeading[]>([]);
     const [showColorPicker, setShowColorPicker] = useState(false);
@@ -566,6 +567,7 @@ export function ArticleViewer({
 
     useEffect(() => {
         setActivePanel(null);
+        setShowChrome(false);
         setHeadings([]);
         setReadingProgress(0);
         selectedRangeRef.current = null;
@@ -609,6 +611,48 @@ export function ArticleViewer({
             container.removeEventListener("scroll", handleScroll);
         };
     }, [article?.id, isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let lastActivity = Date.now();
+        const delay = Math.max(2, globalReaderSettings.autoHideDelay || 5) * 1000;
+
+        const hideChrome = () => {
+            if (activePanel !== null) {
+                return;
+            }
+            if (Date.now() - lastActivity >= delay) {
+                setShowChrome(false);
+            }
+        };
+
+        const revealChrome = () => {
+            lastActivity = Date.now();
+            setShowChrome(true);
+
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            timeoutId = setTimeout(hideChrome, delay);
+        };
+
+        window.addEventListener("mousemove", revealChrome, { passive: true });
+        window.addEventListener("touchstart", revealChrome, { passive: true });
+
+        timeoutId = setTimeout(hideChrome, delay);
+
+        return () => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            window.removeEventListener("mousemove", revealChrome);
+            window.removeEventListener("touchstart", revealChrome);
+        };
+    }, [activePanel, globalReaderSettings.autoHideDelay, isOpen]);
 
     const updateReaderSetting = useCallback((updates: Partial<ReaderSettingsState>) => {
         updateReaderSettings(updates);
@@ -1420,6 +1464,7 @@ export function ArticleViewer({
         || activePanel === "search"
         || activePanel === "settings"
         || activePanel === "bookmarks";
+    const shouldShowReaderChrome = showChrome || activePanel !== null;
 
     if (!article) {
         return null;
@@ -1444,7 +1489,13 @@ export function ArticleViewer({
                 }}
                 data-reading-mode="scroll"
             >
-                <div ref={toolbarContainerRef} className="absolute top-0 left-0 right-0 z-50">
+                <div
+                    ref={toolbarContainerRef}
+                    className={cn(
+                        "absolute left-0 right-0 top-0 z-50 transition-transform duration-300",
+                        shouldShowReaderChrome ? "translate-y-0" : "-translate-y-full",
+                    )}
+                >
                     <WindowTitlebar
                         metadata={metadata}
                         location={location}
@@ -1504,7 +1555,10 @@ export function ArticleViewer({
                     onClose={closePanel}
                 />
 
-                <div className="flex flex-1 min-h-0 overflow-hidden" style={{ paddingTop: toolbarHeight }}>
+                <div
+                    className="flex flex-1 min-h-0 overflow-hidden"
+                    style={{ paddingTop: shouldShowReaderChrome ? toolbarHeight : 0 }}
+                >
                     <ArticleReaderContent
                         article={article}
                         feedTitle={feedTitle}

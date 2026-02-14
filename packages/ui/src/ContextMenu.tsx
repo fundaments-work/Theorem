@@ -178,7 +178,7 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                 className={cn(
                     "fixed z-[calc(var(--z-dropdown)+1)] min-w-[var(--layout-dropdown-menu-min-width)] max-w-[var(--layout-dropdown-menu-max-width)]",
                     "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                    "rounded-lg shadow-[var(--shadow-md)] py-1",
+                    "rounded-sm py-1",
                     "animate-fade-in"
                 )}
                 style={{
@@ -205,7 +205,7 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                             disabled={item.disabled}
                             className={cn(
                                 "w-full flex items-center gap-3 px-3 py-2 text-left",
-                                "text-sm transition-colors",
+                                "font-sans text-[11px] font-medium transition-colors",
                                 item.disabled
                                     ? "opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]"
                                     : item.danger

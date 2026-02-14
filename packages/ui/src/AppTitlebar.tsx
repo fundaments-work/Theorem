@@ -161,7 +161,7 @@ export function AppTitlebar({
         <div
             className={cn(
                 "w-full z-50 select-none border-b border-[var(--color-border)] ui-panel",
-                "px-3 sm:px-4 py-2 sm:py-2.5",
+                "px-4 sm:px-5 py-3 lg:h-16",
                 className
             )}
             data-tauri-drag-region
@@ -173,7 +173,7 @@ export function AppTitlebar({
                         <div className="md:hidden">
                             <button
                                 onClick={onMenuClick}
-                                className="ui-icon-btn w-9 h-9 rounded-xl text-[color:var(--color-text-primary)]"
+                                className="ui-icon-btn w-9 h-9 text-[color:var(--color-text-primary)]"
                                 title="Toggle Sidebar"
                             >
                                 <Menu className="w-5 h-5" />
@@ -181,7 +181,7 @@ export function AppTitlebar({
                         </div>
                     )}
 
-                    <h1 className="text-sm sm:text-base font-semibold text-[color:var(--color-text-primary)] truncate">
+                    <h1 className="font-sans text-sm font-semibold text-[color:var(--color-text-primary)] truncate">
                         {getPageTitle()}
                     </h1>
                 </div>
@@ -198,7 +198,7 @@ export function AppTitlebar({
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 onKeyDown={handleSearchKeyDown}
                                 className={cn(
-                                    "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-xl",
+                                    "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4",
                                     "min-h-[var(--control-height-md)]"
                                 )}
                             />
@@ -212,9 +212,9 @@ export function AppTitlebar({
                         <button
                             onClick={() => setIsMobileSearchOpen((prev) => !prev)}
                             className={cn(
-                                "lg:!hidden ui-icon-btn w-9 h-9 rounded-xl",
+                                "lg:!hidden ui-icon-btn w-9 h-9",
                                 isMobileSearchOpen
-                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast border border-[var(--color-accent)]"
+                                    ? "border border-[var(--color-accent)] text-[color:var(--color-text-primary)]"
                                     : "text-[color:var(--color-text-secondary)]"
                             )}
                             title={isMobileSearchOpen ? "Hide search" : "Search"}
@@ -226,9 +226,9 @@ export function AppTitlebar({
                     <button
                         onClick={() => setRoute("statistics")}
                         className={cn(
-                            "ui-icon-btn w-9 h-9 rounded-xl",
+                            "ui-icon-btn w-9 h-9",
                             currentRoute === "statistics"
-                                ? "bg-[var(--color-accent)] ui-text-accent-contrast border border-[var(--color-accent)]"
+                                ? "border border-[var(--color-accent)] text-[color:var(--color-text-primary)]"
                                 : "text-[color:var(--color-text-secondary)]"
                         )}
                         title="Statistics"
@@ -278,7 +278,7 @@ export function AppTitlebar({
                             onKeyDown={handleSearchKeyDown}
                             autoFocus
                             className={cn(
-                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-12 rounded-xl",
+                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-12",
                                 "min-h-[var(--control-height-md)]"
                             )}
                         />
@@ -305,7 +305,7 @@ export function AppTitlebar({
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onKeyDown={handleSearchKeyDown}
                             className={cn(
-                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4 rounded-xl",
+                                "ui-input ui-input-search ui-input-with-leading-icon w-full pr-4",
                                 "min-h-[var(--control-height-md)]"
                             )}
                         />

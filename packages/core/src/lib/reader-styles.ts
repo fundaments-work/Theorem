@@ -51,9 +51,9 @@ const CSS_VARS = {
 
 // Font family CSS values
 const FONT_FAMILY_VALUES: Record<FontFamily, string> = {
-    original: 'inherit',
+    original: 'var(--font-merriweather), Georgia, serif',
     serif: 'var(--font-merriweather), Georgia, serif',
-    sans: 'var(--font-sans), system-ui, sans-serif',
+    sans: 'var(--font-sans), monospace',
     mono: 'var(--font-mono), monospace',
 };
 
@@ -143,7 +143,7 @@ export function applyReaderStyles(settings: ReaderSettings): void {
     currentSettings = settings;
     const root = document.documentElement;
     const colors = THEME_COLORS[settings.theme];
-    const isDark = settings.theme === 'dark';
+    const isDark = false;
     
     // Apply theme colors instantly
     root.style.setProperty(CSS_VARS.readerBg, colors.bg);

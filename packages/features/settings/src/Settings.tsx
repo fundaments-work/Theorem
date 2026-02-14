@@ -5,7 +5,13 @@
 
 import { useRef, useState, type ChangeEvent } from "react";
 import { cn } from "@theorem/core";
-import { useLearningStore, useSettingsStore, useLibraryStore } from "@theorem/core";
+import {
+    showOpenDirectoryDialog,
+    useLearningStore,
+    useLibraryStore,
+    useSettingsStore,
+    useUIStore,
+} from "@theorem/core";
 import { formatFileSize } from "@theorem/core";
 import { confirmClearAllData } from "@theorem/core";
 import { Dropdown } from "@theorem/ui";
@@ -29,7 +35,6 @@ import {
     Key,
     ExternalLink,
     Copy,
-    Moon,
     Sun,
     BookOpenCheck,
     Target,
@@ -51,21 +56,19 @@ interface SectionProps {
 
 function Section({ title, description, icon, children }: SectionProps) {
     return (
-        <section className="ui-card">
-            <div className="px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface-muted)]/50">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-[var(--color-surface)] text-[color:var(--color-text-primary)]">
-                        {icon}
-                    </div>
-                    <div>
-                        <h2 className="font-semibold text-[color:var(--color-text-primary)]">{title}</h2>
-                        {description && (
-                            <p className="text-xs text-[color:var(--color-text-muted)] mt-0.5">{description}</p>
-                        )}
-                    </div>
-                </div>
+        <section className="border border-[var(--color-border)] bg-[var(--color-surface)]">
+            <div className="border-b border-[var(--color-border)] px-5 py-3">
+                {icon && <span className="sr-only">{icon}</span>}
+                <h2 className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
+                    {title}
+                </h2>
+                {description && (
+                    <p className="mt-1 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
+                        {description}
+                    </p>
+                )}
             </div>
-            <div className="p-6">{children}</div>
+            <div className="px-5 py-4">{children}</div>
         </section>
     );
 }
@@ -79,11 +82,15 @@ interface SettingRowProps {
 
 function SettingRow({ label, description, children }: SettingRowProps) {
     return (
-        <div className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 border-b border-[var(--color-border-subtle)] last:border-0 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid gap-3 border-b border-[var(--color-border-subtle)] py-4 first:pt-0 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div className="w-full sm:flex-1 sm:pr-4">
-                <label className="font-medium text-sm text-[color:var(--color-text-primary)]">{label}</label>
+                <label className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
+                    {label}
+                </label>
                 {description && (
-                    <p className="text-xs text-[color:var(--color-text-muted)] mt-0.5">{description}</p>
+                    <p className="mt-1 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
+                        {description}
+                    </p>
                 )}
             </div>
             <div className="w-full sm:w-auto sm:flex-shrink-0">{children}</div>
@@ -100,20 +107,30 @@ function Toggle({
     onChange: (checked: boolean) => void;
 }) {
     return (
-        <button
-            onClick={() => onChange(!checked)}
-            className={cn(
-                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                checked ? "bg-[var(--color-accent)]" : "bg-[var(--color-border)]"
-            )}
-        >
-            <span
+        <div className="inline-flex border border-[var(--color-border)] bg-[var(--color-surface)]">
+            <button
+                onClick={() => onChange(true)}
                 className={cn(
-                    "inline-block h-4 w-4 transform rounded-full bg-[var(--color-surface)] transition-transform",
-                    checked ? "translate-x-6" : "translate-x-1"
+                    "px-3 py-1.5 font-sans text-[11px] font-medium",
+                    checked
+                        ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                        : "text-[color:var(--color-text-secondary)]"
                 )}
-            />
-        </button>
+            >
+                On
+            </button>
+            <button
+                onClick={() => onChange(false)}
+                className={cn(
+                    "border-l border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium",
+                    !checked
+                        ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                        : "text-[color:var(--color-text-secondary)]"
+                )}
+            >
+                Off
+            </button>
+        </div>
     );
 }
 
@@ -134,10 +151,10 @@ function ButtonSelect<T extends string>({
                     key={opt.value}
                     onClick={() => onChange(opt.value)}
                     className={cn(
-                        "px-3 py-1.5 rounded-md text-sm font-medium transition-colors min-w-[4.5rem]",
+                        "border border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium transition-colors",
                         value === opt.value
-                            ? "bg-[var(--color-accent)] ui-text-accent-contrast shadow-[var(--shadow-xs)]"
-                            : "bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
+                            ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                            : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                     )}
                 >
                     {opt.label}
@@ -158,6 +175,9 @@ export function SettingsPage() {
         updateStats,
     } = useSettingsStore();
     const { books, annotations } = useLibraryStore();
+    const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
+    const vaultSyncMessage = useUIStore((state) => state.vaultSyncMessage);
+    const vaultSyncAt = useUIStore((state) => state.vaultSyncAt);
     const { installedDictionaries, importStarDict, removeDictionary } = useLearningStore();
     const [activeTab, setActiveTab] = useState<
         "general" | "dictionary" | "rss" | "integrations" | "storage"
@@ -166,8 +186,6 @@ export function SettingsPage() {
     // Dummy states for planned features
     const [rssAutoSync, setRssAutoSync] = useState(true);
     const [rssSyncInterval, setRssSyncInterval] = useState(30);
-    const [obsidianVaultPath, setObsidianVaultPath] = useState("");
-    const [obsidianAutoExport, setObsidianAutoExport] = useState(false);
     const [apiEnabled, setApiEnabled] = useState(false);
     const [apiKey, setApiKey] = useState("");
     const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
@@ -215,6 +233,31 @@ export function SettingsPage() {
         navigator.clipboard.writeText(text);
     };
 
+    const updateVaultSettings = (updates: Partial<typeof settings.vault>) => {
+        updateSettings({
+            vault: {
+                ...settings.vault,
+                ...updates,
+            },
+        });
+    };
+
+    const handlePickVaultDirectory = async () => {
+        const selectedPath = await showOpenDirectoryDialog({
+            title: "Choose Obsidian Vault",
+            defaultPath: settings.vault.vaultPath || undefined,
+        });
+
+        if (!selectedPath) {
+            return;
+        }
+
+        updateVaultSettings({
+            enabled: true,
+            vaultPath: selectedPath,
+        });
+    };
+
     const handleDictionaryImport = async (event: ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) {
@@ -232,11 +275,11 @@ export function SettingsPage() {
     };
 
     const tabButtons = [
-        { id: "general" as const, label: "General", icon: Settings },
-        { id: "dictionary" as const, label: "Dictionary", icon: Languages },
-        { id: "rss" as const, label: "RSS", icon: Rss },
-        { id: "integrations" as const, label: "Integrations", icon: Puzzle },
-        { id: "storage" as const, label: "Storage", icon: Database },
+        { id: "general" as const, label: "General" },
+        { id: "dictionary" as const, label: "Dictionary" },
+        { id: "rss" as const, label: "Snapshots" },
+        { id: "integrations" as const, label: "Vault" },
+        { id: "storage" as const, label: "Storage" },
     ];
 
     return (
@@ -262,32 +305,30 @@ export function SettingsPage() {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={cn(
-                                    "snap-start flex min-w-[9.5rem] items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
+                                    "snap-start flex min-w-[10rem] items-center justify-center border border-[var(--color-border)] px-3 py-2.5 font-sans text-[11px] font-medium transition-colors",
                                     activeTab === tab.id
-                                        ? "bg-[var(--color-accent)] ui-text-accent-contrast border-[var(--color-accent)] shadow-[var(--shadow-xs)]"
-                                        : "bg-[var(--color-surface)] border-[var(--color-border)] text-[color:var(--color-text-secondary)]"
+                                        ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                                        : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)]"
                                 )}
                             >
-                                <tab.icon className="w-4 h-4" />
                                 <span className="truncate">{tab.label}</span>
                             </button>
                         ))}
                     </div>
                 </div>
 
-                <div className="hidden sm:flex items-center gap-1 p-1 bg-[var(--color-surface-muted)] rounded-lg w-fit flex-wrap">
+                <div className="hidden sm:flex items-center gap-1 w-fit flex-wrap">
                     {tabButtons.map((tab) => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={cn(
-                                "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
+                                "flex items-center border border-[var(--color-border)] px-4 py-2 font-sans text-[11px] font-medium transition-colors",
                                 activeTab === tab.id
-                                    ? "bg-[var(--color-accent)] ui-text-accent-contrast border border-[var(--color-accent)] shadow-[var(--shadow-xs)]"
-                                    : "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
+                                    ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                                    : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                             )}
                         >
-                            <tab.icon className="w-4 h-4" />
                             {tab.label}
                         </button>
                     ))}
@@ -296,7 +337,7 @@ export function SettingsPage() {
 
             {/* General Settings */}
             {activeTab === "general" && (
-                <div className="space-y-6">
+                <div className="space-y-8">
                     <Section
                         title="Library"
                         description="Library display and organization preferences"
@@ -442,9 +483,8 @@ export function SettingsPage() {
                                 options={[
                                     { value: "light", label: "Light" },
                                     { value: "dark", label: "Dark" },
-                                    { value: "system", label: "System" },
                                 ]}
-                                value={settings.theme || "system"}
+                                value={settings.theme === "system" ? "light" : settings.theme}
                                 onChange={(v) => updateSettings({ theme: v })}
                             />
                         </SettingRow>
@@ -484,7 +524,7 @@ export function SettingsPage() {
 
             {/* Dictionary Settings */}
             {activeTab === "dictionary" && (
-                <div className="space-y-6">
+                <div className="space-y-8">
                     <Section
                         title="Dictionary Source"
                         description="Choose how word lookups are handled"
@@ -564,7 +604,7 @@ export function SettingsPage() {
                                 />
                                 <button
                                     onClick={() => dictionaryFileInputRef.current?.click()}
-                                    className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90 transition-opacity"
+                                    className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white ui-force-on-accent hover:opacity-90 transition-opacity"
                                 >
                                     <Download className="w-4 h-4" /> Import Files
                                 </button>
@@ -584,7 +624,7 @@ export function SettingsPage() {
                             <SettingRow
                                 key={dictionary.id}
                                 label={dictionary.name}
-                                description={`${dictionary.language.toUpperCase()} • StarDict • ${formatFileSize(dictionary.sizeBytes)}`}
+                                description={`${dictionary.language} • StarDict • ${formatFileSize(dictionary.sizeBytes)}`}
                             >
                                 <button
                                     onClick={() => {
@@ -611,7 +651,7 @@ export function SettingsPage() {
 
             {/* RSS Settings */}
             {activeTab === "rss" && (
-                <div className="space-y-6">
+                <div className="space-y-8">
                     <Section
                         title="RSS Feeds"
                         description="Feed reader configuration"
@@ -663,68 +703,82 @@ export function SettingsPage() {
 
             {/* Integrations Settings */}
             {activeTab === "integrations" && (
-                <div className="space-y-6">
+                <div className="space-y-8">
                     <Section
-                        title="Obsidian Export"
-                        description="Export highlights to Obsidian vault"
+                        title="Vault integration"
+                        description="Local-first markdown pipeline for highlights"
                         icon={<BookOpen className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="Enable Obsidian Export"
-                            description="Sync highlights to your Obsidian vault"
+                            label="Enable Vault Sync"
+                            description="Append highlights to markdown in your selected vault"
                         >
-                            <Toggle checked={!!obsidianVaultPath} onChange={() => setObsidianVaultPath(obsidianVaultPath ? "" : "/path/to/vault")} />
+                            <Toggle
+                                checked={settings.vault.enabled}
+                                onChange={(checked) => updateVaultSettings({ enabled: checked })}
+                            />
                         </SettingRow>
 
                         <SettingRow
-                            label="Vault Path"
-                            description="Path to your Obsidian vault"
+                            label="Vault Directory"
+                            description="Pick the local folder to receive markdown updates"
                         >
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <input
                                     type="text"
-                                    value={obsidianVaultPath}
-                                    onChange={(e) => setObsidianVaultPath(e.target.value)}
-                                    placeholder="/path/to/vault"
+                                    value={settings.vault.vaultPath}
+                                    onChange={(e) => updateVaultSettings({ vaultPath: e.target.value })}
+                                    placeholder="/Users/you/Documents/ObsidianVault"
                                     className={cn(
-                                        "px-3 py-1.5 rounded-md text-sm w-48",
-                                        "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
-                                        "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                        "ui-input w-full min-w-[20rem] sm:w-[28rem]"
                                     )}
                                 />
-                                <button className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors">
-                                    Browse
+                                <button
+                                    onClick={() => {
+                                        void handlePickVaultDirectory();
+                                    }}
+                                    className="ui-btn ui-btn-secondary"
+                                >
+                                    Pick folder
                                 </button>
                             </div>
                         </SettingRow>
 
                         <SettingRow
-                            label="Auto-export on Highlight"
-                            description="Automatically export new highlights"
+                            label="Auto Export Highlights"
+                            description="Write markdown immediately when a highlight or note is saved"
                         >
-                            <Toggle checked={obsidianAutoExport} onChange={setObsidianAutoExport} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Export Template"
-                            description="Markdown template for exported highlights"
-                        >
-                            <Dropdown
-                                options={[
-                                    { value: "default", label: "Default (with YAML frontmatter)" },
-                                    { value: "minimal", label: "Minimal (text only)" },
-                                    { value: "custom", label: "Custom template" },
-                                ]}
-                                variant="filled"
-                                size="sm"
+                            <Toggle
+                                checked={settings.vault.autoExportHighlights}
+                                onChange={(checked) => updateVaultSettings({ autoExportHighlights: checked })}
                             />
                         </SettingRow>
 
                         <SettingRow
-                            label="Sync Tags"
-                            description="Include highlight tags in export"
+                            label="Markdown File Name"
+                            description="Target file created/appended inside selected vault"
                         >
-                            <Toggle checked={true} onChange={() => {}} />
+                            <input
+                                type="text"
+                                value={settings.vault.highlightsFileName}
+                                onChange={(e) => updateVaultSettings({ highlightsFileName: e.target.value })}
+                                placeholder="theorem-highlights.md"
+                                className="ui-input w-full min-w-[16rem]"
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Live Sync Status"
+                            description="Background append signal for the markdown pipeline"
+                        >
+                            <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] font-medium text-[color:var(--color-text-primary)]">
+                                {vaultSyncStatus === "synced" && "Status: Synced to vault"}
+                                {vaultSyncStatus === "syncing" && "Status: Appending to markdown"}
+                                {vaultSyncStatus === "error" && "Status: Sync error"}
+                                {vaultSyncStatus === "idle" && "Status: Idle"}
+                                {vaultSyncMessage ? ` | ${vaultSyncMessage}` : ""}
+                                {vaultSyncAt ? ` | ${new Date(vaultSyncAt).toLocaleTimeString()}` : ""}
+                            </div>
                         </SettingRow>
                     </Section>
 
@@ -760,7 +814,7 @@ export function SettingsPage() {
                                         ) : (
                                             <button
                                                 onClick={generateApiKey}
-                                                className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] ui-text-accent-contrast hover:opacity-90 transition-opacity"
+                                                className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white ui-force-on-accent hover:opacity-90 transition-opacity"
                                             >
                                                 Generate
                                             </button>
@@ -803,7 +857,7 @@ export function SettingsPage() {
 
             {/* Storage Settings */}
             {activeTab === "storage" && (
-                <div className="space-y-6">
+                <div className="space-y-8">
                     <Section
                         title="Storage Usage"
                         description="Manage your data and storage"

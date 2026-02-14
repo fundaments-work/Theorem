@@ -11,3 +11,4 @@ export * from './utils';
 export * from './learning-card-text';
 export * from './search/fuzzy';
 export * from './search/domain';
+export * from './vault-sync';

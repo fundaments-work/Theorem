@@ -97,6 +97,12 @@ interface FileDialogOptions {
     defaultPath?: string;
 }
 
+interface DirectoryDialogOptions {
+    title?: string;
+    defaultPath?: string;
+    recursive?: boolean;
+}
+
 /**
  * Shows a native file open dialog
  * @returns Promise<string | string[] | null> - selected file path(s) or null if cancelled
@@ -136,6 +142,33 @@ export async function showOpenFileDialog(options: FileDialogOptions = {}): Promi
         return result;
     } catch (error) {
         console.error("Error showing open file dialog:", error);
+        return null;
+    }
+}
+
+/**
+ * Shows a native directory picker dialog
+ * @returns Promise<string | null> - selected directory path or null if cancelled
+ */
+export async function showOpenDirectoryDialog(options: DirectoryDialogOptions = {}): Promise<string | null> {
+    if (!isTauri()) {
+        return null;
+    }
+
+    try {
+        const result = await open({
+            title: options.title || "Select Directory",
+            defaultPath: options.defaultPath,
+            directory: true,
+            multiple: false,
+            recursive: options.recursive ?? true,
+        });
+        if (Array.isArray(result)) {
+            return result[0] ?? null;
+        }
+        return result;
+    } catch (error) {
+        console.error("Error showing directory picker dialog:", error);
         return null;
     }
 }

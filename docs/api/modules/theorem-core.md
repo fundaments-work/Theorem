@@ -17,6 +17,7 @@ _none_
 - `@mozilla/readability`
 - `@tauri-apps/api`
 - `@tauri-apps/plugin-dialog`
+- `@tauri-apps/plugin-fs`
 - `clsx`
 - `date-fns`
 - `fast-xml-parser`
@@ -29,6 +30,26 @@ _none_
 ## API Reference
 
 ### Functions
+
+### Function `appendAnnotationToVaultMarkdown`
+
+```ts
+appendAnnotationToVaultMarkdown({ annotation, book, settings, }: AppendAnnotationParams): Promise<VaultSyncResult>
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `props` | `AppendAnnotationParams` | no |
+
+**Parameter `props` fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `annotation` | `Annotation` | no |
+| `book` | `Book | undefined` | yes |
+| `settings` | `VaultIntegrationSettings` | no |
+
+- Returns: `Promise<VaultSyncResult>`
 
 ### Function `applyReaderStyles`
 
@@ -1277,6 +1298,28 @@ showMessage(options: MessageOptions): Promise<void>
 
 - Returns: `Promise<void>`
 
+### Function `showOpenDirectoryDialog`
+
+Shows a native directory picker dialog
+
+```ts
+showOpenDirectoryDialog(options?: DirectoryDialogOptions): Promise<string | null>
+```
+
+| Parameter | Type | Optional |
+| --- | --- | --- |
+| `options` | `DirectoryDialogOptions` | yes |
+
+**Parameter `options` fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `defaultPath` | `string | undefined` | yes |
+| `recursive` | `boolean | undefined` | yes |
+| `title` | `string | undefined` | yes |
+
+- Returns: `Promise<string | null>`
+
 ### Function `showOpenFileDialog`
 
 Shows a native file open dialog
@@ -1675,6 +1718,7 @@ _No object fields detected._
 | `scanFolders` | `string[]` | no |
 | `sidebarCollapsed` | `boolean` | no |
 | `theme` | `"light" | "dark" | "system"` | no |
+| `vault` | `VaultIntegrationSettings` | no |
 
 ### Interface `Book`
 
@@ -2318,6 +2362,33 @@ _No object fields detected._
 | `searchQuery` | `string` | no |
 | `selectedBooks` | `string[]` | no |
 | `sidebarOpen` | `boolean` | no |
+| `vaultSyncAt` | `string | undefined` | yes |
+| `vaultSyncMessage` | `string | undefined` | yes |
+| `vaultSyncStatus` | `"error" | "synced" | "idle" | "syncing"` | no |
+
+### Interface `VaultIntegrationSettings`
+
+- Type: `VaultIntegrationSettings`
+
+**Fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `autoExportHighlights` | `boolean` | no |
+| `enabled` | `boolean` | no |
+| `highlightsFileName` | `string` | no |
+| `vaultPath` | `string` | no |
+
+### Type `VaultSyncResult`
+
+- Type: `VaultSyncResult`
+
+**Fields**
+
+| Property | Type | Optional |
+| --- | --- | --- |
+| `message` | `string` | no |
+| `status` | `"error" | "synced" | "skipped"` | no |
 
 ### Interface `VocabularyContext`
 

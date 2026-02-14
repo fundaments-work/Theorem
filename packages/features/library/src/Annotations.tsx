@@ -14,9 +14,6 @@ import { Dropdown } from "@theorem/ui";
 import {
     Highlighter,
     StickyNote,
-    Trash2,
-    Edit3,
-    BookOpen,
     MoreVertical,
 } from "lucide-react";
 
@@ -24,7 +21,7 @@ import {
 function ColorBadge({ color }: { color: HighlightColor }) {
     return (
         <span
-            className="inline-block w-3 h-3 rounded-full border border-[var(--color-overlay-subtle)]"
+            className="inline-block w-2.5 h-2.5 border border-[var(--color-border)]"
             style={{ backgroundColor: HIGHLIGHT_SOLID_COLORS[color] }}
         />
     );
@@ -71,6 +68,7 @@ interface AnnotationCardProps {
         id: string;
         bookId: string;
         type: "highlight" | "note" | "bookmark";
+        location: string;
         selectedText?: string;
         noteContent?: string;
         color?: HighlightColor;
@@ -96,34 +94,28 @@ function AnnotationCard({
 }: AnnotationCardProps) {
     const [showMenu, setShowMenu] = useState(false);
 
-    const getIcon = () => {
-        switch (annotation.type) {
-            case "highlight":
-                return <Highlighter className="w-4 h-4" />;
-            case "note":
-                return <StickyNote className="w-4 h-4" />;
-            case "bookmark":
-                return <span className="w-4 h-4" />;
-        }
-    };
-
     return (
-        <div className="group ui-surface p-5 hover:border-[var(--color-text-muted)] transition-colors">
+        <div className="group border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-black">
             {/* Header */}
             <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 text-[color:var(--color-text-muted)]">
-                        {getIcon()}
-                        <span className="text-xs capitalize">{annotation.type}</span>
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                        <span className="font-sans text-[11px] font-semibold text-[color:var(--color-text-secondary)]">
+                            {annotation.type}
+                        </span>
+                        <span className="font-sans text-[11px] text-[color:var(--color-text-secondary)]">
+                            {new Date(annotation.createdAt).toISOString().slice(0, 10)}
+                        </span>
+                        {annotation.color && <ColorBadge color={annotation.color} />}
                     </div>
-                    {annotation.color && (
-                        <ColorBadge color={annotation.color} />
-                    )}
+                    <div className="mt-2 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
+                        {book?.title || "Unknown source"} | {book?.author || "Unknown author"}
+                    </div>
                 </div>
                 <div className="relative">
                     <button
                         onClick={() => setShowMenu(!showMenu)}
-                        className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] opacity-0 transition-opacity hover:text-[color:var(--color-text-primary)] group-hover:opacity-100"
                     >
                         <MoreVertical className="w-4 h-4" />
                     </button>
@@ -133,25 +125,23 @@ function AnnotationCard({
                                 className="fixed inset-0 z-10"
                                 onClick={() => setShowMenu(false)}
                             />
-                            <div className="absolute right-0 top-full mt-1 w-36 ui-surface shadow-lg z-20 py-1">
+                            <div className="absolute right-0 top-full z-20 mt-1 w-40 border border-[var(--color-border)] bg-[var(--color-surface)] py-1">
                                 <button
                                     onClick={() => {
                                         onEdit(annotation.id);
                                         setShowMenu(false);
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
+                                    className="w-full whitespace-nowrap px-3 py-2 text-left font-sans text-[11px] font-medium text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
                                 >
-                                    <Edit3 className="w-4 h-4" />
-                                    Edit
+                                    Edit note
                                 </button>
                                 <button
                                     onClick={() => {
                                         onDelete(annotation.id);
                                         setShowMenu(false);
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[color:var(--color-error)] hover:bg-[var(--color-surface-muted)]"
+                                    className="w-full whitespace-nowrap px-3 py-2 text-left font-sans text-[11px] font-medium text-[color:var(--color-error)] hover:bg-[var(--color-surface-muted)]"
                                 >
-                                    <Trash2 className="w-4 h-4" />
                                     Delete
                                 </button>
                             </div>
@@ -163,37 +153,28 @@ function AnnotationCard({
             {/* Content */}
             <div className="space-y-3">
                 {annotation.selectedText && (
-                    <blockquote className="text-sm text-[color:var(--color-text-secondary)] border-l-2 border-[var(--color-border)] pl-3 italic line-clamp-3">
-                        "{annotation.selectedText}"
+                    <blockquote className="border-l-2 border-black pl-3 font-serif text-[17px] leading-relaxed text-[color:var(--color-text-primary)]">
+                        {annotation.selectedText}
                     </blockquote>
                 )}
                 {annotation.noteContent && (
-                    <p className="text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap line-clamp-4">
+                    <p className="font-serif text-[16px] leading-relaxed text-[color:var(--color-text-primary)] whitespace-pre-wrap">
                         {annotation.noteContent}
                     </p>
                 )}
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between mt-4 pt-4 border-t border-[var(--color-border-subtle)]">
+            <div className="mt-4 border-t border-[var(--color-border)] pt-4">
                 <button
                     onClick={() => book && onGoToBook(annotation.bookId)}
-                    className="flex items-center gap-2 text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition-colors"
+                    className="font-sans text-[11px] font-medium text-[color:var(--color-text-secondary)] transition-colors hover:text-[color:var(--color-text-primary)]"
                 >
-                    {book?.coverPath ? (
-                        <img
-                            src={book.coverPath}
-                            alt={book.title}
-                            className="w-6 h-9 object-cover rounded-sm"
-                        />
-                    ) : (
-                        <BookOpen className="w-4 h-4" />
-                    )}
-                    <span className="truncate max-w-[var(--layout-inline-title-max-width)]">{book?.title || "Unknown Book"}</span>
+                    Open source
                 </button>
-                <span className="text-xs text-[color:var(--color-text-muted)]">
-                    {new Date(annotation.createdAt).toLocaleDateString()}
-                </span>
+                <div className="mt-3 border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
+                    Location: {annotation.location}
+                </div>
             </div>
         </div>
     );
@@ -209,7 +190,13 @@ const filterTabs = [
 // Main page component
 export function AnnotationsPage() {
     const { annotations, books, removeAnnotation, updateAnnotation } = useLibraryStore();
-    const { currentBookId, setRoute, searchQuery } = useUIStore();
+    const {
+        currentBookId,
+        setRoute,
+        searchQuery,
+        vaultSyncStatus,
+        vaultSyncMessage,
+    } = useUIStore();
     const [activeFilter, setActiveFilter] = useState<"all" | "highlights" | "notes">("all");
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -322,10 +309,10 @@ export function AnnotationsPage() {
     return (
         <div className="ui-page animate-fade-in">
             {/* Header */}
-            <div className="flex items-start justify-between mb-10">
+            <div className="mb-8 flex items-start justify-between">
                 <div>
                     <h1 className="ui-page-title">
-                        Highlights & Notes
+                        Workbench
                     </h1>
                     <p className="ui-page-subtitle">
                         {filteredAnnotations.length} {filteredAnnotations.length === 1 ? "annotation" : "annotations"} across{" "}
@@ -334,37 +321,44 @@ export function AnnotationsPage() {
                 </div>
             </div>
 
+            <div className="mb-8 border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] font-medium text-[color:var(--color-text-primary)]">
+                {vaultSyncStatus === "synced" && "Status: Synced to vault"}
+                {vaultSyncStatus === "syncing" && "Status: Appending to markdown"}
+                {vaultSyncStatus === "error" && "Status: Sync error"}
+                {vaultSyncStatus === "idle" && "Status: Idle"}
+                {vaultSyncMessage ? ` | ${vaultSyncMessage}` : ""}
+            </div>
+
             {currentBookId && (
-                <div className="mb-6 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
+                <div className="mb-8 flex flex-wrap items-center gap-2 border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-sans text-[11px] font-medium">
                     <span className="text-[color:var(--color-text-secondary)]">
                         Showing annotations for:
                     </span>
-                    <span className="font-medium text-[color:var(--color-text-primary)]">{selectedBookTitle}</span>
+                    <span className="text-[color:var(--color-text-primary)]">{selectedBookTitle}</span>
                     <button
                         onClick={() => setRoute("annotations")}
-                        className="ml-auto rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                        className="ml-auto border border-[var(--color-border)] px-2 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                     >
-                        Clear filter
+                        Clear
                     </button>
                 </div>
             )}
 
             {/* Filters */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+            <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                 {/* Filter Tabs */}
-                <div className="flex items-center gap-1 p-1 bg-[var(--color-surface-muted)] rounded-lg w-fit">
+                <div className="flex items-center gap-1 w-fit">
                     {filterTabs.map((tab) => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveFilter(tab.id)}
                             className={cn(
-                                "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
+                                "border border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium transition-colors",
                                 activeFilter === tab.id
-                                    ? "bg-[var(--color-surface)] text-[color:var(--color-text-primary)] shadow-sm"
-                                    : "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
+                                    ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                                    : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                             )}
                         >
-                            <tab.icon className="w-4 h-4" />
                             {tab.label}
                         </button>
                     ))}

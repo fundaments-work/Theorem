@@ -1,32 +1,33 @@
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import {
-    Library,
     BookOpenText,
     Bookmark,
-    Settings,
     ChevronLeft,
     ChevronRight,
-    Highlighter,
     FolderOpen,
+    Highlighter,
+    Library,
     Rss,
-    X,
+    Settings,
 } from "lucide-react";
-import { TheoremLogo } from "../TheoremLogo";
 import { cn } from "@theorem/core";
 import { useUIStore, useSettingsStore } from "@theorem/core";
 import type { AppRoute } from "@theorem/core";
+import { TheoremLogo } from "../TheoremLogo";
 
 interface SidebarItem {
     id: AppRoute;
     label: string;
-    icon: React.ReactNode;
+    icon: ReactNode;
 }
 
 const mainNavItems: SidebarItem[] = [
-    { id: "library", label: "Library", icon: <Library className="w-5 h-5" /> },
-    { id: "vocabulary", label: "Vocabulary", icon: <BookOpenText className="w-5 h-5" /> },
-    { id: "annotations", label: "Highlights", icon: <Highlighter className="w-5 h-5" /> },
-    { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="w-5 h-5" /> },
+    { id: "library", label: "Library", icon: <Library className="h-4 w-4" /> },
+    { id: "vocabulary", label: "Vocabulary", icon: <BookOpenText className="h-4 w-4" /> },
+    { id: "annotations", label: "Highlights", icon: <Highlighter className="h-4 w-4" /> },
+    { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="h-4 w-4" /> },
+    { id: "shelves", label: "Shelves", icon: <FolderOpen className="h-4 w-4" /> },
+    { id: "feeds", label: "Snapshots", icon: <Rss className="h-4 w-4" /> },
 ];
 
 interface SidebarProps {
@@ -40,30 +41,27 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
     const sidebarRef = useRef<HTMLElement>(null);
     const touchStartX = useRef<number>(0);
     const isCollapsedDesktop = !isMobile && !sidebarOpen;
+    const showDesktopFooterRow = !isMobile && sidebarOpen;
 
     const handleToggle = useCallback(() => {
         toggleSidebar();
         updateSettings({ sidebarCollapsed: !settings.sidebarCollapsed });
-    }, [toggleSidebar, updateSettings, settings.sidebarCollapsed]);
+    }, [settings.sidebarCollapsed, toggleSidebar, updateSettings]);
 
-    // Swipe to close handler for mobile
     useEffect(() => {
         if (!isMobile) return;
 
         const sidebar = sidebarRef.current;
         if (!sidebar) return;
 
-        const handleTouchStart = (e: TouchEvent) => {
-            touchStartX.current = e.touches[0].clientX;
+        const handleTouchStart = (event: TouchEvent) => {
+            touchStartX.current = event.touches[0].clientX;
         };
 
-        const handleTouchEnd = (e: TouchEvent) => {
-            const touchEndX = e.changedTouches[0].clientX;
-            const diff = touchStartX.current - touchEndX;
-
-            // Swipe left more than 50px to close
-            if (diff > 50 && onClose) {
-                onClose();
+        const handleTouchEnd = (event: TouchEvent) => {
+            const delta = touchStartX.current - event.changedTouches[0].clientX;
+            if (delta > 50) {
+                onClose?.();
             }
         };
 
@@ -80,219 +78,154 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
         <aside
             ref={sidebarRef}
             className={cn(
-                "flex flex-col h-full border-r border-[var(--color-border)]",
-                "ui-panel",
+                "flex h-full flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]",
                 "transition-[width] duration-220 ease-out",
-                (sidebarOpen || isMobile) ? "w-[var(--layout-sidebar-width)]" : "w-[var(--layout-sidebar-collapsed-width)]"
+                (sidebarOpen || isMobile)
+                    ? "w-[var(--layout-sidebar-width)]"
+                    : "w-[var(--layout-sidebar-collapsed-width)]",
             )}
         >
-            {/* Header - Logo + App Name (visible on all screens) */}
             <div
                 className={cn(
-                    "flex items-center border-b border-[var(--color-border)] h-[4.5rem]",
-                    isCollapsedDesktop ? "justify-center px-0" : "justify-between pl-4 pr-3",
+                    "flex h-16 items-center border-b border-[var(--color-border)] px-4",
+                    "font-sans text-[12px] font-semibold text-[color:var(--color-text-secondary)]",
                 )}
             >
-                <div
-                    className={cn(
-                        "min-w-0 flex items-center",
-                        isCollapsedDesktop ? "justify-center" : "gap-3.5",
-                    )}
-                >
-                    <div
-                        className={cn(
-                            "relative h-10 w-10 flex-shrink-0 rounded-2xl",
-                            "flex items-center justify-center",
-                            "border border-[color-mix(in_srgb,var(--color-accent)_24%,var(--color-border))]",
-                            "bg-[color-mix(in_srgb,var(--color-surface)_72%,var(--color-accent-light))]",
-                            "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--color-surface)_70%,white)]",
-                        )}
-                    >
-                        <TheoremLogo size={25} className="flex-shrink-0" />
-                    </div>
-                    {(sidebarOpen || isMobile) && (
-                        <div className="min-w-0 animate-fade-in">
-                            <span className="ui-brand-wordmark block text-[1.12rem] leading-tight tracking-[0.04em] text-[color:var(--color-text-primary)]">
-                                Theorem
-                            </span>
-                            <span className="mt-1 block text-[0.62rem] leading-none uppercase tracking-[0.22em] text-[color:var(--color-text-muted)]">
-                                Reading Studio
-                            </span>
-                        </div>
+                <div className="flex items-center gap-3.5">
+                    <TheoremLogo size={26} className="shrink-0" />
+                    {!isCollapsedDesktop && (
+                        <span className="truncate text-[14px] leading-none tracking-[0.04em] text-[color:var(--color-text-primary)]">
+                            Theorem
+                        </span>
                     )}
                 </div>
-                {/* Close button - only on mobile */}
-                {isMobile && onClose && (
-                    <button
-                        onClick={onClose}
-                        className="ui-icon-btn w-9 h-9 rounded-lg text-[color:var(--color-text-secondary)]"
-                        aria-label="Close sidebar"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                )}
             </div>
 
-            {/* Navigation Items */}
-            <nav className="flex-1 py-4 overflow-y-auto scrollbar-hide">
-                <ul className="space-y-1 px-2">
-                    {/* Main Navigation */}
+            <nav className="flex-1 overflow-y-auto py-2">
+                <ul className="flex flex-col">
                     {mainNavItems
-                        .filter((item) => (
-                            item.id !== "vocabulary" || settings.learning.vocabularyEnabled
-                        ))
-                        .map((item) => (
-                            <li key={item.id}>
-                                <button
-                                    onClick={() => {
-                                        setRoute(item.id);
-                                        // Clear shelf filter when navigating away from library
-                                        if (item.id !== "library") {
-                                            sessionStorage.removeItem("theorem-selected-shelf");
-                                        }
-                                        // Close mobile sidebar on navigation
-                                        if (isMobile && onClose) {
-                                            onClose();
-                                        }
-                                    }}
-                                    className={cn(
-                                        "w-full flex items-center rounded-xl ui-clickable",
-                                        isCollapsedDesktop ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
-                                        "hover:bg-[var(--color-surface-muted)]",
-                                        currentRoute === item.id
-                                            ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
-                                            : "text-[color:var(--color-text-secondary)]"
-                                    )}
-                                    title={!sidebarOpen ? item.label : undefined}
-                                >
-                                    <span className="flex-shrink-0">{item.icon}</span>
-                                    {(sidebarOpen || isMobile) && (
-                                        <span className="flex items-center gap-2 font-medium text-sm animate-fade-in">
-                                            {item.label}
-                                        </span>
-                                    )}
-                                </button>
-                            </li>
-                        ))}
+                        .filter((item) => item.id !== "vocabulary" || settings.learning.vocabularyEnabled)
+                        .map((item) => {
+                            const isActive = currentRoute === item.id;
 
-                    {/* Shelves Link - navigates to dedicated shelves page */}
-                    <li>
-                        <button
-                            onClick={() => {
-                                setRoute("shelves");
-                                if (isMobile && onClose) {
-                                    onClose();
-                                }
-                            }}
-                            className={cn(
-                                "w-full flex items-center rounded-xl ui-clickable",
-                                isCollapsedDesktop ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
-                                "hover:bg-[var(--color-surface-muted)]",
-                                currentRoute === "shelves"
-                                    ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
-                                    : "text-[color:var(--color-text-secondary)]"
-                            )}
-                            title={!sidebarOpen ? "Shelves" : undefined}
-                        >
-                            <span className="flex-shrink-0">
-                                <FolderOpen className="w-5 h-5" />
-                            </span>
-                            {(sidebarOpen || isMobile) && (
-                                <span className="font-medium text-sm animate-fade-in flex-1 text-left">
-                                    Shelves
-                                </span>
-                            )}
-                        </button>
-                    </li>
-
-                    {/* Feeds Link */}
-                    <li>
-                        <button
-                            onClick={() => {
-                                setRoute("feeds");
-                                if (isMobile && onClose) {
-                                    onClose();
-                                }
-                            }}
-                            className={cn(
-                                "w-full flex items-center rounded-xl ui-clickable",
-                                isCollapsedDesktop ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
-                                "hover:bg-[var(--color-surface-muted)]",
-                                currentRoute === "feeds"
-                                    ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]"
-                                    : "text-[color:var(--color-text-secondary)]"
-                            )}
-                            title={!sidebarOpen ? "Feeds" : undefined}
-                        >
-                            <span className="flex-shrink-0">
-                                <Rss className="w-5 h-5" />
-                            </span>
-                            {(sidebarOpen || isMobile) && (
-                                <span className="font-medium text-sm animate-fade-in flex-1 text-left">
-                                    Feeds
-                                </span>
-                            )}
-                        </button>
-                    </li>
+                            return (
+                                <li key={item.id}>
+                                    <button
+                                        onClick={() => {
+                                            setRoute(item.id);
+                                            if (item.id !== "library") {
+                                                sessionStorage.removeItem("theorem-selected-shelf");
+                                            }
+                                            if (isMobile) {
+                                                onClose?.();
+                                            }
+                                        }}
+                                        className={cn(
+                                            "relative flex h-11 w-full items-center border-b border-[var(--color-border-subtle)] px-4 text-left",
+                                            "font-sans text-[12px] font-medium",
+                                            "transition-colors",
+                                            isActive
+                                                ? "bg-[var(--color-accent)] text-white ui-force-on-accent"
+                                                : "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]",
+                                        )}
+                                        title={isCollapsedDesktop ? item.label : undefined}
+                                        aria-current={isActive ? "page" : undefined}
+                                    >
+                                        {isActive && (
+                                            <span className="absolute inset-y-0 left-0 w-[3px] bg-black" aria-hidden="true" />
+                                        )}
+                                        {isCollapsedDesktop ? (
+                                            <span className="inline-flex h-4 w-4 items-center justify-center">{item.icon}</span>
+                                        ) : (
+                                            <span>{item.label}</span>
+                                        )}
+                                    </button>
+                                </li>
+                            );
+                        })}
                 </ul>
             </nav>
 
-            {/* Bottom Actions */}
-            <div
-                className={cn(
-                    "p-2 border-t border-[var(--color-border)]",
-                    isCollapsedDesktop ? "flex flex-col gap-1" : "flex items-center gap-1",
-                )}
-            >
-                {/* Settings */}
-                <button
-                    onClick={() => {
-                        setRoute("settings");
-                        if (isMobile && onClose) {
-                            onClose();
-                        }
-                    }}
-                    className={cn(
-                        "flex items-center rounded-xl ui-clickable transition-colors",
-                        isCollapsedDesktop
-                            ? "w-full justify-center px-0 py-2.5"
-                            : "flex-1 gap-3 px-3 py-2.5",
-                        currentRoute === "settings"
-                            ? "text-[color:var(--color-accent)]"
-                            : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
-                    )}
-                    title={!sidebarOpen ? "Settings" : undefined}
-                >
-                    <span className="flex-shrink-0"><Settings className="w-5 h-5" /></span>
-                    {(sidebarOpen || isMobile) && (
-                        <span className="font-medium text-sm animate-fade-in">
-                            Settings
-                        </span>
-                    )}
-                </button>
+            <div className="border-t border-[var(--color-border)]">
+                {showDesktopFooterRow ? (
+                    <div className="flex items-stretch">
+                        <button
+                            onClick={() => {
+                                setRoute("settings");
+                            }}
+                            className={cn(
+                                "relative flex h-11 flex-1 items-center border-r border-[var(--color-border-subtle)] px-4 text-left",
+                                "font-sans text-[12px] font-medium text-[color:var(--color-text-secondary)]",
+                                "hover:text-[color:var(--color-text-primary)]",
+                                currentRoute === "settings" && "bg-[var(--color-accent)] text-white ui-force-on-accent",
+                            )}
+                            title="Settings"
+                        >
+                            {currentRoute === "settings" && (
+                                <span className="absolute inset-y-0 left-0 w-[3px] bg-black" aria-hidden="true" />
+                            )}
+                            <span>Settings</span>
+                        </button>
 
-                {/* Collapse Toggle - large screens only */}
-                {!isMobile && (
-                    <div className="hidden lg:block">
                         <button
                             onClick={handleToggle}
-                            className={cn(
-                                "flex items-center justify-center p-2.5 rounded-xl ui-clickable",
-                                "text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]",
-                                sidebarOpen ? "w-10" : "w-full",
-                            )}
-                            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                            className="flex h-11 w-12 items-center justify-center text-[color:var(--color-text-secondary)] transition-colors hover:text-[color:var(--color-text-primary)]"
+                            title="Collapse sidebar"
                         >
-                            {sidebarOpen ? (
-                                <ChevronLeft className="w-5 h-5" />
-                            ) : (
-                                <ChevronRight className="w-5 h-5" />
-                            )}
+                            <ChevronLeft className="h-3.5 w-3.5" />
                         </button>
                     </div>
+                ) : (
+                    <>
+                        <button
+                            onClick={() => {
+                                setRoute("settings");
+                                if (isMobile) {
+                                    onClose?.();
+                                }
+                            }}
+                            className={cn(
+                                "relative flex h-11 w-full items-center border-b border-[var(--color-border-subtle)] px-4 text-left",
+                                "font-sans text-[12px] font-medium text-[color:var(--color-text-secondary)]",
+                                "hover:text-[color:var(--color-text-primary)]",
+                                currentRoute === "settings" && "bg-[var(--color-accent)] text-white ui-force-on-accent",
+                            )}
+                            title={isCollapsedDesktop ? "Settings" : undefined}
+                        >
+                            {currentRoute === "settings" && (
+                                <span className="absolute inset-y-0 left-0 w-[3px] bg-black" aria-hidden="true" />
+                            )}
+                            {isCollapsedDesktop ? (
+                                <span className="inline-flex h-4 w-4 items-center justify-center">
+                                    <Settings className="h-4 w-4" />
+                                </span>
+                            ) : (
+                                <span>Settings</span>
+                            )}
+                        </button>
+
+                        {!isMobile && (
+                            <button
+                                onClick={handleToggle}
+                                className={cn(
+                                    "relative flex h-11 w-full items-center border-b border-[var(--color-border-subtle)] px-4 text-left",
+                                    "font-sans text-[11px] font-medium text-[color:var(--color-text-secondary)]",
+                                    "hover:text-[color:var(--color-text-primary)]",
+                                )}
+                                title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                            >
+                                {isCollapsedDesktop ? (
+                                    <span className="inline-flex h-4 w-4 items-center justify-center">
+                                        {sidebarOpen ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                    </span>
+                                ) : (
+                                    <span>{sidebarOpen ? "‹ Collapse" : "› Expand"}</span>
+                                )}
+                            </button>
+                        )}
+                    </>
                 )}
             </div>
-
         </aside>
     );
 }

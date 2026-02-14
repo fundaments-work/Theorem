@@ -159,6 +159,9 @@ importers:
       '@tauri-apps/plugin-dialog':
         specifier: ^2.0.0
         version: 2.6.0
+      '@tauri-apps/plugin-fs':
+        specifier: ^2.0.0
+        version: 2.4.5
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

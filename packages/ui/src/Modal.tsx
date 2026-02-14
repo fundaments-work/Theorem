@@ -81,7 +81,7 @@ export function Modal({
         >
             <div
                 className={cn(
-                    "ui-card bg-[var(--color-surface)] shadow-[var(--shadow-lg)]",
+                    "ui-card bg-[var(--color-surface)]",
                     size === "fullscreen" ? "rounded-none shadow-none border-0" : "rounded-xl",
                     "flex flex-col max-h-[var(--layout-modal-max-height)]",
                     "overflow-hidden",
@@ -108,7 +108,7 @@ interface ModalHeaderProps {
 export function ModalHeader({ title, onClose, showCloseButton = true }: ModalHeaderProps) {
     return (
         <div className="flex items-center justify-between p-6 border-b border-[var(--color-border)]">
-            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+            <h2 className="font-sans text-sm font-semibold text-[color:var(--color-text-primary)]">
                 {title}
             </h2>
             {showCloseButton && onClose && (

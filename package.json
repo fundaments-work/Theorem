@@ -13,7 +13,9 @@
         "typecheck": "pnpm --filter @theorem/core typecheck && pnpm --filter @theorem/ui typecheck",
         "test": "pnpm -r --if-present test",
         "preview": "pnpm --filter @theorem/web preview",
-        "tauri": "pnpm --filter @theorem/web tauri"
+        "tauri": "pnpm --filter @theorem/web tauri",
+        "rename:branding": "node ./scripts/replace-branding-with-theorem.mjs --write",
+        "rename:branding:dry": "node ./scripts/replace-branding-with-theorem.mjs"
     },
     "devDependencies": {
         "@types/node": "^22.0.0",

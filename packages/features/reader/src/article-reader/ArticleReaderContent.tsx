@@ -162,9 +162,9 @@ export function ArticleReaderContent({
         >
             <article className="w-full max-w-[74ch] mx-auto px-5 py-8 md:px-10 md:py-12" onMouseUp={handleMouseUp}>
                 <header className="mb-10 pb-6 border-b border-[var(--color-border-subtle)]">
-                    <div className="flex flex-wrap items-center gap-2 mb-4 text-[var(--font-size-3xs)] font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">
+                    <div className="mb-4 flex flex-wrap items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-[color:var(--color-text-secondary)]">
                         {feedTitle && (
-                            <span className="px-2 py-1 rounded-full bg-[var(--color-surface-muted)] text-[color:var(--color-accent)]">
+                            <span className="border border-[var(--color-border)] px-2 py-1 text-[color:var(--color-text-primary)]">
                                 {feedTitle}
                             </span>
                         )}
@@ -173,7 +173,7 @@ export function ArticleReaderContent({
                     </div>
 
                     <h1
-                        className="font-semibold leading-tight tracking-tight"
+                        className="font-serif font-semibold leading-tight tracking-tight"
                         style={{
                             fontSize: `${fontSize * 1.5}px`,
                             lineHeight: 1.2,
@@ -183,7 +183,7 @@ export function ArticleReaderContent({
                     </h1>
 
                     {article.author && (
-                        <p className="mt-3 text-sm text-[color:var(--color-text-secondary)]">
+                        <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
                             {article.author}
                         </p>
                     )}
@@ -194,7 +194,7 @@ export function ArticleReaderContent({
                         <img
                             src={article.imageUrl}
                             alt=""
-                            className="w-full h-auto rounded-2xl border border-[var(--color-border-subtle)]"
+                            className="h-auto w-full border border-[var(--color-border-subtle)]"
                             style={{ maxHeight: "420px", objectFit: "cover" }}
                         />
                     </figure>
@@ -213,9 +213,9 @@ export function ArticleReaderContent({
                         "[&_li]:my-1",
                         "[&_blockquote]:my-5 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-4 [&_blockquote]:text-[color:var(--color-text-secondary)]",
                         "[&_a]:text-[color:var(--color-accent)] [&_a]:underline [&_a:hover]:opacity-80",
-                        "[&_img]:my-6 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-xl [&_img]:border [&_img]:border-[var(--color-border-subtle)]",
-                        "[&_pre]:my-5 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-[var(--color-surface-muted)] [&_pre]:p-3",
-                        "[&_code]:rounded [&_code]:bg-[var(--color-surface-muted)] [&_code]:px-1 [&_code]:py-0.5",
+                        "[&_img]:my-6 [&_img]:max-w-full [&_img]:h-auto [&_img]:border [&_img]:border-[var(--color-border-subtle)]",
+                        "[&_pre]:my-5 [&_pre]:overflow-x-auto [&_pre]:border [&_pre]:border-[var(--color-border)] [&_pre]:bg-[var(--color-surface-muted)] [&_pre]:p-3",
+                        "[&_code]:bg-[var(--color-surface-muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[12px]",
                     )}
                     style={{
                         fontSize: `${fontSize}px`,

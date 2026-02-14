@@ -188,6 +188,7 @@ export interface AppSettings {
     theme: "light" | "dark" | "system";
     readerSettings: ReaderSettings;
     learning: LearningSettings;
+    vault: VaultIntegrationSettings;
 }
 
 export type DictionaryMode = "online" | "offline" | "auto";
@@ -200,6 +201,13 @@ export interface LearningSettings {
     preferredProviders: DictionaryProvider[];
     showPronunciation: boolean;
     playPronunciationAudio: boolean;
+}
+
+export interface VaultIntegrationSettings {
+    enabled: boolean;
+    vaultPath: string;
+    autoExportHighlights: boolean;
+    highlightsFileName: string;
 }
 
 export interface VocabularyMeaning {
@@ -314,6 +322,9 @@ export interface UIState {
     isLoading: boolean;
     loadingMessage?: string;
     error?: string;
+    vaultSyncStatus: "idle" | "syncing" | "synced" | "error";
+    vaultSyncMessage?: string;
+    vaultSyncAt?: string;
 }
 
 // Document Engine Types

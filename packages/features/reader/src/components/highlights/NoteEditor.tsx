@@ -123,7 +123,7 @@ export function NoteEditor({
                 "fixed z-[100] animate-fade-in",
                 "bg-[var(--color-surface)]",
                 "border border-[var(--color-border)]",
-                "rounded-lg shadow-[var(--shadow-md)]",
+                "rounded-sm",
                 "p-4 w-[var(--layout-note-editor-width)]"
             )}
             style={{
@@ -133,7 +133,7 @@ export function NoteEditor({
         >
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
+                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--color-text-primary)]">
                     {initialNote ? 'Edit Note' : 'Add Note'}
                 </span>
                 <button
@@ -167,7 +167,7 @@ export function NoteEditor({
                     "px-3 py-2 text-sm",
                     "bg-[var(--color-background)]",
                     "border border-[var(--color-border)]",
-                    "rounded-md resize-y",
+                    "rounded-sm resize-y",
                     "text-[color:var(--color-text-primary)]",
                     "placeholder:text-[color:var(--color-text-muted)]",
                     "focus:outline-none focus:border-[var(--color-accent)]",
@@ -177,15 +177,15 @@ export function NoteEditor({
 
             {/* Footer with save button */}
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--color-border)]">
-                <span className="text-xs text-[color:var(--color-text-muted)]">
+                <span className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">
                     Ctrl+Enter to save
                 </span>
                 <button
                     onClick={handleSave}
                     className={cn(
-                        "flex items-center gap-1.5",
-                        "px-3 py-1.5 text-xs font-medium",
-                        "rounded-md",
+                        "flex items-center gap-1.5 border border-[var(--color-accent)]",
+                        "px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em]",
+                        "rounded-sm",
                         "bg-[var(--color-accent)]",
                         "ui-text-accent-contrast",
                         "hover:opacity-90",

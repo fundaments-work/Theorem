@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { applyReaderStyles, initReaderStyles } from "../lib/reader-styles";
+import { appendAnnotationToVaultMarkdown } from "../lib/vault-sync";
 import {
     lookupDictionaryTerm,
     vocabularyTermFromLookup,
@@ -64,6 +65,13 @@ const defaultLearningSettings: LearningSettings = {
     playPronunciationAudio: false,
 };
 
+const defaultVaultSettings: AppSettings["vault"] = {
+    enabled: false,
+    vaultPath: "",
+    autoExportHighlights: true,
+    highlightsFileName: "theorem-highlights.md",
+};
+
 // Default app settings
 const defaultAppSettings: AppSettings = {
     sidebarCollapsed: false,
@@ -75,6 +83,7 @@ const defaultAppSettings: AppSettings = {
     theme: "system",
     readerSettings: defaultReaderSettings,
     learning: defaultLearningSettings,
+    vault: defaultVaultSettings,
 };
 
 // Default reading stats
@@ -102,6 +111,11 @@ interface UIStore extends UIState {
     clearSelection: () => void;
     setLoading: (loading: boolean, message?: string) => void;
     setError: (error?: string) => void;
+    setVaultSyncStatus: (
+        status: UIState["vaultSyncStatus"],
+        message?: string,
+        syncedAt?: string,
+    ) => void;
     // Reader-specific UI
     setReaderToolbarVisible: (visible: boolean) => void;
     toggleReaderToolbar: () => void;
@@ -118,6 +132,9 @@ export const useUIStore = create<UIStore>((set) => ({
     isLoading: false,
     loadingMessage: undefined,
     error: undefined,
+    vaultSyncStatus: "idle",
+    vaultSyncMessage: undefined,
+    vaultSyncAt: undefined,
 
     setRoute: (route, bookId) =>
         set({
@@ -143,6 +160,8 @@ export const useUIStore = create<UIStore>((set) => ({
     setLoading: (loading, message) =>
         set({ isLoading: loading, loadingMessage: message }),
     setError: (error) => set({ error }),
+    setVaultSyncStatus: (vaultSyncStatus, vaultSyncMessage, vaultSyncAt) =>
+        set({ vaultSyncStatus, vaultSyncMessage, vaultSyncAt }),
 
     // Reader toolbar
     setReaderToolbarVisible: (visible) => set({ readerToolbarVisible: visible }),
@@ -245,6 +264,39 @@ function normalizeCollectionKind(collection: LegacyCollection): Collection | nul
         ...collection,
         kind: "general",
     };
+}
+
+function queueVaultSync(annotation: Annotation, book?: Book): void {
+    const { settings } = useSettingsStore.getState();
+    const { setVaultSyncStatus } = useUIStore.getState();
+
+    if (!settings.vault.enabled || !settings.vault.autoExportHighlights) {
+        return;
+    }
+
+    if (annotation.type !== "highlight" && annotation.type !== "note") {
+        return;
+    }
+
+    setVaultSyncStatus("syncing", "STATUS: APPENDING_TO_MARKDOWN");
+
+    void appendAnnotationToVaultMarkdown({
+        annotation,
+        book,
+        settings: settings.vault,
+    }).then((result) => {
+        if (result.status === "synced") {
+            setVaultSyncStatus("synced", result.message, new Date().toISOString());
+            return;
+        }
+
+        if (result.status === "error") {
+            setVaultSyncStatus("error", result.message);
+            return;
+        }
+
+        setVaultSyncStatus("idle", result.message);
+    });
 }
 
 // Library Store
@@ -597,6 +649,8 @@ export const useLibraryStore = create<LibraryStore>()(
             // Annotation actions
             addAnnotation: (annotation) => {
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
+                const book = get().getBook(annotation.bookId);
+                queueVaultSync(annotation, book);
             },
 
             addHighlightWithNote: (cfi, text, color, note) => {
@@ -613,6 +667,8 @@ export const useLibraryStore = create<LibraryStore>()(
                     createdAt: new Date(),
                 };
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
+                const book = get().getBook(annotation.bookId);
+                queueVaultSync(annotation, book);
                 return annotation;
             },
 
@@ -626,6 +682,12 @@ export const useLibraryStore = create<LibraryStore>()(
                             : a
                     )),
                 }));
+
+                const syncedAnnotation = get().annotations.find((annotation) => annotation.id === annotationId);
+                if (syncedAnnotation) {
+                    const book = get().getBook(syncedAnnotation.bookId);
+                    queueVaultSync(syncedAnnotation, book);
+                }
             },
 
             removeAnnotation: (annotationId) => {
@@ -879,6 +941,15 @@ export const useSettingsStore = create<SettingsStore>()(
                     state.settings.learning = {
                         ...defaultLearningSettings,
                         ...state.settings.learning,
+                    };
+                }
+
+                if (state && !state.settings.vault) {
+                    state.settings.vault = defaultVaultSettings;
+                } else if (state?.settings.vault) {
+                    state.settings.vault = {
+                        ...defaultVaultSettings,
+                        ...state.settings.vault,
                     };
                 }
 

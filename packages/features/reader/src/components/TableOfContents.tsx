@@ -141,9 +141,9 @@ export function TableOfContents({
                 className={cn(
                     "fixed inset-x-0 bottom-0 h-[var(--layout-reader-panel-mobile-height)] z-50 flex flex-col",
                     "sm:inset-x-auto sm:bottom-auto sm:top-0 sm:left-0 sm:h-full sm:w-80 sm:max-w-[var(--layout-reader-panel-max-width-mobile)]",
-                    "reader-sheet border border-[var(--color-border)] rounded-t-2xl sm:rounded-none sm:rounded-r-2xl",
+                    "reader-sheet border border-[var(--color-border)]",
                     "transform transition-transform duration-240 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                    visible ? "translate-y-0 sm:translate-x-0 shadow-[var(--shadow-md)]" : "translate-y-full sm:-translate-x-full shadow-none",
+                    visible ? "translate-y-0 sm:translate-x-0" : "translate-y-full sm:-translate-x-full",
                     className,
                 )}
                 style={readerStyles.surface}
@@ -155,7 +155,7 @@ export function TableOfContents({
                 >
                     <div className="flex items-center gap-3">
                         <div
-                            className="p-1.5 rounded-lg"
+                            className="border border-[var(--color-border)] p-1.5"
                             style={{
                                 backgroundColor: "color-mix(in srgb, var(--reader-fg) 8%, var(--reader-bg))",
                             }}
@@ -163,13 +163,13 @@ export function TableOfContents({
                             <List className="w-4 h-4" style={readerStyles.textPrimary} />
                         </div>
                         <div>
-                            <h2 className="text-sm font-semibold tracking-tight" style={readerStyles.textPrimary}>
-                                {isPdf ? "Navigation" : "Table of Contents"}
-                            </h2>
-                            <p className="text-[var(--font-size-3xs)] font-medium uppercase tracking-wider" style={readerStyles.textMuted}>
-                                {isPdf ? "Outline" : "Navigation"}
-                            </p>
-                        </div>
+                        <h2 className="font-mono text-[11px] font-bold uppercase tracking-[0.1em]" style={readerStyles.textPrimary}>
+                            {isPdf ? "Navigation" : "Table of Contents"}
+                        </h2>
+                        <p className="font-mono text-[10px] font-medium uppercase tracking-[0.08em]" style={readerStyles.textMuted}>
+                            {isPdf ? "Outline" : "Navigation"}
+                        </p>
+                    </div>
                     </div>
                     <button
                         onClick={onClose}
