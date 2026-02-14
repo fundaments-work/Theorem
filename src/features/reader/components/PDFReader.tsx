@@ -15,7 +15,7 @@ import {
     forwardRef,
     useImperativeHandle,
 } from "react";
-import { Loader2, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { PDFJsEngine, type PDFJsEngineRef, type PDFDocumentInfo } from "../engines/pdfjs-engine";
 import { cn } from "../../../core";
 import type { ReaderTheme, Annotation, HighlightColor, PdfZoomMode } from "../../../core";
@@ -67,15 +67,13 @@ interface PDFReaderProps {
 /**
  * Loading spinner with message
  */
-function LoadingState({ message = "Loading PDF..." }: { message?: string }) {
+function LoadingState({ message = "Loading book..." }: { message?: string }) {
     return (
-        <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-surface)] z-20">
-            <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                    <Loader2 className="w-10 h-10 animate-spin text-[color:var(--color-accent)]" />
-                </div>
-                <span className="text-sm text-[color:var(--color-text-secondary)]">{message}</span>
-            </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)] z-20">
+            <div className="w-12 h-12 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
+            <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">
+                {message}
+            </p>
         </div>
     );
 }

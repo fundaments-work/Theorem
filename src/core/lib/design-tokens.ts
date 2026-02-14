@@ -1,408 +1,377 @@
-import type { HighlightColor, ReaderTheme } from "../types";
+import type { FontFamily, HighlightColor, ReaderSettings, ReaderTheme } from "../types";
 
-export interface ThemeSemanticPalette {
-    appBg: string;
-    appSurface: string;
-    appSurfaceElevated: string;
-    appSurfaceMuted: string;
-    appSurfaceVariant: string;
-    appSurfaceHover: string;
-    appTextPrimary: string;
-    appTextSecondary: string;
-    appTextMuted: string;
-    appTextInverse: string;
-    appBorder: string;
-    appBorderSubtle: string;
-    appAccent: string;
-    appAccentHover: string;
-    appAccentLight: string;
-    appAccentContrast: string;
-    appSuccess: string;
-    appWarning: string;
-    appError: string;
-    appInfo: string;
-    appOverlaySubtle: string;
-    appOverlayMedium: string;
-    appOverlayStrong: string;
-    appOverlayStrongHover: string;
-    readerBg: string;
-    readerFg: string;
-    readerLink: string;
-}
-
-export const APP_THEME_PALETTES: Record<ReaderTheme, ThemeSemanticPalette> = {
-    light: {
-        appBg: "#ffffff",
-        appSurface: "#ffffff",
-        appSurfaceElevated: "#ffffff",
-        appSurfaceMuted: "#fafafa",
-        appSurfaceVariant: "#f4f4f4",
-        appSurfaceHover: "#f0f0f0",
-        appTextPrimary: "#1a1a1a",
-        appTextSecondary: "#666666",
-        appTextMuted: "#666666",
-        appTextInverse: "#ffffff",
-        appBorder: "#e5e5e5",
-        appBorderSubtle: "#e5e5e5",
-        appAccent: "#1a1a1a",
-        appAccentHover: "#000000",
-        appAccentLight: "#f4f4f4",
-        appAccentContrast: "#ffffff",
-        appSuccess: "#1a1a1a",
-        appWarning: "#1a1a1a",
-        appError: "#000000",
-        appInfo: "#666666",
-        appOverlaySubtle: "color-mix(in srgb, #000000 8%, transparent)",
-        appOverlayMedium: "color-mix(in srgb, #000000 14%, transparent)",
-        appOverlayStrong: "color-mix(in srgb, #000000 25%, transparent)",
-        appOverlayStrongHover: "color-mix(in srgb, #000000 33%, transparent)",
-        readerBg: "#ffffff",
-        readerFg: "#1a1a1a",
-        readerLink: "#1a1a1a",
-    },
-    sepia: {
-        appBg: "#ffffff",
-        appSurface: "#ffffff",
-        appSurfaceElevated: "#ffffff",
-        appSurfaceMuted: "#fafafa",
-        appSurfaceVariant: "#f4f4f4",
-        appSurfaceHover: "#f0f0f0",
-        appTextPrimary: "#1a1a1a",
-        appTextSecondary: "#666666",
-        appTextMuted: "#666666",
-        appTextInverse: "#ffffff",
-        appBorder: "#e5e5e5",
-        appBorderSubtle: "#e5e5e5",
-        appAccent: "#1a1a1a",
-        appAccentHover: "#000000",
-        appAccentLight: "#f4f4f4",
-        appAccentContrast: "#ffffff",
-        appSuccess: "#1a1a1a",
-        appWarning: "#1a1a1a",
-        appError: "#000000",
-        appInfo: "#666666",
-        appOverlaySubtle: "color-mix(in srgb, #000000 8%, transparent)",
-        appOverlayMedium: "color-mix(in srgb, #000000 14%, transparent)",
-        appOverlayStrong: "color-mix(in srgb, #000000 25%, transparent)",
-        appOverlayStrongHover: "color-mix(in srgb, #000000 33%, transparent)",
-        readerBg: "#f4ecd8",
-        readerFg: "#3d3025",
-        readerLink: "#3d3025",
-    },
-    dark: {
-        appBg: "#000000",
-        appSurface: "#000000",
-        appSurfaceElevated: "#111111",
-        appSurfaceMuted: "#1a1a1a",
-        appSurfaceVariant: "#222222",
-        appSurfaceHover: "#2a2a2a",
-        appTextPrimary: "#ffffff",
-        appTextSecondary: "#b0b0b0",
-        appTextMuted: "#808080",
-        appTextInverse: "#000000",
-        appBorder: "#333333",
-        appBorderSubtle: "#2a2a2a",
-        appAccent: "#ffffff",
-        appAccentHover: "#e0e0e0",
-        appAccentLight: "#1a1a1a",
-        appAccentContrast: "#000000",
-        appSuccess: "#ffffff",
-        appWarning: "#ffffff",
-        appError: "#ff4444",
-        appInfo: "#b0b0b0",
-        appOverlaySubtle: "color-mix(in srgb, #ffffff 8%, transparent)",
-        appOverlayMedium: "color-mix(in srgb, #ffffff 14%, transparent)",
-        appOverlayStrong: "color-mix(in srgb, #000000 65%, transparent)",
-        appOverlayStrongHover: "color-mix(in srgb, #000000 75%, transparent)",
-        readerBg: "#000000",
-        readerFg: "#ffffff",
-        readerLink: "#ffffff",
-    },
-};
-
-export const DESIGN_TOKEN_VARS = {
-    color: {
-        background: "var(--color-background)",
-        surface: "var(--color-surface)",
-        surfaceElevated: "var(--color-surface-elevated)",
-        surfaceMuted: "var(--color-surface-muted)",
-        surfaceVariant: "var(--color-surface-variant)",
-        surfaceHover: "var(--color-surface-hover)",
-        textPrimary: "var(--color-text-primary)",
-        textSecondary: "var(--color-text-secondary)",
-        textMuted: "var(--color-text-muted)",
-        textInverse: "var(--color-text-inverse)",
-        border: "var(--color-border)",
-        borderSubtle: "var(--color-border-subtle)",
-        accent: "var(--color-accent)",
-        accentHover: "var(--color-accent-hover)",
-        accentLight: "var(--color-accent-light)",
-        accentContrast: "var(--color-accent-contrast)",
-        success: "var(--color-success)",
-        warning: "var(--color-warning)",
-        error: "var(--color-error)",
-        info: "var(--color-info)",
-        focusRing: "var(--color-focus-ring)",
-        overlaySubtle: "var(--color-overlay-subtle)",
-        overlayMedium: "var(--color-overlay-medium)",
-        overlayStrong: "var(--color-overlay-strong)",
-        overlayStrongHover: "var(--color-overlay-strong-hover)",
-    },
-    reader: {
-        background: "var(--reader-bg)",
-        foreground: "var(--reader-fg)",
-        link: "var(--reader-link)",
-        fontSize: "var(--reader-font-size)",
-        lineHeight: "var(--reader-line-height)",
-        marginX: "var(--reader-margin-x)",
-        marginY: "var(--reader-margin-y)",
-        brightness: "var(--reader-brightness)",
-        zoom: "var(--reader-zoom)",
-    },
-    spacing: {
-        xxs: "var(--spacing-xxs)",
-        xs: "var(--spacing-xs)",
-        sm: "var(--spacing-sm)",
-        md: "var(--spacing-md)",
-        lg: "var(--spacing-lg)",
-        xl: "var(--spacing-xl)",
-        "2xl": "var(--spacing-2xl)",
-        "3xl": "var(--spacing-3xl)",
-        "4xl": "var(--spacing-4xl)",
-    },
-    radius: {
-        xs: "var(--radius-xs)",
-        sm: "var(--radius-sm)",
-        md: "var(--radius-md)",
-        lg: "var(--radius-lg)",
-        xl: "var(--radius-xl)",
-        "2xl": "var(--radius-2xl)",
-        full: "var(--radius-full)",
-    },
-    shadow: {
-        xs: "var(--shadow-xs)",
-        sm: "var(--shadow-sm)",
-        md: "var(--shadow-md)",
-        lg: "var(--shadow-lg)",
-    },
-    typography: {
-        family: {
-            sans: "var(--font-sans)",
-            serif: "var(--font-serif)",
-            mono: "var(--font-mono)",
-            display: "var(--font-playfair)",
-            readerSerif: "var(--font-merriweather)",
-        },
-        size: {
-            "4xs": "var(--font-size-4xs)",
-            "3xs": "var(--font-size-3xs)",
-            "2xs": "var(--font-size-2xs)",
-            caption: "var(--font-size-caption)",
-            xs: "var(--font-size-xs)",
-            sm: "var(--font-size-sm)",
-            md: "var(--font-size-md)",
-            lg: "var(--font-size-lg)",
-            xl: "var(--font-size-xl)",
-            "2xl": "var(--font-size-2xl)",
-            "3xl": "var(--font-size-3xl)",
-            "4xl": "var(--font-size-4xl)",
-            "5xl": "var(--font-size-5xl)",
-        },
-        lineHeight: {
-            tight: "var(--line-height-tight)",
-            snug: "var(--line-height-snug)",
-            normal: "var(--line-height-normal)",
-            relaxed: "var(--line-height-relaxed)",
-            loose: "var(--line-height-loose)",
-        },
-        weight: {
-            regular: "var(--font-weight-regular)",
-            medium: "var(--font-weight-medium)",
-            semibold: "var(--font-weight-semibold)",
-            bold: "var(--font-weight-bold)",
-            black: "var(--font-weight-black)",
-        },
-        letterSpacing: {
-            tight: "var(--letter-spacing-tight)",
-            normal: "var(--letter-spacing-normal)",
-            wide: "var(--letter-spacing-wide)",
-            wider: "var(--letter-spacing-wider)",
-        },
-    },
-    motion: {
-        duration: {
-            fast: "var(--duration-fast)",
-            normal: "var(--duration-normal)",
-            slow: "var(--duration-slow)",
-        },
-        transition: {
-            fast: "var(--transition-fast)",
-            normal: "var(--transition-normal)",
-            slow: "var(--transition-slow)",
-        },
-    },
-    layout: {
-        container: {
-            sm: "var(--container-width-sm)",
-            md: "var(--container-width-md)",
-            lg: "var(--container-width-lg)",
-            xl: "var(--container-width-xl)",
-            "2xl": "var(--container-width-2xl)",
-            "7xl": "var(--container-width-7xl)",
-            max: "var(--layout-content-max-width)",
-            readable: "var(--layout-content-readable-width)",
-            inlinePadding: "var(--layout-content-inline-padding)",
-            inlinePaddingMobile: "var(--layout-content-inline-padding-mobile)",
-        },
-        sidebar: {
-            expanded: "var(--layout-sidebar-width)",
-            collapsed: "var(--layout-sidebar-collapsed-width)",
-        },
-        chrome: {
-            headerHeight: "var(--layout-header-height)",
-            titlebarHeight: "var(--layout-titlebar-height)",
-            readerToolbarHeight: "var(--layout-reader-toolbar-height)",
-        },
-        panel: {
-            readerWidth: "var(--layout-reader-panel-width)",
-            readerWidthMobile: "var(--layout-reader-panel-width-mobile)",
-            readerMaxHeight: "var(--layout-reader-panel-max-height)",
-            readerMaxWidthMobile: "var(--layout-reader-panel-max-width-mobile)",
-            readerMobileHeight: "var(--layout-reader-panel-mobile-height)",
-            readerListMaxHeight: "var(--layout-reader-list-max-height)",
-        },
-        overlay: {
-            modalMaxHeight: "var(--layout-modal-max-height)",
-            modalWidthFluid: "var(--layout-modal-width-fluid)",
-            modalWidthSm: "var(--layout-modal-width-sm)",
-            modalWidthMd: "var(--layout-modal-width-md)",
-            modalWidthLg: "var(--layout-modal-width-lg)",
-            modalWidthXl: "var(--layout-modal-width-xl)",
-            dropdownMinWidth: "var(--layout-dropdown-menu-min-width)",
-            dropdownMaxWidth: "var(--layout-dropdown-menu-max-width)",
-            popoverMinWidth: "var(--layout-popover-min-width)",
-            tooltipMaxWidth: "var(--layout-tooltip-max-width)",
-            floatingPanelMaxHeight: "var(--layout-floating-panel-max-height)",
-            floatingPanelTopOffset: "var(--layout-floating-panel-top-offset)",
-            floatingPanelMaxHeightDesktop: "var(--layout-floating-panel-max-height-desktop)",
-            floatingPanelWidth: "var(--layout-floating-panel-width)",
-        },
-        editor: {
-            noteWidth: "var(--layout-note-editor-width)",
-            noteMinHeight: "var(--layout-note-editor-min-height)",
-            noteMaxHeight: "var(--layout-note-editor-max-height)",
-            annotationMinHeight: "var(--layout-annotation-editor-min-height)",
-            inlineTitleMaxWidth: "var(--layout-inline-title-max-width)",
-            errorStackMaxHeight: "var(--layout-error-stack-max-height)",
-            errorComponentStackMaxHeight: "var(--layout-error-component-stack-max-height)",
-        },
-        effect: {
-            backdropBlurSm: "var(--effect-backdrop-blur-sm)",
-        },
-    },
-    controls: {
-        height: {
-            sm: "var(--control-height-sm)",
-            md: "var(--control-height-md)",
-            lg: "var(--control-height-lg)",
-            touchMin: "var(--control-touch-min)",
-            iconButton: "var(--control-icon-button-size)",
-        },
-        padding: {
-            x: "var(--control-padding-x)",
-            y: "var(--control-padding-y)",
-        },
-        icon: {
-            sm: "var(--icon-size-sm)",
-            md: "var(--icon-size-md)",
-            lg: "var(--icon-size-lg)",
-        },
-    },
-    zIndex: {
-        backdrop: "var(--z-backdrop)",
-        dropdown: "var(--z-dropdown)",
-        sticky: "var(--z-sticky)",
-        modal: "var(--z-modal)",
-        popover: "var(--z-popover)",
-        tooltip: "var(--z-tooltip)",
-    },
-    breakpoints: {
-        sm: "640px",
-        md: "768px",
-        lg: "1024px",
-        xl: "1280px",
-        "2xl": "1536px",
-    },
-} as const;
-
-export type DesignTokenVars = typeof DESIGN_TOKEN_VARS;
-
-export interface HighlightColorToken {
+interface HighlightColorToken {
     label: string;
     solid: string;
     soft: string;
-    softDark: string;
     picker: string;
     pickerActive: string;
 }
 
-export const HIGHLIGHT_COLOR_TOKENS: Record<HighlightColor, HighlightColorToken> = {
-    yellow: {
-        label: "Yellow",
-        solid: "#f4b400",
-        soft: "rgba(244, 180, 0, 0.26)",
-        softDark: "rgba(244, 180, 0, 0.21)",
-        picker: "#ffe082",
-        pickerActive: "#ffd54f",
+interface RgbColor {
+    r: number;
+    g: number;
+    b: number;
+}
+
+interface ShelfColorToken {
+    bg: string;
+    text: string;
+    border: string;
+    icon: string;
+}
+
+type HighlightColorTone = Exclude<keyof HighlightColorToken, "label">;
+type ThemeColorSlot = "bg" | "fg" | "link";
+
+const HIGHLIGHT_COLORS_ORDER: HighlightColor[] = ["yellow", "green", "blue", "red", "orange", "purple"];
+
+const HIGHLIGHT_LABELS: Record<HighlightColor, string> = {
+    yellow: "Yellow",
+    green: "Green",
+    blue: "Blue",
+    red: "Red",
+    orange: "Orange",
+    purple: "Purple",
+};
+
+const THEME_CLASS_NAMES: Record<ReaderTheme, string> = {
+    light: "theme-light",
+    sepia: "theme-sepia",
+    dark: "theme-dark",
+};
+
+const READER_THEME_CSS_VARS: Record<ThemeColorSlot, string> = {
+    bg: "--reader-bg-override",
+    fg: "--reader-fg-override",
+    link: "--reader-link-override",
+};
+
+const FALLBACK_THEME_COLORS: Record<ReaderTheme, Record<ThemeColorSlot, string>> = {
+    light: {
+        bg: "#ffffff",
+        fg: "#1a1a1a",
+        link: "#1a1a1a",
     },
-    green: {
-        label: "Green",
-        solid: "#2e7d32",
-        soft: "rgba(46, 125, 50, 0.24)",
-        softDark: "rgba(46, 125, 50, 0.2)",
-        picker: "#a5d6a7",
-        pickerActive: "#81c784",
+    sepia: {
+        bg: "#f4ecd8",
+        fg: "#3d3025",
+        link: "#3d3025",
     },
-    blue: {
-        label: "Blue",
-        solid: "#1976d2",
-        soft: "rgba(25, 118, 210, 0.22)",
-        softDark: "rgba(25, 118, 210, 0.18)",
-        picker: "#90caf9",
-        pickerActive: "#64b5f6",
-    },
-    red: {
-        label: "Red",
-        solid: "#d32f2f",
-        soft: "rgba(211, 47, 47, 0.22)",
-        softDark: "rgba(211, 47, 47, 0.18)",
-        picker: "#ef9a9a",
-        pickerActive: "#e57373",
-    },
-    orange: {
-        label: "Orange",
-        solid: "#f57c00",
-        soft: "rgba(245, 124, 0, 0.24)",
-        softDark: "rgba(245, 124, 0, 0.2)",
-        picker: "#ffcc80",
-        pickerActive: "#ffb74d",
-    },
-    purple: {
-        label: "Purple",
-        solid: "#7b1fa2",
-        soft: "rgba(123, 31, 162, 0.22)",
-        softDark: "rgba(123, 31, 162, 0.18)",
-        picker: "#ce93d8",
-        pickerActive: "#ba68c8",
+    dark: {
+        bg: "#000000",
+        fg: "#ffffff",
+        link: "#ffffff",
     },
 };
 
+const FONT_FAMILY_VALUES: Record<FontFamily, string> = {
+    original: "var(--font-merriweather), Georgia, serif",
+    serif: "var(--font-merriweather), Georgia, serif",
+    sans: "var(--font-sans), monospace",
+    mono: "var(--font-mono), monospace",
+};
+
+const resolvedThemeColorCache = new Map<ReaderTheme, Record<ThemeColorSlot, string>>();
+const shelfColorCache = new Map<string, ShelfColorToken>();
+const engineUpdateCallbacks = new Set<() => void>();
+
+let currentSettings: ReaderSettings | null = null;
+
+function canResolveCssVariables(): boolean {
+    return (
+        typeof document !== "undefined"
+        && typeof getComputedStyle !== "undefined"
+        && !!document.documentElement
+    );
+}
+
+function readCssCustomProperty(element: Element, variableName: string): string | null {
+    const value = getComputedStyle(element).getPropertyValue(variableName).trim();
+    return value || null;
+}
+
+function hslToRgb(h: number, s: number, l: number): RgbColor {
+    const hue = ((h % 360) + 360) % 360;
+    const saturation = Math.max(0, Math.min(100, s)) / 100;
+    const lightness = Math.max(0, Math.min(100, l)) / 100;
+
+    const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+    const segment = hue / 60;
+    const x = chroma * (1 - Math.abs((segment % 2) - 1));
+
+    let redPrime = 0;
+    let greenPrime = 0;
+    let bluePrime = 0;
+
+    if (segment >= 0 && segment < 1) {
+        redPrime = chroma;
+        greenPrime = x;
+    } else if (segment >= 1 && segment < 2) {
+        redPrime = x;
+        greenPrime = chroma;
+    } else if (segment >= 2 && segment < 3) {
+        greenPrime = chroma;
+        bluePrime = x;
+    } else if (segment >= 3 && segment < 4) {
+        greenPrime = x;
+        bluePrime = chroma;
+    } else if (segment >= 4 && segment < 5) {
+        redPrime = x;
+        bluePrime = chroma;
+    } else {
+        redPrime = chroma;
+        bluePrime = x;
+    }
+
+    const match = lightness - chroma / 2;
+
+    return {
+        r: Math.round((redPrime + match) * 255),
+        g: Math.round((greenPrime + match) * 255),
+        b: Math.round((bluePrime + match) * 255),
+    };
+}
+
+function parseCssColorToRgb(color: string): RgbColor | null {
+    const normalized = color.trim().toLowerCase();
+
+    if (!normalized) {
+        return null;
+    }
+
+    const hex = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+    if (hex) {
+        const value = hex[1];
+        if (value.length === 3) {
+            return {
+                r: parseInt(value[0] + value[0], 16),
+                g: parseInt(value[1] + value[1], 16),
+                b: parseInt(value[2] + value[2], 16),
+            };
+        }
+
+        return {
+            r: parseInt(value.slice(0, 2), 16),
+            g: parseInt(value.slice(2, 4), 16),
+            b: parseInt(value.slice(4, 6), 16),
+        };
+    }
+
+    const rgb = normalized.match(
+        /^rgba?\(\s*([0-9]{1,3})(?:\s*,\s*|\s+)([0-9]{1,3})(?:\s*,\s*|\s+)([0-9]{1,3})(?:\s*[,/]\s*[0-9.]+)?\s*\)$/,
+    );
+    if (rgb) {
+        return {
+            r: Math.max(0, Math.min(255, Number(rgb[1]))),
+            g: Math.max(0, Math.min(255, Number(rgb[2]))),
+            b: Math.max(0, Math.min(255, Number(rgb[3]))),
+        };
+    }
+
+    const hsl = normalized.match(
+        /^hsla?\(\s*(-?[0-9.]+)(?:deg)?(?:\s+|,\s*)([0-9.]+)%\s*(?:,|\s+)\s*([0-9.]+)%/,
+    );
+    if (hsl) {
+        return hslToRgb(Number(hsl[1]), Number(hsl[2]), Number(hsl[3]));
+    }
+
+    return null;
+}
+
+function relativeLuminance({ r, g, b }: RgbColor): number {
+    const channel = (value: number) => {
+        const srgb = value / 255;
+        return srgb <= 0.03928 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+    };
+
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function getContrastRatio(a: number, b: number): number {
+    const lighter = Math.max(a, b);
+    const darker = Math.min(a, b);
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+function resolveAccessibleAccentContrast(accentCssColor: string): string {
+    const rgb = parseCssColorToRgb(accentCssColor);
+    if (!rgb) {
+        return "#ffffff";
+    }
+
+    const accentLuminance = relativeLuminance(rgb);
+    const whiteContrast = getContrastRatio(accentLuminance, 1);
+    const blackContrast = getContrastRatio(accentLuminance, 0);
+
+    return whiteContrast >= blackContrast ? "#ffffff" : "#000000";
+}
+
+function syncAccentContrastToken(root: HTMLElement): void {
+    const styles = getComputedStyle(root);
+    const accent = styles.getPropertyValue("--color-accent").trim();
+    if (!accent) {
+        return;
+    }
+
+    const contrast = resolveAccessibleAccentContrast(accent);
+    root.style.setProperty("--app-accent-contrast", contrast);
+    root.style.setProperty("--color-accent-contrast", contrast);
+}
+
+function resolveThemeColors(theme: ReaderTheme): Record<ThemeColorSlot, string> {
+    if (!canResolveCssVariables()) {
+        return FALLBACK_THEME_COLORS[theme];
+    }
+
+    const host = document.body ?? document.documentElement;
+    const probe = document.createElement("div");
+    probe.className = THEME_CLASS_NAMES[theme];
+    probe.style.position = "fixed";
+    probe.style.opacity = "0";
+    probe.style.pointerEvents = "none";
+    probe.style.inset = "0";
+    host.appendChild(probe);
+
+    const fallback = FALLBACK_THEME_COLORS[theme];
+    const resolved = {
+        bg: readCssCustomProperty(probe, READER_THEME_CSS_VARS.bg) ?? fallback.bg,
+        fg: readCssCustomProperty(probe, READER_THEME_CSS_VARS.fg) ?? fallback.fg,
+        link: readCssCustomProperty(probe, READER_THEME_CSS_VARS.link) ?? fallback.link,
+    };
+
+    host.removeChild(probe);
+    return resolved;
+}
+
+function highlightColorVarName(color: HighlightColor, tone: HighlightColorTone): string {
+    if (tone === "solid") {
+        return `--highlight-${color}`;
+    }
+    if (tone === "soft") {
+        return `--highlight-${color}-soft`;
+    }
+    if (tone === "picker") {
+        return `--highlight-${color}-picker`;
+    }
+    return `--highlight-${color}-picker-active`;
+}
+
+function highlightColorVarReference(color: HighlightColor, tone: HighlightColorTone): string {
+    return `var(${highlightColorVarName(color, tone)})`;
+}
+
+function resolveHighlightToneColor(color: HighlightColor, tone: HighlightColorTone): string {
+    const variableName = highlightColorVarName(color, tone);
+    return readRootCssCustomProperty(variableName) ?? highlightColorVarReference(color, tone);
+}
+
+function hashString(value: string): number {
+    let hash = 2166136261;
+    for (let i = 0; i < value.length; i += 1) {
+        hash ^= value.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+function createSeededRandom(seed: number): () => number {
+    let state = seed >>> 0;
+    return () => {
+        state = (state + 0x6d2b79f5) >>> 0;
+        let t = Math.imul(state ^ (state >>> 15), 1 | state);
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function isCurrentSurfaceDark(): boolean {
+    const background = readRootCssCustomProperty("--color-background")
+        ?? readRootCssCustomProperty("--reader-bg");
+
+    if (!background) {
+        return false;
+    }
+
+    const rgb = parseCssColorToRgb(background);
+    if (!rgb) {
+        return false;
+    }
+
+    return relativeLuminance(rgb) < 0.45;
+}
+
+function getReadableTextColor(background: RgbColor): string {
+    const bgLuminance = relativeLuminance(background);
+    const whiteContrast = getContrastRatio(bgLuminance, 1);
+    const blackContrast = getContrastRatio(bgLuminance, 0);
+
+    return whiteContrast >= blackContrast ? "#ffffff" : "#111111";
+}
+
+function buildShelfColor(seed: number, darkSurface: boolean): ShelfColorToken {
+    const random = createSeededRandom(seed);
+    const hue = Math.floor(random() * 360);
+    const saturation = darkSurface ? 28 + random() * 20 : 22 + random() * 18;
+    const lightness = darkSurface ? 20 + random() * 12 : 84 + random() * 10;
+    const borderLightness = darkSurface
+        ? Math.min(52, lightness + 10)
+        : Math.max(58, lightness - 18);
+    const iconLightness = darkSurface ? 82 : 24;
+
+    const backgroundRgb = hslToRgb(hue, saturation, lightness);
+
+    return {
+        bg: `hsl(${hue} ${saturation.toFixed(1)}% ${lightness.toFixed(1)}%)`,
+        text: getReadableTextColor(backgroundRgb),
+        border: `hsl(${hue} ${Math.max(16, saturation - 6).toFixed(1)}% ${borderLightness.toFixed(1)}%)`,
+        icon: `hsl(${hue} ${Math.min(88, saturation + 10).toFixed(1)}% ${iconLightness.toFixed(1)}%)`,
+    };
+}
+
+function notifyEnginesOfStyleChange(): void {
+    engineUpdateCallbacks.forEach((callback) => {
+        try {
+            callback();
+        } catch (error) {
+            console.error("Error notifying engine of style change:", error);
+        }
+    });
+}
+
+export function readRootCssCustomProperty(variableName: string): string | null {
+    if (!canResolveCssVariables()) {
+        return null;
+    }
+    return readCssCustomProperty(document.documentElement, variableName);
+}
+
+export function getThemeColors(theme: ReaderTheme): { bg: string; fg: string; link: string } {
+    const cached = resolvedThemeColorCache.get(theme);
+    if (cached) {
+        return cached;
+    }
+
+    const resolved = resolveThemeColors(theme);
+    resolvedThemeColorCache.set(theme, resolved);
+    return resolved;
+}
+
+export const HIGHLIGHT_COLOR_TOKENS: Record<HighlightColor, HighlightColorToken> = Object.fromEntries(
+    HIGHLIGHT_COLORS_ORDER.map((color) => [
+        color,
+        {
+            label: HIGHLIGHT_LABELS[color],
+            solid: highlightColorVarReference(color, "solid"),
+            soft: highlightColorVarReference(color, "soft"),
+            picker: highlightColorVarReference(color, "picker"),
+            pickerActive: highlightColorVarReference(color, "pickerActive"),
+        },
+    ]),
+) as Record<HighlightColor, HighlightColorToken>;
+
 export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = Object.fromEntries(
     Object.entries(HIGHLIGHT_COLOR_TOKENS).map(([color, token]) => [color, token.soft]),
-) as Record<HighlightColor, string>;
-
-export const HIGHLIGHT_COLORS_DARK: Record<HighlightColor, string> = Object.fromEntries(
-    Object.entries(HIGHLIGHT_COLOR_TOKENS).map(([color, token]) => [color, token.softDark]),
 ) as Record<HighlightColor, string>;
 
 export const HIGHLIGHT_SOLID_COLORS: Record<HighlightColor, string> = Object.fromEntries(
@@ -417,42 +386,131 @@ export const HIGHLIGHT_PICKER_ACTIVE_COLORS: Record<HighlightColor, string> = Ob
     Object.entries(HIGHLIGHT_COLOR_TOKENS).map(([color, token]) => [color, token.pickerActive]),
 ) as Record<HighlightColor, string>;
 
-export interface ShelfColorToken {
-    bg: string;
-    text: string;
-    border: string;
-    icon: string;
-    dotClass: string;
+export function getHighlightSolidColor(color: HighlightColor): string {
+    return resolveHighlightToneColor(color, "solid");
 }
 
-export const SHELF_COLOR_PALETTE: ShelfColorToken[] = [
-    { bg: "#f8f8f8", text: "#111111", border: "#d4d4d4", icon: "#1a1a1a", dotClass: "bg-zinc-300" },
-    { bg: "#f4f4f4", text: "#111111", border: "#d0d0d0", icon: "#1a1a1a", dotClass: "bg-zinc-400" },
-    { bg: "#f0f0f0", text: "#111111", border: "#c8c8c8", icon: "#1f1f1f", dotClass: "bg-neutral-400" },
-    { bg: "#ebebeb", text: "#111111", border: "#c2c2c2", icon: "#222222", dotClass: "bg-neutral-500" },
-    { bg: "#e7e7e7", text: "#111111", border: "#bcbcbc", icon: "#242424", dotClass: "bg-stone-500" },
-    { bg: "#e3e3e3", text: "#111111", border: "#b6b6b6", icon: "#262626", dotClass: "bg-slate-500" },
-    { bg: "#dedede", text: "#111111", border: "#afafaf", icon: "#282828", dotClass: "bg-slate-600" },
-    { bg: "#d9d9d9", text: "#111111", border: "#a8a8a8", icon: "#2a2a2a", dotClass: "bg-zinc-600" },
-    { bg: "#d4d4d4", text: "#111111", border: "#a1a1a1", icon: "#2d2d2d", dotClass: "bg-zinc-700" },
-    { bg: "#cfcfcf", text: "#111111", border: "#9a9a9a", icon: "#303030", dotClass: "bg-neutral-700" },
-    { bg: "#cacaca", text: "#111111", border: "#949494", icon: "#333333", dotClass: "bg-neutral-800" },
-    { bg: "#c5c5c5", text: "#111111", border: "#8e8e8e", icon: "#363636", dotClass: "bg-stone-700" },
-    { bg: "#c0c0c0", text: "#111111", border: "#878787", icon: "#383838", dotClass: "bg-slate-700" },
-    { bg: "#bbbbbb", text: "#111111", border: "#818181", icon: "#3b3b3b", dotClass: "bg-slate-800" },
-    { bg: "#b6b6b6", text: "#111111", border: "#7a7a7a", icon: "#3e3e3e", dotClass: "bg-zinc-800" },
-];
+export function getShelfColor(shelfId: string, shelfName: string): ShelfColorToken {
+    const themeKey = isCurrentSurfaceDark() ? "dark" : "light";
+    const normalizedShelfName = shelfName.trim().toLowerCase();
+    const key = `${themeKey}:${shelfId}:${normalizedShelfName}`;
+    const cached = shelfColorCache.get(key);
 
-export const READER_THEME_PREVIEWS: Record<ReaderTheme, { bg: string; fg: string }> = {
-    light: { bg: "#ffffff", fg: "#1a1a1a" },
-    sepia: { bg: "#f4ecd8", fg: "#3d3025" },
-    dark: { bg: "#000000", fg: "#ffffff" },
-};
+    if (cached) {
+        return cached;
+    }
 
-export const DESIGN_TOKENS = {
-    vars: DESIGN_TOKEN_VARS,
-    themes: APP_THEME_PALETTES,
-    highlights: HIGHLIGHT_COLOR_TOKENS,
-    shelves: SHELF_COLOR_PALETTE,
-    readerThemePreviews: READER_THEME_PREVIEWS,
-} as const;
+    const color = buildShelfColor(hashString(key), themeKey === "dark");
+    shelfColorCache.set(key, color);
+    return color;
+}
+
+export function getShelfInitials(name: string): string {
+    return name
+        .split(" ")
+        .map((word) => word[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2);
+}
+
+export function getCurrentReaderSettings(): ReaderSettings | null {
+    return currentSettings;
+}
+
+export function applyReaderStyles(settings: ReaderSettings): void {
+    currentSettings = settings;
+
+    if (typeof document === "undefined") {
+        return;
+    }
+
+    const root = document.documentElement;
+    const colors = getThemeColors(settings.theme);
+    const isDark = settings.theme === "dark";
+
+    root.style.setProperty("--reader-bg", colors.bg);
+    root.style.setProperty("--reader-fg", colors.fg);
+    root.style.setProperty("--reader-link", colors.link);
+
+    root.style.setProperty("--reader-font-size", `${settings.fontSize}px`);
+    root.style.setProperty("--reader-line-height", String(settings.lineHeight));
+    root.style.setProperty("--reader-font-family", FONT_FAMILY_VALUES[settings.fontFamily]);
+    root.style.setProperty("--reader-letter-spacing", `${settings.letterSpacing}em`);
+    root.style.setProperty("--reader-word-spacing", `${settings.wordSpacing}em`);
+    root.style.setProperty("--reader-paragraph-spacing", `${settings.paragraphSpacing}em`);
+    root.style.setProperty("--reader-text-align", settings.textAlign);
+
+    root.style.setProperty("--reader-margin-x", `${settings.margins}%`);
+    root.style.setProperty("--reader-margin-y", `${Math.max(2, settings.margins / 2)}%`);
+    root.style.setProperty("--reader-brightness", `${settings.brightness}%`);
+    root.style.setProperty("--reader-zoom", `${settings.zoom / 100}`);
+    root.style.setProperty("--reader-flow", settings.flow);
+
+    document.body.classList.remove("theme-light", "theme-sepia", "theme-dark");
+    document.body.classList.add(`theme-${settings.theme}`);
+
+    syncAccentContrastToken(root);
+    root.style.colorScheme = isDark ? "dark" : "light";
+
+    notifyEnginesOfStyleChange();
+}
+
+export function registerEngineStyleCallback(callback: () => void): () => void {
+    engineUpdateCallbacks.add(callback);
+    return () => engineUpdateCallbacks.delete(callback);
+}
+
+export function getSettingsChanges(
+    prev: ReaderSettings | null,
+    current: ReaderSettings,
+): { cssChanged: boolean; engineChanged: boolean; changedKeys: string[] } {
+    if (!prev) {
+        return { cssChanged: true, engineChanged: true, changedKeys: Object.keys(current) };
+    }
+
+    const cssKeys = [
+        "theme",
+        "fontSize",
+        "lineHeight",
+        "fontFamily",
+        "letterSpacing",
+        "wordSpacing",
+        "paragraphSpacing",
+        "textAlign",
+        "margins",
+        "brightness",
+        "zoom",
+    ];
+
+    const engineKeys = [
+        "theme",
+        "fontSize",
+        "lineHeight",
+        "fontFamily",
+        "textAlign",
+        "hyphenation",
+        "flow",
+        "layout",
+        "margins",
+        "zoom",
+        "forcePublisherStyles",
+    ];
+
+    const changedKeys: string[] = [];
+    for (const key of Object.keys(current) as Array<keyof ReaderSettings>) {
+        if (prev[key] !== current[key]) {
+            changedKeys.push(key);
+        }
+    }
+
+    return {
+        cssChanged: changedKeys.some((key) => cssKeys.includes(key)),
+        engineChanged: changedKeys.some((key) => engineKeys.includes(key)),
+        changedKeys,
+    };
+}
+
+export function initReaderStyles(settings: ReaderSettings): void {
+    applyReaderStyles(settings);
+}

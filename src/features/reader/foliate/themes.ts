@@ -3,7 +3,7 @@
  * Ported from Foliate GTK app
  */
 
-import { APP_THEME_PALETTES } from "../../../core";
+import { getThemeColors, type ReaderTheme } from "../../../core";
 
 export interface ThemeColors {
     fg: string;
@@ -12,56 +12,31 @@ export interface ThemeColors {
 }
 
 export interface Theme {
-    name: string;
+    name: ReaderTheme;
     label: string;
     light: ThemeColors;
     dark: ThemeColors;
 }
 
-export const themes: Theme[] = [
-    {
-        name: "light",
-        label: "Light",
-        light: {
-            fg: APP_THEME_PALETTES.light.readerFg,
-            bg: APP_THEME_PALETTES.light.readerBg,
-            link: APP_THEME_PALETTES.light.readerLink,
-        },
-        dark: {
-            fg: APP_THEME_PALETTES.light.readerFg,
-            bg: APP_THEME_PALETTES.light.readerBg,
-            link: APP_THEME_PALETTES.light.readerLink,
-        },
-    },
-    {
-        name: "sepia",
-        label: "Sepia",
-        light: {
-            fg: APP_THEME_PALETTES.sepia.readerFg,
-            bg: APP_THEME_PALETTES.sepia.readerBg,
-            link: APP_THEME_PALETTES.sepia.readerLink,
-        },
-        dark: {
-            fg: APP_THEME_PALETTES.sepia.readerFg,
-            bg: APP_THEME_PALETTES.sepia.readerBg,
-            link: APP_THEME_PALETTES.sepia.readerLink,
-        },
-    },
-    {
-        name: "dark",
-        label: "Dark",
-        light: {
-            fg: APP_THEME_PALETTES.dark.readerFg,
-            bg: APP_THEME_PALETTES.dark.readerBg,
-            link: APP_THEME_PALETTES.dark.readerLink,
-        },
-        dark: {
-            fg: APP_THEME_PALETTES.dark.readerFg,
-            bg: APP_THEME_PALETTES.dark.readerBg,
-            link: APP_THEME_PALETTES.dark.readerLink,
-        },
-    },
-];
+const THEME_LABELS: Record<ReaderTheme, string> = {
+    light: "Light",
+    sepia: "Sepia",
+    dark: "Dark",
+};
+
+const THEME_ORDER: ReaderTheme[] = ["light", "sepia", "dark"];
+
+function buildTheme(name: ReaderTheme): Theme {
+    const colors = getThemeColors(name);
+    return {
+        name,
+        label: THEME_LABELS[name],
+        light: { ...colors },
+        dark: { ...colors },
+    };
+}
+
+export const themes: Theme[] = THEME_ORDER.map((themeName) => buildTheme(themeName));
 
 export const invertTheme = (theme: Theme) => ({
     ...theme,
@@ -72,5 +47,6 @@ export const invertTheme = (theme: Theme) => ({
 });
 
 export const getTheme = (name: string): Theme => {
-    return themes.find((theme) => theme.name === name) || themes[0];
+    const themeName = THEME_ORDER.find((theme) => theme === name) ?? "light";
+    return buildTheme(themeName);
 };

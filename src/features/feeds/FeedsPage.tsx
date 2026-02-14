@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { cn, UI_BUTTON_BASE_CLASS } from "../../core";
+import { cn } from "../../core";
 import { useRssStore } from "../../core";
 import type { RssFeed, RssArticle } from "../../core";
 import {
@@ -529,7 +529,7 @@ export function FeedsPage() {
                         onClick={handleRefreshAll}
                         disabled={isRefreshing}
                         className={cn(
-                            UI_BUTTON_BASE_CLASS,
+                            "ui-btn",
                             "disabled:opacity-50",
                         )}
                         title="Refresh feeds"

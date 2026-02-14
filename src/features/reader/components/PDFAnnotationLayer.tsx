@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     HIGHLIGHT_COLORS,
-    HIGHLIGHT_SOLID_COLORS,
+    getHighlightSolidColor,
 } from "../../../core";
 import { cn } from "../../../core";
 import type { Annotation, HighlightColor } from "../../../core";
@@ -30,8 +30,6 @@ interface PDFAnnotationLayerProps {
     onAnnotationChange?: (annotation: Annotation) => void;
     onAnnotationRemove: (id: string) => void;
 }
-
-const PEN_COLORS: Record<HighlightColor, string> = HIGHLIGHT_SOLID_COLORS;
 
 const PDF_HIGHLIGHT_COLORS: Record<HighlightColor, string> = HIGHLIGHT_COLORS;
 
@@ -233,7 +231,7 @@ export function PDFAnnotationLayer({
         context.lineWidth = penWidth * scale;
         context.lineCap = "round";
         context.lineJoin = "round";
-        context.strokeStyle = PEN_COLORS[penColor];
+        context.strokeStyle = getHighlightSolidColor(penColor);
         context.lineTo(localPoint.x * scale, localPoint.y * scale);
         context.stroke();
     }, [getLocalPoint, isDrawing, penColor, penWidth, scale]);
@@ -634,7 +632,7 @@ export function PDFAnnotationLayer({
                         .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x * scale} ${point.y * scale}`)
                         .join(" ");
                     const strokeWidth = (annotation.strokeWidth ?? 2) * scale;
-                    const strokeColor = PEN_COLORS[annotation.color || penColor];
+                    const strokeColor = getHighlightSolidColor(annotation.color || penColor);
 
                     return (
                         <svg key={annotation.id} className="absolute inset-0 w-full h-full pointer-events-none">
@@ -669,7 +667,7 @@ export function PDFAnnotationLayer({
                                 top: `${top}px`,
                                 width: `${iconSize}px`,
                                 height: `${iconSize}px`,
-                                backgroundColor: PEN_COLORS[annotation.color || penColor],
+                                backgroundColor: getHighlightSolidColor(annotation.color || penColor),
                                 color: "var(--color-text-inverse)",
                                 borderColor: "var(--color-overlay-medium)",
                                 pointerEvents: mode === "text" ? "auto" : "none",

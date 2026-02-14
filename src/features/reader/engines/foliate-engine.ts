@@ -27,8 +27,8 @@ import {
     registerEngineStyleCallback,
     getCurrentReaderSettings,
     getThemeColors,
+    getHighlightSolidColor,
 } from '../../../core';
-import { HIGHLIGHT_SOLID_COLORS } from "../../../core";
 import { rankByFuzzyQuery } from "../../../core";
 import { normalizeAuthor } from '../../../core';
 
@@ -488,8 +488,17 @@ export class FoliateEngine {
     }
 
     private getHighlightColor(colorName: string): string {
-        const colorMap: Record<string, string> = HIGHLIGHT_SOLID_COLORS;
-        return colorMap[colorName] || colorMap.yellow;
+        const colorKey: HighlightColor = (
+            colorName === "yellow"
+            || colorName === "green"
+            || colorName === "blue"
+            || colorName === "red"
+            || colorName === "orange"
+            || colorName === "purple"
+        )
+            ? colorName
+            : "yellow";
+        return getHighlightSolidColor(colorKey);
     }
 
     /**

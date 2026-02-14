@@ -1,5 +1,4 @@
 import { Component, ReactNode } from "react";
-import { UI_BUTTON_PRIMARY_CLASS } from "../core";
 
 interface Props {
     children: ReactNode;
@@ -61,7 +60,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         )}
                         <button
                             onClick={() => window.location.reload()}
-                            className={UI_BUTTON_PRIMARY_CLASS}
+                            className="ui-btn-primary"
                         >
                             Reload Page
                         </button>

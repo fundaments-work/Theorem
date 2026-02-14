@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
 import {
     cn,
-    UI_BUTTON_GHOST_CLASS,
-    UI_BUTTON_PRIMARY_CLASS,
-    UI_INPUT_BASE_CLASS,
 } from "../../../../core";
 import { Modal, ModalBody, ModalFooter } from "../../../../ui";
 
@@ -49,7 +46,7 @@ export function EditNoteModal({ isOpen, content, onClose, onSave }: EditNoteModa
                     onChange={(e) => setEditContent(e.target.value)}
                     onKeyDown={handleKeyDown}
                     className={cn(
-                        UI_INPUT_BASE_CLASS,
+                        "ui-input",
                         "h-40 p-3 resize-none"
                     )}
                     placeholder="Add your note..."
@@ -59,13 +56,13 @@ export function EditNoteModal({ isOpen, content, onClose, onSave }: EditNoteModa
             <ModalFooter>
                 <button
                     onClick={onClose}
-                    className={UI_BUTTON_GHOST_CLASS}
+                    className="ui-btn-ghost"
                 >
                     Cancel
                 </button>
                 <button
                     onClick={handleSave}
-                    className={UI_BUTTON_PRIMARY_CLASS}
+                    className="ui-btn-primary"
                 >
                     Save
                 </button>

@@ -27,11 +27,6 @@ import {
 import {
     cn,
     isFixedLayout,
-    READER_THEME_PREVIEWS,
-    UI_BUTTON_BASE_CLASS,
-    UI_CHIP_BUTTON_BASE_CLASS,
-    UI_ICON_BUTTON_BASE_CLASS,
-    UI_TAB_BUTTON_BASE_CLASS,
     type BookFormat,
     type FontFamily,
     type ReaderSettings as ReaderSettingsType,
@@ -54,29 +49,21 @@ const THEMES: Array<{
     id: ReaderTheme;
     label: string;
     icon: React.ReactNode;
-    previewBg: string;
-    previewFg: string;
 }> = [
     {
         id: "light",
         label: "Light",
         icon: <Sun className="w-5 h-5" />,
-        previewBg: READER_THEME_PREVIEWS.light.bg,
-        previewFg: READER_THEME_PREVIEWS.light.fg,
     },
     {
         id: "sepia",
         label: "Sepia",
         icon: <Sunrise className="w-5 h-5" />,
-        previewBg: READER_THEME_PREVIEWS.sepia.bg,
-        previewFg: READER_THEME_PREVIEWS.sepia.fg,
     },
     {
         id: "dark",
         label: "Dark",
         icon: <Moon className="w-5 h-5" />,
-        previewBg: READER_THEME_PREVIEWS.dark.bg,
-        previewFg: READER_THEME_PREVIEWS.dark.fg,
     },
 ];
 
@@ -98,10 +85,10 @@ const ALIGN_OPTIONS = [
     { id: "center", label: "Center", icon: AlignCenter },
 ] as const;
 
-const SECONDARY_BUTTON_CLASS = UI_BUTTON_BASE_CLASS;
-const TAB_BUTTON_CLASS = UI_TAB_BUTTON_BASE_CLASS;
-const CHIP_CONTROL_CLASS = UI_CHIP_BUTTON_BASE_CLASS;
-const ICON_CONTROL_BUTTON_CLASS = UI_ICON_BUTTON_BASE_CLASS;
+const SECONDARY_BUTTON_CLASS = "ui-btn";
+const TAB_BUTTON_CLASS = "ui-tab-btn";
+const CHIP_CONTROL_CLASS = "ui-chip-btn";
+const ICON_CONTROL_BUTTON_CLASS = "ui-icon-btn";
 
 function useSmoothSlider(
     initialValue: number,
@@ -350,7 +337,11 @@ export function ReaderSettings({
                                                 data-active={active}
                                                 aria-pressed={active}
                                             >
-                                                <span className="mx-auto mb-2 inline-flex h-9 w-9 items-center justify-center border border-[var(--color-border)]" style={{ backgroundColor: theme.previewBg, color: theme.previewFg }}>
+                                                <span
+                                                    className="theme-preview mx-auto mb-2 inline-flex h-9 w-9 items-center justify-center border border-[var(--color-border)]"
+                                                    data-theme={theme.id}
+                                                    style={{ backgroundColor: "var(--reader-bg)", color: "var(--reader-fg)" }}
+                                                >
                                                     {theme.icon}
                                                 </span>
                                                 <span className="block text-[10px] font-medium tracking-wide">{theme.label}</span>

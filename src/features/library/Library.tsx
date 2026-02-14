@@ -7,8 +7,6 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
     cn,
     normalizeAuthor,
-    UI_BUTTON_BASE_CLASS,
-    UI_BUTTON_PRIMARY_CLASS,
 } from "../../core";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core";
 import { formatProgress, formatFileSize, formatRelativeDate } from "../../core";
@@ -38,9 +36,9 @@ const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
 };
 
 const TOOLBAR_BUTTON_BASE =
-    `${UI_BUTTON_BASE_CLASS} disabled:opacity-50`;
+    "ui-btn disabled:opacity-50";
 const TOOLBAR_BUTTON_PRIMARY =
-    `${UI_BUTTON_PRIMARY_CLASS} disabled:opacity-50`;
+    "ui-btn-primary disabled:opacity-50";
 const TOOLBAR_ICON_BUTTON = "h-10 w-10 px-0";
 
 type ExtractMetadataFn = typeof import("../../core").extractMetadata;

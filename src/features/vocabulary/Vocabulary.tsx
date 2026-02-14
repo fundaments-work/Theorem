@@ -10,10 +10,6 @@ import {
 } from "lucide-react";
 import {
     cn,
-    UI_BUTTON_BASE_CLASS,
-    UI_BUTTON_DANGER_CLASS,
-    UI_BUTTON_PRIMARY_CLASS,
-    UI_INPUT_BASE_CLASS,
 } from "../../core";
 import { useVocabularyStore, useUIStore } from "../../core";
 import type { VocabularyContext, VocabularyTerm } from "../../core";
@@ -25,10 +21,10 @@ interface SourceFilterOption {
     lastSeenAt: Date | null;
 }
 
-const VOCAB_BUTTON_BASE = UI_BUTTON_BASE_CLASS;
-const VOCAB_BUTTON_PRIMARY = UI_BUTTON_PRIMARY_CLASS;
-const VOCAB_BUTTON_DANGER = UI_BUTTON_DANGER_CLASS;
-const VOCAB_INPUT_CLASS = UI_INPUT_BASE_CLASS;
+const VOCAB_BUTTON_BASE = "ui-btn";
+const VOCAB_BUTTON_PRIMARY = "ui-btn-primary";
+const VOCAB_BUTTON_DANGER = "ui-btn-danger";
+const VOCAB_INPUT_CLASS = "ui-input";
 
 function getTermPrimaryDefinition(term: VocabularyTerm): string {
     const firstMeaning = term.meanings[0];

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { applyReaderStyles, initReaderStyles } from "../lib/reader-styles";
+import { applyReaderStyles, initReaderStyles } from "../lib/design-tokens";
 import { appendAnnotationToVaultMarkdown } from "../lib/vault-sync";
 import {
     lookupDictionaryTerm,

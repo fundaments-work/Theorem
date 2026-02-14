@@ -4,7 +4,7 @@
  */
 
 import { useRef, useState, type ChangeEvent } from "react";
-import { cn, UI_BUTTON_BASE_CLASS, UI_INPUT_BASE_CLASS } from "../../core";
+import { cn } from "../../core";
 import {
     showOpenDirectoryDialog,
     useVocabularyStore,
@@ -730,7 +730,7 @@ export function SettingsPage() {
                                     onChange={(e) => updateVaultSettings({ vaultPath: e.target.value })}
                                     placeholder="/Users/you/Documents/ObsidianVault"
                                     className={cn(
-                                        UI_INPUT_BASE_CLASS,
+                                        "ui-input",
                                         "min-w-[20rem] sm:w-[28rem]"
                                     )}
                                 />
@@ -738,7 +738,7 @@ export function SettingsPage() {
                                     onClick={() => {
                                         void handlePickVaultDirectory();
                                     }}
-                                    className={UI_BUTTON_BASE_CLASS}
+                                    className="ui-btn"
                                 >
                                     Pick folder
                                 </button>
@@ -764,7 +764,7 @@ export function SettingsPage() {
                                 value={settings.vault.highlightsFileName}
                                 onChange={(e) => updateVaultSettings({ highlightsFileName: e.target.value })}
                                 placeholder="theorem-highlights.md"
-                                className={cn(UI_INPUT_BASE_CLASS, "min-w-[16rem]")}
+                                className={cn("ui-input", "min-w-[16rem]")}
                             />
                         </SettingRow>
 
