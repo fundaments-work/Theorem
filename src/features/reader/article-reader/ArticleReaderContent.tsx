@@ -4,7 +4,7 @@ import {
     type FontFamily,
     type ReaderSettings as ReaderSettingsState,
     type RssArticle,
-} from "@theorem/core";
+} from "../../../core";
 import type { ArticleHeading } from "./types";
 import { formatArticleDate, sanitizeArticleHtml } from "./utils";
 

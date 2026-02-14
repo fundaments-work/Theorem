@@ -3,7 +3,7 @@
  * Reusable backdrop for panels and modals
  */
 
-import { cn } from '@theorem/core';
+import { cn } from '../core';
 
 interface BackdropProps {
     visible: boolean;

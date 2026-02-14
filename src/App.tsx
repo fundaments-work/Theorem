@@ -1,40 +1,40 @@
 import { Suspense, lazy, useEffect, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { AppTitlebar, Sidebar } from "@theorem/shell";
+import { AppTitlebar, Sidebar } from "./shell";
 import {
     useUIStore,
     useSettingsStore,
-} from "@theorem/core";
-import { isTauri } from "@theorem/core";
-import { cn } from "@theorem/core";
-import { initReaderStyles } from "@theorem/core";
+} from "./core";
+import { isTauri } from "./core";
+import { cn } from "./core";
+import { initReaderStyles } from "./core";
 
 const LibraryPage = lazy(() =>
-    import("@theorem/feature-library").then((module) => ({ default: module.LibraryPage })),
+    import("./features/library").then((module) => ({ default: module.LibraryPage })),
 );
 const ReaderPage = lazy(() =>
-    import("@theorem/feature-reader").then((module) => ({ default: module.ReaderPage })),
+    import("./features/reader").then((module) => ({ default: module.ReaderPage })),
 );
 const VocabularyPage = lazy(() =>
-    import("@theorem/feature-vocabulary").then((module) => ({ default: module.VocabularyPage })),
+    import("./features/vocabulary").then((module) => ({ default: module.VocabularyPage })),
 );
 const ShelvesPage = lazy(() =>
-    import("@theorem/feature-library").then((module) => ({ default: module.ShelvesPage })),
+    import("./features/library").then((module) => ({ default: module.ShelvesPage })),
 );
 const AnnotationsPage = lazy(() =>
-    import("@theorem/feature-library").then((module) => ({ default: module.AnnotationsPage })),
+    import("./features/library").then((module) => ({ default: module.AnnotationsPage })),
 );
 const BookmarksPage = lazy(() =>
-    import("@theorem/feature-library").then((module) => ({ default: module.BookmarksPage })),
+    import("./features/library").then((module) => ({ default: module.BookmarksPage })),
 );
 const SettingsPage = lazy(() =>
-    import("@theorem/feature-settings").then((module) => ({ default: module.SettingsPage })),
+    import("./features/settings").then((module) => ({ default: module.SettingsPage })),
 );
 const StatisticsPage = lazy(() =>
-    import("@theorem/feature-statistics").then((module) => ({ default: module.StatisticsPage })),
+    import("./features/statistics").then((module) => ({ default: module.StatisticsPage })),
 );
 const FeedsPage = lazy(() =>
-    import("@theorem/feature-feeds").then((module) => ({ default: module.FeedsPage })),
+    import("./features/feeds").then((module) => ({ default: module.FeedsPage })),
 );
 const DESKTOP_STARTUP_MIN_WIDTH = 1024;
 const DESKTOP_STARTUP_MIN_HEIGHT = 720;

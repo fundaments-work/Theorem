@@ -10,8 +10,7 @@
         "test": "echo \"No test script configured\"",
         "preview": "vite preview",
         "tauri": "tauri",
-        "rename:branding": "node ./scripts/replace-branding-with-theorem.mjs --write",
-        "rename:branding:dry": "node ./scripts/replace-branding-with-theorem.mjs"
+        "clean:tauri": "cargo clean --manifest-path src-tauri/Cargo.toml"
     },
     "dependencies": {
         "@mozilla/readability": "^0.6.0",

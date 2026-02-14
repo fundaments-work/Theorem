@@ -4,8 +4,8 @@ import {
     UI_BUTTON_GHOST_CLASS,
     UI_BUTTON_PRIMARY_CLASS,
     UI_INPUT_BASE_CLASS,
-} from "@theorem/core";
-import { Modal, ModalBody, ModalFooter } from "@theorem/ui";
+} from "../../../../core";
+import { Modal, ModalBody, ModalFooter } from "../../../../ui";
 
 interface ShelfModalProps {
     isOpen: boolean;

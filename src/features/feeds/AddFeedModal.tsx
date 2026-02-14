@@ -4,8 +4,8 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { cn } from "@theorem/core";
-import { Modal, ModalBody, ModalFooter } from "@theorem/ui";
+import { cn } from "../../core";
+import { Modal, ModalBody, ModalFooter } from "../../ui";
 import { Loader2, Rss, AlertCircle } from "lucide-react";
 
 interface AddFeedModalProps {

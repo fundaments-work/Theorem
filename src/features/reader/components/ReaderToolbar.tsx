@@ -13,8 +13,8 @@ import {
     Maximize2,
     Minimize2,
 } from 'lucide-react';
-import { cn, normalizeAuthor } from '@theorem/core';
-import type { DocMetadata, DocLocation } from '@theorem/core';
+import { cn, normalizeAuthor } from '../../../core';
+import type { DocMetadata, DocLocation } from '../../../core';
 
 interface ReaderToolbarProps {
     metadata: DocMetadata | null;

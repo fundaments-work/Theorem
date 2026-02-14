@@ -41,4 +41,4 @@ pnpm preview
 - Keep shell/layout in `src/shell`.
 - Keep generic UI primitives in `src/ui`.
 - Keep feature-specific logic/UI in `src/features/<feature-name>`.
-- Continue importing modules through aliases like `@theorem/core`, `@theorem/shell`, and `@theorem/feature-*`.
+- Use standard relative imports (no TypeScript path aliases).

@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { ErrorBoundary } from "@theorem/shell";
+import { ErrorBoundary } from "./shell";
 import "./index.css";
 
 const rootElement = document.getElementById("root");

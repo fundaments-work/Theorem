@@ -4,9 +4,9 @@
  */
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { cn, UI_BUTTON_BASE_CLASS } from "@theorem/core";
-import { useRssStore } from "@theorem/core";
-import type { RssFeed, RssArticle } from "@theorem/core";
+import { cn, UI_BUTTON_BASE_CLASS } from "../../core";
+import { useRssStore } from "../../core";
+import type { RssFeed, RssArticle } from "../../core";
 import {
     Rss, Plus, RefreshCw, Trash2, Loader2,
     ExternalLink, Heart, Clock, ChevronRight,

@@ -1,4 +1,4 @@
-import type { RssArticle } from "@theorem/core";
+import type { RssArticle } from "../../../core";
 
 export function sanitizeArticleHtml(html: string): string {
     if (!html) {

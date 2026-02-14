@@ -1,5 +1,5 @@
 import { Component, ReactNode } from "react";
-import { UI_BUTTON_PRIMARY_CLASS } from "@theorem/core";
+import { UI_BUTTON_PRIMARY_CLASS } from "../core";
 
 interface Props {
     children: ReactNode;

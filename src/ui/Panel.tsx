@@ -4,7 +4,7 @@
  * Theme-aware - adapts to reader theme colors
  */
 
-import { cn } from '@theorem/core';
+import { cn } from '../core';
 import { ReactNode } from 'react';
 
 export type PanelPosition = 'left' | 'right';

@@ -14,9 +14,9 @@ import {
     UI_BUTTON_DANGER_CLASS,
     UI_BUTTON_PRIMARY_CLASS,
     UI_INPUT_BASE_CLASS,
-} from "@theorem/core";
-import { useVocabularyStore, useUIStore } from "@theorem/core";
-import type { VocabularyContext, VocabularyTerm } from "@theorem/core";
+} from "../../core";
+import { useVocabularyStore, useUIStore } from "../../core";
+import type { VocabularyContext, VocabularyTerm } from "../../core";
 
 interface SourceFilterOption {
     key: string;

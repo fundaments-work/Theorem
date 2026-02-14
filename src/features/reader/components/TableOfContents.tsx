@@ -6,9 +6,9 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { ChevronDown, ChevronRight, X, List } from "lucide-react";
-import { cn } from "@theorem/core";
-import type { TocItem } from "@theorem/core";
-import { Backdrop } from "@theorem/ui";
+import { cn } from "../../../core";
+import type { TocItem } from "../../../core";
+import { Backdrop } from "../../../ui";
 
 interface TableOfContentsProps {
     toc: TocItem[];

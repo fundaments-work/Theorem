@@ -1,7 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { fileURLToPath } from "url";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 
 const host = process.env.TAURI_DEV_HOST;
@@ -25,22 +24,6 @@ export default defineConfig(async () => ({
             ],
         }),
     ],
-    resolve: {
-        alias: {
-            "@": fileURLToPath(new URL("./src", import.meta.url)),
-            "@theorem/core": fileURLToPath(new URL("./src/core", import.meta.url)),
-            "@theorem/shell": fileURLToPath(new URL("./src/shell", import.meta.url)),
-            "@theorem/ui": fileURLToPath(new URL("./src/ui", import.meta.url)),
-            "@theorem/feature-reader": fileURLToPath(new URL("./src/features/reader", import.meta.url)),
-            "@theorem/feature-library": fileURLToPath(new URL("./src/features/library", import.meta.url)),
-            "@theorem/feature-settings": fileURLToPath(new URL("./src/features/settings", import.meta.url)),
-            "@theorem/feature-statistics": fileURLToPath(new URL("./src/features/statistics", import.meta.url)),
-            "@theorem/feature-vocabulary": fileURLToPath(new URL("./src/features/vocabulary", import.meta.url)),
-            "@theorem/feature-feeds": fileURLToPath(new URL("./src/features/feeds", import.meta.url)),
-            "@foliate-js": fileURLToPath(new URL("./src/features/reader/foliate-js", import.meta.url)),
-        },
-    },
-
     // Optimize dependencies for faster dev server startup
     optimizeDeps: {
         exclude: [

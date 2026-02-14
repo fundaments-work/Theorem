@@ -4,13 +4,13 @@
  */
 
 import { useState, useMemo } from "react";
-import { HIGHLIGHT_SOLID_COLORS } from "@theorem/core";
-import { cn } from "@theorem/core";
-import { rankByFuzzyQuery } from "@theorem/core";
-import { useLibraryStore, useUIStore } from "@theorem/core";
-import type { HighlightColor } from "@theorem/core";
+import { HIGHLIGHT_SOLID_COLORS } from "../../core";
+import { cn } from "../../core";
+import { rankByFuzzyQuery } from "../../core";
+import { useLibraryStore, useUIStore } from "../../core";
+import type { HighlightColor } from "../../core";
 import { EditNoteModal } from "./components/modals/EditNoteModal";
-import { Dropdown } from "@theorem/ui";
+import { Dropdown } from "../../ui";
 import {
     Highlighter,
     StickyNote,

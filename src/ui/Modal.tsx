@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "@theorem/core";
+import { cn } from "../core";
 
 export interface ModalProps {
     isOpen: boolean;

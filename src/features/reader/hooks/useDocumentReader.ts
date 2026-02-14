@@ -16,7 +16,7 @@ import type {
     SearchResult,
     ThemeSettings,
     TocItem,
-} from "@theorem/core";
+} from "../../../core";
 
 export interface UseDocumentReaderOptions {
     onLocationChange?: (location: DocLocation) => void;

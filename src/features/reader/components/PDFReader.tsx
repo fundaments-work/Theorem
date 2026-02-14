@@ -17,8 +17,8 @@ import {
 } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
 import { PDFJsEngine, type PDFJsEngineRef, type PDFDocumentInfo } from "../engines/pdfjs-engine";
-import { cn } from "@theorem/core";
-import type { ReaderTheme, Annotation, HighlightColor, PdfZoomMode } from "@theorem/core";
+import { cn } from "../../../core";
+import type { ReaderTheme, Annotation, HighlightColor, PdfZoomMode } from "../../../core";
 
 // ============================================================================
 // Types

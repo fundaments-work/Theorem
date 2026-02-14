@@ -9,26 +9,26 @@ import {
     normalizeAuthor,
     UI_BUTTON_BASE_CLASS,
     UI_BUTTON_PRIMARY_CLASS,
-} from "@theorem/core";
-import { useLibraryStore, useUIStore, useSettingsStore } from "@theorem/core";
-import { formatProgress, formatFileSize, formatRelativeDate } from "@theorem/core";
-import { importBooks, pickAndImportBooks, scanFolderForBooks } from "@theorem/core";
-import { rankByFuzzyQuery } from "@theorem/core";
+} from "../../core";
+import { useLibraryStore, useUIStore, useSettingsStore } from "../../core";
+import { formatProgress, formatFileSize, formatRelativeDate } from "../../core";
+import { importBooks, pickAndImportBooks, scanFolderForBooks } from "../../core";
+import { rankByFuzzyQuery } from "../../core";
 import {
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
     ChevronDown, Star, X, ArrowUpDown
 } from "lucide-react";
-import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "@theorem/core";
-import { FORMAT_DISPLAY_NAMES } from "@theorem/core";
-import { isTauri } from "@theorem/core";
-import { getBookData } from "@theorem/core";
-import { ContextMenu } from "@theorem/ui";
-import type { ContextMenuItem } from "@theorem/ui";
-import { Dropdown } from "@theorem/ui";
-import { Modal, ModalBody, ModalFooter } from "@theorem/ui";
-import { confirmDeleteBook } from "@theorem/core";
-import { getShelfColor, getShelfInitials } from "@theorem/core";
+import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "../../core";
+import { FORMAT_DISPLAY_NAMES } from "../../core";
+import { isTauri } from "../../core";
+import { getBookData } from "../../core";
+import { ContextMenu } from "../../ui";
+import type { ContextMenuItem } from "../../ui";
+import { Dropdown } from "../../ui";
+import { Modal, ModalBody, ModalFooter } from "../../ui";
+import { confirmDeleteBook } from "../../core";
+import { getShelfColor, getShelfInitials } from "../../core";
 
 // View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
@@ -43,14 +43,14 @@ const TOOLBAR_BUTTON_PRIMARY =
     `${UI_BUTTON_PRIMARY_CLASS} disabled:opacity-50`;
 const TOOLBAR_ICON_BUTTON = "h-10 w-10 px-0";
 
-type ExtractMetadataFn = typeof import("@theorem/core").extractMetadata;
+type ExtractMetadataFn = typeof import("../../core").extractMetadata;
 
 const COVER_EXTRACTION_BATCH_SIZE = 3;
 let extractMetadataPromise: Promise<ExtractMetadataFn> | null = null;
 
 async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
     if (!extractMetadataPromise) {
-        extractMetadataPromise = import("@theorem/core").then(
+        extractMetadataPromise = import("../../core").then(
             (module) => module.extractMetadata,
         );
     }

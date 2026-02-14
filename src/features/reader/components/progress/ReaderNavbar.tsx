@@ -5,8 +5,8 @@
  */
 
 import { useCallback, useMemo, useState, useRef, useEffect, memo } from "react";
-import { cn } from "@theorem/core";
-import type { TocItem, DocLocation } from "@theorem/core";
+import { cn } from "../../../../core";
+import type { TocItem, DocLocation } from "../../../../core";
 
 interface ReaderNavbarProps {
     location: DocLocation | null;

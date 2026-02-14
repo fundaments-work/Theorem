@@ -4,17 +4,17 @@
  */
 
 import { useRef, useState, type ChangeEvent } from "react";
-import { cn, UI_BUTTON_BASE_CLASS, UI_INPUT_BASE_CLASS } from "@theorem/core";
+import { cn, UI_BUTTON_BASE_CLASS, UI_INPUT_BASE_CLASS } from "../../core";
 import {
     showOpenDirectoryDialog,
     useVocabularyStore,
     useLibraryStore,
     useSettingsStore,
     useUIStore,
-} from "@theorem/core";
-import { formatFileSize } from "@theorem/core";
-import { confirmClearAllData } from "@theorem/core";
-import { Dropdown } from "@theorem/ui";
+} from "../../core";
+import { formatFileSize } from "../../core";
+import { confirmClearAllData } from "../../core";
+import { Dropdown } from "../../ui";
 import {
     Settings,
     Layout,

@@ -20,17 +20,17 @@ import type {
     ThemeSettings,
     ReaderTheme,
     BookFormat,
-} from '@theorem/core';
-import { isFixedLayout, isReflowable } from '@theorem/core';
+} from '../../../core';
+import { isFixedLayout, isReflowable } from '../../../core';
 import { getTheme } from '../foliate/themes';
 import { 
     registerEngineStyleCallback,
     getCurrentReaderSettings,
     getThemeColors,
-} from '@theorem/core';
-import { HIGHLIGHT_SOLID_COLORS } from "@theorem/core";
-import { rankByFuzzyQuery } from "@theorem/core";
-import { normalizeAuthor } from '@theorem/core';
+} from '../../../core';
+import { HIGHLIGHT_SOLID_COLORS } from "../../../core";
+import { rankByFuzzyQuery } from "../../../core";
+import { normalizeAuthor } from '../../../core';
 
 const READER_SEARCH_EXACT_LIMIT = 120;
 const READER_SEARCH_FALLBACK_TRIGGER_THRESHOLD = 3;

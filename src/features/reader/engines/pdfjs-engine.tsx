@@ -15,13 +15,13 @@ import {
     memo,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { cn } from "@theorem/core";
-import { isTauri } from "@theorem/core";
-import { rankByFuzzyQuery } from "@theorem/core";
+import { cn } from "../../../core";
+import { isTauri } from "../../../core";
+import { rankByFuzzyQuery } from "../../../core";
 import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import type { Annotation, HighlightColor, PdfZoomMode, SearchResult, TocItem } from "@theorem/core";
+import type { Annotation, HighlightColor, PdfZoomMode, SearchResult, TocItem } from "../../../core";
 import { PDFAnnotationLayer } from "../components/PDFAnnotationLayer";
 
 // Import CSS (our custom styles only, not pdf_viewer.css which conflicts)

@@ -4,11 +4,11 @@
  */
 
 import { useState, useMemo } from "react";
-import { cn, normalizeAuthor } from "@theorem/core";
-import { rankByFuzzyQuery } from "@theorem/core";
-import { useLibraryStore, useUIStore, useSettingsStore } from "@theorem/core";
+import { cn, normalizeAuthor } from "../../core";
+import { rankByFuzzyQuery } from "../../core";
+import { useLibraryStore, useUIStore, useSettingsStore } from "../../core";
 import { ShelfModal } from "./components/modals/ShelfModal";
-import { getShelfColor, getShelfInitials } from "@theorem/core";
+import { getShelfColor, getShelfInitials } from "../../core";
 import {
     FolderOpen,
     Plus,
@@ -22,8 +22,8 @@ import {
     ArrowLeft,
     LayoutGrid,
 } from "lucide-react";
-import type { Book, Collection, LibraryViewMode } from "@theorem/core";
-import { confirmDeleteBook, confirmRemoveFromShelf } from "@theorem/core";
+import type { Book, Collection, LibraryViewMode } from "../../core";
+import { confirmDeleteBook, confirmRemoveFromShelf } from "../../core";
 
 // View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {

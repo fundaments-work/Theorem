@@ -10,9 +10,9 @@ import {
     Rss,
     Settings,
 } from "lucide-react";
-import { cn } from "@theorem/core";
-import { useUIStore, useSettingsStore } from "@theorem/core";
-import type { AppRoute } from "@theorem/core";
+import { cn } from "../../core";
+import { useUIStore, useSettingsStore } from "../../core";
+import type { AppRoute } from "../../core";
 import { TheoremLogo } from "../TheoremLogo";
 
 interface SidebarItem {

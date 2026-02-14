@@ -13,16 +13,16 @@ import {
     Search,
     BarChart3,
 } from "lucide-react";
-import { cn } from "@theorem/core";
+import { cn } from "../core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { isTauri } from "@theorem/core";
+import { isTauri } from "../core";
 import {
     getSearchPlaceholder,
     hasSearchDomain,
     resolveSearchDomain,
-} from "@theorem/core";
+} from "../core";
 
-import { useUIStore } from "@theorem/core";
+import { useUIStore } from "../core";
 
 interface AppTitlebarProps {
     title: string;

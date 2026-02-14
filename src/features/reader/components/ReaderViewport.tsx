@@ -9,10 +9,10 @@
 
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useMemo, useState } from 'react';
 import { useDocumentReader } from '../hooks/useDocumentReader';
-import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, BookFormat } from '@theorem/core';
-import type { ReaderSettings } from '@theorem/core';
-import { cn } from '@theorem/core';
-import { getSettingsChanges } from '@theorem/core';
+import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, BookFormat } from '../../../core';
+import type { ReaderSettings } from '../../../core';
+import { cn } from '../../../core';
+import { getSettingsChanges } from '../../../core';
 
 export interface ReaderViewportHandle {
     next: () => void;
@@ -265,7 +265,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                     changedKeys.includes('forcePublisherStyles');
 
                 if (needsThemeUpdate) {
-                    const { getThemeColors } = await import('@theorem/core');
+                    const { getThemeColors } = await import('../../../core');
                     const themeColors = getThemeColors(settings.theme);
 
                     applyTheme({

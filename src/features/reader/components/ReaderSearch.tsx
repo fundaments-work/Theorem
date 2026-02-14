@@ -5,8 +5,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X, Loader2, ChevronRight } from 'lucide-react';
-import { cn } from "@theorem/core";
-import { Backdrop, FloatingPanel } from "@theorem/ui";
+import { cn } from "../../../core";
+import { Backdrop, FloatingPanel } from "../../../ui";
 
 export interface ReaderSearchMatch {
     cfi: string;

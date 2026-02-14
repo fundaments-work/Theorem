@@ -5,11 +5,11 @@
 
 import { useState } from 'react';
 import { Bookmark, X, Trash2, ExternalLink, Highlighter } from 'lucide-react';
-import { HIGHLIGHT_PICKER_COLORS } from "@theorem/core";
-import { cn, useLibraryStore, useUIStore } from "@theorem/core";
+import { HIGHLIGHT_PICKER_COLORS } from "../../../core";
+import { cn, useLibraryStore, useUIStore } from "../../../core";
 import { format } from 'date-fns';
-import { Backdrop, FloatingPanel } from "@theorem/ui";
-import type { Annotation, HighlightColor } from "@theorem/core";
+import { Backdrop, FloatingPanel } from "../../../ui";
+import type { Annotation, HighlightColor } from "../../../core";
 
 interface ReaderAnnotationsPanelProps {
     bookId: string;

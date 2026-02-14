@@ -20,8 +20,8 @@ import {
     type ReaderSettings as ReaderSettingsState,
     type RssArticle,
     type TocItem,
-} from "@theorem/core";
-import { Backdrop } from "@theorem/ui";
+} from "../../../core";
+import { Backdrop } from "../../../ui";
 import {
     ReaderSearch,
 } from "../components/ReaderSearch";

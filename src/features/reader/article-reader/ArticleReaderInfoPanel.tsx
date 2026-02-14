@@ -1,6 +1,6 @@
 import { Calendar, ExternalLink, Globe, User, X } from "lucide-react";
-import type { RssArticle } from "@theorem/core";
-import { FloatingPanel } from "@theorem/ui";
+import type { RssArticle } from "../../../core";
+import { FloatingPanel } from "../../../ui";
 import { formatArticleDate } from "./utils";
 
 interface ArticleReaderInfoPanelProps {

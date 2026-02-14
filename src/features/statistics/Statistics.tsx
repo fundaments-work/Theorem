@@ -4,10 +4,10 @@
  */
 
 import { useMemo } from "react";
-import { cn, normalizeAuthor } from "@theorem/core";
-import { useLibraryStore, useSettingsStore, useUIStore } from "@theorem/core";
-import { formatReadingTime } from "@theorem/core";
-import type { DailyReadingActivity } from "@theorem/core";
+import { cn, normalizeAuthor } from "../../core";
+import { useLibraryStore, useSettingsStore, useUIStore } from "../../core";
+import { formatReadingTime } from "../../core";
+import type { DailyReadingActivity } from "../../core";
 import {
     BookOpen,
     Clock,

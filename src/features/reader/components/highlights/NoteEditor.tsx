@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Save } from 'lucide-react';
-import { cn } from "@theorem/core";
+import { cn } from "../../../../core";
 
 interface NoteEditorProps {
     isOpen: boolean;

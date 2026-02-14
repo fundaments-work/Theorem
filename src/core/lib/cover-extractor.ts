@@ -158,7 +158,7 @@ export async function extractMetadata(
     // Import foliate-js makeBook for EPUB and other formats
     try {
         // Use relative path to avoid MIME type issues with Vite dynamic imports
-        const { makeBook } = await import("@foliate-js/view.js");
+        const { makeBook } = await import("../../features/reader/foliate-js/view.js");
         const mimeType = getMimeType(format);
         const file = new File([data], filename, { type: mimeType });
 

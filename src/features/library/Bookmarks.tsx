@@ -4,11 +4,11 @@
  */
 
 import { useState, useMemo } from "react";
-import { cn } from "@theorem/core";
-import { rankByFuzzyQuery } from "@theorem/core";
-import { useLibraryStore, useUIStore } from "@theorem/core";
-import { confirmDeleteBookmark } from "@theorem/core";
-import { Dropdown } from "@theorem/ui";
+import { cn } from "../../core";
+import { rankByFuzzyQuery } from "../../core";
+import { useLibraryStore, useUIStore } from "../../core";
+import { confirmDeleteBookmark } from "../../core";
+import { Dropdown } from "../../ui";
 import {
     Bookmark,
     Trash2,

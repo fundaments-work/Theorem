@@ -4,9 +4,9 @@
  */
 
 import { Bookmark, X, Trash2, ExternalLink } from 'lucide-react';
-import { useLibraryStore } from "@theorem/core";
+import { useLibraryStore } from "../../../core";
 import { format } from 'date-fns';
-import { Backdrop, FloatingPanel } from "@theorem/ui";
+import { Backdrop, FloatingPanel } from "../../../ui";
 
 interface ReaderBookmarksProps {
     bookId: string;

@@ -23,7 +23,7 @@ import {
     type PdfZoomMode,
     type ReaderSettings as ReaderSettingsState,
     type TocItem,
-} from "@theorem/core";
+} from "../../core";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import { TableOfContents } from "./components/TableOfContents";
 import { ReaderSettings } from "./components/ReaderSettings";

@@ -14,7 +14,7 @@ import {
     isTauri,
     type DictionaryLookupResult,
     type HighlightColor,
-} from "@theorem/core";
+} from "../../../../core";
 
 interface HighlightDictionaryViewState {
     term: string;
