@@ -177,8 +177,7 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                 ref={menuRef}
                 className={cn(
                     "fixed z-[calc(var(--z-dropdown)+1)] min-w-[var(--layout-dropdown-menu-min-width)] max-w-[var(--layout-dropdown-menu-max-width)]",
-                    "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                    "rounded-sm py-1",
+                    "ui-overlay-surface py-1",
                     "animate-fade-in"
                 )}
                 style={{
@@ -194,7 +193,7 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
                             return null;
                         }
                         return (
-                            <div key={item.id} className="my-1 border-t border-[var(--color-border)]" />
+                            <div key={item.id} className="my-1 border-t-2 border-[var(--color-border)]" />
                         );
                     }
 

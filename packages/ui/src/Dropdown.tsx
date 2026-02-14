@@ -30,9 +30,9 @@ const sizeClasses = {
 };
 
 const variantClasses = {
-    default: "bg-[var(--color-surface)] border border-[var(--color-border)]",
-    filled: "bg-[var(--color-surface-muted)] border-none",
-    outlined: "bg-transparent border border-[var(--color-border)]",
+    default: "bg-[var(--color-surface)] border-2 border-[var(--color-border)]",
+    filled: "bg-[var(--color-surface-muted)] border-2 border-[var(--color-border)]",
+    outlined: "bg-transparent border-2 border-[var(--color-border)]",
 };
 
 /**
@@ -114,7 +114,7 @@ export function Dropdown<T extends string = string>({
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled}
                 className={cn(
-                    "flex items-center justify-between gap-2 w-full rounded-sm ui-clickable ui-focus-ring",
+                    "flex items-center justify-between gap-2 w-full ui-clickable ui-focus-ring",
                     "text-[color:var(--color-text-primary)]",
                     "transition-colors duration-200",
                     "disabled:opacity-50 disabled:cursor-not-allowed",
@@ -147,8 +147,7 @@ export function Dropdown<T extends string = string>({
                     <div
                         className={cn(
                             "absolute z-[calc(var(--z-dropdown)+1)] mt-1 min-w-full w-max",
-                            "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                            "rounded-sm",
+                            "ui-overlay-surface",
                             "py-1 max-h-60 overflow-y-auto",
                             align === "right" ? "right-0" : "left-0",
                             dropdownClassName

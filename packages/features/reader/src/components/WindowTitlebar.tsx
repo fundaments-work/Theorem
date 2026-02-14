@@ -81,9 +81,9 @@ interface WindowTitlebarProps {
     };
 }
 
-const ICON_BUTTON_CLASS = "p-2 lg:p-1.5 rounded-lg transition-opacity duration-150";
-const ICON_BUTTON_ACTIVE_CLASS = "opacity-100 bg-[var(--color-accent)]/20";
-const ICON_BUTTON_INACTIVE_CLASS = "opacity-60 hover:opacity-100";
+const ICON_BUTTON_CLASS = "ui-icon-btn w-9 h-9 p-0 shrink-0";
+const ICON_BUTTON_ACTIVE_CLASS = "border-[var(--color-text-primary)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]";
+const ICON_BUTTON_INACTIVE_CLASS = "border-transparent text-[color:var(--color-text-secondary)] hover:border-[var(--color-border)] hover:text-[color:var(--color-text-primary)]";
 
 function ToolbarButton({
     onClick,
@@ -129,10 +129,10 @@ function WindowControlButton({
         <button
             onClick={onClick}
             className={cn(
-                "p-2 lg:p-1.5 rounded-lg transition-colors duration-150 opacity-80 hover:opacity-100",
+                "ui-icon-btn w-8 h-8 p-0",
                 danger
                     ? "ui-icon-btn-danger"
-                    : "hover:bg-[var(--color-background)]",
+                    : "border-transparent text-[color:var(--color-text-secondary)] hover:border-[var(--color-border)] hover:text-[color:var(--color-text-primary)]",
             )}
             style={{ color: "var(--reader-fg)" }}
             title={title}
@@ -275,7 +275,7 @@ export function WindowTitlebar({
     return (
         <div
             className={cn(
-                "w-full z-50 select-none border-b reader-toolbar",
+                "w-full z-50 select-none border-b-2 reader-toolbar",
                 "min-h-11 flex flex-col items-stretch gap-1 px-2 py-1",
                 "pt-[max(var(--spacing-xxs),env(safe-area-inset-top))]",
                 "lg:h-11 lg:min-h-0 lg:flex-row lg:items-center lg:justify-between lg:gap-0 lg:py-0",
@@ -291,7 +291,7 @@ export function WindowTitlebar({
             <div className="flex items-center gap-2 w-full min-w-0 lg:flex-1">
                 <button
                     onClick={onBack}
-                    className="p-2 lg:p-1.5 rounded-lg transition-colors shrink-0 hover:opacity-70"
+                    className="ui-icon-btn w-9 h-9 p-0 shrink-0 border-transparent text-[color:var(--color-text-secondary)] hover:border-[var(--color-border)] hover:text-[color:var(--color-text-primary)]"
                     style={{ color: 'var(--reader-fg, var(--color-text))' }}
                     title="Back to Library"
                 >
@@ -394,7 +394,7 @@ export function WindowTitlebar({
                                 setInputPage(pdfControls!.currentPage.toString());
                                 setShowPageInput(true);
                             }}
-                            className="px-2 py-0.5 rounded-lg transition-opacity opacity-60 hover:opacity-100"
+                            className="px-3 py-1 border-2 border-transparent text-xs font-medium hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] transition-colors"
                             style={{ color: 'var(--reader-fg)' }}
                             title="Click to jump to page"
                         >
@@ -477,7 +477,7 @@ export function WindowTitlebar({
                     <div className="relative hidden sm:block">
                         <button
                             onClick={() => setShowZoomMenu(!showZoomMenu)}
-                            className="px-2 py-0.5 rounded-lg transition-opacity opacity-60 hover:opacity-100 text-xs font-medium flex items-center gap-0.5"
+                            className="px-3 py-1 border-2 border-transparent text-xs font-medium flex items-center gap-1 hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] transition-colors"
                             style={{ color: 'var(--reader-fg)' }}
                             title="Zoom options"
                         >
@@ -494,7 +494,7 @@ export function WindowTitlebar({
                                     onClick={() => setShowZoomMenu(false)}
                                 />
                                 <div 
-                                    className="absolute top-full right-0 mt-1 py-1 rounded-lg shadow-lg border z-50 min-w-[var(--layout-popover-min-width)]"
+                                    className="absolute top-full right-0 mt-1 py-1 ui-overlay-surface z-50 min-w-[var(--layout-popover-min-width)]"
                                     style={{
                                         backgroundColor: 'var(--color-surface)',
                                         borderColor: 'var(--color-border)',
@@ -538,7 +538,7 @@ export function WindowTitlebar({
 
                     <button
                         onClick={pdfControls!.onZoomReset}
-                        className="sm:hidden px-2 py-1 rounded-lg transition-opacity opacity-70 hover:opacity-100 text-xs font-medium"
+                        className="sm:hidden px-3 py-1 border-2 border-transparent text-xs font-medium hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] transition-colors"
                         style={{ color: 'var(--reader-fg)' }}
                         title="Reset zoom"
                     >
@@ -895,10 +895,8 @@ export function WindowTitlebar({
                     {/* Window Controls */}
                     {isTauriRuntime && (
                         <div
-                            className="hidden lg:flex items-center gap-0.5 rounded-lg border px-1 py-0.5 mr-1"
+                            className="hidden lg:flex items-center gap-0.5 rounded-lg  px-1 py-0.5 mr-1"
                             style={{
-                                borderColor: "color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)",
-                                backgroundColor: "color-mix(in srgb, var(--reader-fg, var(--color-text)) 5%, transparent)",
                             }}
                         >
                             {onToggleFullscreen && (

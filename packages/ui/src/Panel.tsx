@@ -33,7 +33,7 @@ export function Panel({
             className={cn(
                 'fixed top-0 h-full max-w-[var(--layout-reader-panel-max-width-mobile)] z-[var(--z-dropdown)] flex flex-col',
                 'transform transition-transform duration-240 ease-[cubic-bezier(0.16,1,0.3,1)]',
-                isLeft ? 'left-0 border-r' : 'right-0 border-l',
+                isLeft ? 'left-0 border-r-2' : 'right-0 border-l-2',
                 visible
                     ? 'translate-x-0'
                     : isLeft ? '-translate-x-full' : 'translate-x-full',
@@ -47,7 +47,7 @@ export function Panel({
         >
             {header && (
                 <div 
-                    className="flex items-center justify-between p-5 border-b"
+                    className="flex items-center justify-between p-5 border-b-2"
                     style={{ borderColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)' }}
                 >
                     {header}
@@ -74,7 +74,7 @@ export function FloatingPanel({
     return (
         <div
             className={cn(
-                'fixed z-[var(--z-dropdown)] flex flex-col reader-sheet border',
+                'fixed z-[var(--z-dropdown)] flex flex-col reader-sheet border-2',
                 'left-0 right-0 bottom-0 max-h-[var(--layout-floating-panel-max-height)]',
                 'sm:bottom-auto sm:top-[var(--layout-floating-panel-top-offset)] sm:max-h-[var(--layout-floating-panel-max-height-desktop)] sm:w-[var(--layout-floating-panel-width)]',
                 anchor === 'top-right' && 'sm:left-auto sm:right-5',

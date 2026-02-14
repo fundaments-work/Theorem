@@ -160,7 +160,7 @@ export function AppTitlebar({
     return (
         <div
             className={cn(
-                "w-full z-50 select-none border-b border-[var(--color-border)] ui-panel",
+                "w-full z-50 select-none border-b-2 border-[var(--color-border)] ui-panel",
                 "px-4 sm:px-5 py-3 lg:h-16",
                 className
             )}
@@ -214,7 +214,7 @@ export function AppTitlebar({
                             className={cn(
                                 "lg:!hidden ui-icon-btn w-9 h-9",
                                 isMobileSearchOpen
-                                    ? "border border-[var(--color-accent)] text-[color:var(--color-text-primary)]"
+                                    ? "border-2 border-[var(--color-accent)] text-[color:var(--color-text-primary)]"
                                     : "text-[color:var(--color-text-secondary)]"
                             )}
                             title={isMobileSearchOpen ? "Hide search" : "Search"}
@@ -228,7 +228,7 @@ export function AppTitlebar({
                         className={cn(
                             "ui-icon-btn w-9 h-9",
                             currentRoute === "statistics"
-                                ? "border border-[var(--color-accent)] text-[color:var(--color-text-primary)]"
+                                ? "border-2 border-[var(--color-accent)] text-[color:var(--color-text-primary)]"
                                 : "text-[color:var(--color-text-secondary)]"
                         )}
                         title="Statistics"
@@ -241,21 +241,21 @@ export function AppTitlebar({
                             <div className="hidden sm:block w-px h-5 bg-[var(--color-border)] mx-1" />
                             <button
                                 onClick={handleMinimize}
-                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 rounded-lg text-[color:var(--color-text-primary)]"
+                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 text-[color:var(--color-text-primary)]"
                                 title="Minimize"
                             >
                                 <Minus className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={handleMaximize}
-                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 rounded-lg text-[color:var(--color-text-primary)]"
+                                className="hidden sm:inline-flex ui-icon-btn w-8 h-8 text-[color:var(--color-text-primary)]"
                                 title={isMaximized ? "Restore" : "Maximize"}
                             >
                                 <Square className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={handleClose}
-                                className="hidden sm:inline-flex ui-icon-btn ui-icon-btn-danger w-8 h-8 rounded-lg text-[color:var(--color-text-primary)]"
+                                className="hidden sm:inline-flex ui-icon-btn ui-icon-btn-danger w-8 h-8 text-[color:var(--color-text-primary)]"
                                 title="Close"
                             >
                                 <X className="w-4 h-4" />
@@ -284,7 +284,7 @@ export function AppTitlebar({
                         />
                         <button
                             onClick={() => setIsMobileSearchOpen(false)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 ui-icon-btn w-7 h-7 rounded-lg text-[color:var(--color-text-muted)]"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 ui-icon-btn w-7 h-7 text-[color:var(--color-text-muted)]"
                             title="Close search"
                         >
                             <X className="w-4 h-4" />

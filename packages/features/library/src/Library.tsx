@@ -366,9 +366,7 @@ function EmptyLibrary({ onAddBooks, isLoading }: { onAddBooks: () => void; isLoa
                 onClick={onAddBooks}
                 disabled={isLoading}
                 className={cn(
-                    "ui-empty-state-action flex items-center gap-2 px-6 py-2.5 rounded-full",
-                    "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
-                    "hover:opacity-90 transition-opacity",
+                    "ui-empty-state-action ui-btn ui-btn-primary px-6 py-2.5 text-sm font-medium",
                     "disabled:opacity-50 disabled:cursor-not-allowed"
                 )}
             >
@@ -396,9 +394,7 @@ function ImportButton({
             onClick={onImport}
             disabled={isLoading}
             className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                "bg-[var(--color-accent)] ui-text-accent-contrast text-sm font-medium",
-                "hover:opacity-90 transition-opacity",
+                "ui-btn ui-btn-primary px-4 py-2 text-sm font-medium",
                 "disabled:opacity-50 disabled:cursor-not-allowed"
             )}
         >

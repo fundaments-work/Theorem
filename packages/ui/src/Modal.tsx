@@ -81,8 +81,7 @@ export function Modal({
         >
             <div
                 className={cn(
-                    "ui-card bg-[var(--color-surface)]",
-                    size === "fullscreen" ? "rounded-none shadow-none border-0" : "rounded-xl",
+                    size === "fullscreen" ? "ui-card rounded-none shadow-none border-0" : "ui-overlay-surface",
                     "flex flex-col max-h-[var(--layout-modal-max-height)]",
                     "overflow-hidden",
                     "w-full",
@@ -107,14 +106,14 @@ interface ModalHeaderProps {
 
 export function ModalHeader({ title, onClose, showCloseButton = true }: ModalHeaderProps) {
     return (
-        <div className="flex items-center justify-between p-6 border-b border-[var(--color-border)]">
+        <div className="flex items-center justify-between p-6 border-b-2 border-[var(--color-border)]">
             <h2 className="font-sans text-sm font-semibold text-[color:var(--color-text-primary)]">
                 {title}
             </h2>
             {showCloseButton && onClose && (
                 <button
                     onClick={onClose}
-                    className="ui-icon-btn w-8 h-8 rounded-lg text-[color:var(--color-text-muted)]"
+                    className="ui-icon-btn w-8 h-8 text-[color:var(--color-text-muted)]"
                     aria-label="Close"
                 >
                     <svg
@@ -151,7 +150,7 @@ interface ModalFooterProps {
 
 export function ModalFooter({ children, className }: ModalFooterProps) {
     return (
-        <div className={cn("p-4 border-t border-[var(--color-border)] flex justify-end gap-2", className)}>
+        <div className={cn("p-4 border-t-2 border-[var(--color-border)] flex justify-end gap-2", className)}>
             {children}
         </div>
     );
