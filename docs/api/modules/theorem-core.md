@@ -23,7 +23,6 @@ _none_
 - `fflate`
 - `idb-keyval`
 - `tailwind-merge`
-- `ts-fsrs`
 - `uuid`
 - `zustand`
 
@@ -87,16 +86,6 @@ buildSections(toc: TocItem[], sectionFractions?: number[], sectionsProp?: BookSe
 | `sectionsProp` | `BookSection[] | undefined` | yes |
 
 - Returns: `{ index: number; fraction: number; nextFraction: number; width: number; label: string; href: string; }[]`
-
-### Function `clearAcademicSearchCache`
-
-```ts
-clearAcademicSearchCache(): void
-```
-
-- Parameters: _none_
-
-- Returns: `void`
 
 ### Function `cn`
 
@@ -219,37 +208,6 @@ createBookEntryFromFile(file: File): Promise<Book | null>
 
 - Returns: `Promise<Book | null>`
 
-### Function `createInitialReviewSchedulerState`
-
-Creates a brand-new scheduler state for a newly enrolled review item.
-
-```ts
-createInitialReviewSchedulerState(now?: Date): LearningReviewSchedulerState
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `now` | `Date` | yes |
-
-**Parameter `now` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `getFullYear` | `() => number` | no |
-| `getMonth` | `() => number` | no |
-| `getTime` | `() => number` | no |
-| `getUTCFullYear` | `() => number` | no |
-| `getUTCMonth` | `() => number` | no |
-| `toDateString` | `() => string` | no |
-| `toLocaleDateString` | `{ (): string; (locales?: string | string[], options?: Intl.DateTimeFormatOptions): string; (locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string; }` | no |
-| `toLocaleString` | `{ (): string; (locales?: string | string[], options?: Intl.DateTimeFormatOptions): string; (locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string; }` | no |
-| `toLocaleTimeString` | `{ (): string; (locales?: string | string[], options?: Intl.DateTimeFormatOptions): string; (locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string; }` | no |
-| `toString` | `() => string` | no |
-| `toTimeString` | `() => string` | no |
-| `valueOf` | `() => number` | no |
-
-- Returns: `LearningReviewSchedulerState`
-
 ### Function `createReaderCSS`
 
 Create CSS string for iframe injection with CURRENT values This ensures the iframe gets the actual colors, not default values
@@ -305,40 +263,6 @@ deleteCoverImage(bookId: string): Promise<void>
 | `bookId` | `string` | no |
 
 - Returns: `Promise<void>`
-
-### Function `discoverAcademicPapers`
-
-```ts
-discoverAcademicPapers(options: AcademicDiscoveryOptions): Promise<AcademicPaper[]>
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `options` | `AcademicDiscoveryOptions` | no |
-
-**Parameter `options` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `enrichCitations` | `boolean | undefined` | yes |
-| `fieldQuery` | `string` | no |
-| `maxResults` | `number | undefined` | yes |
-| `source` | `"all" | "arxiv" | "pubmed" | undefined` | yes |
-
-- Returns: `Promise<AcademicPaper[]>`
-
-### Function `downloadPaper`
-
-```ts
-downloadPaper(url: string, paper?: AcademicPaper): Promise<Book>
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `url` | `string` | no |
-| `paper` | `AcademicPaper | undefined` | yes |
-
-- Returns: `Promise<Book>`
 
 ### Function `extractCover`
 
@@ -521,81 +445,6 @@ formatRelativeDate(date: Date): string
 | `toString` | `() => string` | no |
 | `toTimeString` | `() => string` | no |
 | `valueOf` | `() => number` | no |
-
-- Returns: `string`
-
-### Function `generateCitation`
-
-```ts
-generateCitation(paper: AcademicPaper, format: CitationFormat): string
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `paper` | `AcademicPaper` | no |
-| `format` | `CitationFormat` | no |
-
-**Parameter `paper` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `abstract` | `string | undefined` | yes |
-| `authors` | `string[]` | no |
-| `citationCount` | `number | undefined` | yes |
-| `conference` | `string | undefined` | yes |
-| `doi` | `string | undefined` | yes |
-| `fieldTags` | `string[] | undefined` | yes |
-| `id` | `string` | no |
-| `journal` | `string | undefined` | yes |
-| `openAccess` | `boolean | undefined` | yes |
-| `openAccessUrl` | `string | undefined` | yes |
-| `pdfUrl` | `string | undefined` | yes |
-| `publishedDate` | `string | undefined` | yes |
-| `referenceData` | `CitationReferenceData | undefined` | yes |
-| `source` | `AcademicSource` | no |
-| `sourceId` | `string | undefined` | yes |
-| `title` | `string` | no |
-| `url` | `string | undefined` | yes |
-
-- Returns: `string`
-
-### Function `generateReferenceCitation`
-
-```ts
-generateReferenceCitation(reference: ReferenceItem, format: CitationFormat): string
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `reference` | `ReferenceItem` | no |
-| `format` | `CitationFormat` | no |
-
-**Parameter `reference` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `abstract` | `string | undefined` | yes |
-| `addedAt` | `Date` | no |
-| `authors` | `string[]` | no |
-| `bookId` | `string` | no |
-| `citationCount` | `number | undefined` | yes |
-| `conference` | `string | undefined` | yes |
-| `doi` | `string | undefined` | yes |
-| `fieldTags` | `string[] | undefined` | yes |
-| `format` | `BookFormat` | no |
-| `id` | `string` | no |
-| `isAcademic` | `boolean` | no |
-| `journal` | `string | undefined` | yes |
-| `openAccess` | `boolean | undefined` | yes |
-| `openAccessUrl` | `string | undefined` | yes |
-| `publishedDate` | `string | undefined` | yes |
-| `referenceData` | `CitationReferenceData | undefined` | yes |
-| `source` | `"library" | AcademicSource` | no |
-| `sourceId` | `string | undefined` | yes |
-| `tags` | `string[]` | no |
-| `title` | `string` | no |
-| `type` | `ReferenceType` | no |
-| `url` | `string | undefined` | yes |
 
 - Returns: `string`
 
@@ -949,53 +798,6 @@ initReaderStyles(settings: ReaderSettings): void
 
 - Returns: `void`
 
-### Function `isAcademicBook`
-
-```ts
-isAcademicBook(book: Book): boolean
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `book` | `Book` | no |
-
-**Parameter `book` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `academic` | `AcademicMetadata | undefined` | yes |
-| `addedAt` | `Date` | no |
-| `author` | `string` | no |
-| `category` | `string | undefined` | yes |
-| `completedAt` | `Date | undefined` | yes |
-| `coverPath` | `string | undefined` | yes |
-| `currentLocation` | `string | undefined` | yes |
-| `description` | `string | undefined` | yes |
-| `filePath` | `string` | no |
-| `fileSize` | `number` | no |
-| `format` | `BookFormat` | no |
-| `id` | `string` | no |
-| `isbn` | `string | undefined` | yes |
-| `isFavorite` | `boolean` | no |
-| `language` | `string | undefined` | yes |
-| `lastClickFraction` | `number | undefined` | yes |
-| `lastReadAt` | `Date | undefined` | yes |
-| `locations` | `string | undefined` | yes |
-| `manualCompletionState` | `"read" | "unread" | undefined` | yes |
-| `pageProgress` | `{ currentPage: number; endPage?: number; totalPages: number; range: string; } | undefined` | yes |
-| `pdfViewState` | `PdfViewState | undefined` | yes |
-| `progress` | `number` | no |
-| `progressBeforeFinish` | `number | undefined` | yes |
-| `publishedDate` | `string | undefined` | yes |
-| `publisher` | `string | undefined` | yes |
-| `rating` | `number | undefined` | yes |
-| `readingTime` | `number` | no |
-| `storagePath` | `string | undefined` | yes |
-| `tags` | `string[]` | no |
-| `title` | `string` | no |
-
-- Returns: `boolean`
-
 ### Function `isFixedLayout`
 
 ```ts
@@ -1201,35 +1003,6 @@ normalizeLookupTerm(term: string): string
 
 - Returns: `string`
 
-### Function `normalizeReviewSchedulerState`
-
-Ensures persisted scheduler fields are converted back into runtime values.
-
-```ts
-normalizeReviewSchedulerState(state: LearningReviewSchedulerState): LearningReviewSchedulerState
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `state` | `LearningReviewSchedulerState` | no |
-
-**Parameter `state` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `difficulty` | `number` | no |
-| `due` | `Date` | no |
-| `elapsed_days` | `number` | no |
-| `lapses` | `number` | no |
-| `last_review` | `Date | undefined` | yes |
-| `learning_steps` | `number` | no |
-| `reps` | `number` | no |
-| `scheduled_days` | `number` | no |
-| `stability` | `number` | no |
-| `state` | `number` | no |
-
-- Returns: `LearningReviewSchedulerState`
-
 ### Function `pickAndImportBooks`
 
 Show file picker and import selected books Works in both Tauri and browser environments
@@ -1307,45 +1080,6 @@ readBookFile(filePath: string, bookId?: string): Promise<ArrayBuffer>
 
 - Returns: `Promise<ArrayBuffer>`
 
-### Function `referencePublishedTimestamp`
-
-```ts
-referencePublishedTimestamp(reference: ReferenceItem): number
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `reference` | `ReferenceItem` | no |
-
-**Parameter `reference` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `abstract` | `string | undefined` | yes |
-| `addedAt` | `Date` | no |
-| `authors` | `string[]` | no |
-| `bookId` | `string` | no |
-| `citationCount` | `number | undefined` | yes |
-| `conference` | `string | undefined` | yes |
-| `doi` | `string | undefined` | yes |
-| `fieldTags` | `string[] | undefined` | yes |
-| `format` | `BookFormat` | no |
-| `id` | `string` | no |
-| `isAcademic` | `boolean` | no |
-| `journal` | `string | undefined` | yes |
-| `openAccess` | `boolean | undefined` | yes |
-| `openAccessUrl` | `string | undefined` | yes |
-| `publishedDate` | `string | undefined` | yes |
-| `referenceData` | `CitationReferenceData | undefined` | yes |
-| `source` | `"library" | AcademicSource` | no |
-| `sourceId` | `string | undefined` | yes |
-| `tags` | `string[]` | no |
-| `title` | `string` | no |
-| `type` | `ReferenceType` | no |
-| `url` | `string | undefined` | yes |
-
-- Returns: `number`
-
 ### Function `registerEngineStyleCallback`
 
 Register an engine to receive style update notifications
@@ -1394,54 +1128,6 @@ resolveSearchDomain({ placement, route, }: { placement: SearchPlacement; route: 
 | `route` | `AppRoute` | no |
 
 - Returns: `SearchDomain`
-
-### Function `reviewItemSchedulerState`
-
-Runs a single FSRS review transition for a review item.
-
-```ts
-reviewItemSchedulerState(schedulerState: LearningReviewSchedulerState, grade: ReviewGrade, now?: Date): SchedulerReviewResult
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `schedulerState` | `LearningReviewSchedulerState` | no |
-| `grade` | `ReviewGrade` | no |
-| `now` | `Date` | yes |
-
-**Parameter `schedulerState` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `difficulty` | `number` | no |
-| `due` | `Date` | no |
-| `elapsed_days` | `number` | no |
-| `lapses` | `number` | no |
-| `last_review` | `Date | undefined` | yes |
-| `learning_steps` | `number` | no |
-| `reps` | `number` | no |
-| `scheduled_days` | `number` | no |
-| `stability` | `number` | no |
-| `state` | `number` | no |
-
-**Parameter `now` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `getFullYear` | `() => number` | no |
-| `getMonth` | `() => number` | no |
-| `getTime` | `() => number` | no |
-| `getUTCFullYear` | `() => number` | no |
-| `getUTCMonth` | `() => number` | no |
-| `toDateString` | `() => string` | no |
-| `toLocaleDateString` | `{ (): string; (locales?: string | string[], options?: Intl.DateTimeFormatOptions): string; (locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string; }` | no |
-| `toLocaleString` | `{ (): string; (locales?: string | string[], options?: Intl.DateTimeFormatOptions): string; (locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string; }` | no |
-| `toLocaleTimeString` | `{ (): string; (locales?: string | string[], options?: Intl.DateTimeFormatOptions): string; (locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string; }` | no |
-| `toString` | `() => string` | no |
-| `toTimeString` | `() => string` | no |
-| `valueOf` | `() => number` | no |
-
-- Returns: `SchedulerReviewResult`
 
 ### Function `saveBookData`
 
@@ -1519,73 +1205,6 @@ scanFolderForBooks(folderPath: string): Promise<string[]>
 | `folderPath` | `string` | no |
 
 - Returns: `Promise<string[]>`
-
-### Function `searchAcademicPapers`
-
-```ts
-searchAcademicPapers(query: string, options?: AcademicSearchOptions): Promise<AcademicPaper[]>
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `query` | `string` | no |
-| `options` | `AcademicSearchOptions` | yes |
-
-**Parameter `options` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `enrichCitations` | `boolean | undefined` | yes |
-| `maxResults` | `number | undefined` | yes |
-| `sortBy` | `"relevance" | "recent" | undefined` | yes |
-| `source` | `"all" | "arxiv" | "pubmed" | undefined` | yes |
-| `start` | `number | undefined` | yes |
-
-- Returns: `Promise<AcademicPaper[]>`
-
-### Function `searchArxivPapers`
-
-```ts
-searchArxivPapers(query: string, options?: Omit<AcademicSearchOptions, "source">): Promise<AcademicPaper[]>
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `query` | `string` | no |
-| `options` | `Omit<AcademicSearchOptions, "source">` | yes |
-
-**Parameter `options` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `enrichCitations` | `boolean | undefined` | yes |
-| `maxResults` | `number | undefined` | yes |
-| `sortBy` | `"relevance" | "recent" | undefined` | yes |
-| `start` | `number | undefined` | yes |
-
-- Returns: `Promise<AcademicPaper[]>`
-
-### Function `searchPubMedPapers`
-
-```ts
-searchPubMedPapers(query: string, options?: Omit<AcademicSearchOptions, "source">): Promise<AcademicPaper[]>
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `query` | `string` | no |
-| `options` | `Omit<AcademicSearchOptions, "source">` | yes |
-
-**Parameter `options` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `enrichCitations` | `boolean | undefined` | yes |
-| `maxResults` | `number | undefined` | yes |
-| `sortBy` | `"relevance" | "recent" | undefined` | yes |
-| `start` | `number | undefined` | yes |
-
-- Returns: `Promise<AcademicPaper[]>`
 
 ### Function `showAsk`
 
@@ -1703,113 +1322,6 @@ showSaveFileDialog(options?: SaveDialogOptions): Promise<string | null>
 
 - Returns: `Promise<string | null>`
 
-### Function `sortReferenceItems`
-
-```ts
-sortReferenceItems(items: ReferenceItem[], sortBy: ReferenceSortMode): ReferenceItem[]
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `items` | `ReferenceItem[]` | no |
-| `sortBy` | `ReferenceSortMode` | no |
-
-- Returns: `ReferenceItem[]`
-
-### Function `toAcademicPaper`
-
-```ts
-toAcademicPaper(book: Book): AcademicPaper | null
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `book` | `Book` | no |
-
-**Parameter `book` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `academic` | `AcademicMetadata | undefined` | yes |
-| `addedAt` | `Date` | no |
-| `author` | `string` | no |
-| `category` | `string | undefined` | yes |
-| `completedAt` | `Date | undefined` | yes |
-| `coverPath` | `string | undefined` | yes |
-| `currentLocation` | `string | undefined` | yes |
-| `description` | `string | undefined` | yes |
-| `filePath` | `string` | no |
-| `fileSize` | `number` | no |
-| `format` | `BookFormat` | no |
-| `id` | `string` | no |
-| `isbn` | `string | undefined` | yes |
-| `isFavorite` | `boolean` | no |
-| `language` | `string | undefined` | yes |
-| `lastClickFraction` | `number | undefined` | yes |
-| `lastReadAt` | `Date | undefined` | yes |
-| `locations` | `string | undefined` | yes |
-| `manualCompletionState` | `"read" | "unread" | undefined` | yes |
-| `pageProgress` | `{ currentPage: number; endPage?: number; totalPages: number; range: string; } | undefined` | yes |
-| `pdfViewState` | `PdfViewState | undefined` | yes |
-| `progress` | `number` | no |
-| `progressBeforeFinish` | `number | undefined` | yes |
-| `publishedDate` | `string | undefined` | yes |
-| `publisher` | `string | undefined` | yes |
-| `rating` | `number | undefined` | yes |
-| `readingTime` | `number` | no |
-| `storagePath` | `string | undefined` | yes |
-| `tags` | `string[]` | no |
-| `title` | `string` | no |
-
-- Returns: `AcademicPaper | null`
-
-### Function `toReferenceItem`
-
-```ts
-toReferenceItem(book: Book): ReferenceItem
-```
-
-| Parameter | Type | Optional |
-| --- | --- | --- |
-| `book` | `Book` | no |
-
-**Parameter `book` fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `academic` | `AcademicMetadata | undefined` | yes |
-| `addedAt` | `Date` | no |
-| `author` | `string` | no |
-| `category` | `string | undefined` | yes |
-| `completedAt` | `Date | undefined` | yes |
-| `coverPath` | `string | undefined` | yes |
-| `currentLocation` | `string | undefined` | yes |
-| `description` | `string | undefined` | yes |
-| `filePath` | `string` | no |
-| `fileSize` | `number` | no |
-| `format` | `BookFormat` | no |
-| `id` | `string` | no |
-| `isbn` | `string | undefined` | yes |
-| `isFavorite` | `boolean` | no |
-| `language` | `string | undefined` | yes |
-| `lastClickFraction` | `number | undefined` | yes |
-| `lastReadAt` | `Date | undefined` | yes |
-| `locations` | `string | undefined` | yes |
-| `manualCompletionState` | `"read" | "unread" | undefined` | yes |
-| `pageProgress` | `{ currentPage: number; endPage?: number; totalPages: number; range: string; } | undefined` | yes |
-| `pdfViewState` | `PdfViewState | undefined` | yes |
-| `progress` | `number` | no |
-| `progressBeforeFinish` | `number | undefined` | yes |
-| `publishedDate` | `string | undefined` | yes |
-| `publisher` | `string | undefined` | yes |
-| `rating` | `number | undefined` | yes |
-| `readingTime` | `number` | no |
-| `storagePath` | `string | undefined` | yes |
-| `tags` | `string[]` | no |
-| `title` | `string` | no |
-
-- Returns: `ReferenceItem`
-
 ### Function `truncate`
 
 ```ts
@@ -1822,18 +1334,6 @@ truncate(text: string, maxLength: number): string
 | `maxLength` | `number` | no |
 
 - Returns: `string`
-
-### Function `useDailyReviewReminder`
-
-Shows an in-app reminder when daily review is due and review items are waiting.
-
-```ts
-useDailyReviewReminder(): void
-```
-
-- Parameters: _none_
-
-- Returns: `void`
 
 ### Function `useLearningStore`
 
@@ -2124,111 +1624,6 @@ _No object fields detected._
 
 ### Types and Interfaces
 
-### Interface `AcademicDiscoveryOptions`
-
-- Type: `AcademicDiscoveryOptions`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `enrichCitations` | `boolean | undefined` | yes |
-| `fieldQuery` | `string` | no |
-| `maxResults` | `number | undefined` | yes |
-| `source` | `"all" | "arxiv" | "pubmed" | undefined` | yes |
-
-### Interface `AcademicMetadata`
-
-- Type: `AcademicMetadata`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `abstract` | `string | undefined` | yes |
-| `authors` | `string[]` | no |
-| `citationCount` | `number | undefined` | yes |
-| `conference` | `string | undefined` | yes |
-| `doi` | `string | undefined` | yes |
-| `fieldTags` | `string[] | undefined` | yes |
-| `journal` | `string | undefined` | yes |
-| `openAccess` | `boolean | undefined` | yes |
-| `openAccessUrl` | `string | undefined` | yes |
-| `pdfUrl` | `string | undefined` | yes |
-| `referenceData` | `CitationReferenceData | undefined` | yes |
-| `source` | `AcademicSource` | no |
-| `sourceId` | `string | undefined` | yes |
-
-### Interface `AcademicPaper`
-
-- Type: `AcademicPaper`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `abstract` | `string | undefined` | yes |
-| `authors` | `string[]` | no |
-| `citationCount` | `number | undefined` | yes |
-| `conference` | `string | undefined` | yes |
-| `doi` | `string | undefined` | yes |
-| `fieldTags` | `string[] | undefined` | yes |
-| `id` | `string` | no |
-| `journal` | `string | undefined` | yes |
-| `openAccess` | `boolean | undefined` | yes |
-| `openAccessUrl` | `string | undefined` | yes |
-| `pdfUrl` | `string | undefined` | yes |
-| `publishedDate` | `string | undefined` | yes |
-| `referenceData` | `CitationReferenceData | undefined` | yes |
-| `source` | `AcademicSource` | no |
-| `sourceId` | `string | undefined` | yes |
-| `title` | `string` | no |
-| `url` | `string | undefined` | yes |
-
-### Interface `AcademicSearchOptions`
-
-- Type: `AcademicSearchOptions`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `enrichCitations` | `boolean | undefined` | yes |
-| `maxResults` | `number | undefined` | yes |
-| `sortBy` | `"relevance" | "recent" | undefined` | yes |
-| `source` | `"all" | "arxiv" | "pubmed" | undefined` | yes |
-| `start` | `number | undefined` | yes |
-
-### Interface `AcademicSettings`
-
-- Type: `AcademicSettings`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `customTopics` | `AcademicTopic[]` | no |
-
-### Type `AcademicSource`
-
-- Type: `AcademicSource`
-
-**Fields**
-
-_No object fields detected._
-
-### Interface `AcademicTopic`
-
-- Type: `AcademicTopic`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `id` | `string` | no |
-| `label` | `string` | no |
-| `query` | `string` | no |
-
 ### Interface `Annotation`
 
 - Type: `Annotation`
@@ -2271,7 +1666,6 @@ _No object fields detected._
 
 | Property | Type | Optional |
 | --- | --- | --- |
-| `academic` | `AcademicSettings` | no |
 | `cacheSize` | `number` | no |
 | `learning` | `LearningSettings` | no |
 | `librarySortBy` | `LibrarySortBy` | no |
@@ -2290,7 +1684,6 @@ _No object fields detected._
 
 | Property | Type | Optional |
 | --- | --- | --- |
-| `academic` | `AcademicMetadata | undefined` | yes |
 | `addedAt` | `Date` | no |
 | `author` | `string` | no |
 | `category` | `string | undefined` | yes |
@@ -2344,44 +1737,6 @@ _No object fields detected._
 | `index` | `number` | no |
 | `label` | `string` | no |
 
-### Interface `Citation`
-
-- Type: `Citation`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `annotationId` | `string | undefined` | yes |
-| `createdAt` | `Date` | no |
-| `format` | `CitationFormat | undefined` | yes |
-| `id` | `string` | no |
-| `location` | `string | undefined` | yes |
-| `note` | `string | undefined` | yes |
-| `pageNumber` | `number | undefined` | yes |
-| `paperId` | `string` | no |
-| `quote` | `string | undefined` | yes |
-| `updatedAt` | `Date | undefined` | yes |
-
-### Type `CitationFormat`
-
-- Type: `CitationFormat`
-
-**Fields**
-
-_No object fields detected._
-
-### Interface `CitationReferenceData`
-
-- Type: `CitationReferenceData`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `bibtex` | `string | undefined` | yes |
-| `cslJson` | `Record<string, unknown> | undefined` | yes |
-
 ### Interface `Collection`
 
 - Type: `Collection`
@@ -2394,7 +1749,7 @@ _No object fields detected._
 | `createdAt` | `Date` | no |
 | `description` | `string | undefined` | yes |
 | `id` | `string` | no |
-| `kind` | `"general" | "research"` | no |
+| `kind` | `"general"` | no |
 | `name` | `string` | no |
 
 ### Interface `DailyReadingActivity`
@@ -2408,38 +1763,6 @@ _No object fields detected._
 | `booksRead` | `string[]` | no |
 | `date` | `string` | no |
 | `minutes` | `number` | no |
-
-### Interface `DailyReminderState`
-
-- Type: `DailyReminderState`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `completedDate` | `string | undefined` | yes |
-| `dismissedDate` | `string | undefined` | yes |
-| `isPromptVisible` | `boolean` | no |
-| `lastPromptDate` | `string | undefined` | yes |
-
-### Interface `DailyReviewItem`
-
-- Type: `DailyReviewItem`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `back` | `string` | no |
-| `createdAt` | `Date` | no |
-| `dueAt` | `Date` | no |
-| `front` | `string` | no |
-| `id` | `string` | no |
-| `lapseCount` | `number` | no |
-| `reviewCount` | `number` | no |
-| `sourceId` | `string` | no |
-| `sourceType` | `ReviewSourceType` | no |
-| `suspended` | `boolean` | no |
 
 ### Type `DesignTokenVars`
 
@@ -2529,15 +1852,10 @@ _No object fields detected._
 | Property | Type | Optional |
 | --- | --- | --- |
 | `author` | `string` | no |
-| `citationCount` | `number | undefined` | yes |
-| `conference` | `string | undefined` | yes |
 | `cover` | `string | undefined` | yes |
 | `description` | `string | undefined` | yes |
-| `doi` | `string | undefined` | yes |
 | `identifier` | `string | undefined` | yes |
-| `journal` | `string | undefined` | yes |
 | `language` | `string | undefined` | yes |
-| `pdfUrl` | `string | undefined` | yes |
 | `pubdate` | `string | undefined` | yes |
 | `publisher` | `string | undefined` | yes |
 | `title` | `string` | no |
@@ -2622,45 +1940,6 @@ _No object fields detected._
 | `name` | `string` | no |
 | `sizeBytes` | `number` | no |
 
-### Interface `LearningReviewRecord`
-
-- Type: `LearningReviewRecord`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `createdAt` | `Date` | no |
-| `dueAt` | `Date` | no |
-| `id` | `string` | no |
-| `lapseCount` | `number` | no |
-| `lastReviewedAt` | `Date | undefined` | yes |
-| `reviewCount` | `number` | no |
-| `scheduler` | `LearningReviewSchedulerState` | no |
-| `sourceId` | `string` | no |
-| `sourceType` | `ReviewSourceType` | no |
-| `suspended` | `boolean` | no |
-| `updatedAt` | `Date | undefined` | yes |
-
-### Interface `LearningReviewSchedulerState`
-
-- Type: `LearningReviewSchedulerState`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `difficulty` | `number` | no |
-| `due` | `Date` | no |
-| `elapsed_days` | `number` | no |
-| `lapses` | `number` | no |
-| `last_review` | `Date | undefined` | yes |
-| `learning_steps` | `number` | no |
-| `reps` | `number` | no |
-| `scheduled_days` | `number` | no |
-| `stability` | `number` | no |
-| `state` | `number` | no |
-
 ### Interface `LearningSettings`
 
 - Type: `LearningSettings`
@@ -2669,15 +1948,9 @@ _No object fields detected._
 
 | Property | Type | Optional |
 | --- | --- | --- |
-| `dailyReviewGoal` | `number` | no |
-| `dailyReviewTime` | `string` | no |
-| `defaultReminderReviewScope` | `ReviewLaunchScope` | no |
 | `dictionaryMode` | `DictionaryMode` | no |
-| `inAppReminder` | `boolean` | no |
 | `playPronunciationAudio` | `boolean` | no |
 | `preferredProviders` | `DictionaryProvider[]` | no |
-| `reviewHighlightEnabled` | `boolean` | no |
-| `reviewVocabularyEnabled` | `boolean` | no |
 | `showPronunciation` | `boolean` | no |
 | `vocabularyEnabled` | `boolean` | no |
 
@@ -2873,95 +2146,6 @@ _No object fields detected._
 | `totalReadingTime` | `number` | no |
 | `yearlyBookGoal` | `number` | no |
 
-### Interface `ReferenceItem`
-
-- Type: `ReferenceItem`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `abstract` | `string | undefined` | yes |
-| `addedAt` | `Date` | no |
-| `authors` | `string[]` | no |
-| `bookId` | `string` | no |
-| `citationCount` | `number | undefined` | yes |
-| `conference` | `string | undefined` | yes |
-| `doi` | `string | undefined` | yes |
-| `fieldTags` | `string[] | undefined` | yes |
-| `format` | `BookFormat` | no |
-| `id` | `string` | no |
-| `isAcademic` | `boolean` | no |
-| `journal` | `string | undefined` | yes |
-| `openAccess` | `boolean | undefined` | yes |
-| `openAccessUrl` | `string | undefined` | yes |
-| `publishedDate` | `string | undefined` | yes |
-| `referenceData` | `CitationReferenceData | undefined` | yes |
-| `source` | `"library" | AcademicSource` | no |
-| `sourceId` | `string | undefined` | yes |
-| `tags` | `string[]` | no |
-| `title` | `string` | no |
-| `type` | `ReferenceType` | no |
-| `url` | `string | undefined` | yes |
-
-### Type `ReferenceSortMode`
-
-- Type: `ReferenceSortMode`
-
-**Fields**
-
-_No object fields detected._
-
-### Type `ReferenceType`
-
-- Type: `ReferenceType`
-
-**Fields**
-
-_No object fields detected._
-
-### Interface `ReviewEvent`
-
-- Type: `ReviewEvent`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `dueAfter` | `Date` | no |
-| `dueBefore` | `Date` | no |
-| `grade` | `ReviewGrade` | no |
-| `id` | `string` | no |
-| `nextState` | `number` | no |
-| `reviewedAt` | `Date` | no |
-| `sourceId` | `string` | no |
-| `sourceState` | `number` | no |
-| `sourceType` | `ReviewSourceType` | no |
-
-### Type `ReviewGrade`
-
-- Type: `ReviewGrade`
-
-**Fields**
-
-_No object fields detected._
-
-### Type `ReviewLaunchScope`
-
-- Type: `ReviewLaunchScope`
-
-**Fields**
-
-_No object fields detected._
-
-### Type `ReviewSourceType`
-
-- Type: `ReviewSourceType`
-
-**Fields**
-
-_No object fields detected._
-
 ### Interface `RssArticle`
 
 - Type: `RssArticle`
@@ -3001,19 +2185,6 @@ _No object fields detected._
 | `title` | `string` | no |
 | `unreadCount` | `number` | no |
 | `url` | `string` | no |
-
-### Interface `SchedulerReviewResult`
-
-- Type: `SchedulerReviewResult`
-
-**Fields**
-
-| Property | Type | Optional |
-| --- | --- | --- |
-| `dueAt` | `Date` | no |
-| `nextState` | `number` | no |
-| `scheduler` | `LearningReviewSchedulerState` | no |
-| `sourceState` | `number` | no |
 
 ### Type `SearchDomain`
 
@@ -3200,7 +2371,6 @@ _No object fields detected._
 | `createdAt` | `Date` | no |
 | `id` | `string` | no |
 | `language` | `string` | no |
-| `lastReviewedAt` | `Date | undefined` | yes |
 | `lookupCount` | `number` | no |
 | `meanings` | `VocabularyMeaning[]` | no |
 | `normalizedTerm` | `string` | no |

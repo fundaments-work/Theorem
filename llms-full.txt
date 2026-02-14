@@ -19,21 +19,9 @@ theorem monorepo is a modular monorepo designed for AI-assisted development with
 - Purpose: Shared workspace package.
 - Internal deps: _none_
 
-### @theorem/feature-academic
-- Path: `/packages/features/academic`
-- Public entry: `/packages/features/academic/src/index.ts`
-- Purpose: Feature package.
-- Internal deps: `@theorem/core`, `@theorem/ui`
-
 ### @theorem/feature-feeds
 - Path: `/packages/features/feeds`
 - Public entry: `/packages/features/feeds/src/index.ts`
-- Purpose: Feature package.
-- Internal deps: `@theorem/core`, `@theorem/ui`
-
-### @theorem/feature-learning
-- Path: `/packages/features/learning`
-- Public entry: `/packages/features/learning/src/index.ts`
 - Purpose: Feature package.
 - Internal deps: `@theorem/core`, `@theorem/ui`
 
@@ -47,7 +35,7 @@ theorem monorepo is a modular monorepo designed for AI-assisted development with
 - Path: `/packages/features/reader`
 - Public entry: `/packages/features/reader/src/index.ts`
 - Purpose: Feature package.
-- Internal deps: `@theorem/core`, `@theorem/feature-learning`, `@theorem/ui`
+- Internal deps: `@theorem/core`, `@theorem/ui`
 
 ### @theorem/feature-settings
 - Path: `/packages/features/settings`
@@ -77,7 +65,7 @@ theorem monorepo is a modular monorepo designed for AI-assisted development with
 - Path: `/apps/web`
 - Public entry: `/n/a`
 - Purpose: Application package.
-- Internal deps: `@theorem/core`, `@theorem/feature-academic`, `@theorem/feature-feeds`, `@theorem/feature-learning`, `@theorem/feature-library`, `@theorem/feature-reader`, `@theorem/feature-settings`, `@theorem/feature-statistics`, `@theorem/feature-vocabulary`, `@theorem/ui`
+- Internal deps: `@theorem/core`, `@theorem/feature-feeds`, `@theorem/feature-library`, `@theorem/feature-reader`, `@theorem/feature-settings`, `@theorem/feature-statistics`, `@theorem/feature-vocabulary`, `@theorem/ui`
 
 ## Canonical Docs
 

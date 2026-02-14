@@ -12,9 +12,7 @@ Application package.
 
 **Internal packages**
 - `@theorem/core`
-- `@theorem/feature-academic`
 - `@theorem/feature-feeds`
-- `@theorem/feature-learning`
 - `@theorem/feature-library`
 - `@theorem/feature-reader`
 - `@theorem/feature-settings`
@@ -44,7 +42,6 @@ Application package.
 - `react-dom`
 - `react-router-dom`
 - `tailwind-merge`
-- `ts-fsrs`
 - `uuid`
 - `zustand`
 

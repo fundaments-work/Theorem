@@ -13,9 +13,7 @@
 ## Workspace Packages
 
 - `@theorem/core` -> `/packages/core`
-- `@theorem/feature-academic` -> `/packages/features/academic`
 - `@theorem/feature-feeds` -> `/packages/features/feeds`
-- `@theorem/feature-learning` -> `/packages/features/learning`
 - `@theorem/feature-library` -> `/packages/features/library`
 - `@theorem/feature-reader` -> `/packages/features/reader`
 - `@theorem/feature-settings` -> `/packages/features/settings`
