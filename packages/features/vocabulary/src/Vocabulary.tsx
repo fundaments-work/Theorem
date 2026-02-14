@@ -15,7 +15,7 @@ import {
     UI_BUTTON_PRIMARY_CLASS,
     UI_INPUT_BASE_CLASS,
 } from "@theorem/core";
-import { useLearningStore, useUIStore } from "@theorem/core";
+import { useVocabularyStore, useUIStore } from "@theorem/core";
 import type { VocabularyContext, VocabularyTerm } from "@theorem/core";
 
 interface SourceFilterOption {
@@ -150,9 +150,9 @@ function getSourceButtonClass(isActive: boolean): string {
 export function VocabularyPage() {
     const searchQuery = useUIStore((state) => state.searchQuery);
     const setSearchQuery = useUIStore((state) => state.setSearchQuery);
-    const vocabularyTerms = useLearningStore((state) => state.vocabularyTerms);
-    const updateVocabularyTerm = useLearningStore((state) => state.updateVocabularyTerm);
-    const deleteVocabularyTerm = useLearningStore((state) => state.deleteVocabularyTerm);
+    const vocabularyTerms = useVocabularyStore((state) => state.vocabularyTerms);
+    const updateVocabularyTerm = useVocabularyStore((state) => state.updateVocabularyTerm);
+    const deleteVocabularyTerm = useVocabularyStore((state) => state.deleteVocabularyTerm);
 
     const [sourceFilter, setSourceFilter] = useState<string>("all");
     const [selectedTermId, setSelectedTermId] = useState<string | null>(null);

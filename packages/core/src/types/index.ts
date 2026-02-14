@@ -187,7 +187,7 @@ export interface AppSettings {
     cacheSize: number; // MB
     theme: "light" | "dark" | "system";
     readerSettings: ReaderSettings;
-    learning: LearningSettings;
+    vocabulary: VocabularySettings;
     vault: VaultIntegrationSettings;
 }
 
@@ -195,13 +195,16 @@ export type DictionaryMode = "online" | "offline" | "auto";
 
 export type DictionaryProvider = "free_dictionary_api" | "wiktionary" | "stardict";
 
-export interface LearningSettings {
+export interface VocabularySettings {
     vocabularyEnabled: boolean;
     dictionaryMode: DictionaryMode;
     preferredProviders: DictionaryProvider[];
     showPronunciation: boolean;
     playPronunciationAudio: boolean;
 }
+
+/** @deprecated Use VocabularySettings instead */
+export type LearningSettings = VocabularySettings;
 
 export interface VaultIntegrationSettings {
     enabled: boolean;

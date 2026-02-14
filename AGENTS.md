@@ -18,8 +18,7 @@ packages/
     ├── library/                # Library feature module
     ├── settings/               # Settings feature module
     ├── statistics/             # Statistics feature module
-    ├── vocabulary/             # Vocabulary feature module
-    └── learning/               # Learning/review feature module
+    └── vocabulary/             # Vocabulary feature module
 ```
 
 ## Package Manager

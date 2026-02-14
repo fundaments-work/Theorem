@@ -6,7 +6,7 @@
  */
 
 const UI_ACTIVE_BUTTON_STATE_CLASS =
-    "data-[active=true]:border-accent data-[active=true]:bg-accent data-[active=true]:text-accent-contrast data-[active=true]:hover:border-accent-hover data-[active=true]:hover:bg-accent-hover data-[active=true]:hover:text-accent-contrast aria-[pressed=true]:border-accent aria-[pressed=true]:bg-accent aria-[pressed=true]:text-accent-contrast aria-[pressed=true]:hover:border-accent-hover aria-[pressed=true]:hover:bg-accent-hover aria-[pressed=true]:hover:text-accent-contrast aria-[selected=true]:border-accent aria-[selected=true]:bg-accent aria-[selected=true]:text-accent-contrast aria-[selected=true]:hover:border-accent-hover aria-[selected=true]:hover:bg-accent-hover aria-[selected=true]:hover:text-accent-contrast";
+    "data-[active=true]:border-[var(--color-accent)] data-[active=true]:bg-[var(--color-accent)] data-[active=true]:text-[var(--color-accent-contrast)] data-[active=true]:hover:border-[var(--color-accent-hover)] data-[active=true]:hover:bg-[var(--color-accent-hover)] data-[active=true]:hover:text-[var(--color-accent-contrast)] aria-[pressed=true]:border-[var(--color-accent)] aria-[pressed=true]:bg-[var(--color-accent)] aria-[pressed=true]:text-[var(--color-accent-contrast)] aria-[pressed=true]:hover:border-[var(--color-accent-hover)] aria-[pressed=true]:hover:bg-[var(--color-accent-hover)] aria-[pressed=true]:hover:text-[var(--color-accent-contrast)] aria-[selected=true]:border-[var(--color-accent)] aria-[selected=true]:bg-[var(--color-accent)] aria-[selected=true]:text-[var(--color-accent-contrast)] aria-[selected=true]:hover:border-[var(--color-accent-hover)] aria-[selected=true]:hover:bg-[var(--color-accent-hover)] aria-[selected=true]:hover:text-[var(--color-accent-contrast)]";
 
 // Base structural/behavioral styles shared by all buttons
 const UI_BUTTON_SHARED_BASE =
@@ -16,7 +16,7 @@ export const UI_BUTTON_BASE_CLASS =
     `${UI_BUTTON_SHARED_BASE} border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text-primary)]`;
 
 export const UI_BUTTON_PRIMARY_CLASS =
-    `${UI_BUTTON_SHARED_BASE} border-accent bg-accent text-accent-contrast hover:border-accent-hover hover:bg-accent-hover hover:text-accent-contrast`;
+    `${UI_BUTTON_SHARED_BASE} border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:border-[var(--color-accent-hover)] hover:bg-[var(--color-accent-hover)] hover:text-[var(--color-accent-contrast)]`;
 
 export const UI_BUTTON_GHOST_CLASS =
     `${UI_BUTTON_SHARED_BASE} border-[var(--color-border-subtle)] bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text-primary)]`;

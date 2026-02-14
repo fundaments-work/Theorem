@@ -9,7 +9,7 @@ import {
     Annotation,
     cn,
     HIGHLIGHT_COLOR_TOKENS,
-    useLearningStore,
+    useVocabularyStore,
     useLibraryStore,
     useSettingsStore,
     vocabularyTermFromLookup,
@@ -493,9 +493,9 @@ export function ArticleViewer({
 }: ArticleViewerProps) {
     const globalReaderSettings = useSettingsStore((state) => state.settings.readerSettings);
     const updateReaderSettings = useSettingsStore((state) => state.updateReaderSettings);
-    const learningSettings = useSettingsStore((state) => state.settings.learning);
-    const lookupTerm = useLearningStore((state) => state.lookupTerm);
-    const saveVocabularyTerm = useLearningStore((state) => state.saveVocabularyTerm);
+    const learningSettings = useSettingsStore((state) => state.settings.vocabulary);
+    const lookupTerm = useVocabularyStore((state) => state.lookupTerm);
+    const saveVocabularyTerm = useVocabularyStore((state) => state.saveVocabularyTerm);
     const articleAnnotations = useLibraryStore((state) => state.annotations);
     const addAnnotation = useLibraryStore((state) => state.addAnnotation);
     const updateAnnotation = useLibraryStore((state) => state.updateAnnotation);

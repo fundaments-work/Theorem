@@ -9,7 +9,7 @@ import {
     getBookBlob,
     getBookData,
     isTauri,
-    useLearningStore,
+    useVocabularyStore,
     useLibraryStore,
     useRssStore,
     useSettingsStore,
@@ -79,9 +79,9 @@ function BookReaderPage() {
     const saveBookLocations = useLibraryStore((state) => state.saveBookLocations);
     const addReadingTime = useLibraryStore((state) => state.addReadingTime);
     const markBookCompleted = useLibraryStore((state) => state.markBookCompleted);
-    const lookupTerm = useLearningStore((state) => state.lookupTerm);
-    const saveVocabularyTerm = useLearningStore((state) => state.saveVocabularyTerm);
-    const installedDictionaryCount = useLearningStore((state) => state.installedDictionaries.length);
+    const lookupTerm = useVocabularyStore((state) => state.lookupTerm);
+    const saveVocabularyTerm = useVocabularyStore((state) => state.saveVocabularyTerm);
+    const installedDictionaryCount = useVocabularyStore((state) => state.installedDictionaries.length);
 
     const settings = useSettingsStore((state) => state.settings);
     const updateReaderSettings = useSettingsStore((state) => state.updateReaderSettings);
@@ -1175,7 +1175,7 @@ function BookReaderPage() {
             setDictionaryLookupResult(result);
             if (!result) {
                 if (
-                    settings.learning.dictionaryMode === "offline"
+                    settings.vocabulary.dictionaryMode === "offline"
                     && installedDictionaryCount === 0
                 ) {
                     setDictionaryLookupError(
@@ -1195,11 +1195,11 @@ function BookReaderPage() {
         installedDictionaryCount,
         lookupTerm,
         selectedText,
-        settings.learning.dictionaryMode,
+        settings.vocabulary.dictionaryMode,
     ]);
 
     const handleSaveDictionaryResult = useCallback(() => {
-        if (!dictionaryLookupResult || !settings.learning.vocabularyEnabled) {
+        if (!dictionaryLookupResult || !settings.vocabulary.vocabularyEnabled) {
             return;
         }
 
@@ -1214,7 +1214,7 @@ function BookReaderPage() {
                 : undefined,
         );
         setDictionaryLookupSaved(true);
-    }, [currentBook, dictionaryLookupResult, saveVocabularyTerm, settings.learning.vocabularyEnabled]);
+    }, [currentBook, dictionaryLookupResult, saveVocabularyTerm, settings.vocabulary.vocabularyEnabled]);
 
     const handleColorSelect = useCallback(async (color: HighlightColor) => {
         if (!selectedCfi || !currentBookId) return;
@@ -1781,7 +1781,7 @@ function BookReaderPage() {
                                 loading: dictionaryLookupLoading,
                                 error: dictionaryLookupError,
                                 saved: dictionaryLookupSaved,
-                                canSaveToVocabulary: settings.learning.vocabularyEnabled,
+                                canSaveToVocabulary: settings.vocabulary.vocabularyEnabled,
                                 saveDisabledMessage: "Enable Vocabulary Builder in Settings to save terms.",
                                 onSave: handleSaveDictionaryResult,
                                 onBack: () => {

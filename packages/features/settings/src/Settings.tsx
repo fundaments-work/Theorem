@@ -7,7 +7,7 @@ import { useRef, useState, type ChangeEvent } from "react";
 import { cn, UI_BUTTON_BASE_CLASS, UI_INPUT_BASE_CLASS } from "@theorem/core";
 import {
     showOpenDirectoryDialog,
-    useLearningStore,
+    useVocabularyStore,
     useLibraryStore,
     useSettingsStore,
     useUIStore,
@@ -169,7 +169,7 @@ export function SettingsPage() {
     const {
         settings,
         updateSettings,
-        updateLearningSettings,
+        updateVocabularySettings,
         resetSettings,
         stats,
         updateStats,
@@ -178,7 +178,7 @@ export function SettingsPage() {
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
     const vaultSyncMessage = useUIStore((state) => state.vaultSyncMessage);
     const vaultSyncAt = useUIStore((state) => state.vaultSyncAt);
-    const { installedDictionaries, importStarDict, removeDictionary } = useLearningStore();
+    const { installedDictionaries, importStarDict, removeDictionary } = useVocabularyStore();
     const [activeTab, setActiveTab] = useState<
         "general" | "dictionary" | "rss" | "integrations" | "storage"
     >("general");
@@ -202,7 +202,7 @@ export function SettingsPage() {
             const storesToClear: PersistableStore[] = [
                 useSettingsStore as unknown as PersistableStore,
                 useLibraryStore as unknown as PersistableStore,
-                useLearningStore as unknown as PersistableStore,
+                useVocabularyStore as unknown as PersistableStore,
             ];
 
             await Promise.allSettled(
@@ -217,7 +217,7 @@ export function SettingsPage() {
 
             localStorage.removeItem("theorem-settings");
             localStorage.removeItem("theorem-library");
-            localStorage.removeItem("theorem-learning");
+            localStorage.removeItem("theorem-vocabulary");
             window.location.reload();
         }
     };
@@ -500,8 +500,8 @@ export function SettingsPage() {
                             description="Track words you look up while reading"
                         >
                             <Toggle
-                                checked={settings.learning.vocabularyEnabled}
-                                onChange={(checked) => updateLearningSettings({ vocabularyEnabled: checked })}
+                                checked={settings.vocabulary.vocabularyEnabled}
+                                onChange={(checked) => updateVocabularySettings({ vocabularyEnabled: checked })}
                             />
                         </SettingRow>
                     </Section>
@@ -540,8 +540,8 @@ export function SettingsPage() {
                                     { value: "offline", label: "Offline" },
                                     { value: "auto", label: "Auto" },
                                 ]}
-                                value={settings.learning.dictionaryMode}
-                                onChange={(value) => updateLearningSettings({ dictionaryMode: value })}
+                                value={settings.vocabulary.dictionaryMode}
+                                onChange={(value) => updateVocabularySettings({ dictionaryMode: value })}
                             />
                         </SettingRow>
 
@@ -568,8 +568,8 @@ export function SettingsPage() {
                             description="Display phonetic pronunciation"
                         >
                             <Toggle
-                                checked={settings.learning.showPronunciation}
-                                onChange={(checked) => updateLearningSettings({ showPronunciation: checked })}
+                                checked={settings.vocabulary.showPronunciation}
+                                onChange={(checked) => updateVocabularySettings({ showPronunciation: checked })}
                             />
                         </SettingRow>
 
@@ -578,8 +578,8 @@ export function SettingsPage() {
                             description="Auto-play pronunciation audio"
                         >
                             <Toggle
-                                checked={settings.learning.playPronunciationAudio}
-                                onChange={(checked) => updateLearningSettings({ playPronunciationAudio: checked })}
+                                checked={settings.vocabulary.playPronunciationAudio}
+                                onChange={(checked) => updateVocabularySettings({ playPronunciationAudio: checked })}
                             />
                         </SettingRow>
                     </Section>
@@ -687,14 +687,14 @@ export function SettingsPage() {
                             label="Article Extraction"
                             description="Use Mozilla Readability for cleaner articles"
                         >
-                            <Toggle checked={true} onChange={() => {}} />
+                            <Toggle checked={true} onChange={() => { }} />
                         </SettingRow>
 
                         <SettingRow
                             label="Offline Reading"
                             description="Download articles for offline access"
                         >
-                            <Toggle checked={true} onChange={() => {}} />
+                            <Toggle checked={true} onChange={() => { }} />
                         </SettingRow>
                     </Section>
 

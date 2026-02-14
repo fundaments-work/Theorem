@@ -104,7 +104,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
             <nav className="flex-1 overflow-y-auto py-2">
                 <ul className="flex flex-col">
                     {mainNavItems
-                        .filter((item) => item.id !== "vocabulary" || settings.learning.vocabularyEnabled)
+                        .filter((item) => item.id !== "vocabulary" || settings.vocabulary.vocabularyEnabled)
                         .map((item) => {
                             const isActive = currentRoute === item.id;
 

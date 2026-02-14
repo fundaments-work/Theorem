@@ -9,7 +9,6 @@ export * from './import';
 export * from './shelf-colors';
 export * from './ui-class-recipes';
 export * from './utils';
-export * from './learning-card-text';
 export * from './search/fuzzy';
 export * from './search/domain';
 export * from './vault-sync';

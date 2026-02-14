@@ -55,8 +55,8 @@ function App() {
     const toggleSidebar = useUIStore((state) => state.toggleSidebar);
     const isTauriRuntime = isTauri();
     const mainScrollRef = useRef<HTMLElement>(null);
-    const learningSettings = useSettingsStore((state) => state.settings.learning);
-    const vocabularyEnabled = learningSettings.vocabularyEnabled;
+    const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
+    const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
 
     useEffect(() => {
         if (currentRoute === "vocabulary" && !vocabularyEnabled) {

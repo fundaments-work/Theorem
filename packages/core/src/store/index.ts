@@ -19,7 +19,7 @@ import type {
     Collection,
     HighlightColor,
     InstalledDictionary,
-    LearningSettings,
+    VocabularySettings,
     PdfViewState,
     ReaderSettings,
     ReadingStats,
@@ -57,7 +57,7 @@ const defaultReaderSettings: ReaderSettings = {
 };
 
 // Default app settings
-const defaultLearningSettings: LearningSettings = {
+const defaultVocabularySettings: VocabularySettings = {
     vocabularyEnabled: true,
     dictionaryMode: "auto",
     preferredProviders: ["free_dictionary_api", "wiktionary", "stardict"],
@@ -82,7 +82,7 @@ const defaultAppSettings: AppSettings = {
     cacheSize: 500, // MB
     theme: "system",
     readerSettings: defaultReaderSettings,
-    learning: defaultLearningSettings,
+    vocabulary: defaultVocabularySettings,
     vault: defaultVaultSettings,
 };
 
@@ -862,7 +862,7 @@ interface SettingsStore {
 
     updateSettings: (updates: Partial<AppSettings>) => void;
     updateReaderSettings: (updates: Partial<ReaderSettings>) => void;
-    updateLearningSettings: (updates: Partial<LearningSettings>) => void;
+    updateVocabularySettings: (updates: Partial<VocabularySettings>) => void;
     updateStats: (updates: Partial<ReadingStats>) => void;
     resetSettings: () => void;
     resetReaderSettings: () => void;
@@ -894,12 +894,12 @@ export const useSettingsStore = create<SettingsStore>()(
                 }));
             },
 
-            updateLearningSettings: (updates) =>
+            updateVocabularySettings: (updates) =>
                 set((state) => ({
                     settings: {
                         ...state.settings,
-                        learning: {
-                            ...state.settings.learning,
+                        vocabulary: {
+                            ...state.settings.vocabulary,
                             ...updates,
                         },
                     },
@@ -929,18 +929,37 @@ export const useSettingsStore = create<SettingsStore>()(
         }),
         {
             name: "theorem-settings",
+            version: 1,
+            migrate: (persistedState, version) => {
+                const state = persistedState as any;
+
+                // Migration: rename settings.learning → settings.vocabulary
+                if (version === 0 || !version) {
+                    if (state.settings && state.settings.learning && !state.settings.vocabulary) {
+                        state.settings.vocabulary = state.settings.learning;
+                        delete state.settings.learning;
+                    }
+
+                    // Ensure vocabulary settings exist if missing
+                    if (state.settings && !state.settings.vocabulary) {
+                        state.settings.vocabulary = defaultVocabularySettings;
+                    }
+                }
+
+                return state;
+            },
             onRehydrateStorage: () => (state) => {
                 // Apply saved reader settings when store is rehydrated
                 if (state?.settings.readerSettings) {
                     initReaderStyles(state.settings.readerSettings);
                 }
 
-                if (state && !state.settings.learning) {
-                    state.settings.learning = defaultLearningSettings;
-                } else if (state?.settings.learning) {
-                    state.settings.learning = {
-                        ...defaultLearningSettings,
-                        ...state.settings.learning,
+                if (state && !state.settings.vocabulary) {
+                    state.settings.vocabulary = defaultVocabularySettings;
+                } else if (state?.settings.vocabulary) {
+                    state.settings.vocabulary = {
+                        ...defaultVocabularySettings,
+                        ...state.settings.vocabulary,
                     };
                 }
 
@@ -962,7 +981,7 @@ export const useSettingsStore = create<SettingsStore>()(
     )
 );
 
-interface LearningStore {
+interface VocabularyStore {
     vocabularyTerms: VocabularyTerm[];
     installedDictionaries: InstalledDictionary[];
     lookupCache: Record<string, DictionaryLookupResult>;
@@ -1144,7 +1163,7 @@ function normalizeVocabularyTerm(term: VocabularyTerm): VocabularyTerm {
     };
 }
 
-function normalizeLearningLookupCache(
+function normalizeVocabularyLookupCache(
     value: unknown,
 ): Record<string, DictionaryLookupResult> {
     if (!isRecord(value)) {
@@ -1154,7 +1173,7 @@ function normalizeLearningLookupCache(
     return value as Record<string, DictionaryLookupResult>;
 }
 
-export const useLearningStore = create<LearningStore>()(
+export const useVocabularyStore = create<VocabularyStore>()(
     persist(
         (set, get) => ({
             vocabularyTerms: [],
@@ -1299,7 +1318,7 @@ export const useLearningStore = create<LearningStore>()(
                     return cached;
                 }
 
-                const settings = useSettingsStore.getState().settings.learning;
+                const settings = useSettingsStore.getState().settings.vocabulary;
                 const installedIds = get().installedDictionaries.map((dictionary) => dictionary.id);
 
                 const result = await lookupDictionaryTerm({
@@ -1349,7 +1368,7 @@ export const useLearningStore = create<LearningStore>()(
             },
         }),
         {
-            name: "theorem-learning",
+            name: "theorem-vocabulary",
             version: 4,
             migrate: (persistedState, _version) => {
                 const persisted = isRecord(persistedState) ? persistedState : {};
@@ -1378,14 +1397,14 @@ export const useLearningStore = create<LearningStore>()(
                 const installedDictionaries = Array.isArray(persisted.installedDictionaries)
                     ? persisted.installedDictionaries
                     : [];
-                const lookupCache = normalizeLearningLookupCache(persisted.lookupCache);
+                const lookupCache = normalizeVocabularyLookupCache(persisted.lookupCache);
 
                 return {
                     ...persistedWithoutLegacyReviewFields,
                     vocabularyTerms,
                     installedDictionaries,
                     lookupCache,
-                } as LearningStore;
+                } as VocabularyStore;
             },
             onRehydrateStorage: () => (state) => {
                 if (!state) {
@@ -1401,7 +1420,7 @@ export const useLearningStore = create<LearningStore>()(
                     importedAt: toValidDate(dictionary.importedAt, new Date()),
                 }));
 
-                state.lookupCache = normalizeLearningLookupCache(state.lookupCache);
+                state.lookupCache = normalizeVocabularyLookupCache(state.lookupCache);
             },
         },
     ),
