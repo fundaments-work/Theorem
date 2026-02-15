@@ -35,6 +35,12 @@
         },
         {
           "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "/run/media/**"
+        },
+        {
+          "path": "/mnt/**"
         }
       ]
     },
@@ -58,6 +64,41 @@
         },
         {
           "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "/run/media/**"
+        },
+        {
+          "path": "/mnt/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$DATA/**"
+        },
+        {
+          "path": "$LOCALDATA/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "/run/media/**"
+        },
+        {
+          "path": "/mnt/**"
         }
       ]
     },
@@ -75,6 +116,12 @@
         },
         {
           "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "/run/media/**"
+        },
+        {
+          "path": "/mnt/**"
         }
       ]
     },
@@ -92,6 +139,12 @@
         },
         {
           "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "/run/media/**"
+        },
+        {
+          "path": "/mnt/**"
         }
       ]
     },
@@ -109,10 +162,47 @@
         },
         {
           "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "/run/media/**"
+        },
+        {
+          "path": "/mnt/**"
         }
       ]
     },
-    "fs:allow-mkdir",
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DATA/**"
+        },
+        {
+          "path": "$LOCALDATA/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "/run/media/**"
+        },
+        {
+          "path": "/mnt/**"
+        }
+      ]
+    },
     "fs:allow-remove",
     "dialog:default",
     "dialog:allow-open",

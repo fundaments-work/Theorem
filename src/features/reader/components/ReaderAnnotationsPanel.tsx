@@ -41,8 +41,8 @@ export function ReaderAnnotationsPanel({
     const bookmarks = annotations.filter(a => a.type === 'bookmark');
     const highlights = annotations.filter(a => a.type === 'highlight' || a.type === 'note');
     const vaultStatusText = {
-        synced: "Synced to vault",
-        syncing: "Appending to markdown",
+        synced: "Synced to export folder",
+        syncing: "Syncing markdown pages",
         error: "Sync error",
         idle: "Idle",
     }[vaultSyncStatus];

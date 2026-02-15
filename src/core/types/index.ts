@@ -211,6 +211,7 @@ export interface VaultIntegrationSettings {
     vaultPath: string;
     autoExportHighlights: boolean;
     highlightsFileName: string;
+    vocabularyFileName: string;
 }
 
 export interface VocabularyMeaning {

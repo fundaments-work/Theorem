@@ -7,6 +7,7 @@ import { useRef, useState, type ChangeEvent } from "react";
 import { cn } from "../../core";
 import {
     showOpenDirectoryDialog,
+    syncVaultMarkdownSnapshot,
     useVocabularyStore,
     useLibraryStore,
     useSettingsStore,
@@ -175,10 +176,11 @@ export function SettingsPage() {
         updateStats,
     } = useSettingsStore();
     const { books, annotations } = useLibraryStore();
+    const setVaultSyncStatus = useUIStore((state) => state.setVaultSyncStatus);
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
     const vaultSyncMessage = useUIStore((state) => state.vaultSyncMessage);
     const vaultSyncAt = useUIStore((state) => state.vaultSyncAt);
-    const { installedDictionaries, importStarDict, removeDictionary } = useVocabularyStore();
+    const { vocabularyTerms, installedDictionaries, importStarDict, removeDictionary } = useVocabularyStore();
     const [activeTab, setActiveTab] = useState<
         "general" | "dictionary" | "rss" | "integrations" | "storage"
     >("general");
@@ -244,7 +246,7 @@ export function SettingsPage() {
 
     const handlePickVaultDirectory = async () => {
         const selectedPath = await showOpenDirectoryDialog({
-            title: "Choose Obsidian Vault",
+            title: "Choose Export Folder",
             defaultPath: settings.vault.vaultPath || undefined,
         });
 
@@ -274,11 +276,33 @@ export function SettingsPage() {
         }
     };
 
+    const handleSyncVaultNow = async () => {
+        setVaultSyncStatus("syncing", "STATUS: SYNCING_MARKDOWN_EXPORT");
+        const result = await syncVaultMarkdownSnapshot({
+            books,
+            annotations,
+            vocabularyTerms,
+            settings: settings.vault,
+        });
+
+        if (result.status === "synced") {
+            setVaultSyncStatus("synced", result.message, new Date().toISOString());
+            return;
+        }
+
+        if (result.status === "error") {
+            setVaultSyncStatus("error", result.message);
+            return;
+        }
+
+        setVaultSyncStatus("idle", result.message);
+    };
+
     const tabButtons = [
         { id: "general" as const, label: "General" },
         { id: "dictionary" as const, label: "Dictionary" },
         { id: "rss" as const, label: "Snapshots" },
-        { id: "integrations" as const, label: "Vault" },
+        { id: "integrations" as const, label: "Sync" },
         { id: "storage" as const, label: "Storage" },
     ];
 
@@ -705,13 +729,13 @@ export function SettingsPage() {
             {activeTab === "integrations" && (
                 <div className="space-y-8">
                     <Section
-                        title="Vault integration"
-                        description="Local-first markdown pipeline for highlights"
+                        title="Export and sync"
+                        description="Local-first markdown sync for highlights, notes, and vocabulary"
                         icon={<BookOpen className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="Enable Vault Sync"
-                            description="Append highlights to markdown in your selected vault"
+                            label="Enable Export Sync"
+                            description="Enable markdown sync in your selected export folder"
                         >
                             <Toggle
                                 checked={settings.vault.enabled}
@@ -720,7 +744,7 @@ export function SettingsPage() {
                         </SettingRow>
 
                         <SettingRow
-                            label="Vault Directory"
+                            label="Export Folder"
                             description="Pick the local folder to receive markdown updates"
                         >
                             <div className="flex flex-wrap items-center gap-2">
@@ -728,7 +752,7 @@ export function SettingsPage() {
                                     type="text"
                                     value={settings.vault.vaultPath}
                                     onChange={(e) => updateVaultSettings({ vaultPath: e.target.value })}
-                                    placeholder="/Users/you/Documents/ObsidianVault"
+                                    placeholder="/Users/you/Documents/Reading-Exports"
                                     className={cn(
                                         "ui-input",
                                         "min-w-[20rem] sm:w-[28rem]"
@@ -747,7 +771,7 @@ export function SettingsPage() {
 
                         <SettingRow
                             label="Auto Export Highlights"
-                            description="Write markdown immediately when a highlight or note is saved"
+                            description="Rebuild markdown pages when a highlight or note is saved"
                         >
                             <Toggle
                                 checked={settings.vault.autoExportHighlights}
@@ -756,8 +780,8 @@ export function SettingsPage() {
                         </SettingRow>
 
                         <SettingRow
-                            label="Markdown File Name"
-                            description="Target file created/appended inside selected vault"
+                            label="Highlights Index File"
+                            description="Index markdown file generated inside selected export folder"
                         >
                             <input
                                 type="text"
@@ -769,12 +793,43 @@ export function SettingsPage() {
                         </SettingRow>
 
                         <SettingRow
+                            label="Vocabulary File"
+                            description="Vocabulary markdown file generated inside selected export folder"
+                        >
+                            <input
+                                type="text"
+                                value={settings.vault.vocabularyFileName}
+                                onChange={(e) => updateVaultSettings({ vocabularyFileName: e.target.value })}
+                                placeholder="theorem-vocabulary.md"
+                                className={cn("ui-input", "min-w-[16rem]")}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Sync Markdown Now"
+                            description="Export all book highlight pages, index, and vocabulary immediately"
+                        >
+                            <button
+                                onClick={() => {
+                                    void handleSyncVaultNow();
+                                }}
+                                disabled={vaultSyncStatus === "syncing"}
+                                className={cn(
+                                    "ui-btn",
+                                    vaultSyncStatus === "syncing" && "pointer-events-none opacity-60",
+                                )}
+                            >
+                                {vaultSyncStatus === "syncing" ? "Syncing..." : "Sync now"}
+                            </button>
+                        </SettingRow>
+
+                        <SettingRow
                             label="Live Sync Status"
-                            description="Background append signal for the markdown pipeline"
+                            description="Latest markdown export status"
                         >
                             <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] font-medium text-[color:var(--color-text-primary)]">
-                                {vaultSyncStatus === "synced" && "Status: Synced to vault"}
-                                {vaultSyncStatus === "syncing" && "Status: Appending to markdown"}
+                                {vaultSyncStatus === "synced" && "Status: Synced to export folder"}
+                                {vaultSyncStatus === "syncing" && "Status: Syncing markdown pages"}
                                 {vaultSyncStatus === "error" && "Status: Sync error"}
                                 {vaultSyncStatus === "idle" && "Status: Idle"}
                                 {vaultSyncMessage ? ` | ${vaultSyncMessage}` : ""}

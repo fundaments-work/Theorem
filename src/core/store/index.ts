@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { applyReaderStyles, initReaderStyles } from "../lib/design-tokens";
-import { appendAnnotationToVaultMarkdown } from "../lib/vault-sync";
+import { syncVaultMarkdownSnapshot } from "../lib/vault-sync";
 import {
     lookupDictionaryTerm,
     vocabularyTermFromLookup,
@@ -70,6 +70,7 @@ const defaultVaultSettings: AppSettings["vault"] = {
     vaultPath: "",
     autoExportHighlights: true,
     highlightsFileName: "theorem-highlights.md",
+    vocabularyFileName: "theorem-vocabulary.md",
 };
 
 // Default app settings
@@ -266,7 +267,9 @@ function normalizeCollectionKind(collection: LegacyCollection): Collection | nul
     };
 }
 
-function queueVaultSync(annotation: Annotation, book?: Book): void {
+let vaultSyncQueue: Promise<void> = Promise.resolve();
+
+function queueVaultSync(annotation: Annotation): void {
     const { settings } = useSettingsStore.getState();
     const { setVaultSyncStatus } = useUIStore.getState();
 
@@ -278,25 +281,32 @@ function queueVaultSync(annotation: Annotation, book?: Book): void {
         return;
     }
 
-    setVaultSyncStatus("syncing", "STATUS: APPENDING_TO_MARKDOWN");
+    setVaultSyncStatus("syncing", "STATUS: SYNCING_MARKDOWN_EXPORT");
 
-    void appendAnnotationToVaultMarkdown({
-        annotation,
-        book,
-        settings: settings.vault,
-    }).then((result) => {
-        if (result.status === "synced") {
-            setVaultSyncStatus("synced", result.message, new Date().toISOString());
-            return;
-        }
+    vaultSyncQueue = vaultSyncQueue
+        .catch(() => undefined)
+        .then(async () => {
+            const { books, annotations } = useLibraryStore.getState();
+            const { vocabularyTerms } = useVocabularyStore.getState();
+            const result = await syncVaultMarkdownSnapshot({
+                books,
+                annotations,
+                vocabularyTerms,
+                settings: settings.vault,
+            });
 
-        if (result.status === "error") {
-            setVaultSyncStatus("error", result.message);
-            return;
-        }
+            if (result.status === "synced") {
+                setVaultSyncStatus("synced", result.message, new Date().toISOString());
+                return;
+            }
 
-        setVaultSyncStatus("idle", result.message);
-    });
+            if (result.status === "error") {
+                setVaultSyncStatus("error", result.message);
+                return;
+            }
+
+            setVaultSyncStatus("idle", result.message);
+        });
 }
 
 // Library Store
@@ -649,8 +659,7 @@ export const useLibraryStore = create<LibraryStore>()(
             // Annotation actions
             addAnnotation: (annotation) => {
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
-                const book = get().getBook(annotation.bookId);
-                queueVaultSync(annotation, book);
+                queueVaultSync(annotation);
             },
 
             addHighlightWithNote: (cfi, text, color, note) => {
@@ -667,8 +676,7 @@ export const useLibraryStore = create<LibraryStore>()(
                     createdAt: new Date(),
                 };
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
-                const book = get().getBook(annotation.bookId);
-                queueVaultSync(annotation, book);
+                queueVaultSync(annotation);
                 return annotation;
             },
 
@@ -685,8 +693,7 @@ export const useLibraryStore = create<LibraryStore>()(
 
                 const syncedAnnotation = get().annotations.find((annotation) => annotation.id === annotationId);
                 if (syncedAnnotation) {
-                    const book = get().getBook(syncedAnnotation.bookId);
-                    queueVaultSync(syncedAnnotation, book);
+                    queueVaultSync(syncedAnnotation);
                 }
             },
 
@@ -929,9 +936,13 @@ export const useSettingsStore = create<SettingsStore>()(
         }),
         {
             name: "theorem-settings",
-            version: 1,
+            version: 2,
             migrate: (persistedState, version) => {
-                const state = persistedState as any;
+                const state = (
+                    typeof persistedState === "object" && persistedState !== null
+                        ? persistedState
+                        : {}
+                ) as any;
 
                 // Migration: rename settings.learning → settings.vocabulary
                 if (version === 0 || !version) {
@@ -944,6 +955,41 @@ export const useSettingsStore = create<SettingsStore>()(
                     if (state.settings && !state.settings.vocabulary) {
                         state.settings.vocabulary = defaultVocabularySettings;
                     }
+                }
+
+                if (!state.settings) {
+                    state.settings = {
+                        ...defaultAppSettings,
+                        readerSettings: { ...defaultReaderSettings },
+                        vocabulary: { ...defaultVocabularySettings },
+                        vault: { ...defaultVaultSettings },
+                    };
+                } else {
+                    state.settings = {
+                        ...defaultAppSettings,
+                        ...state.settings,
+                        readerSettings: {
+                            ...defaultReaderSettings,
+                            ...(state.settings.readerSettings || {}),
+                        },
+                        vocabulary: {
+                            ...defaultVocabularySettings,
+                            ...(state.settings.vocabulary || {}),
+                        },
+                        vault: {
+                            ...defaultVaultSettings,
+                            ...(state.settings.vault || {}),
+                        },
+                    };
+                }
+
+                if (!state.stats) {
+                    state.stats = {
+                        ...defaultReadingStats,
+                        dailyActivity: [...defaultReadingStats.dailyActivity],
+                    };
+                } else if (!Array.isArray(state.stats.dailyActivity)) {
+                    state.stats.dailyActivity = [];
                 }
 
                 return state;

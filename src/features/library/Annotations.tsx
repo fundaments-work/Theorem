@@ -322,8 +322,8 @@ export function AnnotationsPage() {
             </div>
 
             <div className="mb-8 border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] font-medium text-[color:var(--color-text-primary)]">
-                {vaultSyncStatus === "synced" && "Status: Synced to vault"}
-                {vaultSyncStatus === "syncing" && "Status: Appending to markdown"}
+                {vaultSyncStatus === "synced" && "Status: Synced to export folder"}
+                {vaultSyncStatus === "syncing" && "Status: Syncing markdown pages"}
                 {vaultSyncStatus === "error" && "Status: Sync error"}
                 {vaultSyncStatus === "idle" && "Status: Idle"}
                 {vaultSyncMessage ? ` | ${vaultSyncMessage}` : ""}
