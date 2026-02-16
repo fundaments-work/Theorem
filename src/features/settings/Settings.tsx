@@ -10,6 +10,7 @@ import {
     syncVaultMarkdownSnapshot,
     useVocabularyStore,
     useLibraryStore,
+    useRssStore,
     useSettingsStore,
     useUIStore,
 } from "../../core";
@@ -99,6 +100,10 @@ function SettingRow({ label, description, children }: SettingRowProps) {
     );
 }
 
+function normalizeHighlightsExportName(value: string): string {
+    return value.replace(/\.md$/i, "").trim();
+}
+
 // Toggle component
 function Toggle({
     checked,
@@ -176,6 +181,8 @@ export function SettingsPage() {
         updateStats,
     } = useSettingsStore();
     const { books, annotations } = useLibraryStore();
+    const articles = useRssStore((state) => state.articles);
+    const highlightsExportName = normalizeHighlightsExportName(settings.vault.highlightsFileName);
     const setVaultSyncStatus = useUIStore((state) => state.setVaultSyncStatus);
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
     const vaultSyncMessage = useUIStore((state) => state.vaultSyncMessage);
@@ -281,6 +288,7 @@ export function SettingsPage() {
         const result = await syncVaultMarkdownSnapshot({
             books,
             annotations,
+            rssArticles: articles,
             vocabularyTerms,
             settings: settings.vault,
         });
@@ -780,14 +788,18 @@ export function SettingsPage() {
                         </SettingRow>
 
                         <SettingRow
-                            label="Highlights Index File"
-                            description="Index markdown file generated inside selected export folder"
+                            label="Highlights Export Name"
+                            description="Base name for highlights pages folder (<name>-books). .md suffix is ignored."
                         >
                             <input
                                 type="text"
-                                value={settings.vault.highlightsFileName}
-                                onChange={(e) => updateVaultSettings({ highlightsFileName: e.target.value })}
-                                placeholder="theorem-highlights.md"
+                                value={highlightsExportName}
+                                onChange={(e) => (
+                                    updateVaultSettings({
+                                        highlightsFileName: normalizeHighlightsExportName(e.target.value),
+                                    })
+                                )}
+                                placeholder="theorem-highlights"
                                 className={cn("ui-input", "min-w-[16rem]")}
                             />
                         </SettingRow>
@@ -807,7 +819,7 @@ export function SettingsPage() {
 
                         <SettingRow
                             label="Sync Markdown Now"
-                            description="Export all book highlight pages, index, and vocabulary immediately"
+                            description="Export all book/article highlight pages and vocabulary immediately"
                         >
                             <button
                                 onClick={() => {

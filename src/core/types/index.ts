@@ -210,6 +210,8 @@ export interface VaultIntegrationSettings {
     enabled: boolean;
     vaultPath: string;
     autoExportHighlights: boolean;
+    // Legacy key name kept for persisted-settings compatibility.
+    // Stores the highlights export base name used for `<name>-books`.
     highlightsFileName: string;
     vocabularyFileName: string;
 }

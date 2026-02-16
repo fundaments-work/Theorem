@@ -69,7 +69,7 @@ const defaultVaultSettings: AppSettings["vault"] = {
     enabled: false,
     vaultPath: "",
     autoExportHighlights: true,
-    highlightsFileName: "theorem-highlights.md",
+    highlightsFileName: "theorem-highlights",
     vocabularyFileName: "theorem-vocabulary.md",
 };
 
@@ -287,10 +287,12 @@ function queueVaultSync(annotation: Annotation): void {
         .catch(() => undefined)
         .then(async () => {
             const { books, annotations } = useLibraryStore.getState();
+            const { articles } = useRssStore.getState();
             const { vocabularyTerms } = useVocabularyStore.getState();
             const result = await syncVaultMarkdownSnapshot({
                 books,
                 annotations,
+                rssArticles: articles,
                 vocabularyTerms,
                 settings: settings.vault,
             });

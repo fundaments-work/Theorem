@@ -1,11 +1,26 @@
-import { mkdir, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { isTauri } from "./env";
-import type { Annotation, Book, VaultIntegrationSettings, VocabularyTerm } from "../types";
+import type {
+    Annotation,
+    Book,
+    HighlightColor,
+    RssArticle,
+    VaultIntegrationSettings,
+    VocabularyTerm,
+} from "../types";
 
 const DEFAULT_HIGHLIGHTS_FILE_NAME = "theorem-highlights.md";
 const DEFAULT_VOCABULARY_FILE_NAME = "theorem-vocabulary.md";
 const BOOK_PAGES_FOLDER_SUFFIX = "-books";
 const MAX_BOOK_PAGE_FILE_NAME_LENGTH = 180;
+const FALLBACK_HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
+    yellow: "#f4b400",
+    green: "#2e7d32",
+    blue: "#1976d2",
+    red: "#d32f2f",
+    orange: "#f57c00",
+    purple: "#7b1fa2",
+};
 
 export type VaultSyncResult =
     | { status: "synced"; message: string; filePaths: string[] }
@@ -16,6 +31,7 @@ interface SyncVaultMarkdownParams {
     books: Book[];
     annotations: Annotation[];
     vocabularyTerms: VocabularyTerm[];
+    rssArticles?: RssArticle[];
     settings: VaultIntegrationSettings;
 }
 
@@ -37,7 +53,6 @@ interface ExportBookPage {
     source: ExportSource;
     annotations: Annotation[];
     fileName: string;
-    relativePath: string;
     absolutePath: string;
 }
 
@@ -202,13 +217,6 @@ function joinPath(basePath: string, part: string): string {
     return `${trimmedBase}${separator}${part}`;
 }
 
-function toRelativeMarkdownLink(path: string): string {
-    return path
-        .split("/")
-        .map((segment) => encodeURIComponent(segment))
-        .join("/");
-}
-
 function toBlockQuote(value: string): string {
     return value
         .split("\n")
@@ -216,8 +224,48 @@ function toBlockQuote(value: string): string {
         .join("\n");
 }
 
-function toLinkLabel(value: string): string {
-    return value.replace(/\[/g, "\\[").replace(/\]/g, "\\]");
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function isHighlightColor(value: string | undefined): value is HighlightColor {
+    if (!value) {
+        return false;
+    }
+    return value in FALLBACK_HIGHLIGHT_COLORS;
+}
+
+function readRootCssVariable(variableName: string): string | null {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+        return null;
+    }
+    const resolved = window.getComputedStyle(document.documentElement)
+        .getPropertyValue(variableName)
+        .trim();
+    return resolved || null;
+}
+
+function getAnnotationHighlightColor(annotation: Annotation): string | null {
+    if (!isHighlightColor(annotation.color)) {
+        return null;
+    }
+
+    return readRootCssVariable(`--highlight-${annotation.color}`)
+        ?? FALLBACK_HIGHLIGHT_COLORS[annotation.color];
+}
+
+function toHighlightedQuote(quote: string, color: string | null): string {
+    if (!color) {
+        return toBlockQuote(quote);
+    }
+
+    const escaped = escapeHtml(quote).replace(/\n/g, "<br />");
+    return `<mark style="background-color: ${color}; color: inherit;">${escaped}</mark>`;
 }
 
 function getHighlightAnnotations(annotations: Annotation[]): Annotation[] {
@@ -239,10 +287,9 @@ function buildFallbackSource(bookId: string): ExportSource {
     const sourceId = toSingleLineText(bookId, "unknown-source");
 
     if (sourceId.startsWith("rss:")) {
-        const articleId = sourceId.slice(4);
         return {
             id: sourceId,
-            title: articleId ? `RSS Article ${articleId}` : "RSS Article",
+            title: "RSS Article",
             author: "Unknown Author",
             format: "rss",
             filePath: "",
@@ -251,26 +298,49 @@ function buildFallbackSource(bookId: string): ExportSource {
 
     return {
         id: sourceId,
-        title: `Unknown Source ${sourceId}`,
+        title: "Untitled Document",
         author: "Unknown Author",
         format: "unknown",
         filePath: "",
     };
 }
 
-function buildExportSource(bookId: string, booksById: Map<string, Book>): ExportSource {
+function buildExportSource(
+    bookId: string,
+    booksById: Map<string, Book>,
+    rssArticlesById: Map<string, RssArticle>,
+): ExportSource {
+    const rssArticleId = bookId.startsWith("rss:")
+        ? toSingleLineText(bookId.slice("rss:".length))
+        : "";
+    const rssArticle = rssArticleId ? rssArticlesById.get(rssArticleId) : undefined;
+
     const book = booksById.get(bookId);
-    if (!book) {
-        return buildFallbackSource(bookId);
+    if (book) {
+        const defaultTitle = toSingleLineText(book.title, "Untitled Source");
+        const fallbackTitle = toSingleLineText(rssArticle?.title, defaultTitle);
+        const isSyntheticRssTitle = defaultTitle === bookId || /^RSS Article(\s|$)/i.test(defaultTitle);
+
+        return {
+            id: book.id,
+            title: isSyntheticRssTitle ? fallbackTitle : defaultTitle,
+            author: toSingleLineText(rssArticle?.author, toSingleLineText(book.author, "Unknown Author")),
+            format: book.format,
+            filePath: toSingleLineText(rssArticle?.url, toSingleLineText(book.filePath, "")),
+        };
     }
 
-    return {
-        id: book.id,
-        title: toSingleLineText(book.title, "Untitled Source"),
-        author: toSingleLineText(book.author, "Unknown Author"),
-        format: book.format,
-        filePath: toSingleLineText(book.filePath, ""),
-    };
+    if (rssArticle) {
+        return {
+            id: bookId,
+            title: toSingleLineText(rssArticle.title, "RSS Article"),
+            author: toSingleLineText(rssArticle.author, "Unknown Author"),
+            format: "rss",
+            filePath: toSingleLineText(rssArticle.url, ""),
+        };
+    }
+
+    return buildFallbackSource(bookId);
 }
 
 function buildUniqueFileName(
@@ -313,7 +383,6 @@ function buildBookPageMarkdown(
         "---",
         `title: ${toYamlString(source.title)}`,
         `type: ${toYamlString("theorem-book-highlights")}`,
-        `theorem_book_id: ${toYamlString(source.id)}`,
         `author: ${toYamlString(source.author)}`,
         `format: ${toYamlString(source.format)}`,
         `source_path: ${toYamlString(source.filePath)}`,
@@ -331,7 +400,6 @@ function buildBookPageMarkdown(
         "",
         `- Author: ${source.author}`,
         `- Format: ${source.format}`,
-        `- Source ID: \`${source.id}\``,
         `- Exported at: ${generatedAt}`,
         "",
         "## Highlights and Notes",
@@ -347,27 +415,20 @@ function buildBookPageMarkdown(
         const annotationKind = annotation.type === "note" ? "Note" : "Highlight";
         const quote = toMultilineText(annotation.selectedText);
         const note = toMultilineText(annotation.noteContent);
+        const color = getAnnotationHighlightColor(annotation);
 
         lines.push(`### ${index + 1}. ${annotationKind}`);
-        lines.push(`- Annotation ID: \`${annotation.id}\``);
         lines.push(`- Created: ${toIso(annotation.createdAt)}`);
         if (annotation.updatedAt) {
             lines.push(`- Updated: ${toIso(annotation.updatedAt)}`);
         }
-        if (annotation.color) {
-            lines.push(`- Color: ${annotation.color}`);
-        }
-        const location = toSingleLineText(annotation.location);
-        if (location) {
-            lines.push(`- Location: ${location}`);
-        }
-        if (annotation.pageNumber !== undefined) {
-            lines.push(`- Page: ${annotation.pageNumber}`);
+        if (color) {
+            lines.push(`- Color: ${color}`);
         }
         lines.push("");
 
         if (quote) {
-            lines.push("**Quote**", "", toBlockQuote(quote), "");
+            lines.push("**Quote**", "", toHighlightedQuote(quote, color), "");
         }
 
         if (note) {
@@ -377,53 +438,6 @@ function buildBookPageMarkdown(
         lines.push("---", "");
     });
 
-    return lines.join("\n");
-}
-
-function buildHighlightsIndexMarkdown(
-    pages: ExportBookPage[],
-    generatedAt: string,
-): string {
-    const sortedPages = [...pages].sort((left, right) => left.source.title.localeCompare(right.source.title));
-    const totalAnnotations = sortedPages.reduce((count, page) => count + page.annotations.length, 0);
-
-    const lines: string[] = [
-        "---",
-        `title: ${toYamlString("Theorem Highlights Index")}`,
-        `type: ${toYamlString("theorem-highlights-index")}`,
-        `generated_at: ${toYamlString(generatedAt)}`,
-        `books_total: ${sortedPages.length}`,
-        `annotations_total: ${totalAnnotations}`,
-        "tags:",
-        "  - theorem",
-        "  - highlights",
-        "  - index",
-        "---",
-        "",
-        "# Theorem Highlights",
-        "",
-        `- Exported at: ${generatedAt}`,
-        `- Books: ${sortedPages.length}`,
-        `- Highlights and notes: ${totalAnnotations}`,
-        "",
-        "## Book Pages",
-        "",
-    ];
-
-    if (sortedPages.length === 0) {
-        lines.push("_No highlights or notes found._", "");
-        return lines.join("\n");
-    }
-
-    for (const page of sortedPages) {
-        const linkLabel = toLinkLabel(page.source.title);
-        const linkPath = toRelativeMarkdownLink(page.relativePath);
-        lines.push(
-            `- [${linkLabel}](${linkPath}) | ${page.source.author} | ${page.annotations.length} entries`,
-        );
-    }
-
-    lines.push("");
     return lines.join("\n");
 }
 
@@ -532,11 +546,13 @@ function buildVocabularyMarkdown(terms: VocabularyTerm[], generatedAt: string): 
 
 function buildBookPages(
     books: Book[],
+    rssArticles: RssArticle[],
     annotations: Annotation[],
     vaultPath: string,
     pagesDirectoryName: string,
 ): ExportBookPage[] {
     const booksById = new Map(books.map((book) => [book.id, book]));
+    const rssArticlesById = new Map(rssArticles.map((article) => [article.id, article]));
     const groupedAnnotations = new Map<string, Annotation[]>();
 
     for (const annotation of getHighlightAnnotations(annotations)) {
@@ -552,16 +568,14 @@ function buildBookPages(
     const pagesDirectoryPath = joinPath(vaultPath, pagesDirectoryName);
 
     return Array.from(groupedAnnotations.entries()).map(([bookId, bookAnnotations]) => {
-        const source = buildExportSource(bookId, booksById);
+        const source = buildExportSource(bookId, booksById, rssArticlesById);
         const fileName = buildUniqueFileName(source, usedFileNames);
-        const relativePath = `${pagesDirectoryName}/${fileName}`;
         const absolutePath = joinPath(pagesDirectoryPath, fileName);
 
         return {
             source,
             annotations: bookAnnotations,
             fileName,
-            relativePath,
             absolutePath,
         };
     });
@@ -571,6 +585,7 @@ export async function syncVaultMarkdownSnapshot({
     books,
     annotations,
     vocabularyTerms,
+    rssArticles = [],
     settings,
 }: SyncVaultMarkdownParams): Promise<VaultSyncResult> {
     if (!settings.enabled) {
@@ -600,15 +615,18 @@ export async function syncVaultMarkdownSnapshot({
     );
     const pagesDirectoryName = `${highlightsBaseName}${BOOK_PAGES_FOLDER_SUFFIX}`;
     const pagesDirectoryPath = joinPath(vaultPath, pagesDirectoryName);
-    const highlightsIndexPath = joinPath(vaultPath, highlightsFileName);
+    const legacyHighlightsIndexPath = joinPath(vaultPath, highlightsFileName);
     const vocabularyPath = joinPath(vaultPath, vocabularyFileName);
     const generatedAt = new Date().toISOString();
 
     try {
         await mkdir(vaultPath, { recursive: true });
         await mkdir(pagesDirectoryPath, { recursive: true });
+        if (await exists(legacyHighlightsIndexPath)) {
+            await remove(legacyHighlightsIndexPath);
+        }
 
-        const pages = buildBookPages(books, annotations, vaultPath, pagesDirectoryName);
+        const pages = buildBookPages(books, rssArticles, annotations, vaultPath, pagesDirectoryName);
 
         await Promise.all(
             pages.map((page) => (
@@ -617,11 +635,6 @@ export async function syncVaultMarkdownSnapshot({
                     buildBookPageMarkdown(page.source, page.annotations, generatedAt),
                 )
             )),
-        );
-
-        await writeTextFile(
-            highlightsIndexPath,
-            buildHighlightsIndexMarkdown(pages, generatedAt),
         );
 
         await writeTextFile(
@@ -634,7 +647,6 @@ export async function syncVaultMarkdownSnapshot({
             status: "synced",
             message: `Synced ${pages.length} book page(s), ${highlightsTotal} highlight/note item(s), and ${vocabularyTerms.length} vocabulary term(s).`,
             filePaths: [
-                highlightsIndexPath,
                 ...pages.map((page) => page.absolutePath),
                 vocabularyPath,
             ],
