@@ -3,7 +3,7 @@
  * App configuration with all planned features
  */
 
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState, useEffect, type ChangeEvent } from "react";
 import { cn } from "../../core";
 import {
     showOpenDirectoryDialog,
@@ -16,6 +16,7 @@ import {
 } from "../../core";
 import { formatFileSize } from "../../core";
 import { confirmClearAllData } from "../../core";
+import { clearAllApplicationStorage, getRssStorageStats } from "../../core/lib/storage-manager";
 import { Dropdown } from "../../ui";
 import {
     Settings,
@@ -205,13 +206,24 @@ export function SettingsPage() {
         0,
     );
 
+    const [rssStats, setRssStats] = useState<{ articleCount: number; totalSize: number }>({ articleCount: 0, totalSize: 0 });
+
+    useEffect(() => {
+        getRssStorageStats().then(setRssStats);
+    }, []);
+
     const handleClearData = async () => {
         const confirmed = await confirmClearAllData();
-        if (confirmed) {
+        if (!confirmed) return;
+
+        try {
+            await clearAllApplicationStorage();
+            
             const storesToClear: PersistableStore[] = [
                 useSettingsStore as unknown as PersistableStore,
                 useLibraryStore as unknown as PersistableStore,
                 useVocabularyStore as unknown as PersistableStore,
+                useRssStore as unknown as PersistableStore,
             ];
 
             await Promise.allSettled(
@@ -224,10 +236,9 @@ export function SettingsPage() {
                 }),
             );
 
-            localStorage.removeItem("theorem-settings");
-            localStorage.removeItem("theorem-library");
-            localStorage.removeItem("theorem-vocabulary");
             window.location.reload();
+        } catch (error) {
+            console.error("[Settings] Failed to clear all data:", error);
         }
     };
 
@@ -965,12 +976,12 @@ export function SettingsPage() {
                                     <div>
                                         <p className="font-medium text-sm text-[color:var(--color-text-primary)]">RSS Articles</p>
                                         <p className="text-xs text-[color:var(--color-text-muted)]">
-                                            0 articles cached
+                                            {rssStats.articleCount} {rssStats.articleCount === 1 ? "article" : "articles"} cached
                                         </p>
                                     </div>
                                 </div>
                                 <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
-                                    0 MB
+                                    {formatFileSize(rssStats.totalSize)}
                                 </span>
                             </div>
 

@@ -2,6 +2,7 @@ export * from './env';
 export * from './dialogs';
 export * from './design-tokens';
 export * from './storage';
+export * from './storage-manager';
 export * from './toc';
 export * from './cover-extractor';
 export * from './import';

@@ -11,6 +11,7 @@ import {
     importStarDictDictionary,
     removeStarDictDictionary,
 } from "../services/StarDictService";
+import { deleteBookStorage, cleanupOrphanedStorage } from "../lib/storage-manager";
 import type {
     Annotation,
     AppRoute,
@@ -396,7 +397,16 @@ export const useLibraryStore = create<LibraryStore>()(
             addBooks: (books) =>
                 set((state) => ({ books: [...state.books, ...books] })),
 
-            removeBook: (bookId) => {
+            removeBook: async (bookId) => {
+                const book = get().books.find((b) => b.id === bookId);
+                
+                // Clean up storage first (don't await to keep UI responsive)
+                if (book) {
+                    deleteBookStorage(bookId, book.storagePath || book.filePath).catch((error) => {
+                        console.error('[LibraryStore] Failed to delete book storage:', error);
+                    });
+                }
+                
                 set((state) => ({
                     books: state.books.filter((b) => b.id !== bookId),
                     annotations: state.annotations.filter((a) => a.bookId !== bookId),
@@ -838,12 +848,13 @@ export const useLibraryStore = create<LibraryStore>()(
                     recentBooksCache,
                 } as PersistedLibraryState;
             },
-            partialize: (state) => ({
-                books: state.books,
+            partialize: (state): PersistedLibraryState => ({
+                // Strip coverPath from books to reduce storage size (covers are in IDB)
+                books: state.books.map(({ coverPath: _, ...book }) => book) as Book[],
                 collections: state.collections,
                 annotations: state.annotations,
                 lastScannedAt: state.lastScannedAt,
-                recentBooksCache: state.recentBooksCache,
+                recentBooksCache: state.recentBooksCache.map(({ coverPath: _, ...book }) => book) as CachedBookMetadata[],
             }),
             onRehydrateStorage: () => (state) => {
                 if (!state) {
@@ -1377,12 +1388,19 @@ export const useVocabularyStore = create<VocabularyStore>()(
                 });
 
                 if (result) {
-                    set((state) => ({
-                        lookupCache: {
-                            ...state.lookupCache,
-                            [cacheKey]: result,
-                        },
-                    }));
+                    set((state) => {
+                        const MAX_CACHE_SIZE = 100; // Limit cache to 100 entries
+                        const newCache = { ...state.lookupCache, [cacheKey]: result };
+                        const cacheKeys = Object.keys(newCache);
+                        
+                        // If cache exceeds max size, remove oldest entries (LRU eviction)
+                        if (cacheKeys.length > MAX_CACHE_SIZE) {
+                            const keysToRemove = cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_SIZE);
+                            keysToRemove.forEach(key => delete newCache[key]);
+                        }
+                        
+                        return { lookupCache: newCache };
+                    });
                 }
 
                 return result;
@@ -1454,6 +1472,11 @@ export const useVocabularyStore = create<VocabularyStore>()(
                     lookupCache,
                 } as VocabularyStore;
             },
+            partialize: (state) => ({
+                // Exclude lookupCache from persistence to reduce storage size
+                vocabularyTerms: state.vocabularyTerms,
+                installedDictionaries: state.installedDictionaries,
+            }),
             onRehydrateStorage: () => (state) => {
                 if (!state) {
                     return;
@@ -1468,7 +1491,8 @@ export const useVocabularyStore = create<VocabularyStore>()(
                     importedAt: toValidDate(dictionary.importedAt, new Date()),
                 }));
 
-                state.lookupCache = normalizeVocabularyLookupCache(state.lookupCache);
+                // Initialize empty lookup cache on rehydrate
+                state.lookupCache = {};
             },
         },
     ),
@@ -1746,10 +1770,34 @@ export const useRssStore = create<RssStore>()(
         {
             name: 'theorem-rss',
             version: 1,
-            partialize: (state) => ({
-                feeds: state.feeds,
-                articles: state.articles,
-            }),
+            partialize: (state) => {
+                const MAX_ARTICLES = 500; // Keep only last 500 articles
+                const MAX_ARTICLE_AGE_DAYS = 30; // Remove articles older than 30 days
+                
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - MAX_ARTICLE_AGE_DAYS);
+                
+                // Filter out old articles and limit total count
+                const filteredArticles = state.articles
+                    .filter(article => {
+                        const articleDate = article.publishedAt || article.fetchedAt;
+                        return new Date(articleDate) >= cutoffDate;
+                    })
+                    .slice(0, MAX_ARTICLES);
+                
+                // Truncate article content to reduce storage size (keep first 50KB)
+                const truncatedArticles = filteredArticles.map(article => ({
+                    ...article,
+                    content: article.content.length > 50000 
+                        ? article.content.slice(0, 50000) + '... [truncated]'
+                        : article.content,
+                }));
+                
+                return {
+                    feeds: state.feeds,
+                    articles: truncatedArticles,
+                };
+            },
         },
     ),
 );

@@ -7,7 +7,6 @@ import { get, set, del } from 'idb-keyval';
 import { isTauri } from './env';
 
 const STORE_NAME = 'theorem-books';
-const METADATA_STORE = 'theorem-metadata';
 const COVERS_STORE = 'theorem-covers';
 const BLOB_CACHE_LIMIT = 4;
 
@@ -338,31 +337,8 @@ export async function deleteBookData(id: string, filePath?: string): Promise<voi
 }
 
 /**
- * Save book metadata to storage
- */
-export async function saveBookMetadata<T>(id: string, metadata: T): Promise<void> {
-    try {
-        await set(`${METADATA_STORE}-${id}`, metadata);
-    } catch (error) {
-        console.error('Failed to save metadata:', error);
-    }
-}
-
-/**
- * Get book metadata from storage
- */
-export async function getBookMetadata<T>(id: string): Promise<T | null> {
-    try {
-        const data = await get<T>(`${METADATA_STORE}-${id}`);
-        return data ?? null;
-    } catch (error) {
-        console.error('Failed to get metadata:', error);
-        return null;
-    }
-}
-
-/**
  * Get storage stats
+ * @deprecated Use storage-manager.ts functions instead
  */
 export async function getStorageStats(): Promise<{ used: number; total: number }> {
     // Simplified - in production, use Tauri FS to calculate actual usage

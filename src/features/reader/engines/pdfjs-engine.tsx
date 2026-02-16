@@ -1477,10 +1477,21 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
 
                     let pageText = "";
                     try {
+                        // Check if document is still valid before accessing
+                        if (!activePdfDocument || searchSessionRef.current !== sessionId) {
+                            return;
+                        }
                         const page = await activePdfDocument.getPage(pageNumber);
                         const pageTextContent = await getPageTextContent(page);
                         pageText = getNormalizedPageText(pageTextContent);
                     } catch (error) {
+                        // Handle Transport destroyed error gracefully
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        if (errorMessage.includes("Transport") || errorMessage.includes("destroyed")) {
+                            // Document was destroyed during search, stop gracefully
+                            console.warn("[PDFJsEngine] Search stopped: document destroyed");
+                            return;
+                        }
                         console.warn("[PDFJsEngine] Failed to read page text for search:", pageNumber, error);
                     }
 
@@ -1842,6 +1853,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         });
                     }
                 } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    if (errorMessage.includes("Transport") || errorMessage.includes("destroyed")) {
+                        // Document was destroyed during page load, ignore error
+                        return;
+                    }
                     console.error("[PDFJsEngine] Error loading page:", error);
                 } finally {
                     isLoadingPageRef.current = false;

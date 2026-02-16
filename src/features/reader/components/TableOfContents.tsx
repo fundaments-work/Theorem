@@ -1,11 +1,11 @@
 /**
  * TableOfContents Component
  * Side panel displaying the book's table of contents
- * Swiss Design Standard - Consistent across PDF, EPUB, and Article readers
+ * Swiss Design Standard - Grid-based, clear hierarchy, full-height
  */
 
-import { useState, useCallback, useMemo } from "react";
-import { ChevronDown, ChevronRight, X, List } from "lucide-react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { ChevronDown, ChevronRight, X, List, BookOpen } from "lucide-react";
 import { cn } from "../../../core";
 import type { TocItem } from "../../../core";
 import { Backdrop } from "../../../ui";
@@ -26,65 +26,110 @@ interface TocItemComponentProps {
     depth: number;
     onNavigate: (href: string) => void;
     currentHref?: string;
+    totalItems: number;
 }
 
-function TocItemComponent({ item, depth, onNavigate, currentHref }: TocItemComponentProps) {
+function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: TocItemComponentProps) {
     const [isExpanded, setIsExpanded] = useState(true);
     const hasChildren = item.subitems && item.subitems.length > 0;
     const isActive = currentHref === item.href;
+    const itemRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll active item into view
+    useEffect(() => {
+        if (isActive && itemRef.current) {
+            itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, [isActive]);
 
     const handleToggle = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
         setIsExpanded((prev) => !prev);
     }, []);
 
+    // Swiss grid system: 8px base unit
+    const indentSize = depth * 24; // 24px = 3 × 8px grid unit
+
     return (
-        <div className="group/item">
+        <div ref={itemRef} className="group/item">
             <div
                 className={cn(
-                    "flex cursor-pointer items-center border-l-2 border-transparent px-4 py-2 text-sm text-[color:var(--color-text-primary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-l-[var(--color-accent)] hover:bg-[var(--color-surface-muted)] data-[active=true]:border-l-[var(--color-accent)] data-[active=true]:bg-[var(--color-accent-light)] data-[active=true]:text-[color:var(--color-accent)]",
-                    depth === 0 && "pl-4 font-medium",
-                    depth === 1 && "pl-10 text-xs",
-                    depth >= 2 && "pl-[3.75rem] text-xs text-[color:var(--color-text-secondary)]"
+                    // Swiss design: clear grid, minimal decoration
+                    "relative flex cursor-pointer items-center py-3 px-4",
+                    "transition-all duration-200 ease-out",
+                    "hover:bg-[var(--color-surface-muted)]",
+                    isActive && "bg-[var(--color-accent-light)]"
                 )}
                 data-active={isActive}
                 onClick={() => onNavigate(item.href)}
             >
+                {/* Active indicator - geometric, left-aligned */}
+                <div
+                    className={cn(
+                        "absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-200",
+                        isActive 
+                            ? "bg-[var(--color-accent)]" 
+                            : "bg-transparent group-hover/item:bg-[var(--color-border)]"
+                    )}
+                />
+
+                {/* Indent spacer */}
+                <div style={{ width: indentSize }} className="shrink-0" />
+
+                {/* Expand/collapse button or bullet */}
                 {hasChildren ? (
                     <button
                         onClick={handleToggle}
-                        className="p-1 hover:opacity-70 transition-opacity"
+                        className={cn(
+                            "shrink-0 mr-3 p-1 rounded",
+                            "hover:bg-[var(--color-surface)]",
+                            "transition-colors duration-150"
+                        )}
                     >
                         {isExpanded ? (
-                            <ChevronDown className="w-3.5 h-3.5" />
+                            <ChevronDown className="w-4 h-4 text-[var(--color-text-muted)]" />
                         ) : (
-                            <ChevronRight className="w-3.5 h-3.5" />
+                            <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)]" />
                         )}
                     </button>
                 ) : (
-                    <div className="w-5 flex items-center justify-center">
+                    <div className="shrink-0 mr-3 w-6 flex items-center justify-center">
                         <div
-                            className="w-1.5 h-1.5 transition-transform"
-                            style={{
-                                backgroundColor: "var(--color-text-primary)",
-                                opacity: isActive ? 1 : 0.3,
-                                transform: isActive ? "scale(1.3)" : "scale(1)",
-                            }}
+                            className={cn(
+                                "w-1.5 h-1.5 rounded-full transition-all duration-200",
+                                isActive 
+                                    ? "bg-[var(--color-accent)] scale-125" 
+                                    : "bg-[var(--color-text-muted)] opacity-40 group-hover/item:opacity-70"
+                            )}
                         />
                     </div>
                 )}
-                <span className="flex-1 truncate">{item.label}</span>
+
+                {/* Label - : clean, readable */}
+                <span 
+                    className={cn(
+                        "flex-1 truncate text-sm leading-relaxed",
+                        depth === 0 && "font-medium text-[var(--color-text-primary)]",
+                        depth === 1 && "text-[var(--color-text-primary)]",
+                        depth >= 2 && "text-[var(--color-text-secondary)] text-xs",
+                        isActive && "text-[var(--color-accent)] font-medium"
+                    )}
+                >
+                    {item.label}
+                </span>
             </div>
 
+            {/* Children */}
             {hasChildren && isExpanded && (
-                <div className="animate-fade-in">
+                <div>
                     {item.subitems!.map((child: TocItem, index: number) => (
                         <TocItemComponent
-                            key={index}
+                            key={`${item.href}-${index}`}
                             item={child}
                             depth={depth + 1}
                             onNavigate={onNavigate}
                             currentHref={currentHref}
+                            totalItems={totalItems}
                         />
                     ))}
                 </div>
@@ -113,83 +158,129 @@ export function TableOfContents({
         onClose();
     }, [onNavigate, onClose]);
 
+    // Calculate total items including nested
+    const totalItems = useMemo(() => {
+        const countItems = (items: TocItem[]): number => {
+            return items.reduce((acc, item) => {
+                acc += 1;
+                if (item.subitems) {
+                    acc += countItems(item.subitems);
+                }
+                return acc;
+            }, 0);
+        };
+        return countItems(tocItems);
+    }, [tocItems]);
+
     return (
         <>
             <Backdrop visible={visible} onClick={onClose} />
 
-            {/* Panel */}
+            {/* Panel - Swiss design: grid-based, full-height on desktop */}
             <div
                 className={cn(
-                    "fixed inset-x-0 bottom-0 h-[var(--layout-reader-panel-mobile-height)] z-50 flex flex-col",
-                    "sm:inset-x-auto sm:bottom-auto sm:top-0 sm:left-0 sm:h-full sm:w-80 sm:max-w-[var(--layout-reader-panel-max-width-mobile)]",
-                    "flex w-[min(var(--layout-reader-panel-width),calc(100vw-2.5rem))] max-h-[var(--layout-reader-panel-max-height)] flex-col overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-surface)] max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-[var(--z-modal)] max-md:max-h-none max-md:w-[var(--layout-reader-panel-width-mobile)] max-md:max-w-[var(--layout-reader-panel-max-width-mobile)] max-md:border-l-0",
-                    "transform transition-transform duration-240 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                    visible ? "translate-y-0 sm:translate-x-0" : "translate-y-full sm:-translate-x-full",
+                    // Mobile: bottom sheet
+                    "fixed inset-x-0 bottom-0 z-50",
+                    "h-[70vh]",
+                    
+                    // Desktop: full-height side panel
+                    "sm:inset-y-0 sm:left-0 sm:right-auto sm:top-0 sm:bottom-0",
+                    "h-screen ",
+                    "sm:w-[360px] sm:max-w-[min(360px,40vw)]",
+                    
+                    // Design system
+                    "flex flex-col overflow-hidden",
+                    "bg-[var(--color-surface)]",
+                    "border-r border-[var(--color-border)]",
+                    "shadow-2xl shadow-black/10",
+                    
+                    // Visibility (no animation)
+                    visible ? "flex" : "hidden",
+                    
                     className,
                 )}
             >
-                {/* Header */}
-                <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border-subtle)] px-4 py-3">
-                    <div className="flex items-center gap-3">
-                        <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5">
-                            <List className="w-4 h-4" />
-                        </div>
-                        <div>
-                            <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">
-                                {isPdf ? "Navigation" : "Table of Contents"}
-                            </h2>
-                            <p className="text-xs font-medium leading-snug text-[color:var(--color-text-muted)]">
-                                {isPdf ? "Outline" : "Navigation"}
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="inline-flex h-9 w-9 items-center justify-center border border-transparent bg-transparent text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)] data-[active=true]:border-[var(--color-accent)] data-[active=true]:bg-[var(--color-accent)] data-[active=true]:text-[color:var(--color-accent-contrast)] data-[active=true]:hover:border-[var(--color-accent-hover)] data-[active=true]:hover:bg-[var(--color-accent-hover)]"
-                        aria-label="Close table of contents"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-
-                {/* TOC Items */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-0.5">
-                    {tocItems.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center px-6 py-12 text-center text-[color:var(--color-text-muted)]">
-                            <div className="mb-5 inline-flex h-16 w-16 items-center justify-center border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]">
-                                <List className="w-5 h-5" />
+                {/* Header - Swiss grid layout */}
+                <header className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+                    <div className="flex items-center justify-between px-5 py-4">
+                        {/* Left: Icon and title */}
+                        <div className="flex items-center gap-4">
+                            <div className="flex h-10 w-10 items-center justify-center border border-[var(--color-border)] bg-[var(--color-surface)]">
+                                <List className="w-5 h-5 text-[var(--color-text-primary)]" />
                             </div>
-                            <p className="text-xs font-medium leading-snug text-[color:var(--color-text-muted)]">
-                                {isPdf ? "No outline available" : "No contents found"}
-                            </p>
-                            {isPdf && !pdfHasOutline && (
-                                <p className="text-[var(--font-size-2xs)] text-[color:var(--color-text-muted)] max-w-[16rem] mt-2">
-                                    This PDF has no embedded outline.
+                            <div>
+                                <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-primary)]">
+                                    {isPdf ? "Navigation" : "Contents"}
+                                </h2>
+                                <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+                                    {totalItems} {totalItems === 1 ? 'item' : 'items'}
                                 </p>
+                            </div>
+                        </div>
+
+                        {/* Right: Close button */}
+                        <button
+                            onClick={onClose}
+                            className={cn(
+                                "flex h-10 w-10 items-center justify-center",
+                                "border border-[var(--color-border)]",
+                                "text-[var(--color-text-secondary)]",
+                                "transition-all duration-200",
+                                "hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]",
+                                "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2"
                             )}
+                            aria-label="Close table of contents"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                </header>
+
+                {/* TOC Items - Scrollable content area */}
+                <div className="flex-1 overflow-y-auto overscroll-contain">
+                    {tocItems.length === 0 ? (
+                        <div className="flex h-full flex-col items-center justify-center px-8 py-16 text-center">
+                            <div className="mb-6 flex h-20 w-20 items-center justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface-muted)]">
+                                <BookOpen className="w-8 h-8 text-[var(--color-text-muted)]" />
+                            </div>
+                            <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                                {isPdf ? "No Outline Available" : "No Contents"}
+                            </h3>
+                            <p className="text-xs text-[var(--color-text-muted)] max-w-[240px] leading-relaxed">
+                                {isPdf && !pdfHasOutline 
+                                    ? "This PDF does not contain an embedded outline or bookmarks." 
+                                    : "This document does not have a table of contents."}
+                            </p>
                         </div>
                     ) : (
-                        <div className="flex flex-col">
+                        <nav className="py-2">
                             {tocItems.map((item, index) => (
                                 <TocItemComponent
-                                    key={index}
+                                    key={`toc-${index}`}
                                     item={item}
                                     depth={0}
                                     onNavigate={handleNavigate}
                                     currentHref={currentHref}
+                                    totalItems={totalItems}
                                 />
                             ))}
-                        </div>
+                        </nav>
                     )}
                 </div>
 
-                {/* Footer */}
-                <div className="flex shrink-0 items-center justify-between border-t border-[var(--color-border-subtle)] px-4 py-3">
-                    <span className="text-xs font-medium leading-snug text-[color:var(--color-text-muted)]">
-                        {isPdf ? `${tocItems.length} Outline Items` : `${tocItems.length} Chapters`}
-                    </span>
-                    <span className="text-xs font-medium leading-snug text-[color:var(--color-text-muted)]">Jump to section</span>
-                </div>
+                {/* Footer - Swiss design: minimal info bar */}
+                <footer className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-3">
+                    <div className="flex items-center justify-between text-xs text-[var(--color-text-muted)]">
+                        <span className="font-medium">
+                            {isPdf ? "PDF Outline" : "Document Map"}
+                        </span>
+                        <span>
+                            {currentHref 
+                                ? `Current: ${tocItems.findIndex(item => item.href === currentHref) + 1 || '-'}/${tocItems.length}`
+                                : `${tocItems.length} ${tocItems.length === 1 ? 'chapter' : 'chapters'}`}
+                        </span>
+                    </div>
+                </footer>
             </div>
         </>
     );
