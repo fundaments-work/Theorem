@@ -12,6 +12,7 @@ import {
     removeStarDictDictionary,
 } from "../services/StarDictService";
 import { deleteBookStorage, cleanupOrphanedStorage } from "../lib/storage-manager";
+import { getCoverImage } from "../lib/storage";
 import type {
     Annotation,
     AppRoute,
@@ -228,6 +229,8 @@ function updateBookById(
 
 const bookLookupCache = new WeakMap<Book[], Map<string, Book>>();
 const cachedBookLookupCache = new WeakMap<CachedBookMetadata[], Map<string, CachedBookMetadata>>();
+const annotationsByBookCache = new WeakMap<Annotation[], Map<string, Annotation[]>>();
+const COVER_RESTORE_BATCH_SIZE = 24;
 
 function getBookLookup(books: Book[]): Map<string, Book> {
     const existingLookup = bookLookupCache.get(books);
@@ -249,8 +252,280 @@ function getCachedBookLookup(cache: CachedBookMetadata[]): Map<string, CachedBoo
     return nextLookup;
 }
 
+function getAnnotationsByBookLookup(annotations: Annotation[]): Map<string, Annotation[]> {
+    const existingLookup = annotationsByBookCache.get(annotations);
+    if (existingLookup) {
+        return existingLookup;
+    }
+
+    const nextLookup = new Map<string, Annotation[]>();
+    for (const annotation of annotations) {
+        const existingAnnotations = nextLookup.get(annotation.bookId);
+        if (existingAnnotations) {
+            existingAnnotations.push(annotation);
+            continue;
+        }
+        nextLookup.set(annotation.bookId, [annotation]);
+    }
+
+    annotationsByBookCache.set(annotations, nextLookup);
+    return nextLookup;
+}
+
+function getBookAnnotationSlice(annotations: Annotation[], bookId: string): Annotation[] {
+    return getAnnotationsByBookLookup(annotations).get(bookId) ?? [];
+}
+
 function normalizeTermKey(term: string, language: string): string {
     return `${term.trim().toLowerCase()}::${language.trim().toLowerCase()}`;
+}
+
+function mergeBookIntoCachedEntry(entry: CachedBookMetadata, book: Book): CachedBookMetadata {
+    return {
+        ...entry,
+        title: book.title,
+        author: book.author,
+        coverPath: book.coverPath,
+        currentLocation: book.currentLocation,
+        progress: book.progress,
+        lastClickFraction: book.lastClickFraction,
+        pageProgress: book.pageProgress,
+        pdfViewState: book.pdfViewState,
+        lastReadAt: book.lastReadAt || entry.lastReadAt,
+    };
+}
+
+function syncRecentBooksCacheWithBook(
+    cache: CachedBookMetadata[],
+    book: Book,
+): CachedBookMetadata[] {
+    const index = cache.findIndex((entry) => entry.id === book.id);
+    if (index === -1) {
+        return cache;
+    }
+
+    const nextCache = cache.slice();
+    nextCache[index] = mergeBookIntoCachedEntry(cache[index], book);
+    return nextCache;
+}
+
+function normalizeContentHash(contentHash?: string): string | undefined {
+    if (typeof contentHash !== "string") {
+        return undefined;
+    }
+
+    const normalized = contentHash.trim().toLowerCase();
+    return normalized.length > 0 ? normalized : undefined;
+}
+
+function findDuplicateBookIndex(books: Book[], incomingBook: Book): number {
+    const incomingHash = normalizeContentHash(incomingBook.contentHash);
+    if (incomingHash) {
+        const byHashIndex = books.findIndex(
+            (book) => normalizeContentHash(book.contentHash) === incomingHash,
+        );
+        if (byHashIndex !== -1) {
+            return byHashIndex;
+        }
+    }
+
+    return books.findIndex((book) => {
+        const sameStoragePath = Boolean(
+            incomingBook.storagePath
+            && book.storagePath
+            && incomingBook.storagePath === book.storagePath,
+        );
+        if (sameStoragePath) {
+            return true;
+        }
+
+        return (
+            incomingBook.filePath === book.filePath
+            && incomingBook.format === book.format
+            && incomingBook.fileSize === book.fileSize
+        );
+    });
+}
+
+function isPlaceholderTitle(title: string): boolean {
+    return title === "Unknown" || title.includes(".");
+}
+
+function isPlaceholderAuthor(author: string): boolean {
+    return author === "Unknown Author" || author.trim().length === 0;
+}
+
+function mergeImportedBookMetadata(existingBook: Book, incomingBook: Book): Book {
+    let changed = false;
+    const nextBook = { ...existingBook };
+
+    if (!existingBook.contentHash && incomingBook.contentHash) {
+        nextBook.contentHash = incomingBook.contentHash;
+        changed = true;
+    }
+
+    if (!existingBook.coverPath && incomingBook.coverPath) {
+        nextBook.coverPath = incomingBook.coverPath;
+        changed = true;
+    }
+
+    if (!existingBook.coverExtractionDone && incomingBook.coverExtractionDone) {
+        nextBook.coverExtractionDone = true;
+        changed = true;
+    }
+
+    if (isPlaceholderTitle(existingBook.title) && incomingBook.title && !isPlaceholderTitle(incomingBook.title)) {
+        nextBook.title = incomingBook.title;
+        changed = true;
+    }
+
+    if (isPlaceholderAuthor(existingBook.author) && incomingBook.author && !isPlaceholderAuthor(incomingBook.author)) {
+        nextBook.author = incomingBook.author;
+        changed = true;
+    }
+
+    if (!existingBook.description && incomingBook.description) {
+        nextBook.description = incomingBook.description;
+        changed = true;
+    }
+
+    if (!existingBook.publisher && incomingBook.publisher) {
+        nextBook.publisher = incomingBook.publisher;
+        changed = true;
+    }
+
+    if (!existingBook.publishedDate && incomingBook.publishedDate) {
+        nextBook.publishedDate = incomingBook.publishedDate;
+        changed = true;
+    }
+
+    if (!existingBook.language && incomingBook.language) {
+        nextBook.language = incomingBook.language;
+        changed = true;
+    }
+
+    if (!existingBook.isbn && incomingBook.isbn) {
+        nextBook.isbn = incomingBook.isbn;
+        changed = true;
+    }
+
+    return changed ? nextBook : existingBook;
+}
+
+function cleanupDiscardedImportedBook(book: Book): void {
+    const shouldCleanupAppStorage = Boolean(
+        book.storagePath && book.storagePath.endsWith(".book"),
+    );
+    if (!shouldCleanupAppStorage && typeof indexedDB === "undefined") {
+        return;
+    }
+
+    deleteBookStorage(book.id, book.storagePath || book.filePath).catch((error) => {
+        console.error("[LibraryStore] Failed to cleanup duplicate imported book storage:", error);
+    });
+}
+
+function normalizePersistedBook(book: Book): Book {
+    const contentHash = normalizeContentHash(book.contentHash);
+    const hasLegacyPersistedCoverPath = typeof book.coverPath === "string" && book.coverPath.length > 0;
+
+    return {
+        ...book,
+        contentHash,
+        coverExtractionDone: Boolean(book.coverExtractionDone || hasLegacyPersistedCoverPath),
+    };
+}
+
+function collectBookIdsMissingCoverPath(
+    books: Book[],
+    recentBooksCache: CachedBookMetadata[],
+): string[] {
+    const ids = new Set<string>();
+
+    for (const book of books) {
+        if (!book.coverPath) {
+            ids.add(book.id);
+        }
+    }
+
+    for (const cachedBook of recentBooksCache) {
+        if (!cachedBook.coverPath) {
+            ids.add(cachedBook.id);
+        }
+    }
+
+    return [...ids];
+}
+
+async function loadCoverLookup(bookIds: string[]): Promise<Map<string, string>> {
+    const coverLookup = new Map<string, string>();
+
+    for (let i = 0; i < bookIds.length; i += COVER_RESTORE_BATCH_SIZE) {
+        const batchIds = bookIds.slice(i, i + COVER_RESTORE_BATCH_SIZE);
+        const batchEntries = await Promise.all(
+            batchIds.map(async (bookId) => {
+                const coverPath = await getCoverImage(bookId);
+                return [bookId, coverPath] as const;
+            }),
+        );
+
+        for (const [bookId, coverPath] of batchEntries) {
+            if (coverPath) {
+                coverLookup.set(bookId, coverPath);
+            }
+        }
+    }
+
+    return coverLookup;
+}
+
+function applyCoverLookupToBooks(books: Book[], coverLookup: Map<string, string>): Book[] {
+    let changed = false;
+
+    const nextBooks = books.map((book) => {
+        if (book.coverPath) {
+            return book;
+        }
+
+        const restoredCoverPath = coverLookup.get(book.id);
+        if (!restoredCoverPath) {
+            return book;
+        }
+
+        changed = true;
+        return {
+            ...book,
+            coverPath: restoredCoverPath,
+        };
+    });
+
+    return changed ? nextBooks : books;
+}
+
+function applyCoverLookupToRecentCache(
+    recentBooksCache: CachedBookMetadata[],
+    coverLookup: Map<string, string>,
+): CachedBookMetadata[] {
+    let changed = false;
+
+    const nextCache = recentBooksCache.map((cachedBook) => {
+        if (cachedBook.coverPath) {
+            return cachedBook;
+        }
+
+        const restoredCoverPath = coverLookup.get(cachedBook.id);
+        if (!restoredCoverPath) {
+            return cachedBook;
+        }
+
+        changed = true;
+        return {
+            ...cachedBook,
+            coverPath: restoredCoverPath,
+        };
+    });
+
+    return changed ? nextCache : recentBooksCache;
 }
 
 type LegacyCollection = Omit<Collection, "kind"> & {
@@ -322,6 +597,8 @@ interface LibraryStore {
     recentBooksCache: CachedBookMetadata[];
     // Currently active book for annotations
     currentBookId?: string;
+    // Marks when cover paths stripped from persisted state have been restored from IDB.
+    coversHydrated: boolean;
 
     // Book actions
     addBook: (book: Book) => void;
@@ -389,13 +666,100 @@ export const useLibraryStore = create<LibraryStore>()(
             collections: [],
             annotations: [],
             recentBooksCache: [],
+            coversHydrated: false,
 
             // Book actions
-            addBook: (book) =>
-                set((state) => ({ books: [...state.books, book] })),
+            addBook: (book) => {
+                const state = get();
+                const duplicateIndex = findDuplicateBookIndex(state.books, book);
 
-            addBooks: (books) =>
-                set((state) => ({ books: [...state.books, ...books] })),
+                if (duplicateIndex === -1) {
+                    set({ books: [...state.books, book] });
+                    return;
+                }
+
+                const duplicateBook = state.books[duplicateIndex];
+                if (duplicateBook.id !== book.id) {
+                    cleanupDiscardedImportedBook(book);
+                }
+
+                const mergedBook = mergeImportedBookMetadata(duplicateBook, book);
+                if (mergedBook === duplicateBook) {
+                    return;
+                }
+
+                const books = state.books.slice();
+                books[duplicateIndex] = mergedBook;
+
+                const recentBooksCache = syncRecentBooksCacheWithBook(
+                    state.recentBooksCache,
+                    mergedBook,
+                );
+
+                set(
+                    recentBooksCache === state.recentBooksCache
+                        ? { books }
+                        : { books, recentBooksCache },
+                );
+            },
+
+            addBooks: (incomingBooks) => {
+                if (incomingBooks.length === 0) {
+                    return;
+                }
+
+                const state = get();
+                let nextBooks = state.books;
+                let nextRecentBooksCache = state.recentBooksCache;
+                let booksChanged = false;
+                let cacheChanged = false;
+
+                for (const incomingBook of incomingBooks) {
+                    const duplicateIndex = findDuplicateBookIndex(nextBooks, incomingBook);
+
+                    if (duplicateIndex === -1) {
+                        if (!booksChanged) {
+                            nextBooks = nextBooks.slice();
+                            booksChanged = true;
+                        }
+                        nextBooks.push(incomingBook);
+                        continue;
+                    }
+
+                    const duplicateBook = nextBooks[duplicateIndex];
+                    if (duplicateBook.id !== incomingBook.id) {
+                        cleanupDiscardedImportedBook(incomingBook);
+                    }
+
+                    const mergedBook = mergeImportedBookMetadata(duplicateBook, incomingBook);
+                    if (mergedBook !== duplicateBook) {
+                        if (!booksChanged) {
+                            nextBooks = nextBooks.slice();
+                            booksChanged = true;
+                        }
+                        nextBooks[duplicateIndex] = mergedBook;
+
+                        const updatedCache = syncRecentBooksCacheWithBook(
+                            nextRecentBooksCache,
+                            mergedBook,
+                        );
+                        if (updatedCache !== nextRecentBooksCache) {
+                            nextRecentBooksCache = updatedCache;
+                            cacheChanged = true;
+                        }
+                    }
+                }
+
+                if (!booksChanged && !cacheChanged) {
+                    return;
+                }
+
+                set(
+                    cacheChanged
+                        ? { books: nextBooks, recentBooksCache: nextRecentBooksCache }
+                        : { books: nextBooks },
+                );
+            },
 
             removeBook: async (bookId) => {
                 const book = get().books.find((b) => b.id === bookId);
@@ -421,11 +785,21 @@ export const useLibraryStore = create<LibraryStore>()(
 
             updateBook: (bookId, updates) =>
                 set((state) => {
-                    const { books } = updateBookById(state.books, bookId, (book) => ({
+                    const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
                         ...book,
                         ...updates,
                     }));
-                    return { books };
+                    if (!updatedBook) {
+                        return { books };
+                    }
+
+                    const recentBooksCache = syncRecentBooksCacheWithBook(
+                        state.recentBooksCache,
+                        updatedBook,
+                    );
+                    return recentBooksCache === state.recentBooksCache
+                        ? { books }
+                        : { books, recentBooksCache };
                 }),
 
             updateProgress: (bookId, progress, location, lastClickFraction, pageProgress) =>
@@ -494,39 +868,79 @@ export const useLibraryStore = create<LibraryStore>()(
 
             toggleFavorite: (bookId) =>
                 set((state) => {
-                    const { books } = updateBookById(state.books, bookId, (book) => ({
+                    const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
                         ...book,
                         isFavorite: !book.isFavorite,
                     }));
-                    return { books };
+                    if (!updatedBook) {
+                        return { books };
+                    }
+
+                    const recentBooksCache = syncRecentBooksCacheWithBook(
+                        state.recentBooksCache,
+                        updatedBook,
+                    );
+                    return recentBooksCache === state.recentBooksCache
+                        ? { books }
+                        : { books, recentBooksCache };
                 }),
 
             updateBookMetadata: (bookId, metadata) =>
                 set((state) => {
-                    const { books } = updateBookById(state.books, bookId, (book) => ({
+                    const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
                         ...book,
                         ...metadata,
                     }));
-                    return { books };
+                    if (!updatedBook) {
+                        return { books };
+                    }
+
+                    const recentBooksCache = syncRecentBooksCacheWithBook(
+                        state.recentBooksCache,
+                        updatedBook,
+                    );
+                    return recentBooksCache === state.recentBooksCache
+                        ? { books }
+                        : { books, recentBooksCache };
                 }),
 
             saveBookLocations: (bookId, locations) =>
                 set((state) => {
-                    const { books } = updateBookById(state.books, bookId, (book) => ({
+                    const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
                         ...book,
                         locations,
                     }));
-                    return { books };
+                    if (!updatedBook) {
+                        return { books };
+                    }
+
+                    const recentBooksCache = syncRecentBooksCacheWithBook(
+                        state.recentBooksCache,
+                        updatedBook,
+                    );
+                    return recentBooksCache === state.recentBooksCache
+                        ? { books }
+                        : { books, recentBooksCache };
                 }),
 
             // Reading time tracking
             addReadingTime: (bookId, minutes) =>
                 set((state) => {
-                    const { books } = updateBookById(state.books, bookId, (book) => ({
+                    const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
                         ...book,
                         readingTime: (book.readingTime || 0) + minutes,
                     }));
-                    return { books };
+                    if (!updatedBook) {
+                        return { books };
+                    }
+
+                    const recentBooksCache = syncRecentBooksCacheWithBook(
+                        state.recentBooksCache,
+                        updatedBook,
+                    );
+                    return recentBooksCache === state.recentBooksCache
+                        ? { books }
+                        : { books, recentBooksCache };
                 }),
 
             // Book completion
@@ -716,13 +1130,15 @@ export const useLibraryStore = create<LibraryStore>()(
             },
 
             getBookAnnotations: (bookId) =>
-                get().annotations.filter((a) => a.bookId === bookId),
+                getBookAnnotationSlice(get().annotations, bookId),
 
             getHighlights: (bookId) =>
-                get().annotations.filter((a) => a.bookId === bookId && (a.type === 'highlight' || a.type === 'note')),
+                getBookAnnotationSlice(get().annotations, bookId)
+                    .filter((annotation) => annotation.type === 'highlight' || annotation.type === 'note'),
 
             getBookmarks: (bookId) =>
-                get().annotations.filter((a) => a.bookId === bookId && a.type === 'bookmark'),
+                getBookAnnotationSlice(get().annotations, bookId)
+                    .filter((annotation) => annotation.type === 'bookmark'),
 
             exportAnnotationsToMarkdown: (bookId: string) => {
                 const book = get().getBook(bookId);
@@ -799,8 +1215,8 @@ export const useLibraryStore = create<LibraryStore>()(
         }),
         {
             name: "theorem-library",
-            version: 3,
-            migrate: (persistedState, version) => {
+            version: 4,
+            migrate: (persistedState, _version) => {
                 const persisted = (
                     typeof persistedState === "object" && persistedState !== null
                         ? persistedState
@@ -808,7 +1224,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 ) as Partial<PersistedLibraryState>;
 
                 const books = Array.isArray(persisted.books)
-                    ? persisted.books as Book[]
+                    ? (persisted.books as Book[]).map((book) => normalizePersistedBook(book))
                     : [];
                 const collections = Array.isArray(persisted.collections)
                     ? (persisted.collections as LegacyCollection[])
@@ -830,16 +1246,6 @@ export const useLibraryStore = create<LibraryStore>()(
                     ? persisted.recentBooksCache as CachedBookMetadata[]
                     : [];
 
-                if (version < 3) {
-                    return {
-                        books,
-                        collections,
-                        annotations,
-                        lastScannedAt,
-                        recentBooksCache,
-                    } as PersistedLibraryState;
-                }
-
                 return {
                     books,
                     collections,
@@ -858,6 +1264,7 @@ export const useLibraryStore = create<LibraryStore>()(
             }),
             onRehydrateStorage: () => (state) => {
                 if (!state) {
+                    useLibraryStore.setState({ coversHydrated: true });
                     return;
                 }
 
@@ -870,6 +1277,47 @@ export const useLibraryStore = create<LibraryStore>()(
                         ? annotation.referenceId
                         : undefined,
                 }));
+
+                const bookIdsMissingCoverPath = collectBookIdsMissingCoverPath(
+                    state.books,
+                    state.recentBooksCache,
+                );
+
+                if (bookIdsMissingCoverPath.length === 0) {
+                    useLibraryStore.setState({ coversHydrated: true });
+                    return;
+                }
+
+                void (async () => {
+                    try {
+                        const coverLookup = await loadCoverLookup(bookIdsMissingCoverPath);
+                        if (coverLookup.size === 0) {
+                            return;
+                        }
+
+                        useLibraryStore.setState((currentState) => {
+                            const books = applyCoverLookupToBooks(currentState.books, coverLookup);
+                            const recentBooksCache = applyCoverLookupToRecentCache(
+                                currentState.recentBooksCache,
+                                coverLookup,
+                            );
+
+                            if (
+                                books === currentState.books
+                                && recentBooksCache === currentState.recentBooksCache
+                            ) {
+                                return currentState;
+                            }
+
+                            return {
+                                books,
+                                recentBooksCache,
+                            };
+                        });
+                    } finally {
+                        useLibraryStore.setState({ coversHydrated: true });
+                    }
+                })();
             },
         }
     )
@@ -1507,6 +1955,64 @@ import {
     materializeFeed,
 } from '../services/RssService';
 
+const rssArticleSortCache = new WeakMap<RssArticle[], {
+    allSorted: RssArticle[];
+    feedSorted: Map<string, RssArticle[]>;
+}>();
+
+function getRssArticleTimestamp(article: RssArticle): number {
+    const dateValue = article.publishedAt ?? article.fetchedAt;
+    const timestamp = new Date(dateValue).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function sortRssArticlesByDateDesc(articles: RssArticle[]): RssArticle[] {
+    const sortable = articles.map((article, index) => ({
+        article,
+        timestamp: getRssArticleTimestamp(article),
+        index,
+    }));
+
+    sortable.sort((left, right) => {
+        if (right.timestamp !== left.timestamp) {
+            return right.timestamp - left.timestamp;
+        }
+        return left.index - right.index;
+    });
+
+    return sortable.map((entry) => entry.article);
+}
+
+function getSortedRssArticleLookup(articles: RssArticle[]): {
+    allSorted: RssArticle[];
+    feedSorted: Map<string, RssArticle[]>;
+} {
+    const existingLookup = rssArticleSortCache.get(articles);
+    if (existingLookup) {
+        return existingLookup;
+    }
+
+    const allSorted = sortRssArticlesByDateDesc(articles);
+    const nextLookup = {
+        allSorted,
+        feedSorted: new Map<string, RssArticle[]>(),
+    };
+    rssArticleSortCache.set(articles, nextLookup);
+    return nextLookup;
+}
+
+function getSortedRssArticlesForFeed(articles: RssArticle[], feedId: string): RssArticle[] {
+    const lookup = getSortedRssArticleLookup(articles);
+    const existingFeedArticles = lookup.feedSorted.get(feedId);
+    if (existingFeedArticles) {
+        return existingFeedArticles;
+    }
+
+    const nextFeedArticles = lookup.allSorted.filter((article) => article.feedId === feedId);
+    lookup.feedSorted.set(feedId, nextFeedArticles);
+    return nextFeedArticles;
+}
+
 interface RssStore {
     feeds: RssFeed[];
     articles: RssArticle[];
@@ -1658,22 +2164,11 @@ export const useRssStore = create<RssStore>()(
             },
 
             getArticlesForFeed: (feedId: string) => {
-                return get().articles
-                    .filter(a => a.feedId === feedId)
-                    .sort((a, b) => {
-                        const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : new Date(a.fetchedAt).getTime();
-                        const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : new Date(b.fetchedAt).getTime();
-                        return dateB - dateA;
-                    });
+                return getSortedRssArticlesForFeed(get().articles, feedId);
             },
 
             getAllArticles: () => {
-                return get().articles
-                    .sort((a, b) => {
-                        const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : new Date(a.fetchedAt).getTime();
-                        const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : new Date(b.fetchedAt).getTime();
-                        return dateB - dateA;
-                    });
+                return getSortedRssArticleLookup(get().articles).allSorted;
             },
 
             openArticleInReader: async (article: RssArticle) => {

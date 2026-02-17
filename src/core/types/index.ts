@@ -62,7 +62,9 @@ export interface Book {
     filePath: string;
     storagePath?: string; // Internal storage path for Tauri
     format: BookFormat;
+    contentHash?: string;
     coverPath?: string;
+    coverExtractionDone?: boolean;
     description?: string;
     publisher?: string;
     publishedDate?: string;

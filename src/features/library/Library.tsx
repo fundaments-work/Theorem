@@ -659,6 +659,7 @@ function AddToShelfModal({
 export function LibraryPage() {
     const books = useLibraryStore((state) => state.books);
     const collections = useLibraryStore((state) => state.collections);
+    const coversHydrated = useLibraryStore((state) => state.coversHydrated);
     const addBooks = useLibraryStore((state) => state.addBooks);
     const removeBook = useLibraryStore((state) => state.removeBook);
     const updateBook = useLibraryStore((state) => state.updateBook);
@@ -688,8 +689,8 @@ export function LibraryPage() {
     const [addToShelfBookId, setAddToShelfBookId] = useState<string | null>(null);
     const [isAddToShelfModalOpen, setIsAddToShelfModalOpen] = useState(false);
 
-    // Track if we've already started extraction to avoid duplicate runs
-    const extractionStartedRef = useRef(false);
+    // Track extraction attempts per book so new imports can still be processed.
+    const extractedBookIdsRef = useRef<Set<string>>(new Set());
 
     // Selected shelf state (safely initialized from session storage)
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
@@ -822,13 +823,28 @@ export function LibraryPage() {
 
     // Auto-extract covers for books that don't have them
     useEffect(() => {
-        if (extractionStartedRef.current || books.length === 0) return;
+        if (!coversHydrated || isExtractingCovers || books.length === 0) {
+            return;
+        }
 
-        const booksWithoutCovers = books.filter(book => !book.coverPath);
+        const knownBookIds = new Set(books.map((book) => book.id));
+        extractedBookIdsRef.current.forEach((bookId) => {
+            if (!knownBookIds.has(bookId)) {
+                extractedBookIdsRef.current.delete(bookId);
+            }
+        });
 
-        if (booksWithoutCovers.length === 0) return;
+        const booksWithoutCovers = books.filter(
+            (book) => (
+                !book.coverPath
+                && !book.coverExtractionDone
+                && !extractedBookIdsRef.current.has(book.id)
+            ),
+        );
 
-        extractionStartedRef.current = true;
+        if (booksWithoutCovers.length === 0) {
+            return;
+        }
 
         let isCancelled = false;
 
@@ -845,6 +861,8 @@ export function LibraryPage() {
                     const batch = booksWithoutCovers.slice(i, i + COVER_EXTRACTION_BATCH_SIZE);
 
                     await Promise.all(batch.map(async (book) => {
+                        extractedBookIdsRef.current.add(book.id);
+
                         try {
                             const storagePath = book.storagePath || book.filePath;
                             const data = await getBookData(book.id, storagePath);
@@ -856,7 +874,7 @@ export function LibraryPage() {
                             const filename = book.filePath.split(/[/\\]/).pop() || 'book.epub';
                             const metadata = await extractMetadata(data, book.format, filename, book.id);
 
-                            const updates: Partial<Book> = {};
+                            const updates: Partial<Book> = { coverExtractionDone: true };
 
                             if (metadata.coverDataUrl) {
                                 updates.coverPath = metadata.coverDataUrl;
@@ -918,7 +936,7 @@ export function LibraryPage() {
             isCancelled = true;
             clearTimeout(timeoutId);
         };
-    }, [books, updateBook]);
+    }, [books, coversHydrated, isExtractingCovers, updateBook]);
 
     // Close filter dropdown when clicking outside
     useEffect(() => {
@@ -1069,11 +1087,6 @@ export function LibraryPage() {
                             >
                                 Clear filter
                             </button>
-                        )}
-                        {isExtractingCovers && (
-                            <span className="ml-2 text-[color:var(--color-accent)]">
-                                • Extracting covers ({extractionProgress.current}/{extractionProgress.total})
-                            </span>
                         )}
                     </p>
                 </div>

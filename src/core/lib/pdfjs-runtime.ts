@@ -1,0 +1,27 @@
+type PdfJsModule = typeof import("pdfjs-dist");
+type PdfJsWorkerConfigurableModule = Pick<PdfJsModule, "GlobalWorkerOptions">;
+
+const PDFJS_WORKER_URL = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).href;
+
+let workerConfigured = false;
+let configuredPdfJsModulePromise: Promise<PdfJsModule> | null = null;
+
+export function configurePdfJsWorker(module: PdfJsWorkerConfigurableModule): void {
+    if (workerConfigured && module.GlobalWorkerOptions.workerSrc === PDFJS_WORKER_URL) {
+        return;
+    }
+
+    module.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+    workerConfigured = true;
+}
+
+export async function getConfiguredPdfJs(): Promise<PdfJsModule> {
+    if (!configuredPdfJsModulePromise) {
+        configuredPdfJsModulePromise = import("pdfjs-dist").then((module) => {
+            configurePdfJsWorker(module);
+            return module;
+        });
+    }
+
+    return configuredPdfJsModulePromise;
+}

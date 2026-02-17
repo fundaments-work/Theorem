@@ -17,6 +17,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { cn } from "../../../core";
 import { isTauri } from "../../../core";
+import { configurePdfJsWorker } from "../../../core/lib/pdfjs-runtime";
 import { rankByFuzzyQuery } from "../../../core";
 import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
@@ -27,13 +28,7 @@ import { PDFAnnotationLayer } from "../components/PDFAnnotationLayer";
 // Import CSS (our custom styles only, not pdf_viewer.css which conflicts)
 import "./pdfjs-engine.css";
 
-// Configure worker using Vite's URL handling
-// This creates a proper URL that works in both dev and production
-const workerUrl = new URL(
-    "pdfjs-dist/build/pdf.worker.mjs",
-    import.meta.url
-).href;
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+configurePdfJsWorker(pdfjsLib);
 
 // Types
 export interface PDFJsEngineProps {

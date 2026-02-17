@@ -19,6 +19,30 @@ let extractMetadataFnPromise: Promise<ExtractMetadataFn> | null = null;
 
 const IMPORT_CONCURRENCY = 3;
 
+function arrayBufferToHex(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let hex = '';
+    for (let index = 0; index < bytes.length; index += 1) {
+        hex += bytes[index].toString(16).padStart(2, '0');
+    }
+    return hex;
+}
+
+async function computeContentHash(buffer: ArrayBuffer): Promise<string | undefined> {
+    const subtle = globalThis.crypto?.subtle;
+    if (!subtle) {
+        return undefined;
+    }
+
+    try {
+        const digest = await subtle.digest('SHA-256', buffer);
+        return arrayBufferToHex(digest);
+    } catch (error) {
+        console.warn('[Import] Failed to compute content hash:', error);
+        return undefined;
+    }
+}
+
 async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
     if (!extractMetadataFnPromise) {
         extractMetadataFnPromise = import('./cover-extractor').then(
@@ -168,6 +192,7 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
         console.error('Empty file or failed to read:', file.name);
         return null;
     }
+    const contentHash = await computeContentHash(buffer);
 
     const id = uuidv4();
     const fileSize = file.size;
@@ -186,9 +211,11 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
 
     // Extract metadata and cover from the book file
     let metadata;
+    let coverExtractionDone = false;
     try {
         const extractMetadata = await getExtractMetadataFn();
         metadata = await extractMetadata(buffer, format, filename, id);
+        coverExtractionDone = true;
     } catch (error) {
         console.warn('[Import] Metadata extraction failed, using filename:', error);
         metadata = null;
@@ -203,12 +230,14 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
         filePath: `browser://${filename}`, // Virtual path for browser-imported files
         storagePath,
         format,
+        contentHash,
         fileSize,
         addedAt: new Date(),
         progress: 0,
         isFavorite: false,
         tags: [],
         readingTime: 0,
+        coverExtractionDone,
         // Additional metadata from extraction
         coverPath: metadata?.coverDataUrl || undefined,
         description: metadata?.description,
@@ -319,6 +348,7 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         console.error('Empty file or failed to read:', filePath);
         return null;
     }
+    const contentHash = await computeContentHash(buffer);
 
     const id = uuidv4();
 
@@ -331,9 +361,11 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
 
     // Extract metadata and cover from the book file
     let metadata;
+    let coverExtractionDone = false;
     try {
         const extractMetadata = await getExtractMetadataFn();
         metadata = await extractMetadata(buffer, format, filename, id);
+        coverExtractionDone = true;
     } catch (error) {
         console.warn('[Import] Metadata extraction failed, using filename:', error);
         metadata = null;
@@ -348,12 +380,14 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         filePath,
         storagePath,
         format,
+        contentHash,
         fileSize,
         addedAt: new Date(),
         progress: 0,
         isFavorite: false,
         tags: [],
         readingTime: 0,
+        coverExtractionDone,
         // Additional metadata from extraction
         coverPath: metadata?.coverDataUrl || undefined,
         description: metadata?.description,
