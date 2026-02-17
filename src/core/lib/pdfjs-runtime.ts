@@ -5,6 +5,7 @@ const PDFJS_WORKER_URL = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.
 
 let workerConfigured = false;
 let configuredPdfJsModulePromise: Promise<PdfJsModule> | null = null;
+let prewarmPromise: Promise<void> | null = null;
 
 export function configurePdfJsWorker(module: PdfJsWorkerConfigurableModule): void {
     if (workerConfigured && module.GlobalWorkerOptions.workerSrc === PDFJS_WORKER_URL) {
@@ -24,4 +25,16 @@ export async function getConfiguredPdfJs(): Promise<PdfJsModule> {
     }
 
     return configuredPdfJsModulePromise;
+}
+
+export function prewarmPdfJsRuntime(): Promise<void> {
+    if (!prewarmPromise) {
+        prewarmPromise = getConfiguredPdfJs()
+            .then(() => undefined)
+            .catch(() => {
+                // Allow retry if warmup fails due transient startup conditions.
+                prewarmPromise = null;
+            });
+    }
+    return prewarmPromise;
 }

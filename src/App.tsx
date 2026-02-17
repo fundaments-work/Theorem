@@ -8,6 +8,7 @@ import {
 import { isTauri } from "./core";
 import { cn } from "./core";
 import { initReaderStyles } from "./core";
+import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 
 const LibraryPage = lazy(() =>
     import("./features/library").then((module) => ({ default: module.LibraryPage })),
@@ -67,6 +68,48 @@ function App() {
     useEffect(() => {
         initReaderStyles(useSettingsStore.getState().settings.readerSettings);
     }, []); // Only on mount - the store's onRehydrate will handle persisted settings
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        type IdleCapableWindow = Window & typeof globalThis & {
+            requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+
+        const idleWindow = window as IdleCapableWindow;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let idleHandle: number | null = null;
+        let cancelled = false;
+
+        const warmPdfRuntime = () => {
+            if (cancelled) {
+                return;
+            }
+            void prewarmPdfJsRuntime();
+        };
+
+        if (idleWindow.requestIdleCallback) {
+            idleHandle = idleWindow.requestIdleCallback(
+                () => warmPdfRuntime(),
+                { timeout: 1800 },
+            );
+        } else {
+            timeoutId = setTimeout(warmPdfRuntime, 900);
+        }
+
+        return () => {
+            cancelled = true;
+            if (idleHandle !== null && idleWindow.cancelIdleCallback) {
+                idleWindow.cancelIdleCallback(idleHandle);
+            }
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+            }
+        };
+    }, []);
 
     // Ensure the desktop window doesn't start in a mobile-like size.
     useEffect(() => {

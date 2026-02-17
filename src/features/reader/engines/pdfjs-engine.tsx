@@ -14,7 +14,7 @@ import {
     useMemo,
     memo,
 } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { cn } from "../../../core";
 import { isTauri } from "../../../core";
 import { configurePdfJsWorker } from "../../../core/lib/pdfjs-runtime";
@@ -104,11 +104,13 @@ const ZOOM_STEP = 0.25;
 const DEFAULT_SCALE = 1.0;
 const PDF_TO_CSS_UNITS = pdfjsLib.PixelsPerInch?.PDF_TO_CSS_UNITS ?? (96 / 72);
 const PAGE_PRERENDER_MARGIN = "220% 0px";
-const INITIAL_PAGE_LOAD_SIZE = 2;
+const INITIAL_PAGE_LOAD_SIZE = 1;
 const PAGE_LOAD_BATCH_SIZE = 5;
+const PAGE_LOAD_AHEAD_THRESHOLD = 2;
 const WEBKIT_MIN_OUTPUT_SCALE = 2;
 const MAX_CANVAS_PIXEL_COUNT = 16_000_000;
 const TEXT_CONTENT_CACHE_LIMIT = 8;
+const PDF_INFO_CACHE_LIMIT = 32;
 const EMPTY_ANNOTATIONS: Annotation[] = [];
 const TEXT_LAYER_SELECTING_CLASS = "selecting";
 const WEBKIT_TEXT_LAYER_PAGE_WINDOW = 1;
@@ -123,6 +125,7 @@ const DEFAULT_ZOOM_MODE: PdfZoomMode = "width-fit";
 
 const activeTextLayers = new Map<HTMLDivElement, HTMLDivElement>();
 const pageTextContentCache = new Map<number, PageTextContent>();
+const pdfDocumentInfoCache = new Map<string, PDFDocumentInfo>();
 let textLayerSelectionAbortController: AbortController | null = null;
 
 function getCanvasPixelRatio(
@@ -510,6 +513,42 @@ function getNormalizedPageText(textContent: PageTextContent): string {
 
 function getPdfSearchLocation(pageNumber: number): string {
     return `pdf:page:${pageNumber}`;
+}
+
+function buildPdfInfoCacheKey(pdfPath: string, originalFilename: string | undefined, dataByteLength?: number): string {
+    if (pdfPath && pdfPath.length > 0) {
+        return `path:${pdfPath}`;
+    }
+    const filenamePart = originalFilename || "document";
+    const byteLengthPart = typeof dataByteLength === "number" ? `:len:${dataByteLength}` : "";
+    return `blob:${filenamePart}${byteLengthPart}`;
+}
+
+function setCachedPdfDocumentInfo(cacheKey: string, info: PDFDocumentInfo): void {
+    if (!cacheKey) {
+        return;
+    }
+    pdfDocumentInfoCache.delete(cacheKey);
+    pdfDocumentInfoCache.set(cacheKey, info);
+
+    while (pdfDocumentInfoCache.size > PDF_INFO_CACHE_LIMIT) {
+        const oldestKey = pdfDocumentInfoCache.keys().next().value as string | undefined;
+        if (!oldestKey) {
+            break;
+        }
+        pdfDocumentInfoCache.delete(oldestKey);
+    }
+}
+
+function getCachedPdfDocumentInfo(cacheKey: string, totalPages: number): PDFDocumentInfo | null {
+    const cached = pdfDocumentInfoCache.get(cacheKey);
+    if (!cached || cached.totalPages !== totalPages) {
+        return null;
+    }
+    // Refresh insertion order for LRU behavior.
+    pdfDocumentInfoCache.delete(cacheKey);
+    pdfDocumentInfoCache.set(cacheKey, cached);
+    return cached;
 }
 
 function getFitWidthScale(container: HTMLElement, page: PDFPageProxy): number {
@@ -1339,6 +1378,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const [pages, setPages] = useState<PDFPageProxy[]>([]);
         const hasAppliedInitialViewStateRef = useRef(false);
         const initialPageRestoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+        const pendingScrollPageRef = useRef<number | null>(null);
+        const loadingPageNumbersRef = useRef<Set<number>>(new Set());
         const currentPageRef = useRef(initialPage);
         const totalPagesRef = useRef(0);
         const scaleRef = useRef(DEFAULT_SCALE);
@@ -1401,6 +1442,48 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             return clampedScale;
         }, [setZoomMode]);
 
+        const getLoadedPageNumbers = useCallback(() => {
+            return new Set(pages.map((page) => page.pageNumber));
+        }, [pages]);
+
+        const loadSpecificPages = useCallback(async (pageNumbers: number[]) => {
+            if (!pdfDocument) {
+                return false;
+            }
+
+            const loadedPageNumbers = getLoadedPageNumbers();
+            const numbersToLoad = pageNumbers
+                .filter((pageNumber) => pageNumber >= 1 && pageNumber <= pdfDocument.numPages)
+                .filter((pageNumber) => !loadedPageNumbers.has(pageNumber))
+                .filter((pageNumber) => !loadingPageNumbersRef.current.has(pageNumber));
+
+            if (numbersToLoad.length === 0) {
+                return false;
+            }
+
+            numbersToLoad.forEach((pageNumber) => loadingPageNumbersRef.current.add(pageNumber));
+
+            try {
+                const loadedPages = await Promise.all(numbersToLoad.map((pageNumber) => pdfDocument.getPage(pageNumber)));
+                setPages((previousPages) => {
+                    const pageMap = new Map(previousPages.map((page) => [page.pageNumber, page]));
+                    for (const page of loadedPages) {
+                        pageMap.set(page.pageNumber, page);
+                    }
+                    return Array.from(pageMap.values()).sort((left, right) => left.pageNumber - right.pageNumber);
+                });
+                return true;
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                if (!errorMessage.includes("Transport") && !errorMessage.includes("destroyed")) {
+                    console.error("[PDFJsEngine] Error loading specific pages:", error);
+                }
+                return false;
+            } finally {
+                numbersToLoad.forEach((pageNumber) => loadingPageNumbersRef.current.delete(pageNumber));
+            }
+        }, [getLoadedPageNumbers, pdfDocument]);
+
         const clearSearch = useCallback(() => {
             searchSessionRef.current += 1;
         }, []);
@@ -1429,7 +1512,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 return;
             }
 
-            if (attempts >= 40) {
+            if (attempts >= 200) {
                 return;
             }
 
@@ -1625,6 +1708,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     setIsLoading(true);
                     setError(null);
                     setPages([]);
+                    loadingPageNumbersRef.current.clear();
+                    pendingScrollPageRef.current = null;
                     clearPageTextContentCache();
                     searchSessionRef.current += 1;
                     hasAppliedInitialViewStateRef.current = false;
@@ -1634,33 +1719,68 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     }
                     zoomModeRef.current = initialZoomMode;
 
-                    // Get PDF data
-                    let data: Uint8Array;
+                    const canUseDirectAssetUrl = isTauri() && Boolean(pdfPath) && !isVirtualPath && !pdfData;
+
+                    // Get PDF data when URL streaming is not available.
+                    let data: Uint8Array | undefined;
+                    let dataByteLength: number | undefined;
                     if (pdfData) {
-                        // Use provided data (works in both browser and Tauri)
+                        // Use provided data (works in both browser and Tauri).
                         data = pdfData;
-                    } else if (isTauri() && pdfPath && !isVirtualPath) {
-                        // Read via Tauri
+                        dataByteLength = data.byteLength;
+                    } else if (!canUseDirectAssetUrl && isTauri() && pdfPath && !isVirtualPath) {
+                        // Read via Tauri bridge as a fallback source.
                         data = await invoke<Uint8Array>("read_pdf_file", { path: pdfPath });
-                    } else {
+                        dataByteLength = data.byteLength;
+                    } else if (!canUseDirectAssetUrl) {
                         // Should not reach here due to early return above.
                         throw new Error("PDF data not provided. Please ensure the book is properly loaded.");
                     }
 
                     if (cancelled) return;
 
-                    // Load document
-                    // Fix: Ensure data is a "clean" Uint8Array to avoid DataCloneError in some WebKit environments
-                    // By using subarray(0) or new Uint8Array(data) we ensure it's a serializable object
-                    const loadingTask = pdfjsLib.getDocument({
-                        data: toSerializablePdfData(data),
+                    const displayFilename = originalFilename || pdfPath.split("/").pop()?.replace(/\.[^/.]+$/, "") || "document";
+                    const infoCacheKey = buildPdfInfoCacheKey(pdfPath, originalFilename, dataByteLength);
+                    const commonPdfOptions = {
                         cMapUrl: "/pdfjs/cmaps/",
                         cMapPacked: true,
                         standardFontDataUrl: "/pdfjs/standard_fonts/",
                         isEvalSupported: false, // Security: disable eval
-                    });
+                    };
 
-                    const pdf = await loadingTask.promise;
+                    let pdf: PDFDocumentProxy;
+                    if (canUseDirectAssetUrl) {
+                        try {
+                            const directUrl = convertFileSrc(pdfPath);
+                            const loadingTask = pdfjsLib.getDocument({
+                                ...commonPdfOptions,
+                                url: directUrl,
+                                // Disable eager fetching so large files don't get pulled entirely at open.
+                                // Per PDF.js docs this works best with streaming disabled.
+                                disableAutoFetch: true,
+                                disableStream: true,
+                                rangeChunkSize: 256 * 1024,
+                            });
+                            pdf = await loadingTask.promise;
+                        } catch (urlLoadError) {
+                            // Fallback for environments where asset URL loading is unavailable.
+                            console.warn("[PDFJsEngine] Asset URL loading failed, falling back to Tauri read:", urlLoadError);
+                            const fallbackData = await invoke<Uint8Array>("read_pdf_file", { path: pdfPath });
+                            const loadingTask = pdfjsLib.getDocument({
+                                ...commonPdfOptions,
+                                data: toSerializablePdfData(fallbackData),
+                            });
+                            pdf = await loadingTask.promise;
+                        }
+                    } else {
+                        const loadingTask = pdfjsLib.getDocument({
+                            ...commonPdfOptions,
+                            // Ensure data is a clean Uint8Array to avoid DataCloneError in some WebKit builds.
+                            data: toSerializablePdfData(data as Uint8Array),
+                        });
+                        pdf = await loadingTask.promise;
+                    }
+
                     loadedPdf = pdf;
 
                     if (cancelled) {
@@ -1670,60 +1790,87 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
 
                     setPdfDocument(pdf);
 
-                    // Get metadata
-                    const [metadata, { tocItems, hasOutline }] = await Promise.all([
-                        pdf.getMetadata(),
-                        buildPdfToc(pdf),
-                    ]);
-                    const metaInfo = metadata.info as Record<string, unknown>;
-                    // Use original filename (without extension) as fallback for title
-                    const displayFilename = originalFilename || pdfPath.split("/").pop()?.replace(/\.[^/.]+$/, "") || "document";
-                    const info: PDFDocumentInfo = {
-                        title: (metaInfo?.Title as string) || displayFilename,
-                        author: metaInfo?.Author as string | undefined,
-                        subject: metaInfo?.Subject as string | undefined,
-                        keywords: metaInfo?.Keywords as string | undefined,
-                        creator: metaInfo?.Creator as string | undefined,
-                        producer: metaInfo?.Producer as string | undefined,
-                        creationDate: metaInfo?.CreationDate ? new Date(metaInfo.CreationDate as string) : undefined,
-                        modificationDate: metaInfo?.ModDate ? new Date(metaInfo.ModDate as string) : undefined,
-                        totalPages: pdf.numPages,
-                        filename: displayFilename,
-                        hasOutline,
-                        toc: tocItems,
-                    };
-
-                    const clampedInitialPage = Math.max(1, Math.min(initialPage, info.totalPages || 1));
+                    const totalPageCount = Math.max(1, pdf.numPages);
+                    const clampedInitialPage = Math.max(1, Math.min(initialPage, totalPageCount));
                     initialPageToRestoreRef.current = clampedInitialPage;
                     // Keep refs/state in sync before first callback so parent never receives 0 total pages.
                     currentPageRef.current = clampedInitialPage;
-                    totalPagesRef.current = info.totalPages;
+                    totalPagesRef.current = totalPageCount;
                     scaleRef.current = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, initialZoom));
                     setCurrentPage(clampedInitialPage);
-                    setTotalPages(info.totalPages);
+                    setTotalPages(totalPageCount);
                     setScale(scaleRef.current);
                     setZoomMode(initialZoomMode, true);
 
-                    // Pre-load first few pages
-                    const pagesToLoad = Math.min(INITIAL_PAGE_LOAD_SIZE, pdf.numPages);
+                    const initialPageNumbers = Array.from(new Set(
+                        [
+                            clampedInitialPage,
+                            clampedInitialPage + 1,
+                            clampedInitialPage - 1,
+                        ].filter((pageNumber) => pageNumber >= 1 && pageNumber <= pdf.numPages),
+                    ));
                     const initialPages = await Promise.all(
-                        Array.from({ length: pagesToLoad }, (_, pageIndex) => pdf.getPage(pageIndex + 1)),
+                        initialPageNumbers.map((pageNumber) => pdf.getPage(pageNumber)),
                     );
 
                     if (!cancelled) {
-                        setPages(initialPages);
+                        setPages(initialPages.sort((left, right) => left.pageNumber - right.pageNumber));
                         setIsLoading(false);
-                        callbacksRef.current.onLoad?.(info);
+                        const cachedInfo = getCachedPdfDocumentInfo(infoCacheKey, totalPageCount);
+                        const initialInfo: PDFDocumentInfo = cachedInfo ?? {
+                            title: displayFilename,
+                            totalPages: totalPageCount,
+                            filename: displayFilename,
+                            hasOutline: false,
+                            toc: [],
+                        };
+                        callbacksRef.current.onLoad?.(initialInfo);
                         // Also call onPageChange with initial page to update parent state
                         callbacksRef.current.onPageChange?.(
                             clampedInitialPage,
-                            info.totalPages,
+                            totalPageCount,
                             scaleRef.current,
                         );
                     } else {
                         // Cleanup if cancelled
                         initialPages.forEach(p => p.cleanup());
                         pdf.destroy();
+                    }
+
+                    // Defer expensive metadata + outline resolution so first render is not blocked.
+                    // If we have a cache hit for this document source, skip recomputation.
+                    if (!cancelled && !getCachedPdfDocumentInfo(infoCacheKey, totalPageCount)) {
+                        void (async () => {
+                            try {
+                                const [metadata, { tocItems, hasOutline }] = await Promise.all([
+                                    pdf.getMetadata(),
+                                    buildPdfToc(pdf),
+                                ]);
+                                if (cancelled) {
+                                    return;
+                                }
+                                const metaInfo = metadata.info as Record<string, unknown>;
+                                const finalInfo: PDFDocumentInfo = {
+                                    title: (metaInfo?.Title as string) || displayFilename,
+                                    author: metaInfo?.Author as string | undefined,
+                                    subject: metaInfo?.Subject as string | undefined,
+                                    keywords: metaInfo?.Keywords as string | undefined,
+                                    creator: metaInfo?.Creator as string | undefined,
+                                    producer: metaInfo?.Producer as string | undefined,
+                                    creationDate: metaInfo?.CreationDate ? new Date(metaInfo.CreationDate as string) : undefined,
+                                    modificationDate: metaInfo?.ModDate ? new Date(metaInfo.ModDate as string) : undefined,
+                                    totalPages: totalPageCount,
+                                    filename: displayFilename,
+                                    hasOutline,
+                                    toc: tocItems,
+                                };
+                                setCachedPdfDocumentInfo(infoCacheKey, finalInfo);
+                                callbacksRef.current.onLoad?.(finalInfo);
+                            } catch (metadataError) {
+                                // Metadata/outline failures should not break rendering after first paint.
+                                console.warn("[PDFJsEngine] Deferred metadata load failed:", metadataError);
+                            }
+                        })();
                     }
 
                 } catch (err) {
@@ -1739,11 +1886,13 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
 
             loadPdf();
 
-            return () => {
-                cancelled = true;
-                // Cleanup
-                if (initialPageRestoreTimeoutRef.current) {
-                    clearTimeout(initialPageRestoreTimeoutRef.current);
+                return () => {
+                    cancelled = true;
+                    loadingPageNumbersRef.current.clear();
+                    pendingScrollPageRef.current = null;
+                    // Cleanup
+                    if (initialPageRestoreTimeoutRef.current) {
+                        clearTimeout(initialPageRestoreTimeoutRef.current);
                     initialPageRestoreTimeoutRef.current = null;
                 }
                 setPages((existingPages) => {
@@ -1758,9 +1907,6 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             // Only reload when pdfPath, pdfData, or initialPage changes
             // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [initialPage, initialZoom, initialZoomMode, pdfPath, pdfData, originalFilename, setZoomMode]);
-
-        // Track loading state to prevent duplicate page loads
-        const isLoadingPageRef = useRef(false);
 
         // Apply initial zoom strategy and restore initial page once first pages are rendered.
         useEffect(() => {
@@ -1806,67 +1952,31 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             };
         }, [pages, applyZoom, initialZoom, initialZoomMode, restoreInitialPageWithRetry]);
 
-        // Load additional pages as needed
+        // Keep nearby pages loaded around the current reading position.
         useEffect(() => {
-            if (!pdfDocument || pages.length >= pdfDocument.numPages) return;
-            if (isLoadingPageRef.current) return;
+            if (!pdfDocument || totalPagesRef.current <= 0) {
+                return;
+            }
 
-            let cancelled = false;
-            isLoadingPageRef.current = true;
+            const rangeStart = Math.max(1, currentPage - PAGE_LOAD_AHEAD_THRESHOLD);
+            const rangeEnd = Math.min(
+                totalPagesRef.current,
+                Math.max(INITIAL_PAGE_LOAD_SIZE, currentPage + PAGE_LOAD_AHEAD_THRESHOLD),
+            );
+            const targetRange = Array.from(
+                { length: rangeEnd - rangeStart + 1 },
+                (_, index) => rangeStart + index,
+            );
+            if (targetRange.length === 0) {
+                return;
+            }
 
-            const loadMorePages = async () => {
-                const nextPageNum = pages.length + 1;
-                if (nextPageNum > pdfDocument.numPages) {
-                    isLoadingPageRef.current = false;
-                    return;
-                }
-                const endPageNum = Math.min(
-                    nextPageNum + PAGE_LOAD_BATCH_SIZE - 1,
-                    pdfDocument.numPages,
-                );
-
-                try {
-                    const pagePromises: Promise<PDFPageProxy>[] = [];
-                    for (let pageNum = nextPageNum; pageNum <= endPageNum; pageNum++) {
-                        pagePromises.push(pdfDocument.getPage(pageNum));
-                    }
-                    const loadedPages = await Promise.all(pagePromises);
-                    if (!cancelled) {
-                        setPages((prev) => {
-                            const existingPageNumbers = new Set(prev.map((existingPage) => existingPage.pageNumber));
-                            const nextPages = loadedPages.filter(
-                                (loadedPage) => !existingPageNumbers.has(loadedPage.pageNumber),
-                            );
-                            if (nextPages.length === 0) {
-                                return prev;
-                            }
-                            return [...prev, ...nextPages];
-                        });
-                    } else {
-                        loadedPages.forEach((loadedPage) => {
-                            loadedPage.cleanup();
-                        });
-                    }
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    if (errorMessage.includes("Transport") || errorMessage.includes("destroyed")) {
-                        // Document was destroyed during page load, ignore error
-                        return;
-                    }
-                    console.error("[PDFJsEngine] Error loading page:", error);
-                } finally {
-                    isLoadingPageRef.current = false;
-                }
-            };
-
-            // Load next page batch when we're near the end of loaded pages
-            loadMorePages();
-
-            return () => {
-                cancelled = true;
-                isLoadingPageRef.current = false;
-            };
-        }, [pdfDocument, pages.length]);
+            const sortedByDistance = [...targetRange].sort((left, right) => {
+                return Math.abs(left - currentPage) - Math.abs(right - currentPage);
+            });
+            const nextBatch = sortedByDistance.slice(0, PAGE_LOAD_BATCH_SIZE);
+            void loadSpecificPages(nextBatch);
+        }, [currentPage, loadSpecificPages, pdfDocument]);
 
         // Handle scroll-based page tracking and wheel zoom
         useEffect(() => {
@@ -1954,10 +2064,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             };
         }, [pages.length, applyZoom]);
 
-        const scrollToPage = useCallback((targetPage: number, behavior: ScrollBehavior = "smooth") => {
+        const scrollToPage = useCallback((targetPage: number, behavior: ScrollBehavior = "smooth"): boolean => {
             const container = containerRef.current;
             if (!container) {
-                return;
+                return false;
             }
 
             const pageNode = container.querySelector<HTMLElement>(
@@ -1968,32 +2078,73 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     top: Math.max(0, pageNode.offsetTop - 8),
                     behavior,
                 });
+                return true;
+            }
+            return false;
+        }, []);
+
+        const navigateToPage = useCallback((targetPage: number, behavior: ScrollBehavior = "smooth") => {
+            const totalPageCount = totalPagesRef.current;
+            if (targetPage < 1 || targetPage > totalPageCount) {
                 return;
             }
 
-            // Fallback while additional pages are still being loaded.
-            const approximatePageHeight = container.scrollHeight / Math.max(1, pages.length);
-            container.scrollTo({
-                top: Math.max(0, (targetPage - 1) * approximatePageHeight),
-                behavior,
-            });
-        }, [pages.length]);
+            if (
+                targetPage !== currentPageRef.current
+                && totalPageCount > 0
+            ) {
+                currentPageRef.current = targetPage;
+                setCurrentPage(targetPage);
+                callbacksRef.current.onPageChange?.(targetPage, totalPageCount, scaleRef.current);
+            }
+
+            if (scrollToPage(targetPage, behavior)) {
+                pendingScrollPageRef.current = null;
+                return;
+            }
+
+            pendingScrollPageRef.current = targetPage;
+            void loadSpecificPages([
+                targetPage,
+                targetPage + 1,
+                targetPage - 1,
+                targetPage + 2,
+                targetPage - 2,
+            ]);
+        }, [loadSpecificPages, scrollToPage]);
+
+        useEffect(() => {
+            const pendingPage = pendingScrollPageRef.current;
+            if (!pendingPage) {
+                return;
+            }
+
+            const hasPendingPageLoaded = pages.some((page) => page.pageNumber === pendingPage);
+            if (!hasPendingPageLoaded) {
+                return;
+            }
+
+            const didScroll = scrollToPage(pendingPage, "auto");
+            if (didScroll) {
+                pendingScrollPageRef.current = null;
+            }
+        }, [pages, scrollToPage]);
 
         // Expose imperative methods
         useImperativeHandle(ref, () => ({
             goToPage: (page: number) => {
                 if (page >= 1 && page <= totalPages) {
-                    scrollToPage(page);
+                    navigateToPage(page, "smooth");
                 }
             },
             nextPage: () => {
                 if (currentPage < totalPages) {
-                    scrollToPage(currentPage + 1);
+                    navigateToPage(currentPage + 1, "smooth");
                 }
             },
             prevPage: () => {
                 if (currentPage > 1) {
-                    scrollToPage(currentPage - 1);
+                    navigateToPage(currentPage - 1, "smooth");
                 }
             },
             zoomIn: () => {
@@ -2033,7 +2184,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             },
             search: (query: string) => search(query),
             clearSearch: () => clearSearch(),
-        }), [applyZoom, clearSearch, currentPage, pages.length, scrollToPage, search, totalPages]);
+        }), [applyZoom, clearSearch, currentPage, navigateToPage, search, totalPages]);
 
         const displayError = error?.replace(/\s+/g, " ").trim();
 
