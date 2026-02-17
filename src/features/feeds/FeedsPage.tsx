@@ -3,14 +3,15 @@
  * RSS feed subscription management and article browsing
  */
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core";
 import { useRssStore } from "../../core";
 import type { RssFeed, RssArticle } from "../../core";
 import {
     Rss, Plus, RefreshCw, Trash2, Loader2,
-    ExternalLink, Heart, Clock, ChevronRight,
-    AlertCircle, Globe, LayoutTemplate, ArrowLeft
+    ExternalLink, Heart, AlertCircle,
+    LayoutTemplate, ArrowLeft, MoreHorizontal
 } from "lucide-react";
 import { AddFeedModal } from "./AddFeedModal";
 
@@ -42,6 +43,35 @@ function stripHtml(html: string): string {
     return div.textContent || div.innerText || "";
 }
 
+function useTouchVisibleActions(): boolean {
+    const [touchVisibleActions, setTouchVisibleActions] = useState(() => {
+        if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+            return false;
+        }
+        return window.matchMedia("(hover: none), (pointer: coarse)").matches;
+    });
+
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+            return;
+        }
+
+        const mediaQuery = window.matchMedia("(hover: none), (pointer: coarse)");
+        const handleChange = () => setTouchVisibleActions(mediaQuery.matches);
+        handleChange();
+
+        if (typeof mediaQuery.addEventListener === "function") {
+            mediaQuery.addEventListener("change", handleChange);
+            return () => mediaQuery.removeEventListener("change", handleChange);
+        }
+
+        mediaQuery.addListener(handleChange);
+        return () => mediaQuery.removeListener(handleChange);
+    }, []);
+
+    return touchVisibleActions;
+}
+
 // ── Feed List Item ──
 
 function FeedListItem({
@@ -49,17 +79,38 @@ function FeedListItem({
     isSelected,
     onSelect,
     onDelete,
+    showTouchActions,
 }: {
     feed: RssFeed;
     isSelected: boolean;
     onSelect: () => void;
     onDelete: () => void;
+    showTouchActions: boolean;
 }) {
+    const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+    const actionMenuRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!isActionMenuOpen) {
+            return;
+        }
+
+        const handlePointerDown = (event: PointerEvent) => {
+            if (actionMenuRef.current?.contains(event.target as Node)) {
+                return;
+            }
+            setIsActionMenuOpen(false);
+        };
+
+        document.addEventListener("pointerdown", handlePointerDown);
+        return () => document.removeEventListener("pointerdown", handlePointerDown);
+    }, [isActionMenuOpen]);
+
     return (
         <div
             onClick={onSelect}
             className={cn(
-                "group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
+                "group relative flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
                 isSelected
                     ? "bg-[var(--color-accent)]/10 text-[color:var(--color-accent)]"
                     : "hover:bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]",
@@ -108,19 +159,44 @@ function FeedListItem({
                 </span>
             )}
 
-            {/* Delete button (on hover) or always on mobile? Interaction is touch, so hover fails. 
-                Maybe add a swipe action or a separate menu. For now sticking to hover for desktop consistency, 
-                and maybe long-press? Or explicit delete mode (later). */}
-            <button
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                }}
-                className="opacity-0 group-hover:opacity-100 p-2 rounded hover:bg-[var(--color-error)]/10 transition-all flex-shrink-0"
-                title="Remove feed"
-            >
-                <Trash2 className="w-3.5 h-3.5 text-[color:var(--color-error)]" />
-            </button>
+            <div ref={actionMenuRef} className="relative flex-shrink-0">
+                <button
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        setIsActionMenuOpen((open) => !open);
+                    }}
+                    className={cn(
+                        "p-1.5 rounded-md transition-colors",
+                        showTouchActions
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+                        isActionMenuOpen
+                            ? "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]"
+                            : "text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"
+                    )}
+                    title="Feed actions"
+                    aria-label={`Actions for ${feed.title}`}
+                    aria-expanded={isActionMenuOpen}
+                >
+                    <MoreHorizontal className="w-3.5 h-3.5" />
+                </button>
+
+                {isActionMenuOpen && (
+                    <div className="absolute right-0 top-full mt-1 z-20 min-w-36 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg">
+                        <button
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                setIsActionMenuOpen(false);
+                                onDelete();
+                            }}
+                            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs font-medium text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10"
+                        >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove feed</span>
+                        </button>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
@@ -323,6 +399,9 @@ export function FeedsPage() {
         }
         return window.sessionStorage.getItem(FEEDS_MOBILE_LIST_STORAGE_KEY) !== "false";
     });
+    const showTouchActions = useTouchVisibleActions();
+    const feedListScrollRef = useRef<HTMLDivElement | null>(null);
+    const articleListScrollRef = useRef<HTMLDivElement | null>(null);
 
     const selectedFeed = selectedFeedId ? feeds.find(f => f.id === selectedFeedId) : null;
 
@@ -361,6 +440,49 @@ export function FeedsPage() {
         }
         return getAllArticles();
     }, [selectedFeedId, articles, getArticlesForFeed, getAllArticles]);
+
+    const feedListRows = useMemo(
+        () => [{ kind: "all" as const }, ...feeds.map((feed) => ({ kind: "feed" as const, feed }))],
+        [feeds],
+    );
+
+    const feedVirtualizer = useVirtualizer({
+        count: feedListRows.length,
+        getScrollElement: () => feedListScrollRef.current,
+        estimateSize: () => 46,
+        overscan: 10,
+        getItemKey: (index) => (
+            index === 0
+                ? "all-articles"
+                : feedListRows[index]?.kind === "feed"
+                    ? feedListRows[index].feed.id
+                    : String(index)
+        ),
+    });
+
+    const articleVirtualItemCount = displayedArticles.length > 0
+        ? displayedArticles.length + 1
+        : 0;
+    const articleVirtualizer = useVirtualizer({
+        count: articleVirtualItemCount,
+        getScrollElement: () => articleListScrollRef.current,
+        estimateSize: () => 212,
+        overscan: 6,
+        getItemKey: (index) => (
+            index === displayedArticles.length
+                ? "end-of-list"
+                : displayedArticles[index]?.id ?? String(index)
+        ),
+        measureElement: (element) => element?.getBoundingClientRect().height ?? 212,
+    });
+
+    useEffect(() => {
+        feedVirtualizer.measure();
+    }, [feedVirtualizer, feedListRows.length, showMobileList]);
+
+    useEffect(() => {
+        articleVirtualizer.measure();
+    }, [articleVirtualizer, displayedArticles.length, selectedFeedId, showMobileList]);
 
     // Feed title lookup for article cards
     const feedTitleById = useMemo(() => {
@@ -451,38 +573,61 @@ export function FeedsPage() {
                 </div>
 
                 {/* Feed List */}
-                <div className="flex-1 overflow-y-auto p-2">
-                    <button
-                        onClick={() => handleSelectFeed(null)}
-                        className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors mb-2",
-                            selectedFeedId === null
-                                ? "bg-[var(--color-accent)]/10 text-[color:var(--color-accent)]"
-                                : "hover:bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]",
-                        )}
-                    >
-                        <div className={cn(
-                            "w-6 h-6 rounded flex items-center justify-center transition-colors",
-                            selectedFeedId === null
-                                ? "text-[color:var(--color-accent)]"
-                                : "text-[color:var(--color-text-muted)]",
-                        )}>
-                            <LayoutTemplate className="w-4 h-4" />
+                <div ref={feedListScrollRef} className="flex-1 overflow-y-auto">
+                    <div className="p-2">
+                        <div
+                            className="relative w-full"
+                            style={{ height: `${feedVirtualizer.getTotalSize()}px` }}
+                        >
+                            {feedVirtualizer.getVirtualItems().map((virtualRow) => {
+                                const row = feedListRows[virtualRow.index];
+                                if (!row) {
+                                    return null;
+                                }
+
+                                return (
+                                    <div
+                                        key={virtualRow.key}
+                                        ref={feedVirtualizer.measureElement}
+                                        data-index={virtualRow.index}
+                                        className="absolute left-0 top-0 w-full pb-1"
+                                        style={{
+                                            transform: `translateY(${virtualRow.start}px)`,
+                                        }}
+                                    >
+                                        {row.kind === "all" ? (
+                                            <button
+                                                onClick={() => handleSelectFeed(null)}
+                                                className={cn(
+                                                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
+                                                    selectedFeedId === null
+                                                        ? "bg-[var(--color-accent)]/10 text-[color:var(--color-accent)]"
+                                                        : "hover:bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]",
+                                                )}
+                                            >
+                                                <div className={cn(
+                                                    "w-6 h-6 rounded flex items-center justify-center transition-colors",
+                                                    selectedFeedId === null
+                                                        ? "text-[color:var(--color-accent)]"
+                                                        : "text-[color:var(--color-text-muted)]",
+                                                )}>
+                                                    <LayoutTemplate className="w-4 h-4" />
+                                                </div>
+                                                <span className="text-sm font-medium">All Articles</span>
+                                            </button>
+                                        ) : (
+                                            <FeedListItem
+                                                feed={row.feed}
+                                                isSelected={selectedFeedId === row.feed.id}
+                                                onSelect={() => handleSelectFeed(row.feed.id)}
+                                                onDelete={() => handleDeleteFeed(row.feed.id)}
+                                                showTouchActions={showTouchActions}
+                                            />
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
-                        <span className="text-sm font-medium">All Articles</span>
-                    </button>
-
-
-                    <div className="space-y-0.5">
-                        {feeds.map(feed => (
-                            <FeedListItem
-                                key={feed.id}
-                                feed={feed}
-                                isSelected={selectedFeedId === feed.id}
-                                onSelect={() => handleSelectFeed(feed.id)}
-                                onDelete={() => handleDeleteFeed(feed.id)}
-                            />
-                        ))}
                     </div>
                 </div>
             </div>
@@ -540,7 +685,7 @@ export function FeedsPage() {
                 </header>
 
                 {/* Scrollable Article List */}
-                <div className="flex-1 overflow-y-auto">
+                <div ref={articleListScrollRef} className="flex-1 overflow-y-auto">
                     {isLoading && feeds.length === 0 ? (
                         <div className="flex items-center justify-center h-full">
                             <Loader2 className="w-6 h-6 animate-spin text-[color:var(--color-text-muted)]" />
@@ -548,19 +693,48 @@ export function FeedsPage() {
                     ) : displayedArticles.length === 0 ? (
                         <EmptyArticles feedTitle={selectedFeed?.title} />
                     ) : (
-                        <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-4">
-                            {displayedArticles.map(article => (
-                                <ArticleCard
-                                    key={article.id}
-                                    article={article}
-                                    feedTitle={!selectedFeedId ? feedTitleById.get(article.feedId) : undefined}
-                                    onRead={() => openArticleInReader(article)}
-                                    onToggleFavorite={() => toggleArticleFavorite(article.id)}
-                                />
-                            ))}
+                        <div className="p-4 sm:p-6">
+                            <div className="mx-auto max-w-6xl">
+                                <div
+                                    className="relative w-full"
+                                    style={{ height: `${articleVirtualizer.getTotalSize()}px` }}
+                                >
+                                    {articleVirtualizer.getVirtualItems().map((virtualRow) => {
+                                        const article = displayedArticles[virtualRow.index];
+                                        const style = { transform: `translateY(${virtualRow.start}px)` };
 
-                            <div className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">
-                                You've reached the end of the list.
+                                        if (!article) {
+                                            return (
+                                                <div
+                                                    key={virtualRow.key}
+                                                    ref={articleVirtualizer.measureElement}
+                                                    data-index={virtualRow.index}
+                                                    className="absolute left-0 top-0 w-full py-8 text-center text-sm text-[color:var(--color-text-muted)]"
+                                                    style={style}
+                                                >
+                                                    You've reached the end of the list.
+                                                </div>
+                                            );
+                                        }
+
+                                        return (
+                                            <div
+                                                key={article.id}
+                                                ref={articleVirtualizer.measureElement}
+                                                data-index={virtualRow.index}
+                                                className="absolute left-0 top-0 w-full pb-4"
+                                                style={style}
+                                            >
+                                                <ArticleCard
+                                                    article={article}
+                                                    feedTitle={!selectedFeedId ? feedTitleById.get(article.feedId) : undefined}
+                                                    onRead={() => openArticleInReader(article)}
+                                                    onToggleFavorite={() => toggleArticleFavorite(article.id)}
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     )}

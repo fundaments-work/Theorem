@@ -36,8 +36,13 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isMobile, onClose }: SidebarProps) {
-    const { currentRoute, setRoute, sidebarOpen, toggleSidebar } = useUIStore();
-    const { settings, updateSettings } = useSettingsStore();
+    const currentRoute = useUIStore((state) => state.currentRoute);
+    const setRoute = useUIStore((state) => state.setRoute);
+    const sidebarOpen = useUIStore((state) => state.sidebarOpen);
+    const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+    const sidebarCollapsed = useSettingsStore((state) => state.settings.sidebarCollapsed);
+    const vocabularyEnabled = useSettingsStore((state) => state.settings.vocabulary.vocabularyEnabled);
+    const updateSettings = useSettingsStore((state) => state.updateSettings);
     const sidebarRef = useRef<HTMLElement>(null);
     const touchStartX = useRef<number>(0);
     const isCollapsedDesktop = !isMobile && !sidebarOpen;
@@ -45,8 +50,8 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
 
     const handleToggle = useCallback(() => {
         toggleSidebar();
-        updateSettings({ sidebarCollapsed: !settings.sidebarCollapsed });
-    }, [settings.sidebarCollapsed, toggleSidebar, updateSettings]);
+        updateSettings({ sidebarCollapsed: !sidebarCollapsed });
+    }, [sidebarCollapsed, toggleSidebar, updateSettings]);
 
     useEffect(() => {
         if (!isMobile) return;
@@ -104,7 +109,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
             <nav className="flex-1 overflow-y-auto py-2">
                 <ul className="flex flex-col">
                     {mainNavItems
-                        .filter((item) => item.id !== "vocabulary" || settings.vocabulary.vocabularyEnabled)
+                        .filter((item) => item.id !== "vocabulary" || vocabularyEnabled)
                         .map((item) => {
                             const isActive = currentRoute === item.id;
 

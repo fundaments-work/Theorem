@@ -46,7 +46,11 @@ export function AppTitlebar({
 }: AppTitlebarProps) {
     const [isMaximized, setIsMaximized] = useState(false);
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-    const { currentRoute, searchQuery, setSearchQuery, commitSearch, setRoute } = useUIStore();
+    const currentRoute = useUIStore((state) => state.currentRoute);
+    const searchQuery = useUIStore((state) => state.searchQuery);
+    const setSearchQuery = useUIStore((state) => state.setSearchQuery);
+    const commitSearch = useUIStore((state) => state.commitSearch);
+    const setRoute = useUIStore((state) => state.setRoute);
     const isTauriRuntime = isTauri();
     const searchDomain = resolveSearchDomain({
         placement: "appTitlebar",

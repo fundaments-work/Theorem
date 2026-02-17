@@ -3,11 +3,12 @@
  * Unified panel for Bookmarks and Highlights with tabs
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Bookmark, X, Trash2, ExternalLink, Highlighter } from 'lucide-react';
 import { HIGHLIGHT_PICKER_COLORS } from "../../../core";
 import { cn, useLibraryStore, useUIStore } from "../../../core";
 import { format } from 'date-fns';
+import { useShallow } from 'zustand/react/shallow';
 import { Backdrop, FloatingPanel } from "../../../ui";
 import type { Annotation, HighlightColor } from "../../../core";
 
@@ -34,12 +35,20 @@ export function ReaderAnnotationsPanel({
     className,
 }: ReaderAnnotationsPanelProps) {
     const [activeTab, setActiveTab] = useState<TabType>('bookmarks');
-    const { getBookAnnotations, removeAnnotation } = useLibraryStore();
+    const annotations = useLibraryStore(useShallow(
+        (state) => state.getBookAnnotations(bookId),
+    ));
+    const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
-    const annotations = getBookAnnotations(bookId);
-    
-    const bookmarks = annotations.filter(a => a.type === 'bookmark');
-    const highlights = annotations.filter(a => a.type === 'highlight' || a.type === 'note');
+
+    const bookmarks = useMemo(
+        () => annotations.filter((annotation) => annotation.type === 'bookmark'),
+        [annotations],
+    );
+    const highlights = useMemo(
+        () => annotations.filter((annotation) => annotation.type === 'highlight' || annotation.type === 'note'),
+        [annotations],
+    );
     const vaultStatusText = {
         synced: "Synced to export folder",
         syncing: "Syncing markdown pages",
