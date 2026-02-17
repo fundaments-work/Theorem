@@ -10,7 +10,7 @@ import { useRssStore } from "../../core";
 import type { RssFeed, RssArticle } from "../../core";
 import {
     Rss, Plus, RefreshCw, Trash2, Loader2,
-    ExternalLink, Heart, AlertCircle,
+    ExternalLink, AlertCircle,
     LayoutTemplate, ArrowLeft, MoreHorizontal
 } from "lucide-react";
 import { AddFeedModal } from "./AddFeedModal";
@@ -207,12 +207,10 @@ function ArticleCard({
     article,
     feedTitle,
     onRead,
-    onToggleFavorite,
 }: {
     article: RssArticle;
     feedTitle?: string;
     onRead: () => void;
-    onToggleFavorite: () => void;
 }) {
     const summary = useMemo(() => {
         const text = article.summary || article.content;
@@ -271,22 +269,6 @@ function ArticleCard({
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 mt-4">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onToggleFavorite();
-                            }}
-                            className={cn(
-                                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                                article.isFavorite
-                                    ? "text-[color:var(--color-accent)] bg-[var(--color-accent)]/10"
-                                    : "text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]",
-                            )}
-                        >
-                            <Heart className={cn("w-3.5 h-3.5", article.isFavorite && "fill-current")} />
-                            <span>Favorite</span>
-                        </button>
-
                         {article.url && (
                             <a
                                 href={article.url}
@@ -379,7 +361,6 @@ export function FeedsPage() {
     const getArticlesForFeed = useRssStore((s) => s.getArticlesForFeed);
     const getAllArticles = useRssStore((s) => s.getAllArticles);
     const openArticleInReader = useRssStore((s) => s.openArticleInReader);
-    const toggleArticleFavorite = useRssStore((s) => s.toggleArticleFavorite);
     const setError = useRssStore((s) => s.setError);
 
     const [selectedFeedId, setSelectedFeedId] = useState<string | null>(() => {
@@ -657,16 +638,9 @@ export function FeedsPage() {
                             <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem] truncate">
                                 {selectedFeed ? selectedFeed.title : "All Articles"}
                             </h1>
-                            {!selectedFeed && (
-                                <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
-                                    {displayedArticles.length} articles
-                                </p>
-                            )}
-                            {selectedFeed && (
-                                <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
-                                    {selectedFeed.url}
-                                </p>
-                            )}
+                            <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
+                                {displayedArticles.length} articles
+                            </p>
                         </div>
                     </div>
 
@@ -729,7 +703,6 @@ export function FeedsPage() {
                                                     article={article}
                                                     feedTitle={!selectedFeedId ? feedTitleById.get(article.feedId) : undefined}
                                                     onRead={() => openArticleInReader(article)}
-                                                    onToggleFavorite={() => toggleArticleFavorite(article.id)}
                                                 />
                                             </div>
                                         );
