@@ -27,6 +27,7 @@ import {
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import { TableOfContents } from "./components/TableOfContents";
 import { ReaderSettings } from "./components/ReaderSettings";
+import { PDFViewSettingsPanel } from "./components/PDFViewSettingsPanel";
 import { ReaderAnnotationsPanel } from "./components/ReaderAnnotationsPanel";
 import { ReaderSearch } from "./components/ReaderSearch";
 import { BookInfoPopover } from "./components/BookInfoPopover";
@@ -525,16 +526,23 @@ function BookReaderPage() {
             timeout = setTimeout(hideToolbar, settings.readerSettings.autoHideDelay * 1000);
         };
 
+        if (isPdfFormat) {
+            showToolbarAndReset();
+        } else {
+            timeout = setTimeout(hideToolbar, settings.readerSettings.autoHideDelay * 1000);
+        }
+
         window.addEventListener('mousemove', showToolbarAndReset, { passive: true });
         window.addEventListener('touchstart', showToolbarAndReset, { passive: true });
-        timeout = setTimeout(hideToolbar, settings.readerSettings.autoHideDelay * 1000);
+        window.addEventListener('keydown', showToolbarAndReset);
 
         return () => {
             clearTimeout(timeout);
             window.removeEventListener('mousemove', showToolbarAndReset);
             window.removeEventListener('touchstart', showToolbarAndReset);
+            window.removeEventListener('keydown', showToolbarAndReset);
         };
-    }, [isMobileViewport, settings.readerSettings.autoHideDelay, activePanel]);
+    }, [activePanel, isMobileViewport, isPdfFormat, settings.readerSettings.autoHideDelay]);
 
     const handleReaderExitFullscreen = useCallback(() => {
         updateReaderSettings({ fullscreen: false });
@@ -798,6 +806,24 @@ function BookReaderPage() {
     const [dictionaryLookupError, setDictionaryLookupError] = useState<string | null>(null);
     const [dictionaryLookupLoading, setDictionaryLookupLoading] = useState(false);
     const [dictionaryLookupSaved, setDictionaryLookupSaved] = useState(false);
+
+    useEffect(() => {
+        if (!isPdfFormat || !isMobileViewport || !showToolbar || activePanel !== null) {
+            return;
+        }
+
+        const timeout = setTimeout(() => {
+            setShowToolbar(false);
+        }, settings.readerSettings.autoHideDelay * 1000);
+
+        return () => clearTimeout(timeout);
+    }, [
+        activePanel,
+        isMobileViewport,
+        isPdfFormat,
+        settings.readerSettings.autoHideDelay,
+        showToolbar,
+    ]);
 
     const handleViewportTap = useCallback(() => {
         if (showColorPicker || showNoteEditor) {
@@ -1579,7 +1605,7 @@ function BookReaderPage() {
             <div
                 ref={toolbarContainerRef}
                 className={cn(
-                    "absolute top-0 left-0 right-0 z-50 transition-transform duration-300",
+                    "absolute top-0 left-0 right-0 z-[140] transition-transform duration-300",
                     shouldShowReaderChrome ? "translate-y-0" : "-translate-y-full"
                 )}
             >
@@ -1722,7 +1748,20 @@ function BookReaderPage() {
             />
 
             {/* Reader settings/info panels */}
-            {!isPdfFormat && (
+            {isPdfFormat ? (
+                <PDFViewSettingsPanel
+                    visible={activePanel === "settings"}
+                    onClose={() => setActivePanel(null)}
+                    zoom={pdfZoom}
+                    zoomMode={pdfZoomMode}
+                    onZoomIn={handlePdfZoomIn}
+                    onZoomOut={handlePdfZoomOut}
+                    onZoomReset={handlePdfZoomReset}
+                    onFitPage={handlePdfZoomFitPage}
+                    onFitWidth={handlePdfZoomFitWidth}
+                    onRotate={() => pdfReaderRef.current?.rotateClockwise()}
+                />
+            ) : (
                 <ReaderSettings
                     settings={effectiveReaderSettings}
                     visible={activePanel === 'settings'}

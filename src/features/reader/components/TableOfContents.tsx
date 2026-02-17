@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { ChevronDown, ChevronRight, X, List, BookOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, X, List } from "lucide-react";
 import { cn } from "../../../core";
 import type { TocItem } from "../../../core";
 import { Backdrop } from "../../../ui";
@@ -174,13 +174,13 @@ export function TableOfContents({
 
     return (
         <>
-            <Backdrop visible={visible} onClick={onClose} />
+            <Backdrop visible={visible} onClick={onClose} className="z-[155]" />
 
             {/* Panel - Swiss design: grid-based, full-height on desktop */}
             <div
                 className={cn(
                     // Mobile: bottom sheet
-                    "fixed inset-x-0 bottom-0 z-50",
+                    "fixed inset-x-0 bottom-0 z-[160]",
                     "h-[70vh]",
                     
                     // Desktop: full-height side panel
@@ -241,7 +241,7 @@ export function TableOfContents({
                     {tocItems.length === 0 ? (
                         <div className="flex h-full flex-col items-center justify-center px-8 py-16 text-center">
                             <div className="mb-6 flex h-20 w-20 items-center justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface-muted)]">
-                                <BookOpen className="w-8 h-8 text-[var(--color-text-muted)]" />
+                                <List className="w-8 h-8 text-[var(--color-text-muted)]" />
                             </div>
                             <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-2">
                                 {isPdf ? "No Outline Available" : "No Contents"}

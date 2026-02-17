@@ -20,13 +20,10 @@ import {
     PenLine,
     ChevronLeft,
     ChevronRight,
-    ZoomIn,
-    ZoomOut,
-    RotateCw,
+    SlidersHorizontal,
     Pencil,
     Type,
     Eraser,
-    ChevronDown,
 } from "lucide-react";
 import { HIGHLIGHT_SOLID_COLORS } from "../../../core";
 import { cn, normalizeAuthor } from "../../../core";
@@ -175,7 +172,6 @@ export function WindowTitlebar({
     const [isMaximized, setIsMaximized] = useState(false);
     const [showPageInput, setShowPageInput] = useState(false);
     const [inputPage, setInputPage] = useState("");
-    const [showZoomMenu, setShowZoomMenu] = useState(false);
     const currentChapter = location?.tocItem?.label || location?.pageItem?.label;
 
     const isPdfMode = hideReaderControls && pdfControls;
@@ -183,13 +179,6 @@ export function WindowTitlebar({
     const activePenColor = pdfControls?.penColor || "blue";
     const activePenWidth = pdfControls?.penWidth || 2;
     const isTauriRuntime = isTauri();
-
-    useEffect(() => {
-        if (isPdfMode) {
-            return;
-        }
-        setShowZoomMenu(false);
-    }, [isPdfMode]);
 
     // Listen for window state changes
     useEffect(() => {
@@ -275,7 +264,7 @@ export function WindowTitlebar({
     return (
         <div
             className={cn(
-                "w-full z-50 select-none border-b-2 reader-toolbar",
+                "w-full z-[150] select-none border-b-2 reader-toolbar",
                 "min-h-11 flex flex-col items-stretch gap-1 px-2 py-1",
                 "pt-[max(var(--spacing-xxs),env(safe-area-inset-top))]",
                 "lg:h-11 lg:min-h-0 lg:flex-row lg:items-center lg:justify-between lg:gap-0 lg:py-0",
@@ -465,93 +454,15 @@ export function WindowTitlebar({
                     />
 
                     <button
-                        onClick={pdfControls!.onZoomOut}
-                        className={cn(ICON_BUTTON_CLASS, ICON_BUTTON_INACTIVE_CLASS)}
-                        style={{ color: 'var(--reader-fg)' }}
-                        title="Zoom out"
-                    >
-                        <ZoomOut className="w-4 h-4" />
-                    </button>
-
-                    {/* Zoom with dropdown menu */}
-                    <div className="relative hidden sm:block">
-                        <button
-                            onClick={() => setShowZoomMenu(!showZoomMenu)}
-                            className="px-3 py-1 border-2 border-transparent text-xs font-medium flex items-center gap-1 hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                            style={{ color: 'var(--reader-fg)' }}
-                            title="Zoom options"
-                        >
-                            {pdfControls!.zoomMode === 'page-fit' ? 'Fit Page' :
-                             pdfControls!.zoomMode === 'width-fit' ? 'Fit Width' :
-                             `${Math.round(pdfControls!.zoom * 100)}%`}
-                            <ChevronDown className="w-3 h-3" />
-                        </button>
-                        
-                        {showZoomMenu && (
-                            <>
-                                <div 
-                                    className="fixed inset-0 z-40"
-                                    onClick={() => setShowZoomMenu(false)}
-                                />
-                                <div 
-                                    className="absolute top-full right-0 mt-1 py-1 border border-[var(--color-border)] bg-[var(--color-surface)] z-50 min-w-[var(--layout-popover-min-width)]"
-                                    style={{
-                                        backgroundColor: 'var(--color-surface)',
-                                        borderColor: 'var(--color-border)',
-                                    }}
-                                >
-                                    <button
-                                        onClick={() => {
-                                            pdfControls!.onZoomFitPage?.();
-                                            setShowZoomMenu(false);
-                                        }}
-                                        className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--color-background)] transition-colors"
-                                        style={{ color: 'var(--reader-fg)' }}
-                                    >
-                                        Fit to Page
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            pdfControls!.onZoomFitWidth?.();
-                                            setShowZoomMenu(false);
-                                        }}
-                                        className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--color-background)] transition-colors"
-                                        style={{ color: 'var(--reader-fg)' }}
-                                    >
-                                        Fit to Width
-                                    </button>
-                                    <div className="h-px my-1" style={{ backgroundColor: 'var(--color-border)' }} />
-                                    <button
-                                        onClick={() => {
-                                            pdfControls!.onZoomReset();
-                                            setShowZoomMenu(false);
-                                        }}
-                                        className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--color-background)] transition-colors"
-                                        style={{ color: 'var(--reader-fg)' }}
-                                    >
-                                        100%
-                                    </button>
-                                </div>
-                            </>
+                        onClick={onToggleSettings}
+                        className={cn(
+                            ICON_BUTTON_CLASS,
+                            activePanel === "settings" ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
                         )}
-                    </div>
-
-                    <button
-                        onClick={pdfControls!.onZoomReset}
-                        className="sm:hidden px-3 py-1 border-2 border-transparent text-xs font-medium hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                        style={{ color: 'var(--reader-fg)' }}
-                        title="Reset zoom"
+                        style={{ color: "var(--reader-fg)" }}
+                        title="View settings"
                     >
-                        {Math.round(pdfControls!.zoom * 100)}%
-                    </button>
-
-                    <button
-                        onClick={pdfControls!.onZoomIn}
-                        className={cn(ICON_BUTTON_CLASS, ICON_BUTTON_INACTIVE_CLASS)}
-                        style={{ color: 'var(--reader-fg)' }}
-                        title="Zoom in"
-                    >
-                        <ZoomIn className="w-4 h-4" />
+                        <SlidersHorizontal className="w-4 h-4" />
                     </button>
 
                     <div 
@@ -767,15 +678,6 @@ export function WindowTitlebar({
                         </button>
                     )}
 
-                    <button
-                        onClick={pdfControls!.onRotate}
-                        className={cn(ICON_BUTTON_CLASS, ICON_BUTTON_INACTIVE_CLASS)}
-                        style={{ color: 'var(--reader-fg)' }}
-                        title="Rotate"
-                    >
-                        <RotateCw className="w-4 h-4" />
-                    </button>
-
                     </div>
                 </div>
             ) : (
@@ -855,7 +757,7 @@ export function WindowTitlebar({
                             active={activePanel === "settings"}
                             title="Reading Settings"
                         >
-                            <Type className="w-4 h-4" />
+                            <SlidersHorizontal className="w-4 h-4" />
                         </ToolbarButton>
 
                         <div
