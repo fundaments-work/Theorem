@@ -842,7 +842,6 @@ export function LibraryPage() {
         const booksWithoutCovers = books.filter(
             (book) => (
                 !book.coverPath
-                && !book.coverExtractionDone
                 && !extractedBookIdsRef.current.has(book.id)
             ),
         );

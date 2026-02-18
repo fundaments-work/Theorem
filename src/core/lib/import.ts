@@ -375,7 +375,7 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
     try {
         const extractMetadata = await getExtractMetadataFn();
         metadata = await extractMetadata(buffer, format, filename, id);
-        coverExtractionDone = true;
+        coverExtractionDone = Boolean(metadata?.coverDataUrl);
     } catch (error) {
         console.warn('[Import] Metadata extraction failed, using filename:', error);
         metadata = null;
@@ -531,7 +531,7 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     try {
         const extractMetadata = await getExtractMetadataFn();
         metadata = await extractMetadata(buffer, format, filename, id);
-        coverExtractionDone = true;
+        coverExtractionDone = Boolean(metadata?.coverDataUrl);
     } catch (error) {
         console.warn('[Import] Metadata extraction failed, using filename:', error);
         metadata = null;
