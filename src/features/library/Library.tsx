@@ -1141,10 +1141,13 @@ export function LibraryPage() {
                         {showFilterDropdown && (
                             <>
                                 <div
-                                    className="fixed inset-0 z-10"
+                                    className="fixed inset-0 z-10 sm:hidden"
                                     onClick={() => setShowFilterDropdown(false)}
                                 />
-                                <div className="absolute left-0 top-full z-20 mt-2 w-[min(20rem,calc(100vw-2rem))] border border-[var(--color-border)] bg-[var(--color-surface)] py-2 shadow-lg sm:left-auto sm:right-0">
+                                <div className={cn(
+                                    "absolute top-full z-20 mt-2 border border-[var(--color-border)] bg-[var(--color-surface)] py-2 shadow-lg",
+                                    "fixed inset-x-4 top-[20%] mx-auto w-auto max-w-[20rem] sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80"
+                                )}>
                                     {/* Sort By */}
                                     <div className="px-3 py-2 border-b border-[var(--color-border)]">
                                         <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Sort By</p>

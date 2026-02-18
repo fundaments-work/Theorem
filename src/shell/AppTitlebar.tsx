@@ -9,7 +9,6 @@ import {
     Minus,
     Square,
     X,
-    Menu,
     Search,
     BarChart3,
 } from "lucide-react";
@@ -23,10 +22,10 @@ import {
 } from "../core";
 
 import { useUIStore } from "../core";
+import { TheoremLogo } from "./TheoremLogo";
 
 interface AppTitlebarProps {
     title: string;
-    onMenuClick?: () => void;
     className?: string;
 }
 
@@ -41,7 +40,6 @@ const TITLEBAR_SEARCH_INPUT =
 
 export function AppTitlebar({
     title,
-    onMenuClick,
     className,
 }: AppTitlebarProps) {
     const [isMaximized, setIsMaximized] = useState(false);
@@ -190,17 +188,9 @@ export function AppTitlebar({
                     className="flex items-center gap-2 shrink-0 min-w-0"
                     data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
                 >
-                    {onMenuClick && (
-                        <div className="md:hidden">
-                            <button
-                                onClick={onMenuClick}
-                                className={TITLEBAR_ICON_BUTTON}
-                                title="Toggle Sidebar"
-                            >
-                                <Menu className="w-5 h-5" />
-                            </button>
-                        </div>
-                    )}
+                    <div className="md:hidden">
+                        <TheoremLogo size={26} />
+                    </div>
 
                     <h1 className="font-sans text-sm font-semibold text-[color:var(--color-text-primary)] truncate">
                         {getPageTitle()}

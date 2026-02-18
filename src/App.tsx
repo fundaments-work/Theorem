@@ -1,12 +1,11 @@
 import { Suspense, lazy, useEffect, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { AppTitlebar, Sidebar } from "./shell";
+import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import {
     useUIStore,
     useSettingsStore,
 } from "./core";
 import { isTauriDesktop } from "./core";
-import { cn } from "./core";
 import { initReaderStyles } from "./core";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 
@@ -51,8 +50,6 @@ function PageFallback() {
 function App() {
     const currentRoute = useUIStore((state) => state.currentRoute);
     const setRoute = useUIStore((state) => state.setRoute);
-    const sidebarOpen = useUIStore((state) => state.sidebarOpen);
-    const toggleSidebar = useUIStore((state) => state.toggleSidebar);
     const isDesktopTauriRuntime = isTauriDesktop();
     const mainScrollRef = useRef<HTMLElement>(null);
     const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
@@ -195,35 +192,19 @@ function App() {
                 <Sidebar />
             </div>
 
-            {/* Mobile sidebar overlay - only on small screens */}
-            {sidebarOpen && (
-                <div
-                    className="fixed inset-0 z-[var(--z-backdrop)] bg-[var(--color-overlay-strong)] md:hidden"
-                    onClick={toggleSidebar}
-                />
-            )}
-
-            {/* Mobile sidebar - only on small screens */}
-            <div
-                className={cn(
-                    "fixed inset-y-0 left-0 z-[calc(var(--z-dropdown)+1)] md:hidden",
-                    "transform transition-transform duration-300",
-                    sidebarOpen ? "translate-x-0" : "-translate-x-full",
-                )}
-            >
-                <Sidebar isMobile onClose={toggleSidebar} />
-            </div>
-
             {/* Main Content */}
             <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
-                <AppTitlebar title="Theorem" onMenuClick={toggleSidebar} />
+                <AppTitlebar title="Theorem" />
 
                 {/* Page Content */}
-                <main ref={mainScrollRef} className="flex-1 overflow-y-auto">
+                <main ref={mainScrollRef} className="flex-1 overflow-y-auto pb-16 md:pb-0">
                     <Suspense fallback={<PageFallback />}>
                         {renderPage()}
                     </Suspense>
                 </main>
+
+                {/* Mobile Navigation */}
+                <BottomNav />
             </div>
         </div>
     );
