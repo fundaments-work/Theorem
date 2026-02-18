@@ -14,6 +14,17 @@ import type { ReaderSettings } from '../../../core';
 import { cn } from '../../../core';
 import { getSettingsChanges } from '../../../core';
 
+const FORMAT_EXTENSION_MAP: Record<BookFormat, string> = {
+    epub: 'epub',
+    mobi: 'mobi',
+    azw: 'azw',
+    azw3: 'azw3',
+    fb2: 'fb2',
+    cbz: 'cbz',
+    cbr: 'cbr',
+    pdf: 'pdf',
+};
+
 export interface ReaderViewportHandle {
     next: () => void;
     prev: () => void;
@@ -177,7 +188,8 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
 
         const openFile = async () => {
             try {
-                const filename = file instanceof File ? file.name : 'document.epub';
+                const extension = FORMAT_EXTENSION_MAP[format] ?? 'epub';
+                const filename = file instanceof File ? file.name : `document.${extension}`;
                 await open(
                     file,
                     filename,

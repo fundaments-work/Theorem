@@ -5,7 +5,7 @@ import {
     useUIStore,
     useSettingsStore,
 } from "./core";
-import { isTauri } from "./core";
+import { isTauriDesktop } from "./core";
 import { cn } from "./core";
 import { initReaderStyles } from "./core";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
@@ -53,7 +53,7 @@ function App() {
     const setRoute = useUIStore((state) => state.setRoute);
     const sidebarOpen = useUIStore((state) => state.sidebarOpen);
     const toggleSidebar = useUIStore((state) => state.toggleSidebar);
-    const isTauriRuntime = isTauri();
+    const isDesktopTauriRuntime = isTauriDesktop();
     const mainScrollRef = useRef<HTMLElement>(null);
     const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
     const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
@@ -113,7 +113,7 @@ function App() {
 
     // Ensure the desktop window doesn't start in a mobile-like size.
     useEffect(() => {
-        if (!isTauriRuntime) {
+        if (!isDesktopTauriRuntime) {
             return;
         }
 
@@ -141,7 +141,7 @@ function App() {
         return () => {
             cancelled = true;
         };
-    }, [isTauriRuntime]);
+    }, [isDesktopTauriRuntime]);
 
     // Check if we're in reader mode (full screen, no sidebar)
     const isReaderMode = currentRoute === "reader";
@@ -189,7 +189,7 @@ function App() {
     }
 
     return (
-        <div className="flex h-screen bg-[var(--color-background)]">
+        <div className="flex h-screen min-h-[100dvh] bg-[var(--color-background)]">
             {/* Sidebar - Shows on md screens and up (tablets and laptops) */}
             <div className="hidden md:block">
                 <Sidebar />
@@ -206,7 +206,7 @@ function App() {
             {/* Mobile sidebar - only on small screens */}
             <div
                 className={cn(
-                    "fixed left-0 top-0 h-full z-[calc(var(--z-dropdown)+1)] md:hidden",
+                    "fixed inset-y-0 left-0 z-[calc(var(--z-dropdown)+1)] md:hidden",
                     "transform transition-transform duration-300",
                     sidebarOpen ? "translate-x-0" : "-translate-x-full",
                 )}

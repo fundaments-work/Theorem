@@ -21,8 +21,45 @@ function getStorageKey(id: string, filePath?: string): string {
     return filePath || `id:${id}`;
 }
 
+function safeDecodeURIComponent(value: string): string {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+}
+
+function normalizeFilePath(filePath: string): string {
+    const trimmedPath = filePath.trim();
+    if (!trimmedPath) {
+        return trimmedPath;
+    }
+
+    if (!trimmedPath.startsWith('file://')) {
+        return safeDecodeURIComponent(trimmedPath);
+    }
+
+    try {
+        const url = new URL(trimmedPath);
+        if (url.protocol !== 'file:') {
+            return safeDecodeURIComponent(trimmedPath);
+        }
+
+        const decodedPath = safeDecodeURIComponent(url.pathname);
+        // Windows file URL shape: file:///C:/Users/...
+        if (/^\/[A-Za-z]:\//.test(decodedPath)) {
+            return decodedPath.slice(1);
+        }
+        return decodedPath || trimmedPath;
+    } catch {
+        return trimmedPath;
+    }
+}
+
 function getMimeTypeFromPath(filePath?: string): string {
-    const ext = filePath?.toLowerCase().split('.').pop();
+    const ext = filePath
+        ? normalizeFilePath(filePath).split(/[?#]/, 1)[0].toLowerCase().split('.').pop()
+        : undefined;
     if (ext === 'pdf') {
         return 'application/pdf';
     }
@@ -175,18 +212,19 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
 
     const readPromise = (async () => {
         const fs = await getTauriFs();
+        const normalizedPath = filePath ? normalizeFilePath(filePath) : undefined;
 
         // Check if this is a browser-imported file (virtual path)
-        const isBrowserPath = filePath?.startsWith('browser://');
+        const isBrowserPath = normalizedPath?.startsWith('browser://');
         // Check if this is an IndexedDB URL
-        const isIdbUrl = filePath?.startsWith('idb://');
+        const isIdbUrl = normalizedPath?.startsWith('idb://');
 
         // If we have Tauri and a real file path (not browser:// or idb://), read from there
-        if (fs && filePath && !isIdbUrl && !isBrowserPath) {
+        if (fs && normalizedPath && !isIdbUrl && !isBrowserPath) {
             try {
                 // Check if this is an app storage path - use baseDir for those
-                if (isAppStoragePath(filePath)) {
-                    const relativePath = getRelativeStoragePath(filePath);
+                if (isAppStoragePath(normalizedPath)) {
+                    const relativePath = getRelativeStoragePath(normalizedPath);
                     if (relativePath) {
                         const contents = await fs.readFile(relativePath, {
                             baseDir: fs.BaseDirectory.AppData,
@@ -196,7 +234,7 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
                 }
 
                 // For external files, read directly
-                const contents = await fs.readFile(filePath);
+                const contents = await fs.readFile(normalizedPath);
                 return contents.buffer as ArrayBuffer;
             } catch (error) {
                 console.error('[Storage] Error reading file from Tauri FS:', error);
@@ -205,7 +243,7 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
         }
 
         // Extract ID from idb:// URL if needed, otherwise use the provided id
-        const effectiveId = isIdbUrl ? filePath!.slice(6) : id;
+        const effectiveId = isIdbUrl ? normalizedPath!.slice(6) : id;
 
         // Fallback to IndexedDB (for browser mode and idb:// paths)
         try {
@@ -244,19 +282,20 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
 
     const readPromise = (async () => {
         const fs = await getTauriFs();
+        const normalizedPath = filePath ? normalizeFilePath(filePath) : undefined;
 
         // Check if this is a browser-imported file (virtual path)
-        const isBrowserPath = filePath?.startsWith('browser://');
+        const isBrowserPath = normalizedPath?.startsWith('browser://');
         // Check if this is an IndexedDB URL
-        const isIdbUrl = filePath?.startsWith('idb://');
+        const isIdbUrl = normalizedPath?.startsWith('idb://');
         const mimeType = getMimeTypeFromPath(filePath);
 
         // If we have Tauri and a real file path (not browser:// or idb://), read from there
-        if (fs && filePath && !isIdbUrl && !isBrowserPath) {
+        if (fs && normalizedPath && !isIdbUrl && !isBrowserPath) {
             try {
                 // Check if this is an app storage path - use baseDir for those
-                if (isAppStoragePath(filePath)) {
-                    const relativePath = getRelativeStoragePath(filePath);
+                if (isAppStoragePath(normalizedPath)) {
+                    const relativePath = getRelativeStoragePath(normalizedPath);
                     if (relativePath) {
                         const contents = await fs.readFile(relativePath, {
                             baseDir: fs.BaseDirectory.AppData,
@@ -266,7 +305,7 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
                 }
 
                 // For external files, read directly
-                const contents = await fs.readFile(filePath);
+                const contents = await fs.readFile(normalizedPath);
                 return new Blob([contents], { type: mimeType });
             } catch (error) {
                 console.error('[Storage] Error reading blob from Tauri FS:', error);
@@ -275,7 +314,7 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
         }
 
         // Extract ID from idb:// URL if needed
-        const effectiveId = isIdbUrl ? filePath!.slice(6) : id;
+        const effectiveId = isIdbUrl ? normalizedPath!.slice(6) : id;
 
         // Fallback to IndexedDB (for browser mode and idb:// paths)
         try {
@@ -309,12 +348,13 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
 export async function deleteBookData(id: string, filePath?: string): Promise<void> {
     const fs = await getTauriFs();
     clearBlobCacheForBook(id, filePath);
+    const normalizedPath = filePath ? normalizeFilePath(filePath) : undefined;
     
-    if (fs && filePath && !filePath.startsWith('idb://')) {
+    if (fs && normalizedPath && !normalizedPath.startsWith('idb://')) {
         try {
             // Check if this is an app storage path - use baseDir for those
-            if (isAppStoragePath(filePath)) {
-                const relativePath = getRelativeStoragePath(filePath);
+            if (isAppStoragePath(normalizedPath)) {
+                const relativePath = getRelativeStoragePath(normalizedPath);
                 if (relativePath) {
                     await fs.remove(relativePath, {
                         baseDir: fs.BaseDirectory.AppData
@@ -322,7 +362,7 @@ export async function deleteBookData(id: string, filePath?: string): Promise<voi
                     return;
                 }
             }
-            await fs.remove(filePath);
+            await fs.remove(normalizedPath);
             return;
         } catch (error) {
             console.error('[Storage] Failed to delete from Tauri FS:', error);

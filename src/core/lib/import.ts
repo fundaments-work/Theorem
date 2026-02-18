@@ -79,6 +79,106 @@ async function runWithConcurrency<TInput, TOutput>(
     return results;
 }
 
+function safeDecodeURIComponent(value: string): string {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+}
+
+function normalizeImportPath(filePath: string): string {
+    const trimmedPath = filePath.trim();
+    if (!trimmedPath) {
+        return trimmedPath;
+    }
+
+    if (!trimmedPath.startsWith('file://')) {
+        return safeDecodeURIComponent(trimmedPath);
+    }
+
+    try {
+        const url = new URL(trimmedPath);
+        if (url.protocol !== 'file:') {
+            return safeDecodeURIComponent(trimmedPath);
+        }
+
+        const decodedPath = safeDecodeURIComponent(url.pathname);
+        // Windows file URL shape: file:///C:/Users/...
+        if (/^\/[A-Za-z]:\//.test(decodedPath)) {
+            return decodedPath.slice(1);
+        }
+        return decodedPath || trimmedPath;
+    } catch {
+        return trimmedPath;
+    }
+}
+
+function normalizePathForFormatLookup(filePath: string): string {
+    const normalizedPath = normalizeImportPath(filePath);
+    return normalizedPath.split(/[?#]/, 1)[0].toLowerCase();
+}
+
+function isZipSignature(bytes: Uint8Array): boolean {
+    if (bytes.length < 4) {
+        return false;
+    }
+
+    return bytes[0] === 0x50
+        && bytes[1] === 0x4b
+        && (
+            (bytes[2] === 0x03 && bytes[3] === 0x04)
+            || (bytes[2] === 0x05 && bytes[3] === 0x06)
+            || (bytes[2] === 0x07 && bytes[3] === 0x08)
+        );
+}
+
+function detectFormatFromBuffer(buffer: ArrayBuffer): BookFormat | null {
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length === 0) {
+        return null;
+    }
+
+    if (
+        bytes.length >= 5
+        && bytes[0] === 0x25
+        && bytes[1] === 0x50
+        && bytes[2] === 0x44
+        && bytes[3] === 0x46
+        && bytes[4] === 0x2d
+    ) {
+        return 'pdf';
+    }
+
+    if (bytes.length >= 68) {
+        const mobiMagic = String.fromCharCode(...bytes.slice(60, 68));
+        if (mobiMagic === 'BOOKMOBI') {
+            return 'mobi';
+        }
+    }
+
+    const textProbe = new TextDecoder().decode(bytes.slice(0, Math.min(bytes.length, 4096))).toLowerCase();
+    if (textProbe.includes('<fictionbook')) {
+        return 'fb2';
+    }
+
+    if (isZipSignature(bytes)) {
+        const zipProbe = new TextDecoder().decode(bytes.slice(0, Math.min(bytes.length, 262144))).toLowerCase();
+        if (zipProbe.includes('application/epub+zip') || zipProbe.includes('meta-inf/container.xml') || zipProbe.includes('.opf')) {
+            return 'epub';
+        }
+        if (zipProbe.includes('.fb2')) {
+            return 'fb2';
+        }
+        if (/\.(png|jpe?g|webp|gif|bmp|avif)/.test(zipProbe) && !zipProbe.includes('.opf')) {
+            return 'cbz';
+        }
+        return 'epub';
+    }
+
+    return null;
+}
+
 async function initTauriPlugins() {
     if (!isTauri()) {
         return null; // Return null instead of throwing - caller will handle browser mode
@@ -99,7 +199,7 @@ async function initTauriPlugins() {
  * Note: CBR is recognized for graceful rejection, but not currently importable.
  */
 export function getBookFormat(filePath: string): BookFormat | null {
-    const lowerPath = filePath.toLowerCase();
+    const lowerPath = normalizePathForFormatLookup(filePath);
 
     // Multi-part extensions must be checked before single-part matches.
     if (lowerPath.endsWith('.fb2.zip')) return 'fb2';
@@ -133,8 +233,28 @@ export async function pickBookFiles(): Promise<string[]> {
 
     const selected = await plugins.dialog.open({
         multiple: true,
+        pickerMode: 'document',
+        fileAccessMode: 'copy',
         filters: [
-            { name: 'All eBooks', extensions: ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'fb2.zip', 'cbz', 'pdf'] },
+            {
+                name: 'All eBooks',
+                extensions: [
+                    'epub',
+                    'mobi',
+                    'azw',
+                    'azw3',
+                    'fb2',
+                    'fbz',
+                    'fb2.zip',
+                    'cbz',
+                    'pdf',
+                    'application/epub+zip',
+                    'application/x-mobipocket-ebook',
+                    'application/x-fictionbook+xml',
+                    'application/vnd.comicbook+zip',
+                    'application/pdf',
+                ],
+            },
             { name: 'EPUB', extensions: ['epub'] },
             { name: 'Kindle (MOBI/AZW)', extensions: ['mobi', 'azw', 'azw3'] },
             { name: 'FictionBook (FB2)', extensions: ['fb2', 'fbz', 'fb2.zip'] },
@@ -144,7 +264,26 @@ export async function pickBookFiles(): Promise<string[]> {
     });
 
     if (!selected) return [];
-    return Array.isArray(selected) ? selected : [selected];
+    const entries = (Array.isArray(selected) ? selected : [selected]) as unknown[];
+    const paths: string[] = [];
+
+    for (const entry of entries) {
+        if (typeof entry === 'string') {
+            paths.push(normalizeImportPath(entry));
+            continue;
+        }
+
+        if (
+            entry
+            && typeof entry === 'object'
+            && 'path' in entry
+            && typeof (entry as { path?: unknown }).path === 'string'
+        ) {
+            paths.push(normalizeImportPath((entry as { path: string }).path));
+        }
+    }
+
+    return paths;
 }
 
 /**
@@ -274,15 +413,16 @@ export async function importBooksFromFiles(files: File[]): Promise<Book[]> {
  * Uses the storage abstraction to handle both Tauri paths and IndexedDB
  */
 export async function readBookFile(filePath: string, bookId?: string): Promise<ArrayBuffer> {
+    const normalizedFilePath = normalizeImportPath(filePath);
     try {
         // Use getBookData which properly handles both Tauri paths and IndexedDB URLs
-        const data = await getBookData(bookId || '', filePath);
+        const data = await getBookData(bookId || '', normalizedFilePath);
         if (!data) {
             throw new Error('Could not read book file from storage - data not found');
         }
         return data;
     } catch (error) {
-        console.error('[Import] Error reading file:', filePath, error);
+        console.error('[Import] Error reading file:', normalizedFilePath, error);
         throw new Error(`Failed to read book file: ${error}`);
     }
 }
@@ -314,15 +454,8 @@ export function extractFilenameMetadata(filePath: string): { title: string; auth
  * Extracts metadata and cover image using foliate-js
  */
 export async function createBookEntry(filePath: string): Promise<Book | null> {
-    const format = getBookFormat(filePath);
-    if (!format) {
-        console.error('Unsupported file format:', filePath);
-        return null;
-    }
-    if (!isImportFormatSupported(format)) {
-        console.error('[Import] CBR archives are not supported in this build:', filePath);
-        return null;
-    }
+    const normalizedFilePath = normalizeImportPath(filePath);
+    let format = getBookFormat(normalizedFilePath);
 
     const plugins = await initTauriPlugins();
     if (!plugins?.fs) throw new Error('FS plugin not available - this function requires Tauri');
@@ -331,7 +464,7 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     // Get file stats
     let fileSize = 0;
     try {
-        const stats = await fs.stat(filePath);
+        const stats = await fs.stat(normalizedFilePath);
         fileSize = Number(stats.size);
     } catch {
         // Stats not available, continue without size
@@ -339,13 +472,25 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
 
     // Check file size - warn if very large (> 100MB)
     if (fileSize > 100 * 1024 * 1024) {
-        console.warn('Large file detected:', filePath, formatFileSize(fileSize));
+        console.warn('Large file detected:', normalizedFilePath, formatFileSize(fileSize));
     }
 
     // Read file content for storage
-    const buffer = await readBookFile(filePath);
+    const buffer = await readBookFile(normalizedFilePath);
     if (!buffer || buffer.byteLength === 0) {
-        console.error('Empty file or failed to read:', filePath);
+        console.error('Empty file or failed to read:', normalizedFilePath);
+        return null;
+    }
+
+    if (!format) {
+        format = detectFormatFromBuffer(buffer);
+    }
+    if (!format) {
+        console.error('Unsupported file format:', normalizedFilePath);
+        return null;
+    }
+    if (!isImportFormatSupported(format)) {
+        console.error('[Import] CBR archives are not supported in this build:', normalizedFilePath);
         return null;
     }
     const contentHash = await computeContentHash(buffer);
@@ -356,8 +501,8 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     const storagePath = await saveBookData(id, buffer);
 
     // Get filename for fallback metadata
-    const filename = filePath.split(/[/\\]/).pop() || 'Unknown.epub';
-    const filenameMetadata = extractFilenameMetadata(filePath);
+    const filename = normalizedFilePath.split(/[/\\]/).pop() || 'Unknown.epub';
+    const filenameMetadata = extractFilenameMetadata(normalizedFilePath);
 
     // Extract metadata and cover from the book file
     let metadata;
@@ -377,7 +522,7 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         id,
         title: metadata?.title || filenameMetadata.title,
         author: metadata?.author || "",
-        filePath,
+        filePath: normalizedFilePath,
         storagePath,
         format,
         contentHash,

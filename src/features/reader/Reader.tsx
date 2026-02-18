@@ -16,6 +16,7 @@ import {
     useUIStore,
     vocabularyTermFromLookup,
     type Annotation,
+    type BookFormat,
     type DictionaryLookupResult,
     type DocLocation,
     type DocMetadata,
@@ -68,6 +69,26 @@ function resolvePdfTargetPage(target: string): number | null {
         return Math.floor(numericValue);
     }
     return null;
+}
+
+function getMimeTypeForBookFormat(format: BookFormat): string {
+    switch (format) {
+        case "epub":
+            return "application/epub+zip";
+        case "mobi":
+        case "azw":
+        case "azw3":
+            return "application/x-mobipocket-ebook";
+        case "fb2":
+            return "application/x-fictionbook+xml";
+        case "cbz":
+            return "application/vnd.comicbook+zip";
+        case "pdf":
+            return "application/pdf";
+        case "cbr":
+        default:
+            return "application/octet-stream";
+    }
 }
 
 function BookReaderPage() {
@@ -387,7 +408,11 @@ function BookReaderPage() {
                 if (!blob) {
                     throw new Error('Could not read book file from storage.');
                 }
-                setFile(blob);
+                const expectedMimeType = getMimeTypeForBookFormat(book.format);
+                const typedBlob = blob.type === expectedMimeType
+                    ? blob
+                    : blob.slice(0, blob.size, expectedMimeType);
+                setFile(typedBlob);
             } catch (err) {
                 if (!isCancelled) {
                     setLoadError(err instanceof Error ? err.message : 'Unknown error loading book');
@@ -740,9 +765,38 @@ function BookReaderPage() {
         }
     }, []);
 
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        const state = window.history.state;
+        if (!(state && typeof state === "object" && state.__theorem_reader_entry === true)) {
+            window.history.pushState(
+                {
+                    ...(state && typeof state === "object" ? state : {}),
+                    __theorem_reader_entry: true,
+                },
+                "",
+            );
+        }
+
+        const handlePopState = () => {
+            setRoute("library");
+        };
+
+        window.addEventListener("popstate", handlePopState);
+        return () => {
+            window.removeEventListener("popstate", handlePopState);
+        };
+    }, [setRoute]);
 
     const handleBack = useCallback(() => {
-        setRoute('library');
+        if (typeof window !== "undefined" && window.history.length > 1) {
+            window.history.back();
+            return;
+        }
+        setRoute("library");
     }, [setRoute]);
 
     const handleError = useCallback((err: Error) => {
@@ -1694,6 +1748,7 @@ function BookReaderPage() {
                         ref={readerRef}
                         file={file}
                         settings={effectiveReaderSettings}
+                        format={currentBook?.format}
                         initialLocation={initialLocation}
                         savedLocations={getBook(currentBookId || '')?.locations}
                         onReady={handleReady}

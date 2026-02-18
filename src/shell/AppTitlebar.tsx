@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "../core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { isTauri } from "../core";
+import { isMobile, isTauri } from "../core";
 import {
     getSearchPlaceholder,
     hasSearchDomain,
@@ -52,6 +52,8 @@ export function AppTitlebar({
     const commitSearch = useUIStore((state) => state.commitSearch);
     const setRoute = useUIStore((state) => state.setRoute);
     const isTauriRuntime = isTauri();
+    const isMobileRuntime = isMobile();
+    const showDesktopWindowControls = isTauriRuntime && !isMobileRuntime;
     const searchDomain = resolveSearchDomain({
         placement: "appTitlebar",
         route: currentRoute,
@@ -60,7 +62,7 @@ export function AppTitlebar({
     const searchPlaceholder = getSearchPlaceholder(searchDomain);
 
     useEffect(() => {
-        if (!isTauriRuntime) {
+        if (!showDesktopWindowControls) {
             return;
         }
 
@@ -85,7 +87,7 @@ export function AppTitlebar({
         updateMaximizedState();
 
         return () => window.removeEventListener("resize", handleResize);
-    }, [isTauriRuntime]);
+    }, [showDesktopWindowControls]);
 
     useEffect(() => {
         setIsMobileSearchOpen(false);
@@ -98,7 +100,7 @@ export function AppTitlebar({
     }, [isSearchVisible]);
 
     const handleMinimize = async () => {
-        if (!isTauriRuntime) {
+        if (!showDesktopWindowControls) {
             return;
         }
         try {
@@ -110,7 +112,7 @@ export function AppTitlebar({
     };
 
     const handleMaximize = async () => {
-        if (!isTauriRuntime) {
+        if (!showDesktopWindowControls) {
             return;
         }
         try {
@@ -126,7 +128,7 @@ export function AppTitlebar({
     };
 
     const handleClose = async () => {
-        if (!isTauriRuntime) {
+        if (!showDesktopWindowControls) {
             return;
         }
         try {
@@ -174,14 +176,20 @@ export function AppTitlebar({
         <div
             className={cn(
                 "w-full z-50 select-none border-b-2 border-[var(--color-border)] bg-[var(--color-surface)]",
-                "px-4 sm:px-5 py-3 lg:h-16",
+                "px-3 sm:px-5 pb-3 pt-[calc(env(safe-area-inset-top)+var(--spacing-sm))] lg:h-16 lg:py-3",
                 className
             )}
-            data-tauri-drag-region
+            data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
         >
-            <div className="flex items-center justify-between gap-3 sm:gap-4" data-tauri-drag-region>
+            <div
+                className="flex items-center justify-between gap-3 sm:gap-4"
+                data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
+            >
                 {/* Left side - Menu + Title */}
-                <div className="flex items-center gap-2 shrink-0 min-w-0" data-tauri-drag-region>
+                <div
+                    className="flex items-center gap-2 shrink-0 min-w-0"
+                    data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
+                >
                     {onMenuClick && (
                         <div className="md:hidden">
                             <button
@@ -201,7 +209,10 @@ export function AppTitlebar({
 
                 {/* Center - Search (desktop) */}
                 {isSearchVisible && (
-                    <div className="hidden lg:flex lg:flex-1 lg:min-w-[18rem] lg:max-w-3xl" data-tauri-drag-region>
+                    <div
+                        className="hidden lg:flex lg:flex-1 lg:min-w-[18rem] lg:max-w-3xl"
+                        data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
+                    >
                         <div className="relative w-full">
                             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                             <input
@@ -250,7 +261,7 @@ export function AppTitlebar({
                         <BarChart3 className="w-5 h-5" />
                     </button>
 
-                    {isTauriRuntime && (
+                    {showDesktopWindowControls && (
                         <>
                             <div className="hidden sm:block w-px h-5 bg-[var(--color-border)] mx-1" />
                             <button

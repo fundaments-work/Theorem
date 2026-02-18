@@ -85,9 +85,14 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
             className={cn(
                 "flex h-full flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]",
                 "transition-[width] duration-220 ease-out",
-                (sidebarOpen || isMobile)
-                    ? "w-[var(--layout-sidebar-width)]"
-                    : "w-[var(--layout-sidebar-collapsed-width)]",
+                isMobile && "h-[100dvh] pt-[calc(env(safe-area-inset-top)+var(--spacing-sm))] pb-[calc(env(safe-area-inset-bottom)+var(--spacing-sm))]",
+                isMobile
+                    ? "w-[min(var(--layout-sidebar-width),calc(100vw-env(safe-area-inset-left)-env(safe-area-inset-right)-var(--spacing-lg)))]"
+                    : (
+                        (sidebarOpen || isMobile)
+                            ? "w-[var(--layout-sidebar-width)]"
+                            : "w-[var(--layout-sidebar-collapsed-width)]"
+                    ),
             )}
         >
             <div

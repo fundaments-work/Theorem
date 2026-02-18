@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { HIGHLIGHT_SOLID_COLORS } from "../../../core";
 import { cn, normalizeAuthor } from "../../../core";
-import { isTauri } from "../../../core";
+import { isMobile, isTauri } from "../../../core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { DocMetadata, DocLocation, HighlightColor } from "../../../core";
 
@@ -179,10 +179,12 @@ export function WindowTitlebar({
     const activePenColor = pdfControls?.penColor || "blue";
     const activePenWidth = pdfControls?.penWidth || 2;
     const isTauriRuntime = isTauri();
+    const isMobileRuntime = isMobile();
+    const showDesktopWindowControls = isTauriRuntime && !isMobileRuntime;
 
     // Listen for window state changes
     useEffect(() => {
-        if (!isTauriRuntime) {
+        if (!showDesktopWindowControls) {
             return;
         }
 
@@ -207,7 +209,7 @@ export function WindowTitlebar({
         updateMaximizedState();
 
         return () => window.removeEventListener("resize", handleResize);
-    }, [isTauriRuntime]);
+    }, [showDesktopWindowControls]);
 
     const formatLocation = () => {
         if (!location) return null;
@@ -222,7 +224,7 @@ export function WindowTitlebar({
     };
 
     const handleMinimize = async () => {
-        if (!isTauriRuntime) {
+        if (!showDesktopWindowControls) {
             return;
         }
         try {
@@ -234,7 +236,7 @@ export function WindowTitlebar({
     };
 
     const handleMaximize = async () => {
-        if (!isTauriRuntime) {
+        if (!showDesktopWindowControls) {
             return;
         }
         try {
@@ -250,7 +252,7 @@ export function WindowTitlebar({
     };
 
     const handleClose = async () => {
-        if (!isTauriRuntime) {
+        if (!showDesktopWindowControls) {
             return;
         }
         try {
@@ -266,7 +268,7 @@ export function WindowTitlebar({
             className={cn(
                 "w-full z-[150] select-none border-b-2 reader-toolbar",
                 "min-h-11 flex flex-col items-stretch gap-1 px-2 py-1",
-                "pt-[max(var(--spacing-xxs),env(safe-area-inset-top))]",
+                "pt-[calc(env(safe-area-inset-top)+var(--spacing-xs))]",
                 "lg:h-11 lg:min-h-0 lg:flex-row lg:items-center lg:justify-between lg:gap-0 lg:py-0",
                 "bg-[var(--color-surface)] border-[var(--color-border)]",
                 className
@@ -781,7 +783,7 @@ export function WindowTitlebar({
             <div
                 className={cn(
                     "overflow-x-auto overflow-y-visible reader-toolbar-scroll",
-                    isTauriRuntime
+                    showDesktopWindowControls
                         ? "hidden lg:block lg:w-auto"
                         : onToggleFullscreen
                             ? "hidden xl:block xl:w-auto"
@@ -795,7 +797,7 @@ export function WindowTitlebar({
                     )}
                 >
                     {/* Window Controls */}
-                    {isTauriRuntime && (
+                    {showDesktopWindowControls && (
                         <div
                             className="hidden lg:flex items-center gap-0.5 rounded-lg  px-1 py-0.5 mr-1"
                             style={{
@@ -837,7 +839,7 @@ export function WindowTitlebar({
                         </div>
                     )}
 
-                    {!isTauriRuntime && onToggleFullscreen && (
+                    {!showDesktopWindowControls && !isTauriRuntime && onToggleFullscreen && (
                         <div
                             className="hidden xl:flex items-center gap-0.5 rounded-lg border px-1 py-0.5 mr-1"
                             style={{
