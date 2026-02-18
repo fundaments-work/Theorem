@@ -52,6 +52,16 @@ Notes:
 - Run root `pnpm` commands from repo root.
 - No meaningful automated test suite is configured (`pnpm test` is placeholder).
 
+## Git Ignore Policy
+- Treat generated/build outputs as uncommitted artifacts.
+- Never commit local SDK/signing files or Android machine-local config.
+- Keep these untracked by default:
+  - `node_modules/`, `.pnpm-store/`, `dist/`, `dist-ssr/`, `coverage/`, `.vite/`
+  - `target/`, `src-tauri/target/`, `src-tauri/gen/schemas/`
+  - `src-tauri/gen/android/` (entire generated Android Studio project)
+  - `*.jks`, `*.keystore`, `*.aab`, `*.apk`, `output-metadata.json`
+- If your release workflow needs Android project files versioned, remove `src-tauri/gen/android/` from `.gitignore` and use the generated project’s nested `.gitignore` files (`src-tauri/gen/android/.gitignore`, `src-tauri/gen/android/app/.gitignore`) as baseline.
+
 ## Architecture Rules
 
 ### Routing + page wiring

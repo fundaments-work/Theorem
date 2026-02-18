@@ -7,10 +7,35 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Node / frontend
 node_modules
+.pnpm-store
 dist
 dist-ssr
+coverage
+.vite
+*.tsbuildinfo
 *.local
+.env
+.env.*
+!.env.example
+
+# Rust / Tauri build artifacts
+target
+src-tauri/target
+
+# Tauri generated schema files
+src-tauri/gen/schemas
+
+# Android (Tauri generated project)
+src-tauri/gen/android/
+
+# Android signing/package outputs
+*.jks
+*.keystore
+*.aab
+*.apk
+output-metadata.json
 
 # Editor directories and files
 .vscode/*

@@ -8,7 +8,8 @@ import { isTauri } from './env';
 
 const STORE_NAME = 'theorem-books';
 const COVERS_STORE = 'theorem-covers';
-const BLOB_CACHE_LIMIT = 4;
+// Cache limit: 4 for desktop, 2 for mobile (to save memory)
+const BLOB_CACHE_LIMIT = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 2 : 4;
 
 // Cache for Tauri FS module
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;

@@ -6,7 +6,7 @@
 
 import type { Book, BookFormat } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { isTauri } from './env';
+import { isTauri, isMobile } from './env';
 import { saveBookData, getBookData } from './storage';
 import { formatFileSize } from './utils';
 
@@ -231,59 +231,80 @@ export async function pickBookFiles(): Promise<string[]> {
     const plugins = await initTauriPlugins();
     if (!plugins?.dialog) throw new Error('Dialog plugin not available');
 
-    const selected = await plugins.dialog.open({
-        multiple: true,
-        pickerMode: 'document',
-        fileAccessMode: 'copy',
-        filters: [
-            {
-                name: 'All eBooks',
-                extensions: [
-                    'epub',
-                    'mobi',
-                    'azw',
-                    'azw3',
-                    'fb2',
-                    'fbz',
-                    'fb2.zip',
-                    'cbz',
-                    'pdf',
-                    'application/epub+zip',
-                    'application/x-mobipocket-ebook',
-                    'application/x-fictionbook+xml',
-                    'application/vnd.comicbook+zip',
-                    'application/pdf',
-                ],
-            },
-            { name: 'EPUB', extensions: ['epub'] },
-            { name: 'Kindle (MOBI/AZW)', extensions: ['mobi', 'azw', 'azw3'] },
-            { name: 'FictionBook (FB2)', extensions: ['fb2', 'fbz', 'fb2.zip'] },
-            { name: 'Comics (CBZ)', extensions: ['cbz'] },
-            { name: 'PDF', extensions: ['pdf'] },
-        ],
-    });
+    try {
+        const selected = await plugins.dialog.open({
+            multiple: true,
+            pickerMode: 'document',
+            fileAccessMode: 'copy',
+            filters: [
+                {
+                    name: 'All eBooks',
+                    extensions: [
+                        'epub',
+                        'mobi',
+                        'azw',
+                        'azw3',
+                        'fb2',
+                        'fbz',
+                        'fb2.zip',
+                        'cbz',
+                        'pdf',
+                        'application/epub+zip',
+                        'application/x-mobipocket-ebook',
+                        'application/x-fictionbook+xml',
+                        'application/vnd.comicbook+zip',
+                        'application/pdf',
+                    ],
+                },
+                { name: 'EPUB', extensions: ['epub'] },
+                { name: 'Kindle (MOBI/AZW)', extensions: ['mobi', 'azw', 'azw3'] },
+                { name: 'FictionBook (FB2)', extensions: ['fb2', 'fbz', 'fb2.zip'] },
+                { name: 'Comics (CBZ)', extensions: ['cbz'] },
+                { name: 'PDF', extensions: ['pdf'] },
+            ],
+        });
 
-    if (!selected) return [];
-    const entries = (Array.isArray(selected) ? selected : [selected]) as unknown[];
-    const paths: string[] = [];
-
-    for (const entry of entries) {
-        if (typeof entry === 'string') {
-            paths.push(normalizeImportPath(entry));
-            continue;
+        // Debug logging for mobile
+        if (isMobile()) {
+            console.log('[pickBookFiles] Dialog returned:', selected);
+            console.log('[pickBookFiles] Type:', typeof selected);
         }
 
-        if (
-            entry
-            && typeof entry === 'object'
-            && 'path' in entry
-            && typeof (entry as { path?: unknown }).path === 'string'
-        ) {
-            paths.push(normalizeImportPath((entry as { path: string }).path));
+        if (!selected) return [];
+        const entries = (Array.isArray(selected) ? selected : [selected]) as unknown[];
+        const paths: string[] = [];
+
+        for (const entry of entries) {
+            if (typeof entry === 'string') {
+                // On Android, dialog may return content:// URIs which we need to handle differently
+                if (entry.startsWith('content://')) {
+                    paths.push(entry);
+                } else {
+                    paths.push(normalizeImportPath(entry));
+                }
+                continue;
+            }
+
+            if (entry && typeof entry === 'object') {
+                // Handle object with path property (desktop)
+                if ('path' in entry && typeof (entry as { path?: unknown }).path === 'string') {
+                    paths.push(normalizeImportPath((entry as { path: string }).path));
+                    continue;
+                }
+                
+                // Handle object with uri property (some mobile versions)
+                if ('uri' in entry && typeof (entry as { uri?: unknown }).uri === 'string') {
+                    const uri = (entry as { uri: string }).uri;
+                    paths.push(uri.startsWith('content://') ? uri : normalizeImportPath(uri));
+                }
+            }
         }
+
+        return paths;
+    } catch (error) {
+        console.error('[pickBookFiles] Dialog error:', error);
+        throw error;
     }
-
-    return paths;
 }
 
 /**
@@ -569,13 +590,22 @@ export async function importBooks(filePaths: string[]): Promise<Book[]> {
  * Works in both Tauri and browser environments
  */
 export async function pickAndImportBooks(): Promise<Book[]> {
-    if (isTauri()) {
-        // Tauri: use native file picker
+    if (isTauri() && !isMobile()) {
+        // Desktop Tauri: use native file picker
         const filePaths = await pickBookFiles();
         if (filePaths.length === 0) {
             return [];
         }
         return importBooks(filePaths);
+    } else if (isTauri() && isMobile()) {
+        // Mobile Tauri (Android): Use browser file picker for better compatibility
+        // The native dialog on Android returns content:// URIs which are hard to handle
+        console.log('[pickAndImportBooks] Using browser file picker for mobile');
+        const files = await pickBookFilesBrowser();
+        if (files.length === 0) {
+            return [];
+        }
+        return importBooksFromFiles(files);
     } else {
         // Browser: use HTML5 file picker
         const files = await pickBookFilesBrowser();

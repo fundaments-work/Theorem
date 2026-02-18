@@ -8,7 +8,9 @@ import {
     cn,
     getBookBlob,
     getBookData,
+    isMobile,
     isTauri,
+    useAndroidBackButton,
     useVocabularyStore,
     useLibraryStore,
     useRssStore,
@@ -385,20 +387,26 @@ function BookReaderPage() {
                 const storagePath = book.storagePath || book.filePath;
 
                 if (book.format === 'pdf') {
+                    // On mobile, always load PDF data into memory - never rely on direct path access
+                    // because mobile file systems may have permission/URI issues
                     const canPdfEngineReadDirectPath = isTauri()
+                        && !isMobile()
                         && !!storagePath
                         && !storagePath.startsWith('browser://')
                         && !storagePath.startsWith('idb://');
 
                     if (canPdfEngineReadDirectPath) {
+                        console.log('[Reader] Using direct path for PDF:', storagePath);
                         return;
                     }
 
+                    console.log('[Reader] Loading PDF data into memory for mobile compatibility');
                     const data = await getBookData(book.id, storagePath);
                     if (isCancelled) return;
-                    if (!data) {
-                        throw new Error('Could not read PDF file from storage.');
+                    if (!data || data.byteLength === 0) {
+                        throw new Error('Could not read PDF file from storage - data is empty.');
                     }
+                    console.log('[Reader] PDF data loaded, size:', data.byteLength);
                     setPdfData(new Uint8Array(data));
                     return;
                 }
@@ -765,8 +773,34 @@ function BookReaderPage() {
         }
     }, []);
 
+    // Handle Android back button
+    useAndroidBackButton(() => {
+        // Check if any panel is open - close them first
+        if (activePanel) {
+            setActivePanel(null);
+            return true; // Handled, don't exit app
+        }
+        
+        // Close color picker if open
+        if (showColorPicker) {
+            setShowColorPicker(false);
+            return true;
+        }
+        
+        // Close note editor if open
+        if (showNoteEditor) {
+            setShowNoteEditor(false);
+            return true;
+        }
+        
+        // No panels open - go back to library
+        setRoute("library");
+        return true; // Handled, stay in app (go to library)
+    });
+
+    // Web-based back button handling for desktop browsers
     useEffect(() => {
-        if (typeof window === "undefined") {
+        if (typeof window === "undefined" || isMobile()) {
             return;
         }
 

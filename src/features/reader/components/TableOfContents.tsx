@@ -179,13 +179,13 @@ export function TableOfContents({
             {/* Panel - Swiss design: grid-based, full-height on desktop */}
             <div
                 className={cn(
-                    // Mobile: bottom sheet
+                    // Mobile: bottom sheet (70% height)
                     "fixed inset-x-0 bottom-0 z-[160]",
-                    "h-[70vh]",
+                    "h-[70vh] max-h-[70vh]",
                     
                     // Desktop: full-height side panel
                     "sm:inset-y-0 sm:left-0 sm:right-auto sm:top-0 sm:bottom-0",
-                    "h-screen ",
+                    "sm:h-screen sm:max-h-screen",
                     "sm:w-[360px] sm:max-w-[min(360px,40vw)]",
                     
                     // Design system

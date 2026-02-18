@@ -247,7 +247,7 @@ function BookCard({
         return (
             <ContextMenu items={contextMenuItems}>
                 <div
-                    className="group flex items-center gap-4 p-3 w-full rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors cursor-pointer select-none"
+                    className="group flex w-full items-center gap-3 rounded-lg p-3 transition-colors hover:bg-[var(--color-surface-muted)] sm:gap-4 cursor-pointer select-none"
                     onClick={handleCardClick}
                 >
                     {/* Cover Image */}
@@ -295,10 +295,15 @@ function BookCard({
                                 </div>
                             )}
                         </div>
+                        {book.progress > 0 && (
+                            <p className="mt-1 text-[0.6875rem] text-[color:var(--color-text-muted)] sm:hidden">
+                                {formatProgress(book.progress)}
+                            </p>
+                        )}
                     </div>
 
                     {/* Progress */}
-                    <div className="text-right">
+                    <div className="hidden text-right sm:block">
                         {book.progress > 0 ? (
                             <p className="text-sm text-[color:var(--color-text-secondary)]">
                                 {formatProgress(book.progress)}
@@ -399,7 +404,7 @@ function ImportButton({
         <button
             onClick={onImport}
             disabled={isLoading}
-            className={cn(TOOLBAR_BUTTON_PRIMARY, "px-4 py-2")}
+            className={cn(TOOLBAR_BUTTON_PRIMARY, "px-3 py-2 sm:px-4")}
         >
             {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1067,11 +1072,11 @@ export function LibraryPage() {
     }
 
     return (
-        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
+        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             {/* Header */}
-            <div className="flex items-center justify-between mb-10">
-                <div>
-                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
+            <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                    <h1 className="m-0 break-words font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         {selectedShelf ? selectedShelf.name : showFavoritesOnly ? "Favorites" : "Library"}
                     </h1>
                     <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
@@ -1091,7 +1096,7 @@ export function LibraryPage() {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3">
                     {/* View Mode Toggle */}
                     <button
                         onClick={toggleViewMode}
@@ -1107,7 +1112,7 @@ export function LibraryPage() {
                         <button
                             onClick={handleScanFolder}
                             disabled={isScanning}
-                            className={cn(TOOLBAR_BUTTON_BASE, "px-4 py-2")}
+                            className={cn(TOOLBAR_BUTTON_BASE, "px-3 py-2 sm:px-4")}
                             title="Scan Folder"
                         >
                             {isScanning ? (
@@ -1125,7 +1130,7 @@ export function LibraryPage() {
                             onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                             className={cn(
                                 TOOLBAR_BUTTON_BASE,
-                                "px-4 py-2",
+                                "px-3 py-2 sm:px-4",
                                 showFilterDropdown && "border-[var(--color-accent)] bg-[var(--color-accent-light)] text-[color:var(--color-text-primary)]"
                             )}
                         >
@@ -1140,7 +1145,7 @@ export function LibraryPage() {
                                     className="fixed inset-0 z-10"
                                     onClick={() => setShowFilterDropdown(false)}
                                 />
-                                <div className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg z-20 py-2">
+                                <div className="absolute left-0 top-full z-20 mt-2 w-[min(20rem,calc(100vw-2rem))] border border-[var(--color-border)] bg-[var(--color-surface)] py-2 shadow-lg sm:left-auto sm:right-0">
                                     {/* Sort By */}
                                     <div className="px-3 py-2 border-b border-[var(--color-border)]">
                                         <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Sort By</p>
@@ -1357,7 +1362,7 @@ export function LibraryPage() {
                         ))}
                     </div>
                 ) : settings.libraryViewMode === "compact" ? (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
                         {sortedBooks.map((book) => (
                             <BookCard
                                 key={book.id}
@@ -1374,7 +1379,7 @@ export function LibraryPage() {
                         ))}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 sm:gap-x-6 sm:gap-y-10 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                         {sortedBooks.map((book) => (
                             <BookCard
                                 key={book.id}

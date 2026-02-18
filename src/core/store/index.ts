@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { applyReaderStyles, initReaderStyles } from "../lib/design-tokens";
 import { syncVaultMarkdownSnapshot } from "../lib/vault-sync";
+import { isMobile } from "../lib/env";
 import {
     lookupDictionaryTerm,
     vocabularyTermFromLookup,
@@ -127,7 +128,7 @@ interface UIStore extends UIState {
 export const useUIStore = create<UIStore>((set) => ({
     currentRoute: "library",
     currentBookId: undefined,
-    sidebarOpen: true,
+    sidebarOpen: !isMobile(), // Closed by default on mobile, open on desktop
     readerToolbarVisible: true,
     searchQuery: "",
     searchCommittedQuery: "",

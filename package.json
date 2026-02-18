@@ -19,6 +19,7 @@
         "@mozilla/readability": "^0.6.0",
         "@tanstack/react-virtual": "^3.13.18",
         "@tauri-apps/api": "^2.0.0",
+        "@tauri-apps/plugin-app": "2.0.0-alpha.1",
         "@tauri-apps/plugin-dialog": "^2.0.0",
         "@tauri-apps/plugin-fs": "^2.0.0",
         "@tauri-apps/plugin-opener": "^2.0.0",

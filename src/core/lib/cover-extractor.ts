@@ -7,6 +7,7 @@ import type { BookFormat } from "../types";
 import { saveCoverImage } from "./storage";
 import { getConfiguredPdfJs } from "./pdfjs-runtime";
 import { normalizeAuthor } from "./utils";
+import { isMobile } from "./env";
 
 /**
  * Extracted metadata from a book file
@@ -92,18 +93,28 @@ export async function extractMetadata(
             
             // Try to extract first page as cover thumbnail
             try {
+                console.log("[CoverExtractor] Extracting PDF cover, mobile:", isMobile());
                 const page = await pdf.getPage(1);
-                const viewport = page.getViewport({ scale: 0.5 });
+                const viewport = page.getViewport({ scale: isMobile() ? 0.3 : 0.5 }); // Smaller scale on mobile for performance
                 const canvas = document.createElement("canvas");
                 const ctx = canvas.getContext("2d");
                 
                 if (ctx) {
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
+                    // Limit canvas size on mobile to avoid memory issues
+                    const maxDimension = isMobile() ? 600 : 1000;
+                    let scale = isMobile() ? 0.3 : 0.5;
+                    if (viewport.width > maxDimension || viewport.height > maxDimension) {
+                        const maxViewportDim = Math.max(viewport.width, viewport.height);
+                        scale = (maxDimension / maxViewportDim) * scale;
+                    }
+                    const adjustedViewport = page.getViewport({ scale });
+                    
+                    canvas.width = adjustedViewport.width;
+                    canvas.height = adjustedViewport.height;
                     
                     await page.render({
                         canvasContext: ctx,
-                        viewport: viewport,
+                        viewport: adjustedViewport,
                     }).promise;
                     
                     // Convert canvas to blob
@@ -113,6 +124,7 @@ export async function extractMetadata(
                     
                     if (blob && bookId) {
                         result.coverDataUrl = await saveCoverImage(bookId, blob);
+                        console.log("[CoverExtractor] PDF cover saved successfully");
                     }
                     
                     page.cleanup();
@@ -142,10 +154,20 @@ export async function extractMetadata(
         // Use relative path to avoid MIME type issues with Vite dynamic imports
         const { makeBook } = await import("../../features/reader/foliate-js/view.js");
         const mimeType = getMimeType(format);
-        const file = new File([data], filename, { type: mimeType });
+        
+        // On mobile, creating a File from ArrayBuffer may not work well with foliate-js
+        // Try to use a Blob instead, which is more compatible
+        let bookInput: File | Blob;
+        if (isMobile()) {
+            // For mobile, use Blob which is more compatible with synthetic file objects
+            bookInput = new Blob([data], { type: mimeType });
+            console.log("[CoverExtractor] Using Blob for mobile compatibility");
+        } else {
+            bookInput = new File([data], filename, { type: mimeType });
+        }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const book: any = await makeBook(file);
+        const book: any = await makeBook(bookInput);
 
         // Extract metadata
         if (book.metadata) {
@@ -188,6 +210,7 @@ export async function extractMetadata(
             title: result.title,
             author: result.author,
             hasCover: !!result.coverDataUrl,
+            mobile: isMobile(),
         });
 
         return result;
