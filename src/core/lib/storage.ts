@@ -1,25 +1,37 @@
 /**
  * Storage Utilities
- * Tauri-native file system storage with SQLite metadata
+ * SQLite-first storage in Tauri with IndexedDB web fallback.
  */
 
 import { get, set, del } from 'idb-keyval';
 import { isTauri } from './env';
+import {
+    sqliteDeleteBookData,
+    sqliteDeleteCoverImage,
+    sqliteGetBookData,
+    sqliteGetCoverImage,
+    sqliteGetMaterializedBookPath,
+    sqliteGetStorageStats,
+    sqliteSaveBookData,
+    sqliteSaveCoverImage,
+} from './sqlite-storage';
 
 const STORE_NAME = 'theorem-books';
 const COVERS_STORE = 'theorem-covers';
-// Cache limit: 4 for desktop, 2 for mobile (to save memory)
-const BLOB_CACHE_LIMIT = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 2 : 4;
+const BLOB_CACHE_LIMIT = 3;
 
-// Cache for Tauri FS module
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
-let appDataDirPath: string | null = null;
+
 const blobCache = new Map<string, Blob>();
 const pendingDataReads = new Map<string, Promise<ArrayBuffer | null>>();
 const pendingBlobReads = new Map<string, Promise<Blob | null>>();
+const materializedPathCache = new Map<string, string>();
 
 function getStorageKey(id: string, filePath?: string): string {
-    return filePath || `id:${id}`;
+    if (filePath) {
+        return filePath;
+    }
+    return `sqlite://${id}`;
 }
 
 function safeDecodeURIComponent(value: string): string {
@@ -47,7 +59,6 @@ function normalizeFilePath(filePath: string): string {
         }
 
         const decodedPath = safeDecodeURIComponent(url.pathname);
-        // Windows file URL shape: file:///C:/Users/...
         if (/^\/[A-Za-z]:\//.test(decodedPath)) {
             return decodedPath.slice(1);
         }
@@ -70,13 +81,44 @@ function getMimeTypeFromPath(filePath?: string): string {
     return 'application/octet-stream';
 }
 
+function resolveSqliteBookId(id: string, filePath?: string): string | null {
+    if (filePath?.startsWith('sqlite://')) {
+        const parsed = filePath.slice('sqlite://'.length);
+        return parsed || null;
+    }
+    if (id.trim()) {
+        return id;
+    }
+    return null;
+}
+
+function resolveIndexedDbBookId(id: string, filePath?: string): string | null {
+    if (filePath?.startsWith('idb://')) {
+        const parsed = filePath.slice('idb://'.length);
+        return parsed || null;
+    }
+    if (id.trim()) {
+        return id;
+    }
+    return null;
+}
+
+function isExternalFilePath(filePath?: string): boolean {
+    if (!filePath) {
+        return false;
+    }
+
+    return !filePath.startsWith('sqlite://')
+        && !filePath.startsWith('idb://')
+        && !filePath.startsWith('browser://');
+}
+
 function getCachedBlob(cacheKey: string): Blob | null {
     const cached = blobCache.get(cacheKey);
     if (!cached) {
         return null;
     }
 
-    // Refresh insertion order for LRU eviction.
     blobCache.delete(cacheKey);
     blobCache.set(cacheKey, cached);
     return cached;
@@ -97,10 +139,10 @@ function cacheBlob(cacheKey: string, blob: Blob): void {
 function clearBlobCacheForBook(id: string, filePath?: string): void {
     blobCache.delete(getStorageKey(id, filePath));
     blobCache.delete(`idb://${id}`);
-    blobCache.delete(`id:${id}`);
+    blobCache.delete(`sqlite://${id}`);
+    materializedPathCache.delete(id);
 }
 
-// Dynamically import Tauri FS
 async function getTauriFs() {
     if (!isTauri()) return null;
     if (tauriFs) return tauriFs;
@@ -112,97 +154,81 @@ async function getTauriFs() {
     }
 }
 
-async function getAppDataPath(): Promise<string | null> {
-    if (!isTauri()) return null;
-    if (appDataDirPath) return appDataDirPath;
+async function readExternalFile(path: string): Promise<ArrayBuffer | null> {
+    const fs = await getTauriFs();
+    if (!fs) {
+        return null;
+    }
+
     try {
-        const { appDataDir } = await import('@tauri-apps/api/path');
-        appDataDirPath = await appDataDir();
-        return appDataDirPath;
-    } catch {
+        const contents = await fs.readFile(path);
+        return contents.buffer as ArrayBuffer;
+    } catch (error) {
+        console.error('[Storage] Failed to read external file path:', path, error);
         return null;
     }
 }
 
-async function getAppDir() {
-    const fs = await getTauriFs();
-    if (!fs) return null;
-    
-    try {
-        const dir = await getAppDataPath();
-        if (!dir) return null;
-        
-        // Ensure books directory exists using baseDir option
-        const booksDir = 'books';
-        try {
-            await fs.mkdir(booksDir, { 
-                recursive: true, 
-                baseDir: fs.BaseDirectory.AppData 
-            });
-        } catch {
-            // Directory may already exist
-        }
-        
-        return `${dir}/books`;
-    } catch {
+export async function getBookMaterializedPath(id: string, filePath?: string): Promise<string | null> {
+    const normalizedPath = filePath ? normalizeFilePath(filePath) : undefined;
+    if (normalizedPath && isExternalFilePath(normalizedPath)) {
+        return normalizedPath;
+    }
+
+    if (!isTauri()) {
         return null;
     }
+
+    const sqliteBookId = resolveSqliteBookId(id, normalizedPath);
+    if (!sqliteBookId) {
+        return null;
+    }
+
+    const cachedPath = materializedPathCache.get(sqliteBookId);
+    if (cachedPath) {
+        return cachedPath;
+    }
+
+    try {
+        const materializedPath = await sqliteGetMaterializedBookPath(sqliteBookId);
+        if (materializedPath) {
+            materializedPathCache.set(sqliteBookId, materializedPath);
+            return materializedPath;
+        }
+    } catch (error) {
+        console.error('[Storage] Failed to resolve materialized SQLite book path:', error);
+    }
+
+    return null;
 }
 
 /**
- * Save book data to storage
- * In Tauri: saves to app data directory
- * Fallback: IndexedDB for development
+ * Save book data to storage.
+ * - Tauri: SQLite (primary)
+ * - Web: IndexedDB
  */
 export async function saveBookData(id: string, data: ArrayBuffer): Promise<string> {
-    const fs = await getTauriFs();
-    const appDir = await getAppDir();
     clearBlobCacheForBook(id);
-    
-    if (fs && appDir) {
-        const relativePath = `books/${id}.book`;
-        const fullPath = `${appDir}/${id}.book`;
+
+    if (isTauri()) {
         try {
-            await fs.writeFile(relativePath, new Uint8Array(data), {
-                baseDir: fs.BaseDirectory.AppData
-            });
-            return fullPath;
+            return await sqliteSaveBookData(id, data);
         } catch (error) {
-            console.error('[Storage] Failed to save to Tauri FS:', error);
+            console.error('[Storage] Failed to persist binary to SQLite:', error);
         }
     }
-    
-    // Fallback to IndexedDB
+
     try {
         await set(`${STORE_NAME}-${id}`, data);
         return `idb://${id}`;
     } catch (error) {
-        console.error('[Storage] Failed to save book data:', error);
+        console.error('[Storage] Failed to save book data to IndexedDB:', error);
         throw error;
     }
 }
 
 /**
- * Check if a path is an app storage path (ends with .book)
- */
-function isAppStoragePath(filePath: string): boolean {
-    return filePath.endsWith('.book');
-}
-
-/**
- * Get the relative path for app storage files
- */
-function getRelativeStoragePath(filePath: string): string | null {
-    // Extract the book ID from the path (e.g., "books/uuid.book")
-    const match = filePath.match(/books\/([^/]+\.book)$/);
-    if (match) {
-        return `books/${match[1]}`;
-    }
-    return null;
-}
-
-/**
- * Get book data from storage as ArrayBuffer
+ * Get book data from storage as ArrayBuffer.
  */
 export async function getBookData(id: string, filePath?: string): Promise<ArrayBuffer | null> {
     const cacheKey = getStorageKey(id, filePath);
@@ -212,46 +238,45 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
     }
 
     const readPromise = (async () => {
-        const fs = await getTauriFs();
         const normalizedPath = filePath ? normalizeFilePath(filePath) : undefined;
+        const sqliteBookId = resolveSqliteBookId(id, normalizedPath);
 
-        // Check if this is a browser-imported file (virtual path)
-        const isBrowserPath = normalizedPath?.startsWith('browser://');
-        // Check if this is an IndexedDB URL
-        const isIdbUrl = normalizedPath?.startsWith('idb://');
-
-        // If we have Tauri and a real file path (not browser:// or idb://), read from there
-        if (fs && normalizedPath && !isIdbUrl && !isBrowserPath) {
-            try {
-                // Check if this is an app storage path - use baseDir for those
-                if (isAppStoragePath(normalizedPath)) {
-                    const relativePath = getRelativeStoragePath(normalizedPath);
-                    if (relativePath) {
-                        const contents = await fs.readFile(relativePath, {
-                            baseDir: fs.BaseDirectory.AppData,
-                        });
-                        return contents.buffer as ArrayBuffer;
-                    }
+        if (isTauri() && sqliteBookId) {
+            const materializedPath = await getBookMaterializedPath(sqliteBookId, normalizedPath);
+            if (materializedPath) {
+                const materializedData = await readExternalFile(materializedPath);
+                if (materializedData && materializedData.byteLength > 0) {
+                    return materializedData;
                 }
+            }
 
-                // For external files, read directly
-                const contents = await fs.readFile(normalizedPath);
-                return contents.buffer as ArrayBuffer;
+            try {
+                const sqliteData = await sqliteGetBookData(sqliteBookId);
+                if (sqliteData && sqliteData.byteLength > 0) {
+                    return sqliteData;
+                }
             } catch (error) {
-                console.error('[Storage] Error reading file from Tauri FS:', error);
-                // Continue to fallback
+                console.error('[Storage] Failed to read binary from SQLite:', error);
             }
         }
 
-        // Extract ID from idb:// URL if needed, otherwise use the provided id
-        const effectiveId = isIdbUrl ? normalizedPath!.slice(6) : id;
+        if (isTauri() && normalizedPath && isExternalFilePath(normalizedPath)) {
+            const externalData = await readExternalFile(normalizedPath);
+            if (externalData && externalData.byteLength > 0) {
+                return externalData;
+            }
+        }
 
-        // Fallback to IndexedDB (for browser mode and idb:// paths)
+        const indexedDbId = resolveIndexedDbBookId(id, normalizedPath);
+        if (!indexedDbId) {
+            return null;
+        }
+
         try {
-            const data = await get<ArrayBuffer>(`${STORE_NAME}-${effectiveId}`);
+            const data = await get<ArrayBuffer>(`${STORE_NAME}-${indexedDbId}`);
             return data ?? null;
         } catch (error) {
-            console.error('[Storage] Failed to get book data from IndexedDB:', error);
+            console.error('[Storage] Failed to read book data from IndexedDB:', error);
             return null;
         }
     })();
@@ -266,8 +291,7 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
 }
 
 /**
- * Get book data as a Blob - more memory efficient than ArrayBuffer
- * This avoids extra memory copies when passing to EPUB.js
+ * Get book data as a Blob.
  */
 export async function getBookBlob(id: string, filePath?: string): Promise<Blob | null> {
     const cacheKey = getStorageKey(id, filePath);
@@ -282,52 +306,13 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
     }
 
     const readPromise = (async () => {
-        const fs = await getTauriFs();
-        const normalizedPath = filePath ? normalizeFilePath(filePath) : undefined;
-
-        // Check if this is a browser-imported file (virtual path)
-        const isBrowserPath = normalizedPath?.startsWith('browser://');
-        // Check if this is an IndexedDB URL
-        const isIdbUrl = normalizedPath?.startsWith('idb://');
-        const mimeType = getMimeTypeFromPath(filePath);
-
-        // If we have Tauri and a real file path (not browser:// or idb://), read from there
-        if (fs && normalizedPath && !isIdbUrl && !isBrowserPath) {
-            try {
-                // Check if this is an app storage path - use baseDir for those
-                if (isAppStoragePath(normalizedPath)) {
-                    const relativePath = getRelativeStoragePath(normalizedPath);
-                    if (relativePath) {
-                        const contents = await fs.readFile(relativePath, {
-                            baseDir: fs.BaseDirectory.AppData,
-                        });
-                        return new Blob([contents], { type: mimeType });
-                    }
-                }
-
-                // For external files, read directly
-                const contents = await fs.readFile(normalizedPath);
-                return new Blob([contents], { type: mimeType });
-            } catch (error) {
-                console.error('[Storage] Error reading blob from Tauri FS:', error);
-                // Continue to fallback
-            }
-        }
-
-        // Extract ID from idb:// URL if needed
-        const effectiveId = isIdbUrl ? normalizedPath!.slice(6) : id;
-
-        // Fallback to IndexedDB (for browser mode and idb:// paths)
-        try {
-            const data = await get<ArrayBuffer>(`${STORE_NAME}-${effectiveId}`);
-            if (!data) {
-                return null;
-            }
-            return new Blob([data], { type: mimeType });
-        } catch (error) {
-            console.error('[Storage] Failed to get book blob from IndexedDB:', error);
+        const data = await getBookData(id, filePath);
+        if (!data) {
             return null;
         }
+
+        const mimeType = getMimeTypeFromPath(filePath);
+        return new Blob([data], { type: mimeType });
     })();
 
     pendingBlobReads.set(cacheKey, readPromise);
@@ -344,51 +329,51 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
 }
 
 /**
- * Delete book data from storage
+ * Delete book data from storage.
  */
 export async function deleteBookData(id: string, filePath?: string): Promise<void> {
-    const fs = await getTauriFs();
     clearBlobCacheForBook(id, filePath);
+
     const normalizedPath = filePath ? normalizeFilePath(filePath) : undefined;
-    
-    if (fs && normalizedPath && !normalizedPath.startsWith('idb://')) {
+    const sqliteBookId = resolveSqliteBookId(id, normalizedPath);
+    if (isTauri() && sqliteBookId) {
         try {
-            // Check if this is an app storage path - use baseDir for those
-            if (isAppStoragePath(normalizedPath)) {
-                const relativePath = getRelativeStoragePath(normalizedPath);
-                if (relativePath) {
-                    await fs.remove(relativePath, {
-                        baseDir: fs.BaseDirectory.AppData
-                    });
-                    return;
-                }
-            }
-            await fs.remove(normalizedPath);
-            return;
+            await sqliteDeleteBookData(sqliteBookId);
         } catch (error) {
-            console.error('[Storage] Failed to delete from Tauri FS:', error);
+            console.error('[Storage] Failed to delete book from SQLite:', error);
         }
     }
-    
-    try {
-        await del(`${STORE_NAME}-${id}`);
-    } catch (error) {
-        console.error('[Storage] Failed to delete book data:', error);
+
+    const indexedDbId = resolveIndexedDbBookId(id, normalizedPath);
+    if (indexedDbId) {
+        try {
+            await del(`${STORE_NAME}-${indexedDbId}`);
+        } catch (error) {
+            console.error('[Storage] Failed to delete book from IndexedDB:', error);
+        }
     }
 }
 
 /**
- * Get storage stats
- * @deprecated Use storage-manager.ts functions instead
+ * Get storage stats.
+ * @deprecated Use storage-manager.ts functions instead.
  */
 export async function getStorageStats(): Promise<{ used: number; total: number }> {
-    // Simplified - in production, use Tauri FS to calculate actual usage
-    return { used: 0, total: 1024 * 1024 * 1024 }; // 1GB default
+    if (isTauri()) {
+        try {
+            const stats = await sqliteGetStorageStats();
+            return {
+                used: stats.total_size,
+                total: Math.max(stats.total_size, 1024 * 1024 * 1024),
+            };
+        } catch (error) {
+            console.error('[Storage] Failed to get SQLite storage stats:', error);
+        }
+    }
+
+    return { used: 0, total: 1024 * 1024 * 1024 };
 }
 
-/**
- * Convert Blob to data URL
- */
 async function blobToDataUrl(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -399,45 +384,68 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /**
- * Save cover image as data URL
- * @param bookId - The book ID
- * @param blob - Cover image blob (JPEG/PNG)
- * @returns Data URL of the saved cover
+ * Save cover image as data URL.
  */
 export async function saveCoverImage(bookId: string, blob: Blob): Promise<string> {
+    const dataUrl = await blobToDataUrl(blob);
+
+    if (isTauri()) {
+        try {
+            await sqliteSaveCoverImage(bookId, dataUrl);
+            return dataUrl;
+        } catch (error) {
+            console.error('[Storage] Failed to save cover image to SQLite, falling back to IndexedDB:', error);
+        }
+    }
+
     try {
-        const dataUrl = await blobToDataUrl(blob);
         await set(`${COVERS_STORE}-${bookId}`, dataUrl);
         return dataUrl;
     } catch (error) {
-        console.error('[Storage] Failed to save cover image:', error);
+        console.error('[Storage] Failed to save cover image fallback:', error);
         throw error;
     }
 }
 
 /**
- * Get cover image data URL
- * @param bookId - The book ID
- * @returns Data URL of the cover or null if not found
+ * Get cover image data URL.
  */
 export async function getCoverImage(bookId: string): Promise<string | null> {
+    if (isTauri()) {
+        try {
+            const cover = await sqliteGetCoverImage(bookId);
+            if (cover) {
+                return cover;
+            }
+        } catch (error) {
+            console.error('[Storage] Failed to read cover from SQLite:', error);
+        }
+    }
+
     try {
         const dataUrl = await get<string>(`${COVERS_STORE}-${bookId}`);
         return dataUrl ?? null;
     } catch (error) {
-        console.error('[Storage] Failed to get cover image:', error);
+        console.error('[Storage] Failed to get cover image from IndexedDB:', error);
         return null;
     }
 }
 
 /**
- * Delete cover image
- * @param bookId - The book ID
+ * Delete cover image.
  */
 export async function deleteCoverImage(bookId: string): Promise<void> {
+    if (isTauri()) {
+        try {
+            await sqliteDeleteCoverImage(bookId);
+        } catch (error) {
+            console.error('[Storage] Failed to delete cover image from SQLite:', error);
+        }
+    }
+
     try {
         await del(`${COVERS_STORE}-${bookId}`);
     } catch (error) {
-        console.error('[Storage] Failed to delete cover image:', error);
+        console.error('[Storage] Failed to delete cover image from IndexedDB:', error);
     }
 }

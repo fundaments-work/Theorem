@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { applyReaderStyles, initReaderStyles } from "../lib/design-tokens";
 import { syncVaultMarkdownSnapshot } from "../lib/vault-sync";
 import { isMobile } from "../lib/env";
+import { theoremPersistStorage } from "../lib/persist-storage";
 import {
     lookupDictionaryTerm,
     vocabularyTermFromLookup,
@@ -414,14 +415,11 @@ function mergeImportedBookMetadata(existingBook: Book, incomingBook: Book): Book
 }
 
 function cleanupDiscardedImportedBook(book: Book): void {
-    const shouldCleanupAppStorage = Boolean(
-        book.storagePath && book.storagePath.endsWith(".book"),
-    );
-    if (!shouldCleanupAppStorage && typeof indexedDB === "undefined") {
+    if (!book.id) {
         return;
     }
 
-    deleteBookStorage(book.id, book.storagePath || book.filePath).catch((error) => {
+    deleteBookStorage(book.id).catch((error) => {
         console.error("[LibraryStore] Failed to cleanup duplicate imported book storage:", error);
     });
 }
@@ -767,7 +765,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 
                 // Clean up storage first (don't await to keep UI responsive)
                 if (book) {
-                    deleteBookStorage(bookId, book.storagePath || book.filePath).catch((error) => {
+                    deleteBookStorage(bookId).catch((error) => {
                         console.error('[LibraryStore] Failed to delete book storage:', error);
                     });
                 }
@@ -1217,6 +1215,7 @@ export const useLibraryStore = create<LibraryStore>()(
         {
             name: "theorem-library",
             version: 4,
+            storage: createJSONStorage(() => theoremPersistStorage),
             migrate: (persistedState, _version) => {
                 const persisted = (
                     typeof persistedState === "object" && persistedState !== null
@@ -1399,6 +1398,7 @@ export const useSettingsStore = create<SettingsStore>()(
         {
             name: "theorem-settings",
             version: 2,
+            storage: createJSONStorage(() => theoremPersistStorage),
             migrate: (persistedState, version) => {
                 const state = (
                     typeof persistedState === "object" && persistedState !== null
@@ -1885,6 +1885,7 @@ export const useVocabularyStore = create<VocabularyStore>()(
         {
             name: "theorem-vocabulary",
             version: 4,
+            storage: createJSONStorage(() => theoremPersistStorage),
             migrate: (persistedState, _version) => {
                 const persisted = isRecord(persistedState) ? persistedState : {};
                 const {
@@ -2266,6 +2267,7 @@ export const useRssStore = create<RssStore>()(
         {
             name: 'theorem-rss',
             version: 1,
+            storage: createJSONStorage(() => theoremPersistStorage),
             partialize: (state) => {
                 const MAX_ARTICLES = 500; // Keep only last 500 articles
                 const MAX_ARTICLE_AGE_DAYS = 30; // Remove articles older than 30 days

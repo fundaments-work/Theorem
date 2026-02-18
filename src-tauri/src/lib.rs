@@ -1,3 +1,5 @@
+mod database;
+
 use reqwest::blocking::Client;
 use serde::Serialize;
 use std::env;
@@ -5,6 +7,7 @@ use std::env;
  * Tauri Library Module
  */
 use std::fs;
+use tauri::ipc::Response;
 
 /**
  * Metadata structure for PDF documents.
@@ -54,12 +57,13 @@ fn read_file(path: String) -> Result<Vec<u8>, String> {
  * * `Err(String)` - Error message if reading fails
  */
 #[tauri::command]
-fn read_pdf_file(path: String) -> Result<Vec<u8>, String> {
+fn read_pdf_file(path: String) -> Result<Response, String> {
     // Try to read the file directly using standard fs
     // The Tauri FS plugin's scope permissions are checked on the frontend side
     // when reading from app storage, so by the time we get here, the path
     // should be accessible.
-    fs::read(&path).map_err(|e| format!("Failed to read PDF file '{}': {}", path, e))
+    let data = fs::read(&path).map_err(|e| format!("Failed to read PDF file '{}': {}", path, e))?;
+    Ok(Response::new(data))
 }
 
 /**
@@ -457,7 +461,20 @@ pub fn run() {
             get_pdf_metadata,
             fetch_rss_feed,
             fetch_url_content,
-            fetch_binary_content
+            fetch_binary_content,
+            database::sqlite_save_book_data,
+            database::sqlite_get_book_data,
+            database::sqlite_delete_book_data,
+            database::sqlite_get_materialized_book_path,
+            database::sqlite_save_cover_image,
+            database::sqlite_get_cover_image,
+            database::sqlite_delete_cover_image,
+            database::sqlite_get_storage_stats,
+            database::sqlite_cleanup_orphaned_storage,
+            database::sqlite_clear_all_storage,
+            database::sqlite_get_kv,
+            database::sqlite_set_kv,
+            database::sqlite_delete_kv
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

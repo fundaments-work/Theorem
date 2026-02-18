@@ -25,7 +25,8 @@ tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-os = "2"
 tauri-plugin-http = "2"
-tauri-plugin-app = "2"
+tauri-plugin-app = "2.0.0-alpha.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "rustls-tls"] }
+rusqlite = { version = "0.32", features = ["bundled"] }

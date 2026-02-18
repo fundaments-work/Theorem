@@ -3,6 +3,8 @@ export * from './dialogs';
 export * from './design-tokens';
 export * from './storage';
 export * from './storage-manager';
+export * from './sqlite-storage';
+export * from './persist-storage';
 export * from './toc';
 export * from './cover-extractor';
 export * from './import';
