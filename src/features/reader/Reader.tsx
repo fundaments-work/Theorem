@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
     cn,
+    getBookMaterializedPath,
     getBookBlob,
     getBookData,
     isMobile,
@@ -129,6 +130,7 @@ function BookReaderPage() {
     const [pdfInitialPage, setPdfInitialPage] = useState(1);
     const [pdfInitialZoom, setPdfInitialZoom] = useState(DEFAULT_PDF_ZOOM);
     const [pdfInitialZoomMode, setPdfInitialZoomMode] = useState<PdfZoomMode>(DEFAULT_PDF_ZOOM_MODE);
+    const [resolvedPdfPath, setResolvedPdfPath] = useState("");
     const [pdfAnnotationMode, setPdfAnnotationMode] = useState<'none' | 'highlight' | 'pen' | 'text' | 'erase'>('none');
     const [pdfHighlightColor, setPdfHighlightColor] = useState<HighlightColor>("yellow");
     const [pdfBrushColor, setPdfBrushColor] = useState<HighlightColor>("blue");
@@ -333,6 +335,7 @@ function BookReaderPage() {
             setPdfInitialPage(1);
             setPdfInitialZoom(DEFAULT_PDF_ZOOM);
             setPdfInitialZoomMode(DEFAULT_PDF_ZOOM_MODE);
+            setResolvedPdfPath("");
             setPdfHasOutline(false);
             setMetadata(null);
             setToc([]);
@@ -387,17 +390,14 @@ function BookReaderPage() {
                 const storagePath = book.storagePath || book.filePath;
 
                 if (book.format === 'pdf') {
-                    // On mobile, always load PDF data into memory - never rely on direct path access
-                    // because mobile file systems may have permission/URI issues
-                    const canPdfEngineReadDirectPath = isTauri()
-                        && !isMobile()
-                        && !!storagePath
-                        && !storagePath.startsWith('browser://')
-                        && !storagePath.startsWith('idb://');
-
-                    if (canPdfEngineReadDirectPath) {
-                        console.log('[Reader] Using direct path for PDF:', storagePath);
-                        return;
+                    if (isTauri()) {
+                        const materializedPath = await getBookMaterializedPath(book.id, storagePath);
+                        if (materializedPath) {
+                            if (!isCancelled) {
+                                setResolvedPdfPath(materializedPath);
+                            }
+                            return;
+                        }
                     }
 
                     console.log('[Reader] Loading PDF data into memory for mobile compatibility');
@@ -407,6 +407,7 @@ function BookReaderPage() {
                         throw new Error('Could not read PDF file from storage - data is empty.');
                     }
                     console.log('[Reader] PDF data loaded, size:', data.byteLength);
+                    setResolvedPdfPath("");
                     setPdfData(new Uint8Array(data));
                     return;
                 }
@@ -433,6 +434,31 @@ function BookReaderPage() {
         loadBook();
         return () => { isCancelled = true; };
     }, [currentBookId, getBook]);
+
+    // Preload the next few books to keep tap-to-open latency low on mobile.
+    useEffect(() => {
+        if (!currentBookId) {
+            return;
+        }
+
+        const allBooks = useLibraryStore.getState().books;
+        const currentBookIndex = allBooks.findIndex((book) => book.id === currentBookId);
+        if (currentBookIndex === -1) {
+            return;
+        }
+
+        const upcomingBooks = allBooks.slice(currentBookIndex + 1, currentBookIndex + 4);
+        for (const book of upcomingBooks) {
+            if (book.format === 'pdf') {
+                continue;
+            }
+
+            const storagePath = book.storagePath || book.filePath;
+            void getBookBlob(book.id, storagePath).catch((error) => {
+                console.debug('[Reader] Prefetch skipped for book:', book.id, error);
+            });
+        }
+    }, [currentBookId]);
 
     // Track reading time
     useEffect(() => {
@@ -1755,7 +1781,7 @@ function BookReaderPage() {
                 {isPdfFormat ? (
                     <PDFReader
                         ref={pdfReaderRef}
-                        pdfPath={currentBook?.storagePath || currentBook?.filePath || ""}
+                        pdfPath={resolvedPdfPath}
                         pdfData={pdfData ?? undefined}
                         originalFilename={currentBook?.title}
                         initialPage={pdfInitialPage}

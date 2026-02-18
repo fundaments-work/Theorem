@@ -550,6 +550,12 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 return;
             }
 
+            const currentSelection = getSelection();
+            if (currentSelection?.text?.trim()) {
+                suppressSwipeRef.current = false;
+                return;
+            }
+
             if (absDeltaX > absDeltaY && absDeltaX > SWIPE_THRESHOLD) {
                 e.preventDefault();
                 if (deltaX > 0) {
@@ -571,23 +577,26 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
             lastTapRef.current = null;
         };
 
-        const parent = container.parentElement;
-        if (parent) {
-            parent.addEventListener('touchstart', handleTouchStart, { passive: true });
-            parent.addEventListener('touchmove', handleTouchMove, { passive: false });
-            parent.addEventListener('touchend', handleTouchEnd, { passive: false });
-            parent.addEventListener('touchcancel', handleTouchCancel, { passive: true });
+        const listenerTargets = [container, container.parentElement].filter(
+            (target, index, list): target is HTMLElement => Boolean(target) && list.indexOf(target) === index,
+        );
+
+        for (const target of listenerTargets) {
+            target.addEventListener('touchstart', handleTouchStart, { passive: true });
+            target.addEventListener('touchmove', handleTouchMove, { passive: false });
+            target.addEventListener('touchend', handleTouchEnd, { passive: false });
+            target.addEventListener('touchcancel', handleTouchCancel, { passive: true });
         }
         
         return () => {
-            if (parent) {
-                parent.removeEventListener('touchstart', handleTouchStart);
-                parent.removeEventListener('touchmove', handleTouchMove);
-                parent.removeEventListener('touchend', handleTouchEnd);
-                parent.removeEventListener('touchcancel', handleTouchCancel);
+            for (const target of listenerTargets) {
+                target.removeEventListener('touchstart', handleTouchStart);
+                target.removeEventListener('touchmove', handleTouchMove);
+                target.removeEventListener('touchend', handleTouchEnd);
+                target.removeEventListener('touchcancel', handleTouchCancel);
             }
         };
-    }, [next, onZoomGestureChange, prev, settings.flow, showNavFeedback]);
+    }, [getSelection, next, onZoomGestureChange, prev, settings.flow, showNavFeedback]);
 
     const displayError = error?.message?.replace(/\s+/g, " ").trim();
 
@@ -636,7 +645,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                     isLoading ? 'opacity-0' : 'opacity-100',
                 )}
                 style={{ 
-                    touchAction: settings.flow === 'scroll' ? 'auto' : 'none',
+                    touchAction: settings.flow === 'scroll' ? 'pan-y pinch-zoom' : 'manipulation',
                     overflow: settings.flow === 'scroll' ? 'auto' : 'hidden',
                     filter: `brightness(${settings.brightness}%)`,
                 }}

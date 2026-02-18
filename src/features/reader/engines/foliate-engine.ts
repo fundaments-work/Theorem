@@ -115,6 +115,35 @@ export class FoliateEngine {
         );
     }
 
+    private shouldUseTransformZoom(): boolean {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+
+        const isMobileViewport = window.matchMedia('(max-width: 768px)').matches;
+        return isMobileViewport && this.flow !== 'scroll' && !this.isFixedLayoutFormat;
+    }
+
+    private applyZoomToDocument(doc: Document): void {
+        const root = doc.documentElement;
+        if (!root) {
+            return;
+        }
+
+        if (this.shouldUseTransformZoom()) {
+            root.style.zoom = '1';
+            root.style.transformOrigin = 'top left';
+            root.style.transform = `scale(${this.zoom_level})`;
+            root.style.width = `${100 / this.zoom_level}%`;
+            return;
+        }
+
+        root.style.removeProperty('transform');
+        root.style.removeProperty('transform-origin');
+        root.style.removeProperty('width');
+        root.style.zoom = String(this.zoom_level);
+    }
+
     async init(container: HTMLElement): Promise<void> {
         this.container = container;
         
@@ -257,7 +286,7 @@ export class FoliateEngine {
             const detail = e.detail;
             if (detail?.doc?.documentElement) {
                 // Apply zoom immediately
-                detail.doc.documentElement.style.zoom = String(this.zoom_level);
+                this.applyZoomToDocument(detail.doc);
             }
         });
 
@@ -575,9 +604,17 @@ export class FoliateEngine {
         );
         renderer.setAttribute('max-block-size', '800px');
         // Auto layout: use double columns for paged mode on larger screens, single for scroll or small screens
-        const columnCount = this.layout === 'single' ? 1 : 
-                           this.layout === 'double' ? 2 :
-                           this.flow === 'scroll' ? 1 : 2; // auto: 2 columns for paged, 1 for scroll
+        const isMobileViewport = typeof window !== 'undefined'
+            && window.matchMedia('(max-width: 768px)').matches;
+        const columnCount = isMobileViewport && this.flow !== 'scroll'
+            ? 1
+            : this.layout === 'single'
+                ? 1
+                : this.layout === 'double'
+                    ? 2
+                    : this.flow === 'scroll'
+                        ? 1
+                        : 2;
         renderer.setAttribute('max-column-count', columnCount);
         if (currentSettings?.enableAnimations) {
             renderer.setAttribute('animated', '');
@@ -916,7 +953,7 @@ export class FoliateEngine {
         for (const content of contents) {
             const doc = content.doc;
             if (doc?.documentElement) {
-                doc.documentElement.style.zoom = String(this.zoom_level);
+                this.applyZoomToDocument(doc);
             }
         }
     }
@@ -1627,6 +1664,13 @@ export class FoliateEngine {
             let pointerMoved = false;
             const TAP_MAX_DISTANCE = 12;
             const TAP_MAX_DURATION = 350;
+            const SWIPE_MIN_DISTANCE = 56;
+            const SWIPE_MAX_VERTICAL_DISTANCE = 80;
+            const SWIPE_MAX_DURATION = 650;
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let touchStartAt = 0;
+            let touchMoved = false;
 
             win.addEventListener(
                 'pointerdown',
@@ -1666,6 +1710,101 @@ export class FoliateEngine {
                     pointerMoved = false;
                 },
                 true,
+            );
+
+            win.addEventListener(
+                'touchstart',
+                (event: TouchEvent) => {
+                    if (event.touches.length !== 1) {
+                        touchStartAt = 0;
+                        touchMoved = false;
+                        return;
+                    }
+
+                    const touch = event.touches[0];
+                    touchStartX = touch.clientX;
+                    touchStartY = touch.clientY;
+                    touchStartAt = Date.now();
+                    touchMoved = false;
+                },
+                { capture: true, passive: true },
+            );
+
+            win.addEventListener(
+                'touchmove',
+                (event: TouchEvent) => {
+                    if (touchStartAt === 0 || event.touches.length !== 1) {
+                        return;
+                    }
+
+                    const touch = event.touches[0];
+                    const distance = Math.hypot(
+                        touch.clientX - touchStartX,
+                        touch.clientY - touchStartY,
+                    );
+                    if (distance > TAP_MAX_DISTANCE) {
+                        touchMoved = true;
+                    }
+                },
+                { capture: true, passive: true },
+            );
+
+            win.addEventListener(
+                'touchend',
+                (event: TouchEvent) => {
+                    if (touchStartAt === 0 || event.changedTouches.length !== 1) {
+                        touchStartAt = 0;
+                        touchMoved = false;
+                        return;
+                    }
+
+                    if (this.flow === 'scroll') {
+                        touchStartAt = 0;
+                        touchMoved = false;
+                        return;
+                    }
+
+                    if (this.isInteractiveTapTarget(event.target)) {
+                        touchStartAt = 0;
+                        touchMoved = false;
+                        return;
+                    }
+
+                    const selection = doc.getSelection();
+                    if (selection && !selection.isCollapsed && selection.toString().trim().length > 0) {
+                        touchStartAt = 0;
+                        touchMoved = false;
+                        return;
+                    }
+
+                    const touch = event.changedTouches[0];
+                    const deltaX = touch.clientX - touchStartX;
+                    const deltaY = touch.clientY - touchStartY;
+                    const elapsed = Date.now() - touchStartAt;
+                    const absX = Math.abs(deltaX);
+                    const absY = Math.abs(deltaY);
+
+                    touchStartAt = 0;
+
+                    if (
+                        elapsed > SWIPE_MAX_DURATION
+                        || absX < SWIPE_MIN_DISTANCE
+                        || absX <= absY
+                        || absY > SWIPE_MAX_VERTICAL_DISTANCE
+                    ) {
+                        touchMoved = false;
+                        return;
+                    }
+
+                    touchMoved = false;
+                    event.preventDefault();
+                    if (deltaX > 0) {
+                        void this.prev();
+                    } else {
+                        void this.next();
+                    }
+                },
+                { capture: true, passive: false },
             );
             
             // Listen for mouseup on the iframe window

@@ -1694,7 +1694,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             let loadedPdf: PDFDocumentProxy | null = null;
 
             const loadPdf = async () => {
-                const isVirtualPath = pdfPath.startsWith("idb://") || pdfPath.startsWith("browser://");
+                const isVirtualPath = (
+                    pdfPath.startsWith("idb://")
+                    || pdfPath.startsWith("browser://")
+                    || pdfPath.startsWith("sqlite://")
+                );
                 const requiresProvidedData = !isTauri() || isVirtualPath || !pdfPath;
 
                 // Wait for in-memory bytes when direct filesystem loading is not possible.
@@ -1755,11 +1759,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                             const loadingTask = pdfjsLib.getDocument({
                                 ...commonPdfOptions,
                                 url: directUrl,
-                                // Disable eager fetching so large files don't get pulled entirely at open.
-                                // Per PDF.js docs this works best with streaming disabled.
-                                disableAutoFetch: true,
-                                disableStream: true,
-                                rangeChunkSize: 256 * 1024,
+                                // Favor faster first-paint for local files.
+                                rangeChunkSize: 512 * 1024,
                             });
                             pdf = await loadingTask.promise;
                         } catch (urlLoadError) {
@@ -1802,16 +1803,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     setScale(scaleRef.current);
                     setZoomMode(initialZoomMode, true);
 
-                    const initialPageNumbers = Array.from(new Set(
-                        [
-                            clampedInitialPage,
-                            clampedInitialPage + 1,
-                            clampedInitialPage - 1,
-                        ].filter((pageNumber) => pageNumber >= 1 && pageNumber <= pdf.numPages),
-                    ));
-                    const initialPages = await Promise.all(
-                        initialPageNumbers.map((pageNumber) => pdf.getPage(pageNumber)),
-                    );
+                    // First paint: render only the active page, then load neighbors asynchronously.
+                    const initialPages = [
+                        await pdf.getPage(clampedInitialPage),
+                    ];
 
                     if (!cancelled) {
                         setPages(initialPages.sort((left, right) => left.pageNumber - right.pageNumber));
@@ -1831,6 +1826,10 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                             totalPageCount,
                             scaleRef.current,
                         );
+                        void loadSpecificPages([
+                            clampedInitialPage + 1,
+                            clampedInitialPage - 1,
+                        ]);
                     } else {
                         // Cleanup if cancelled
                         initialPages.forEach(p => p.cleanup());
