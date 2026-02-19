@@ -1,5 +1,5 @@
 import { ask, confirm, message, open, save } from "@tauri-apps/plugin-dialog";
-import { isTauri } from "./env";
+import { isMobile, isTauri } from "./env";
 
 /**
  * Native Tauri Dialog Utilities
@@ -154,6 +154,10 @@ export async function showOpenDirectoryDialog(options: DirectoryDialogOptions = 
     if (!isTauri()) {
         return null;
     }
+    if (isMobile()) {
+        console.warn("Directory picker is not supported on mobile platforms.");
+        return null;
+    }
 
     try {
         const result = await open({
@@ -162,6 +166,7 @@ export async function showOpenDirectoryDialog(options: DirectoryDialogOptions = 
             directory: true,
             multiple: false,
             recursive: options.recursive ?? true,
+            fileAccessMode: "scoped",
         });
         if (Array.isArray(result)) {
             return result[0] ?? null;

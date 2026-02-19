@@ -408,6 +408,35 @@ fn fetch_binary_content(url: String) -> Result<Vec<u8>, String> {
     Ok(bytes.to_vec())
 }
 
+#[tauri::command]
+fn pick_library_folder_mobile(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    #[cfg(target_os = "android")]
+    {
+        tauri_plugin_mobile_folder_scan::pick_folder(&app)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("Mobile folder selection is only available on Android.".to_string())
+    }
+}
+
+#[tauri::command]
+fn scan_library_folder_mobile(
+    app: tauri::AppHandle,
+    tree_uri: String,
+) -> Result<Vec<String>, String> {
+    #[cfg(target_os = "android")]
+    {
+        tauri_plugin_mobile_folder_scan::scan_folder(&app, &tree_uri)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, tree_uri);
+        Err("Mobile folder scanning is only available on Android.".to_string())
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn apply_linux_webkit_workarounds() {
     // Allow advanced users to disable these workarounds for troubleshooting:
@@ -450,6 +479,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_app::init())
+        .plugin(tauri_plugin_mobile_folder_scan::init())
         .invoke_handler(tauri::generate_handler![
             read_file,
             read_pdf_file,
@@ -457,6 +487,8 @@ pub fn run() {
             fetch_rss_feed,
             fetch_url_content,
             fetch_binary_content,
+            pick_library_folder_mobile,
+            scan_library_folder_mobile,
             database::sqlite_save_book_data,
             database::sqlite_get_book_data,
             database::sqlite_delete_book_data,

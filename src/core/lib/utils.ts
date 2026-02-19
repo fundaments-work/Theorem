@@ -109,6 +109,13 @@ export function normalizeFilePath(filePath: string): string {
         return trimmedPath;
     }
 
+    // Keep non-file URI schemes untouched. SAF content URIs are percent-encoded
+    // and decoding them can invalidate the document identifier.
+    const schemeMatch = trimmedPath.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
+    if (schemeMatch && schemeMatch[1]?.toLowerCase() !== "file") {
+        return trimmedPath;
+    }
+
     if (!trimmedPath.startsWith("file://")) {
         return safeDecodeURIComponent(trimmedPath);
     }

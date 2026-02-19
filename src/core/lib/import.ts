@@ -8,21 +8,36 @@ import type { Book, BookFormat } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { isTauri, isMobile } from './env';
 import { saveBookData, getBookData } from './storage';
-import { formatFileSize, normalizeFilePath } from './utils';
+import { formatFileSize, normalizeFilePath, safeDecodeURIComponent } from './utils';
 
 // Dynamically import Tauri plugins
 let tauriDialog: typeof import('@tauri-apps/plugin-dialog') | null = null;
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
 
-const DEFAULT_IMPORT_CONCURRENCY = 2;
+const DEFAULT_IMPORT_CONCURRENCY = 4;
+const MAX_IMPORT_CONCURRENCY = 8;
 const INSTANT_IMPORT_MODE = true;
-const CONTENT_HASH_MAX_BYTES = 64 * 1024 * 1024;
+const CONTENT_HASH_MAX_BYTES = 4 * 1024 * 1024;
+const CONTENT_URI_READ_TIMEOUT_MS = 20000;
+const IMPORT_ENTRY_TIMEOUT_MS = 30000;
 const SUPPORTED_IMPORT_EXTENSIONS = ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'fb2.zip', 'cbz', 'pdf'];
 const SUPPORTED_IMPORT_SUFFIXES = SUPPORTED_IMPORT_EXTENSIONS.map((extension) => `.${extension}`);
 const BROWSER_IMPORT_ACCEPT = SUPPORTED_IMPORT_SUFFIXES.join(',');
 
 function getImportConcurrency(): number {
-    return isMobile() ? 1 : DEFAULT_IMPORT_CONCURRENCY;
+    if (isMobile()) {
+        return 1;
+    }
+
+    const hardwareConcurrency = globalThis.navigator?.hardwareConcurrency;
+    if (typeof hardwareConcurrency === 'number' && hardwareConcurrency > 0) {
+        return Math.max(
+            DEFAULT_IMPORT_CONCURRENCY,
+            Math.min(MAX_IMPORT_CONCURRENCY, Math.floor(hardwareConcurrency / 2)),
+        );
+    }
+
+    return DEFAULT_IMPORT_CONCURRENCY;
 }
 
 function arrayBufferToHex(buffer: ArrayBuffer): string {
@@ -32,6 +47,24 @@ function arrayBufferToHex(buffer: ArrayBuffer): string {
         hex += bytes[index].toString(16).padStart(2, '0');
     }
     return hex;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            reject(new Error(`[Import] Timeout while ${label} (${timeoutMs}ms)`));
+        }, timeoutMs);
+
+        promise
+            .then((value) => {
+                clearTimeout(timeoutId);
+                resolve(value);
+            })
+            .catch((error) => {
+                clearTimeout(timeoutId);
+                reject(error);
+            });
+    });
 }
 
 async function computeContentHash(buffer: ArrayBuffer): Promise<string | undefined> {
@@ -81,6 +114,127 @@ async function runWithConcurrency<TInput, TOutput>(
 
 function normalizeImportPath(filePath: string): string {
     return normalizeFilePath(filePath);
+}
+
+function normalizeFilenameCandidate(candidate: string): string | null {
+    const decodedCandidate = safeDecodeURIComponent(candidate).trim();
+    if (!decodedCandidate) {
+        return null;
+    }
+
+    const withoutStoragePrefix = decodedCandidate.includes(':')
+        ? decodedCandidate.slice(decodedCandidate.indexOf(':') + 1)
+        : decodedCandidate;
+    const basename = withoutStoragePrefix
+        .replace(/\\/g, '/')
+        .split('/')
+        .filter(Boolean)
+        .pop()
+        ?.trim();
+
+    if (!basename || basename === '.' || basename === '..') {
+        return null;
+    }
+
+    return basename;
+}
+
+function hasKnownBookExtension(candidate: string): boolean {
+    const lowerName = candidate.toLowerCase();
+    return SUPPORTED_IMPORT_SUFFIXES.some((suffix) => lowerName.endsWith(suffix));
+}
+
+function defaultFilenameForFormat(format: BookFormat): string {
+    switch (format) {
+        case 'epub':
+            return 'book.epub';
+        case 'mobi':
+            return 'book.mobi';
+        case 'azw':
+            return 'book.azw';
+        case 'azw3':
+            return 'book.azw3';
+        case 'fb2':
+            return 'book.fb2';
+        case 'cbz':
+            return 'book.cbz';
+        case 'cbr':
+            return 'book.cbr';
+        case 'pdf':
+            return 'book.pdf';
+    }
+}
+
+export function ensureFilenameForFormat(filename: string | undefined, format: BookFormat): string {
+    const normalizedCandidate = normalizeFilenameCandidate(filename || '');
+    if (!normalizedCandidate) {
+        return defaultFilenameForFormat(format);
+    }
+
+    if (hasKnownBookExtension(normalizedCandidate)) {
+        return normalizedCandidate;
+    }
+
+    const hasGenericExtension = /\.[A-Za-z0-9]{1,10}$/.test(normalizedCandidate);
+    if (hasGenericExtension) {
+        return normalizedCandidate;
+    }
+
+    const fallbackName = defaultFilenameForFormat(format);
+    const fallbackExtension = fallbackName.slice(fallbackName.lastIndexOf('.'));
+    return `${normalizedCandidate}${fallbackExtension}`;
+}
+
+export function extractFilenameFromPath(filePath: string): string {
+    const normalizedPath = normalizeImportPath(filePath);
+
+    if (normalizedPath.startsWith('content://')) {
+        try {
+            const uri = new URL(normalizedPath);
+            const directCandidates = [
+                uri.searchParams.get('displayName'),
+                uri.searchParams.get('_display_name'),
+                uri.searchParams.get('name'),
+                uri.searchParams.get('filename'),
+            ];
+            for (const value of directCandidates) {
+                if (!value) {
+                    continue;
+                }
+                const normalizedCandidate = normalizeFilenameCandidate(value);
+                if (normalizedCandidate && hasKnownBookExtension(normalizedCandidate)) {
+                    return normalizedCandidate;
+                }
+            }
+
+            const encodedDocumentMatch = uri.pathname.match(/\/document\/(.+)$/);
+            if (encodedDocumentMatch && encodedDocumentMatch[1]) {
+                const documentId = safeDecodeURIComponent(encodedDocumentMatch[1]);
+                const normalizedCandidate = normalizeFilenameCandidate(documentId);
+                if (normalizedCandidate) {
+                    return normalizedCandidate;
+                }
+            }
+
+            const decodedPathname = safeDecodeURIComponent(uri.pathname);
+            const decodedDocumentMatch = decodedPathname.match(/\/document\/(.+)$/);
+            if (decodedDocumentMatch && decodedDocumentMatch[1]) {
+                const normalizedCandidate = normalizeFilenameCandidate(decodedDocumentMatch[1]);
+                if (normalizedCandidate) {
+                    return normalizedCandidate;
+                }
+            }
+        } catch {
+            // fall through to generic parsing
+        }
+    }
+
+    const fallbackFilename = normalizedPath.split(/[/\\]/).pop() || 'Unknown';
+    const normalizedFallback = normalizeFilenameCandidate(fallbackFilename);
+    if (normalizedFallback) {
+        return normalizedFallback;
+    }
+    return safeDecodeURIComponent(fallbackFilename);
 }
 
 function isSupportedImportFilename(lowerName: string): boolean {
@@ -411,7 +565,7 @@ export async function readBookFile(filePath: string, bookId?: string): Promise<A
  * Extract basic metadata from filename
  */
 export function extractFilenameMetadata(filePath: string): { title: string; author: string } {
-    const filename = filePath.split(/[/\\]/).pop() || 'Unknown';
+    const filename = extractFilenameFromPath(filePath);
     const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
     
     // Try to parse "Author - Title" format
@@ -435,6 +589,7 @@ export function extractFilenameMetadata(filePath: string): { title: string; auth
  */
 export async function createBookEntry(filePath: string): Promise<Book | null> {
     const normalizedFilePath = normalizeImportPath(filePath);
+    const isContentUri = normalizedFilePath.startsWith('content://');
     let format = getBookFormat(normalizedFilePath);
 
     const plugins = await initTauriPlugins();
@@ -443,11 +598,13 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
 
     // Get file stats
     let fileSize = 0;
-    try {
-        const stats = await fs.stat(normalizedFilePath);
-        fileSize = Number(stats.size);
-    } catch {
-        // Stats not available, continue without size
+    if (!isContentUri) {
+        try {
+            const stats = await fs.stat(normalizedFilePath);
+            fileSize = Number(stats.size);
+        } catch {
+            // Stats not available, continue without size
+        }
     }
 
     // Check file size - warn if very large (> 100MB)
@@ -456,10 +613,19 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     }
 
     // Read file content for storage
-    const buffer = await readBookFile(normalizedFilePath);
+    const buffer = isContentUri
+        ? await withTimeout(
+            readBookFile(normalizedFilePath),
+            CONTENT_URI_READ_TIMEOUT_MS,
+            `reading Android document URI: ${normalizedFilePath}`,
+        )
+        : await readBookFile(normalizedFilePath);
     if (!buffer || buffer.byteLength === 0) {
         console.error('Empty file or failed to read:', normalizedFilePath);
         return null;
+    }
+    if (fileSize <= 0) {
+        fileSize = buffer.byteLength;
     }
 
     if (!format) {
@@ -480,8 +646,9 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     // Save to app storage first
     const storagePath = await saveBookData(id, buffer);
 
-    // Get filename for fallback metadata
-    const filenameMetadata = extractFilenameMetadata(normalizedFilePath);
+    // Resolve a stable filename for metadata extraction on Android content URIs.
+    const resolvedFilename = ensureFilenameForFormat(extractFilenameFromPath(normalizedFilePath), format);
+    const filenameMetadata = extractFilenameMetadata(resolvedFilename);
 
     // Build book object quickly and defer expensive metadata extraction to
     // background processing in the library screen.
@@ -521,7 +688,11 @@ export async function importBooksIncremental(
         getImportConcurrency(),
         async (filePath): Promise<Book | null> => {
             try {
-                const book = await createBookEntry(filePath);
+                const book = await withTimeout(
+                    createBookEntry(filePath),
+                    IMPORT_ENTRY_TIMEOUT_MS,
+                    `importing file: ${filePath}`,
+                );
                 if (book) {
                     onBookImported?.(book);
                 }
@@ -581,19 +752,117 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
     if (!plugins?.fs) throw new Error('FS plugin not available - folder scanning requires Tauri');
     const fs = plugins.fs;
 
+    const rootFolderPath = normalizeImportPath(folderPath);
+    if (!rootFolderPath) {
+        return [];
+    }
+
     const bookFiles: string[] = [];
+    const visitedDirectories = new Set<string>();
+
+    type ScanEntryLike = {
+        name?: unknown;
+        path?: unknown;
+        isDirectory?: unknown;
+        isFile?: unknown;
+        isSymlink?: unknown;
+    };
+
+    type ScanEntryKind = 'directory' | 'file' | 'skip';
+
+    function joinScanPath(parentDir: string, childName: string): string {
+        const safeChildName = childName.replace(/^[/\\]+/, '');
+        if (!parentDir) {
+            return safeChildName;
+        }
+
+        if (parentDir.endsWith('/') || parentDir.endsWith('\\')) {
+            return `${parentDir}${safeChildName}`;
+        }
+
+        const separator = parentDir.includes('\\') && !parentDir.includes('/') ? '\\' : '/';
+        return `${parentDir}${separator}${safeChildName}`;
+    }
+
+    function getEntryName(entry: ScanEntryLike): string | null {
+        if (typeof entry.name === 'string') {
+            const trimmedName = entry.name.trim();
+            if (trimmedName) {
+                return trimmedName;
+            }
+        }
+
+        if (typeof entry.path === 'string') {
+            const trimmedPath = entry.path.trim();
+            if (!trimmedPath) {
+                return null;
+            }
+            const pathName = trimmedPath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
+            return pathName?.trim() || null;
+        }
+
+        return null;
+    }
+
+    function getBooleanFlag(value: unknown): boolean | null {
+        return typeof value === 'boolean' ? value : null;
+    }
+
+    async function resolveEntryKind(entry: ScanEntryLike, fullPath: string): Promise<ScanEntryKind> {
+        if (getBooleanFlag(entry.isSymlink) === true) {
+            return 'skip';
+        }
+
+        if (getBooleanFlag(entry.isDirectory) === true) {
+            return 'directory';
+        }
+
+        if (getBooleanFlag(entry.isFile) === true) {
+            return 'file';
+        }
+
+        try {
+            const stats = await fs.stat(fullPath);
+            if (stats.isSymlink) {
+                return 'skip';
+            }
+            if (stats.isDirectory) {
+                return 'directory';
+            }
+            if (stats.isFile) {
+                return 'file';
+            }
+        } catch {
+            // Best-effort fallback for unusual entry payloads.
+        }
+
+        return 'skip';
+    }
 
     async function scanDir(dir: string) {
+        const normalizedDir = normalizeImportPath(dir);
+        if (visitedDirectories.has(normalizedDir)) {
+            return;
+        }
+        visitedDirectories.add(normalizedDir);
+
         try {
-            const entries = await fs.readDir(dir);
+            const entries = await fs.readDir(normalizedDir);
             
             for (const entry of entries) {
-                const fullPath = `${dir}/${entry.name}`;
-                
-                if (entry.isDirectory) {
+                const entryLike = entry as ScanEntryLike;
+                const entryName = getEntryName(entryLike);
+                if (!entryName) {
+                    continue;
+                }
+
+                const fullPath = normalizeImportPath(joinScanPath(normalizedDir, entryName));
+                const kind = await resolveEntryKind(entryLike, fullPath);
+
+                if (kind === 'directory') {
                     await scanDir(fullPath);
-                } else if (entry.isFile) {
-                    const lowerName = entry.name.toLowerCase();
+                } else if (kind === 'file') {
+                    const lowerName = entryName.toLowerCase();
                     const isSupportedBook = isSupportedImportFilename(lowerName);
 
                     if (isSupportedBook) {
@@ -602,10 +871,10 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
                 }
             }
         } catch (error) {
-            console.error('Error scanning directory:', dir, error);
+            console.error('Error scanning directory:', normalizedDir, error);
         }
     }
 
-    await scanDir(folderPath);
-    return bookFiles;
+    await scanDir(rootFolderPath);
+    return Array.from(new Set(bookFiles));
 }

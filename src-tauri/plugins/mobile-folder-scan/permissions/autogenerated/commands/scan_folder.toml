@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-scan-folder"
+description = "Enables the scan_folder command without any pre-configured scope."
+commands.allow = ["scan_folder"]
+
+[[permission]]
+identifier = "deny-scan-folder"
+description = "Denies the scan_folder command without any pre-configured scope."
+commands.deny = ["scan_folder"]

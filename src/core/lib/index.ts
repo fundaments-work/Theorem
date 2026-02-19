@@ -13,3 +13,4 @@ export * from './search/fuzzy';
 export * from './search/domain';
 export * from './vault-sync';
 export * from './sync-bundle';
+export * from './mobile-folder-scan';

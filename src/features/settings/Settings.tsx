@@ -11,7 +11,10 @@ import {
     syncVaultMarkdownSnapshot,
     exportUnifiedSyncBundle,
     estimateSyncBundleSizeBytes,
+    isMobile,
     isTauri,
+    normalizeFilePath,
+    pickLibraryFolderMobile,
     useVocabularyStore,
     useLibraryStore,
     useRssStore,
@@ -184,6 +187,8 @@ export function SettingsPage() {
     const { books, annotations } = useLibraryStore();
     const articles = useRssStore((state) => state.articles);
     const highlightsExportName = normalizeHighlightsExportName(settings.vault.highlightsFileName);
+    const primaryLibraryFolder = settings.scanFolders[0] || "";
+    const isMobilePlatform = isMobile();
     const setVaultSyncStatus = useUIStore((state) => state.setVaultSyncStatus);
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
     const vaultSyncMessage = useUIStore((state) => state.vaultSyncMessage);
@@ -247,6 +252,11 @@ export function SettingsPage() {
     };
 
     const handlePickVaultDirectory = async () => {
+        if (isMobilePlatform) {
+            alert("Folder selection is not supported on mobile. Configure export path on desktop.");
+            return;
+        }
+
         const selectedPath = await showOpenDirectoryDialog({
             title: "Choose Export Folder",
             defaultPath: settings.vault.vaultPath || undefined,
@@ -259,6 +269,31 @@ export function SettingsPage() {
         updateVaultSettings({
             enabled: true,
             vaultPath: selectedPath,
+        });
+    };
+
+    const handlePickLibraryFolder = async () => {
+        if (isMobilePlatform) {
+            const selectedUri = await pickLibraryFolderMobile();
+            if (!selectedUri) {
+                return;
+            }
+            updateSettings({ scanFolders: [selectedUri] });
+            return;
+        }
+
+        const selectedPath = await showOpenDirectoryDialog({
+            title: "Choose Library Folder",
+            defaultPath: primaryLibraryFolder || undefined,
+        });
+
+        if (!selectedPath) {
+            return;
+        }
+
+        const normalizedPath = normalizeFilePath(selectedPath);
+        updateSettings({
+            scanFolders: normalizedPath ? [normalizedPath] : [],
         });
     };
 
@@ -460,6 +495,41 @@ export function SettingsPage() {
                                 value={settings.librarySortOrder}
                                 onChange={(v) => updateSettings({ librarySortOrder: v })}
                             />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Library Folder"
+                            description={
+                                isMobilePlatform
+                                    ? "Pick a documents folder (SAF) for mobile folder scanning."
+                                    : "Default folder used when scanning books from the Library page"
+                            }
+                        >
+                            <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={primaryLibraryFolder}
+                                    readOnly
+                                    placeholder="Not configured"
+                                    className={cn("ui-input", "min-w-[20rem] sm:w-[28rem]")}
+                                />
+                                <button
+                                    onClick={() => {
+                                        void handlePickLibraryFolder();
+                                    }}
+                                    className="ui-btn"
+                                >
+                                    Pick folder
+                                </button>
+                                {primaryLibraryFolder && (
+                                    <button
+                                        onClick={() => updateSettings({ scanFolders: [] })}
+                                        className="ui-btn"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
                         </SettingRow>
                     </Section>
 
@@ -738,7 +808,11 @@ export function SettingsPage() {
 
                         <SettingRow
                             label="Export Folder"
-                            description="Pick the local folder to receive markdown updates"
+                            description={
+                                isMobilePlatform
+                                    ? "Folder selection is unavailable on mobile. Configure export path on desktop."
+                                    : "Pick the local folder to receive markdown updates"
+                            }
                         >
                             <div className="flex flex-wrap items-center gap-2">
                                 <input
@@ -755,7 +829,8 @@ export function SettingsPage() {
                                     onClick={() => {
                                         void handlePickVaultDirectory();
                                     }}
-                                    className="ui-btn"
+                                    disabled={isMobilePlatform}
+                                    className={cn("ui-btn", isMobilePlatform && "pointer-events-none opacity-50")}
                                 >
                                     Pick folder
                                 </button>

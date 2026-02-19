@@ -9,8 +9,8 @@ import { getConfiguredPdfJs } from './pdfjs-runtime';
 import { normalizeAuthor } from './utils';
 import { isMobile } from './env';
 
-const DEFAULT_METADATA_TIMEOUT_MS = 10000;
-const DEFAULT_COVER_TIMEOUT_MS = 5000;
+const DEFAULT_METADATA_TIMEOUT_MS = isMobile() ? 15000 : 10000;
+const DEFAULT_COVER_TIMEOUT_MS = isMobile() ? 12000 : 5000;
 
 export interface ExtractedMetadata {
     title: string;
@@ -26,6 +26,7 @@ export interface ExtractedMetadata {
 export interface MetadataExtractionOptions {
     metadataTimeoutMs?: number;
     coverTimeoutMs?: number;
+    allowFallbackCover?: boolean;
 }
 
 function normalizeMetadataTitle(value: unknown): string {
@@ -124,6 +125,55 @@ function getMimeType(format: BookFormat): string {
     }
 }
 
+function getCoverTimeoutMultiplier(format: BookFormat): number {
+    switch (format) {
+        case 'mobi':
+        case 'azw':
+        case 'azw3':
+            return isMobile() ? 2.6 : 2.0;
+        case 'epub':
+        case 'fb2':
+            return isMobile() ? 1.8 : 1.5;
+        case 'cbz':
+            return isMobile() ? 1.5 : 1.3;
+        case 'pdf':
+            return isMobile() ? 1.6 : 1.4;
+        case 'cbr':
+        default:
+            return 1;
+    }
+}
+
+async function normalizeCoverBlob(rawCover: unknown, fallbackMimeType: string): Promise<Blob | null> {
+    if (!rawCover) {
+        return null;
+    }
+
+    if (rawCover instanceof Blob) {
+        return rawCover.size > 0 ? rawCover : null;
+    }
+
+    if (rawCover instanceof ArrayBuffer) {
+        return rawCover.byteLength > 0 ? new Blob([rawCover], { type: fallbackMimeType }) : null;
+    }
+
+    if (ArrayBuffer.isView(rawCover)) {
+        return rawCover.byteLength > 0 ? new Blob([rawCover], { type: fallbackMimeType }) : null;
+    }
+
+    if (typeof rawCover === 'string' && rawCover.startsWith('data:')) {
+        try {
+            const response = await fetch(rawCover);
+            const blob = await response.blob();
+            return blob.size > 0 ? blob : null;
+        } catch {
+            return null;
+        }
+    }
+
+    return null;
+}
+
 function buildFallbackCoverSvg(title: string, author: string): string {
     const normalizedTitle = (title || 'Untitled').trim();
     const normalizedAuthor = (author || 'Unknown Author').trim();
@@ -203,7 +253,12 @@ export async function extractMetadata(
     options?: MetadataExtractionOptions,
 ): Promise<ExtractedMetadata> {
     const metadataTimeoutMs = Math.max(500, options?.metadataTimeoutMs ?? DEFAULT_METADATA_TIMEOUT_MS);
-    const coverTimeoutMs = Math.max(300, options?.coverTimeoutMs ?? DEFAULT_COVER_TIMEOUT_MS);
+    const baseCoverTimeoutMs = options?.coverTimeoutMs ?? DEFAULT_COVER_TIMEOUT_MS;
+    const coverTimeoutMs = Math.max(
+        300,
+        Math.round(baseCoverTimeoutMs * getCoverTimeoutMultiplier(format)),
+    );
+    const allowFallbackCover = options?.allowFallbackCover ?? true;
     const result: ExtractedMetadata = {
         title: '',
         author: '',
@@ -271,12 +326,16 @@ export async function extractMetadata(
             }
 
             pdf.destroy();
-            await ensureCoverFallback(result, filename, bookId);
+            if (allowFallbackCover) {
+                await ensureCoverFallback(result, filename, bookId);
+            }
             return result;
         } catch (pdfError) {
             console.warn('[CoverExtractor] Failed to extract PDF metadata:', pdfError);
             result.title = filename.replace(/\.[^/.]+$/, '');
-            result.coverDataUrl = await createAndPersistFallbackCover(result.title, result.author || 'Unknown Author', bookId);
+            if (allowFallbackCover) {
+                result.coverDataUrl = await createAndPersistFallbackCover(result.title, result.author || 'Unknown Author', bookId);
+            }
             return result;
         }
     }
@@ -331,7 +390,7 @@ export async function extractMetadata(
         if (book.getCover) {
             try {
                 const rawCoverBlob = await withTimeout(book.getCover(), coverTimeoutMs, 'extracting cover');
-                const coverBlob = rawCoverBlob instanceof Blob ? rawCoverBlob : null;
+                const coverBlob = await normalizeCoverBlob(rawCoverBlob, mimeType);
                 if (coverBlob) {
                     if (bookId) {
                         result.coverDataUrl = await saveCoverImage(bookId, coverBlob);
@@ -352,12 +411,16 @@ export async function extractMetadata(
             }
         }
 
-        await ensureCoverFallback(result, filename, bookId);
+        if (allowFallbackCover) {
+            await ensureCoverFallback(result, filename, bookId);
+        }
         return result;
     } catch (error) {
         console.warn('[CoverExtractor] Failed to extract metadata:', error);
         result.title = filename.replace(/\.[^/.]+$/, '');
-        result.coverDataUrl = await createAndPersistFallbackCover(result.title, result.author || 'Unknown Author', bookId);
+        if (allowFallbackCover) {
+            result.coverDataUrl = await createAndPersistFallbackCover(result.title, result.author || 'Unknown Author', bookId);
+        }
         return result;
     }
 }

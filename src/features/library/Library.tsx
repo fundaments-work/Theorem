@@ -6,14 +6,19 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
     cn,
+    normalizeFilePath,
     normalizeAuthor,
 } from "../../core";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core";
 import { formatProgress, formatFileSize, formatRelativeDate } from "../../core";
 import {
+    ensureFilenameForFormat,
     extractFilenameMetadata,
+    extractFilenameFromPath,
+    pickLibraryFolderMobile,
     importBooksIncremental,
     pickAndImportBooksIncremental,
+    scanLibraryFolderMobile,
     scanFolderForBooks,
 } from "../../core";
 import { rankByFuzzyQuery } from "../../core";
@@ -24,13 +29,14 @@ import {
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "../../core";
 import { FORMAT_DISPLAY_NAMES } from "../../core";
-import { isTauri } from "../../core";
+import { isMobile, isTauri } from "../../core";
 import { getBookData } from "../../core";
 import { ContextMenu } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
 import { Dropdown } from "../../ui";
 import { Modal, ModalBody, ModalFooter } from "../../ui";
 import { confirmDeleteBook } from "../../core";
+import { showOpenDirectoryDialog } from "../../core";
 import { getShelfColor, getShelfInitials } from "../../core";
 
 // View mode icons
@@ -49,8 +55,12 @@ const TOOLBAR_ICON_BUTTON = "h-10 w-10 px-0";
 type ExtractMetadataFn = typeof import("../../core").extractMetadata;
 
 const COVER_EXTRACTION_BATCH_SIZE = 3;
-const IMPORT_METADATA_TIMEOUT_MS = 2500;
-const IMPORT_COVER_TIMEOUT_MS = 1500;
+const IMPORT_METADATA_TIMEOUT_MS = isMobile() ? 9000 : 6000;
+const IMPORT_COVER_TIMEOUT_MS = isMobile() ? 7000 : 4000;
+const IMPORT_METADATA_QUEUE_CONCURRENCY = isMobile() ? 1 : 3;
+const BATCH_METADATA_TIMEOUT_MS = isMobile() ? 22000 : 10000;
+const BATCH_COVER_TIMEOUT_MS = isMobile() ? 16000 : 5000;
+const MAX_METADATA_EXTRACTION_ATTEMPTS = isMobile() ? 4 : 6;
 let extractMetadataPromise: Promise<ExtractMetadataFn> | null = null;
 
 async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
@@ -68,7 +78,7 @@ function normalizeMetadataText(value: string | undefined): string {
 
 function shouldUseExtractedTitle(book: Book, extractedTitle: string | undefined): boolean {
     const nextTitle = normalizeMetadataText(extractedTitle);
-    if (!nextTitle || book.format === "pdf") {
+    if (!nextTitle) {
         return false;
     }
 
@@ -96,7 +106,7 @@ function shouldUseExtractedTitle(book: Book, extractedTitle: string | undefined)
 
 function shouldUseExtractedAuthor(book: Book, extractedAuthor: string | undefined): boolean {
     const nextAuthor = normalizeMetadataText(extractedAuthor);
-    if (!nextAuthor || nextAuthor.toLowerCase() === "unknown author" || book.format === "pdf") {
+    if (!nextAuthor || nextAuthor.toLowerCase() === "unknown author") {
         return false;
     }
 
@@ -115,6 +125,30 @@ function shouldUseExtractedAuthor(book: Book, extractedAuthor: string | undefine
     );
 
     return currentAuthor === "Unknown Author" || currentIsFilenameFallback;
+}
+
+function hasEncodedContentUriFallbackTitle(book: Book): boolean {
+    return book.filePath.startsWith("content://") && /%[0-9a-f]{2}/i.test(book.title);
+}
+
+function isLikelyGeneratedFallbackCover(coverPath?: string): boolean {
+    if (!coverPath || !coverPath.startsWith("data:image/svg+xml")) {
+        return false;
+    }
+
+    try {
+        const [, payload = ""] = coverPath.split(",", 2);
+        const content = coverPath.includes(";base64,")
+            ? atob(payload)
+            : decodeURIComponent(payload);
+        return content.includes("Book cover fallback");
+    } catch {
+        return false;
+    }
+}
+
+function shouldRetryMissingCoverExtraction(book: Book): boolean {
+    return !book.coverPath && book.coverExtractionDone === true;
 }
 
 function isBookMarkedRead(book: Book): boolean {
@@ -426,7 +460,17 @@ function BookCard({
 }
 
 // Empty State Component
-function EmptyLibrary({ onAddBooks, isLoading }: { onAddBooks: () => void; isLoading: boolean }) {
+function EmptyLibrary({
+    onAddBooks,
+    onScanFolder,
+    isImporting,
+    isScanning,
+}: {
+    onAddBooks: () => void;
+    onScanFolder?: () => void;
+    isImporting: boolean;
+    isScanning: boolean;
+}) {
     return (
         <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-24 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
@@ -438,18 +482,35 @@ function EmptyLibrary({ onAddBooks, isLoading }: { onAddBooks: () => void; isLoa
             <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-muted)] mb-8 text-sm leading-relaxed">
                 Import books to start reading
             </p>
-            <button
-                onClick={onAddBooks}
-                disabled={isLoading}
-                className={cn(TOOLBAR_BUTTON_PRIMARY, "min-w-[10.5rem] whitespace-nowrap px-6 py-2.5")}
-            >
-                {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                    <Plus className="w-4 h-4" />
+            <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                    onClick={onAddBooks}
+                    disabled={isImporting}
+                    className={cn(TOOLBAR_BUTTON_PRIMARY, "min-w-[10.5rem] whitespace-nowrap px-6 py-2.5")}
+                >
+                    {isImporting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                        <Plus className="w-4 h-4" />
+                    )}
+                    <span>{isImporting ? "Importing..." : "Import Books"}</span>
+                </button>
+
+                {onScanFolder && (
+                    <button
+                        onClick={onScanFolder}
+                        disabled={isScanning}
+                        className={cn(TOOLBAR_BUTTON_BASE, "min-w-[10.5rem] whitespace-nowrap px-6 py-2.5")}
+                    >
+                        {isScanning ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <FolderOpen className="w-4 h-4" />
+                        )}
+                        <span>{isScanning ? "Scanning..." : "Scan Folder"}</span>
+                    </button>
                 )}
-                <span>{isLoading ? 'Importing...' : 'Import Books'}</span>
-            </button>
+            </div>
         </div>
     );
 }
@@ -730,6 +791,7 @@ export function LibraryPage() {
     const addBook = useLibraryStore((state) => state.addBook);
     const removeBook = useLibraryStore((state) => state.removeBook);
     const updateBook = useLibraryStore((state) => state.updateBook);
+    const setLastScannedAt = useLibraryStore((state) => state.setLastScannedAt);
     const toggleFavorite = useLibraryStore((state) => state.toggleFavorite);
     const markBookCompleted = useLibraryStore((state) => state.markBookCompleted);
     const markBookUnread = useLibraryStore((state) => state.markBookUnread);
@@ -758,45 +820,58 @@ export function LibraryPage() {
 
     // Tracks cover extraction jobs currently in progress.
     const extractedBookIdsRef = useRef<Set<string>>(new Set());
+    const metadataExtractionAttemptsRef = useRef<Map<string, number>>(new Map());
+    const pendingImportMetadataQueueRef = useRef<Book[]>([]);
+    const queuedImportMetadataIdsRef = useRef<Set<string>>(new Set());
+    const activeImportMetadataTasksRef = useRef(0);
 
-    const extractImportedBookMetadata = useCallback(async (book: Book) => {
-        if (book.coverExtractionDone || extractedBookIdsRef.current.has(book.id)) {
+    const performImportedBookMetadataExtraction = useCallback(async (book: Book) => {
+        const latestBook = useLibraryStore
+            .getState()
+            .books
+            .find((candidate) => candidate.id === book.id) ?? book;
+
+        if (latestBook.coverExtractionDone && latestBook.coverPath) {
             return;
         }
-
-        extractedBookIdsRef.current.add(book.id);
 
         try {
             const extractMetadata = await getExtractMetadataFn();
             let data: ArrayBuffer | null = null;
+            const isContentUri = latestBook.filePath.startsWith("content://");
             const hasOriginalFilePath = (
-                !book.filePath.startsWith('browser://')
-                && !book.filePath.startsWith('idb://')
-                && !book.filePath.startsWith('sqlite://')
+                !latestBook.filePath.startsWith('browser://')
+                && !latestBook.filePath.startsWith('idb://')
+                && !latestBook.filePath.startsWith('sqlite://')
+                && !isContentUri
             );
 
             if (hasOriginalFilePath) {
-                data = await getBookData('', book.filePath);
+                data = await getBookData('', latestBook.filePath);
             }
 
             if (!data) {
-                const storagePath = book.storagePath || book.filePath;
-                data = await getBookData(book.id, storagePath);
+                const storagePath = latestBook.storagePath || latestBook.filePath;
+                data = await getBookData(latestBook.id, storagePath);
             }
 
             if (!data) {
                 return;
             }
 
-            const filename = book.filePath.split(/[/\\]/).pop() || "book.epub";
+            const filename = ensureFilenameForFormat(
+                extractFilenameFromPath(latestBook.filePath),
+                latestBook.format,
+            );
             const metadata = await extractMetadata(
                 data,
-                book.format,
+                latestBook.format,
                 filename,
-                book.id,
+                latestBook.id,
                 {
                     metadataTimeoutMs: IMPORT_METADATA_TIMEOUT_MS,
                     coverTimeoutMs: IMPORT_COVER_TIMEOUT_MS,
+                    allowFallbackCover: false,
                 },
             );
 
@@ -806,26 +881,26 @@ export function LibraryPage() {
                 updates.coverPath = metadata.coverDataUrl;
             }
 
-            const shouldUpdateTitle = shouldUseExtractedTitle(book, metadata.title);
+            const shouldUpdateTitle = shouldUseExtractedTitle(latestBook, metadata.title);
             if (shouldUpdateTitle) {
                 updates.title = normalizeMetadataText(metadata.title);
             }
 
-            const shouldUpdateAuthor = shouldUseExtractedAuthor(book, metadata.author);
+            const shouldUpdateAuthor = shouldUseExtractedAuthor(latestBook, metadata.author);
             if (shouldUpdateAuthor) {
                 updates.author = normalizeMetadataText(metadata.author);
             }
 
-            if (metadata.description && !book.description) {
+            if (metadata.description && !latestBook.description) {
                 updates.description = metadata.description;
             }
-            if (metadata.publisher && !book.publisher) {
+            if (metadata.publisher && !latestBook.publisher) {
                 updates.publisher = metadata.publisher;
             }
-            if (metadata.language && !book.language) {
+            if (metadata.language && !latestBook.language) {
                 updates.language = metadata.language;
             }
-            if (metadata.publishedDate && !book.publishedDate) {
+            if (metadata.publishedDate && !latestBook.publishedDate) {
                 updates.publishedDate = metadata.publishedDate;
             }
 
@@ -833,26 +908,70 @@ export function LibraryPage() {
                 Boolean(metadata.coverDataUrl)
                 || shouldUpdateTitle
                 || shouldUpdateAuthor
-                || Boolean(metadata.description && !book.description)
-                || Boolean(metadata.publisher && !book.publisher)
-                || Boolean(metadata.language && !book.language)
-                || Boolean(metadata.publishedDate && !book.publishedDate)
+                || Boolean(metadata.description && !latestBook.description)
+                || Boolean(metadata.publisher && !latestBook.publisher)
+                || Boolean(metadata.language && !latestBook.language)
+                || Boolean(metadata.publishedDate && !latestBook.publishedDate)
             );
 
-            if (hasUsefulMetadataUpdate) {
+            if (Boolean(metadata.coverDataUrl) || (hasUsefulMetadataUpdate && Boolean(latestBook.coverPath))) {
                 updates.coverExtractionDone = true;
             }
 
             if (Object.keys(updates).length > 0) {
-                updateBook(book.id, updates);
+                updateBook(latestBook.id, updates);
             }
 
         } catch (error) {
             console.error("[Library] Fast metadata extraction failed for imported book:", book.id, error);
-        } finally {
-            extractedBookIdsRef.current.delete(book.id);
         }
     }, [updateBook]);
+
+    const pumpImportMetadataQueue = useCallback(() => {
+        while (
+            activeImportMetadataTasksRef.current < IMPORT_METADATA_QUEUE_CONCURRENCY
+            && pendingImportMetadataQueueRef.current.length > 0
+        ) {
+            const nextBook = pendingImportMetadataQueueRef.current.pop();
+            if (!nextBook) {
+                break;
+            }
+
+            if (extractedBookIdsRef.current.has(nextBook.id)) {
+                continue;
+            }
+
+            activeImportMetadataTasksRef.current += 1;
+            extractedBookIdsRef.current.add(nextBook.id);
+
+            void performImportedBookMetadataExtraction(nextBook)
+                .catch((error) => {
+                    console.error("[Library] Import metadata queue task failed:", nextBook.id, error);
+                })
+                .finally(() => {
+                    activeImportMetadataTasksRef.current = Math.max(0, activeImportMetadataTasksRef.current - 1);
+                    extractedBookIdsRef.current.delete(nextBook.id);
+                    queuedImportMetadataIdsRef.current.delete(nextBook.id);
+                    if (pendingImportMetadataQueueRef.current.length > 0) {
+                        pumpImportMetadataQueue();
+                    }
+                });
+        }
+    }, [performImportedBookMetadataExtraction]);
+
+    const extractImportedBookMetadata = useCallback((book: Book) => {
+        if (
+            book.coverExtractionDone
+            || queuedImportMetadataIdsRef.current.has(book.id)
+            || extractedBookIdsRef.current.has(book.id)
+        ) {
+            return;
+        }
+
+        queuedImportMetadataIdsRef.current.add(book.id);
+        pendingImportMetadataQueueRef.current.push(book);
+        pumpImportMetadataQueue();
+    }, [pumpImportMetadataQueue]);
 
     // Selected shelf state (safely initialized from session storage)
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
@@ -995,14 +1114,41 @@ export function LibraryPage() {
                 extractedBookIdsRef.current.delete(bookId);
             }
         });
+        metadataExtractionAttemptsRef.current.forEach((_attempts, bookId) => {
+            if (!knownBookIds.has(bookId)) {
+                metadataExtractionAttemptsRef.current.delete(bookId);
+            }
+        });
+        queuedImportMetadataIdsRef.current.forEach((bookId) => {
+            if (!knownBookIds.has(bookId)) {
+                queuedImportMetadataIdsRef.current.delete(bookId);
+            }
+        });
+        pendingImportMetadataQueueRef.current = pendingImportMetadataQueueRef.current.filter(
+            (book) => knownBookIds.has(book.id),
+        );
 
-        const booksWithoutCovers = books
+        const booksNeedingMetadata = books
             .filter(
-                (book) => (
-                    !book.coverPath
-                    && book.coverExtractionDone !== true
-                    && !extractedBookIdsRef.current.has(book.id)
-                ),
+                (book) => {
+                    const attempts = metadataExtractionAttemptsRef.current.get(book.id) ?? 0;
+                    return attempts < MAX_METADATA_EXTRACTION_ATTEMPTS && (
+                        (
+                            (
+                                !book.coverPath
+                                && book.coverExtractionDone !== true
+                            )
+                            || shouldRetryMissingCoverExtraction(book)
+                            || hasEncodedContentUriFallbackTitle(book)
+                            || (
+                                book.filePath.startsWith("content://")
+                                && isLikelyGeneratedFallbackCover(book.coverPath)
+                            )
+                        )
+                        && !extractedBookIdsRef.current.has(book.id)
+                        && !queuedImportMetadataIdsRef.current.has(book.id)
+                    );
+                },
             )
             .sort((a, b) => {
                 const aAddedAt = new Date(a.addedAt).getTime();
@@ -1010,7 +1156,7 @@ export function LibraryPage() {
                 return bAddedAt - aAddedAt;
             });
 
-        if (booksWithoutCovers.length === 0) {
+        if (booksNeedingMetadata.length === 0) {
             return;
         }
 
@@ -1018,29 +1164,33 @@ export function LibraryPage() {
 
         const extractCovers = async () => {
             setIsExtractingCovers(true);
-            const total = booksWithoutCovers.length;
+            const total = booksNeedingMetadata.length;
             setExtractionProgress({ current: 0, total });
 
             try {
                 const extractMetadata = await getExtractMetadataFn();
                 let processedCount = 0;
+                const batchSize = isMobile() ? 1 : COVER_EXTRACTION_BATCH_SIZE;
 
-                for (let i = 0; i < booksWithoutCovers.length && !isCancelled; i += COVER_EXTRACTION_BATCH_SIZE) {
-                    const batch = booksWithoutCovers.slice(i, i + COVER_EXTRACTION_BATCH_SIZE);
+                for (let i = 0; i < booksNeedingMetadata.length && !isCancelled; i += batchSize) {
+                    const batch = booksNeedingMetadata.slice(i, i + batchSize);
 
                     await Promise.all(batch.map(async (book) => {
                         if (extractedBookIdsRef.current.has(book.id)) {
                             return;
                         }
                         extractedBookIdsRef.current.add(book.id);
-                        let extractionCompleted = false;
+                        const nextAttempts = (metadataExtractionAttemptsRef.current.get(book.id) ?? 0) + 1;
+                        metadataExtractionAttemptsRef.current.set(book.id, nextAttempts);
 
                         try {
                             let data: ArrayBuffer | null = null;
+                            const isContentUri = book.filePath.startsWith("content://");
                             const hasOriginalFilePath = (
                                 !book.filePath.startsWith('browser://')
                                 && !book.filePath.startsWith('idb://')
                                 && !book.filePath.startsWith('sqlite://')
+                                && !isContentUri
                             );
 
                             if (hasOriginalFilePath) {
@@ -1056,13 +1206,29 @@ export function LibraryPage() {
                                 return;
                             }
 
-                            const filename = book.filePath.split(/[/\\]/).pop() || 'book.epub';
-                            const metadata = await extractMetadata(data, book.format, filename, book.id);
+                            const filename = ensureFilenameForFormat(
+                                extractFilenameFromPath(book.filePath),
+                                book.format,
+                            );
+                            const metadata = await extractMetadata(
+                                data,
+                                book.format,
+                                filename,
+                                book.id,
+                                {
+                                    metadataTimeoutMs: BATCH_METADATA_TIMEOUT_MS,
+                                    coverTimeoutMs: BATCH_COVER_TIMEOUT_MS,
+                                    allowFallbackCover: false,
+                                },
+                            );
 
-                            const updates: Partial<Book> = { coverExtractionDone: true };
+                            const updates: Partial<Book> = {};
                             if (metadata.coverDataUrl) {
                                 updates.coverPath = metadata.coverDataUrl;
                             }
+
+                            const shouldUpdateTitle = shouldUseExtractedTitle(book, metadata.title);
+                            const shouldUpdateAuthor = shouldUseExtractedAuthor(book, metadata.author);
 
                             if (shouldUseExtractedTitle(book, metadata.title)) {
                                 updates.title = normalizeMetadataText(metadata.title);
@@ -1084,16 +1250,29 @@ export function LibraryPage() {
                                 updates.publishedDate = metadata.publishedDate;
                             }
 
+                            const hasUsefulMetadataUpdate = (
+                                Boolean(metadata.coverDataUrl)
+                                || shouldUpdateTitle
+                                || shouldUpdateAuthor
+                                || Boolean(metadata.description && !book.description)
+                                || Boolean(metadata.publisher && !book.publisher)
+                                || Boolean(metadata.language && !book.language)
+                                || Boolean(metadata.publishedDate && !book.publishedDate)
+                            );
+                            if (Boolean(metadata.coverDataUrl) || (hasUsefulMetadataUpdate && Boolean(book.coverPath))) {
+                                updates.coverExtractionDone = true;
+                            }
+
                             if (!isCancelled && Object.keys(updates).length > 0) {
                                 updateBook(book.id, updates);
-                                extractionCompleted = true;
+                            }
+                            if (metadata.coverDataUrl) {
+                                metadataExtractionAttemptsRef.current.delete(book.id);
                             }
                         } catch (error) {
                             console.error('[Library] Failed to extract cover for book:', book.id, error);
                         } finally {
-                            if (!extractionCompleted || isCancelled) {
-                                extractedBookIdsRef.current.delete(book.id);
-                            }
+                            extractedBookIdsRef.current.delete(book.id);
                         }
                     }));
 
@@ -1161,6 +1340,29 @@ export function LibraryPage() {
         }
     }, [addBook, extractImportedBookMetadata]);
 
+    const importDiscoveredBooks = useCallback(async (bookPaths: string[]) => {
+        if (bookPaths.length === 0) {
+            alert("No supported books were found in the selected folder.");
+            return;
+        }
+
+        await importBooksIncremental(bookPaths, (book) => {
+            addBook(book);
+            void extractImportedBookMetadata(book);
+        });
+        setLastScannedAt(new Date());
+    }, [addBook, extractImportedBookMetadata, setLastScannedAt]);
+
+    const scanAndImportFolder = useCallback(async (folderPath: string) => {
+        const normalizedFolderPath = normalizeFilePath(folderPath);
+        if (!normalizedFolderPath) {
+            return;
+        }
+
+        const bookPaths = await scanFolderForBooks(normalizedFolderPath);
+        await importDiscoveredBooks(bookPaths);
+    }, [importDiscoveredBooks]);
+
     // Handle scanning folder (Tauri only)
     const handleScanFolder = useCallback(async () => {
         if (!isTauri()) {
@@ -1168,27 +1370,57 @@ export function LibraryPage() {
             return;
         }
 
-        setIsScanning(true);
         try {
-            const dialog = await import('@tauri-apps/plugin-dialog');
-            const folder = await dialog.open({
-                directory: true,
-                multiple: false,
-            });
+            if (isMobile()) {
+                setIsScanning(true);
 
-            if (folder && typeof folder === 'string') {
-                const bookPaths = await scanFolderForBooks(folder);
-                await importBooksIncremental(bookPaths, (book) => {
-                    addBook(book);
-                    void extractImportedBookMetadata(book);
-                });
+                let selectedFolder = settings.scanFolders[0] || "";
+                if (!selectedFolder) {
+                    const pickedFolder = await pickLibraryFolderMobile();
+                    if (!pickedFolder) {
+                        return;
+                    }
+                    selectedFolder = pickedFolder;
+                    updateSettings({ scanFolders: [selectedFolder] });
+                }
+
+                const bookUris = await scanLibraryFolderMobile(selectedFolder);
+                await importDiscoveredBooks(bookUris);
+                return;
             }
+
+            const defaultDesktopFolder = settings.scanFolders[0]?.startsWith("content://")
+                ? undefined
+                : settings.scanFolders[0] || undefined;
+            const selectedFolder = await showOpenDirectoryDialog({
+                title: "Scan Library Folder",
+                defaultPath: defaultDesktopFolder,
+            });
+            if (!selectedFolder) {
+                return;
+            }
+
+            const normalizedFolderPath = normalizeFilePath(selectedFolder);
+            if (!normalizedFolderPath) {
+                return;
+            }
+
+            updateSettings({ scanFolders: [normalizedFolderPath] });
+
+            setIsScanning(true);
+            await scanAndImportFolder(normalizedFolderPath);
         } catch (err) {
             console.error('Scan error:', err);
+            alert(err instanceof Error ? err.message : 'Failed to scan selected folder.');
         } finally {
             setIsScanning(false);
         }
-    }, [addBook, extractImportedBookMetadata]);
+    }, [
+        importDiscoveredBooks,
+        scanAndImportFolder,
+        settings.scanFolders,
+        updateSettings,
+    ]);
 
     // Book actions
     const handleOpenBook = useCallback((book: Book) => {
@@ -1251,7 +1483,14 @@ export function LibraryPage() {
     };
 
     if (books.length === 0) {
-        return <EmptyLibrary onAddBooks={handleAddBooks} isLoading={isImporting} />;
+        return (
+            <EmptyLibrary
+                onAddBooks={handleAddBooks}
+                onScanFolder={isTauri() ? handleScanFolder : undefined}
+                isImporting={isImporting}
+                isScanning={isScanning}
+            />
+        );
     }
 
     return (

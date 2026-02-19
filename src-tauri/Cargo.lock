@@ -3936,6 +3936,7 @@ dependencies = [
  "tauri-plugin-app",
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
+ "tauri-plugin-mobile-folder-scan",
  "tauri-plugin-opener",
  "tauri-plugin-os",
 ]
@@ -4067,6 +4068,16 @@ dependencies = [
  "thiserror 2.0.18",
  "toml 0.9.11+spec-1.1.0",
  "url",
+]
+
+[[package]]
+name = "tauri-plugin-mobile-folder-scan"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]
