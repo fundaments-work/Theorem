@@ -130,9 +130,8 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         onLocationsGenerated: () => {},
         onLocationChange,
         onError,
-        onTextSelected: onTextSelected ? (cfi, text, _range) => {
-            // We need to capture the mouse event separately
-            onTextSelected(cfi, text);
+        onTextSelected: onTextSelected ? (cfi, text, rangeOrEvent) => {
+            onTextSelected(cfi, text, rangeOrEvent);
         } : undefined,
         onLocationsSaved,
         onViewportTap,

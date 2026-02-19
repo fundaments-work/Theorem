@@ -1657,11 +1657,13 @@ export class FoliateEngine {
             console.debug('[FoliateEngine] Attaching listeners to iframe element for section', index);
             
             // Track last selection to avoid duplicates
-            let lastSelection = '';
+            let lastSelectionKey = '';
             let pointerDownX = 0;
             let pointerDownY = 0;
             let pointerDownAt = 0;
             let pointerMoved = false;
+            const SELECTION_CAPTURE_DELAY = 24;
+            const SELECTION_INTERACTION_SUPPRESS_MS = 420;
             const TAP_MAX_DISTANCE = 12;
             const TAP_MAX_DURATION = 350;
             const SWIPE_MIN_DISTANCE = 56;
@@ -1671,6 +1673,90 @@ export class FoliateEngine {
             let touchStartY = 0;
             let touchStartAt = 0;
             let touchMoved = false;
+            let selectionCaptureTimeout: number | null = null;
+            let lastSelectionCapturedAt = 0;
+
+            const getEventPoint = (event?: MouseEvent | PointerEvent | TouchEvent): { x: number; y: number } | null => {
+                if (!event) {
+                    return null;
+                }
+                if ('changedTouches' in event && event.changedTouches.length > 0) {
+                    const touch = event.changedTouches[0];
+                    return { x: touch.clientX, y: touch.clientY };
+                }
+                if ('clientX' in event && typeof event.clientX === 'number') {
+                    return { x: event.clientX, y: event.clientY };
+                }
+                return null;
+            };
+
+            const scheduleSelectionCapture = (event?: MouseEvent | PointerEvent | TouchEvent) => {
+                if (selectionCaptureTimeout !== null) {
+                    window.clearTimeout(selectionCaptureTimeout);
+                }
+                selectionCaptureTimeout = window.setTimeout(() => {
+                    selectionCaptureTimeout = null;
+                    try {
+                        const selection = doc.getSelection();
+                        if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+                            lastSelectionKey = '';
+                            return;
+                        }
+
+                        const text = selection.toString().trim();
+                        if (!text) {
+                            return;
+                        }
+
+                        const range = selection.getRangeAt(0);
+                        const cfi = this.getCFIFromRange(index, range);
+                        if (!cfi) {
+                            return;
+                        }
+
+                        const selectionKey = `${cfi}::${text}`;
+                        if (selectionKey === lastSelectionKey) {
+                            return;
+                        }
+                        lastSelectionKey = selectionKey;
+
+                        const rect = range.getBoundingClientRect();
+                        const point = getEventPoint(event) ?? {
+                            x: rect.left + rect.width / 2,
+                            y: rect.top,
+                        };
+                        const syntheticEvent = new MouseEvent('mouseup', {
+                            clientX: point.x,
+                            clientY: point.y,
+                            bubbles: true,
+                        });
+
+                        lastSelectionCapturedAt = Date.now();
+                        callback(cfi, text, syntheticEvent);
+                    } catch (err) {
+                        console.warn('[FoliateEngine] Error while capturing iframe selection:', err);
+                    }
+                }, SELECTION_CAPTURE_DELAY);
+            };
+
+            // Suppress native text action menus inside the reading iframe.
+            doc.addEventListener(
+                'contextmenu',
+                (event: MouseEvent) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                },
+                true,
+            );
+
+            win.addEventListener(
+                'contextmenu',
+                (event: MouseEvent) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                },
+                true,
+            );
 
             win.addEventListener(
                 'pointerdown',
@@ -1757,6 +1843,7 @@ export class FoliateEngine {
                         touchMoved = false;
                         return;
                     }
+                    scheduleSelectionCapture(event);
 
                     if (this.flow === 'scroll') {
                         touchStartAt = 0;
@@ -1772,6 +1859,8 @@ export class FoliateEngine {
 
                     const selection = doc.getSelection();
                     if (selection && !selection.isCollapsed && selection.toString().trim().length > 0) {
+                        event.preventDefault();
+                        event.stopPropagation();
                         touchStartAt = 0;
                         touchMoved = false;
                         return;
@@ -1798,48 +1887,40 @@ export class FoliateEngine {
 
                     touchMoved = false;
                     event.preventDefault();
-                    if (deltaX > 0) {
-                        void this.prev();
-                    } else {
-                        void this.next();
-                    }
+                    window.setTimeout(() => {
+                        const shouldSuppressInteraction =
+                            Date.now() - lastSelectionCapturedAt < SELECTION_INTERACTION_SUPPRESS_MS;
+                        if (shouldSuppressInteraction) {
+                            return;
+                        }
+
+                        const selection = doc.getSelection();
+                        const hasSelection = Boolean(
+                            selection
+                            && !selection.isCollapsed
+                            && selection.toString().trim().length > 0,
+                        );
+                        if (hasSelection) {
+                            return;
+                        }
+                        if (deltaX > 0) {
+                            void this.prev();
+                        } else {
+                            void this.next();
+                        }
+                    }, SELECTION_CAPTURE_DELAY);
                 },
                 { capture: true, passive: false },
             );
-            
+
+            doc.addEventListener('selectionchange', () => {
+                scheduleSelectionCapture();
+            }, true);
+
             // Listen for mouseup on the iframe window
-            win.addEventListener('mouseup', (e: MouseEvent) => {
-                console.debug('[FoliateEngine] IFRAME MOUSEUP in section', index);
-                
-                setTimeout(() => {
-                    try {
-                        const selection = doc.getSelection();
-                        console.debug('[FoliateEngine] Checking selection in iframe', index, {
-                            rangeCount: selection?.rangeCount,
-                            isCollapsed: selection?.isCollapsed
-                        });
-                        
-                        if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
-                            const text = selection.toString().trim();
-                            
-                            if (text && text !== lastSelection && text.length > 0) {
-                                lastSelection = text;
-                                console.debug('[FoliateEngine] TEXT SELECTED in iframe', index, ':', text.substring(0, 50));
-                                
-                                const range = selection.getRangeAt(0);
-                                const cfi = this.getCFIFromRange(index, range);
-                                
-                                if (cfi) {
-                                    console.debug('[FoliateEngine] Calling callback from iframe listener');
-                                    callback(cfi, text, e);
-                                }
-                            }
-                        }
-                    } catch (err) {
-                        console.warn('[FoliateEngine] Error in iframe mouseup handler:', err);
-                    }
-                }, 100);
-            });
+            win.addEventListener('mouseup', (event: MouseEvent) => {
+                scheduleSelectionCapture(event);
+            }, true);
 
             win.addEventListener(
                 'pointerup',
@@ -1863,12 +1944,19 @@ export class FoliateEngine {
 
                     pointerDownAt = 0;
                     pointerMoved = false;
+                    scheduleSelectionCapture(event);
 
                     if (!isTap) {
                         return;
                     }
 
                     window.setTimeout(() => {
+                        const shouldSuppressInteraction =
+                            Date.now() - lastSelectionCapturedAt < SELECTION_INTERACTION_SUPPRESS_MS;
+                        if (shouldSuppressInteraction) {
+                            return;
+                        }
+
                         const selection = doc.getSelection();
                         const hasSelection = Boolean(
                             selection
@@ -1879,7 +1967,7 @@ export class FoliateEngine {
                             return;
                         }
                         this.notifyViewportTap(event.target);
-                    }, 0);
+                    }, SELECTION_CAPTURE_DELAY);
                 },
                 true,
             );
@@ -1907,8 +1995,39 @@ export class FoliateEngine {
                 let pointerDownY = 0;
                 let pointerDownAt = 0;
                 let pointerMoved = false;
+                const SELECTION_CAPTURE_DELAY = 24;
                 const TAP_MAX_DISTANCE = 12;
                 const TAP_MAX_DURATION = 350;
+                
+                function postSelection(clientX, clientY) {
+                    var selection = document.getSelection();
+                    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+                        return false;
+                    }
+
+                    var text = selection.toString().trim();
+                    if (!text || text === lastSelection) {
+                        return false;
+                    }
+
+                    lastSelection = text;
+                    var range = selection.getRangeAt(0);
+                    var rect = range.getBoundingClientRect();
+                    window.parent.postMessage({
+                        type: 'foliate-selection',
+                        sectionIndex: ${index},
+                        text: text,
+                        clientX: Number.isFinite(clientX) ? clientX : rect.left + rect.width / 2,
+                        clientY: Number.isFinite(clientY) ? clientY : rect.top,
+                        rect: {
+                            left: rect.left,
+                            top: rect.top,
+                            width: rect.width,
+                            height: rect.height
+                        }
+                    }, '*');
+                    return true;
+                }
                 
                 document.addEventListener('pointerdown', function(e) {
                     if (!e.isPrimary || e.button !== 0) {
@@ -1934,6 +2053,11 @@ export class FoliateEngine {
                     pointerDownAt = 0;
                     pointerMoved = false;
                 });
+
+                document.addEventListener('contextmenu', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, true);
                 
                 document.addEventListener('pointerup', function(e) {
                     const elapsed = Date.now() - pointerDownAt;
@@ -1948,32 +2072,7 @@ export class FoliateEngine {
                     
                     // Check selection after a short delay
                     setTimeout(function() {
-                        var selection = document.getSelection();
-                        
-                        if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
-                            var text = selection.toString().trim();
-                            
-                            // Prevent duplicate selections
-                            if (text && text !== lastSelection && text.length > 0) {
-                                lastSelection = text;
-                                
-                                var range = selection.getRangeAt(0);
-                                var rect = range.getBoundingClientRect();
-                                
-                                window.parent.postMessage({
-                                    type: 'foliate-selection',
-                                    sectionIndex: ${index},
-                                    text: text,
-                                    clientX: e.clientX,
-                                    clientY: e.clientY,
-                                    rect: {
-                                        left: rect.left,
-                                        top: rect.top,
-                                        width: rect.width,
-                                        height: rect.height
-                                    }
-                                }, '*');
-                            }
+                        if (postSelection(e.clientX, e.clientY)) {
                             return;
                         }
 
@@ -1983,8 +2082,17 @@ export class FoliateEngine {
                                 sectionIndex: ${index},
                             }, '*');
                         }
-                    }, 100);
+                    }, SELECTION_CAPTURE_DELAY);
                 });
+
+                document.addEventListener('touchend', function(e) {
+                    setTimeout(function() {
+                        var touch = e.changedTouches && e.changedTouches.length > 0
+                            ? e.changedTouches[0]
+                            : null;
+                        postSelection(touch ? touch.clientX : undefined, touch ? touch.clientY : undefined);
+                    }, SELECTION_CAPTURE_DELAY);
+                }, { passive: true });
             })();
         `;
         

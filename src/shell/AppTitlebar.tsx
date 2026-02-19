@@ -208,7 +208,6 @@ export function AppTitlebar({
                         data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
                     >
                         <div className="relative w-full">
-                            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                             <input
                                 type="text"
                                 placeholder={searchPlaceholder}
@@ -286,7 +285,6 @@ export function AppTitlebar({
             {isSearchVisible && isMobileSearchOpen && (
                 <div className="mt-2 sm:hidden">
                     <div className="relative w-full">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                         <input
                             type="text"
                             placeholder={searchPlaceholder}

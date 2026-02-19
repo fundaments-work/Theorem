@@ -28,6 +28,54 @@ export interface MetadataExtractionOptions {
     coverTimeoutMs?: number;
 }
 
+function normalizeMetadataTitle(value: unknown): string {
+    if (typeof value === 'string') {
+        return value.replace(/\s+/g, ' ').trim();
+    }
+
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const normalized = normalizeMetadataTitle(item);
+            if (normalized) {
+                return normalized;
+            }
+        }
+        return '';
+    }
+
+    if (value && typeof value === 'object') {
+        const recordValue = value as Record<string, unknown>;
+        const preferredKeys = ['title', 'name', 'label', 'value'];
+        for (const key of preferredKeys) {
+            const candidate = normalizeMetadataTitle(recordValue[key]);
+            if (candidate) {
+                return candidate;
+            }
+        }
+        for (const nestedValue of Object.values(recordValue)) {
+            const candidate = normalizeMetadataTitle(nestedValue);
+            if (candidate) {
+                return candidate;
+            }
+        }
+    }
+
+    return '';
+}
+
+function normalizeMetadataString(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    const normalized = value.replace(/\s+/g, ' ').trim();
+    return normalized.length > 0 ? normalized : undefined;
+}
+
+function isPlaceholderMetadataTitle(title: string): boolean {
+    const normalized = title.trim().toLowerCase();
+    return normalized === 'unknown title' || normalized === 'untitled' || normalized === 'untitled book';
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     return new Promise((resolve, reject) => {
         const timeoutId = setTimeout(() => {
@@ -267,13 +315,17 @@ export async function extractMetadata(
         }
 
         if (book.metadata) {
-            result.title = book.metadata.title || filename.replace(/\.[^/.]+$/, '');
+            const fallbackTitle = filename.replace(/\.[^/.]+$/, '');
+            const normalizedTitle = normalizeMetadataTitle(book.metadata.title);
+            result.title = normalizedTitle && !isPlaceholderMetadataTitle(normalizedTitle)
+                ? normalizedTitle
+                : fallbackTitle;
             result.author = normalizeAuthor(book.metadata.author);
-            result.description = book.metadata.description;
-            result.publisher = book.metadata.publisher;
-            result.language = book.metadata.language;
-            result.publishedDate = book.metadata.publishedDate;
-            result.identifier = book.metadata.identifier;
+            result.description = normalizeMetadataString(book.metadata.description);
+            result.publisher = normalizeMetadataString(book.metadata.publisher);
+            result.language = normalizeMetadataString(book.metadata.language);
+            result.publishedDate = normalizeMetadataString(book.metadata.publishedDate);
+            result.identifier = normalizeMetadataString(book.metadata.identifier);
         }
 
         if (book.getCover) {

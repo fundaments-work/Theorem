@@ -10,7 +10,12 @@ import {
 } from "../../core";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core";
 import { formatProgress, formatFileSize, formatRelativeDate } from "../../core";
-import { importBooksIncremental, pickAndImportBooksIncremental, scanFolderForBooks } from "../../core";
+import {
+    extractFilenameMetadata,
+    importBooksIncremental,
+    pickAndImportBooksIncremental,
+    scanFolderForBooks,
+} from "../../core";
 import { rankByFuzzyQuery } from "../../core";
 import {
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
@@ -55,6 +60,61 @@ async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
         );
     }
     return extractMetadataPromise;
+}
+
+function normalizeMetadataText(value: string | undefined): string {
+    return (value || "").replace(/\s+/g, " ").trim();
+}
+
+function shouldUseExtractedTitle(book: Book, extractedTitle: string | undefined): boolean {
+    const nextTitle = normalizeMetadataText(extractedTitle);
+    if (!nextTitle || book.format === "pdf") {
+        return false;
+    }
+
+    const loweredNext = nextTitle.toLowerCase();
+    if (loweredNext === "unknown title" || loweredNext === "untitled" || loweredNext === "untitled book") {
+        return false;
+    }
+
+    const currentTitle = normalizeMetadataText(book.title);
+    if (!currentTitle) {
+        return true;
+    }
+    if (currentTitle === nextTitle) {
+        return false;
+    }
+
+    const filenameFallbackTitle = normalizeMetadataText(extractFilenameMetadata(book.filePath).title);
+    const currentIsFilenameFallback = (
+        filenameFallbackTitle.length > 0
+        && currentTitle.toLowerCase() === filenameFallbackTitle.toLowerCase()
+    );
+
+    return currentTitle === "Unknown" || currentTitle.includes(".") || currentIsFilenameFallback;
+}
+
+function shouldUseExtractedAuthor(book: Book, extractedAuthor: string | undefined): boolean {
+    const nextAuthor = normalizeMetadataText(extractedAuthor);
+    if (!nextAuthor || nextAuthor.toLowerCase() === "unknown author" || book.format === "pdf") {
+        return false;
+    }
+
+    const currentAuthor = normalizeMetadataText(normalizeAuthor(book.author));
+    if (!currentAuthor) {
+        return true;
+    }
+    if (currentAuthor === nextAuthor) {
+        return false;
+    }
+
+    const filenameFallbackAuthor = normalizeMetadataText(extractFilenameMetadata(book.filePath).author);
+    const currentIsFilenameFallback = (
+        filenameFallbackAuthor.length > 0
+        && currentAuthor.toLowerCase() === filenameFallbackAuthor.toLowerCase()
+    );
+
+    return currentAuthor === "Unknown Author" || currentIsFilenameFallback;
 }
 
 function isBookMarkedRead(book: Book): boolean {
@@ -740,18 +800,20 @@ export function LibraryPage() {
                 },
             );
 
-            const updates: Partial<Book> = { coverExtractionDone: true };
+            const updates: Partial<Book> = {};
 
             if (metadata.coverDataUrl) {
                 updates.coverPath = metadata.coverDataUrl;
             }
 
-            if (metadata.title && (book.title === "Unknown" || book.title.includes("."))) {
-                updates.title = metadata.title;
+            const shouldUpdateTitle = shouldUseExtractedTitle(book, metadata.title);
+            if (shouldUpdateTitle) {
+                updates.title = normalizeMetadataText(metadata.title);
             }
 
-            if (metadata.author && (book.author === "Unknown Author" || !book.author)) {
-                updates.author = metadata.author;
+            const shouldUpdateAuthor = shouldUseExtractedAuthor(book, metadata.author);
+            if (shouldUpdateAuthor) {
+                updates.author = normalizeMetadataText(metadata.author);
             }
 
             if (metadata.description && !book.description) {
@@ -765,6 +827,20 @@ export function LibraryPage() {
             }
             if (metadata.publishedDate && !book.publishedDate) {
                 updates.publishedDate = metadata.publishedDate;
+            }
+
+            const hasUsefulMetadataUpdate = (
+                Boolean(metadata.coverDataUrl)
+                || shouldUpdateTitle
+                || shouldUpdateAuthor
+                || Boolean(metadata.description && !book.description)
+                || Boolean(metadata.publisher && !book.publisher)
+                || Boolean(metadata.language && !book.language)
+                || Boolean(metadata.publishedDate && !book.publishedDate)
+            );
+
+            if (hasUsefulMetadataUpdate) {
+                updates.coverExtractionDone = true;
             }
 
             if (Object.keys(updates).length > 0) {
@@ -984,23 +1060,15 @@ export function LibraryPage() {
                             const metadata = await extractMetadata(data, book.format, filename, book.id);
 
                             const updates: Partial<Book> = { coverExtractionDone: true };
-                            const isBackgroundMetadataPass = !book.coverExtractionDone;
-
                             if (metadata.coverDataUrl) {
                                 updates.coverPath = metadata.coverDataUrl;
                             }
 
-                            if (
-                                metadata.title
-                                && (isBackgroundMetadataPass || book.title === 'Unknown' || book.title.includes('.'))
-                            ) {
-                                updates.title = metadata.title;
+                            if (shouldUseExtractedTitle(book, metadata.title)) {
+                                updates.title = normalizeMetadataText(metadata.title);
                             }
-                            if (
-                                metadata.author
-                                && (isBackgroundMetadataPass || book.author === 'Unknown Author' || !book.author)
-                            ) {
-                                updates.author = metadata.author;
+                            if (shouldUseExtractedAuthor(book, metadata.author)) {
+                                updates.author = normalizeMetadataText(metadata.author);
                             }
 
                             if (metadata.description && !book.description) {
