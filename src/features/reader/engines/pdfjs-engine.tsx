@@ -1885,13 +1885,13 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
 
             loadPdf();
 
-                return () => {
-                    cancelled = true;
-                    loadingPageNumbersRef.current.clear();
-                    pendingScrollPageRef.current = null;
-                    // Cleanup
-                    if (initialPageRestoreTimeoutRef.current) {
-                        clearTimeout(initialPageRestoreTimeoutRef.current);
+            return () => {
+                cancelled = true;
+                loadingPageNumbersRef.current.clear();
+                pendingScrollPageRef.current = null;
+                // Cleanup
+                if (initialPageRestoreTimeoutRef.current) {
+                    clearTimeout(initialPageRestoreTimeoutRef.current);
                     initialPageRestoreTimeoutRef.current = null;
                 }
                 setPages((existingPages) => {
@@ -2263,8 +2263,12 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 </div>
 
                 {!isLoading && !error && totalPages > 0 && (
-                    <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 z-50 pointer-events-none px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-xs sm:text-sm text-[color:var(--color-text-secondary)] shadow-sm">
-                        Page {currentPage} of {totalPages} | {Math.round(scale * 100)}%
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none px-3 py-1.5 rounded-full bg-[var(--color-surface)]/90 backdrop-blur-md border border-[var(--color-border)] text-xs sm:text-sm text-[color:var(--color-text-secondary)] shadow-lg shadow-black/5">
+                        <span className="font-medium text-[color:var(--color-text-primary)]">{currentPage}</span>
+                        <span className="mx-1 text-[color:var(--color-text-muted)]">/</span>
+                        <span>{totalPages}</span>
+                        <span className="mx-2 w-px h-3 bg-[var(--color-border)] hidden sm:inline-block" />
+                        <span className="opacity-80 hidden sm:inline">{Math.round(scale * 100)}%</span>
                     </div>
                 )}
             </div>
