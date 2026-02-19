@@ -160,7 +160,7 @@ export function ArticleReaderContent({
                 overscrollBehaviorY: "contain",
             }}
         >
-            <article className="w-full max-w-[74ch] mx-auto px-5 py-8 md:px-10 md:py-12" onMouseUp={handleMouseUp}>
+            <article className="w-full max-w-[74ch] mx-auto px-6 py-12 md:px-12 md:py-20" onMouseUp={handleMouseUp}>
                 <header className="mb-10 pb-6 border-b border-[var(--color-border-subtle)]">
                     <div className="mb-4 flex flex-wrap items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-[color:var(--color-text-secondary)]">
                         {feedTitle && (

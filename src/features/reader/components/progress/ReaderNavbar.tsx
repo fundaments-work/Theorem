@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useMemo, useState, useRef, useEffect, memo } from "react";
+import { List } from "lucide-react";
 import { cn } from "../../../../core";
 import type { TocItem, DocLocation } from "../../../../core";
 
@@ -14,6 +15,7 @@ interface ReaderNavbarProps {
     sectionFractions: number[];
     onSeek: (fraction: number) => void;
     totalPages?: number;
+    onToggleToc: () => void;
     className?: string;
 }
 
@@ -65,6 +67,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
     sectionFractions,
     onSeek,
     totalPages,
+    onToggleToc,
     className,
 }: ReaderNavbarProps) {
     const [isDragging, setIsDragging] = useState(false);
@@ -278,16 +281,31 @@ export const ReaderNavbar = memo(function ReaderNavbar({
             )}
             style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
         >
-            {/* Info row: section label + time remaining */}
-            <div className="flex items-center justify-between gap-2 text-[var(--font-size-2xs)] sm:text-xs text-[color:var(--color-text-muted)]">
-                <span className="truncate max-w-[52%] sm:max-w-[60%]">{currentSectionLabel}</span>
-                <div className="flex items-center gap-2">
-                    {timeRemaining && (
-                        <span className="hidden sm:inline text-[color:var(--color-text-muted)]">{timeRemaining}</span>
-                    )}
-                    <span className="font-medium text-[color:var(--color-text-primary)]">
-                        {progressText}
+            {/* Top Row: TOC Button + Info */}
+            <div className="flex items-center gap-3">
+                <button
+                    onClick={onToggleToc}
+                    className="p-1 px-[0.14rem] -mx-0.5 mt-[-0.20rem] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] rounded-md transition-colors"
+                >
+                    <List size={20} />
+                </button>
+
+                {/* Info: section label + time remaining */}
+                <div className="flex-1 flex items-center justify-between gap-1 text-[var(--font-size-2xs)] sm:text-xs text-[color:var(--color-text-muted)] min-w-0">
+                    <span
+                        className="truncate max-w-[50%]"
+                        title={currentSectionLabel}
+                    >
+                        {currentSectionLabel}
                     </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                        {timeRemaining && (
+                            <span className="hidden sm:inline text-[color:var(--color-text-muted)]">{timeRemaining}</span>
+                        )}
+                        <span className="font-medium text-[color:var(--color-text-primary)]">
+                            {progressText}
+                        </span>
+                    </div>
                 </div>
             </div>
 

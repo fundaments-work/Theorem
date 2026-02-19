@@ -28,6 +28,7 @@ import {
     type ReaderSettings as ReaderSettingsState,
     type TocItem,
 } from "../../core";
+import { List } from "lucide-react";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import { TableOfContents } from "./components/TableOfContents";
 import { ReaderSettings } from "./components/ReaderSettings";
@@ -44,6 +45,7 @@ import { ArticleViewer } from "./article-reader/ArticleViewer";
 import { useReaderFullscreen, useToolbarHeight } from "./hooks";
 import type { PDFJsEngineRef } from "./engines/pdfjs-engine";
 import type { ReaderViewportHandle } from "./components/ReaderViewport";
+import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -160,8 +162,8 @@ function BookReaderPage() {
             ? window.matchMedia(MOBILE_READER_MEDIA_QUERY).matches
             : false
     ));
-    const [showToolbar, setShowToolbar] = useState(false);
-    type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | null;
+    const [showToolbar, setShowToolbar] = useState(true);
+    type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | 'menu' | null;
     const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [initialLocation, setInitialLocation] = useState<string | undefined>(undefined);
@@ -311,6 +313,7 @@ function BookReaderPage() {
 
         // Set immediately to prevent duplicate loads during async operations
         loadedBookIdRef.current = currentBookId;
+        setShowToolbar(true);
 
         let isCancelled = false;
 
@@ -806,19 +809,19 @@ function BookReaderPage() {
             setActivePanel(null);
             return true; // Handled, don't exit app
         }
-        
+
         // Close color picker if open
         if (showColorPicker) {
             setShowColorPicker(false);
             return true;
         }
-        
+
         // Close note editor if open
         if (showNoteEditor) {
             setShowNoteEditor(false);
             return true;
         }
-        
+
         // No panels open - go back to library
         setRoute("library");
         return true; // Handled, stay in app (go to library)
@@ -958,7 +961,12 @@ function BookReaderPage() {
             return;
         }
 
-        if (!isMobileViewport || activePanel) {
+        if (activePanel) {
+            setActivePanel(null);
+            return;
+        }
+
+        if (!isMobileViewport) {
             return;
         }
         setShowToolbar((previous) => !previous);
@@ -1734,49 +1742,32 @@ function BookReaderPage() {
                     onToggleBookmarks={() => togglePanel('bookmarks')}
                     onToggleSearch={() => togglePanel('search')}
                     onToggleInfo={() => togglePanel('info')}
+                    onToggleMenu={() => togglePanel('menu')}
                     onAddBookmark={handleAddPageBookmark}
                     isCurrentPageBookmarked={isCurrentPageBookmarked}
                     activePanel={activePanel}
                     fullscreen={settings.readerSettings.fullscreen}
                     onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
-                    hideReaderControls={isPdfFormat}
-                    pdfControls={isPdfFormat ? {
-                        currentPage: pdfCurrentPage,
-                        totalPages: pdfTotalPages,
-                        zoom: pdfZoom,
-                        zoomMode: pdfZoomMode,
-                        annotationMode: pdfAnnotationMode,
-                        highlightColor: pdfHighlightColor,
-                        penColor: pdfBrushColor,
-                        penWidth: pdfBrushWidth,
-                        onPrevPage: () => pdfReaderRef.current?.prevPage(),
-                        onNextPage: () => pdfReaderRef.current?.nextPage(),
-                        onZoomIn: handlePdfZoomIn,
-                        onZoomOut: handlePdfZoomOut,
-                        onZoomReset: handlePdfZoomReset,
-                        onZoomFitPage: handlePdfZoomFitPage,
-                        onZoomFitWidth: handlePdfZoomFitWidth,
-                        onRotate: () => pdfReaderRef.current?.rotateClockwise(),
-                        onPageInput: (page: number) => pdfReaderRef.current?.goToPage(page),
-                        onAddBookmark: handlePdfAddBookmark,
-                        onAnnotationModeChange: setPdfAnnotationMode,
-                        onHighlightColorChange: setPdfHighlightColor,
-                        onPenColorChange: setPdfBrushColor,
-                        onPenWidthChange: setPdfBrushWidth,
-                        isCurrentPageBookmarked: isPdfPageBookmarked,
-                    } : undefined}
+
                 />
             </div>
 
             {/* Reader Viewport - Use PDFReader for PDF, ReaderViewport for others */}
             <div
                 className={cn(
-                    "flex-1 min-h-0 overflow-hidden",
+                    "flex-1 min-h-0 overflow-hidden relative",
                     !isPdfFormat && (
-                        shouldShowReaderChrome ? "pb-14 sm:pb-12" : "pb-0"
+                        shouldShowReaderChrome ? "pb-14 sm:pb-12" : "pb-[env(safe-area-inset-bottom,var(--spacing-md))]"
                     ),
                 )}
-                style={{ paddingTop: `${shouldShowReaderChrome ? toolbarHeight : 0}px` }}
+                style={{
+                    paddingTop: shouldShowReaderChrome
+                        ? `${toolbarHeight}px`
+                        : "max(env(safe-area-inset-top, 0px), var(--spacing-md, 16px))",
+                    paddingBottom: shouldShowReaderChrome
+                        ? undefined
+                        : "max(env(safe-area-inset-bottom, 0px), var(--spacing-lg, 32px))"
+                }}
             >
                 {isPdfFormat ? (
                     <PDFReader
@@ -1822,6 +1813,35 @@ function BookReaderPage() {
                 )}
             </div>
 
+            {/* PDF Floating Toolbar & TOC Button */}
+            {isBookReady && isPdfFormat && (
+                <>
+                    <button
+                        onClick={() => togglePanel('toc')}
+                        className={cn(
+                            "fixed bottom-6 left-6 z-[100]",
+                            "flex items-center justify-center w-12 h-12 rounded-2xl shadow-xl transition-all duration-300",
+                            "bg-[var(--color-surface)]/90 backdrop-blur-xl text-[var(--color-text-primary)] border border-[var(--color-border)]",
+                            "hover:scale-105 active:scale-95 hover:bg-[var(--color-surface)]"
+                        )}
+                        aria-label="Table of Contents"
+                    >
+                        <List className="w-5 h-5" />
+                    </button>
+                    <PDFFloatingToolbar
+                        annotationMode={pdfAnnotationMode}
+                        highlightColor={pdfHighlightColor}
+                        penColor={pdfBrushColor}
+                        penWidth={pdfBrushWidth}
+                        onAnnotationModeChange={setPdfAnnotationMode}
+                        onHighlightColorChange={setPdfHighlightColor}
+                        onPenColorChange={setPdfBrushColor}
+                        onPenWidthChange={setPdfBrushWidth}
+                        className="bottom-6 right-6"
+                    />
+                </>
+            )}
+
             {/* Bottom Progress Navbar - only for non-PDF formats */}
             {isBookReady && !isPdfFormat && (
                 <ReaderNavbar
@@ -1830,6 +1850,7 @@ function BookReaderPage() {
                     sectionFractions={sectionFractions}
                     onSeek={handleSeek}
                     totalPages={location?.pageInfo?.totalPages}
+                    onToggleToc={() => togglePanel('toc')}
                     className={cn(
                         "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",
                         shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
