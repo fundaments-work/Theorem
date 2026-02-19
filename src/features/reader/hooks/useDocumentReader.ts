@@ -26,6 +26,7 @@ export interface UseDocumentReaderOptions {
     onTextSelected?: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void;
     onLocationsSaved?: (locations: string) => void;
     onViewportTap?: () => void;
+    shouldForceViewportTap?: () => boolean;
 }
 
 export interface UseDocumentReaderReturn {
@@ -198,6 +199,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
             onViewportTap: () => {
                 callbacksRef.current.onViewportTap?.();
             },
+            shouldForceViewportTap: () => callbacksRef.current.shouldForceViewportTap?.() ?? false,
         });
 
         let isCancelled = false;

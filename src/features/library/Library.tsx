@@ -21,7 +21,6 @@ import {
     scanLibraryFolderMobile,
     scanFolderForBooks,
 } from "../../core";
-import { rankByFuzzyQuery } from "../../core";
 import {
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
@@ -38,6 +37,7 @@ import { Modal, ModalBody, ModalFooter } from "../../ui";
 import { confirmDeleteBook } from "../../core";
 import { showOpenDirectoryDialog } from "../../core";
 import { getShelfColor, getShelfInitials } from "../../core";
+import { getFilteredAndSortedBooks } from "./filtering";
 
 // View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
@@ -1010,97 +1010,23 @@ export function LibraryPage() {
         return new Set(selectedShelf.bookIds);
     }, [selectedShelf]);
 
-    // Filter books based on search query, selected shelf, and favorites
-    const filteredBooks = useMemo(() => {
-        let result = books;
-
-        // Filter by shelf if selected
-        if (selectedShelfBookIds) {
-            result = result.filter((book) => selectedShelfBookIds.has(book.id));
-        } else {
-            // In main view (no shelf selected), hide RSS articles
-            // They should only be accessible via the Feeds page or potentially a specific "Feeds" shelf if we made one
-            result = result.filter(b => !b.tags.includes('rss'));
-        }
-
-        // Filter by favorites
-        if (showFavoritesOnly) {
-            result = result.filter(b => b.isFavorite);
-        }
-
-        // Filter by search query
-        if (searchQuery.trim()) {
-            const rankedBooks = rankByFuzzyQuery(
-                result.map((book) => ({
-                    book,
-                    title: book.title,
-                    author: normalizeAuthor(book.author),
-                    tags: book.tags.join(" "),
-                    format: `${FORMAT_DISPLAY_NAMES[book.format]} ${book.format}`,
-                })),
-                searchQuery,
-                {
-                    keys: [
-                        { name: "title", weight: 0.45 },
-                        { name: "author", weight: 0.3 },
-                        { name: "tags", weight: 0.15 },
-                        { name: "format", weight: 0.1 },
-                    ],
-                },
-            );
-            result = rankedBooks.map(({ item }) => item.book);
-        }
-
-        return result;
-    }, [books, searchQuery, selectedShelfBookIds, showFavoritesOnly]);
-
-    // Sort books
     const sortedBooks = useMemo(() => {
-        if (searchQuery.trim()) {
-            return filteredBooks;
-        }
-
-        const sorted = [...filteredBooks];
-        const sortBy = settings.librarySortBy;
-        const sortOrder = settings.librarySortOrder;
-
-        sorted.sort((a, b) => {
-            let comparison = 0;
-
-            switch (sortBy) {
-                case "title":
-                    comparison = a.title.localeCompare(b.title);
-                    break;
-                case "author":
-                    comparison = normalizeAuthor(a.author).localeCompare(normalizeAuthor(b.author));
-                    break;
-                case "dateAdded":
-                    const aAdded = a.addedAt instanceof Date ? a.addedAt : new Date(a.addedAt);
-                    const bAdded = b.addedAt instanceof Date ? b.addedAt : new Date(b.addedAt);
-                    comparison = aAdded.getTime() - bAdded.getTime();
-                    break;
-                case "lastRead":
-                    const aLastRead = a.lastReadAt ? (a.lastReadAt instanceof Date ? a.lastReadAt : new Date(a.lastReadAt)) : null;
-                    const bLastRead = b.lastReadAt ? (b.lastReadAt instanceof Date ? b.lastReadAt : new Date(b.lastReadAt)) : null;
-                    const aTime = aLastRead?.getTime() || 0;
-                    const bTime = bLastRead?.getTime() || 0;
-                    comparison = aTime - bTime;
-                    break;
-                case "progress":
-                    comparison = a.progress - b.progress;
-                    break;
-                case "rating":
-                    const aRating = a.rating || 0;
-                    const bRating = b.rating || 0;
-                    comparison = aRating - bRating;
-                    break;
-            }
-
-            return sortOrder === "asc" ? comparison : -comparison;
+        return getFilteredAndSortedBooks({
+            books,
+            searchQuery,
+            selectedShelfBookIds,
+            showFavoritesOnly,
+            sortBy: settings.librarySortBy,
+            sortOrder: settings.librarySortOrder,
         });
-
-        return sorted;
-    }, [filteredBooks, searchQuery, settings.librarySortBy, settings.librarySortOrder]);
+    }, [
+        books,
+        searchQuery,
+        selectedShelfBookIds,
+        settings.librarySortBy,
+        settings.librarySortOrder,
+        showFavoritesOnly,
+    ]);
 
     // Auto-extract covers for books that don't have them
     useEffect(() => {
@@ -1759,6 +1685,22 @@ export function LibraryPage() {
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+
+                            {/* Quick Filters */}
+                            <div className="p-5">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Quick</h3>
+                                <button
+                                    onClick={() => setShowFavoritesOnly((previous) => !previous)}
+                                    className={cn(
+                                        "w-full py-2 text-[10px] font-black border-2 transition-all",
+                                        showFavoritesOnly
+                                            ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                            : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                    )}
+                                >
+                                    FAVORITES
+                                </button>
                             </div>
 
                             {/* Shelf Filter */}

@@ -95,6 +95,7 @@ export function NoteEditor({
             }
         };
 
+        document.addEventListener('pointerdown', handleClickOutside, true);
         document.addEventListener('mousedown', handleClickOutside, true);
         document.addEventListener('click', handleClickOutside, true);
         
@@ -103,6 +104,7 @@ export function NoteEditor({
         window.addEventListener('scroll', handleScroll, true);
         
         return () => {
+            document.removeEventListener('pointerdown', handleClickOutside, true);
             document.removeEventListener('mousedown', handleClickOutside, true);
             document.removeEventListener('click', handleClickOutside, true);
             window.removeEventListener('scroll', handleScroll, true);

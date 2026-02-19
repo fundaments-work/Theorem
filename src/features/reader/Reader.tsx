@@ -1080,6 +1080,10 @@ function BookReaderPage() {
         setShowToolbar((previous) => !previous);
     }, [activePanel, isMobileViewport, showColorPicker, showNoteEditor]);
 
+    const shouldForceViewportTap = useCallback(() => {
+        return showColorPicker || showNoteEditor;
+    }, [showColorPicker, showNoteEditor]);
+
     const addAnnotation = useLibraryStore((state) => state.addAnnotation);
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
     const getBookAnnotations = useLibraryStore((state) => state.getBookAnnotations);
@@ -1921,6 +1925,7 @@ function BookReaderPage() {
                         onLocationsSaved={handleLocationsSaved}
                         onTextSelected={handleTextSelected}
                         onViewportTap={handleViewportTap}
+                        shouldForceViewportTap={shouldForceViewportTap}
                         onZoomGestureChange={handleZoomGestureChange}
                         className="w-full h-full"
                     />

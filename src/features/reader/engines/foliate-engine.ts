@@ -60,6 +60,7 @@ export interface FoliateEngineOptions {
     onError?: (error: Error) => void;
     onTextSelected?: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void;
     onViewportTap?: () => void;
+    shouldForceViewportTap?: () => boolean;
 }
 
 export class FoliateEngine {
@@ -1525,6 +1526,10 @@ export class FoliateEngine {
         this.options.onViewportTap();
     }
 
+    private shouldForceViewportTap(): boolean {
+        return this.options.shouldForceViewportTap?.() ?? false;
+    }
+
     /**
      * Setup selection listeners inside iframe documents
      * This is needed because selectionchange doesn't bubble from iframes
@@ -1571,6 +1576,10 @@ export class FoliateEngine {
                         }
                     }
                 } else if (event.data?.type === 'foliate-tap') {
+                    const hasSelection = Boolean(event.data?.hasSelection);
+                    if (hasSelection && !this.shouldForceViewportTap()) {
+                        return;
+                    }
                     this.notifyViewportTap(null);
                 }
             };
@@ -1963,7 +1972,7 @@ export class FoliateEngine {
                             && !selection.isCollapsed
                             && selection.toString().trim().length > 0,
                         );
-                        if (hasSelection) {
+                        if (hasSelection && !this.shouldForceViewportTap()) {
                             return;
                         }
                         this.notifyViewportTap(event.target);
@@ -2072,14 +2081,12 @@ export class FoliateEngine {
                     
                     // Check selection after a short delay
                     setTimeout(function() {
-                        if (postSelection(e.clientX, e.clientY)) {
-                            return;
-                        }
-
+                        var hasSelection = postSelection(e.clientX, e.clientY);
                         if (isTap) {
                             window.parent.postMessage({
                                 type: 'foliate-tap',
                                 sectionIndex: ${index},
+                                hasSelection: hasSelection,
                             }, '*');
                         }
                     }, SELECTION_CAPTURE_DELAY);

@@ -177,12 +177,12 @@ export function HighlightColorPicker({
                 x = leftBound;
             }
 
-            // Position above or below based on available space inside bounded viewport.
+            // Prefer showing above the selection so native selection handles stay visible.
             const spaceAbove = position.y - topBound;
             const spaceBelow = bottomBound - position.y;
             const verticalGap = 12;
-            
-            if (spaceBelow < rect.height + verticalGap && spaceAbove > rect.height + verticalGap) {
+
+            if (spaceAbove >= rect.height + verticalGap || spaceAbove > spaceBelow) {
                 y = position.y - rect.height - verticalGap; // Show above
             } else {
                 y = position.y + verticalGap; // Show below
@@ -306,6 +306,7 @@ export function HighlightColorPicker({
 
         // Use capture phase to catch clicks before they reach iframe
         const timer = setTimeout(() => {
+            document.addEventListener('pointerdown', handleClickOutside, true);
             document.addEventListener('mousedown', handleClickOutside, true);
             document.addEventListener('click', handleClickOutside, true);
         }, 50);
@@ -320,6 +321,7 @@ export function HighlightColorPicker({
 
         return () => {
             clearTimeout(timer);
+            document.removeEventListener('pointerdown', handleClickOutside, true);
             document.removeEventListener('mousedown', handleClickOutside, true);
             document.removeEventListener('click', handleClickOutside, true);
             window.removeEventListener('scroll', handleScrollOrResize, true);

@@ -53,6 +53,7 @@ interface ReaderViewportProps {
     onTextSelected?: (cfi: string, text: string, rangeOrEvent?: Range | MouseEvent) => void;
     onLocationsSaved?: (locations: string) => void;
     onViewportTap?: () => void;
+    shouldForceViewportTap?: () => boolean;
     onZoomGestureChange?: (zoom: number) => void;
     initialLocation?: string;
     savedLocations?: string;
@@ -69,6 +70,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     onTextSelected,
     onLocationsSaved,
     onViewportTap,
+    shouldForceViewportTap,
     onZoomGestureChange,
     initialLocation,
     savedLocations,
@@ -135,6 +137,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         } : undefined,
         onLocationsSaved,
         onViewportTap,
+        shouldForceViewportTap,
     });
 
     // Expose methods via ref
