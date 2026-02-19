@@ -96,7 +96,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
             <div
                 className={cn(
                     "flex h-[var(--layout-sidebar-header-height)] items-center border-b border-[var(--color-border)]",
-                    isCollapsedDesktop ? "justify-center px-0" : "!px-14"
+                    isMobile ? "px-6" : (isCollapsedDesktop ? "justify-center px-0" : "!px-14")
                 )}
             >
                 <div className="flex items-center gap-4">
@@ -131,7 +131,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                         className={cn(
                                             "ui-sidebar-nav-item w-full py-4 transition-colors duration-150 relative",
                                             isActive ? "bg-[color:var(--color-text-primary)] text-[color:var(--color-surface)] shadow-md" : "hover:bg-[var(--color-surface-hover)]",
-                                            isCollapsedDesktop ? "justify-center px-0" : "!pl-14 pr-0"
+                                            isMobile ? "px-6" : (isCollapsedDesktop ? "justify-center px-0" : "!pl-14 pr-0")
                                         )}
                                         title={isCollapsedDesktop ? item.label : undefined}
                                         aria-current={isActive ? "page" : undefined}
@@ -159,7 +159,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
 
             <div className={cn(
                 "border-t border-[var(--color-border)] bg-[var(--color-surface)] mt-auto mt-4",
-                isCollapsedDesktop ? "py-4 px-0" : "py-6 !px-14"
+                isMobile ? "py-4 px-6" : (isCollapsedDesktop ? "py-4 px-0" : "py-6 !px-14")
             )}>
                 {showDesktopFooterRow ? (
                     <div className="flex items-center justify-between gap-4">

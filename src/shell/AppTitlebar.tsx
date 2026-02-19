@@ -171,7 +171,7 @@ export function AppTitlebar({
         <div
             className={cn(
                 "w-full z-50 select-none border-b border-[var(--color-border)] bg-[var(--color-surface)]",
-                "px-8 pb-3 pt-[calc(env(safe-area-inset-top)+var(--spacing-sm))] lg:h-[4rem] lg:py-4",
+                "px-4 pb-3 pt-[calc(env(safe-area-inset-top)+var(--spacing-sm))] lg:h-[4rem] lg:py-4 lg:px-14",
                 className
             )}
             data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
