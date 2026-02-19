@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Save } from 'lucide-react';
 import { cn } from "../../../../core";
 
@@ -12,6 +13,12 @@ interface NoteEditorProps {
     position: { x: number; y: number };
     initialNote: string;
     selectedText: string;
+    viewportPadding?: Partial<{
+        top: number;
+        right: number;
+        bottom: number;
+        left: number;
+    }>;
     onSave: (note: string) => void;
     onClose: () => void;
 }
@@ -21,6 +28,7 @@ export function NoteEditor({
     position,
     initialNote,
     selectedText,
+    viewportPadding,
     onSave,
     onClose,
 }: NoteEditorProps) {
@@ -39,27 +47,35 @@ export function NoteEditor({
         const rect = editor.getBoundingClientRect();
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
+        const padding = 16;
+        const leftBound = Math.max(padding, viewportPadding?.left ?? padding);
+        const rightBound = Math.min(viewportWidth - padding, viewportWidth - (viewportPadding?.right ?? padding));
+        const topBound = Math.max(padding, viewportPadding?.top ?? padding);
+        const bottomBound = Math.min(viewportHeight - padding, viewportHeight - (viewportPadding?.bottom ?? padding));
 
         let { x, y } = position;
 
         // Adjust horizontal position
-        if (x + rect.width > viewportWidth) {
-            x = viewportWidth - rect.width - 16;
+        if (x + rect.width > rightBound) {
+            x = rightBound - rect.width;
         }
-        if (x < 16) {
-            x = 16;
+        if (x < leftBound) {
+            x = leftBound;
         }
 
         // Adjust vertical position
-        if (y + rect.height > viewportHeight) {
+        if (y + rect.height > bottomBound) {
             y = y - rect.height - 40;
         }
-        if (y < 16) {
-            y = 16;
+        if (y + rect.height > bottomBound) {
+            y = bottomBound - rect.height;
+        }
+        if (y < topBound) {
+            y = topBound;
         }
 
         setAdjustedPosition({ x, y });
-    }, [isOpen, position]);
+    }, [isOpen, position, viewportPadding?.bottom, viewportPadding?.left, viewportPadding?.right, viewportPadding?.top]);
 
     // Focus textarea when opened
     useEffect(() => {
@@ -116,11 +132,11 @@ export function NoteEditor({
 
     if (!isOpen) return null;
 
-    return (
+    const editorContent = (
         <div
             ref={editorRef}
             className={cn(
-                "fixed z-[100] animate-fade-in",
+                "fixed animate-fade-in",
                 "bg-[var(--color-surface)]",
                 "border border-[var(--color-border)]",
                 "rounded-sm",
@@ -129,6 +145,7 @@ export function NoteEditor({
             style={{
                 left: adjustedPosition.x,
                 top: adjustedPosition.y,
+                zIndex: "calc(var(--z-tooltip) + 40)",
             }}
         >
             {/* Header */}
@@ -198,6 +215,12 @@ export function NoteEditor({
             </div>
         </div>
     );
+
+    if (typeof document === "undefined") {
+        return editorContent;
+    }
+
+    return createPortal(editorContent, document.body);
 }
 
 export default NoteEditor;

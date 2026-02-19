@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { MessageSquare, X, Check, Trash2, Languages, Loader2, ArrowLeft } from 'lucide-react';
 import { ask } from '@tauri-apps/plugin-dialog';
 import {
@@ -38,6 +39,12 @@ interface HighlightColorPickerProps {
     onBookmark: () => void;
     onDelete?: () => void;
     dictionary?: HighlightDictionaryViewState;
+    viewportPadding?: Partial<{
+        top: number;
+        right: number;
+        bottom: number;
+        left: number;
+    }>;
     onClose: () => void;
 }
 
@@ -97,6 +104,7 @@ export function HighlightColorPicker({
     onBookmark,
     onDelete,
     dictionary,
+    viewportPadding,
     onClose,
 }: HighlightColorPickerProps) {
     const popupRef = useRef<HTMLDivElement>(null);
@@ -151,6 +159,10 @@ export function HighlightColorPicker({
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
             const padding = 12;
+            const leftBound = Math.max(padding, viewportPadding?.left ?? padding);
+            const rightBound = Math.min(viewportWidth - padding, viewportWidth - (viewportPadding?.right ?? padding));
+            const topBound = Math.max(padding, viewportPadding?.top ?? padding);
+            const bottomBound = Math.min(viewportHeight - padding, viewportHeight - (viewportPadding?.bottom ?? padding));
 
             let { x, y } = position;
 
@@ -158,29 +170,30 @@ export function HighlightColorPicker({
             x = x - rect.width / 2;
 
             // Adjust horizontal bounds
-            if (x + rect.width > viewportWidth - padding) {
-                x = viewportWidth - rect.width - padding;
+            if (x + rect.width > rightBound) {
+                x = rightBound - rect.width;
             }
-            if (x < padding) {
-                x = padding;
+            if (x < leftBound) {
+                x = leftBound;
             }
 
-            // Position above or below based on available space
-            const spaceAbove = position.y;
-            const spaceBelow = viewportHeight - position.y;
+            // Position above or below based on available space inside bounded viewport.
+            const spaceAbove = position.y - topBound;
+            const spaceBelow = bottomBound - position.y;
+            const verticalGap = 12;
             
-            if (spaceBelow < rect.height + padding && spaceAbove > rect.height) {
-                y = position.y - rect.height - 12; // Show above
+            if (spaceBelow < rect.height + verticalGap && spaceAbove > rect.height + verticalGap) {
+                y = position.y - rect.height - verticalGap; // Show above
             } else {
-                y = position.y + 12; // Show below
+                y = position.y + verticalGap; // Show below
             }
 
             // Ensure vertical bounds
-            if (y + rect.height > viewportHeight - padding) {
-                y = viewportHeight - rect.height - padding;
+            if (y + rect.height > bottomBound) {
+                y = bottomBound - rect.height;
             }
-            if (y < padding) {
-                y = padding;
+            if (y < topBound) {
+                y = topBound;
             }
 
             setAdjustedPosition({ x, y });
@@ -195,6 +208,10 @@ export function HighlightColorPicker({
         dictionary?.saved,
         isOpen,
         position,
+        viewportPadding?.bottom,
+        viewportPadding?.left,
+        viewportPadding?.right,
+        viewportPadding?.top,
     ]);
 
     // Close handlers with animation
@@ -323,24 +340,25 @@ export function HighlightColorPicker({
     // Keep hook ordering stable: return null only after all hooks are declared.
     if (!isOpen) return null;
 
-    return (
+    const popupContent = (
         <>
             <style>{ANIMATION_STYLES}</style>
             <div
                 ref={popupRef}
                 onMouseDownCapture={handlePopupMouseDownCapture}
                 className={cn(
-                    "fixed z-[100]",
+                    "fixed",
                     "bg-[var(--color-surface)]",
                     "border border-[var(--color-border)]",
                     "rounded-xl shadow-[var(--shadow-md)]",
                     "p-2",
-                    isDictionaryView && "w-[20rem]",
+                    isDictionaryView && "w-[20rem] max-w-[calc(100vw-2rem)]",
                     isClosing ? "picker-animate-out" : "picker-animate-in"
                 )}
                 style={{
                     left: adjustedPosition.x,
                     top: adjustedPosition.y,
+                    zIndex: "calc(var(--z-tooltip) + 40)",
                 }}
             >
                 {/* Header with close button */}
@@ -595,6 +613,12 @@ export function HighlightColorPicker({
             </div>
         </>
     );
+
+    if (typeof document === "undefined") {
+        return popupContent;
+    }
+
+    return createPortal(popupContent, document.body);
 }
 
 export default HighlightColorPicker;

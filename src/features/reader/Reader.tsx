@@ -911,6 +911,31 @@ function BookReaderPage() {
     }, []);
 
     const shouldShowReaderChrome = showToolbar || activePanel !== null;
+    const readerPopoverPadding = useMemo(() => {
+        const defaultInset = 12;
+        if (!isMobileViewport) {
+            return {
+                top: defaultInset,
+                right: defaultInset,
+                bottom: defaultInset,
+                left: defaultInset,
+            };
+        }
+
+        const topInset = shouldShowReaderChrome
+            ? Math.max(defaultInset, toolbarHeight + 8)
+            : 16;
+        const bottomInset = (!isPdfFormat && shouldShowReaderChrome)
+            ? 84
+            : 16;
+
+        return {
+            top: topInset,
+            right: 12,
+            bottom: bottomInset,
+            left: 12,
+        };
+    }, [isMobileViewport, isPdfFormat, shouldShowReaderChrome, toolbarHeight]);
 
     // Highlight state
     const [showColorPicker, setShowColorPicker] = useState(false);
@@ -1391,6 +1416,12 @@ function BookReaderPage() {
         const term = selectedText.trim();
         if (!term) {
             return;
+        }
+
+        // Hide native selection handles before showing the larger dictionary panel.
+        readerRef.current?.clearSelection?.();
+        if (typeof window !== "undefined") {
+            window.getSelection?.()?.removeAllRanges?.();
         }
 
         setColorPickerMode("dictionary");
@@ -2032,6 +2063,7 @@ function BookReaderPage() {
                         onDefine={handleDefineSelection}
                         onBookmark={handleBookmarkFromSelection}
                         onDelete={editingHighlightId ? handleDeleteFromColorPicker : undefined}
+                        viewportPadding={readerPopoverPadding}
                         dictionary={colorPickerMode === "dictionary"
                             ? {
                                 term: dictionaryLookupTerm,
@@ -2069,6 +2101,7 @@ function BookReaderPage() {
                         position={noteEditorPosition}
                         initialNote={editingNote}
                         selectedText={selectedText}
+                        viewportPadding={readerPopoverPadding}
                         onSave={handleSaveNote}
                         onClose={() => {
                             setShowNoteEditor(false);
