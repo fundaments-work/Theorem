@@ -4,9 +4,11 @@ import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import {
     useUIStore,
     useSettingsStore,
+    isTauriDesktop,
+    isMobile,
+    initReaderStyles,
+    cn,
 } from "./core";
-import { isTauriDesktop } from "./core";
-import { initReaderStyles } from "./core";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 
 const LibraryPage = lazy(() =>
@@ -229,11 +231,13 @@ function App() {
         );
     }
 
+    const isMobileDevice = isMobile();
+
     return (
         <div className="flex h-screen min-h-[100dvh] bg-[var(--color-background)]">
             {/* Sidebar - Shows on md screens and up (tablets and laptops) */}
             <div className="hidden md:block">
-                <Sidebar />
+                <Sidebar isMobile={isMobileDevice} />
             </div>
 
             {/* Main Content */}
@@ -241,7 +245,7 @@ function App() {
                 <AppTitlebar title="Theorem" />
 
                 {/* Page Content */}
-                <main ref={mainScrollRef} className="flex-1 overflow-y-auto pb-16 md:pb-0">
+                <main ref={mainScrollRef} className="flex-1 overflow-y-auto pb-16 md:pb-0 px-8 py-6 custom-scrollbar">
                     <Suspense fallback={<PageFallback />}>
                         {renderPage()}
                     </Suspense>

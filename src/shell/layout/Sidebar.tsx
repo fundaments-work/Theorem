@@ -86,32 +86,30 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                 "flex h-full flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]",
                 "transition-[width] duration-220 ease-out",
                 isMobile && "h-[100dvh] pt-[calc(env(safe-area-inset-top)+var(--spacing-sm))] pb-[calc(env(safe-area-inset-bottom)+var(--spacing-sm))]",
-                isMobile
-                    ? "w-[min(var(--layout-sidebar-width),calc(100vw-env(safe-area-inset-left)-env(safe-area-inset-right)-var(--spacing-lg)))]"
-                    : (
-                        (sidebarOpen || isMobile)
-                            ? "w-[var(--layout-sidebar-width)]"
-                            : "w-[var(--layout-sidebar-collapsed-width)]"
-                    ),
+                !isMobile && (
+                    (sidebarOpen || isMobile)
+                        ? "w-[var(--layout-sidebar-width)]"
+                        : "w-[var(--layout-sidebar-collapsed-width)]"
+                ),
             )}
         >
             <div
                 className={cn(
-                    "flex h-[var(--layout-sidebar-header-height)] items-center border-b border-[var(--color-border)] px-4",
-                    "font-sans text-[12px] font-semibold text-[color:var(--color-text-secondary)]",
+                    "flex h-[var(--layout-sidebar-header-height)] items-center border-b border-[var(--color-border)]",
+                    isCollapsedDesktop ? "justify-center px-0" : "!px-14"
                 )}
             >
-                <div className="flex items-center gap-3.5">
-                    <TheoremLogo size={26} className="shrink-0" />
+                <div className="flex items-center gap-4">
+                    <TheoremLogo size={24} className="shrink-0" />
                     {!isCollapsedDesktop && (
-                        <span className="truncate text-[14px] leading-none tracking-[0.04em] text-[color:var(--color-text-primary)]">
+                        <span className="truncate text-[13px] leading-none tracking-[0.12em] uppercase text-[color:var(--color-text-primary)] font-bold">
                             Theorem
                         </span>
                     )}
                 </div>
             </div>
 
-            <nav className="flex-1 overflow-y-auto py-2">
+            <nav className="flex-1 overflow-y-auto py-6 min-h-0 custom-scrollbar">
                 <ul className="flex flex-col">
                     {mainNavItems
                         .filter((item) => item.id !== "vocabulary" || vocabularyEnabled)
@@ -131,17 +129,26 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                             }
                                         }}
                                         className={cn(
-                                            "ui-sidebar-nav-item",
-                                            isCollapsedDesktop && "justify-center px-0",
+                                            "ui-sidebar-nav-item w-full py-4 transition-colors duration-150 relative",
+                                            isActive ? "bg-[color:var(--color-text-primary)] text-[color:var(--color-surface)] shadow-md" : "hover:bg-[var(--color-surface-hover)]",
+                                            isCollapsedDesktop ? "justify-center px-0" : "!pl-14 pr-0"
                                         )}
                                         title={isCollapsedDesktop ? item.label : undefined}
                                         aria-current={isActive ? "page" : undefined}
-                                        data-active={isActive ? "true" : undefined}
                                     >
-                                        {isCollapsedDesktop ? (
-                                            <span className="inline-flex h-4 w-4 items-center justify-center">{item.icon}</span>
-                                        ) : (
-                                            <span>{item.label}</span>
+                                        <span className={cn(
+                                            "flex items-center gap-5 w-full",
+                                            isCollapsedDesktop && "justify-center"
+                                        )}>
+                                            <span className="shrink-0">{item.icon}</span>
+                                            {!isCollapsedDesktop && (
+                                                <span className="truncate uppercase tracking-[0.08em] text-[11px] font-bold">
+                                                    {item.label}
+                                                </span>
+                                            )}
+                                        </span>
+                                        {isActive && !isCollapsedDesktop && (
+                                            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[color:var(--color-accent)]" />
                                         )}
                                     </button>
                                 </li>
@@ -150,32 +157,36 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                 </ul>
             </nav>
 
-            <div className="border-t border-[var(--color-border)]">
+            <div className={cn(
+                "border-t border-[var(--color-border)] bg-[var(--color-surface)] mt-auto mt-4",
+                isCollapsedDesktop ? "py-4 px-0" : "py-6 !px-14"
+            )}>
                 {showDesktopFooterRow ? (
-                    <div className="flex items-stretch">
+                    <div className="flex items-center justify-between gap-4">
                         <button
                             onClick={() => {
                                 setRoute("settings");
                             }}
                             className={cn(
-                                "ui-sidebar-nav-item flex-1 border-r border-[var(--color-border-subtle)] border-b-0",
+                                "flex items-center gap-4 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors",
+                                currentRoute === "settings" && "text-[color:var(--color-accent)]"
                             )}
                             title="Settings"
-                            data-active={currentRoute === "settings" ? "true" : undefined}
                         >
-                            <span>Settings</span>
+                            <Settings className="h-4 w-4" />
+                            <span className="uppercase tracking-[0.08em] text-[11px] font-bold">Settings</span>
                         </button>
 
                         <button
                             onClick={handleToggle}
-                            className="ui-icon-btn !h-[var(--layout-sidebar-item-height)] !w-[var(--layout-sidebar-toggle-width)] border-y-0 border-r-0"
+                            className="p-2 -mr-2 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors"
                             title="Collapse sidebar"
                         >
-                            <ChevronLeft className="h-3.5 w-3.5" />
+                            <ChevronLeft className="h-4 w-4" />
                         </button>
                     </div>
                 ) : (
-                    <>
+                    <div className="flex flex-col gap-4">
                         <button
                             onClick={() => {
                                 setRoute("settings");
@@ -184,40 +195,29 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                 }
                             }}
                             className={cn(
-                                "ui-sidebar-nav-item",
-                                isCollapsedDesktop && "justify-center px-0",
+                                "flex items-center justify-center text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors",
+                                isCollapsedDesktop ? "w-full" : "justify-start gap-4"
                             )}
                             title={isCollapsedDesktop ? "Settings" : undefined}
-                            data-active={currentRoute === "settings" ? "true" : undefined}
                         >
-                            {isCollapsedDesktop ? (
-                                <span className="inline-flex h-4 w-4 items-center justify-center">
-                                    <Settings className="h-4 w-4" />
-                                </span>
-                            ) : (
-                                <span>Settings</span>
-                            )}
+                            <Settings className="h-4 w-4" />
+                            {!isCollapsedDesktop && <span className="uppercase tracking-[0.08em] text-[11px] font-bold">Settings</span>}
                         </button>
 
                         {!isMobile && (
                             <button
                                 onClick={handleToggle}
                                 className={cn(
-                                    "ui-sidebar-nav-item",
-                                    isCollapsedDesktop && "justify-center px-0",
+                                    "flex items-center justify-center text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors",
+                                    isCollapsedDesktop ? "w-full" : "justify-start gap-4"
                                 )}
                                 title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
                             >
-                                {isCollapsedDesktop ? (
-                                    <span className="inline-flex h-4 w-4 items-center justify-center">
-                                        {sidebarOpen ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                    </span>
-                                ) : (
-                                    <span>{sidebarOpen ? "‹ Collapse" : "› Expand"}</span>
-                                )}
+                                {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                {!isCollapsedDesktop && <span className="uppercase tracking-[0.08em] text-[11px] font-bold">{sidebarOpen ? "Collapse" : "Expand"}</span>}
                             </button>
                         )}
-                    </>
+                    </div>
                 )}
             </div>
         </aside>

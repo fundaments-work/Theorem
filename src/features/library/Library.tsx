@@ -278,21 +278,21 @@ function BookCard({
                     {/* Cover Image */}
                     <div
                         className={cn(
-                            "relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden rounded-lg",
+                            "relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden rounded-sm",
                             "border border-[var(--color-border)]",
-                            "transition-all duration-200 group-hover:shadow-lg cursor-pointer"
+                            "transition-all duration-300 group-hover:shadow-lg group-hover:-translate-y-1 cursor-pointer"
                         )}
                     >
                         {book.coverPath ? (
                             <img
                                 src={book.coverPath}
                                 alt={book.title}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                                 loading="lazy"
                             />
                         ) : (
-                            <div className="book-cover-placeholder w-full h-full text-xs p-2 flex items-center justify-center">
-                                <span className="line-clamp-3 text-center">{book.title}</span>
+                            <div className="book-cover-placeholder w-full h-full text-[10px] p-2 flex items-center justify-center bg-[var(--color-surface-muted)]">
+                                <span className="line-clamp-3 text-center uppercase tracking-tighter opacity-40 font-bold">{book.title}</span>
                             </div>
                         )}
 
@@ -300,7 +300,7 @@ function BookCard({
                         {book.progress > 0 && (
                             <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
                                 <div
-                                    className="h-full bg-[var(--color-accent)]"
+                                    className="h-full bg-[var(--color-accent)] transition-all duration-500"
                                     style={{ width: `${book.progress * 100}%` }}
                                 />
                             </div>
@@ -309,29 +309,24 @@ function BookCard({
                         {/* Favorite Badge */}
                         <div
                             className={cn(
-                                "absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-colors pointer-events-none",
+                                "absolute top-2 right-2 w-6 h-6 flex items-center justify-center transition-all duration-300 pointer-events-none",
                                 book.isFavorite
-                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
-                                    : "opacity-0"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] scale-100"
+                                    : "bg-white/90 text-[color:var(--color-text-secondary)] scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100"
                             )}
                         >
-                            <Heart className={cn("w-3 h-3 fill-current")} />
+                            <Heart className={cn("w-3 h-3", book.isFavorite ? "fill-current" : "")} />
                         </div>
                     </div>
 
                     {/* Book Info */}
-                    <div>
-                        <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] line-clamp-1 mb-0.5">
+                    <div className="px-0.5">
+                        <h3 className="font-bold text-[11px] uppercase tracking-wide text-[color:var(--color-text-primary)] line-clamp-1 mb-0.5 transition-colors group-hover:text-[color:var(--color-accent)]">
                             {book.title}
                         </h3>
-                        <p className="text-xs text-[color:var(--color-text-secondary)] line-clamp-1">
+                        <p className="text-[10px] font-medium text-[color:var(--color-text-secondary)] line-clamp-1 opacity-60 uppercase tracking-tight">
                             {normalizeAuthor(book.author) || "Unknown Author"}
                         </p>
-                        {book.progress > 0 && (
-                            <p className="text-[var(--font-size-3xs)] text-[color:var(--color-text-muted)] mt-1">
-                                {formatProgress(book.progress)}
-                            </p>
-                        )}
                     </div>
                 </div>
             </ContextMenu>
@@ -1612,7 +1607,7 @@ export function LibraryPage() {
                                 ))}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8">
                                 {sortedBooks.map((book) => (
                                     <BookCard
                                         key={book.id}
