@@ -61,6 +61,28 @@ function App() {
         }
     }, [currentRoute, setRoute, vocabularyEnabled]);
 
+    // Handle system back button / browser history
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        // Initialize history state for the initial landing page
+        window.history.replaceState({ route: currentRoute, bookId: useUIStore.getState().currentBookId }, "");
+
+        const handlePopState = (event: PopStateEvent) => {
+            const state = event.state;
+            if (state && state.route) {
+                // Navigate to the state's route without pushing a new history entry
+                setRoute(state.route, state.bookId, false);
+            } else if (!state) {
+                // System back typically goes to null state at the beginning
+                setRoute("library", undefined, false);
+            }
+        };
+
+        window.addEventListener("popstate", handlePopState);
+        return () => window.removeEventListener("popstate", handlePopState);
+    }, [setRoute]); // Only setup once, but include setRoute in deps for safety
+
     // Initialize reader styles on app load
     useEffect(() => {
         initReaderStyles(useSettingsStore.getState().settings.readerSettings);

@@ -322,6 +322,7 @@ export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookD
 export interface UIState {
     currentRoute: AppRoute;
     currentBookId?: string;
+    routeHistory: AppRoute[]; // Simple tracking for internal app use if needed
     sidebarOpen: boolean;
     readerToolbarVisible: boolean;
     searchQuery: string;

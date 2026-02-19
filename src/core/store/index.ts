@@ -106,7 +106,8 @@ const defaultReadingStats: ReadingStats = {
 
 // UI State Store
 interface UIStore extends UIState {
-    setRoute: (route: AppRoute, bookId?: string) => void;
+    setRoute: (route: AppRoute, bookId?: string, pushHistory?: boolean) => void;
+    goBack: () => void;
     toggleSidebar: () => void;
     setSearchQuery: (query: string) => void;
     commitSearch: () => void;
@@ -140,14 +141,31 @@ export const useUIStore = create<UIStore>((set) => ({
     vaultSyncStatus: "idle",
     vaultSyncMessage: undefined,
     vaultSyncAt: undefined,
+    routeHistory: [],
 
-    setRoute: (route, bookId) =>
-        set({
+    setRoute: (route, bookId, pushHistory = true) => {
+        if (pushHistory && typeof window !== "undefined") {
+            window.history.pushState({ route, bookId }, "");
+        }
+        set((state) => ({
             currentRoute: route,
             currentBookId: bookId,
+            routeHistory: pushHistory ? [...state.routeHistory, state.currentRoute] : state.routeHistory,
             searchQuery: "",
             searchCommittedQuery: "",
-        }),
+        }));
+    },
+    goBack: () => {
+        if (typeof window !== "undefined" && window.history.length > 1) {
+            window.history.back();
+        } else {
+            set((state) => ({
+                currentRoute: "library",
+                currentBookId: undefined,
+                routeHistory: [],
+            }));
+        }
+    },
     toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
     setSearchQuery: (query) => set({ searchQuery: query }),
     commitSearch: () => set((state) => ({
@@ -762,14 +780,14 @@ export const useLibraryStore = create<LibraryStore>()(
 
             removeBook: async (bookId) => {
                 const book = get().books.find((b) => b.id === bookId);
-                
+
                 // Clean up storage first (don't await to keep UI responsive)
                 if (book) {
                     deleteBookStorage(bookId).catch((error) => {
                         console.error('[LibraryStore] Failed to delete book storage:', error);
                     });
                 }
-                
+
                 set((state) => ({
                     books: state.books.filter((b) => b.id !== bookId),
                     annotations: state.annotations.filter((a) => a.bookId !== bookId),
@@ -1841,13 +1859,13 @@ export const useVocabularyStore = create<VocabularyStore>()(
                         const MAX_CACHE_SIZE = 100; // Limit cache to 100 entries
                         const newCache = { ...state.lookupCache, [cacheKey]: result };
                         const cacheKeys = Object.keys(newCache);
-                        
+
                         // If cache exceeds max size, remove oldest entries (LRU eviction)
                         if (cacheKeys.length > MAX_CACHE_SIZE) {
                             const keysToRemove = cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_SIZE);
                             keysToRemove.forEach(key => delete newCache[key]);
                         }
-                        
+
                         return { lookupCache: newCache };
                     });
                 }
@@ -2271,10 +2289,10 @@ export const useRssStore = create<RssStore>()(
             partialize: (state) => {
                 const MAX_ARTICLES = 500; // Keep only last 500 articles
                 const MAX_ARTICLE_AGE_DAYS = 30; // Remove articles older than 30 days
-                
+
                 const cutoffDate = new Date();
                 cutoffDate.setDate(cutoffDate.getDate() - MAX_ARTICLE_AGE_DAYS);
-                
+
                 // Filter out old articles and limit total count
                 const filteredArticles = state.articles
                     .filter(article => {
@@ -2282,15 +2300,15 @@ export const useRssStore = create<RssStore>()(
                         return new Date(articleDate) >= cutoffDate;
                     })
                     .slice(0, MAX_ARTICLES);
-                
+
                 // Truncate article content to reduce storage size (keep first 50KB)
                 const truncatedArticles = filteredArticles.map(article => ({
                     ...article,
-                    content: article.content.length > 50000 
+                    content: article.content.length > 50000
                         ? article.content.slice(0, 50000) + '... [truncated]'
                         : article.content,
                 }));
-                
+
                 return {
                     feeds: state.feeds,
                     articles: truncatedArticles,

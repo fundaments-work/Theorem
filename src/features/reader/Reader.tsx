@@ -99,6 +99,7 @@ function getMimeTypeForBookFormat(format: BookFormat): string {
 function BookReaderPage() {
     const currentBookId = useUIStore((state) => state.currentBookId);
     const setRoute = useUIStore((state) => state.setRoute);
+    const goBack = useUIStore((state) => state.goBack);
 
     const getBook = useLibraryStore((state) => state.getBook);
     const updateProgress = useLibraryStore((state) => state.updateProgress);
@@ -823,8 +824,8 @@ function BookReaderPage() {
         }
 
         // No panels open - go back to library
-        setRoute("library");
-        return true; // Handled, stay in app (go to library)
+        goBack();
+        return true; // Handled
     });
 
     // Web-based back button handling for desktop browsers
@@ -855,12 +856,8 @@ function BookReaderPage() {
     }, [setRoute]);
 
     const handleBack = useCallback(() => {
-        if (typeof window !== "undefined" && window.history.length > 1) {
-            window.history.back();
-            return;
-        }
-        setRoute("library");
-    }, [setRoute]);
+        goBack();
+    }, [goBack]);
 
     const handleError = useCallback((err: Error) => {
         setLoadError(err.message);

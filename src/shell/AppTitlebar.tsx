@@ -11,6 +11,7 @@ import {
     X,
     Search,
     BarChart3,
+    ArrowLeft,
 } from "lucide-react";
 import { cn } from "../core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -188,6 +189,15 @@ export function AppTitlebar({
                     className="flex items-center gap-2 shrink-0 min-w-0"
                     data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
                 >
+                    {currentRoute !== "library" && (
+                        <button
+                            onClick={() => useUIStore.getState().goBack()}
+                            className={cn(TITLEBAR_ICON_BUTTON, "mr-1 rounded-full")}
+                            title="Back"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                        </button>
+                    )}
                     <div className="md:hidden">
                         <TheoremLogo size={26} />
                     </div>
