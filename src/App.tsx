@@ -70,12 +70,23 @@ function App() {
 
         const handlePopState = (event: PopStateEvent) => {
             const state = event.state;
+            const currentUIState = useUIStore.getState();
+
+            // Ignore our internal back interceptor states
+            if (state && state.__theorem_back) {
+                return;
+            }
+
             if (state && state.route) {
-                // Navigate to the state's route without pushing a new history entry
-                setRoute(state.route, state.bookId, false);
+                // Only update if the route or book has actually changed
+                if (state.route !== currentUIState.currentRoute || state.bookId !== currentUIState.currentBookId) {
+                    setRoute(state.route, state.bookId, false);
+                }
             } else if (!state) {
-                // System back typically goes to null state at the beginning
-                setRoute("library", undefined, false);
+                // If we land on a null state (beginning of history), default to library
+                if (currentUIState.currentRoute !== "library") {
+                    setRoute("library", undefined, false);
+                }
             }
         };
 

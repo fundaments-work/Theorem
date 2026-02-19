@@ -3,7 +3,7 @@
  * Tauri-only desktop application
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 
 /**
  * Check if running in a Tauri environment
@@ -53,25 +53,47 @@ export function isTouchDevice(): boolean {
  * Uses history API to intercept back button
  */
 export function useAndroidBackButton(handler: () => boolean) {
+    const handlerRef = useRef(handler);
+
+    // Keep handler ref up to date without triggering effect re-runs
+    useEffect(() => {
+        handlerRef.current = handler;
+    }, [handler]);
+
     useEffect(() => {
         if (!isTauriMobile()) return;
 
-        // Push initial state to enable back button handling
+        // Push initial interceptor state
+        // We only do this once on mount of the component using the hook
         window.history.pushState({ __theorem_back: true }, '');
 
-        const handlePopState = () => {
-            const handled = handler();
+        const handlePopState = (event: PopStateEvent) => {
+            // Only handle our specific back interceptor state
+            // If the state being popped ISN'T ours, let App.tsx handle it
+            const state = event.state;
+
+            // If we find ourselves back at a state without our flag, it means we've
+            // already "popped" the interceptor.
+            const handled = handlerRef.current();
+
             if (handled) {
-                // Re-push state to continue handling future back buttons
+                // handler returned true: they intercepted the back action (e.g. closed a modal)
+                // stay on current page by re-pushing the interceptor state
                 window.history.pushState({ __theorem_back: true }, '');
+            } else {
+                // handler returned false: they WANT to proceed with back navigation
+                // We've already popped the interceptor state, so we just let it be.
+                // The browser/webview is now at the state BEFORE our interceptor.
             }
-            // If not handled, the app will exit (default Android behavior)
         };
 
         window.addEventListener('popstate', handlePopState);
 
         return () => {
             window.removeEventListener('popstate', handlePopState);
+            // If we are unmounting, we might want to go back once more if we're still 
+            // sitting on our dummy state, but usually the navigation that caused
+            // unmount has already cleared it.
         };
-    }, [handler]);
+    }, []); // Only run on mount
 }

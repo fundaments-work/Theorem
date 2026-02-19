@@ -11,6 +11,7 @@ import {
     getBookData,
     isMobile,
     isTauri,
+    isTauriMobile,
     useAndroidBackButton,
     useVocabularyStore,
     useLibraryStore,
@@ -803,62 +804,6 @@ function BookReaderPage() {
         }
     }, []);
 
-    // Handle Android back button
-    useAndroidBackButton(() => {
-        // Check if any panel is open - close them first
-        if (activePanel) {
-            setActivePanel(null);
-            return true; // Handled, don't exit app
-        }
-
-        // Close color picker if open
-        if (showColorPicker) {
-            setShowColorPicker(false);
-            return true;
-        }
-
-        // Close note editor if open
-        if (showNoteEditor) {
-            setShowNoteEditor(false);
-            return true;
-        }
-
-        // No panels open - go back to library
-        goBack();
-        return true; // Handled
-    });
-
-    // Web-based back button handling for desktop browsers
-    useEffect(() => {
-        if (typeof window === "undefined" || isMobile()) {
-            return;
-        }
-
-        const state = window.history.state;
-        if (!(state && typeof state === "object" && state.__theorem_reader_entry === true)) {
-            window.history.pushState(
-                {
-                    ...(state && typeof state === "object" ? state : {}),
-                    __theorem_reader_entry: true,
-                },
-                "",
-            );
-        }
-
-        const handlePopState = () => {
-            setRoute("library");
-        };
-
-        window.addEventListener("popstate", handlePopState);
-        return () => {
-            window.removeEventListener("popstate", handlePopState);
-        };
-    }, [setRoute]);
-
-    const handleBack = useCallback(() => {
-        goBack();
-    }, [goBack]);
-
     const handleError = useCallback((err: Error) => {
         setLoadError(err.message);
     }, []);
@@ -920,6 +865,77 @@ function BookReaderPage() {
     const [dictionaryLookupError, setDictionaryLookupError] = useState<string | null>(null);
     const [dictionaryLookupLoading, setDictionaryLookupLoading] = useState(false);
     const [dictionaryLookupSaved, setDictionaryLookupSaved] = useState(false);
+
+    // Handle Android back button
+    const handleAndroidBack = useCallback(() => {
+        // Check if any panel is open - close them first
+        if (activePanel) {
+            setActivePanel(null);
+            return true; // Handled, re-push interceptor
+        }
+
+        // Close color picker if open
+        if (showColorPicker) {
+            setShowColorPicker(false);
+            return true;
+        }
+
+        // Close note editor if open
+        if (showNoteEditor) {
+            setShowNoteEditor(false);
+            return true;
+        }
+
+        // No panels open - go back to library
+        // We return false to the hook so it doesn't re-push the dummy state
+        // allowing the system back action to proceed to the previous route.
+        goBack();
+        return false;
+    }, [activePanel, showColorPicker, showNoteEditor, goBack]);
+
+    useAndroidBackButton(handleAndroidBack);
+
+    // Web-based back button handling for desktop browsers and mobile web
+    useEffect(() => {
+        if (typeof window === "undefined" || isTauriMobile()) {
+            return;
+        }
+
+        const state = window.history.state;
+        // Use consistent interceptor flag
+        if (!(state && typeof state === "object" && state.__theorem_back === true)) {
+            window.history.pushState(
+                {
+                    ...(state && typeof state === "object" ? state : {}),
+                    __theorem_back: true,
+                },
+                "",
+            );
+        }
+
+        const handlePopState = (event: PopStateEvent) => {
+            // If the state we popped to is our reader entry state, we want to exit
+            // but we check if we were already handled by another listener
+            if (useUIStore.getState().currentRoute === "reader") {
+                setRoute("library");
+            }
+        };
+
+        window.addEventListener("popstate", handlePopState);
+        return () => {
+            window.removeEventListener("popstate", handlePopState);
+        };
+    }, [setRoute]);
+
+    const handleBack = useCallback(() => {
+        // If we have a history stack, going back will be caught by our popstate listeners
+        if (typeof window !== "undefined" && window.history.length > 1) {
+            window.history.back();
+        } else {
+            // Fallback for direct entry
+            setRoute("library");
+        }
+    }, [setRoute]);
 
     useEffect(() => {
         if (!isPdfFormat || !isMobileViewport || !showToolbar || activePanel !== null) {
