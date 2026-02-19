@@ -189,22 +189,29 @@ export function AppTitlebar({
                     className="flex items-center gap-2 shrink-0 min-w-0"
                     data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
                 >
-                    {currentRoute !== "library" && (
-                        <button
-                            onClick={() => useUIStore.getState().goBack()}
-                            className={cn(TITLEBAR_ICON_BUTTON, "mr-1 rounded-full")}
-                            title="Back"
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                        </button>
-                    )}
-                    <div className="md:hidden">
-                        <TheoremLogo size={26} />
-                    </div>
+                    <button
+                        onClick={() => {
+                            if (currentRoute !== "library") {
+                                useUIStore.getState().goBack();
+                            }
+                        }}
+                        disabled={currentRoute === "library"}
+                        className={cn(
+                            "flex items-center gap-2.5 p-1 -ml-1 rounded-none transition-all duration-200",
+                            currentRoute !== "library"
+                                ? "hover:bg-[var(--color-surface-muted)] active:scale-95 cursor-pointer"
+                                : "cursor-default"
+                        )}
+                        title={currentRoute !== "library" ? "Go Back" : undefined}
+                    >
+                        <div>
+                            <TheoremLogo size={26} />
+                        </div>
 
-                    <h1 className="font-sans text-sm font-semibold text-[color:var(--color-text-primary)] truncate">
-                        {getPageTitle()}
-                    </h1>
+                        <h1 className="font-sans text-sm font-semibold text-[color:var(--color-text-primary)] truncate">
+                            {getPageTitle()}
+                        </h1>
+                    </button>
                 </div>
 
                 {/* Center - Search (desktop) */}

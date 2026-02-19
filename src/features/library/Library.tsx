@@ -15,7 +15,7 @@ import { rankByFuzzyQuery } from "../../core";
 import {
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
-    ChevronDown, Star, X, ArrowUpDown
+    ChevronDown, Star, X, ArrowUpDown, Check
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "../../core";
 import { FORMAT_DISPLAY_NAMES } from "../../core";
@@ -1095,310 +1095,285 @@ export function LibraryPage() {
                     </p>
                 </div>
 
-                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3">
-                    {/* View Mode Toggle */}
+                <div className="flex items-center gap-2 sm:gap-4 ml-auto">
+                    {/* Import and View Mode grouped left */}
+                    <ImportButton onImport={handleAddBooks} isLoading={isImporting} />
+
                     <button
                         onClick={toggleViewMode}
-                        className={cn(TOOLBAR_BUTTON_BASE, TOOLBAR_ICON_BUTTON)}
+                        className={cn(TOOLBAR_BUTTON_BASE, TOOLBAR_ICON_BUTTON, "border-2 rounded-none")}
                         title={`View: ${settings.libraryViewMode}`}
                     >
                         {viewModeIcons[settings.libraryViewMode]}
                     </button>
 
-                    <ImportButton onImport={handleAddBooks} isLoading={isImporting} />
+                    <div className="h-6 w-px bg-[var(--color-border)]" />
 
+                    {/* Folder opening then Filter */}
                     {isTauri() && (
                         <button
                             onClick={handleScanFolder}
                             disabled={isScanning}
-                            className={cn(TOOLBAR_BUTTON_BASE, "px-3 py-2 sm:px-4")}
+                            className={cn(TOOLBAR_BUTTON_BASE, "px-3 py-2 sm:px-4 border-2 rounded-none")}
                             title="Scan Folder"
                         >
-                            {isScanning ? (
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <FolderOpen className="w-4 h-4" />
-                            )}
-                            <span className="hidden sm:inline">Scan</span>
+                            {isScanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}
+                            <span className="hidden sm:inline font-bold text-xs uppercase">Scan</span>
                         </button>
                     )}
 
-                    {/* Filter Button with Dropdown */}
-                    <div className="relative" ref={filterDropdownRef}>
-                        <button
-                            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                            className={cn(
-                                TOOLBAR_BUTTON_BASE,
-                                "px-3 py-2 sm:px-4",
-                                showFilterDropdown && "border-[var(--color-accent)] bg-[var(--color-accent-light)] text-[color:var(--color-text-primary)]"
-                            )}
-                        >
-                            <Filter className="w-4 h-4" />
-                            <span className="hidden sm:inline">Filter</span>
-                            <ChevronDown className={cn("w-3 h-3 transition-transform", showFilterDropdown && "rotate-180")} />
-                        </button>
+                    <button
+                        onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                        className={cn(
+                            "ui-btn h-10 px-3 sm:px-5 transition-all duration-200 border-2",
+                            showFilterDropdown
+                                ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-[var(--color-border)] hover:border-[var(--color-text-primary)]"
+                        )}
+                    >
+                        <Filter className="w-4 h-4" />
+                        <span className="hidden sm:inline font-black tracking-tight uppercase text-xs">Filter</span>
+                        <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-300", showFilterDropdown && "rotate-180")} />
+                    </button>
+                </div>
+            </div>
 
-                        {showFilterDropdown && (
-                            <>
-                                <div
-                                    className="fixed inset-0 z-10 sm:hidden"
-                                    onClick={() => setShowFilterDropdown(false)}
-                                />
-                                <div className={cn(
-                                    "absolute top-full z-20 mt-2 border border-[var(--color-border)] bg-[var(--color-surface)] py-2 shadow-lg",
-                                    "fixed inset-x-4 top-[20%] mx-auto w-auto max-w-[20rem] sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80"
-                                )}>
-                                    {/* Sort By */}
-                                    <div className="px-3 py-2 border-b border-[var(--color-border)]">
-                                        <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Sort By</p>
-                                        <div className="space-y-1">
-                                            {[
-                                                { id: "title", label: "Title" },
-                                                { id: "author", label: "Author" },
-                                                { id: "dateAdded", label: "Date Added" },
-                                                { id: "lastRead", label: "Last Read" },
-                                                { id: "progress", label: "Progress" },
-                                                { id: "rating", label: "Rating" },
-                                            ].map((option) => (
+            <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-start mt-8">
+                <div className="flex-1 w-full">
+                    {/* Mobile Only: Inline Filter Drawer */}
+                    <div className={cn(
+                        "md:hidden overflow-hidden transition-all duration-300",
+                        showFilterDropdown ? "max-h-[800px] mb-8 opacity-100" : "max-h-0 opacity-0 mb-0"
+                    )}>
+                        <div className="w-full border-t-2 border-b-2 border-[var(--color-border)] bg-[var(--color-surface-muted)]">
+                            <div className="grid grid-cols-1 divide-y divide-[var(--color-border)]">
+                                {/* Sort Field */}
+                                <div className="p-4">
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-3">Sort By</h3>
+                                    <div className="grid grid-cols-2 gap-1">
+                                        {[
+                                            { id: "title", label: "Title" },
+                                            { id: "author", label: "Author" },
+                                            { id: "dateAdded", label: "Added" },
+                                            { id: "lastRead", label: "Read" },
+                                        ].map((option) => (
+                                            <button
+                                                key={option.id}
+                                                onClick={() => updateSettings({ librarySortBy: option.id as LibrarySortBy })}
+                                                className={cn(
+                                                    "flex items-center justify-between px-3 py-2 text-xs font-bold transition-all border",
+                                                    settings.librarySortBy === option.id
+                                                        ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                                        : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-surface)]"
+                                                )}
+                                            >
+                                                {option.label}
+                                                {settings.librarySortBy === option.id && <Check className="w-3 h-3" />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Order & Filters Group */}
+                                <div className="grid grid-cols-2 divide-x divide-[var(--color-border)]">
+                                    <div className="p-4">
+                                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-3">Order</h3>
+                                        <div className="flex flex-col gap-1">
+                                            {["asc", "desc"].map((id) => (
                                                 <button
-                                                    key={option.id}
-                                                    onClick={() => updateSettings({ librarySortBy: option.id as LibrarySortBy })}
+                                                    key={id}
+                                                    onClick={() => updateSettings({ librarySortOrder: id as LibrarySortOrder })}
                                                     className={cn(
-                                                        "w-full flex items-center justify-between px-2 py-1.5 rounded text-sm",
-                                                        settings.librarySortBy === option.id
-                                                            ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
-                                                            : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                                        "px-3 py-2 text-[10px] font-bold border transition-all",
+                                                        settings.librarySortOrder === id ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
                                                     )}
                                                 >
-                                                    {option.label}
-                                                    {settings.librarySortBy === option.id && (
-                                                        <ChevronDown className="w-3 h-3" />
-                                                    )}
+                                                    {id === "asc" ? "ASC" : "DESC"}
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
-
-                                    {/* Sort Order */}
-                                    <div className="px-3 py-2 border-b border-[var(--color-border)]">
-                                        <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">
-                                            Order
-                                        </p>
-                                        <div className="relative">
-                                            <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[color:var(--color-text-muted)]" />
-                                            <Dropdown<LibrarySortOrder>
-                                                value={settings.librarySortOrder}
-                                                onChange={(value) => {
-                                                    updateSettings({
-                                                        librarySortOrder: value,
-                                                    });
-                                                }}
-                                                options={[
-                                                    { value: "asc", label: "Ascending" },
-                                                    { value: "desc", label: "Descending" },
-                                                ]}
-                                                variant="filled"
-                                                size="sm"
-                                                align="right"
-                                                className={cn(
-                                                    "w-full",
-                                                    "[&>button]:w-full",
-                                                    "[&>button]:pl-9",
-                                                    "[&>button]:pr-3",
-                                                    "[&>button]:min-h-[var(--control-height-sm)]",
-                                                    "[&>button]:text-[color:var(--color-text-secondary)]"
-                                                )}
-                                                dropdownClassName="!w-full !min-w-full"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Filter by Favorites */}
-                                    <div className="px-3 py-2 border-b border-[var(--color-border)]">
-                                        <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Filter</p>
-                                        <div className="space-y-1">
+                                    <div className="p-4">
+                                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-3">Quick</h3>
+                                        <div className="flex flex-col gap-1">
                                             <button
-                                                onClick={() => {
-                                                    setShowFavoritesOnly(false);
-                                                    setShowFilterDropdown(false);
-                                                }}
+                                                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
                                                 className={cn(
-                                                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
-                                                    !showFavoritesOnly
-                                                        ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
-                                                        : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                                    "px-3 py-2 text-[10px] font-bold border transition-all",
+                                                    showFavoritesOnly ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
                                                 )}
                                             >
-                                                <BookOpen className="w-4 h-4" />
-                                                All Books
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setShowFavoritesOnly(true);
-                                                    setShowFilterDropdown(false);
-                                                }}
-                                                className={cn(
-                                                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
-                                                    showFavoritesOnly
-                                                        ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
-                                                        : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
-                                                )}
-                                            >
-                                                <Heart className={cn("w-4 h-4", showFavoritesOnly && "fill-current")} />
-                                                Favorites Only
+                                                FAVS
                                             </button>
                                         </div>
-                                    </div>
-
-                                    {/* Filter by Shelf */}
-                                    {collections.length > 0 && (
-                                        <div className="px-3 py-2 border-b border-[var(--color-border)]">
-                                            <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Filter by Shelf</p>
-                                            <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-                                                <button
-                                                    onClick={() => {
-                                                        sessionStorage.removeItem("theorem-selected-shelf");
-                                                        setSelectedShelfId(null);
-                                                        setShowFilterDropdown(false);
-                                                    }}
-                                                    className={cn(
-                                                        "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
-                                                        !selectedShelf
-                                                            ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
-                                                            : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
-                                                    )}
-                                                >
-                                                    <BookOpen className="w-4 h-4" />
-                                                    All Books
-                                                </button>
-                                                {generalCollections.length > 0 && (
-                                                    <div className="space-y-1">
-                                                        {generalCollections.map((shelf) => {
-                                                            const colors = getShelfColor(shelf.id, shelf.name);
-                                                            const isSelected = selectedShelfId === shelf.id;
-                                                            return (
-                                                                <button
-                                                                    key={shelf.id}
-                                                                    onClick={() => {
-                                                                        setSelectedShelfId(shelf.id);
-                                                                        sessionStorage.setItem("theorem-selected-shelf", shelf.id);
-                                                                        setShowFilterDropdown(false);
-                                                                    }}
-                                                                    className={cn(
-                                                                        "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left",
-                                                                        isSelected
-                                                                            ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
-                                                                            : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
-                                                                    )}
-                                                                >
-                                                                    <div
-                                                                        className="w-4 h-4 rounded flex items-center justify-center text-[0.625rem] leading-tight font-semibold"
-                                                                        style={{
-                                                                            backgroundColor: colors.bg,
-                                                                            color: colors.text,
-                                                                        }}
-                                                                    >
-                                                                        {getShelfInitials(shelf.name)}
-                                                                    </div>
-                                                                    <span className="flex-1 truncate">{shelf.name}</span>
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Manage Shelves Link */}
-                                    <div className="px-3 py-2">
-                                        <button
-                                            onClick={() => {
-                                                setRoute("shelves");
-                                                setShowFilterDropdown(false);
-                                            }}
-                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                            Manage Shelves...
-                                        </button>
                                     </div>
                                 </div>
-                            </>
-                        )}
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            {/* Books Grid/List/Compact */}
-            <section>
-                {sortedBooks.length === 0 ? (
-                    <div className="text-center py-16">
-                        <p className="text-[color:var(--color-text-muted)]">
-                            No books match your search.
-                        </p>
-                        {searchQuery && (
-                            <button
-                                onClick={() => useUIStore.getState().setSearchQuery("")}
-                                className="mt-2 text-sm text-[color:var(--color-accent)] hover:underline"
-                            >
-                                Clear search
-                            </button>
+                    {/* Books Grid/List/Compact */}
+                    <section>
+                        {sortedBooks.length === 0 ? (
+                            <div className="text-center py-16 border-2 border-dashed border-[var(--color-border)]">
+                                <p className="text-[color:var(--color-text-muted)] font-bold uppercase text-xs tracking-widest">
+                                    No documents match criteria
+                                </p>
+                                {searchQuery && (
+                                    <button
+                                        onClick={() => useUIStore.getState().setSearchQuery("")}
+                                        className="mt-4 text-[10px] font-black uppercase text-[color:var(--color-accent)] hover:underline tracking-tighter"
+                                    >
+                                        [ RESET SEARCH ]
+                                    </button>
+                                )}
+                            </div>
+                        ) : settings.libraryViewMode === "list" ? (
+                            <div className="space-y-1">
+                                {sortedBooks.map((book) => (
+                                    <BookCard
+                                        key={book.id}
+                                        book={book}
+                                        viewMode={settings.libraryViewMode}
+                                        onOpenBook={handleOpenBook}
+                                        onToggleFavorite={handleToggleFavorite}
+                                        onDeleteBook={handleDeleteBook}
+                                        onShowInfo={handleShowInfo}
+                                        onAddToShelf={handleAddToShelf}
+                                        onMarkAsRead={handleMarkAsRead}
+                                        onMarkAsUnread={handleMarkAsUnread}
+                                    />
+                                ))}
+                            </div>
+                        ) : settings.libraryViewMode === "compact" ? (
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                                {sortedBooks.map((book) => (
+                                    <BookCard
+                                        key={book.id}
+                                        book={book}
+                                        viewMode={settings.libraryViewMode}
+                                        onOpenBook={handleOpenBook}
+                                        onToggleFavorite={handleToggleFavorite}
+                                        onDeleteBook={handleDeleteBook}
+                                        onShowInfo={handleShowInfo}
+                                        onAddToShelf={handleAddToShelf}
+                                        onMarkAsRead={handleMarkAsRead}
+                                        onMarkAsUnread={handleMarkAsUnread}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                                {sortedBooks.map((book) => (
+                                    <BookCard
+                                        key={book.id}
+                                        book={book}
+                                        viewMode={settings.libraryViewMode}
+                                        onOpenBook={handleOpenBook}
+                                        onToggleFavorite={handleToggleFavorite}
+                                        onDeleteBook={handleDeleteBook}
+                                        onShowInfo={handleShowInfo}
+                                        onAddToShelf={handleAddToShelf}
+                                        onMarkAsRead={handleMarkAsRead}
+                                        onMarkAsUnread={handleMarkAsUnread}
+                                    />
+                                ))}
+                            </div>
                         )}
-                    </div>
-                ) : settings.libraryViewMode === "list" ? (
-                    <div className="space-y-1">
-                        {sortedBooks.map((book) => (
-                            <BookCard
-                                key={book.id}
-                                book={book}
-                                viewMode={settings.libraryViewMode}
-                                onOpenBook={handleOpenBook}
-                                onToggleFavorite={handleToggleFavorite}
-                                onDeleteBook={handleDeleteBook}
-                                onShowInfo={handleShowInfo}
-                                onAddToShelf={handleAddToShelf}
-                                onMarkAsRead={handleMarkAsRead}
-                                onMarkAsUnread={handleMarkAsUnread}
-                            />
-                        ))}
-                    </div>
-                ) : settings.libraryViewMode === "compact" ? (
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
-                        {sortedBooks.map((book) => (
-                            <BookCard
-                                key={book.id}
-                                book={book}
-                                viewMode={settings.libraryViewMode}
-                                onOpenBook={handleOpenBook}
-                                onToggleFavorite={handleToggleFavorite}
-                                onDeleteBook={handleDeleteBook}
-                                onShowInfo={handleShowInfo}
-                                onAddToShelf={handleAddToShelf}
-                                onMarkAsRead={handleMarkAsRead}
-                                onMarkAsUnread={handleMarkAsUnread}
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 sm:gap-x-6 sm:gap-y-10 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                        {sortedBooks.map((book) => (
-                            <BookCard
-                                key={book.id}
-                                book={book}
-                                viewMode={settings.libraryViewMode}
-                                onOpenBook={handleOpenBook}
-                                onToggleFavorite={handleToggleFavorite}
-                                onDeleteBook={handleDeleteBook}
-                                onShowInfo={handleShowInfo}
-                                onAddToShelf={handleAddToShelf}
-                                onMarkAsRead={handleMarkAsRead}
-                                onMarkAsUnread={handleMarkAsUnread}
-                            />
-                        ))}
-                    </div>
+                    </section>
+                </div>
+
+                {/* Desktop: Sticky Swiss Sidebar */}
+                {showFilterDropdown && (
+                    <aside className="hidden md:block w-72 shrink-0 sticky top-24 border-2 border-[var(--color-border)] bg-[var(--color-surface-muted)] animate-in slide-in-from-right-4 duration-300">
+                        <div className="divide-y-2 divide-[var(--color-border)]">
+                            {/* Sort */}
+                            <div className="p-5">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Sort Criteria</h3>
+                                <div className="flex flex-col gap-1">
+                                    {[
+                                        { id: "title", label: "Title" },
+                                        { id: "author", label: "Author" },
+                                        { id: "dateAdded", label: "Date Added" },
+                                        { id: "lastRead", label: "Last Read" },
+                                    ].map((option) => (
+                                        <button
+                                            key={option.id}
+                                            onClick={() => updateSettings({ librarySortBy: option.id as LibrarySortBy })}
+                                            className={cn(
+                                                "flex items-center justify-between px-4 py-2.5 text-xs font-bold border-2 transition-all",
+                                                settings.librarySortBy === option.id
+                                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                                    : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                            )}
+                                        >
+                                            {option.label.toUpperCase()}
+                                            {settings.librarySortBy === option.id && <Check className="w-3.5 h-3.5" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Order */}
+                            <div className="p-5">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Direction</h3>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[
+                                        { id: "asc", label: "ASC" },
+                                        { id: "desc", label: "DESC" },
+                                    ].map((option) => (
+                                        <button
+                                            key={option.id}
+                                            onClick={() => updateSettings({ librarySortOrder: option.id as LibrarySortOrder })}
+                                            className={cn(
+                                                "py-2 text-[10px] font-black border-2 transition-all",
+                                                settings.librarySortOrder === option.id
+                                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                                    : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                            )}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Shelf Filter */}
+                            <div className="p-5">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)]">Collections</h3>
+                                    <button onClick={() => setRoute("shelves")} className="text-[10px] font-bold text-[color:var(--color-accent)] hover:underline">EDIT</button>
+                                </div>
+                                <div className="flex flex-col gap-1 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                                    <button
+                                        onClick={() => setSelectedShelfId(null)}
+                                        className={cn(
+                                            "flex items-center gap-3 px-4 py-2.5 text-xs font-bold border-2 transition-all",
+                                            !selectedShelfId ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                        )}
+                                    >
+                                        <LayoutGrid className="w-3.5 h-3.5" />
+                                        ALL DOCUMENTS
+                                    </button>
+                                    {collections.map((shelf) => (
+                                        <button
+                                            key={shelf.id}
+                                            onClick={() => setSelectedShelfId(shelf.id)}
+                                            className={cn(
+                                                "flex items-center justify-between px-4 py-2.5 text-xs font-bold border-2 transition-all",
+                                                selectedShelfId === shelf.id ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                            )}
+                                        >
+                                            <span className="truncate">{shelf.name.toUpperCase()}</span>
+                                            {selectedShelfId === shelf.id && <Check className="w-3.5 h-3.5" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
                 )}
-            </section>
+            </div>
 
             {/* Book Info Modal */}
             <BookInfoModal

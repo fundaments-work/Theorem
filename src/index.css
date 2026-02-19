@@ -122,6 +122,16 @@ button:disabled {
     background: var(--color-text-muted);
 }
 
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border: none;
+    border-radius: var(--radius-full);
+}
+
 /* Selection - Uses CSS Variables */
 ::selection {
     background-color: var(--color-accent-light);
