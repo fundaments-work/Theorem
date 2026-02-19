@@ -22,12 +22,12 @@ interface SidebarItem {
 }
 
 const mainNavItems: SidebarItem[] = [
-    { id: "library", label: "Library", icon: <Library className="h-4 w-4" /> },
-    { id: "vocabulary", label: "Vocabulary", icon: <BookOpenText className="h-4 w-4" /> },
-    { id: "annotations", label: "Highlights", icon: <Highlighter className="h-4 w-4" /> },
-    { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="h-4 w-4" /> },
-    { id: "shelves", label: "Shelves", icon: <FolderOpen className="h-4 w-4" /> },
-    { id: "feeds", label: "Snapshots", icon: <Rss className="h-4 w-4" /> },
+    { id: "library", label: "Library", icon: <Library className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
+    { id: "vocabulary", label: "Vocabulary", icon: <BookOpenText className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
+    { id: "annotations", label: "Highlights", icon: <Highlighter className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
+    { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
+    { id: "shelves", label: "Shelves", icon: <FolderOpen className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
+    { id: "feeds", label: "Snapshots", icon: <Rss className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
 ];
 
 interface SidebarProps {
@@ -97,7 +97,7 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
         >
             <div
                 className={cn(
-                    "flex h-16 items-center border-b border-[var(--color-border)] px-4",
+                    "flex h-[var(--layout-sidebar-header-height)] items-center border-b border-[var(--color-border)] px-4",
                     "font-sans text-[12px] font-semibold text-[color:var(--color-text-secondary)]",
                 )}
             >
@@ -131,19 +131,13 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                             }
                                         }}
                                         className={cn(
-                                            "relative flex h-11 w-full items-center border-b border-[var(--color-border-subtle)] px-4 text-left",
-                                            "font-sans text-[12px] font-medium",
-                                            "transition-colors",
-                                            isActive
-                                                ? "bg-[var(--color-accent)] text-white !text-white"
-                                                : "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]",
+                                            "ui-sidebar-nav-item",
+                                            isCollapsedDesktop && "justify-center px-0",
                                         )}
                                         title={isCollapsedDesktop ? item.label : undefined}
                                         aria-current={isActive ? "page" : undefined}
+                                        data-active={isActive ? "true" : undefined}
                                     >
-                                        {isActive && (
-                                            <span className="absolute inset-y-0 left-0 w-[3px] bg-black" aria-hidden="true" />
-                                        )}
                                         {isCollapsedDesktop ? (
                                             <span className="inline-flex h-4 w-4 items-center justify-center">{item.icon}</span>
                                         ) : (
@@ -164,22 +158,17 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                 setRoute("settings");
                             }}
                             className={cn(
-                                "relative flex h-11 flex-1 items-center border-r border-[var(--color-border-subtle)] px-4 text-left",
-                                "font-sans text-[12px] font-medium text-[color:var(--color-text-secondary)]",
-                                "hover:text-[color:var(--color-text-primary)]",
-                                currentRoute === "settings" && "bg-[var(--color-accent)] text-white !text-white",
+                                "ui-sidebar-nav-item flex-1 border-r border-[var(--color-border-subtle)] border-b-0",
                             )}
                             title="Settings"
+                            data-active={currentRoute === "settings" ? "true" : undefined}
                         >
-                            {currentRoute === "settings" && (
-                                <span className="absolute inset-y-0 left-0 w-[3px] bg-black" aria-hidden="true" />
-                            )}
                             <span>Settings</span>
                         </button>
 
                         <button
                             onClick={handleToggle}
-                            className="flex h-11 w-12 items-center justify-center text-[color:var(--color-text-secondary)] transition-colors hover:text-[color:var(--color-text-primary)]"
+                            className="ui-icon-btn !h-[var(--layout-sidebar-item-height)] !w-[var(--layout-sidebar-toggle-width)] border-y-0 border-r-0"
                             title="Collapse sidebar"
                         >
                             <ChevronLeft className="h-3.5 w-3.5" />
@@ -195,16 +184,12 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                 }
                             }}
                             className={cn(
-                                "relative flex h-11 w-full items-center border-b border-[var(--color-border-subtle)] px-4 text-left",
-                                "font-sans text-[12px] font-medium text-[color:var(--color-text-secondary)]",
-                                "hover:text-[color:var(--color-text-primary)]",
-                                currentRoute === "settings" && "bg-[var(--color-accent)] text-white !text-white",
+                                "ui-sidebar-nav-item",
+                                isCollapsedDesktop && "justify-center px-0",
                             )}
                             title={isCollapsedDesktop ? "Settings" : undefined}
+                            data-active={currentRoute === "settings" ? "true" : undefined}
                         >
-                            {currentRoute === "settings" && (
-                                <span className="absolute inset-y-0 left-0 w-[3px] bg-black" aria-hidden="true" />
-                            )}
                             {isCollapsedDesktop ? (
                                 <span className="inline-flex h-4 w-4 items-center justify-center">
                                     <Settings className="h-4 w-4" />
@@ -218,9 +203,8 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                             <button
                                 onClick={handleToggle}
                                 className={cn(
-                                    "relative flex h-11 w-full items-center border-b border-[var(--color-border-subtle)] px-4 text-left",
-                                    "font-sans text-[11px] font-medium text-[color:var(--color-text-secondary)]",
-                                    "hover:text-[color:var(--color-text-primary)]",
+                                    "ui-sidebar-nav-item",
+                                    isCollapsedDesktop && "justify-center px-0",
                                 )}
                                 title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
                             >

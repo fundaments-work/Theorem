@@ -346,7 +346,6 @@ export function SettingsPage() {
     const tabButtons = [
         { id: "general" as const, label: "General" },
         { id: "dictionary" as const, label: "Dictionary" },
-        { id: "rss" as const, label: "Snapshots" },
         { id: "integrations" as const, label: "Sync" },
         { id: "storage" as const, label: "Storage" },
     ];
@@ -718,26 +717,6 @@ export function SettingsPage() {
                 </div>
             )}
 
-            {/* RSS Settings */}
-            {activeTab === "rss" && (
-                <div className="space-y-8">
-                    <Section
-                        title="RSS Feeds"
-                        description="Feed reader status"
-                        icon={<Rss className="w-5 h-5" />}
-                    >
-                        <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3">
-                            <p className="font-sans text-[12px] font-medium text-[color:var(--color-text-primary)]">
-                                RSS behavior is managed automatically in this release.
-                            </p>
-                            <p className="mt-1 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
-                                Cached articles: {rssStats.articleCount} ({formatFileSize(rssStats.totalSize)})
-                            </p>
-                        </div>
-                    </Section>
-
-                </div>
-            )}
 
             {/* Integrations Settings */}
             {activeTab === "integrations" && (

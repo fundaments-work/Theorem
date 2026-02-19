@@ -12,8 +12,9 @@ import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 const LibraryPage = lazy(() =>
     import("./features/library").then((module) => ({ default: module.LibraryPage })),
 );
+const loadReaderPage = () => import("./features/reader");
 const ReaderPage = lazy(() =>
-    import("./features/reader").then((module) => ({ default: module.ReaderPage })),
+    loadReaderPage().then((module) => ({ default: module.ReaderPage })),
 );
 const VocabularyPage = lazy(() =>
     import("./features/vocabulary").then((module) => ({ default: module.VocabularyPage })),
@@ -43,6 +44,15 @@ function PageFallback() {
     return (
         <div className="flex h-full w-full items-center justify-center text-[color:var(--color-text-secondary)]">
             Loading...
+        </div>
+    );
+}
+
+function ReaderFallback() {
+    return (
+        <div className="fixed inset-0 flex flex-col items-center justify-center bg-[var(--color-background)]">
+            <div className="w-12 h-12 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
+            <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">Opening reader...</p>
         </div>
     );
 }
@@ -119,6 +129,7 @@ function App() {
                 return;
             }
             void prewarmPdfJsRuntime();
+            void loadReaderPage();
         };
 
         if (idleWindow.requestIdleCallback) {
@@ -212,7 +223,7 @@ function App() {
     // Reader mode: full screen without sidebar
     if (isReaderMode) {
         return (
-            <Suspense fallback={<PageFallback />}>
+            <Suspense fallback={<ReaderFallback />}>
                 <ReaderPage />
             </Suspense>
         );

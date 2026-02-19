@@ -11,7 +11,6 @@ import {
     X,
     Search,
     BarChart3,
-    ArrowLeft,
 } from "lucide-react";
 import { cn } from "../core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -31,13 +30,12 @@ interface AppTitlebarProps {
 }
 
 const TITLEBAR_ICON_BUTTON =
-    "inline-flex h-9 w-9 items-center justify-center border border-transparent bg-transparent text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
-const TITLEBAR_ICON_ACTIVE = "border-2 border-[var(--color-accent)] text-[color:var(--color-text-primary)]";
+    "ui-icon-btn !h-9 !w-9";
 const TITLEBAR_WINDOW_BUTTON =
-    "hidden sm:inline-flex h-8 w-8 items-center justify-center border border-transparent bg-transparent text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
-const TITLEBAR_CLOSE_BUTTON = `${TITLEBAR_WINDOW_BUTTON} hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]`;
+    "ui-icon-btn hidden sm:inline-flex !h-8 !w-8 border-transparent bg-transparent";
+const TITLEBAR_CLOSE_BUTTON = `${TITLEBAR_WINDOW_BUTTON} hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)] hover:border-[color:color-mix(in_srgb,var(--color-error)_35%,var(--color-border))]`;
 const TITLEBAR_SEARCH_INPUT =
-    "min-h-[var(--control-height-md)] w-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-2 pl-[calc(var(--control-padding-x)+var(--icon-size-sm)+var(--spacing-md))] text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] transition-[background-color,border-color,color,box-shadow] duration-200 ease-out hover:border-[color:color-mix(in_srgb,var(--color-accent)_32%,var(--color-border))] focus-visible:border-[color:color-mix(in_srgb,var(--color-accent)_58%,var(--color-border))] focus-visible:outline-2 focus-visible:outline-[color:color-mix(in_srgb,var(--color-accent)_28%,transparent)] focus-visible:outline-offset-0";
+    "ui-input bg-[var(--color-surface)] pl-[calc(var(--control-padding-x)+var(--icon-size-sm)+var(--spacing-md))]";
 
 export function AppTitlebar({
     title,
@@ -187,29 +185,20 @@ export function AppTitlebar({
                     className="flex items-center gap-2 shrink-0 min-w-0"
                     data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
                 >
+
                     <button
-                        onClick={() => {
-                            if (currentRoute !== "library") {
-                                useUIStore.getState().goBack();
-                            }
-                        }}
-                        disabled={currentRoute === "library"}
-                        className={cn(
-                            "flex items-center gap-2.5 p-1 -ml-1 rounded-none transition-all duration-200",
-                            currentRoute !== "library"
-                                ? "hover:bg-[var(--color-surface-muted)] active:scale-95 cursor-pointer"
-                                : "cursor-default"
-                        )}
-                        title={currentRoute !== "library" ? "Go Back" : undefined}
+                        onClick={() => setRoute("library")}
+                        className="sm:hidden inline-flex items-center p-1 -ml-1"
+                        title="Go to Library"
                     >
                         <div>
-                            <TheoremLogo size={26} />
+                            <TheoremLogo size={24} />
                         </div>
-
-                        <h1 className="font-sans text-sm font-semibold text-[color:var(--color-text-primary)] truncate">
-                            {getPageTitle()}
-                        </h1>
                     </button>
+
+                    <h1 className="hidden sm:block font-sans text-sm font-semibold text-[color:var(--color-text-primary)] truncate">
+                        {getPageTitle()}
+                    </h1>
                 </div>
 
                 {/* Center - Search (desktop) */}
@@ -241,13 +230,12 @@ export function AppTitlebar({
                         <button
                             onClick={() => setIsMobileSearchOpen((prev) => !prev)}
                             className={cn(
-                                "lg:!hidden",
-                                TITLEBAR_ICON_BUTTON,
-                                isMobileSearchOpen
-                                    ? TITLEBAR_ICON_ACTIVE
-                                    : null
+                                "sm:!hidden",
+                                TITLEBAR_ICON_BUTTON
                             )}
                             title={isMobileSearchOpen ? "Hide search" : "Search"}
+                            data-active={isMobileSearchOpen ? "true" : undefined}
+                            aria-pressed={isMobileSearchOpen}
                         >
                             <Search className="w-5 h-5" />
                         </button>
@@ -256,12 +244,11 @@ export function AppTitlebar({
                     <button
                         onClick={() => setRoute("statistics")}
                         className={cn(
-                            TITLEBAR_ICON_BUTTON,
-                            currentRoute === "statistics"
-                                ? TITLEBAR_ICON_ACTIVE
-                                : null
+                            TITLEBAR_ICON_BUTTON
                         )}
                         title="Statistics"
+                        data-active={currentRoute === "statistics" ? "true" : undefined}
+                        aria-pressed={currentRoute === "statistics"}
                     >
                         <BarChart3 className="w-5 h-5" />
                     </button>
@@ -297,7 +284,7 @@ export function AppTitlebar({
 
             {/* Search - Mobile (toggle from icon) */}
             {isSearchVisible && isMobileSearchOpen && (
-                <div className="mt-2 lg:hidden">
+                <div className="mt-2 sm:hidden">
                     <div className="relative w-full">
                         <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                         <input
@@ -315,8 +302,8 @@ export function AppTitlebar({
                         <button
                             onClick={() => setIsMobileSearchOpen(false)}
                             className={cn(
-                                "absolute right-2 top-1/2 -translate-y-1/2 !h-7 !w-7 text-[color:var(--color-text-muted)]",
-                                TITLEBAR_ICON_BUTTON
+                                "absolute right-2 top-1/2 -translate-y-1/2 !h-7 !w-7",
+                                "ui-icon-btn"
                             )}
                             title="Close search"
                         >
