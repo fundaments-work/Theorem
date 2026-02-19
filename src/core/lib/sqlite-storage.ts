@@ -58,9 +58,7 @@ export async function sqliteSaveCoverImage(bookId: string, dataUrl: string): Pro
     const invoke = await getInvoke();
     await invoke('sqlite_save_cover_image', {
         bookId,
-        book_id: bookId,
         dataUrl,
-        data_url: dataUrl,
     });
 }
 
@@ -68,7 +66,6 @@ export async function sqliteGetCoverImage(bookId: string): Promise<string | null
     const invoke = await getInvoke();
     return invoke('sqlite_get_cover_image', {
         bookId,
-        book_id: bookId,
     }) as Promise<string | null>;
 }
 
@@ -76,7 +73,6 @@ export async function sqliteDeleteCoverImage(bookId: string): Promise<void> {
     const invoke = await getInvoke();
     await invoke('sqlite_delete_cover_image', {
         bookId,
-        book_id: bookId,
     });
 }
 
@@ -89,7 +85,6 @@ export async function sqliteCleanupOrphanedStorage(existingBookIds: string[]): P
     const invoke = await getInvoke();
     return invoke('sqlite_cleanup_orphaned_storage', {
         existingBookIds,
-        existing_book_ids: existingBookIds,
     }) as Promise<SqliteCleanupResult>;
 }
 
