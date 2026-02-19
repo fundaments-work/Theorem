@@ -141,7 +141,6 @@ export const useUIStore = create<UIStore>((set) => ({
     vaultSyncStatus: "idle",
     vaultSyncMessage: undefined,
     vaultSyncAt: undefined,
-    routeHistory: [],
 
     setRoute: (route, bookId, pushHistory = true) => {
         if (pushHistory && typeof window !== "undefined") {
@@ -150,7 +149,6 @@ export const useUIStore = create<UIStore>((set) => ({
         set((state) => ({
             currentRoute: route,
             currentBookId: bookId,
-            routeHistory: pushHistory ? [...state.routeHistory, state.currentRoute] : state.routeHistory,
             searchQuery: "",
             searchCommittedQuery: "",
         }));
@@ -162,7 +160,6 @@ export const useUIStore = create<UIStore>((set) => ({
             set((state) => ({
                 currentRoute: "library",
                 currentBookId: undefined,
-                routeHistory: [],
             }));
         }
     },

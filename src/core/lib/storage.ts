@@ -11,10 +11,10 @@ import {
     sqliteGetBookData,
     sqliteGetCoverImage,
     sqliteGetMaterializedBookPath,
-    sqliteGetStorageStats,
     sqliteSaveBookData,
     sqliteSaveCoverImage,
 } from './sqlite-storage';
+import { normalizeFilePath } from './utils';
 
 const STORE_NAME = 'theorem-books';
 const COVERS_STORE = 'theorem-covers';
@@ -32,40 +32,6 @@ function getStorageKey(id: string, filePath?: string): string {
         return filePath;
     }
     return `sqlite://${id}`;
-}
-
-function safeDecodeURIComponent(value: string): string {
-    try {
-        return decodeURIComponent(value);
-    } catch {
-        return value;
-    }
-}
-
-function normalizeFilePath(filePath: string): string {
-    const trimmedPath = filePath.trim();
-    if (!trimmedPath) {
-        return trimmedPath;
-    }
-
-    if (!trimmedPath.startsWith('file://')) {
-        return safeDecodeURIComponent(trimmedPath);
-    }
-
-    try {
-        const url = new URL(trimmedPath);
-        if (url.protocol !== 'file:') {
-            return safeDecodeURIComponent(trimmedPath);
-        }
-
-        const decodedPath = safeDecodeURIComponent(url.pathname);
-        if (/^\/[A-Za-z]:\//.test(decodedPath)) {
-            return decodedPath.slice(1);
-        }
-        return decodedPath || trimmedPath;
-    } catch {
-        return trimmedPath;
-    }
 }
 
 function getMimeTypeFromPath(filePath?: string): string {
@@ -212,7 +178,8 @@ export async function saveBookData(id: string, data: ArrayBuffer): Promise<strin
 
     if (isTauri()) {
         try {
-            return await sqliteSaveBookData(id, data);
+            const storagePath = await sqliteSaveBookData(id, data);
+            return storagePath;
         } catch (error) {
             console.error('[Storage] Failed to persist binary to SQLite:', error);
         }
@@ -241,13 +208,26 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
         const normalizedPath = filePath ? normalizeFilePath(filePath) : undefined;
         const sqliteBookId = resolveSqliteBookId(id, normalizedPath);
 
+        // Prefer direct file-system reads for source paths to avoid expensive
+        // SQLite->JS binary marshalling when a readable path is available.
+        if (isTauri() && normalizedPath && isExternalFilePath(normalizedPath)) {
+            const externalData = await readExternalFile(normalizedPath);
+            if (externalData && externalData.byteLength > 0) {
+                return externalData;
+            }
+        }
+
         if (isTauri() && sqliteBookId) {
-            const materializedPath = await getBookMaterializedPath(sqliteBookId, normalizedPath);
-            if (materializedPath) {
-                const materializedData = await readExternalFile(materializedPath);
-                if (materializedData && materializedData.byteLength > 0) {
-                    return materializedData;
+            try {
+                const materializedPath = await getBookMaterializedPath(sqliteBookId);
+                if (materializedPath) {
+                    const materializedData = await readExternalFile(materializedPath);
+                    if (materializedData && materializedData.byteLength > 0) {
+                        return materializedData;
+                    }
                 }
+            } catch (error) {
+                console.error('[Storage] Failed to read materialized SQLite book path:', error);
             }
 
             try {
@@ -257,13 +237,6 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
                 }
             } catch (error) {
                 console.error('[Storage] Failed to read binary from SQLite:', error);
-            }
-        }
-
-        if (isTauri() && normalizedPath && isExternalFilePath(normalizedPath)) {
-            const externalData = await readExternalFile(normalizedPath);
-            if (externalData && externalData.byteLength > 0) {
-                return externalData;
             }
         }
 
@@ -352,26 +325,6 @@ export async function deleteBookData(id: string, filePath?: string): Promise<voi
             console.error('[Storage] Failed to delete book from IndexedDB:', error);
         }
     }
-}
-
-/**
- * Get storage stats.
- * @deprecated Use storage-manager.ts functions instead.
- */
-export async function getStorageStats(): Promise<{ used: number; total: number }> {
-    if (isTauri()) {
-        try {
-            const stats = await sqliteGetStorageStats();
-            return {
-                used: stats.total_size,
-                total: Math.max(stats.total_size, 1024 * 1024 * 1024),
-            };
-        } catch (error) {
-            console.error('[Storage] Failed to get SQLite storage stats:', error);
-        }
-    }
-
-    return { used: 0, total: 1024 * 1024 * 1024 };
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {

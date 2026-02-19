@@ -1,13 +1,17 @@
 /**
  * Settings Page
- * App configuration with all planned features
+ * App configuration and preferences
  */
 
 import { useRef, useState, useEffect, type ChangeEvent } from "react";
 import { cn } from "../../core";
 import {
     showOpenDirectoryDialog,
+    showSaveFileDialog,
     syncVaultMarkdownSnapshot,
+    exportUnifiedSyncBundle,
+    estimateSyncBundleSizeBytes,
+    isTauri,
     useVocabularyStore,
     useLibraryStore,
     useRssStore,
@@ -33,11 +37,7 @@ import {
     Puzzle,
     Download,
     Globe,
-    Wifi,
     WifiOff,
-    Key,
-    ExternalLink,
-    Copy,
     Sun,
     BookOpenCheck,
     Target,
@@ -193,11 +193,6 @@ export function SettingsPage() {
         "general" | "dictionary" | "rss" | "integrations" | "storage"
     >("general");
 
-    // Dummy states for planned features
-    const [rssAutoSync, setRssAutoSync] = useState(true);
-    const [rssSyncInterval, setRssSyncInterval] = useState(30);
-    const [apiEnabled, setApiEnabled] = useState(false);
-    const [apiKey, setApiKey] = useState("");
     const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
 
     const totalStorage = books.reduce((acc, b) => acc + b.fileSize, 0);
@@ -240,17 +235,6 @@ export function SettingsPage() {
         } catch (error) {
             console.error("[Settings] Failed to clear all data:", error);
         }
-    };
-
-    const generateApiKey = () => {
-        const key = "lr_" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
-            .map(b => b.toString(16).padStart(2, "0"))
-            .join("");
-        setApiKey(key);
-    };
-
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
     };
 
     const updateVaultSettings = (updates: Partial<typeof settings.vault>) => {
@@ -315,6 +299,48 @@ export function SettingsPage() {
         }
 
         setVaultSyncStatus("idle", result.message);
+    };
+
+    const handleExportData = async () => {
+        try {
+            const { bundle, warnings } = await exportUnifiedSyncBundle();
+            const bundleSize = estimateSyncBundleSizeBytes(bundle);
+            const payload = JSON.stringify(bundle, null, 2);
+            const defaultFileName = `theorem-sync-${new Date().toISOString().slice(0, 10)}.json`;
+
+            if (isTauri()) {
+                const outputPath = await showSaveFileDialog({
+                    title: "Export Unified Sync Bundle",
+                    defaultPath: defaultFileName,
+                    filters: [{ name: "JSON", extensions: ["json"] }],
+                });
+
+                if (!outputPath) {
+                    return;
+                }
+
+                const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+                await writeTextFile(outputPath, payload);
+            } else {
+                const blob = new Blob([payload], { type: "application/json" });
+                const objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = objectUrl;
+                link.download = defaultFileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(objectUrl);
+            }
+
+            const warningSuffix = warnings.length > 0
+                ? ` Warnings: ${warnings.length} missing binary item(s).`
+                : "";
+            alert(`Export complete (${formatFileSize(bundleSize)}).${warningSuffix}`);
+        } catch (error) {
+            console.error("[Settings] Failed to export unified sync bundle:", error);
+            alert(error instanceof Error ? error.message : "Failed to export data.");
+        }
     };
 
     const tabButtons = [
@@ -697,48 +723,17 @@ export function SettingsPage() {
                 <div className="space-y-8">
                     <Section
                         title="RSS Feeds"
-                        description="Feed reader configuration"
+                        description="Feed reader status"
                         icon={<Rss className="w-5 h-5" />}
                     >
-                        <SettingRow
-                            label="Auto-sync Feeds"
-                            description="Automatically refresh feeds in background"
-                        >
-                            <Toggle checked={rssAutoSync} onChange={setRssAutoSync} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Sync Interval"
-                            description={`Check for new articles every ${rssSyncInterval} minutes`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs text-[color:var(--color-text-muted)]">15m</span>
-                                <input
-                                    type="range"
-                                    min={15}
-                                    max={240}
-                                    step={15}
-                                    value={rssSyncInterval}
-                                    onChange={(e) => setRssSyncInterval(parseInt(e.target.value))}
-                                    className="w-32"
-                                />
-                                <span className="text-xs text-[color:var(--color-text-muted)]">4h</span>
-                            </div>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Article Extraction"
-                            description="Use Mozilla Readability for cleaner articles"
-                        >
-                            <Toggle checked={true} onChange={() => { }} />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Offline Reading"
-                            description="Download articles for offline access"
-                        >
-                            <Toggle checked={true} onChange={() => { }} />
-                        </SettingRow>
+                        <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3">
+                            <p className="font-sans text-[12px] font-medium text-[color:var(--color-text-primary)]">
+                                RSS behavior is managed automatically in this release.
+                            </p>
+                            <p className="mt-1 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
+                                Cached articles: {rssStats.articleCount} ({formatFileSize(rssStats.totalSize)})
+                            </p>
+                        </div>
                     </Section>
 
                 </div>
@@ -861,76 +856,6 @@ export function SettingsPage() {
                         </SettingRow>
                     </Section>
 
-                    <Section
-                        title="Public API"
-                        description="Access your data programmatically"
-                        icon={<Key className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Enable API"
-                            description="Allow external applications to access your data"
-                        >
-                            <Toggle checked={apiEnabled} onChange={setApiEnabled} />
-                        </SettingRow>
-
-                        {apiEnabled && (
-                            <>
-                                <SettingRow
-                                    label="API Key"
-                                    description="Keep this secret!"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <code className="px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md text-sm text-[color:var(--color-text-secondary)] max-w-[var(--layout-tooltip-max-width)] truncate">
-                                            {apiKey || "No key generated"}
-                                        </code>
-                                        {apiKey ? (
-                                            <button
-                                                onClick={() => copyToClipboard(apiKey)}
-                                                className="p-1.5 rounded-md hover:bg-[var(--color-surface-muted)] transition-colors"
-                                            >
-                                                <Copy className="w-4 h-4" />
-                                            </button>
-                                        ) : (
-                                            <button
-                                                onClick={generateApiKey}
-                                                className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white !text-white hover:opacity-90 transition-opacity"
-                                            >
-                                                Generate
-                                            </button>
-                                        )}
-                                    </div>
-                                </SettingRow>
-
-                                <SettingRow
-                                    label="Webhook URL"
-                                    description="Receive real-time updates"
-                                >
-                                    <input
-                                        type="text"
-                                        placeholder="https://your-app.com/webhook"
-                                        className={cn(
-                                            "px-3 py-1.5 rounded-md text-sm w-56",
-                                            "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
-                                            "border-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                        )}
-                                    />
-                                </SettingRow>
-
-                                <div className="mt-4 p-4 bg-[var(--color-surface-muted)] rounded-lg">
-                                    <p className="text-sm font-medium text-[color:var(--color-text-primary)] mb-2">API Documentation</p>
-                                    <p className="text-xs text-[color:var(--color-text-muted)] mb-3">
-                                        Access your library, highlights, and vocabulary programmatically.
-                                    </p>
-                                    <a
-                                        href="#"
-                                        className="text-xs text-[color:var(--color-accent)] hover:underline flex items-center gap-1"
-                                    >
-                                        View OpenAPI docs <ExternalLink className="w-3 h-3" />
-                                    </a>
-                                </div>
-                            </>
-                        )}
-                    </Section>
                 </div>
             )}
 
@@ -1030,6 +955,7 @@ export function SettingsPage() {
                             </button>
 
                             <button
+                                onClick={handleExportData}
                                 className={cn(
                                     "w-full flex items-center gap-3 p-4 rounded-lg",
                                     "border border-[var(--color-border)]",
@@ -1041,7 +967,7 @@ export function SettingsPage() {
                                 <div className="flex-1">
                                     <p className="font-medium text-sm">Export Data</p>
                                     <p className="text-xs text-[color:var(--color-text-muted)]">
-                                        Download all your data as JSON
+                                        Export full sync bundle with books, highlights, vocabulary, RSS, and dictionaries
                                     </p>
                                 </div>
                                 <ChevronRight className="w-4 h-4" />

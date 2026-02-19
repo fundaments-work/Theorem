@@ -322,8 +322,6 @@ fn fetch_url_content(url: String) -> Result<String, String> {
             .header("Accept-Language", "en-US,en;q=0.9")
             .header("Referer", &referer)
             .header("Upgrade-Insecure-Requests", "1")
-            .header("Cache-Control", "no-cache")
-            .header("Pragma", "no-cache")
             .header("DNT", "1")
             .send();
 
@@ -393,8 +391,6 @@ fn fetch_binary_content(url: String) -> Result<Vec<u8>, String> {
         .header("Accept", "application/pdf,application/octet-stream,*/*")
         .header("Accept-Language", "en-US,en;q=0.9")
         .header("Referer", &referer)
-        .header("Cache-Control", "no-cache")
-        .header("Pragma", "no-cache")
         .send()
         .map_err(|e| format!("Failed to fetch binary content: {}", e))?;
 
@@ -453,7 +449,6 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_app::init())
         .invoke_handler(tauri::generate_handler![
             read_file,
@@ -474,7 +469,14 @@ pub fn run() {
             database::sqlite_clear_all_storage,
             database::sqlite_get_kv,
             database::sqlite_set_kv,
-            database::sqlite_delete_kv
+            database::sqlite_delete_kv,
+            database::sqlite_count_kv_by_prefix,
+            database::sqlite_delete_kv_by_prefix,
+            database::sqlite_set_blob,
+            database::sqlite_get_blob,
+            database::sqlite_delete_blob,
+            database::sqlite_delete_blobs_by_prefix,
+            database::sqlite_get_blob_stats
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

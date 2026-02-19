@@ -1,6 +1,6 @@
 /**
  * Book Import Utilities
- * Cross-platform file import with metadata extraction
+ * Cross-platform file import with instant entry creation
  * Works in both Tauri and browser environments
  */
 
@@ -8,16 +8,22 @@ import type { Book, BookFormat } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { isTauri, isMobile } from './env';
 import { saveBookData, getBookData } from './storage';
-import { formatFileSize } from './utils';
-
-type ExtractMetadataFn = typeof import('./cover-extractor')['extractMetadata'];
+import { formatFileSize, normalizeFilePath } from './utils';
 
 // Dynamically import Tauri plugins
 let tauriDialog: typeof import('@tauri-apps/plugin-dialog') | null = null;
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
-let extractMetadataFnPromise: Promise<ExtractMetadataFn> | null = null;
 
-const IMPORT_CONCURRENCY = 3;
+const DEFAULT_IMPORT_CONCURRENCY = 2;
+const INSTANT_IMPORT_MODE = true;
+const CONTENT_HASH_MAX_BYTES = 64 * 1024 * 1024;
+const SUPPORTED_IMPORT_EXTENSIONS = ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'fb2.zip', 'cbz', 'pdf'];
+const SUPPORTED_IMPORT_SUFFIXES = SUPPORTED_IMPORT_EXTENSIONS.map((extension) => `.${extension}`);
+const BROWSER_IMPORT_ACCEPT = SUPPORTED_IMPORT_SUFFIXES.join(',');
+
+function getImportConcurrency(): number {
+    return isMobile() ? 1 : DEFAULT_IMPORT_CONCURRENCY;
+}
 
 function arrayBufferToHex(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
@@ -29,6 +35,10 @@ function arrayBufferToHex(buffer: ArrayBuffer): string {
 }
 
 async function computeContentHash(buffer: ArrayBuffer): Promise<string | undefined> {
+    if (buffer.byteLength > CONTENT_HASH_MAX_BYTES) {
+        return undefined;
+    }
+
     const subtle = globalThis.crypto?.subtle;
     if (!subtle) {
         return undefined;
@@ -41,16 +51,6 @@ async function computeContentHash(buffer: ArrayBuffer): Promise<string | undefin
         console.warn('[Import] Failed to compute content hash:', error);
         return undefined;
     }
-}
-
-async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
-    if (!extractMetadataFnPromise) {
-        extractMetadataFnPromise = import('./cover-extractor').then(
-            (module) => module.extractMetadata,
-        );
-    }
-
-    return extractMetadataFnPromise;
 }
 
 async function runWithConcurrency<TInput, TOutput>(
@@ -79,39 +79,12 @@ async function runWithConcurrency<TInput, TOutput>(
     return results;
 }
 
-function safeDecodeURIComponent(value: string): string {
-    try {
-        return decodeURIComponent(value);
-    } catch {
-        return value;
-    }
+function normalizeImportPath(filePath: string): string {
+    return normalizeFilePath(filePath);
 }
 
-function normalizeImportPath(filePath: string): string {
-    const trimmedPath = filePath.trim();
-    if (!trimmedPath) {
-        return trimmedPath;
-    }
-
-    if (!trimmedPath.startsWith('file://')) {
-        return safeDecodeURIComponent(trimmedPath);
-    }
-
-    try {
-        const url = new URL(trimmedPath);
-        if (url.protocol !== 'file:') {
-            return safeDecodeURIComponent(trimmedPath);
-        }
-
-        const decodedPath = safeDecodeURIComponent(url.pathname);
-        // Windows file URL shape: file:///C:/Users/...
-        if (/^\/[A-Za-z]:\//.test(decodedPath)) {
-            return decodedPath.slice(1);
-        }
-        return decodedPath || trimmedPath;
-    } catch {
-        return trimmedPath;
-    }
+function isSupportedImportFilename(lowerName: string): boolean {
+    return SUPPORTED_IMPORT_SUFFIXES.some((suffix) => lowerName.endsWith(suffix));
 }
 
 function normalizePathForFormatLookup(filePath: string): string {
@@ -235,20 +208,13 @@ export async function pickBookFiles(): Promise<string[]> {
         const selected = await plugins.dialog.open({
             multiple: true,
             pickerMode: 'document',
-            fileAccessMode: 'copy',
+            // Use scoped access to avoid a dialog-level file copy.
+            fileAccessMode: 'scoped',
             filters: [
                 {
                     name: 'All eBooks',
                     extensions: [
-                        'epub',
-                        'mobi',
-                        'azw',
-                        'azw3',
-                        'fb2',
-                        'fbz',
-                        'fb2.zip',
-                        'cbz',
-                        'pdf',
+                        ...SUPPORTED_IMPORT_EXTENSIONS,
                         'application/epub+zip',
                         'application/x-mobipocket-ebook',
                         'application/x-fictionbook+xml',
@@ -316,7 +282,7 @@ export function pickBookFilesBrowser(): Promise<File[]> {
         const input = document.createElement('input');
         input.type = 'file';
         input.multiple = true;
-        input.accept = '.epub,.mobi,.azw,.azw3,.fb2,.fbz,.fb2.zip,.cbz,.pdf';
+        input.accept = BROWSER_IMPORT_ACCEPT;
         
         input.onchange = () => {
             const files = input.files ? Array.from(input.files) : [];
@@ -369,24 +335,12 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
     const filename = file.name;
     const filenameMetadata = extractFilenameMetadata(filename);
 
-    // Extract metadata and cover from the book file
-    let metadata;
-    let coverExtractionDone = false;
-    try {
-        const extractMetadata = await getExtractMetadataFn();
-        metadata = await extractMetadata(buffer, format, filename, id);
-        coverExtractionDone = Boolean(metadata?.coverDataUrl);
-    } catch (error) {
-        console.warn('[Import] Metadata extraction failed, using filename:', error);
-        metadata = null;
-    }
-
-    // Build book object with extracted metadata (with filename fallbacks)
-    // Note: Only use filename for title fallback, not for author (avoid showing filename as author)
+    // Build book object quickly and defer expensive metadata extraction to
+    // background processing in the library screen.
     const book: Book = {
         id,
-        title: metadata?.title || filenameMetadata.title,
-        author: metadata?.author || "",
+        title: filenameMetadata.title,
+        author: filenameMetadata.author || "",
         filePath: `browser://${filename}`, // Virtual path for browser-imported files
         storagePath,
         format,
@@ -397,13 +351,7 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
         isFavorite: false,
         tags: [],
         readingTime: 0,
-        coverExtractionDone,
-        // Additional metadata from extraction
-        coverPath: metadata?.coverDataUrl || undefined,
-        description: metadata?.description,
-        publisher: metadata?.publisher,
-        publishedDate: metadata?.publishedDate,
-        language: metadata?.language,
+        coverExtractionDone: !INSTANT_IMPORT_MODE,
     };
 
     return book;
@@ -413,12 +361,23 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
  * Import books from browser File objects
  */
 export async function importBooksFromFiles(files: File[]): Promise<Book[]> {
+    return importBooksFromFilesIncremental(files);
+}
+
+export async function importBooksFromFilesIncremental(
+    files: File[],
+    onBookImported?: (book: Book) => void,
+): Promise<Book[]> {
     const imported = await runWithConcurrency(
         files,
-        IMPORT_CONCURRENCY,
+        getImportConcurrency(),
         async (file): Promise<Book | null> => {
             try {
-                return await createBookEntryFromFile(file);
+                const book = await createBookEntryFromFile(file);
+                if (book) {
+                    onBookImported?.(book);
+                }
+                return book;
             } catch (error) {
                 console.error('Failed to import book:', file.name, error);
                 return null;
@@ -522,27 +481,14 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     const storagePath = await saveBookData(id, buffer);
 
     // Get filename for fallback metadata
-    const filename = normalizedFilePath.split(/[/\\]/).pop() || 'Unknown.epub';
     const filenameMetadata = extractFilenameMetadata(normalizedFilePath);
 
-    // Extract metadata and cover from the book file
-    let metadata;
-    let coverExtractionDone = false;
-    try {
-        const extractMetadata = await getExtractMetadataFn();
-        metadata = await extractMetadata(buffer, format, filename, id);
-        coverExtractionDone = Boolean(metadata?.coverDataUrl);
-    } catch (error) {
-        console.warn('[Import] Metadata extraction failed, using filename:', error);
-        metadata = null;
-    }
-
-    // Build book object with extracted metadata (with filename fallbacks)
-    // Note: Only use filename for title fallback, not for author (avoid showing filename as author)
+    // Build book object quickly and defer expensive metadata extraction to
+    // background processing in the library screen.
     const book: Book = {
         id,
-        title: metadata?.title || filenameMetadata.title,
-        author: metadata?.author || "",
+        title: filenameMetadata.title,
+        author: filenameMetadata.author || "",
         filePath: normalizedFilePath,
         storagePath,
         format,
@@ -553,13 +499,7 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         isFavorite: false,
         tags: [],
         readingTime: 0,
-        coverExtractionDone,
-        // Additional metadata from extraction
-        coverPath: metadata?.coverDataUrl || undefined,
-        description: metadata?.description,
-        publisher: metadata?.publisher,
-        publishedDate: metadata?.publishedDate,
-        language: metadata?.language,
+        coverExtractionDone: !INSTANT_IMPORT_MODE,
     };
 
     return book;
@@ -569,12 +509,23 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
  * Import multiple books with error handling
  */
 export async function importBooks(filePaths: string[]): Promise<Book[]> {
+    return importBooksIncremental(filePaths);
+}
+
+export async function importBooksIncremental(
+    filePaths: string[],
+    onBookImported?: (book: Book) => void,
+): Promise<Book[]> {
     const imported = await runWithConcurrency(
         filePaths,
-        IMPORT_CONCURRENCY,
+        getImportConcurrency(),
         async (filePath): Promise<Book | null> => {
             try {
-                return await createBookEntry(filePath);
+                const book = await createBookEntry(filePath);
+                if (book) {
+                    onBookImported?.(book);
+                }
+                return book;
             } catch (error) {
                 console.error('Failed to import book:', filePath, error);
                 return null;
@@ -590,13 +541,19 @@ export async function importBooks(filePaths: string[]): Promise<Book[]> {
  * Works in both Tauri and browser environments
  */
 export async function pickAndImportBooks(): Promise<Book[]> {
+    return pickAndImportBooksIncremental();
+}
+
+export async function pickAndImportBooksIncremental(
+    onBookImported?: (book: Book) => void,
+): Promise<Book[]> {
     if (isTauri() && !isMobile()) {
         // Desktop Tauri: use native file picker
         const filePaths = await pickBookFiles();
         if (filePaths.length === 0) {
             return [];
         }
-        return importBooks(filePaths);
+        return importBooksIncremental(filePaths, onBookImported);
     } else if (isTauri() && isMobile()) {
         // Mobile Tauri (Android): Use browser file picker for better compatibility
         // The native dialog on Android returns content:// URIs which are hard to handle
@@ -605,14 +562,14 @@ export async function pickAndImportBooks(): Promise<Book[]> {
         if (files.length === 0) {
             return [];
         }
-        return importBooksFromFiles(files);
+        return importBooksFromFilesIncremental(files, onBookImported);
     } else {
         // Browser: use HTML5 file picker
         const files = await pickBookFilesBrowser();
         if (files.length === 0) {
             return [];
         }
-        return importBooksFromFiles(files);
+        return importBooksFromFilesIncremental(files, onBookImported);
     }
 }
 
@@ -637,16 +594,7 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
                     await scanDir(fullPath);
                 } else if (entry.isFile) {
                     const lowerName = entry.name.toLowerCase();
-                    const isSupportedBook =
-                        lowerName.endsWith('.epub')
-                        || lowerName.endsWith('.mobi')
-                        || lowerName.endsWith('.azw')
-                        || lowerName.endsWith('.azw3')
-                        || lowerName.endsWith('.fb2')
-                        || lowerName.endsWith('.fbz')
-                        || lowerName.endsWith('.fb2.zip')
-                        || lowerName.endsWith('.cbz')
-                        || lowerName.endsWith('.pdf');
+                    const isSupportedBook = isSupportedImportFilename(lowerName);
 
                     if (isSupportedBook) {
                         bookFiles.push(fullPath);

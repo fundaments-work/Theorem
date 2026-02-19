@@ -50,7 +50,7 @@ src-tauri/
 
 Notes:
 - Run root `pnpm` commands from repo root.
-- No meaningful automated test suite is configured (`pnpm test` is placeholder).
+- `pnpm test` runs Vitest (currently focused and not yet comprehensive).
 
 ## Git Ignore Policy
 - Treat generated/build outputs as uncommitted artifacts.

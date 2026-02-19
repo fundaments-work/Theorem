@@ -10,10 +10,16 @@
 import { get, del, keys } from 'idb-keyval';
 import { isTauri } from './env';
 import {
+    sqliteCountKvByPrefix,
+    sqliteDeleteBlobsByPrefix,
+    sqliteDeleteKvByPrefix,
+    sqliteGetBlobStats,
     sqliteCleanupOrphanedStorage,
     sqliteClearAllStorage,
     sqliteDeleteBookData,
     sqliteDeleteCoverImage,
+    sqliteDeleteKv,
+    sqliteGetKv,
     sqliteGetStorageStats,
 } from './sqlite-storage';
 
@@ -22,7 +28,15 @@ const COVERS_STORE = 'theorem-covers';
 const METADATA_STORE = 'theorem-metadata';
 const STARDICT_PREFIX = 'theorem-stardict';
 
+function hasIndexedDbSupport(): boolean {
+    return typeof indexedDB !== 'undefined';
+}
+
 async function getIndexedDBKeysByPrefix(prefix: string): Promise<string[]> {
+    if (!hasIndexedDbSupport()) {
+        return [];
+    }
+
     try {
         const allKeys = await keys();
         return allKeys.filter((key): key is string => (
@@ -64,6 +78,10 @@ export async function deleteBookStorage(bookId: string): Promise<void> {
         return;
     }
 
+    if (!hasIndexedDbSupport()) {
+        return;
+    }
+
     await Promise.allSettled([
         del(`${STORE_NAME}-${bookId}`),
         del(`${COVERS_STORE}-${bookId}`),
@@ -84,7 +102,7 @@ export async function getBookStorageStats(): Promise<{
             const sqliteStats = await sqliteGetStorageStats();
             return {
                 totalBooks: sqliteStats.total_books,
-                totalSize: sqliteStats.total_size,
+                totalSize: sqliteStats.binaries_size + sqliteStats.covers_size,
                 coversSize: sqliteStats.covers_size,
                 binariesSize: sqliteStats.binaries_size,
                 idbBooks: sqliteStats.idb_books,
@@ -123,6 +141,33 @@ export async function getRssStorageStats(): Promise<{
     articleCount: number;
     totalSize: number;
 }> {
+    if (isTauri()) {
+        const serialized = await sqliteGetKv('zustand:theorem-rss');
+        if (!serialized) {
+            return {
+                articleCount: 0,
+                totalSize: 0,
+            };
+        }
+
+        let articleCount = 0;
+        try {
+            const parsed = JSON.parse(serialized) as {
+                state?: { articles?: unknown[] };
+            };
+            articleCount = Array.isArray(parsed?.state?.articles)
+                ? parsed.state.articles.length
+                : 0;
+        } catch {
+            articleCount = 0;
+        }
+
+        return {
+            articleCount,
+            totalSize: new Blob([serialized]).size,
+        };
+    }
+
     const rssKeys = await getIndexedDBKeysByPrefix('theorem-rss-');
     let totalSize = 0;
 
@@ -140,6 +185,18 @@ export async function getStarDictStorageStats(): Promise<{
     dictionaryCount: number;
     totalSize: number;
 }> {
+    if (isTauri()) {
+        const [blobStats, dictionaryCount] = await Promise.all([
+            sqliteGetBlobStats(`${STARDICT_PREFIX}:`),
+            sqliteCountKvByPrefix(`${STARDICT_PREFIX}:`),
+        ]);
+
+        return {
+            dictionaryCount,
+            totalSize: blobStats.total_size,
+        };
+    }
+
     const dictionaryKeys = await getIndexedDBKeysByPrefix(`${STARDICT_PREFIX}:`);
     let totalSize = 0;
 
@@ -154,6 +211,14 @@ export async function getStarDictStorageStats(): Promise<{
 }
 
 export async function clearAllStarDictDictionaries(): Promise<void> {
+    if (isTauri()) {
+        await Promise.allSettled([
+            sqliteDeleteBlobsByPrefix(`${STARDICT_PREFIX}:`),
+            sqliteDeleteKvByPrefix(`${STARDICT_PREFIX}:`),
+        ]);
+        return;
+    }
+
     const dictionaryKeys = await getIndexedDBKeysByPrefix(`${STARDICT_PREFIX}:`);
     await Promise.all(dictionaryKeys.map((key) => del(key)));
 }
@@ -179,6 +244,11 @@ export async function clearAllCovers(): Promise<void> {
 }
 
 export async function clearAllRssStorage(): Promise<void> {
+    if (isTauri()) {
+        await sqliteDeleteKv('zustand:theorem-rss');
+        return;
+    }
+
     const rssKeys = await getIndexedDBKeysByPrefix('theorem-rss-');
     await Promise.all(rssKeys.map((key) => del(key)));
 }

@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Readability } from '@mozilla/readability';
 import { XMLParser } from 'fast-xml-parser';
 import { isTauri } from '../lib/env';
+import { invoke } from '@tauri-apps/api/core';
 
 // ── Types ──
 
@@ -28,6 +29,16 @@ export interface ExtractedArticleContent {
     imageUrl?: string;
     publishedAt?: Date;
 }
+
+interface CachedTextResponse {
+    body: string;
+    expiresAt: number;
+}
+
+const FEED_FETCH_CACHE_TTL_MS = 2 * 60 * 1000;
+const ARTICLE_FETCH_CACHE_TTL_MS = 5 * 60 * 1000;
+const feedResponseCache = new Map<string, CachedTextResponse>();
+const articleResponseCache = new Map<string, CachedTextResponse>();
 
 // ── Helpers ──
 
@@ -89,6 +100,35 @@ function absolutizeSrcset(srcset: string, baseUrl: string): string {
 
 function normalizeWhitespace(value: string): string {
     return value.replace(/\s+/g, ' ').trim();
+}
+
+function getCachedResponse(
+    cache: Map<string, CachedTextResponse>,
+    key: string,
+): string | null {
+    const cached = cache.get(key);
+    if (!cached) {
+        return null;
+    }
+
+    if (cached.expiresAt <= Date.now()) {
+        cache.delete(key);
+        return null;
+    }
+
+    return cached.body;
+}
+
+function putCachedResponse(
+    cache: Map<string, CachedTextResponse>,
+    key: string,
+    body: string,
+    ttlMs: number,
+): void {
+    cache.set(key, {
+        body,
+        expiresAt: Date.now() + ttlMs,
+    });
 }
 
 // ── XML Parser Factory ──
@@ -658,13 +698,25 @@ function parseFeedXml(xmlText: string): ParsedFeed {
 // ── Fetching ──
 
 async function fetchWithTauri(url: string): Promise<string> {
-    const { invoke } = await import('@tauri-apps/api/core');
-    return await invoke<string>('fetch_rss_feed', { url });
+    const cached = getCachedResponse(feedResponseCache, url);
+    if (cached) {
+        return cached;
+    }
+
+    const body = await invoke<string>('fetch_rss_feed', { url });
+    putCachedResponse(feedResponseCache, url, body, FEED_FETCH_CACHE_TTL_MS);
+    return body;
 }
 
 async function fetchUrlWithTauri(url: string): Promise<string> {
-    const { invoke } = await import('@tauri-apps/api/core');
-    return await invoke<string>('fetch_url_content', { url });
+    const cached = getCachedResponse(articleResponseCache, url);
+    if (cached) {
+        return cached;
+    }
+
+    const body = await invoke<string>('fetch_url_content', { url });
+    putCachedResponse(articleResponseCache, url, body, ARTICLE_FETCH_CACHE_TTL_MS);
+    return body;
 }
 
 function isCorsError(error: Error): boolean {
@@ -917,6 +969,11 @@ function extractArticleContentFallback(html: string, articleUrl: string): Extrac
 }
 
 async function fetchUrlContent(url: string): Promise<string> {
+    const cached = getCachedResponse(articleResponseCache, url);
+    if (cached) {
+        return cached;
+    }
+
     if (isTauri()) {
         try {
             return await fetchUrlWithTauri(url);
@@ -949,7 +1006,9 @@ async function fetchUrlContent(url: string): Promise<string> {
         throw new Error(`Failed to fetch article: ${response.status} ${response.statusText}`);
     }
 
-    return await response.text();
+    const body = await response.text();
+    putCachedResponse(articleResponseCache, url, body, ARTICLE_FETCH_CACHE_TTL_MS);
+    return body;
 }
 
 // ── Public API ──
@@ -975,16 +1034,16 @@ export async function fetchAndExtractArticleContent(articleUrl: string): Promise
 export async function fetchAndParseFeed(
     url: string,
 ): Promise<{ feed: Omit<ParsedFeed, 'articles'>; articles: ParsedFeed['articles'] }> {
-    let xmlText: string;
+    let xmlText = getCachedResponse(feedResponseCache, url) ?? "";
 
-    if (isTauri()) {
+    if (!xmlText && isTauri()) {
         try {
             xmlText = await fetchWithTauri(url);
         } catch (tauriError) {
             const errorMsg = tauriError instanceof Error ? tauriError.message : String(tauriError);
             throw new Error(`Failed to fetch feed: ${errorMsg}`);
         }
-    } else {
+    } else if (!xmlText) {
         if (isLikelyCorsRestricted(url)) {
             throw new Error(
                 `This URL appears to be from a publisher that blocks browser requests (CORS). ` +
@@ -1042,6 +1101,7 @@ export async function fetchAndParseFeed(
 
         try {
             xmlText = await response.text();
+            putCachedResponse(feedResponseCache, url, xmlText, FEED_FETCH_CACHE_TTL_MS);
         } catch (textError) {
             throw new Error(`Failed to read feed content: ${textError instanceof Error ? textError.message : 'Unknown error'}`);
         }

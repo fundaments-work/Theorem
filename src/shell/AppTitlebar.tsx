@@ -156,8 +156,6 @@ export function AppTitlebar({
                 return "Bookmarks";
             case "shelves":
                 return "Shelves";
-            case "bookDetails":
-                return "Book Details";
             case "feeds":
                 return "Feeds";
             default:

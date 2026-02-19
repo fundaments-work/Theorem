@@ -53,8 +53,22 @@ const MIN_READER_ZOOM = 50;
 const MIN_PAGED_READER_ZOOM = 100;
 const MAX_READER_ZOOM = 200;
 const PDF_STATE_SAVE_DEBOUNCE_MS = 400;
+const READER_PROGRESS_SAVE_DEBOUNCE_MS = 1200;
 const DEFAULT_PDF_ZOOM = 1;
 const DEFAULT_PDF_ZOOM_MODE: PdfZoomMode = 'width-fit';
+
+type PendingProgressUpdate = {
+    bookId: string;
+    percentage: number;
+    cfi: string;
+    lastClickFraction?: number;
+    pageProgress?: {
+        currentPage: number;
+        endPage?: number;
+        totalPages: number;
+        range: string;
+    };
+};
 
 function clampReaderZoomByFlow(zoom: number, flow: ReaderSettingsState['flow']): number {
     const minZoom = flow === 'paged' ? MIN_PAGED_READER_ZOOM : MIN_READER_ZOOM;
@@ -174,6 +188,8 @@ function BookReaderPage() {
     const resumeTargetRef = useRef<string | null>(null);
     const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pdfProgressSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const progressSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pendingProgressUpdateRef = useRef<PendingProgressUpdate | null>(null);
     const hasAppliedInitialLocationRef = useRef(false);
     const debug = useCallback((...args: unknown[]) => {
         if (import.meta.env.DEV) {
@@ -568,6 +584,9 @@ function BookReaderPage() {
             if (pdfProgressSaveTimeoutRef.current) {
                 clearTimeout(pdfProgressSaveTimeoutRef.current);
             }
+            if (progressSaveTimeoutRef.current) {
+                clearTimeout(progressSaveTimeoutRef.current);
+            }
         };
     }, []);
 
@@ -657,6 +676,51 @@ function BookReaderPage() {
         });
     }, [markBookCompleted, updateStats]);
 
+    const flushPendingProgressUpdate = useCallback(() => {
+        const pendingUpdate = pendingProgressUpdateRef.current;
+        if (!pendingUpdate) {
+            return;
+        }
+
+        pendingProgressUpdateRef.current = null;
+        if (progressSaveTimeoutRef.current) {
+            clearTimeout(progressSaveTimeoutRef.current);
+            progressSaveTimeoutRef.current = null;
+        }
+
+        updateProgress(
+            pendingUpdate.bookId,
+            pendingUpdate.percentage,
+            pendingUpdate.cfi,
+            pendingUpdate.lastClickFraction,
+            pendingUpdate.pageProgress,
+        );
+        handleBookCompletionProgress(pendingUpdate.bookId, pendingUpdate.percentage);
+    }, [handleBookCompletionProgress, updateProgress]);
+
+    const scheduleProgressUpdate = useCallback((nextUpdate: PendingProgressUpdate) => {
+        pendingProgressUpdateRef.current = nextUpdate;
+
+        if (progressSaveTimeoutRef.current) {
+            clearTimeout(progressSaveTimeoutRef.current);
+        }
+
+        progressSaveTimeoutRef.current = setTimeout(() => {
+            progressSaveTimeoutRef.current = null;
+            flushPendingProgressUpdate();
+        }, READER_PROGRESS_SAVE_DEBOUNCE_MS);
+    }, [flushPendingProgressUpdate]);
+
+    useEffect(() => {
+        flushPendingProgressUpdate();
+    }, [currentBookId, flushPendingProgressUpdate]);
+
+    useEffect(() => {
+        return () => {
+            flushPendingProgressUpdate();
+        };
+    }, [flushPendingProgressUpdate]);
+
     const handleLocationChange = useCallback((loc: DocLocation) => {
         setLocation(loc);
 
@@ -731,14 +795,17 @@ function BookReaderPage() {
                 range: loc.pageInfo.range || `${loc.pageInfo.currentPage}`,
             } : undefined;
 
-            queueMicrotask(() => {
-                updateProgress(currentBookId, safePercentage, safeCfi, lastClickFraction, pageProgress);
-                handleBookCompletionProgress(currentBookId, safePercentage);
+            scheduleProgressUpdate({
+                bookId: currentBookId,
+                percentage: safePercentage,
+                cfi: safeCfi,
+                lastClickFraction,
+                pageProgress,
             });
             lastClickFractionRef.current = null;
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentBookId, handleBookCompletionProgress, updateProgress]);
+    }, [currentBookId, scheduleProgressUpdate, updateProgress]);
 
     useEffect(() => {
         if (!isPdfFormat || !currentBookId || pdfTotalPages <= 0) {
@@ -889,9 +956,10 @@ function BookReaderPage() {
         // No panels open - go back to library
         // We return false to the hook so it doesn't re-push the dummy state
         // allowing the system back action to proceed to the previous route.
+        flushPendingProgressUpdate();
         goBack();
         return false;
-    }, [activePanel, showColorPicker, showNoteEditor, goBack]);
+    }, [activePanel, showColorPicker, showNoteEditor, goBack, flushPendingProgressUpdate]);
 
     useAndroidBackButton(handleAndroidBack);
 
@@ -917,6 +985,7 @@ function BookReaderPage() {
             // If the state we popped to is our reader entry state, we want to exit
             // but we check if we were already handled by another listener
             if (useUIStore.getState().currentRoute === "reader") {
+                flushPendingProgressUpdate();
                 setRoute("library");
             }
         };
@@ -925,9 +994,10 @@ function BookReaderPage() {
         return () => {
             window.removeEventListener("popstate", handlePopState);
         };
-    }, [setRoute]);
+    }, [setRoute, flushPendingProgressUpdate]);
 
     const handleBack = useCallback(() => {
+        flushPendingProgressUpdate();
         // If we have a history stack, going back will be caught by our popstate listeners
         if (typeof window !== "undefined" && window.history.length > 1) {
             window.history.back();
@@ -935,7 +1005,7 @@ function BookReaderPage() {
             // Fallback for direct entry
             setRoute("library");
         }
-    }, [setRoute]);
+    }, [setRoute, flushPendingProgressUpdate]);
 
     useEffect(() => {
         if (!isPdfFormat || !isMobileViewport || !showToolbar || activePanel !== null) {

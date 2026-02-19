@@ -12,6 +12,13 @@ export default defineConfig({
             provider: "v8",
             reporter: ["text", "html"],
             reportsDirectory: "coverage",
+            include: ["src/**/*.{ts,tsx}"],
+            exclude: [
+                "src/features/reader/foliate-js/**",
+                "src/**/*.d.ts",
+                "src/main.tsx",
+                "src/features/reader/engines/**",
+            ],
         },
     },
 });

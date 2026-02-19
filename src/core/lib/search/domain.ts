@@ -17,7 +17,6 @@ const APP_TITLEBAR_DOMAIN_BY_ROUTE: Record<AppRoute, SearchDomain> = {
     reader: "none",
     vocabulary: "vocabulary",
     settings: "none",
-    bookDetails: "none",
     annotations: "annotations",
     statistics: "none",
     shelves: "shelves",

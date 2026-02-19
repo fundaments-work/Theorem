@@ -1,10 +1,13 @@
 import { isTauri } from './env';
+import { invoke } from '@tauri-apps/api/core';
 
 export interface SqliteStorageStats {
     total_books: number;
     total_size: number;
     covers_size: number;
     binaries_size: number;
+    blob_entries: number;
+    blob_size: number;
     idb_books: number;
     tauri_books: number;
 }
@@ -15,25 +18,21 @@ export interface SqliteCleanupResult {
     removed_metadata: number;
 }
 
-let tauriInvoke: ((command: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
+export interface SqliteBlobStats {
+    count: number;
+    total_size: number;
+}
 
 async function getInvoke() {
     if (!isTauri()) {
         throw new Error('SQLite storage commands are only available in Tauri runtime.');
     }
-
-    if (!tauriInvoke) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        tauriInvoke = invoke;
-    }
-
-    return tauriInvoke;
+    return invoke;
 }
 
 export async function sqliteSaveBookData(id: string, data: ArrayBuffer): Promise<string> {
     const invoke = await getInvoke();
-    const bytes = Array.from(new Uint8Array(data));
-    return invoke('sqlite_save_book_data', { id, data: bytes }) as Promise<string>;
+    return invoke('sqlite_save_book_data', { id, data: new Uint8Array(data) }) as Promise<string>;
 }
 
 export async function sqliteGetBookData(id: string): Promise<ArrayBuffer | null> {
@@ -112,4 +111,45 @@ export async function sqliteSetKv(key: string, value: string): Promise<void> {
 export async function sqliteDeleteKv(key: string): Promise<void> {
     const invoke = await getInvoke();
     await invoke('sqlite_delete_kv', { key });
+}
+
+export async function sqliteCountKvByPrefix(prefix: string): Promise<number> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_count_kv_by_prefix', { prefix }) as Promise<number>;
+}
+
+export async function sqliteDeleteKvByPrefix(prefix: string): Promise<number> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_delete_kv_by_prefix', { prefix }) as Promise<number>;
+}
+
+export async function sqliteSetBlob(key: string, data: ArrayBuffer): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_set_blob', { key, data: new Uint8Array(data) });
+}
+
+export async function sqliteGetBlob(key: string): Promise<ArrayBuffer | null> {
+    const invoke = await getInvoke();
+    const result = await invoke('sqlite_get_blob', { key }) as number[] | null;
+    if (!result) {
+        return null;
+    }
+    return new Uint8Array(result).buffer;
+}
+
+export async function sqliteDeleteBlob(key: string): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_delete_blob', { key });
+}
+
+export async function sqliteDeleteBlobsByPrefix(prefix: string): Promise<number> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_delete_blobs_by_prefix', { prefix }) as Promise<number>;
+}
+
+export async function sqliteGetBlobStats(prefix?: string): Promise<SqliteBlobStats> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_get_blob_stats', {
+        prefix: prefix ?? null,
+    }) as Promise<SqliteBlobStats>;
 }

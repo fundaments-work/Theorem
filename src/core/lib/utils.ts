@@ -90,3 +90,42 @@ export function normalizeAuthor(author: unknown): string {
     
     return "";
 }
+
+export function safeDecodeURIComponent(value: string): string {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+}
+
+/**
+ * Normalize common file:// URI forms into plain absolute paths.
+ * Keeps non-file URLs untouched (except safe URL-decoding).
+ */
+export function normalizeFilePath(filePath: string): string {
+    const trimmedPath = filePath.trim();
+    if (!trimmedPath) {
+        return trimmedPath;
+    }
+
+    if (!trimmedPath.startsWith("file://")) {
+        return safeDecodeURIComponent(trimmedPath);
+    }
+
+    try {
+        const url = new URL(trimmedPath);
+        if (url.protocol !== "file:") {
+            return safeDecodeURIComponent(trimmedPath);
+        }
+
+        const decodedPath = safeDecodeURIComponent(url.pathname);
+        // Windows file URL shape: file:///C:/Users/...
+        if (/^\/[A-Za-z]:\//.test(decodedPath)) {
+            return decodedPath.slice(1);
+        }
+        return decodedPath || trimmedPath;
+    } catch {
+        return trimmedPath;
+    }
+}

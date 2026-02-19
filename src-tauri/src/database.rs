@@ -14,6 +14,8 @@ pub struct SqliteStorageStats {
     pub total_size: u64,
     pub covers_size: u64,
     pub binaries_size: u64,
+    pub blob_entries: u64,
+    pub blob_size: u64,
     pub idb_books: u64,
     pub tauri_books: u64,
 }
@@ -23,6 +25,12 @@ pub struct SqliteCleanupResult {
     pub removed_books: u64,
     pub removed_covers: u64,
     pub removed_metadata: u64,
+}
+
+#[derive(Serialize)]
+pub struct SqliteBlobStats {
+    pub count: u64,
+    pub total_size: u64,
 }
 
 fn database_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -91,6 +99,12 @@ where
                 updated_at INTEGER NOT NULL DEFAULT (unixepoch())
             );
 
+            CREATE TABLE IF NOT EXISTS blob_store (
+                key TEXT PRIMARY KEY,
+                data BLOB NOT NULL,
+                updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+            );
+
             CREATE TABLE IF NOT EXISTS materialized_books (
                 book_id TEXT PRIMARY KEY,
                 source_updated_at INTEGER NOT NULL,
@@ -115,7 +129,18 @@ pub fn sqlite_save_book_data(app: AppHandle, id: String, data: Vec<u8>) -> Resul
                 data = excluded.data,
                 updated_at = unixepoch()
             "#,
-            params![id, data],
+            params![id, data.as_slice()],
+        )?;
+
+        connection.execute(
+            r#"
+            INSERT INTO materialized_books (book_id, source_updated_at, materialized_at)
+            VALUES (?1, (SELECT updated_at FROM books WHERE id = ?1), unixepoch())
+            ON CONFLICT(book_id) DO UPDATE SET
+                source_updated_at = (SELECT updated_at FROM books WHERE id = ?1),
+                materialized_at = unixepoch()
+            "#,
+            params![id],
         )?;
         Ok(())
     })?;
@@ -269,11 +294,21 @@ pub fn sqlite_get_storage_stats(app: AppHandle) -> Result<SqliteStorageStats, St
             |row| row.get(0),
         )?;
 
+        let (blob_entries, blob_size): (u64, u64) = connection.query_row(
+            "SELECT COUNT(*) AS blob_entries, COALESCE(SUM(length(data)), 0) AS blob_size FROM blob_store",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
         Ok(SqliteStorageStats {
             total_books,
-            total_size: binaries_size.saturating_add(covers_size),
+            total_size: binaries_size
+                .saturating_add(covers_size)
+                .saturating_add(blob_size),
             covers_size,
             binaries_size,
+            blob_entries,
+            blob_size,
             idb_books: 0,
             tauri_books: total_books,
         })
@@ -344,6 +379,7 @@ pub fn sqlite_clear_all_storage(app: AppHandle) -> Result<(), String> {
         connection.execute("DELETE FROM covers", [])?;
         connection.execute("DELETE FROM materialized_books", [])?;
         connection.execute("DELETE FROM books", [])?;
+        connection.execute("DELETE FROM blob_store", [])?;
         connection.execute("DELETE FROM kv_store", [])?;
         Ok(())
     })
@@ -384,5 +420,100 @@ pub fn sqlite_delete_kv(app: AppHandle, key: String) -> Result<(), String> {
     with_connection(&app, |connection| {
         connection.execute("DELETE FROM kv_store WHERE key = ?1", params![key])?;
         Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_count_kv_by_prefix(app: AppHandle, prefix: String) -> Result<u64, String> {
+    with_connection(&app, |connection| {
+        connection.query_row(
+            "SELECT COUNT(*) FROM kv_store WHERE key LIKE ?1 || '%'",
+            params![prefix],
+            |row| row.get(0),
+        )
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_delete_kv_by_prefix(app: AppHandle, prefix: String) -> Result<u64, String> {
+    with_connection(&app, |connection| {
+        let affected = connection.execute(
+            "DELETE FROM kv_store WHERE key LIKE ?1 || '%'",
+            params![prefix],
+        )?;
+        Ok(affected as u64)
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_set_blob(app: AppHandle, key: String, data: Vec<u8>) -> Result<(), String> {
+    with_connection(&app, |connection| {
+        connection.execute(
+            r#"
+            INSERT INTO blob_store (key, data, updated_at)
+            VALUES (?1, ?2, unixepoch())
+            ON CONFLICT(key) DO UPDATE SET
+                data = excluded.data,
+                updated_at = unixepoch()
+            "#,
+            params![key, data],
+        )?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_get_blob(app: AppHandle, key: String) -> Result<Option<Vec<u8>>, String> {
+    with_connection(&app, |connection| {
+        connection
+            .query_row(
+                "SELECT data FROM blob_store WHERE key = ?1",
+                params![key],
+                |row| row.get(0),
+            )
+            .optional()
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_delete_blob(app: AppHandle, key: String) -> Result<(), String> {
+    with_connection(&app, |connection| {
+        connection.execute("DELETE FROM blob_store WHERE key = ?1", params![key])?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_delete_blobs_by_prefix(app: AppHandle, prefix: String) -> Result<u64, String> {
+    with_connection(&app, |connection| {
+        let affected = connection.execute(
+            "DELETE FROM blob_store WHERE key LIKE ?1 || '%'",
+            params![prefix],
+        )?;
+        Ok(affected as u64)
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_get_blob_stats(
+    app: AppHandle,
+    prefix: Option<String>,
+) -> Result<SqliteBlobStats, String> {
+    with_connection(&app, |connection| {
+        let (count, total_size): (u64, u64) = if let Some(prefix) = prefix {
+            connection.query_row(
+                "SELECT COUNT(*), COALESCE(SUM(length(data)), 0) FROM blob_store WHERE key LIKE ?1 || '%'",
+                params![prefix],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?
+        } else {
+            connection.query_row(
+                "SELECT COUNT(*), COALESCE(SUM(length(data)), 0) FROM blob_store",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?
+        };
+
+        Ok(SqliteBlobStats { count, total_size })
     })
 }

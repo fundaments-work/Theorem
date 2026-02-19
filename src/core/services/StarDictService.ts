@@ -5,8 +5,17 @@ import type {
     InstalledDictionary,
     VocabularyMeaning,
 } from "../types";
+import { isTauri } from "../lib/env";
+import {
+    sqliteDeleteBlob,
+    sqliteDeleteKv,
+    sqliteGetBlob,
+    sqliteGetKv,
+    sqliteSetBlob,
+    sqliteSetKv,
+} from "../lib/sqlite-storage";
 
-interface StoredStarDictManifest {
+export interface StoredStarDictManifest {
     id: string;
     name: string;
     language: string;
@@ -30,12 +39,85 @@ function fileKey(id: string, part: "ifo" | "idx" | "dict" | "syn"): string {
     return `${STORAGE_PREFIX}:${id}:${part}`;
 }
 
+async function readManifest(id: string): Promise<StoredStarDictManifest | null> {
+    const key = manifestKey(id);
+    if (isTauri()) {
+        const serialized = await sqliteGetKv(key);
+        if (!serialized) {
+            return null;
+        }
+
+        try {
+            return JSON.parse(serialized) as StoredStarDictManifest;
+        } catch (error) {
+            console.error("[StarDictService] Failed to parse stored manifest:", error);
+            return null;
+        }
+    }
+
+    return await get<StoredStarDictManifest>(key) ?? null;
+}
+
+async function writeManifest(manifest: StoredStarDictManifest): Promise<void> {
+    const key = manifestKey(manifest.id);
+    if (isTauri()) {
+        await sqliteSetKv(key, JSON.stringify(manifest));
+        return;
+    }
+    await set(key, manifest);
+}
+
+async function deleteManifest(id: string): Promise<void> {
+    const key = manifestKey(id);
+    if (isTauri()) {
+        await sqliteDeleteKv(key);
+        return;
+    }
+    await del(key);
+}
+
+async function readDictionaryPart(
+    id: string,
+    part: "ifo" | "idx" | "dict" | "syn",
+): Promise<ArrayBuffer | null> {
+    const key = fileKey(id, part);
+    if (isTauri()) {
+        return await sqliteGetBlob(key);
+    }
+    return toArrayBuffer(await get(key));
+}
+
+async function writeDictionaryPart(
+    id: string,
+    part: "ifo" | "idx" | "dict" | "syn",
+    buffer: ArrayBuffer,
+): Promise<void> {
+    const key = fileKey(id, part);
+    if (isTauri()) {
+        await sqliteSetBlob(key, buffer);
+        return;
+    }
+    await set(key, buffer);
+}
+
+async function deleteDictionaryPart(
+    id: string,
+    part: "ifo" | "idx" | "dict" | "syn",
+): Promise<void> {
+    const key = fileKey(id, part);
+    if (isTauri()) {
+        await sqliteDeleteBlob(key);
+        return;
+    }
+    await del(key);
+}
+
 function toArrayBuffer(value: unknown): ArrayBuffer | null {
     if (value instanceof ArrayBuffer) {
         return value;
     }
     if (value instanceof Uint8Array) {
-        return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+        return value.slice().buffer;
     }
     return null;
 }
@@ -132,15 +214,15 @@ async function ensureLoadedDictionary(id: string): Promise<LoadedStarDict | null
         return existing;
     }
 
-    const manifest = await get<StoredStarDictManifest>(manifestKey(id));
+    const manifest = await readManifest(id);
     if (!manifest) {
         return null;
     }
 
-    const ifo = toArrayBuffer(await get(fileKey(id, "ifo")));
-    const idx = toArrayBuffer(await get(fileKey(id, "idx")));
-    const dict = toArrayBuffer(await get(fileKey(id, "dict")));
-    const syn = toArrayBuffer(await get(fileKey(id, "syn")));
+    const ifo = await readDictionaryPart(id, "ifo");
+    const idx = await readDictionaryPart(id, "idx");
+    const dict = await readDictionaryPart(id, "dict");
+    const syn = await readDictionaryPart(id, "syn");
 
     if (!ifo || !idx || !dict) {
         return null;
@@ -194,12 +276,12 @@ export async function importStarDictDictionary(
         hasSyn: Boolean(synBuffer),
     };
 
-    await set(manifestKey(id), manifest);
-    await set(fileKey(id, "ifo"), ifoBuffer);
-    await set(fileKey(id, "idx"), idxBuffer);
-    await set(fileKey(id, "dict"), dictBuffer);
+    await writeManifest(manifest);
+    await writeDictionaryPart(id, "ifo", ifoBuffer);
+    await writeDictionaryPart(id, "idx", idxBuffer);
+    await writeDictionaryPart(id, "dict", dictBuffer);
     if (synBuffer) {
-        await set(fileKey(id, "syn"), synBuffer);
+        await writeDictionaryPart(id, "syn", synBuffer);
     }
 
     const runtime = await createRuntimeDictionary({
@@ -226,12 +308,53 @@ export async function importStarDictDictionary(
 export async function removeStarDictDictionary(id: string): Promise<void> {
     loadedDictionaries.delete(id);
     await Promise.all([
-        del(manifestKey(id)),
-        del(fileKey(id, "ifo")),
-        del(fileKey(id, "idx")),
-        del(fileKey(id, "dict")),
-        del(fileKey(id, "syn")),
+        deleteManifest(id),
+        deleteDictionaryPart(id, "ifo"),
+        deleteDictionaryPart(id, "idx"),
+        deleteDictionaryPart(id, "dict"),
+        deleteDictionaryPart(id, "syn"),
     ]);
+}
+
+export interface ExportedStarDictDictionary {
+    manifest: StoredStarDictManifest;
+    files: {
+        ifo: ArrayBuffer;
+        idx: ArrayBuffer;
+        dict: ArrayBuffer;
+        syn?: ArrayBuffer;
+    };
+}
+
+/**
+ * Exports an installed StarDict package including raw files for sync/backup.
+ */
+export async function exportStarDictDictionary(
+    id: string,
+): Promise<ExportedStarDictDictionary | null> {
+    const manifest = await readManifest(id);
+    if (!manifest) {
+        return null;
+    }
+
+    const ifo = await readDictionaryPart(id, "ifo");
+    const idx = await readDictionaryPart(id, "idx");
+    const dict = await readDictionaryPart(id, "dict");
+    const syn = await readDictionaryPart(id, "syn");
+
+    if (!ifo || !idx || !dict) {
+        return null;
+    }
+
+    return {
+        manifest,
+        files: {
+            ifo,
+            idx,
+            dict,
+            ...(syn ? { syn } : {}),
+        },
+    };
 }
 
 /**

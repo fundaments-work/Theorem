@@ -9,8 +9,8 @@ import { getConfiguredPdfJs } from './pdfjs-runtime';
 import { normalizeAuthor } from './utils';
 import { isMobile } from './env';
 
-const METADATA_TIMEOUT_MS = 10000;
-const COVER_TIMEOUT_MS = 5000;
+const DEFAULT_METADATA_TIMEOUT_MS = 10000;
+const DEFAULT_COVER_TIMEOUT_MS = 5000;
 
 export interface ExtractedMetadata {
     title: string;
@@ -21,6 +21,11 @@ export interface ExtractedMetadata {
     publishedDate?: string;
     identifier?: string;
     coverDataUrl?: string | null;
+}
+
+export interface MetadataExtractionOptions {
+    metadataTimeoutMs?: number;
+    coverTimeoutMs?: number;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -147,7 +152,10 @@ export async function extractMetadata(
     format: BookFormat,
     filename: string,
     bookId?: string,
+    options?: MetadataExtractionOptions,
 ): Promise<ExtractedMetadata> {
+    const metadataTimeoutMs = Math.max(500, options?.metadataTimeoutMs ?? DEFAULT_METADATA_TIMEOUT_MS);
+    const coverTimeoutMs = Math.max(300, options?.coverTimeoutMs ?? DEFAULT_COVER_TIMEOUT_MS);
     const result: ExtractedMetadata = {
         title: '',
         author: '',
@@ -163,16 +171,16 @@ export async function extractMetadata(
                 isEvalSupported: false,
             });
 
-            const pdf = await withTimeout(loadingTask.promise, METADATA_TIMEOUT_MS, 'loading PDF metadata');
+            const pdf = await withTimeout(loadingTask.promise, metadataTimeoutMs, 'loading PDF metadata');
 
-            const metadata = await withTimeout(pdf.getMetadata(), METADATA_TIMEOUT_MS, 'reading PDF metadata');
+            const metadata = await withTimeout(pdf.getMetadata(), metadataTimeoutMs, 'reading PDF metadata');
             const metaInfo = metadata.info as Record<string, unknown>;
 
             result.title = (metaInfo?.Title as string) || filename.replace(/\.[^/.]+$/, '');
             result.author = (metaInfo?.Author as string) || '';
 
             try {
-                const page = await withTimeout(pdf.getPage(1), COVER_TIMEOUT_MS, 'opening PDF page for cover');
+                const page = await withTimeout(pdf.getPage(1), coverTimeoutMs, 'opening PDF page for cover');
                 const viewport = page.getViewport({ scale: isMobile() ? 0.3 : 0.5 });
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
@@ -194,7 +202,7 @@ export async function extractMetadata(
                             canvasContext: ctx,
                             viewport: adjustedViewport,
                         }).promise,
-                        COVER_TIMEOUT_MS,
+                        coverTimeoutMs,
                         'rendering PDF cover',
                     );
 
@@ -242,7 +250,7 @@ export async function extractMetadata(
         try {
             book = await withTimeout(
                 makeBook(bookInput),
-                METADATA_TIMEOUT_MS,
+                metadataTimeoutMs,
                 'opening book with foliate',
             );
         } catch (openError) {
@@ -250,7 +258,7 @@ export async function extractMetadata(
                 const fileFallback = new File([data], filename, { type: mimeType });
                 book = await withTimeout(
                     makeBook(fileFallback),
-                    METADATA_TIMEOUT_MS,
+                    metadataTimeoutMs,
                     'opening book with File fallback',
                 );
             } else {
@@ -270,7 +278,7 @@ export async function extractMetadata(
 
         if (book.getCover) {
             try {
-                const rawCoverBlob = await withTimeout(book.getCover(), COVER_TIMEOUT_MS, 'extracting cover');
+                const rawCoverBlob = await withTimeout(book.getCover(), coverTimeoutMs, 'extracting cover');
                 const coverBlob = rawCoverBlob instanceof Blob ? rawCoverBlob : null;
                 if (coverBlob) {
                     if (bookId) {

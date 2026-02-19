@@ -1,4 +1,3 @@
-import { exists, mkdir, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { isTauri } from "./env";
 import type {
     Annotation,
@@ -13,6 +12,7 @@ const DEFAULT_HIGHLIGHTS_FILE_NAME = "theorem-highlights.md";
 const DEFAULT_VOCABULARY_FILE_NAME = "theorem-vocabulary.md";
 const BOOK_PAGES_FOLDER_SUFFIX = "-books";
 const MAX_BOOK_PAGE_FILE_NAME_LENGTH = 180;
+let tauriFs: typeof import("@tauri-apps/plugin-fs") | null = null;
 const FALLBACK_HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
     yellow: "#f4b400",
     green: "#2e7d32",
@@ -54,6 +54,14 @@ interface ExportBookPage {
     annotations: Annotation[];
     fileName: string;
     absolutePath: string;
+}
+
+async function getTauriFs() {
+    if (tauriFs) {
+        return tauriFs;
+    }
+    tauriFs = await import("@tauri-apps/plugin-fs");
+    return tauriFs;
 }
 
 function toSingleLineText(value: string | undefined, fallback = ""): string {
@@ -620,24 +628,25 @@ export async function syncVaultMarkdownSnapshot({
     const generatedAt = new Date().toISOString();
 
     try {
-        await mkdir(vaultPath, { recursive: true });
-        await mkdir(pagesDirectoryPath, { recursive: true });
-        if (await exists(legacyHighlightsIndexPath)) {
-            await remove(legacyHighlightsIndexPath);
+        const fs = await getTauriFs();
+        await fs.mkdir(vaultPath, { recursive: true });
+        await fs.mkdir(pagesDirectoryPath, { recursive: true });
+        if (await fs.exists(legacyHighlightsIndexPath)) {
+            await fs.remove(legacyHighlightsIndexPath);
         }
 
         const pages = buildBookPages(books, rssArticles, annotations, vaultPath, pagesDirectoryName);
 
         await Promise.all(
             pages.map((page) => (
-                writeTextFile(
+                fs.writeTextFile(
                     page.absolutePath,
                     buildBookPageMarkdown(page.source, page.annotations, generatedAt),
                 )
             )),
         );
 
-        await writeTextFile(
+        await fs.writeTextFile(
             vocabularyPath,
             buildVocabularyMarkdown(vocabularyTerms, generatedAt),
         );

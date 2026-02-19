@@ -316,13 +316,12 @@ export interface RssArticle {
 }
 
 // Navigation
-export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "bookDetails" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds";
+export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds";
 
 // UI State
 export interface UIState {
     currentRoute: AppRoute;
     currentBookId?: string;
-    routeHistory: AppRoute[]; // Simple tracking for internal app use if needed
     sidebarOpen: boolean;
     readerToolbarVisible: boolean;
     searchQuery: string;
