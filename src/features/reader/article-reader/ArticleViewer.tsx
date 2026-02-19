@@ -1507,6 +1507,7 @@ export function ArticleViewer({
                         onToggleBookmarks={() => togglePanel("bookmarks")}
                         onToggleSearch={() => togglePanel("search")}
                         onToggleInfo={() => togglePanel("info")}
+                        onToggleMenu={() => togglePanel("menu")}
                         onAddBookmark={handleAddScrollBookmark}
                         isCurrentPageBookmarked={Boolean(currentBookmark)}
                         activePanel={activePanel}

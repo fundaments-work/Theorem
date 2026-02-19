@@ -1,4 +1,4 @@
-export type ArticleReaderPanel = "toc" | "search" | "bookmarks" | "settings" | "info" | null;
+export type ArticleReaderPanel = "toc" | "search" | "bookmarks" | "settings" | "info" | "menu" | null;
 
 export interface ArticleHeading {
     id: string;

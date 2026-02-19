@@ -128,7 +128,10 @@ function MobileMenu({ isOpen, onClose, items, triggerRef }: MenuProps) {
             {/* Transparent overlay to catch clicks on the toolbar/chrome area */}
             <div
                 className="fixed inset-0 z-[160]"
-                onClick={onClose}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                }}
             />
             <div
                 className="absolute right-2 top-full mt-1 z-[161] min-w-[12rem] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-lg backdrop-blur-md"
@@ -140,9 +143,9 @@ function MobileMenu({ isOpen, onClose, items, triggerRef }: MenuProps) {
                 {items.map((item, index) => (
                     <button
                         key={index}
-                        onClick={() => {
+                        onClick={(e) => {
+                            e.stopPropagation();
                             item.onClick();
-                            onClose();
                         }}
                         disabled={item.disabled}
                         className={cn(
