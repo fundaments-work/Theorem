@@ -188,9 +188,11 @@ pub fn sqlite_get_materialized_book_path(
     }
 
     let data = with_connection(&app, |connection| {
-        connection.query_row("SELECT data FROM books WHERE id = ?1", params![id], |row| {
-            row.get::<_, Vec<u8>>(0)
-        }).optional()
+        connection
+            .query_row("SELECT data FROM books WHERE id = ?1", params![id], |row| {
+                row.get::<_, Vec<u8>>(0)
+            })
+            .optional()
     })?;
 
     if let Some(blob_data) = data {
@@ -255,7 +257,7 @@ pub fn sqlite_delete_cover_image(app: AppHandle, book_id: String) -> Result<(), 
 #[tauri::command]
 pub fn sqlite_get_storage_stats(app: AppHandle) -> Result<SqliteStorageStats, String> {
     let mut binaries_size = 0;
-    
+
     let cache_dir = app
         .path()
         .app_data_dir()

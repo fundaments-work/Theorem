@@ -3924,24 +3924,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-app"
-version = "0.1.0"
-dependencies = [
- "reqwest 0.11.27",
- "rusqlite",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-app",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-mobile-folder-scan",
- "tauri-plugin-opener",
- "tauri-plugin-os",
-]
-
-[[package]]
 name = "tauri-build"
 version = "2.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4243,6 +4225,24 @@ dependencies = [
  "futf",
  "mac",
  "utf-8",
+]
+
+[[package]]
+name = "theorem"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.11.27",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-app",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-mobile-folder-scan",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
 ]
 
 [[package]]

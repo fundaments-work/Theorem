@@ -1,6 +1,6 @@
 # Theorem
 
-Tauri-based desktop e-book reader using a single root `pnpm` project.
+Tauri-first, local-first reading workspace for ebooks, PDFs, and RSS with a web fallback runtime.
 
 ## Layout
 

@@ -1,6 +1,17 @@
 {
     "name": "theorem",
+    "description": "Local-first reader for EPUB, MOBI, AZW, FB2, CBZ, PDF, and RSS articles.",
     "private": true,
+    "author": "Fundamentals",
+    "license": "UNLICENSED",
+    "homepage": "https://github.com/sapienskid/hodor",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/sapienskid/hodor.git"
+    },
+    "bugs": {
+        "url": "https://github.com/sapienskid/hodor/issues"
+    },
     "packageManager": "pnpm@10.18.1",
     "scripts": {
         "dev": "vite",

@@ -38,16 +38,84 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "deb",
-      "rpm"
-    ],
+    "targets": "all",
+    "category": "Education",
+    "publisher": "Fundamentals",
+    "homepage": "https://github.com/sapienskid/hodor",
+    "shortDescription": "Local-first reader for ebooks, PDFs, and RSS feeds.",
+    "longDescription": "Theorem is a local-first reading workspace for EPUB, MOBI, AZW, AZW3, FB2, CBZ, and PDF books plus RSS articles. Organize your library, annotate across formats, capture vocabulary, and export notes to markdown.",
+    "copyright": "Copyright (c) 2026 Fundamentals",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "name": "EPUB ebook",
+        "description": "Electronic publication",
+        "ext": [
+          "epub"
+        ],
+        "mimeType": "application/epub+zip",
+        "role": "Viewer"
+      },
+      {
+        "name": "MOBI ebook",
+        "description": "Mobipocket ebook",
+        "ext": [
+          "mobi"
+        ],
+        "mimeType": "application/x-mobipocket-ebook",
+        "role": "Viewer"
+      },
+      {
+        "name": "AZW ebook",
+        "description": "Kindle ebook",
+        "ext": [
+          "azw"
+        ],
+        "mimeType": "application/vnd.amazon.ebook",
+        "role": "Viewer"
+      },
+      {
+        "name": "AZW3 ebook",
+        "description": "Kindle Format 8 ebook",
+        "ext": [
+          "azw3"
+        ],
+        "mimeType": "application/vnd.amazon.mobi8-ebook",
+        "role": "Viewer"
+      },
+      {
+        "name": "FB2 ebook",
+        "description": "FictionBook ebook",
+        "ext": [
+          "fb2"
+        ],
+        "mimeType": "application/x-fictionbook+xml",
+        "role": "Viewer"
+      },
+      {
+        "name": "CBZ comic archive",
+        "description": "Comic book ZIP archive",
+        "ext": [
+          "cbz"
+        ],
+        "mimeType": "application/vnd.comicbook+zip",
+        "role": "Viewer"
+      },
+      {
+        "name": "PDF document",
+        "description": "Portable document format",
+        "ext": [
+          "pdf"
+        ],
+        "mimeType": "application/pdf",
+        "role": "Viewer"
+      }
     ],
     "resources": {
       "../node_modules/pdfjs-dist/build/pdf.worker.mjs": "pdfjs/build/pdf.worker.mjs",
@@ -60,10 +128,12 @@
         "bundleMediaFramework": false
       },
       "deb": {
+        "section": "utils",
         "files": {}
       },
       "rpm": {
-        "epoch": 0
+        "epoch": 0,
+        "release": "1"
       }
     },
     "android": {

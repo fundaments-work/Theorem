@@ -1,6 +1,11 @@
 [package]
 name = "tauri-plugin-mobile-folder-scan"
 version = "0.1.0"
+description = "Android folder picker/scan plugin used by Theorem."
+authors = ["Fundamentals"]
+license = "UNLICENSED"
+homepage = "https://github.com/sapienskid/hodor"
+repository = "https://github.com/sapienskid/hodor"
 edition = "2021"
 links = "tauri-plugin-mobile-folder-scan"
 build = "build.rs"
