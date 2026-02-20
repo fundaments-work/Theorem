@@ -107,7 +107,7 @@ const PAGE_PRERENDER_MARGIN = "220% 0px";
 const INITIAL_PAGE_LOAD_SIZE = 1;
 const PAGE_LOAD_BATCH_SIZE = 5;
 const PAGE_LOAD_AHEAD_THRESHOLD = 2;
-const WEBKIT_MIN_OUTPUT_SCALE = 2;
+const WEBKIT_MIN_OUTPUT_SCALE = 1.2;
 const MAX_CANVAS_PIXEL_COUNT = 16_000_000;
 const TEXT_CONTENT_CACHE_LIMIT = 8;
 const PDF_INFO_CACHE_LIMIT = 32;
@@ -134,7 +134,10 @@ function getCanvasPixelRatio(
     preferSharpCanvas: boolean,
     currentScale: number,
 ): number {
-    const deviceRatio = Math.max(1, window.devicePixelRatio || 1);
+    const rawDeviceRatio = Math.max(1, window.devicePixelRatio || 1);
+    const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+    const deviceRatio = isAndroid ? Math.min(rawDeviceRatio, 1.25) : rawDeviceRatio;
+
     // Reduce supersampling at high zoom levels to keep WebKit memory/render cost bounded.
     const sharpRatioTarget = currentScale <= 1.2
         ? WEBKIT_MIN_OUTPUT_SCALE
@@ -144,7 +147,7 @@ function getCanvasPixelRatio(
                 ? 1.5
                 : 1.25;
     const preferredRatio = preferSharpCanvas
-        ? Math.max(deviceRatio, sharpRatioTarget)
+        ? (isAndroid ? deviceRatio : Math.max(deviceRatio, sharpRatioTarget))
         : deviceRatio;
     const safePixelBudget = Math.max(1, cssWidth * cssHeight);
     const maxAllowedRatio = Math.sqrt(MAX_CANVAS_PIXEL_COUNT / safePixelBudget);
@@ -1760,7 +1763,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                 ...commonPdfOptions,
                                 url: directUrl,
                                 // Favor faster first-paint for local files.
-                                rangeChunkSize: 512 * 1024,
+                                rangeChunkSize: 65536,
                             });
                             pdf = await loadingTask.promise;
                         } catch (urlLoadError) {

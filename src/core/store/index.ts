@@ -127,66 +127,80 @@ interface UIStore extends UIState {
     toggleReaderToolbar: () => void;
 }
 
-export const useUIStore = create<UIStore>((set) => ({
-    currentRoute: "library",
-    currentBookId: undefined,
-    sidebarOpen: !isMobile(), // Closed by default on mobile, open on desktop
-    readerToolbarVisible: true,
-    searchQuery: "",
-    searchCommittedQuery: "",
-    selectedBooks: [],
-    isLoading: false,
-    loadingMessage: undefined,
-    error: undefined,
-    vaultSyncStatus: "idle",
-    vaultSyncMessage: undefined,
-    vaultSyncAt: undefined,
-
-    setRoute: (route, bookId, pushHistory = true) => {
-        if (pushHistory && typeof window !== "undefined") {
-            window.history.pushState({ route, bookId }, "");
-        }
-        set((state) => ({
-            currentRoute: route,
-            currentBookId: bookId,
+export const useUIStore = create<UIStore>()(
+    persist(
+        (set) => ({
+            currentRoute: "library",
+            currentBookId: undefined,
+            sidebarOpen: !isMobile(), // Closed by default on mobile, open on desktop
+            readerToolbarVisible: true,
             searchQuery: "",
             searchCommittedQuery: "",
-        }));
-    },
-    goBack: () => {
-        if (typeof window !== "undefined" && window.history.length > 1) {
-            window.history.back();
-        } else {
-            set((state) => ({
-                currentRoute: "library",
-                currentBookId: undefined,
-            }));
-        }
-    },
-    toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-    setSearchQuery: (query) => set({ searchQuery: query }),
-    commitSearch: () => set((state) => ({
-        searchCommittedQuery: state.searchQuery.trim(),
-    })),
-    clearSearch: () => set({ searchQuery: "", searchCommittedQuery: "" }),
-    setSelectedBooks: (bookIds) => set({ selectedBooks: bookIds }),
-    toggleBookSelection: (bookId) =>
-        set((state) => ({
-            selectedBooks: state.selectedBooks.includes(bookId)
-                ? state.selectedBooks.filter((id) => id !== bookId)
-                : [...state.selectedBooks, bookId],
-        })),
-    clearSelection: () => set({ selectedBooks: [] }),
-    setLoading: (loading, message) =>
-        set({ isLoading: loading, loadingMessage: message }),
-    setError: (error) => set({ error }),
-    setVaultSyncStatus: (vaultSyncStatus, vaultSyncMessage, vaultSyncAt) =>
-        set({ vaultSyncStatus, vaultSyncMessage, vaultSyncAt }),
+            selectedBooks: [],
+            isLoading: false,
+            loadingMessage: undefined,
+            error: undefined,
+            vaultSyncStatus: "idle",
+            vaultSyncMessage: undefined,
+            vaultSyncAt: undefined,
 
-    // Reader toolbar
-    setReaderToolbarVisible: (visible) => set({ readerToolbarVisible: visible }),
-    toggleReaderToolbar: () => set((state) => ({ readerToolbarVisible: !state.readerToolbarVisible })),
-}));
+            setRoute: (route, bookId, pushHistory = true) => {
+                if (pushHistory && typeof window !== "undefined") {
+                    window.history.pushState({ route, bookId }, "");
+                }
+                set((state) => ({
+                    currentRoute: route,
+                    currentBookId: bookId,
+                    searchQuery: "",
+                    searchCommittedQuery: "",
+                }));
+            },
+            goBack: () => {
+                if (typeof window !== "undefined" && window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    set((state) => ({
+                        currentRoute: "library",
+                        currentBookId: undefined,
+                    }));
+                }
+            },
+            toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+            setSearchQuery: (query) => set({ searchQuery: query }),
+            commitSearch: () => set((state) => ({
+                searchCommittedQuery: state.searchQuery.trim(),
+            })),
+            clearSearch: () => set({ searchQuery: "", searchCommittedQuery: "" }),
+            setSelectedBooks: (bookIds) => set({ selectedBooks: bookIds }),
+            toggleBookSelection: (bookId) =>
+                set((state) => ({
+                    selectedBooks: state.selectedBooks.includes(bookId)
+                        ? state.selectedBooks.filter((id) => id !== bookId)
+                        : [...state.selectedBooks, bookId],
+                })),
+            clearSelection: () => set({ selectedBooks: [] }),
+            setLoading: (loading, message) =>
+                set({ isLoading: loading, loadingMessage: message }),
+            setError: (error) => set({ error }),
+            setVaultSyncStatus: (vaultSyncStatus, vaultSyncMessage, vaultSyncAt) =>
+                set({ vaultSyncStatus, vaultSyncMessage, vaultSyncAt }),
+
+            // Reader toolbar
+            setReaderToolbarVisible: (visible) => set({ readerToolbarVisible: visible }),
+            toggleReaderToolbar: () => set((state) => ({ readerToolbarVisible: !state.readerToolbarVisible })),
+        }),
+        {
+            name: 'theorem-ui',
+            version: 1,
+            storage: createJSONStorage(() => theoremPersistStorage),
+            partialize: (state) => ({
+                currentRoute: state.currentRoute,
+                currentBookId: state.currentBookId,
+                sidebarOpen: state.sidebarOpen,
+            }),
+        }
+    )
+);
 
 // Recently opened books cache for fast access
 interface CachedBookMetadata {

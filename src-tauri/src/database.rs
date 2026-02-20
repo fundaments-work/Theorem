@@ -120,16 +120,21 @@ where
 
 #[tauri::command]
 pub fn sqlite_save_book_data(app: AppHandle, id: String, data: Vec<u8>) -> Result<String, String> {
+    let materialized_path = materialized_book_path(&app, &id)?;
+    fs::write(&materialized_path, &data).map_err(|error| {
+        format!("Failed to write book data file '{materialized_path:?}': {error}")
+    })?;
+
     with_connection(&app, |connection| {
         connection.execute(
             r#"
             INSERT INTO books (id, data, updated_at)
-            VALUES (?1, ?2, unixepoch())
+            VALUES (?1, X'', unixepoch())
             ON CONFLICT(id) DO UPDATE SET
-                data = excluded.data,
+                data = X'',
                 updated_at = unixepoch()
             "#,
-            params![id, data.as_slice()],
+            params![id],
         )?;
 
         connection.execute(
@@ -150,13 +155,11 @@ pub fn sqlite_save_book_data(app: AppHandle, id: String, data: Vec<u8>) -> Resul
 
 #[tauri::command]
 pub fn sqlite_get_book_data(app: AppHandle, id: String) -> Result<Option<Vec<u8>>, String> {
-    with_connection(&app, |connection| {
-        connection
-            .query_row("SELECT data FROM books WHERE id = ?1", params![id], |row| {
-                row.get(0)
-            })
-            .optional()
-    })
+    if let Ok(Some(path)) = sqlite_get_materialized_book_path(app.clone(), id.clone()) {
+        let content = fs::read(&path).map_err(|e| format!("Failed to read book file: {}", e))?;
+        return Ok(Some(content));
+    }
+    Ok(None)
 }
 
 #[tauri::command]
@@ -178,63 +181,33 @@ pub fn sqlite_get_materialized_book_path(
     app: AppHandle,
     id: String,
 ) -> Result<Option<String>, String> {
-    let source_updated_at = with_connection(&app, |connection| {
-        connection
-            .query_row(
-                "SELECT updated_at FROM books WHERE id = ?1",
-                params![id],
-                |row| row.get::<_, i64>(0),
-            )
-            .optional()
-    })?;
-
-    let source_updated_at = match source_updated_at {
-        Some(value) => value,
-        None => return Ok(None),
-    };
-
     let materialized_path = materialized_book_path(&app, &id)?;
 
-    let can_reuse_materialized = with_connection(&app, |connection| {
-        connection
-            .query_row(
-                "SELECT source_updated_at FROM materialized_books WHERE book_id = ?1",
-                params![id],
-                |row| row.get::<_, i64>(0),
-            )
-            .optional()
-            .map(|cached| cached == Some(source_updated_at) && materialized_path.exists())
-    })?;
-
-    if can_reuse_materialized {
+    if materialized_path.exists() {
         return Ok(Some(materialized_path.to_string_lossy().into_owned()));
     }
 
     let data = with_connection(&app, |connection| {
         connection.query_row("SELECT data FROM books WHERE id = ?1", params![id], |row| {
             row.get::<_, Vec<u8>>(0)
-        })
+        }).optional()
     })?;
 
-    fs::write(&materialized_path, data).map_err(|error| {
-        format!("Failed to write materialized cache file '{materialized_path:?}': {error}")
-    })?;
+    if let Some(blob_data) = data {
+        if !blob_data.is_empty() {
+            fs::write(&materialized_path, &blob_data).map_err(|error| {
+                format!("Failed to write migrated book file '{materialized_path:?}': {error}")
+            })?;
 
-    with_connection(&app, |connection| {
-        connection.execute(
-            r#"
-            INSERT INTO materialized_books (book_id, source_updated_at, materialized_at)
-            VALUES (?1, ?2, unixepoch())
-            ON CONFLICT(book_id) DO UPDATE SET
-                source_updated_at = excluded.source_updated_at,
-                materialized_at = unixepoch()
-            "#,
-            params![id, source_updated_at],
-        )?;
-        Ok(())
-    })?;
+            let _ = with_connection(&app, |connection| {
+                connection.execute("UPDATE books SET data = X'' WHERE id = ?1", params![id])
+            });
 
-    Ok(Some(materialized_path.to_string_lossy().into_owned()))
+            return Ok(Some(materialized_path.to_string_lossy().into_owned()));
+        }
+    }
+
+    Ok(None)
 }
 
 #[tauri::command]
@@ -281,9 +254,27 @@ pub fn sqlite_delete_cover_image(app: AppHandle, book_id: String) -> Result<(), 
 
 #[tauri::command]
 pub fn sqlite_get_storage_stats(app: AppHandle) -> Result<SqliteStorageStats, String> {
+    let mut binaries_size = 0;
+    
+    let cache_dir = app
+        .path()
+        .app_data_dir()
+        .ok()
+        .map(|dir| dir.join(MATERIALIZED_BOOK_CACHE_DIR));
+
+    if let Some(path) = cache_dir {
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    binaries_size += metadata.len();
+                }
+            }
+        }
+    }
+
     with_connection(&app, |connection| {
-        let (total_books, binaries_size): (u64, u64) = connection.query_row(
-            "SELECT COUNT(*) AS total_books, COALESCE(SUM(length(data)), 0) AS binaries_size FROM books",
+        let (total_books, legacy_binaries_size): (u64, u64) = connection.query_row(
+            "SELECT COUNT(*) AS total_books, COALESCE(SUM(length(data)), 0) AS legacy_binaries_size FROM books",
             [],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
@@ -300,13 +291,15 @@ pub fn sqlite_get_storage_stats(app: AppHandle) -> Result<SqliteStorageStats, St
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
 
+        let total_binaries_size = binaries_size + legacy_binaries_size;
+
         Ok(SqliteStorageStats {
             total_books,
-            total_size: binaries_size
+            total_size: total_binaries_size
                 .saturating_add(covers_size)
                 .saturating_add(blob_size),
             covers_size,
-            binaries_size,
+            binaries_size: total_binaries_size,
             blob_entries,
             blob_size,
             idb_books: 0,

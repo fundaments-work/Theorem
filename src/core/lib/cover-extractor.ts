@@ -269,8 +269,21 @@ export async function extractMetadata(
     if (format === 'pdf') {
         try {
             const pdfjsLib = await getConfiguredPdfJs();
+
+            // Android Webkit can throw DataCloneError if we don't ensure a clean array buffer view
+            const rawPdfData = new Uint8Array(data);
+            const serializableData = (() => {
+                if (rawPdfData.buffer && rawPdfData.buffer instanceof ArrayBuffer) {
+                    if (rawPdfData.byteOffset !== 0 || rawPdfData.byteLength !== rawPdfData.buffer.byteLength) {
+                        return new Uint8Array(rawPdfData.buffer.slice(rawPdfData.byteOffset, rawPdfData.byteOffset + rawPdfData.byteLength));
+                    }
+                    return rawPdfData;
+                }
+                return new Uint8Array(Array.from(rawPdfData));
+            })();
+
             const loadingTask = pdfjsLib.getDocument({
-                data: new Uint8Array(data),
+                data: serializableData,
                 isEvalSupported: false,
             });
 
