@@ -6,6 +6,7 @@
 
 import {
     useEffect,
+    useLayoutEffect,
     useRef,
     useState,
     useCallback,
@@ -1371,6 +1372,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         onAnnotationRemove
     }, ref) {
         const containerRef = useRef<HTMLDivElement>(null);
+        const zoomContainerRef = useRef<HTMLDivElement>(null);
         const [isLoading, setIsLoading] = useState(true);
         const [error, setError] = useState<string | null>(null);
         const [currentPage, setCurrentPage] = useState(initialPage);
@@ -1382,6 +1384,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const hasAppliedInitialViewStateRef = useRef(false);
         const initialPageRestoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
         const pendingScrollPageRef = useRef<number | null>(null);
+        const pendingScrollAdjustmentRef = useRef<{ left: number, top: number, scale: number } | null>(null);
         const loadingPageNumbersRef = useRef<Set<number>>(new Set());
         const currentPageRef = useRef(initialPage);
         const totalPagesRef = useRef(0);
@@ -1412,6 +1415,16 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
 
         useEffect(() => {
             scaleRef.current = scale;
+        }, [scale]);
+
+        useLayoutEffect(() => {
+            const container = containerRef.current;
+            const scrollAdjustment = pendingScrollAdjustmentRef.current;
+            if (container && scrollAdjustment && Math.abs(scrollAdjustment.scale - scale) < 0.001) {
+                container.scrollLeft = scrollAdjustment.left;
+                container.scrollTop = scrollAdjustment.top;
+                pendingScrollAdjustmentRef.current = null;
+            }
         }, [scale]);
 
         const setZoomMode = useCallback((mode: PdfZoomMode, force = false) => {
@@ -2066,6 +2079,99 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             };
         }, [pages.length, applyZoom]);
 
+        // Handle Touch Pinch-to-Zoom
+        useEffect(() => {
+            const container = containerRef.current;
+            const zoomContainer = zoomContainerRef.current;
+            if (!container || !zoomContainer || pages.length === 0) return;
+
+            let isPinching = false;
+            let initialDistance = 0;
+            let initialScale = 1;
+            let initialPinchCenterX = 0;
+            let initialPinchCenterY = 0;
+            let initialScrollLeft = 0;
+            let initialScrollTop = 0;
+
+            const onTouchStart = (e: TouchEvent) => {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    isPinching = true;
+                    initialScale = scaleRef.current;
+                    const dx = e.touches[1].clientX - e.touches[0].clientX;
+                    const dy = e.touches[1].clientY - e.touches[0].clientY;
+                    initialDistance = Math.sqrt(dx * dx + dy * dy);
+
+                    const rect = container.getBoundingClientRect();
+                    initialPinchCenterX = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left;
+                    initialPinchCenterY = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top;
+                    initialScrollLeft = container.scrollLeft;
+                    initialScrollTop = container.scrollTop;
+
+                    zoomContainer.style.transformOrigin = `${initialPinchCenterX + initialScrollLeft}px ${initialPinchCenterY + initialScrollTop}px`;
+                }
+            };
+
+            const onTouchMove = (e: TouchEvent) => {
+                if (isPinching && e.touches.length === 2) {
+                    e.preventDefault();
+                    const dx = e.touches[1].clientX - e.touches[0].clientX;
+                    const dy = e.touches[1].clientY - e.touches[0].clientY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const scaleRatio = distance / initialDistance;
+
+                    const targetScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, initialScale * scaleRatio));
+                    const visualScale = targetScale / initialScale;
+
+                    zoomContainer.style.transform = `scale(${visualScale})`;
+                }
+            };
+
+            const onTouchEnd = (e: TouchEvent) => {
+                if (isPinching && e.touches.length < 2) {
+                    isPinching = false;
+                    const transformValue = zoomContainer.style.transform;
+                    zoomContainer.style.transform = '';
+                    zoomContainer.style.transformOrigin = '';
+
+                    if (transformValue) {
+                        const match = transformValue.match(/scale\(([^)]+)\)/);
+                        if (match && match[1]) {
+                            const visualScale = parseFloat(match[1]);
+                            const finalScale = initialScale * visualScale;
+                            const ratio = finalScale / initialScale;
+
+                            const contentCenterX = initialPinchCenterX + initialScrollLeft;
+                            const contentCenterY = initialPinchCenterY + initialScrollTop;
+
+                            const newContentCenterX = contentCenterX * ratio;
+                            const newContentCenterY = contentCenterY * ratio;
+
+                            pendingScrollAdjustmentRef.current = {
+                                left: newContentCenterX - initialPinchCenterX,
+                                top: newContentCenterY - initialPinchCenterY,
+                                scale: finalScale
+                            };
+
+                            applyZoom(finalScale);
+                        }
+                    }
+                }
+            };
+
+            container.addEventListener("touchstart", onTouchStart, { passive: false });
+            container.addEventListener("touchmove", onTouchMove, { passive: false });
+            container.addEventListener("touchend", onTouchEnd);
+            container.addEventListener("touchcancel", onTouchEnd);
+
+            return () => {
+                container.removeEventListener("touchstart", onTouchStart);
+                container.removeEventListener("touchmove", onTouchMove);
+                container.removeEventListener("touchend", onTouchEnd);
+                container.removeEventListener("touchcancel", onTouchEnd);
+            };
+        }, [pages.length, applyZoom]);
+
         const scrollToPage = useCallback((targetPage: number, behavior: ScrollBehavior = "smooth"): boolean => {
             const container = containerRef.current;
             if (!container) {
@@ -2223,6 +2329,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     onClick={handleViewportClick}
                 >
                     <div
+                        ref={zoomContainerRef}
                         className="pdf-zoom-container flex flex-col items-center justify-start min-h-full py-2 sm:py-4 space-y-2 sm:space-y-4 px-1 sm:px-0 mx-auto"
                     >
                         {pages.map((page) => {

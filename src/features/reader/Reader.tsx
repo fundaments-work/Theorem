@@ -1861,8 +1861,8 @@ function BookReaderPage() {
                     onToggleSearch={() => togglePanel('search')}
                     onToggleInfo={() => togglePanel('info')}
                     onToggleMenu={() => togglePanel('menu')}
-                    onAddBookmark={handleAddPageBookmark}
-                    isCurrentPageBookmarked={isCurrentPageBookmarked}
+                    onAddBookmark={isPdfFormat ? handlePdfAddBookmark : handleAddPageBookmark}
+                    isCurrentPageBookmarked={isPdfFormat ? isPdfPageBookmarked : isCurrentPageBookmarked}
                     activePanel={activePanel}
                     fullscreen={settings.readerSettings.fullscreen}
                     onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
