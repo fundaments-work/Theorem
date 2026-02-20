@@ -206,9 +206,6 @@ export interface VocabularySettings {
     playPronunciationAudio: boolean;
 }
 
-/** @deprecated Use VocabularySettings instead */
-export type LearningSettings = VocabularySettings;
-
 export interface VaultIntegrationSettings {
     enabled: boolean;
     vaultPath: string;
