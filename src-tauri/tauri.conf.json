@@ -41,9 +41,9 @@
     "targets": "all",
     "category": "Education",
     "publisher": "Fundamentals",
-    "homepage": "https://github.com/sapienskid/hodor",
-    "shortDescription": "Local-first reader for ebooks, PDFs, and RSS feeds.",
-    "longDescription": "Theorem is a local-first reading workspace for EPUB, MOBI, AZW, AZW3, FB2, CBZ, and PDF books plus RSS articles. Organize your library, annotate across formats, capture vocabulary, and export notes to markdown.",
+    "homepage": "https://github.com/sapienskid/theorem",
+    "shortDescription": "Local-first reader for PDFs, EPUBs, and RSS with markdown export.",
+    "longDescription": "Theorem is a free, open-source, local-first reading app for PDFs, EPUBs and RSS. Highlight and annotate anything, capture vocabulary, and sync notes to local Markdown files for Obsidian or Logseq. No cloud account, no subscription, no vendor lock-in.",
     "copyright": "Copyright (c) 2026 Fundamentals",
     "icon": [
       "icons/32x32.png",

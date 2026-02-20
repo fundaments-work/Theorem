@@ -1,7 +1,7 @@
 [package]
 name = "theorem"
 version = "0.1.0"
-description = "Local-first reader for ebooks, PDFs, and RSS articles."
+description = "Local-first reader for PDFs, EPUBs, and RSS with markdown export."
 authors = ["Fundamentals"]
 license = "UNLICENSED"
 homepage = "https://github.com/sapienskid/hodor"

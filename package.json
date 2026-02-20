@@ -1,16 +1,16 @@
 {
     "name": "theorem",
-    "description": "Local-first reader for EPUB, MOBI, AZW, FB2, CBZ, PDF, and RSS articles.",
+    "description": "Local-first reader for PDFs, EPUBs, and RSS with highlights and Markdown export.",
     "private": true,
     "author": "Fundamentals",
-    "license": "UNLICENSED",
-    "homepage": "https://github.com/sapienskid/hodor",
+    "license": "MIT",
+    "homepage": "https://github.com/sapienskid/theorem",
     "repository": {
         "type": "git",
-        "url": "https://github.com/sapienskid/hodor.git"
+        "url": "https://github.com/sapienskid/theorem.git"
     },
     "bugs": {
-        "url": "https://github.com/sapienskid/hodor/issues"
+        "url": "https://github.com/sapienskid/theorem/issues"
     },
     "packageManager": "pnpm@10.18.1",
     "scripts": {
