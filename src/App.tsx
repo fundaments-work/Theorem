@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import {
@@ -10,6 +10,7 @@ import {
     cn,
 } from "./core";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
+import { OnboardingFlow } from "./features/onboarding";
 
 const LibraryPage = lazy(() =>
     import("./features/library").then((module) => ({ default: module.LibraryPage })),
@@ -66,6 +67,12 @@ function App() {
     const mainScrollRef = useRef<HTMLElement>(null);
     const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
     const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
+    const hasCompletedOnboarding = useSettingsStore((state) => state.settings.hasCompletedOnboarding);
+    const updateSettings = useSettingsStore((state) => state.updateSettings);
+
+    const handleOnboardingComplete = useCallback(() => {
+        updateSettings({ hasCompletedOnboarding: true });
+    }, [updateSettings]);
 
     useEffect(() => {
         if (currentRoute === "vocabulary" && !vocabularyEnabled) {
@@ -223,6 +230,11 @@ function App() {
     };
 
     // Reader mode: full screen without sidebar
+    // Onboarding flow for first-time users
+    if (!hasCompletedOnboarding) {
+        return <OnboardingFlow onComplete={handleOnboardingComplete} />;
+    }
+
     if (isReaderMode) {
         return (
             <Suspense fallback={<ReaderFallback />}>

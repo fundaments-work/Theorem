@@ -89,6 +89,7 @@ const defaultAppSettings: AppSettings = {
     readerSettings: defaultReaderSettings,
     vocabulary: defaultVocabularySettings,
     vault: defaultVaultSettings,
+    hasCompletedOnboarding: false,
 };
 
 // Default reading stats

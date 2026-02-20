@@ -191,6 +191,7 @@ export interface AppSettings {
     readerSettings: ReaderSettings;
     vocabulary: VocabularySettings;
     vault: VaultIntegrationSettings;
+    hasCompletedOnboarding: boolean;
 }
 
 export type DictionaryMode = "online" | "offline" | "auto";
