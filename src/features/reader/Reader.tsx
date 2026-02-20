@@ -936,11 +936,21 @@ function BookReaderPage() {
             left: 12,
         };
     }, [isMobileViewport, isPdfFormat, shouldShowReaderChrome, toolbarHeight]);
+    const colorPickerViewportPadding = useMemo(() => {
+        if (!isMobileViewport) {
+            return readerPopoverPadding;
+        }
+        return {
+            ...readerPopoverPadding,
+            // Keep enough room for chrome, but avoid forcing overlap near selections.
+            bottom: Math.max(16, Math.min(readerPopoverPadding.bottom, 24)),
+        };
+    }, [isMobileViewport, readerPopoverPadding]);
 
     // Highlight state
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [colorPickerMode, setColorPickerMode] = useState<"actions" | "dictionary">("actions");
-    const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
+    const [colorPickerPosition, setColorPickerPosition] = useState<{ x: number; y: number; height?: number }>({ x: 0, y: 0 });
     const [selectedText, setSelectedText] = useState('');
     const [selectedCfi, setSelectedCfi] = useState('');
     const [activeAnnotation, setActiveAnnotation] = useState<Annotation | null>(null);
@@ -1313,6 +1323,42 @@ function BookReaderPage() {
             return;
         }
 
+        const resolvePickerPosition = (anchor?: Range | MouseEvent) => {
+            if (anchor && 'getBoundingClientRect' in anchor) {
+                const rect = anchor.getBoundingClientRect();
+                let normalizedLeft = rect.left;
+                let normalizedTop = rect.top;
+
+                // Ranges from foliate iframes report coordinates in iframe space.
+                // Convert to top-level viewport so fixed overlays align correctly.
+                const rangeDocument = anchor.startContainer?.ownerDocument;
+                const frameElement = rangeDocument?.defaultView?.frameElement;
+                if (frameElement instanceof HTMLElement) {
+                    const frameRect = frameElement.getBoundingClientRect();
+                    normalizedLeft += frameRect.left;
+                    normalizedTop += frameRect.top;
+                }
+
+                return {
+                    x: normalizedLeft + rect.width / 2,
+                    y: normalizedTop,
+                    height: Math.max(rect.height, 24),
+                };
+            }
+
+            if (anchor && 'clientX' in anchor) {
+                return {
+                    x: anchor.clientX,
+                    y: anchor.clientY,
+                };
+            }
+
+            return {
+                x: window.innerWidth / 2,
+                y: window.innerHeight / 3,
+            };
+        };
+
         // Robust duplicate detection: check CFI (exact or partial), then text content
         // This prevents duplicates when CFIs vary slightly for the same text
         let existingAnnotation = freshAnnotations.find(a => {
@@ -1354,22 +1400,9 @@ function BookReaderPage() {
             setSelectedCfi(existingAnnotation.location); // Use stored location for consistency
             setSelectedText(existingAnnotation.selectedText || text || '');
 
-            // Position color picker - improved positioning logic
-            if (rangeOrEvent && 'clientX' in rangeOrEvent) {
-                // Mouse event - position near click
-                const mouseEvent = rangeOrEvent as MouseEvent;
-                debug('[Reader] Positioning color picker from mouse event:', mouseEvent.clientX, mouseEvent.clientY);
-                setColorPickerPosition({ x: mouseEvent.clientX, y: mouseEvent.clientY });
-            } else if (rangeOrEvent && 'getBoundingClientRect' in rangeOrEvent) {
-                // Range object - position at top-center of range
-                const rect = rangeOrEvent.getBoundingClientRect();
-                debug('[Reader] Positioning color picker from range rect:', rect.left, rect.top, rect.width, rect.height);
-                setColorPickerPosition({ x: rect.left + rect.width / 2, y: rect.top });
-            } else {
-                // Fallback to center of screen
-                debug('[Reader] Positioning color picker at screen center (fallback)');
-                setColorPickerPosition({ x: window.innerWidth / 2, y: window.innerHeight / 3 });
-            }
+            const pickerPosition = resolvePickerPosition(rangeOrEvent);
+            debug('[Reader] Positioning color picker:', pickerPosition);
+            setColorPickerPosition(pickerPosition);
 
             setColorPickerMode("actions");
             setDictionaryLookupTerm('');
@@ -1392,19 +1425,9 @@ function BookReaderPage() {
             setSelectedCfi(cfi);
             setSelectedText(text);
 
-            // Position color picker near selection - improved positioning logic
-            if (rangeOrEvent && 'clientX' in rangeOrEvent) {
-                const mouseEvent = rangeOrEvent as MouseEvent;
-                debug('[Reader] Positioning color picker for new selection from mouse:', mouseEvent.clientX, mouseEvent.clientY);
-                setColorPickerPosition({ x: mouseEvent.clientX, y: mouseEvent.clientY });
-            } else if (rangeOrEvent && 'getBoundingClientRect' in rangeOrEvent) {
-                const rect = rangeOrEvent.getBoundingClientRect();
-                debug('[Reader] Positioning color picker for new selection from range:', rect.left, rect.top);
-                setColorPickerPosition({ x: rect.left + rect.width / 2, y: rect.top });
-            } else {
-                debug('[Reader] Positioning color picker at screen center (fallback)');
-                setColorPickerPosition({ x: window.innerWidth / 2, y: window.innerHeight / 3 });
-            }
+            const pickerPosition = resolvePickerPosition(rangeOrEvent);
+            debug('[Reader] Positioning color picker:', pickerPosition);
+            setColorPickerPosition(pickerPosition);
 
             setColorPickerMode("actions");
             setDictionaryLookupTerm('');
@@ -2074,7 +2097,7 @@ function BookReaderPage() {
                         onDefine={handleDefineSelection}
                         onBookmark={handleBookmarkFromSelection}
                         onDelete={editingHighlightId ? handleDeleteFromColorPicker : undefined}
-                        viewportPadding={readerPopoverPadding}
+                        viewportPadding={colorPickerViewportPadding}
                         dictionary={colorPickerMode === "dictionary"
                             ? {
                                 term: dictionaryLookupTerm,

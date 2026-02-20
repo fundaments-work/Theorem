@@ -507,7 +507,7 @@ export function ArticleViewer({
     const [headings, setHeadings] = useState<ArticleHeading[]>([]);
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [colorPickerMode, setColorPickerMode] = useState<"actions" | "dictionary">("actions");
-    const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
+    const [colorPickerPosition, setColorPickerPosition] = useState<{ x: number, y: number, height?: number }>({ x: 0, y: 0 });
     const [selectedText, setSelectedText] = useState("");
     const [showNoteEditor, setShowNoteEditor] = useState(false);
     const [noteEditorPosition, setNoteEditorPosition] = useState({ x: 0, y: 0 });
@@ -831,7 +831,7 @@ export function ArticleViewer({
         showNoteEditor,
     ]);
 
-    const handleTextSelect = useCallback((text: string, position: { x: number; y: number }, range: Range) => {
+    const handleTextSelect = useCallback((text: string, position: { x: number; y: number; height?: number }, range: Range) => {
         const normalizedText = text.trim();
         if (!normalizedText) {
             return;

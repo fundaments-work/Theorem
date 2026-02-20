@@ -434,6 +434,7 @@ export class FoliateEngine {
                     // Enable pointer events so the highlight is clickable
                     g.style.pointerEvents = 'all';
                     g.style.cursor = 'pointer';
+                    g.style.touchAction = 'manipulation';
                     
                     for (const rect of rects) {
                         const el = doc.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -445,10 +446,8 @@ export class FoliateEngine {
                         g.appendChild(el);
                     }
                     
-                    // Add click handler directly to the highlight group
-                    // This ensures clicks on highlights are properly detected
-                    g.addEventListener('click', (e: Event) => {
-                        const mouseEvent = e as MouseEvent;
+                    const activateHighlight = (e: Event) => {
+                        const sourceEvent = e as MouseEvent;
                         console.debug('[FoliateEngine] Highlight clicked:', annotationValue);
                         e.stopPropagation();
                         e.preventDefault();
@@ -460,14 +459,33 @@ export class FoliateEngine {
                         if (clickedAnnotation && this.options.onTextSelected) {
                             // Get bounding rect for positioning
                             const firstRect = rects[0];
+                            const frameElement = doc.defaultView?.frameElement;
+                            const frameRect = frameElement instanceof HTMLElement
+                                ? frameElement.getBoundingClientRect()
+                                : null;
+                            const frameOffsetX = frameRect?.left ?? 0;
+                            const frameOffsetY = frameRect?.top ?? 0;
                             const syntheticEvent = new MouseEvent('click', {
-                                clientX: firstRect ? firstRect.left + firstRect.width / 2 : mouseEvent.clientX,
-                                clientY: firstRect ? firstRect.top : mouseEvent.clientY,
+                                clientX: firstRect
+                                    ? frameOffsetX + firstRect.left + firstRect.width / 2
+                                    : frameOffsetX + sourceEvent.clientX,
+                                clientY: firstRect
+                                    ? frameOffsetY + firstRect.top
+                                    : frameOffsetY + sourceEvent.clientY,
                                 bubbles: true
                             });
                             
                             console.debug('[FoliateEngine] Triggering onTextSelected for clicked highlight:', clickedAnnotation.id);
                             this.options.onTextSelected(clickedAnnotation.location, clickedAnnotation.selectedText || '', syntheticEvent);
+                        }
+                    };
+
+                    // Mobile browsers may not dispatch `click` reliably inside SVG overlays.
+                    g.addEventListener('click', activateHighlight);
+                    g.addEventListener('touchend', activateHighlight, { passive: false });
+                    g.addEventListener('pointerup', (event: PointerEvent) => {
+                        if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+                            activateHighlight(event);
                         }
                     });
                     
@@ -497,18 +515,30 @@ export class FoliateEngine {
             
             if (annotation) {
                 console.debug('[FoliateEngine] Found annotation for click:', annotation.id, annotation.type);
-                // Create synthetic event for positioning
-                const rect = range?.getBoundingClientRect();
-                console.debug('[FoliateEngine] Annotation click rect:', rect);
-                const syntheticEvent = new MouseEvent('click', {
-                    clientX: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
-                    clientY: rect ? rect.top + rect.height / 2 : window.innerHeight / 2,
-                    bubbles: true
-                });
-                
                 // Call the callback with annotation data
                 if (this.options.onTextSelected) {
-                    this.options.onTextSelected(annotation.location, annotation.selectedText || '', syntheticEvent);
+                    if (range && typeof range.cloneRange === 'function') {
+                        this.options.onTextSelected(annotation.location, annotation.selectedText || '', range.cloneRange());
+                    } else {
+                        const rect = range?.getBoundingClientRect?.();
+                        let rectLeft = rect?.left ?? 0;
+                        let rectTop = rect?.top ?? 0;
+                        if (range) {
+                            const rangeDoc = range.startContainer?.ownerDocument;
+                            const frameElement = rangeDoc?.defaultView?.frameElement;
+                            if (frameElement instanceof HTMLElement) {
+                                const frameRect = frameElement.getBoundingClientRect();
+                                rectLeft += frameRect.left;
+                                rectTop += frameRect.top;
+                            }
+                        }
+                        const syntheticEvent = new MouseEvent('click', {
+                            clientX: rect ? rectLeft + rect.width / 2 : window.innerWidth / 2,
+                            clientY: rect ? rectTop : window.innerHeight / 2,
+                            bubbles: true
+                        });
+                        this.options.onTextSelected(annotation.location, annotation.selectedText || '', syntheticEvent);
+                    }
                 }
             } else {
                 console.warn('[FoliateEngine] No annotation found for CFI:', value?.substring(0, 50));
@@ -1553,6 +1583,10 @@ export class FoliateEngine {
                         // Try to find the range for CFI generation
                         const doc = content.doc;
                         const selection = doc.getSelection();
+                        const frameElement = doc.defaultView?.frameElement;
+                        const frameRect = frameElement instanceof HTMLElement
+                            ? frameElement.getBoundingClientRect()
+                            : null;
                         
                         if (selection && !selection.isCollapsed) {
                             try {
@@ -1560,15 +1594,25 @@ export class FoliateEngine {
                                 const cfi = this.getCFIFromRange(sectionIndex, range);
                                 
                                 if (cfi) {
-                                    // Create synthetic mouse event
-                                    const syntheticEvent = new MouseEvent('mouseup', {
-                                        clientX: clientX || (rect?.left + rect?.width / 2) || 0,
-                                        clientY: clientY || (rect?.top) || 0,
-                                        bubbles: true
-                                    });
-                                    
                                     console.debug('[FoliateEngine] Calling callback with CFI:', cfi);
-                                    callback(cfi, text, syntheticEvent);
+                                    try {
+                                        callback(cfi, text, range.cloneRange());
+                                    } catch {
+                                        const syntheticEvent = new MouseEvent('mouseup', {
+                                            clientX: (
+                                                frameRect
+                                                    ? frameRect.left + (clientX || (rect?.left + rect?.width / 2) || 0)
+                                                    : (clientX || (rect?.left + rect?.width / 2) || 0)
+                                            ),
+                                            clientY: (
+                                                frameRect
+                                                    ? frameRect.top + (clientY || (rect?.top) || 0)
+                                                    : (clientY || (rect?.top) || 0)
+                                            ),
+                                            bubbles: true
+                                        });
+                                        callback(cfi, text, syntheticEvent);
+                                    }
                                 }
                             } catch (err) {
                                 console.warn('[FoliateEngine] Error getting CFI from postMessage selection:', err);
@@ -1662,6 +1706,13 @@ export class FoliateEngine {
                 console.warn('[FoliateEngine] Cannot access iframe content for section', index);
                 return;
             }
+
+            if (doc.documentElement) {
+                doc.documentElement.style.touchAction = 'manipulation';
+            }
+            if (doc.body) {
+                doc.body.style.touchAction = 'manipulation';
+            }
             
             console.debug('[FoliateEngine] Attaching listeners to iframe element for section', index);
             
@@ -1729,19 +1780,23 @@ export class FoliateEngine {
                         }
                         lastSelectionKey = selectionKey;
 
-                        const rect = range.getBoundingClientRect();
-                        const point = getEventPoint(event) ?? {
-                            x: rect.left + rect.width / 2,
-                            y: rect.top,
-                        };
-                        const syntheticEvent = new MouseEvent('mouseup', {
-                            clientX: point.x,
-                            clientY: point.y,
-                            bubbles: true,
-                        });
-
                         lastSelectionCapturedAt = Date.now();
-                        callback(cfi, text, syntheticEvent);
+                        try {
+                            callback(cfi, text, range.cloneRange());
+                        } catch {
+                            const rect = range.getBoundingClientRect();
+                            const point = getEventPoint(event) ?? {
+                                x: rect.left + rect.width / 2,
+                                y: rect.top,
+                            };
+                            const iframeRect = iframe.getBoundingClientRect();
+                            const syntheticEvent = new MouseEvent('mouseup', {
+                                clientX: iframeRect.left + point.x,
+                                clientY: iframeRect.top + point.y,
+                                bubbles: true,
+                            });
+                            callback(cfi, text, syntheticEvent);
+                        }
                     } catch (err) {
                         console.warn('[FoliateEngine] Error while capturing iframe selection:', err);
                     }
@@ -1766,6 +1821,13 @@ export class FoliateEngine {
                 },
                 true,
             );
+
+            const suppressDoubleTapZoom = (event: Event) => {
+                event.preventDefault();
+            };
+
+            doc.addEventListener('dblclick', suppressDoubleTapZoom, true);
+            win.addEventListener('dblclick', suppressDoubleTapZoom, true);
 
             win.addEventListener(
                 'pointerdown',

@@ -19,7 +19,7 @@ interface ArticleReaderContentProps {
     wordSpacing: number;
     contentRef: RefObject<HTMLDivElement | null>;
     scrollContainerRef: RefObject<HTMLDivElement | null>;
-    onTextSelect: (text: string, position: { x: number; y: number }, range: Range) => void;
+    onTextSelect: (text: string, position: { x: number; y: number; height?: number }, range: Range) => void;
     onHeadingsChange: (headings: ArticleHeading[]) => void;
     /** Pre-sanitized HTML string. When provided, the component skips internal
      *  sanitization and uses this value directly. This allows the parent to
@@ -138,6 +138,7 @@ export function ArticleReaderContent({
         onTextSelect(text, {
             x: rect.left + rect.width / 2,
             y: rect.top,
+            height: Math.max(rect.height, 24),
         }, range.cloneRange());
     }, [contentRef, onTextSelect]);
 

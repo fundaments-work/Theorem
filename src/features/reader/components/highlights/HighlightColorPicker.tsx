@@ -31,7 +31,7 @@ interface HighlightDictionaryViewState {
 
 interface HighlightColorPickerProps {
     isOpen: boolean;
-    position: { x: number; y: number };
+    position: { x: number; y: number; height?: number };
     currentColor?: HighlightColor | null;
     onSelectColor: (color: HighlightColor) => void;
     onAddNote: () => void;
@@ -49,17 +49,17 @@ interface HighlightColorPickerProps {
 }
 
 // Color configurations with proper highlight styling
-const COLOR_OPTIONS: { 
+const COLOR_OPTIONS: {
     color: HighlightColor;
     label: string;
 }[] = [
-    { color: "yellow", label: HIGHLIGHT_COLOR_TOKENS.yellow.label },
-    { color: "green", label: HIGHLIGHT_COLOR_TOKENS.green.label },
-    { color: "blue", label: HIGHLIGHT_COLOR_TOKENS.blue.label },
-    { color: "red", label: HIGHLIGHT_COLOR_TOKENS.red.label },
-    { color: "orange", label: HIGHLIGHT_COLOR_TOKENS.orange.label },
-    { color: "purple", label: HIGHLIGHT_COLOR_TOKENS.purple.label },
-];
+        { color: "yellow", label: HIGHLIGHT_COLOR_TOKENS.yellow.label },
+        { color: "green", label: HIGHLIGHT_COLOR_TOKENS.green.label },
+        { color: "blue", label: HIGHLIGHT_COLOR_TOKENS.blue.label },
+        { color: "red", label: HIGHLIGHT_COLOR_TOKENS.red.label },
+        { color: "orange", label: HIGHLIGHT_COLOR_TOKENS.orange.label },
+        { color: "purple", label: HIGHLIGHT_COLOR_TOKENS.purple.label },
+    ];
 
 // Animation keyframes
 const ANIMATION_STYLES = `
@@ -158,11 +158,14 @@ export function HighlightColorPicker({
             const rect = popup.getBoundingClientRect();
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
-            const padding = 12;
-            const leftBound = Math.max(padding, viewportPadding?.left ?? padding);
-            const rightBound = Math.min(viewportWidth - padding, viewportWidth - (viewportPadding?.right ?? padding));
-            const topBound = Math.max(padding, viewportPadding?.top ?? padding);
-            const bottomBound = Math.min(viewportHeight - padding, viewportHeight - (viewportPadding?.bottom ?? padding));
+            const isMobileViewport = viewportWidth <= 768;
+            const boundaryPadding = 12;
+            const leftBound = Math.max(boundaryPadding, viewportPadding?.left ?? boundaryPadding);
+            const rightBound = Math.min(viewportWidth - boundaryPadding, viewportWidth - (viewportPadding?.right ?? boundaryPadding));
+            const softTopBound = Math.max(boundaryPadding, viewportPadding?.top ?? boundaryPadding);
+            const softBottomBound = Math.min(viewportHeight - boundaryPadding, viewportHeight - (viewportPadding?.bottom ?? boundaryPadding));
+            const hardTopBound = boundaryPadding;
+            const hardBottomBound = viewportHeight - boundaryPadding;
 
             let { x, y } = position;
 
@@ -177,23 +180,95 @@ export function HighlightColorPicker({
                 x = leftBound;
             }
 
-            // Prefer showing above the selection so native selection handles stay visible.
-            const spaceAbove = position.y - topBound;
-            const spaceBelow = bottomBound - position.y;
-            const verticalGap = 12;
+            const clampY = (value: number, top: number, bottom: number) => {
+                if (value < top) return top;
+                if (value + rect.height > bottom) return bottom - rect.height;
+                return value;
+            };
+            const fitsY = (value: number, top: number, bottom: number) => (
+                value >= top && value + rect.height <= bottom
+            );
+            const overlapWithSelection = (popupTop: number, selectionTop: number, selectionBottom: number) => {
+                const popupBottom = popupTop + rect.height;
+                return Math.max(0, Math.min(popupBottom, selectionBottom) - Math.max(popupTop, selectionTop));
+            };
 
-            if (spaceAbove >= rect.height + verticalGap || spaceAbove > spaceBelow) {
-                y = position.y - rect.height - verticalGap; // Show above
+            // Flip above/below based on selection position with a guaranteed visual gap.
+            const fallbackSelectionHeight = isMobileViewport ? 32 : 24;
+            const selectionHeight = Math.max(position.height ?? fallbackSelectionHeight, fallbackSelectionHeight);
+            const inferredSelectionTop = position.height === undefined
+                ? position.y - selectionHeight / 2
+                : position.y;
+            const selectionTop = Math.max(hardTopBound, Math.min(inferredSelectionTop, hardBottomBound - 1));
+            const selectionBottom = Math.min(hardBottomBound, selectionTop + selectionHeight);
+            const softViewportHeight = Math.max(softBottomBound - softTopBound, 1);
+            const isLargeSelection = selectionHeight >= softViewportHeight * 0.55;
+
+            // Mobile-first behavior for select-all / page-sized selections:
+            // keep the overlay centered instead of pushing it into status/title bars.
+            if (isLargeSelection) {
+                x = (viewportWidth - rect.width) / 2;
+                if (x + rect.width > rightBound) {
+                    x = rightBound - rect.width;
+                }
+                if (x < leftBound) {
+                    x = leftBound;
+                }
+
+                y = clampY(
+                    softTopBound + (softViewportHeight - rect.height) / 2,
+                    softTopBound,
+                    softBottomBound,
+                );
+                setAdjustedPosition({ x, y });
+                return;
+            }
+
+            const verticalGap = isMobileViewport ? 24 : 14;
+            const viewportMidpointY = (softTopBound + softBottomBound) / 2;
+            const preferBelow = selectionTop < viewportMidpointY;
+            const yBelow = selectionBottom + verticalGap;
+            const yAbove = selectionTop - rect.height - verticalGap;
+            const canPlaceBelowSoft = fitsY(yBelow, softTopBound, softBottomBound);
+            const canPlaceAboveSoft = fitsY(yAbove, softTopBound, softBottomBound);
+            const canPlaceBelowHard = fitsY(yBelow, hardTopBound, hardBottomBound);
+            const canPlaceAboveHard = fitsY(yAbove, hardTopBound, hardBottomBound);
+
+            if (preferBelow && canPlaceBelowSoft) {
+                y = yBelow;
+            } else if (!preferBelow && canPlaceAboveSoft) {
+                y = yAbove;
+            } else if (canPlaceBelowSoft) {
+                y = yBelow;
+            } else if (canPlaceAboveSoft) {
+                y = yAbove;
+            } else if (preferBelow && canPlaceBelowHard) {
+                y = yBelow;
+            } else if (!preferBelow && canPlaceAboveHard) {
+                y = yAbove;
+            } else if (canPlaceBelowHard) {
+                y = yBelow;
+            } else if (canPlaceAboveHard) {
+                y = yAbove;
             } else {
-                y = position.y + verticalGap; // Show below
+                const belowClamped = clampY(yBelow, hardTopBound, hardBottomBound);
+                const aboveClamped = clampY(yAbove, hardTopBound, hardBottomBound);
+                const belowOverlap = overlapWithSelection(belowClamped, selectionTop, selectionBottom);
+                const aboveOverlap = overlapWithSelection(aboveClamped, selectionTop, selectionBottom);
+
+                if (preferBelow) {
+                    y = belowOverlap <= aboveOverlap ? belowClamped : aboveClamped;
+                } else {
+                    y = aboveOverlap <= belowOverlap ? aboveClamped : belowClamped;
+                }
             }
 
             // Ensure vertical bounds
-            if (y + rect.height > bottomBound) {
-                y = bottomBound - rect.height;
+            if (y + rect.height > hardBottomBound) {
+                y = hardBottomBound - rect.height;
             }
-            if (y < topBound) {
-                y = topBound;
+            if (y < hardTopBound) {
+                y = hardTopBound;
             }
 
             setAdjustedPosition({ x, y });
@@ -279,7 +354,7 @@ export function HighlightColorPicker({
                     handleClose();
                 }
             }
-            
+
             // Number keys 1-6 for quick color selection (only when not confirming delete)
             if (!showDeleteConfirm && !isDictionaryView) {
                 const num = parseInt(e.key);
@@ -315,7 +390,7 @@ export function HighlightColorPicker({
         const handleScrollOrResize = () => {
             handleClose();
         };
-        
+
         window.addEventListener('scroll', handleScrollOrResize, true);
         window.addEventListener('resize', handleScrollOrResize);
 
@@ -570,18 +645,18 @@ export function HighlightColorPicker({
                                     onClick={() => {
                                         onDefine?.();
                                     }}
-                                className={cn(
-                                    "flex items-center justify-center gap-1.5",
-                                    "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                    "rounded-lg",
-                                    "bg-[var(--color-surface-variant)]",
-                                    "text-[color:var(--color-text-secondary)]",
-                                    "hover:bg-[var(--color-surface-muted)]",
-                                    "hover:text-[color:var(--color-text-primary)]",
-                                    "transition-colors duration-150",
-                                    "active:scale-95",
-                                    !onDefine && "opacity-50 cursor-not-allowed"
-                                )}
+                                    className={cn(
+                                        "flex items-center justify-center gap-1.5",
+                                        "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
+                                        "rounded-lg",
+                                        "bg-[var(--color-surface-variant)]",
+                                        "text-[color:var(--color-text-secondary)]",
+                                        "hover:bg-[var(--color-surface-muted)]",
+                                        "hover:text-[color:var(--color-text-primary)]",
+                                        "transition-colors duration-150",
+                                        "active:scale-95",
+                                        !onDefine && "opacity-50 cursor-not-allowed"
+                                    )}
                                     disabled={!onDefine}
                                 >
                                     <Languages className="w-3 h-3" />
