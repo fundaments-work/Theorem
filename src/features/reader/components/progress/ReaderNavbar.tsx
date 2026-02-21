@@ -285,7 +285,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
             <div className="flex items-center gap-3">
                 <button
                     onClick={onToggleToc}
-                    className="p-1 px-[0.14rem] -mx-0.5 mt-[-0.20rem] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] rounded-md transition-colors"
+                    className="p-1 px-[0.14rem] -mx-0.5 mt-[-0.20rem] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors"
                 >
                     <List size={20} />
                 </button>

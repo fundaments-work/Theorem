@@ -54,7 +54,7 @@ function PageFallback() {
 function ReaderFallback() {
     return (
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-[var(--color-background)]">
-            <div className="w-12 h-12 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
+            <div className="w-12 h-12 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
             <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">Opening reader...</p>
         </div>
     );

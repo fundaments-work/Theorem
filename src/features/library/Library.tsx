@@ -278,7 +278,7 @@ function BookCard({
                     {/* Cover Image */}
                     <div
                         className={cn(
-                            "relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden rounded-sm",
+                            "relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden",
                             "border border-[var(--color-border)]",
                             "transition-all duration-300 group-hover:shadow-lg group-hover:-translate-y-1 cursor-pointer"
                         )}
@@ -338,12 +338,12 @@ function BookCard({
         return (
             <ContextMenu items={contextMenuItems}>
                 <div
-                    className="group flex w-full items-center gap-3 rounded-lg p-3 transition-colors hover:bg-[var(--color-surface-muted)] sm:gap-4 cursor-pointer select-none"
+                    className="group flex w-full items-center gap-3 p-3 transition-colors hover:bg-[var(--color-surface-muted)] sm:gap-4 cursor-pointer select-none"
                     onClick={handleCardClick}
                 >
                     {/* Cover Image */}
                     <div className={cn(
-                        "relative w-12 h-16 flex-shrink-0 bg-[var(--color-surface-muted)] overflow-hidden rounded",
+                        "relative w-12 h-16 flex-shrink-0 bg-[var(--color-surface-muted)] overflow-hidden",
                         "border border-[var(--color-border)]"
                     )}>
                         {book.coverPath ? (
@@ -413,7 +413,7 @@ function BookCard({
         <ContextMenu items={contextMenuItems}>
             <div
                 onClick={handleCardClick}
-                className="group relative aspect-[2/3] bg-[var(--color-surface-muted)] overflow-hidden rounded-lg border border-[var(--color-border)] hover:shadow-lg transition-all duration-200 w-full cursor-pointer select-none"
+                className="group relative aspect-[2/3] bg-[var(--color-surface-muted)] overflow-hidden border border-[var(--color-border)] hover:shadow-lg transition-all duration-200 w-full cursor-pointer select-none"
             >
                 {book.coverPath ? (
                     <img
@@ -441,7 +441,7 @@ function BookCard({
                 {/* Favorite Badge */}
                 <div
                     className={cn(
-                        "absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center transition-colors pointer-events-none",
+                        "absolute top-1 right-1 w-5 h-5 flex items-center justify-center transition-colors pointer-events-none",
                         book.isFavorite
                             ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                             : "opacity-0"
@@ -468,7 +468,7 @@ function EmptyLibrary({
 }) {
     return (
         <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-24 text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
+            <div className="w-16 h-16 bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <BookOpen className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
             <h2 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
@@ -548,10 +548,10 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                             <img
                                 src={book.coverPath}
                                 alt={book.title}
-                                className="w-24 h-36 object-cover rounded-lg shadow-md"
+                                className="w-24 h-36 object-cover shadow-md"
                             />
                         ) : (
-                            <div className="w-24 h-36 bg-[var(--color-surface-muted)] rounded-lg flex items-center justify-center">
+                            <div className="w-24 h-36 bg-[var(--color-surface-muted)] flex items-center justify-center">
                                 <BookOpen className="w-8 h-8 text-[color:var(--color-text-muted)]" />
                             </div>
                         )}
@@ -644,7 +644,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
                                     {book.tags.map((tag: string) => (
                                         <span
                                             key={tag}
-                                            className="px-2 py-0.5 text-xs rounded-full bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]"
+                                            className="px-2 py-0.5 text-xs bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]"
                                         >
                                             {tag}
                                         </span>
@@ -658,7 +658,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
             <ModalFooter>
                 <button
                     onClick={onClose}
-                    className="px-4 py-2 rounded-lg bg-[var(--color-surface-muted)] text-sm text-[color:var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors"
+                    className="ui-btn-ghost"
                 >
                     Close
                 </button>
@@ -701,7 +701,7 @@ function AddToShelfModal({
                     onClose();
                 }
             }}
-            className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors text-left"
+            className="w-full flex items-center gap-3 p-3 hover:bg-[var(--color-surface-muted)] transition-colors text-left"
         >
             <FolderOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
             <div className="flex-1">
@@ -742,7 +742,7 @@ function AddToShelfModal({
                                 onChange={(e) => setNewShelfName(e.target.value)}
                                 placeholder="Shelf name..."
                                 className={cn(
-                                    "flex-1 px-3 py-2 rounded-lg",
+                                    "flex-1 px-3 py-2",
                                     "bg-[var(--color-background)] border border-[var(--color-border)]",
                                     "text-sm text-[color:var(--color-text-primary)]",
                                     "focus:outline-none focus:border-[var(--color-accent)]"
@@ -754,11 +754,7 @@ function AddToShelfModal({
                             <button
                                 onClick={handleCreateShelf}
                                 disabled={!newShelfName.trim()}
-                                className={cn(
-                                    "px-4 py-2 rounded-lg bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-sm font-medium",
-                                    "hover:opacity-90 transition-opacity",
-                                    "disabled:opacity-50 disabled:cursor-not-allowed"
-                                )}
+                                className="ui-btn-primary"
                             >
                                 Create
                             </button>
@@ -769,7 +765,7 @@ function AddToShelfModal({
             <ModalFooter>
                 <button
                     onClick={onClose}
-                    className="px-4 py-2 rounded-lg text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] transition-colors"
+                    className="ui-btn-ghost"
                 >
                     Cancel
                 </button>
@@ -1445,7 +1441,7 @@ export function LibraryPage() {
 
                     <button
                         onClick={toggleViewMode}
-                        className={cn(TOOLBAR_BUTTON_BASE, TOOLBAR_ICON_BUTTON, "border-2 rounded-none")}
+                        className={cn(TOOLBAR_BUTTON_BASE, TOOLBAR_ICON_BUTTON, "border-2")}
                         title={`View: ${settings.libraryViewMode}`}
                     >
                         {viewModeIcons[settings.libraryViewMode]}
@@ -1458,7 +1454,7 @@ export function LibraryPage() {
                         <button
                             onClick={handleScanFolder}
                             disabled={isScanning}
-                            className={cn(TOOLBAR_BUTTON_BASE, "px-3 py-2 sm:px-4 border-2 rounded-none")}
+                            className={cn(TOOLBAR_BUTTON_BASE, "px-3 py-2 sm:px-4 border-2")}
                             title="Scan Folder"
                         >
                             {isScanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}

@@ -1338,7 +1338,7 @@ const PageCanvas = memo(function PageCanvas({
             {/* Rendering Spinner */}
             {shouldRender && isRendering && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-accent)]" />
+                    <div className="animate-spin h-8 w-8 border-b-2 border-[var(--color-accent)]" />
                 </div>
             )}
         </div>
@@ -2301,7 +2301,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 {/* Loading State */}
                 {isLoading && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)]">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--color-accent)]"></div>
+                        <div className="animate-spin h-12 w-12 border-b-2 border-[var(--color-accent)]"></div>
                         <p className="mt-4 text-[color:var(--color-text-secondary)]">Loading PDF...</p>
                     </div>
                 )}
@@ -2373,7 +2373,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 </div>
 
                 {!isLoading && !error && totalPages > 0 && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none px-3 py-1.5 rounded-full bg-[var(--color-surface)]/90 backdrop-blur-md border border-[var(--color-border)] text-xs sm:text-sm text-[color:var(--color-text-secondary)] shadow-lg shadow-black/5">
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none px-3 py-1.5 bg-[var(--color-surface)]/90 backdrop-blur-md border border-[var(--color-border)] text-xs sm:text-sm text-[color:var(--color-text-secondary)] shadow-lg shadow-black/5">
                         <span className="font-medium text-[color:var(--color-text-primary)]">{currentPage}</span>
                         <span className="mx-1 text-[color:var(--color-text-muted)]">/</span>
                         <span>{totalPages}</span>

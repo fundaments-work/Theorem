@@ -82,15 +82,15 @@ export function PDFFloatingToolbar({
                 )}
             >
                 {/* Tools */}
-                <div className="flex flex-col items-center gap-2 p-2 rounded-2xl bg-[var(--color-surface)]/90 backdrop-blur-xl border border-[var(--color-border)] shadow-2xl">
+                <div className="flex flex-col items-center gap-2 p-2 bg-[var(--color-surface)]/90 backdrop-blur-xl border border-[var(--color-border)] shadow-2xl">
                     {/* Tool Buttons */}
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'highlight' ? 'none' : 'highlight')}
                             className={cn(
-                                "relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200",
+                                "relative w-10 h-10 flex items-center justify-center transition-all duration-200",
                                 annotationMode === 'highlight'
-                                    ? "bg-[var(--color-accent)] text-white shadow-lg scale-105"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
                             title="Highlight"
@@ -101,9 +101,9 @@ export function PDFFloatingToolbar({
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'pen' ? 'none' : 'pen')}
                             className={cn(
-                                "relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200",
+                                "relative w-10 h-10 flex items-center justify-center transition-all duration-200",
                                 annotationMode === 'pen'
-                                    ? "bg-[var(--color-accent)] text-white shadow-lg scale-105"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
                             title="Pen"
@@ -114,9 +114,9 @@ export function PDFFloatingToolbar({
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'text' ? 'none' : 'text')}
                             className={cn(
-                                "relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200",
+                                "relative w-10 h-10 flex items-center justify-center transition-all duration-200",
                                 annotationMode === 'text'
-                                    ? "bg-[var(--color-accent)] text-white shadow-lg scale-105"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
                             title="Text"
@@ -127,9 +127,9 @@ export function PDFFloatingToolbar({
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'erase' ? 'none' : 'erase')}
                             className={cn(
-                                "relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200",
+                                "relative w-10 h-10 flex items-center justify-center transition-all duration-200",
                                 annotationMode === 'erase'
-                                    ? "bg-[var(--color-accent)] text-white shadow-lg scale-105"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
                             title="Eraser"
@@ -150,7 +150,7 @@ export function PDFFloatingToolbar({
                                     key={swatch.color}
                                     onClick={() => onColorChange(swatch.color)}
                                     className={cn(
-                                        "w-6 h-6 rounded-full transition-transform ring-2 ring-transparent",
+                                        "w-6 h-6 transition-transform ring-2 ring-transparent",
                                         activeColor === swatch.color ? "scale-110 ring-[var(--color-border)] shadow-sm" : "hover:scale-110"
                                     )}
                                     style={{ backgroundColor: swatch.fill }}
@@ -166,10 +166,10 @@ export function PDFFloatingToolbar({
             <button
                 onClick={toggleOpen}
                 className={cn(
-                    "pointer-events-auto flex items-center justify-center w-14 h-14 rounded-2xl shadow-xl transition-all duration-300",
+                    "pointer-events-auto flex items-center justify-center w-14 h-14 shadow-xl transition-all duration-300",
                     isOpen
                         ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rotate-90"
-                        : "bg-[var(--color-accent)] text-white hover:scale-105 hover:shadow-2xl hover:-translate-y-0.5"
+                        : "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] hover:scale-105 hover:shadow-2xl hover:-translate-y-0.5"
                 )}
                 aria-label={isOpen ? "Close tools" : "Open tools"}
             >

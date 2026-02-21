@@ -49,7 +49,7 @@ function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" }) {
 
     return (
         <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
+            <div className="w-16 h-16 bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <Icon className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
             <h2 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
@@ -355,7 +355,7 @@ export function AnnotationsPage() {
                             className={cn(
                                 "border border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium transition-colors",
                                 activeFilter === tab.id
-                                    ? "bg-[var(--color-accent)] text-white !text-white"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                                     : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                             )}
                         >

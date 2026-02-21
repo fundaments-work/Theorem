@@ -40,20 +40,20 @@ export class ErrorBoundary extends Component<Props, State> {
                         <p className="text-[color:var(--color-text-secondary)] mb-4">
                             The application encountered an unexpected error.
                         </p>
-                        <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-error)_26%,var(--color-border))] bg-[color-mix(in_srgb,var(--color-error)_8%,var(--color-surface))] p-4 mb-4 overflow-auto">
+                        <div className="border border-[color-mix(in_srgb,var(--color-error)_26%,var(--color-border))] bg-[color-mix(in_srgb,var(--color-error)_8%,var(--color-surface))] p-4 mb-4 overflow-auto">
                             <p className="font-mono text-sm text-[color:var(--color-error)] whitespace-pre-wrap break-words">
                                 <strong>Error:</strong> {this.state.error?.message}
                             </p>
                         </div>
                         {this.state.error?.stack && (
-                            <pre className="rounded-lg bg-[var(--color-surface-muted)] text-[color:var(--color-error)] p-4 overflow-auto text-xs max-h-[var(--layout-error-stack-max-height)] mb-4">
+                            <pre className="bg-[var(--color-surface-muted)] text-[color:var(--color-error)] p-4 overflow-auto text-xs max-h-[var(--layout-error-stack-max-height)] mb-4">
                                 {this.state.error.stack}
                             </pre>
                         )}
                         {this.state.errorInfo?.componentStack && (
                             <div className="mb-4">
                                 <p className="font-semibold mb-2 text-[color:var(--color-text-primary)]">Component Stack:</p>
-                                <pre className="rounded-lg bg-[var(--color-surface-muted)] text-[color:var(--color-warning)] p-4 overflow-auto text-xs max-h-[var(--layout-error-component-stack-max-height)]">
+                                <pre className="bg-[var(--color-surface-muted)] text-[color:var(--color-warning)] p-4 overflow-auto text-xs max-h-[var(--layout-error-component-stack-max-height)]">
                                     {this.state.errorInfo.componentStack}
                                 </pre>
                             </div>

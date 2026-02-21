@@ -375,7 +375,7 @@ export function VocabularyPage() {
                     <div className="flex items-center gap-3 overflow-hidden">
                         <button
                             onClick={handleBackToSources}
-                            className="md:hidden -ml-2 p-1.5 rounded-lg text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                            className="md:hidden -ml-2 p-1.5 text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
@@ -406,7 +406,7 @@ export function VocabularyPage() {
                                             key={term.id}
                                             onClick={() => setSelectedTermId(term.id)}
                                             className={cn(
-                                                "w-full rounded-xl px-4 py-4 text-left transition-all",
+                                                "w-full px-4 py-4 text-left transition-all",
                                                 isSelected
                                                     ? "bg-[var(--color-surface-elevated)] shadow-sm ring-1 ring-[var(--color-border-subtle)]"
                                                     : "hover:bg-[var(--color-surface-muted)]/50"
@@ -455,7 +455,7 @@ export function VocabularyPage() {
                                 <div className="mb-6 flex items-center gap-3 md:hidden">
                                     <button
                                         onClick={() => setSelectedTermId(null)}
-                                        className="p-2 -ml-2 rounded-lg text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                        className="p-2 -ml-2 text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                                     >
                                         <ChevronLeft className="w-6 h-6" />
                                     </button>
@@ -469,7 +469,7 @@ export function VocabularyPage() {
                                         </h2>
                                         <div className="mt-3 flex flex-wrap items-center gap-3">
                                             {selectedTerm.phonetic && (
-                                                <span className="font-mono text-sm text-[color:var(--color-text-secondary)] bg-[var(--color-surface-muted)] px-2 py-1 rounded-md">
+                                                <span className="font-mono text-sm text-[color:var(--color-text-secondary)] bg-[var(--color-surface-muted)] px-2 py-1">
                                                     /{selectedTerm.phonetic}/
                                                 </span>
                                             )}
@@ -480,7 +480,7 @@ export function VocabularyPage() {
                                         {selectedTerm.meanings.map((meaning, idx) => (
                                             <div key={`${meaning.provider}-${idx}`} className="space-y-3">
                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--color-accent)] bg-[var(--color-accent)]/5 px-2 py-1 rounded">
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--color-accent)] bg-[var(--color-accent)]/5 px-2 py-1">
                                                         {meaning.partOfSpeech}
                                                     </span>
                                                     <span className="text-[10px] uppercase text-[color:var(--color-text-muted)] font-semibold tracking-wider opacity-60">
@@ -490,7 +490,7 @@ export function VocabularyPage() {
                                                 <ul className="space-y-4">
                                                     {meaning.definitions.slice(0, 4).map((def) => (
                                                         <li key={def} className="flex gap-4 text-base text-[color:var(--color-text-primary)] leading-relaxed">
-                                                            <span className="shrink-0 text-[color:var(--color-accent)] mt-2.5 h-1.5 w-1.5 rounded-full bg-current opacity-30" />
+                                                            <span className="shrink-0 text-[color:var(--color-accent)] mt-2.5 h-1.5 w-1.5 bg-current opacity-30" />
                                                             <span>{def}</span>
                                                         </li>
                                                     ))}
@@ -502,7 +502,7 @@ export function VocabularyPage() {
                                     <hr className="border-[var(--color-border-subtle)]" />
 
                                     <div className="grid gap-6 sm:grid-cols-2">
-                                        <div className="space-y-4 rounded-2xl bg-[var(--color-surface-muted)]/40 p-5">
+                                        <div className="space-y-4 bg-[var(--color-surface-muted)]/40 p-5">
                                             <div className="space-y-2">
                                                 <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[color:var(--color-text-muted)]">
                                                     <NotebookPen className="w-3.5 h-3.5" />
@@ -570,7 +570,7 @@ export function VocabularyPage() {
                             </div>
                         ) : (
                             <div className="hidden h-full flex-col items-center justify-center text-center p-12 md:flex animate-fade-in opacity-40">
-                                <div className="w-20 h-20 rounded-3xl bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
+                                <div className="w-20 h-20 bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                                     <BookOpenText className="w-10 h-10 text-[color:var(--color-text-muted)]" />
                                 </div>
                                 <h3 className="text-xl font-semibold text-[color:var(--color-text-primary)] mb-2">Select a term</h3>

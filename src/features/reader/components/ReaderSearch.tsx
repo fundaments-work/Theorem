@@ -199,7 +199,7 @@ export function ReaderSearch({
                         <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">Search</h2>
                         <button
                             onClick={onClose}
-                            className="reader-chip w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors hover:opacity-80"
+                            className="reader-chip w-8 h-8 inline-flex items-center justify-center transition-colors hover:opacity-80"
                             aria-label="Close search"
                         >
                             <X className="w-4 h-4" />
@@ -213,13 +213,13 @@ export function ReaderSearch({
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             placeholder="Search in document..."
-                            className="w-full h-10 pl-10 pr-10 bg-[var(--color-background)] rounded-xl text-sm border-2 border-transparent focus:border-[var(--color-accent)] transition-colors outline-none text-[color:var(--color-text-primary)]"
+                            className="w-full h-10 pl-10 pr-10 bg-[var(--color-background)] text-sm border-2 border-transparent focus:border-[var(--color-accent)] transition-colors outline-none text-[color:var(--color-text-primary)]"
                         />
                         {query && (
                             <button
                                 type="button"
                                 onClick={handleClear}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--color-surface-muted)] transition-colors text-[color:var(--color-text-muted)]"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-[var(--color-surface-muted)] transition-colors text-[color:var(--color-text-muted)]"
                             >
                                 <X className="w-3.5 h-3.5" />
                             </button>
@@ -265,7 +265,7 @@ export function ReaderSearch({
                             <button
                                 key={index}
                                 onClick={() => handleNavigate(result.cfi)}
-                                className="w-full flex flex-col gap-1 p-3 rounded-xl hover:bg-[var(--color-background)] transition-colors text-left group"
+                                className="w-full flex flex-col gap-1 p-3 hover:bg-[var(--color-background)] transition-colors text-left group"
                             >
                                 <p
                                     className="text-[var(--font-size-caption)] text-[color:var(--color-text-secondary)] line-clamp-3 leading-relaxed"

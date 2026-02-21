@@ -34,14 +34,14 @@ export function ReaderBookmarks({
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
                     <div className="flex items-center gap-2.5">
-                        <div className="p-1.5 rounded-lg bg-[var(--color-background)] text-[color:var(--color-accent)]">
+                        <div className="p-1.5 bg-[var(--color-background)] text-[color:var(--color-accent)]">
                             <Bookmark className="w-4 h-4 fill-current" />
                         </div>
                         <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">Bookmarks</h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1.5 rounded-xl hover:bg-[var(--color-surface-muted)] transition-colors text-[color:var(--color-text-secondary)]"
+                        className="p-1.5 hover:bg-[var(--color-surface-muted)] transition-colors text-[color:var(--color-text-secondary)]"
                     >
                         <X className="w-4 h-4" />
                     </button>
@@ -51,7 +51,7 @@ export function ReaderBookmarks({
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar max-h-[var(--layout-reader-list-max-height)]">
                     {bookmarks.length === 0 ? (
                         <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center">
-                            <div className="w-12 h-12 rounded-2xl bg-[var(--color-background)] flex items-center justify-center mb-4 text-[color:var(--color-text-muted)]">
+                            <div className="w-12 h-12 bg-[var(--color-background)] flex items-center justify-center mb-4 text-[color:var(--color-text-muted)]">
                                 <Bookmark className="w-6 h-6" />
                             </div>
                             <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)] mb-1">No bookmarks yet</h3>
@@ -64,7 +64,7 @@ export function ReaderBookmarks({
                             {bookmarks.map((bookmark) => (
                                 <div
                                     key={bookmark.id}
-                                    className="group flex flex-col gap-2 p-3 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors cursor-pointer"
+                                    className="group flex flex-col gap-2 p-3 border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors cursor-pointer"
                                     onClick={() => {
                                         onNavigate(bookmark.location);
                                         onClose();
@@ -81,7 +81,7 @@ export function ReaderBookmarks({
                                                 e.stopPropagation();
                                                 removeAnnotation(bookmark.id);
                                             }}
-                                            className="reader-danger-action p-1.5 rounded-lg text-[color:var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
+                                            className="reader-danger-action p-1.5 text-[color:var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>

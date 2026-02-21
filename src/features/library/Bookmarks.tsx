@@ -24,7 +24,7 @@ import {
 function EmptyBookmarks() {
     return (
         <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
+            <div className="w-16 h-16 bg-[var(--color-surface-muted)] flex items-center justify-center mb-6">
                 <Bookmark className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
             </div>
             <h2 className="w-full break-words text-balance text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
@@ -70,10 +70,10 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                         <img
                             src={book.coverPath}
                             alt={book.title}
-                            className="w-10 h-14 object-cover rounded shadow-sm"
+                            className="w-10 h-14 object-cover shadow-sm"
                         />
                     ) : (
-                        <div className="w-10 h-14 bg-[var(--color-surface-muted)] rounded flex items-center justify-center">
+                        <div className="w-10 h-14 bg-[var(--color-surface-muted)] flex items-center justify-center">
                             <BookOpen className="w-4 h-4 text-[color:var(--color-text-muted)]" />
                         </div>
                     )}
@@ -102,7 +102,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                             e.stopPropagation();
                             book && onGoToBookmark(bookmark.bookId, bookmark.location);
                         }}
-                        className="p-2 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+                        className="p-2 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
                         title="Go to bookmark"
                     >
                         <ExternalLink className="w-4 h-4" />
@@ -112,7 +112,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                             e.stopPropagation();
                             await onDelete(bookmark.id);
                         }}
-                        className="p-2 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-error)]"
+                        className="p-2 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-error)]"
                         title="Delete bookmark"
                     >
                         <Trash2 className="w-4 h-4" />
@@ -157,7 +157,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
 
                 {/* Bookmark Icon */}
                 <div className="absolute top-3 right-3">
-                    <div className="w-8 h-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center">
+                    <div className="w-8 h-8 bg-[var(--color-accent)] flex items-center justify-center">
                         <Bookmark className="w-4 h-4 text-[color:var(--color-text-inverse)] fill-[var(--color-text-inverse)]" />
                     </div>
                 </div>
@@ -178,14 +178,14 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                             onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
-                            className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"
+                            className="p-1.5 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"
                             title="Go to bookmark"
                         >
                             <ExternalLink className="w-4 h-4" />
                         </button>
                         <button
                             onClick={async () => await onDelete(bookmark.id)}
-                            className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-error)]"
+                            className="p-1.5 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-error)]"
                             title="Delete bookmark"
                         >
                             <Trash2 className="w-4 h-4" />
@@ -318,11 +318,11 @@ export function BookmarksPage() {
                 />
 
                 {/* View Mode Toggle */}
-                <div className="flex items-center bg-[var(--color-surface-muted)] rounded-lg p-1">
+                <div className="flex items-center bg-[var(--color-surface-muted)] p-1">
                     <button
                         onClick={() => setViewMode("grid")}
                         className={cn(
-                            "p-2 rounded-md transition-colors",
+                            "p-2 transition-colors",
                             viewMode === "grid"
                                 ? "bg-[var(--color-surface)] text-[color:var(--color-text-primary)] shadow-sm"
                                 : "text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
@@ -334,7 +334,7 @@ export function BookmarksPage() {
                     <button
                         onClick={() => setViewMode("list")}
                         className={cn(
-                            "p-2 rounded-md transition-colors",
+                            "p-2 transition-colors",
                             viewMode === "list"
                                 ? "bg-[var(--color-surface)] text-[color:var(--color-text-primary)] shadow-sm"
                                 : "text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"

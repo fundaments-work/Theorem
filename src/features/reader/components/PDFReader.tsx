@@ -70,7 +70,7 @@ interface PDFReaderProps {
 function LoadingState({ message = "Loading book..." }: { message?: string }) {
     return (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)] z-20">
-            <div className="w-12 h-12 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
+            <div className="w-12 h-12 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
             <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">
                 {message}
             </p>
@@ -98,7 +98,7 @@ function ErrorState({
         <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-surface)] z-20">
             <div className="mx-auto w-full max-w-[26rem] min-w-0 flex flex-col items-center gap-4 text-center p-8">
                 <div
-                    className="w-16 h-16 rounded-full flex items-center justify-center"
+                    className="w-16 h-16 flex items-center justify-center"
                     style={{
                         backgroundColor: "color-mix(in srgb, var(--color-error) 14%, var(--color-surface))",
                     }}
@@ -116,7 +116,7 @@ function ErrorState({
                     <button
                         onClick={onRetry}
                         className={cn(
-                            "min-w-[10.5rem] whitespace-nowrap mt-4 px-4 py-2 rounded-lg",
+                            "min-w-[10.5rem] whitespace-nowrap mt-4 px-4 py-2",
                             "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]",
                             "hover:bg-[var(--color-accent-hover)]",
                             "transition-colors text-sm font-medium"

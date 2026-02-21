@@ -56,9 +56,9 @@
     --spacing-3xl: 4.8rem;
     --spacing-4xl: 6rem;
 
-    /* Radius scale */
-    --radius-sm: 0;
+    /* Radius scale - Swiss design (no rounding) */
     --radius-xs: 0;
+    --radius-sm: 0;
     --radius-md: 0;
     --radius-lg: 0;
     --radius-xl: 0;
@@ -635,4 +635,40 @@
 .theme-preview[data-theme="dark"] {
     --reader-bg: #000000;
     --reader-fg: #ffffff;
+}
+
+/* Page-level utility classes */
+.ui-page-title {
+    font-size: 1.45rem;
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    line-height: 1.1;
+    color: var(--color-text-primary);
+}
+
+.ui-section {
+    border: var(--border-width-interactive) solid var(--color-border);
+    background: var(--color-surface);
+}
+
+.ui-card {
+    border: var(--border-width-interactive) solid var(--color-border);
+    background: var(--color-surface);
+}
+
+.ui-error-toast {
+    background: var(--color-error);
+    color: var(--color-text-inverse);
+}
+
+.ui-success-toast {
+    background: var(--color-success);
+    color: var(--color-text-inverse);
+}
+
+/* Focus visible utility */
+.ui-focus-ring:focus-visible {
+    outline: calc(var(--border-width-interactive) * 2) solid var(--color-focus-ring);
+    outline-offset: 2px;
 }

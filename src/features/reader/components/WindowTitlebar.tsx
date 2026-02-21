@@ -134,7 +134,7 @@ function MobileMenu({ isOpen, onClose, items, triggerRef }: MenuProps) {
                 }}
             />
             <div
-                className="absolute right-2 top-full mt-1 z-[161] min-w-[12rem] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-lg backdrop-blur-md"
+                className="absolute right-2 top-full mt-1 z-[161] min-w-[12rem] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-lg backdrop-blur-md"
                 style={{
                     backgroundColor: 'var(--reader-bg, var(--color-surface))',
                     borderColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)',

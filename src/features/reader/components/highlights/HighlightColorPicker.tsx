@@ -427,7 +427,7 @@ export function HighlightColorPicker({
                     "fixed",
                     "bg-[var(--color-surface)]",
                     "border border-[var(--color-border)]",
-                    "rounded-xl shadow-[var(--shadow-md)]",
+                    "shadow-[var(--shadow-md)]",
                     "p-2",
                     isDictionaryView && "w-[20rem] max-w-[calc(100vw-2rem)]",
                     isClosing ? "picker-animate-out" : "picker-animate-in"
@@ -453,7 +453,7 @@ export function HighlightColorPicker({
                     <button
                         onClick={handleClose}
                         className={cn(
-                            "p-1 rounded-md",
+                            "p-1",
                             "text-[color:var(--color-text-muted)]",
                             "hover:bg-[var(--color-surface-muted)]",
                             "hover:text-[color:var(--color-text-primary)]",
@@ -509,7 +509,7 @@ export function HighlightColorPicker({
                             {dictionary.onBack ? (
                                 <button
                                     onClick={dictionary.onBack}
-                                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+                                    className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
                                 >
                                     <ArrowLeft className="h-3.5 w-3.5" />
                                     Back
@@ -526,7 +526,7 @@ export function HighlightColorPicker({
                                     || dictionary.canSaveToVocabulary === false
                                 }
                                 className={cn(
-                                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium",
+                                    "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium",
                                     dictionary.saved
                                         ? "bg-[var(--color-success)]/10 text-[color:var(--color-success)]"
                                         : "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] hover:opacity-90",
@@ -558,7 +558,7 @@ export function HighlightColorPicker({
                                 onClick={handleDeleteCancelled}
                                 className={cn(
                                     "flex-1 px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                    "rounded-lg",
+                                    
                                     "bg-[var(--color-surface-variant)]",
                                     "text-[color:var(--color-text-secondary)]",
                                     "hover:bg-[var(--color-surface-muted)]",
@@ -573,7 +573,7 @@ export function HighlightColorPicker({
                                 onClick={handleDeleteConfirmed}
                                 className={cn(
                                     "reader-danger-action flex-1 px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                    "rounded-lg",
+                                    
                                     "bg-[color-mix(in_srgb,var(--color-error)_10%,transparent)]",
                                     "transition-colors duration-150",
                                     "active:scale-95"
@@ -592,7 +592,7 @@ export function HighlightColorPicker({
                                     key={color}
                                     onClick={() => handleColorClick(color)}
                                     className={cn(
-                                        "w-7 h-7 rounded-lg",
+                                        "w-7 h-7",
                                         "flex items-center justify-center",
                                         "border border-[var(--color-overlay-subtle)]",
                                         "shadow-sm",
@@ -627,7 +627,7 @@ export function HighlightColorPicker({
                                 className={cn(
                                     "flex-1 flex items-center justify-center gap-1.5",
                                     "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                    "rounded-lg",
+                                    
                                     "bg-[var(--color-surface-variant)]",
                                     "text-[color:var(--color-text-secondary)]",
                                     "hover:bg-[var(--color-surface-muted)]",
@@ -648,7 +648,7 @@ export function HighlightColorPicker({
                                     className={cn(
                                         "flex items-center justify-center gap-1.5",
                                         "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                        "rounded-lg",
+                                        
                                         "bg-[var(--color-surface-variant)]",
                                         "text-[color:var(--color-text-secondary)]",
                                         "hover:bg-[var(--color-surface-muted)]",
@@ -674,7 +674,7 @@ export function HighlightColorPicker({
                                     className={cn(
                                         "reader-danger-action w-full flex items-center justify-center gap-1.5",
                                         "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                        "rounded-lg",
+                                        
                                         "hover:bg-[color-mix(in_srgb,var(--color-error)_10%,transparent)]",
                                         "transition-colors duration-150",
                                         "active:scale-95"

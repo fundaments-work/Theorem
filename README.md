@@ -8,10 +8,15 @@ Read PDFs, EPUBs, and RSS in one workspace. Highlight and annotate anything. Syn
 
 No cloud account. No subscription wall. No vendor lock-in.
 
-## Download Theorem v1.0
+## Download Theorem
 
-- [Download Linux AppImage](https://github.com/sapienskid/theorem/releases/latest)
-- [Download Android APK](https://github.com/sapienskid/theorem/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/sapienskid/theorem?label=latest&style=flat-square)](https://github.com/sapienskid/theorem/releases/latest)
+
+- [Download for Windows](https://github.com/sapienskid/theorem/releases/latest) (`.msi` or `.exe`)
+- [Download for macOS (Intel)](https://github.com/sapienskid/theorem/releases/latest) (`.dmg`)
+- [Download for macOS (Apple Silicon)](https://github.com/sapienskid/theorem/releases/latest) (`.dmg`)
+- [Download for Linux](https://github.com/sapienskid/theorem/releases/latest) (`.AppImage` or `.deb`)
+- [Download for Android](https://github.com/sapienskid/theorem/releases/latest) (`.apk`)
 - [Star on GitHub](https://github.com/sapienskid/theorem/stargazers)
 - [View Source Code](https://github.com/sapienskid/theorem)
 - [Join Community Discussions](https://github.com/sapienskid/theorem/discussions)
@@ -23,7 +28,7 @@ No cloud account. No subscription wall. No vendor lock-in.
 - One app should handle books, papers, and feeds without splitting your workflow.
 - Your second brain should stay in plain text you can open in 10 years.
 
-## What You Can Do in v1.0
+## What You Can Do
 
 - **Read across formats:** EPUB, MOBI, AZW, AZW3, FB2, CBZ, PDF, and RSS.
 - **Highlight and annotate:** Capture passages and notes while you read.
@@ -43,14 +48,15 @@ Theorem is designed for knowledge workers using PKM systems, Zettelkasten method
 
 If your stack is "read -> highlight -> connect ideas in Markdown," Theorem removes the export friction.
 
-## Honest Status
+## Current Status
 
-Theorem v1.0 is early but functional. It is already useful for daily reading and note capture, with a clear local-first architecture and transparent open-source code.
+Theorem is in **beta**. It is functional for daily reading and note capture, with a clear local-first architecture and transparent open-source code.
 
-Current limitations to know up front:
+**Current limitations:**
 - Cross-device sync is not built in yet.
 - You are responsible for backups (your data is local).
 - CBR is recognized for compatibility but intentionally unsupported for import/render.
+- Android build requires manual setup (see [Android Build Guide](./docs/android-build.md)).
 
 ## FAQ
 
@@ -72,9 +78,16 @@ Yes. Markdown sync is designed for vault-based workflows.
 
 ### Is there built-in device sync?
 
-Not in v1.0. Today, Theorem prioritizes local ownership and exportability.
+Not yet. Theorem prioritizes local ownership and exportability. This is planned for a future release.
 
 ## Development
+
+### Prerequisites
+
+- Node.js 22+
+- pnpm 10+
+- Rust stable
+- For Android: Android SDK with NDK 29
 
 ### Project Layout
 
@@ -107,4 +120,33 @@ pnpm build
 
 # Preview web build
 pnpm preview
+
+# Run tests
+pnpm test
 ```
+
+### Building for Release
+
+```bash
+# Desktop (all platforms)
+pnpm tauri build
+
+# Android (requires setup - see docs/android-build.md)
+pnpm tauri android build --release
+```
+
+See [Android Build Guide](./docs/android-build.md) for Android-specific instructions.
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+MIT License - see [LICENSE](./LICENSE) for details.

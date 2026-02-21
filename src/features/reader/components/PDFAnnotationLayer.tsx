@@ -601,7 +601,7 @@ export function PDFAnnotationLayer({
                         <div
                             key={`${annotation.id}-${index}`}
                             title={annotation.selectedText || "Highlight"}
-                            className="absolute pointer-events-none rounded-[var(--radius-xs)]"
+                            className="absolute pointer-events-none"
                             style={{
                                 left: `${rect.x * scale}px`,
                                 top: `${(rect.y + Math.min(rect.height * 0.16, 1.4 / Math.max(scale, 0.01))) * scale}px`,
@@ -661,7 +661,7 @@ export function PDFAnnotationLayer({
                             key={annotation.id}
                             type="button"
                             title={noteText || "Note"}
-                            className="absolute rounded-md border shadow-sm flex items-center justify-center"
+                            className="absolute border shadow-sm flex items-center justify-center"
                             style={{
                                 left: `${left}px`,
                                 top: `${top}px`,
@@ -691,7 +691,7 @@ export function PDFAnnotationLayer({
 
             {textNoteEditor && noteEditorPosition && (
                 <div
-                    className="absolute rounded-lg border shadow-md z-30 p-2"
+                    className="absolute border shadow-md z-30 p-2"
                     style={{
                         left: `${noteEditorPosition.left}px`,
                         top: `${noteEditorPosition.top}px`,
@@ -728,7 +728,7 @@ export function PDFAnnotationLayer({
                                 setTextNoteEditor(null);
                             }
                         }}
-                        className="w-full min-h-[var(--layout-annotation-editor-min-height)] resize-none rounded border text-xs p-2 focus:outline-none"
+                        className="w-full min-h-[var(--layout-annotation-editor-min-height)] resize-none border text-xs p-2 focus:outline-none"
                         placeholder="Write a note..."
                         style={{
                             color: "var(--reader-fg, var(--color-text))",
@@ -739,7 +739,7 @@ export function PDFAnnotationLayer({
                     <div className="mt-2 flex items-center justify-end gap-2">
                         <button
                             type="button"
-                            className="px-2 py-1 rounded text-[var(--font-size-2xs)] opacity-80 hover:opacity-100"
+                            className="px-2 py-1 text-[var(--font-size-2xs)] opacity-80 hover:opacity-100"
                             style={{
                                 color: "var(--reader-fg, var(--color-text))",
                             }}
@@ -749,7 +749,7 @@ export function PDFAnnotationLayer({
                         </button>
                         <button
                             type="button"
-                            className="px-2 py-1 rounded text-[var(--font-size-2xs)] bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
+                            className="px-2 py-1 text-[var(--font-size-2xs)] bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                             onClick={saveTextNoteEditor}
                         >
                             Save Note

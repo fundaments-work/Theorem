@@ -123,7 +123,7 @@ function Toggle({
                 className={cn(
                     "px-3 py-1.5 font-sans text-[11px] font-medium",
                     checked
-                        ? "bg-[var(--color-accent)] text-white !text-white"
+                        ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                         : "text-[color:var(--color-text-secondary)]"
                 )}
             >
@@ -134,7 +134,7 @@ function Toggle({
                 className={cn(
                     "border-l border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium",
                     !checked
-                        ? "bg-[var(--color-accent)] text-white !text-white"
+                        ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                         : "text-[color:var(--color-text-secondary)]"
                 )}
             >
@@ -163,7 +163,7 @@ function ButtonSelect<T extends string>({
                     className={cn(
                         "border border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium transition-colors",
                         value === opt.value
-                            ? "bg-[var(--color-accent)] text-white !text-white"
+                            ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                             : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                     )}
                 >
@@ -410,7 +410,7 @@ export function SettingsPage() {
                                 className={cn(
                                     "snap-start flex min-w-[10rem] items-center justify-center border border-[var(--color-border)] px-3 py-2.5 font-sans text-[11px] font-medium transition-colors",
                                     activeTab === tab.id
-                                        ? "bg-[var(--color-accent)] text-white !text-white"
+                                        ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                                         : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)]"
                                 )}
                             >
@@ -428,7 +428,7 @@ export function SettingsPage() {
                             className={cn(
                                 "flex items-center border border-[var(--color-border)] px-4 py-2 font-sans text-[11px] font-medium transition-colors",
                                 activeTab === tab.id
-                                    ? "bg-[var(--color-accent)] text-white !text-white"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                                     : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                             )}
                         >
@@ -550,7 +550,7 @@ export function SettingsPage() {
                                     min={1}
                                     max={180}
                                     className={cn(
-                                        "w-20 px-3 py-1.5 rounded-lg text-sm",
+                                        "w-20 px-3 py-1.5 text-sm",
                                         "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
                                         "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
                                         "text-center"
@@ -572,7 +572,7 @@ export function SettingsPage() {
                                     min={1}
                                     max={100}
                                     className={cn(
-                                        "w-20 px-3 py-1.5 rounded-lg text-sm",
+                                        "w-20 px-3 py-1.5 text-sm",
                                         "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
                                         "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
                                         "text-center"
@@ -589,9 +589,9 @@ export function SettingsPage() {
                                     {stats.booksReadThisYear} / {stats.yearlyBookGoal} books
                                 </span>
                             </div>
-                            <div className="mt-2 h-2 bg-[var(--color-surface-muted)] rounded-full overflow-hidden">
+                            <div className="mt-2 h-2 bg-[var(--color-surface-muted)] overflow-hidden">
                                 <div
-                                    className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-500"
+                                    className="h-full bg-[var(--color-accent)] transition-all duration-500"
                                     style={{ width: `${Math.min(100, (stats.booksReadThisYear / Math.max(1, stats.yearlyBookGoal)) * 100)}%` }}
                                 />
                             </div>
@@ -651,7 +651,7 @@ export function SettingsPage() {
                                     resetSettings();
                                 }
                             }}
-                            className="flex items-center gap-2 px-4 py-2 text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] transition-colors"
+                            className="ui-btn-danger"
                         >
                             <RotateCcw className="w-4 h-4" />
                             Reset to Defaults
@@ -687,7 +687,7 @@ export function SettingsPage() {
                             label="Primary API"
                             description="Online dictionary service"
                         >
-                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md">
+                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)]">
                                 Free Dictionary API
                             </span>
                         </SettingRow>
@@ -696,7 +696,7 @@ export function SettingsPage() {
                             label="Fallback"
                             description="Secondary dictionary source"
                         >
-                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md">
+                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)]">
                                 Wiktionary
                             </span>
                         </SettingRow>
@@ -742,7 +742,7 @@ export function SettingsPage() {
                                 />
                                 <button
                                     onClick={() => dictionaryFileInputRef.current?.click()}
-                                    className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white !text-white hover:opacity-90 transition-opacity"
+                                    className="ui-btn-primary"
                                 >
                                     <Download className="w-4 h-4" /> Import Files
                                 </button>
@@ -768,7 +768,7 @@ export function SettingsPage() {
                                     onClick={() => {
                                         void removeDictionary(dictionary.id);
                                     }}
-                                    className="px-3 py-1.5 rounded-md text-sm bg-[var(--color-surface-muted)] text-[color:var(--color-error)] hover:opacity-80 transition-opacity"
+                                    className="ui-btn-danger"
                                 >
                                     Remove
                                 </button>
@@ -779,7 +779,7 @@ export function SettingsPage() {
                             label="Offline Mode Guard"
                             description="When offline mode is enabled without dictionaries, lookups will show setup guidance"
                         >
-                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)] rounded-md">
+                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)]">
                                 Enabled
                             </span>
                         </SettingRow>
@@ -922,7 +922,7 @@ export function SettingsPage() {
                         icon={<Database className="w-5 h-5" />}
                     >
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)] rounded-lg">
+                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
                                 <div className="flex items-center gap-3">
                                     <BookOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                                     <div>
@@ -937,7 +937,7 @@ export function SettingsPage() {
                                 </span>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)] rounded-lg">
+                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
                                 <div className="flex items-center gap-3">
                                     <FolderOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                                     <div>
@@ -949,7 +949,7 @@ export function SettingsPage() {
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)] rounded-lg">
+                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
                                 <div className="flex items-center gap-3">
                                     <Rss className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                                     <div>
@@ -964,7 +964,7 @@ export function SettingsPage() {
                                 </span>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)] rounded-lg">
+                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
                                 <div className="flex items-center gap-3">
                                     <Languages className="w-5 h-5 text-[color:var(--color-text-muted)]" />
                                     <div>
@@ -992,7 +992,7 @@ export function SettingsPage() {
                             <button
                                 onClick={handleClearData}
                                 className={cn(
-                                    "w-full flex items-center gap-3 p-4 rounded-lg",
+                                    "w-full flex items-center gap-3 p-4",
                                     "border border-[var(--color-error)]/20",
                                     "text-[color:var(--color-error)] hover:bg-[var(--color-error)]/5",
                                     "transition-colors text-left"
@@ -1011,7 +1011,7 @@ export function SettingsPage() {
                             <button
                                 onClick={handleExportData}
                                 className={cn(
-                                    "w-full flex items-center gap-3 p-4 rounded-lg",
+                                    "w-full flex items-center gap-3 p-4",
                                     "border border-[var(--color-border)]",
                                     "text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]",
                                     "transition-colors text-left"

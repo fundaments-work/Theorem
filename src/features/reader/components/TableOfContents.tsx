@@ -81,7 +81,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
                     <button
                         onClick={handleToggle}
                         className={cn(
-                            "shrink-0 mr-3 p-1 rounded",
+                            "shrink-0 mr-3 p-1",
                             "hover:bg-[var(--color-surface)]",
                             "transition-colors duration-150"
                         )}
@@ -96,7 +96,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
                     <div className="shrink-0 mr-3 w-6 flex items-center justify-center">
                         <div
                             className={cn(
-                                "w-1.5 h-1.5 rounded-full transition-all duration-200",
+                                "w-1.5 h-1.5 transition-all duration-200",
                                 isActive 
                                     ? "bg-[var(--color-accent)] scale-125" 
                                     : "bg-[var(--color-text-muted)] opacity-40 group-hover/item:opacity-70"

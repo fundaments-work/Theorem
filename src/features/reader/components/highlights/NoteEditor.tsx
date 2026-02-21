@@ -141,7 +141,7 @@ export function NoteEditor({
                 "fixed animate-fade-in",
                 "bg-[var(--color-surface)]",
                 "border border-[var(--color-border)]",
-                "rounded-sm",
+                
                 "p-4 w-[var(--layout-note-editor-width)]"
             )}
             style={{
@@ -158,7 +158,7 @@ export function NoteEditor({
                 <button
                     onClick={onClose}
                     className={cn(
-                        "p-1 rounded-md",
+                        "p-1",
                         "text-[color:var(--color-text-muted)]",
                         "hover:bg-[var(--color-surface-muted)]",
                         "transition-colors"
@@ -170,7 +170,7 @@ export function NoteEditor({
 
             {/* Selected text preview */}
             {selectedText && (
-                <div className="mb-3 px-2 py-1.5 bg-[var(--color-surface-variant)] rounded text-xs text-[color:var(--color-text-secondary)] line-clamp-2">
+                <div className="mb-3 px-2 py-1.5 bg-[var(--color-surface-variant)] text-xs text-[color:var(--color-text-secondary)] line-clamp-2">
                     &ldquo;{selectedText.slice(0, 100)}{selectedText.length > 100 ? '...' : ''}&rdquo;
                 </div>
             )}
@@ -186,7 +186,7 @@ export function NoteEditor({
                     "px-3 py-2 text-sm",
                     "bg-[var(--color-background)]",
                     "border border-[var(--color-border)]",
-                    "rounded-sm resize-y",
+                    "resize-y",
                     "text-[color:var(--color-text-primary)]",
                     "placeholder:text-[color:var(--color-text-muted)]",
                     "focus:outline-none focus:border-[var(--color-accent)]",
@@ -204,7 +204,7 @@ export function NoteEditor({
                     className={cn(
                         "flex items-center gap-1.5 border border-[var(--color-accent)]",
                         "px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em]",
-                        "rounded-sm",
+                        
                         "bg-[var(--color-accent)]",
                         "text-[color:var(--color-accent-contrast)]",
                         "hover:opacity-90",

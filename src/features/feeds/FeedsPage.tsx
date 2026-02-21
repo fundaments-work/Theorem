@@ -110,7 +110,7 @@ function FeedListItem({
         <div
             onClick={onSelect}
             className={cn(
-                "group relative flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
+                "group relative flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors",
                 isSelected
                     ? "bg-[var(--color-accent)]/10 text-[color:var(--color-accent)]"
                     : "hover:bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]",
@@ -119,7 +119,7 @@ function FeedListItem({
         >
             {/* Feed Icon */}
             <div className={cn(
-                "w-6 h-6 rounded flex items-center justify-center flex-shrink-0 overlay",
+                "w-6 h-6 flex items-center justify-center flex-shrink-0 overlay",
                 isSelected
                     ? "text-[color:var(--color-accent)]"
                     : "text-[color:var(--color-text-muted)]",
@@ -128,7 +128,7 @@ function FeedListItem({
                     <img
                         src={feed.iconUrl}
                         alt=""
-                        className="w-4 h-4 rounded-sm"
+                        className="w-4 h-4"
                         onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
                         }}
@@ -150,7 +150,7 @@ function FeedListItem({
             {/* Unread badge */}
             {feed.unreadCount > 0 && (
                 <span className={cn(
-                    "text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0",
+                    "text-[10px] font-bold px-1.5 py-0.5 flex-shrink-0",
                     isSelected
                         ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                         : "bg-[var(--color-surface-muted)] text-[color:var(--color-text-muted)]",
@@ -166,7 +166,7 @@ function FeedListItem({
                         setIsActionMenuOpen((open) => !open);
                     }}
                     className={cn(
-                        "p-1.5 rounded-md transition-colors",
+                        "p-1.5 transition-colors",
                         showTouchActions
                             ? "opacity-100"
                             : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
@@ -182,14 +182,14 @@ function FeedListItem({
                 </button>
 
                 {isActionMenuOpen && (
-                    <div className="absolute right-0 top-full mt-1 z-20 min-w-36 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg">
+                    <div className="absolute right-0 top-full mt-1 z-20 min-w-36 border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg">
                         <button
                             onClick={(event) => {
                                 event.stopPropagation();
                                 setIsActionMenuOpen(false);
                                 onDelete();
                             }}
-                            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs font-medium text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10"
+                            className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs font-medium text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10"
                         >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Remove feed</span>
@@ -223,7 +223,7 @@ function ArticleCard({
         <div
             onClick={onRead}
             className={cn(
-                "group p-4 sm:p-5 rounded-2xl border transition-all duration-200 cursor-pointer",
+                "group p-4 sm:p-5 border transition-all duration-200 cursor-pointer",
                 article.isRead
                     ? "border-transparent bg-[var(--color-surface-muted)]/30 opacity-70 hover:opacity-100"
                     : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]/30 hover:shadow-sm",
@@ -275,7 +275,7 @@ function ArticleCard({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                             >
                                 <ExternalLink className="w-3.5 h-3.5" />
                                 <span>Original</span>
@@ -286,7 +286,7 @@ function ArticleCard({
 
                 {/* Thumbnail */}
                 {article.imageUrl && (
-                    <div className="hidden sm:block w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)]">
+                    <div className="hidden sm:block w-24 h-24 flex-shrink-0 overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)]">
                         <img
                             src={article.imageUrl}
                             alt=""
@@ -320,7 +320,7 @@ function EmptyFeeds({ onAddFeed }: { onAddFeed: () => void }) {
             <button
                 onClick={onAddFeed}
                 className={cn(
-                    "min-w-[10.5rem] whitespace-nowrap flex items-center gap-2 px-6 py-2.5 rounded-full",
+                    "min-w-[10.5rem] whitespace-nowrap flex items-center gap-2 px-6 py-2.5",
                     "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-sm font-medium",
                     "hover:opacity-90 transition-opacity shadow-sm",
                 )}
@@ -546,7 +546,7 @@ export function FeedsPage() {
                     </h2>
                     <button
                         onClick={() => setIsAddModalOpen(true)}
-                        className="p-1.5 rounded-lg text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                        className="p-1.5 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                         title="Add Feed"
                     >
                         <Plus className="w-4 h-4" />
@@ -580,14 +580,14 @@ export function FeedsPage() {
                                             <button
                                                 onClick={() => handleSelectFeed(null)}
                                                 className={cn(
-                                                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
+                                                    "w-full flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors",
                                                     selectedFeedId === null
                                                         ? "bg-[var(--color-accent)]/10 text-[color:var(--color-accent)]"
                                                         : "hover:bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]",
                                                 )}
                                             >
                                                 <div className={cn(
-                                                    "w-6 h-6 rounded flex items-center justify-center transition-colors",
+                                                    "w-6 h-6 flex items-center justify-center transition-colors",
                                                     selectedFeedId === null
                                                         ? "text-[color:var(--color-accent)]"
                                                         : "text-[color:var(--color-text-muted)]",
@@ -629,7 +629,7 @@ export function FeedsPage() {
                         {/* Mobile Back Button */}
                         <button
                             onClick={handleBackToFeeds}
-                            className="md:hidden -ml-2 p-1.5 rounded-lg text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                            className="md:hidden -ml-2 p-1.5 text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
@@ -716,10 +716,10 @@ export function FeedsPage() {
 
             {/* Error Toast */}
             {error && (
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-[var(--color-error)] text-white text-sm font-medium shadow-xl animate-fade-in-up">
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 bg-[var(--color-error)] text-[color:var(--color-text-inverse)] text-sm font-medium shadow-xl animate-fade-in-up">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{error}</span>
-                    <button onClick={() => setError(undefined)} className="ml-2 p-0.5 hover:bg-white/20 rounded">✕</button>
+                    <button onClick={() => setError(undefined)} className="ml-2 p-0.5 hover:bg-white/20">✕</button>
                 </div>
             )}
 

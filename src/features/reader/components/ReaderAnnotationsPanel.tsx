@@ -150,7 +150,7 @@ export function ReaderAnnotationsPanel({
     const currentItems = activeTab === 'bookmarks' ? bookmarks : highlights;
     const emptyState = activeTab === 'bookmarks' ? (
         <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-[var(--color-background)] flex items-center justify-center mb-4 text-[color:var(--color-text-muted)]">
+            <div className="w-12 h-12 bg-[var(--color-background)] flex items-center justify-center mb-4 text-[color:var(--color-text-muted)]">
                 <Bookmark className="w-6 h-6" />
             </div>
             <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)] mb-1">No bookmarks yet</h3>
@@ -160,7 +160,7 @@ export function ReaderAnnotationsPanel({
         </div>
     ) : (
         <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-[var(--color-background)] flex items-center justify-center mb-4 text-[color:var(--color-text-muted)]">
+            <div className="w-12 h-12 bg-[var(--color-background)] flex items-center justify-center mb-4 text-[color:var(--color-text-muted)]">
                 <Highlighter className="w-6 h-6" />
             </div>
             <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)] mb-1">No highlights yet</h3>
