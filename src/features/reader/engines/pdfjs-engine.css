@@ -12,7 +12,8 @@
     margin: 0 auto;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    box-shadow: var(--shadow-sm);
+    /* Keep scrolling smooth for long PDF stacks (avoid per-page shadow repaint cost). */
+    box-shadow: none;
 }
 
 /* Page container */
@@ -123,7 +124,7 @@
 .theme-dark .pdf-page-wrapper {
     background: var(--color-surface);
     border-color: var(--color-border);
-    box-shadow: var(--shadow-md);
+    box-shadow: none;
 }
 
 .theme-sepia .pdf-page-wrapper {
@@ -134,7 +135,7 @@
 @media (max-width: 768px) {
     .pdf-page-wrapper {
         border-width: 0;
-        box-shadow: var(--shadow-xs);
+        box-shadow: none;
     }
 }
 
