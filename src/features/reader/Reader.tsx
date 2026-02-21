@@ -52,10 +52,11 @@ const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
 const MIN_PAGED_READER_ZOOM = 100;
 const MAX_READER_ZOOM = 200;
-const PDF_STATE_SAVE_DEBOUNCE_MS = 400;
+const PDF_STATE_SAVE_DEBOUNCE_MS = 900;
 const READER_PROGRESS_SAVE_DEBOUNCE_MS = 1200;
 const DEFAULT_PDF_ZOOM = 1;
 const DEFAULT_PDF_ZOOM_MODE: PdfZoomMode = 'width-fit';
+const PDF_ZOOM_PERSIST_PRECISION = 100;
 
 type PendingProgressUpdate = {
     bookId: string;
@@ -188,6 +189,13 @@ function BookReaderPage() {
     const resumeTargetRef = useRef<string | null>(null);
     const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pdfProgressSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastPersistedPdfStateRef = useRef<{
+        bookId: string;
+        page: number;
+        totalPages: number;
+        zoom: number;
+        zoomMode: PdfZoomMode;
+    } | null>(null);
     const progressSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingProgressUpdateRef = useRef<PendingProgressUpdate | null>(null);
     const hasAppliedInitialLocationRef = useRef(false);
@@ -590,6 +598,10 @@ function BookReaderPage() {
         };
     }, []);
 
+    useEffect(() => {
+        lastPersistedPdfStateRef.current = null;
+    }, [currentBookId]);
+
     // Auto-hide toolbar
     useEffect(() => {
         if (isMobileViewport) return;
@@ -819,7 +831,30 @@ function BookReaderPage() {
         pdfProgressSaveTimeoutRef.current = setTimeout(() => {
             const safeTotalPages = Math.max(1, Math.floor(pdfTotalPages));
             const safeCurrentPage = Math.max(1, Math.min(Math.floor(pdfCurrentPage), safeTotalPages));
-            const safeZoom = Math.max(0.25, Math.min(5, pdfZoom));
+            const safeZoom = Math.round(
+                Math.max(0.25, Math.min(5, pdfZoom)) * PDF_ZOOM_PERSIST_PRECISION,
+            ) / PDF_ZOOM_PERSIST_PRECISION;
+            const nextPersistedState = {
+                bookId: currentBookId,
+                page: safeCurrentPage,
+                totalPages: safeTotalPages,
+                zoom: safeZoom,
+                zoomMode: pdfZoomMode,
+            } as const;
+
+            const previousPersistedState = lastPersistedPdfStateRef.current;
+            if (
+                previousPersistedState
+                && previousPersistedState.bookId === nextPersistedState.bookId
+                && previousPersistedState.page === nextPersistedState.page
+                && previousPersistedState.totalPages === nextPersistedState.totalPages
+                && previousPersistedState.zoom === nextPersistedState.zoom
+                && previousPersistedState.zoomMode === nextPersistedState.zoomMode
+            ) {
+                return;
+            }
+
+            lastPersistedPdfStateRef.current = nextPersistedState;
 
             updatePdfReadingState(currentBookId, {
                 page: safeCurrentPage,

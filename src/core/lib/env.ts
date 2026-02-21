@@ -41,6 +41,21 @@ export function isTauriDesktop(): boolean {
 }
 
 /**
+ * Check if runtime browser engine is WebKit (Safari/WebKitGTK).
+ * Excludes Chromium- and Firefox-based user agents.
+ */
+export function isWebKitBrowserEngine(): boolean {
+    if (typeof navigator === 'undefined') return false;
+
+    const userAgent = navigator.userAgent;
+    const isWebKit = /AppleWebKit/i.test(userAgent);
+    const isChromiumBased = /Chrome|Chromium|CriOS|Edg\//i.test(userAgent);
+    const isFirefoxBased = /Firefox|FxiOS/i.test(userAgent);
+
+    return isWebKit && !isChromiumBased && !isFirefoxBased;
+}
+
+/**
  * Check if running on a touch device
  */
 export function isTouchDevice(): boolean {

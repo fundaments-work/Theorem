@@ -872,19 +872,43 @@ export const useLibraryStore = create<LibraryStore>()(
                     const { books: updatedBooks, updatedBook } = updateBookById(
                         state.books,
                         bookId,
-                        (book) => ({
-                            ...book,
-                            currentLocation: `pdf:page:${safePage}`,
-                            progress: safeProgress,
-                            pageProgress: {
-                                currentPage: safePage,
-                                totalPages: safeTotalPages,
-                                range: `${safePage}`,
-                            },
-                            pdfViewState: safePdfViewState,
-                            lastReadAt: new Date(),
-                        }),
+                        (book) => {
+                            const nextLocation = `pdf:page:${safePage}`;
+                            const existingPdfViewState = book.pdfViewState;
+                            const hasSamePdfState = !!existingPdfViewState
+                                && existingPdfViewState.page === safePdfViewState.page
+                                && existingPdfViewState.totalPages === safePdfViewState.totalPages
+                                && Math.abs(existingPdfViewState.zoom - safePdfViewState.zoom) < 0.0001
+                                && existingPdfViewState.zoomMode === safePdfViewState.zoomMode;
+                            const hasSameLocation = book.currentLocation === nextLocation;
+                            const hasSameProgress = Math.abs((book.progress ?? 0) - safeProgress) < 0.0001;
+                            const hasSamePageProgress = !!book.pageProgress
+                                && book.pageProgress.currentPage === safePage
+                                && book.pageProgress.totalPages === safeTotalPages
+                                && book.pageProgress.range === `${safePage}`;
+
+                            if (hasSamePdfState && hasSameLocation && hasSameProgress && hasSamePageProgress) {
+                                return book;
+                            }
+
+                            return {
+                                ...book,
+                                currentLocation: nextLocation,
+                                progress: safeProgress,
+                                pageProgress: {
+                                    currentPage: safePage,
+                                    totalPages: safeTotalPages,
+                                    range: `${safePage}`,
+                                },
+                                pdfViewState: safePdfViewState,
+                                lastReadAt: new Date(),
+                            };
+                        },
                     );
+
+                    if (updatedBooks === state.books) {
+                        return state;
+                    }
 
                     if (updatedBook) {
                         const existingCache = state.recentBooksCache.filter((book) => book.id !== bookId);
