@@ -16,7 +16,7 @@ No cloud account. No subscription wall. No vendor lock-in.
 - [Download for macOS (Intel)](https://github.com/sapienskid/theorem/releases/latest) (`.dmg`)
 - [Download for macOS (Apple Silicon)](https://github.com/sapienskid/theorem/releases/latest) (`.dmg`)
 - [Download for Linux](https://github.com/sapienskid/theorem/releases/latest) (`.AppImage` or `.deb`)
-- [Download for Android](https://github.com/sapienskid/theorem/releases/latest) (`.apk`)
+- [Download for Mobile (Android)](https://github.com/sapienskid/theorem/releases/latest) (`.apk`)
 - [Star on GitHub](https://github.com/sapienskid/theorem/stargazers)
 - [View Source Code](https://github.com/sapienskid/theorem)
 - [Join Community Discussions](https://github.com/sapienskid/theorem/discussions)
