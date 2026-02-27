@@ -53,6 +53,7 @@ jobs:
           generate_release_notes: true
 
   build-linux:
+    if: ${{ false }}
     name: Build Linux
     runs-on: ubuntu-22.04
     needs: create-release
@@ -112,6 +113,7 @@ jobs:
             src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
 
   build-macos-intel:
+    if: ${{ false }}
     name: Build macOS (Intel)
     runs-on: macos-latest
     needs: create-release
@@ -203,6 +205,7 @@ jobs:
             src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
 
   build-macos-arm:
+    if: ${{ false }}
     name: Build macOS (Apple Silicon)
     runs-on: macos-latest
     needs: create-release
@@ -336,16 +339,8 @@ jobs:
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
 
-      - name: Upload Windows artifacts
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          files: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
-
   build-android:
+    if: ${{ false }}
     name: Build Android
     runs-on: ubuntu-latest
     needs: create-release
@@ -434,16 +429,10 @@ jobs:
             src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
 
   publish-release:
+    if: ${{ false }}
     name: Publish Release
     runs-on: ubuntu-latest
     needs: [build-linux, build-macos-intel, build-macos-arm, build-windows, build-android]
-    if: >-
-      always() &&
-      needs.build-linux.result == 'success' &&
-      needs.build-macos-intel.result == 'success' &&
-      needs.build-macos-arm.result == 'success' &&
-      needs.build-windows.result == 'success' &&
-      needs.build-android.result == 'success'
     steps:
       - name: Publish Release
         run: echo "All builds completed successfully. Release is ready for review."
