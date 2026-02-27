@@ -59,11 +59,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added edge-case regression tests for author normalization and nullable/string-backed date fields.
 - Added a non-mutation assertion to guarantee filtering/sorting does not reorder the input array.
+- Updated desktop bundle versioning to an MSI-compatible format (`0.1.0-1`) for Windows release packaging.
 
 ### CI
 
 - Added a dedicated `Build` job in CI to enforce production build success (`pnpm build`) on every push and pull request.
 - Hardened tag-based release workflow to publish desktop and Android artifacts from CI/CD.
+- Updated macOS release runners and signing flow with a safe ad-hoc fallback when signing secrets are unavailable or disabled.
 
 ### Technical
 

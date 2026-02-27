@@ -113,7 +113,7 @@ jobs:
 
   build-macos-intel:
     name: Build macOS (Intel)
-    runs-on: macos-13
+    runs-on: macos-latest
     needs: create-release
     steps:
       - uses: actions/checkout@v4
@@ -145,7 +145,23 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Tauri app
+      - name: Resolve macOS signing mode
+        id: macos-signing
+        shell: bash
+        run: |
+          if [[ "${{ vars.ENABLE_MACOS_SIGNING }}" == "true" \
+            && -n "${{ secrets.APPLE_CERTIFICATE }}" \
+            && -n "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" \
+            && -n "${{ secrets.APPLE_ID }}" \
+            && -n "${{ secrets.APPLE_PASSWORD }}" \
+            && -n "${{ secrets.APPLE_TEAM_ID }}" ]]; then
+            echo "mode=signed" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=adhoc" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Tauri app (signed)
+        if: steps.macos-signing.outputs.mode == 'signed'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -155,6 +171,20 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Theorem ${{ github.ref_name }}"
+          releaseBody: "See assets below."
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          args: --target x86_64-apple-darwin
+
+      - name: Build Tauri app (ad-hoc signing)
+        if: steps.macos-signing.outputs.mode == 'adhoc'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: "-"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Theorem ${{ github.ref_name }}"
@@ -206,7 +236,23 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Tauri app
+      - name: Resolve macOS signing mode
+        id: macos-signing
+        shell: bash
+        run: |
+          if [[ "${{ vars.ENABLE_MACOS_SIGNING }}" == "true" \
+            && -n "${{ secrets.APPLE_CERTIFICATE }}" \
+            && -n "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" \
+            && -n "${{ secrets.APPLE_ID }}" \
+            && -n "${{ secrets.APPLE_PASSWORD }}" \
+            && -n "${{ secrets.APPLE_TEAM_ID }}" ]]; then
+            echo "mode=signed" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=adhoc" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Tauri app (signed)
+        if: steps.macos-signing.outputs.mode == 'signed'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -216,6 +262,20 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Theorem ${{ github.ref_name }}"
+          releaseBody: "See assets below."
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          args: --target aarch64-apple-darwin
+
+      - name: Build Tauri app (ad-hoc signing)
+        if: steps.macos-signing.outputs.mode == 'adhoc'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: "-"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Theorem ${{ github.ref_name }}"
