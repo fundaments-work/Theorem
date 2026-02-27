@@ -383,6 +383,39 @@ jobs:
           sed -i '0,/isMinifyEnabled = true/s//isMinifyEnabled = false/' src-tauri/gen/android/app/build.gradle.kts
           grep -n "isMinifyEnabled" src-tauri/gen/android/app/build.gradle.kts
 
+      - name: Configure Android Gradle signing
+        shell: bash
+        run: |
+          FILE="src-tauri/gen/android/app/build.gradle.kts"
+
+          if ! grep -q 'import java.io.FileInputStream' "$FILE"; then
+            sed -i '1a import java.io.FileInputStream' "$FILE"
+          fi
+
+          if ! grep -q 'signingConfigs {' "$FILE"; then
+            sed -i '/^    buildTypes {/i\
+    signingConfigs {\
+        create("release") {\
+            val keystorePropertiesFile = rootProject.file("keystore.properties")\
+            val keystoreProperties = Properties()\
+            if (keystorePropertiesFile.exists()) {\
+                keystoreProperties.load(FileInputStream(keystorePropertiesFile))\
+            }\
+            keyAlias = keystoreProperties["keyAlias"] as String\
+            keyPassword = keystoreProperties["password"] as String\
+            storeFile = file(keystoreProperties["storeFile"] as String)\
+            storePassword = keystoreProperties["password"] as String\
+        }\
+    }\
+' "$FILE"
+          fi
+
+          if ! grep -q 'signingConfig = signingConfigs.getByName("release")' "$FILE"; then
+            sed -i '/getByName("release") {/a\            signingConfig = signingConfigs.getByName("release")' "$FILE"
+          fi
+
+          grep -n 'FileInputStream\|signingConfigs\|signingConfig = signingConfigs.getByName("release")' "$FILE"
+
       - name: Debug Android signing inputs (safe)
         shell: bash
         run: |
@@ -484,8 +517,6 @@ jobs:
           cat > src-tauri/gen/android/keystore.properties <<EOF
           keyAlias=$KEY_ALIAS
           password=$KEY_PASSWORD
-          keyPassword=$KEY_PASSWORD
-          storePassword=$STORE_PASSWORD
           storeFile=$RUNNER_TEMP/theorem-release.jks
           EOF
 
