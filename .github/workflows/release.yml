@@ -383,43 +383,60 @@ jobs:
           sed -i '0,/isMinifyEnabled = true/s//isMinifyEnabled = false/' src-tauri/gen/android/app/build.gradle.kts
           grep -n "isMinifyEnabled" src-tauri/gen/android/app/build.gradle.kts
 
-      - name: Resolve Android signing mode
-        id: android-signing
+      - name: Validate Android signing secrets
         shell: bash
         env:
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [[ -n "$ANDROID_KEYSTORE_BASE64" \
-            && -n "$ANDROID_KEYSTORE_PASSWORD" \
-            && -n "$ANDROID_KEY_ALIAS" \
-            && -n "$ANDROID_KEY_PASSWORD" ]]; then
-            echo "mode=signed" >> "$GITHUB_OUTPUT"
-          else
-            echo "mode=unsigned" >> "$GITHUB_OUTPUT"
+          KEY_B64="$ANDROID_KEY_BASE64"
+          if [[ -z "$KEY_B64" ]]; then
+            KEY_B64="$ANDROID_KEYSTORE_BASE64"
+          fi
+          if [[ -z "$KEY_B64" || -z "$ANDROID_KEYSTORE_PASSWORD" || -z "$ANDROID_KEY_ALIAS" || -z "$ANDROID_KEY_PASSWORD" ]]; then
+            echo "::error::Missing Android signing secrets. Configure ANDROID_KEY_BASE64 (or ANDROID_KEYSTORE_BASE64), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD."
+            exit 1
           fi
 
-      - name: Decode signing keystore
-        if: steps.android-signing.outputs.mode == 'signed'
+      - name: Setup Android signing
+        shell: bash
         env:
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > src-tauri/gen/android/theorem-release.jks
-
-      - name: Build Android APK (unsigned release)
-        if: steps.android-signing.outputs.mode == 'unsigned'
-        run: pnpm tauri android build
-
-      - name: Build Android APK (signed)
-        if: steps.android-signing.outputs.mode == 'signed'
-        env:
-          ANDROID_KEYSTORE_PATH: src-tauri/gen/android/theorem-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          KEY_B64="$ANDROID_KEY_BASE64"
+          if [[ -z "$KEY_B64" ]]; then
+            KEY_B64="$ANDROID_KEYSTORE_BASE64"
+          fi
+          printf '%s' "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/theorem-release.jks"
+          cat > src-tauri/gen/android/keystore.properties <<EOF
+          keyAlias=$ANDROID_KEY_ALIAS
+          password=$ANDROID_KEY_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          storeFile=$RUNNER_TEMP/theorem-release.jks
+          EOF
+
+      - name: Build Android release artifacts
         run: pnpm tauri android build
+
+      - name: Collect signed Android artifacts
+        shell: bash
+        run: |
+          mkdir -p android-release
+          find src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk' ! -name '*-unsigned.apk' -exec cp {} android-release/ \;
+          find src-tauri/gen/android/app/build/outputs/bundle -type f -name '*.aab' -exec cp {} android-release/ \;
+          ls -lah android-release
+          if ! compgen -G "android-release/*.apk" > /dev/null; then
+            echo "::error::No signed APK found in build outputs."
+            exit 1
+          fi
 
       - name: Upload Android artifacts (attempt 1)
         id: upload-android-attempt-1
@@ -429,8 +446,8 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           draft: true
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+            android-release/*.apk
+            android-release/*.aab
 
       - name: Upload Android artifacts (retry)
         if: steps.upload-android-attempt-1.outcome == 'failure'
@@ -439,8 +456,8 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           draft: true
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+            android-release/*.apk
+            android-release/*.aab
 
   publish-release:
     name: Publish Release
