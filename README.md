@@ -132,7 +132,7 @@ pnpm test
 pnpm tauri build
 
 # Android (requires setup - see docs/android-build.md)
-pnpm tauri android build --release
+pnpm tauri android build
 ```
 
 See [Android Build Guide](./docs/android-build.md) for Android-specific instructions.

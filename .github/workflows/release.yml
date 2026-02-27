@@ -413,7 +413,7 @@ jobs:
         if: env.ANDROID_KEYSTORE_BASE64 == ''
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: pnpm tauri android build --release
+        run: pnpm tauri android build
 
       - name: Build Android APK (signed)
         if: env.ANDROID_KEYSTORE_BASE64 != ''
@@ -422,7 +422,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: pnpm tauri android build --release
+        run: pnpm tauri android build
 
       - name: Upload Android artifacts
         uses: softprops/action-gh-release@v2

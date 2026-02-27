@@ -65,7 +65,7 @@ pnpm tauri android build --debug
 ### Release Build (Unsigned)
 
 ```bash
-pnpm tauri android build --release
+pnpm tauri android build
 ```
 
 The APK will be at:
@@ -107,7 +107,7 @@ export ANDROID_KEY_PASSWORD=your_key_password
 ### Build Signed APK
 
 ```bash
-pnpm tauri android build --release
+pnpm tauri android build
 ```
 
 ## CI/CD Setup
@@ -139,7 +139,7 @@ Upload the signed APK to:
 For Play Store distribution, you need an AAB (Android App Bundle):
 
 ```bash
-pnpm tauri android build --release --aab
+pnpm tauri android build --aab
 ```
 
 The AAB will be at:
@@ -181,5 +181,5 @@ The default build creates a universal APK with all architectures:
 For smaller APKs, build for specific architectures:
 
 ```bash
-pnpm tauri android build --release --target aarch64
+pnpm tauri android build --target aarch64
 ```
