@@ -36,15 +36,26 @@ jobs:
         id: get_version
         run: echo "VERSION=${RELEASE_TAG#v}" >> $GITHUB_OUTPUT
 
-      - name: Verify existing release tag
+      - name: Check existing release tag
+        id: release-check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error \
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" >/dev/null
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          if [[ "${status}" == "200" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release for ${RELEASE_TAG} already exists and will be updated."
+          elif [[ "${status}" == "404" ]]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No release found for ${RELEASE_TAG}. A new draft release will be created."
+          else
+            echo "::error::GitHub API returned unexpected status ${status} while checking release tag ${RELEASE_TAG}."
+            exit 1
+          fi
 
       - name: Create or Update Release
         id: create-release
