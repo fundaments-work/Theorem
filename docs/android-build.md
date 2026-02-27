@@ -77,10 +77,21 @@ src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-rele
 
 ### Generate a Signing Key
 
+Interactive:
+
 ```bash
-keytool -genkey -v -keystore theorem-release.jks \
-  -keyalg RSA -keysize 2048 -validity 10000 \
-  -alias theorem
+keytool -genkeypair -v \
+  -keystore theorem-release.jks \
+  -alias theorem \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000
+```
+
+Note: `keytool` password input is hidden (no characters are shown while typing). If your terminal has trouble with interactive prompts, use a non-interactive command:
+
+```bash
+keytool -genkeypair -keystore theorem-release.jks -storetype PKCS12 -storepass "YourStrongPass123" -alias theorem -keyalg RSA -keysize 2048 -validity 10000 -keypass "YourStrongPass123" -dname "CN=Theorem, OU=Dev, O=Fundamentals, L=City, ST=State, C=US" -noprompt
 ```
 
 ### Configure Signing
@@ -120,10 +131,12 @@ base64 -w 0 theorem-release.jks         # Linux
 ```
 
 Add these secrets to your repository:
-- `ANDROID_KEYSTORE_BASE64`: Base64-encoded keystore file
-- `ANDROID_KEYSTORE_PASSWORD`: Keystore password
+- `ANDROID_KEY_BASE64` (preferred) or `ANDROID_KEYSTORE_BASE64`: Base64-encoded keystore file
 - `ANDROID_KEY_ALIAS`: Key alias
 - `ANDROID_KEY_PASSWORD`: Key password
+- `ANDROID_KEYSTORE_PASSWORD`: Keystore password (optional, defaults to `ANDROID_KEY_PASSWORD`)
+
+The release workflow fails if these required signing values are missing, and only uploads signed APKs.
 
 ## Distribution
 
