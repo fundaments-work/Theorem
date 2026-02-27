@@ -53,7 +53,6 @@ jobs:
           generate_release_notes: true
 
   build-linux:
-    if: ${{ false }}
     name: Build Linux
     runs-on: ubuntu-22.04
     needs: create-release
@@ -102,18 +101,7 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: --target x86_64-unknown-linux-gnu
 
-      - name: Upload Linux artifacts
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          files: |
-            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
-            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
-            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
-
   build-macos-intel:
-    if: ${{ false }}
     name: Build macOS (Intel)
     runs-on: macos-latest
     needs: create-release
@@ -195,17 +183,7 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: --target x86_64-apple-darwin
 
-      - name: Upload macOS Intel artifacts
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          files: |
-            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
-
   build-macos-arm:
-    if: ${{ false }}
     name: Build macOS (Apple Silicon)
     runs-on: macos-latest
     needs: create-release
@@ -287,15 +265,6 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: --target aarch64-apple-darwin
 
-      - name: Upload macOS ARM artifacts
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          files: |
-            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
-
   build-windows:
     name: Build Windows
     runs-on: windows-latest
@@ -340,7 +309,6 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
 
   build-android:
-    if: ${{ false }}
     name: Build Android
     runs-on: ubuntu-latest
     needs: create-release
@@ -419,7 +387,19 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: pnpm tauri android build
 
-      - name: Upload Android artifacts
+      - name: Upload Android artifacts (attempt 1)
+        id: upload-android-attempt-1
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          files: |
+            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+
+      - name: Upload Android artifacts (retry)
+        if: steps.upload-android-attempt-1.outcome == 'failure'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -429,10 +409,16 @@ jobs:
             src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
 
   publish-release:
-    if: ${{ false }}
     name: Publish Release
     runs-on: ubuntu-latest
     needs: [build-linux, build-macos-intel, build-macos-arm, build-windows, build-android]
+    if: >-
+      always() &&
+      needs.build-linux.result == 'success' &&
+      needs.build-macos-intel.result == 'success' &&
+      needs.build-macos-arm.result == 'success' &&
+      needs.build-windows.result == 'success' &&
+      needs.build-android.result == 'success'
     steps:
       - name: Publish Release
         run: echo "All builds completed successfully. Release is ready for review."
