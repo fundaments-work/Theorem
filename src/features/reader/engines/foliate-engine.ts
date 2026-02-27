@@ -42,6 +42,8 @@ const MIN_READER_ZOOM_LEVEL = 0.2;
 const MIN_PAGED_READER_ZOOM_LEVEL = 1.0;
 const MAX_READER_ZOOM_LEVEL = 4.0;
 const READER_ZOOM_STEP = 0.1;
+const READER_OPEN_TIMEOUT_MS = 20000;
+const READER_NAVIGATION_TIMEOUT_MS = 6000;
 
 interface ReaderSearchExcerpt {
     pre?: string;
@@ -103,6 +105,25 @@ export class FoliateEngine {
 
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
+    }
+
+    private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+        let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+        try {
+            return await Promise.race([
+                promise,
+                new Promise<T>((_, reject) => {
+                    timeoutHandle = setTimeout(() => {
+                        reject(new Error(`Timed out while ${operation}.`));
+                    }, timeoutMs);
+                }),
+            ]);
+        } finally {
+            if (timeoutHandle) {
+                clearTimeout(timeoutHandle);
+            }
+        }
     }
 
     private getMinZoomLevelForFlow(flow: ReadingFlow = this.flow): number {
@@ -202,7 +223,11 @@ export class FoliateEngine {
             this.setupEventListeners();
 
             // Open the book in the view
-            await this.view.open(this.book);
+            await this.withTimeout(
+                this.view.open(this.book),
+                READER_OPEN_TIMEOUT_MS,
+                'opening the book',
+            );
 
             // Get section fractions for progress calculation
             // Add delay to ensure view is fully ready
@@ -246,19 +271,31 @@ export class FoliateEngine {
             if (initialLocation) {
                 console.debug('[FoliateEngine] Navigating to initial CFI location:', initialLocation.substring(0, 50));
                 try {
-                    const result = await this.view.goTo(initialLocation);
+                    const result = await this.withTimeout(
+                        this.view.goTo(initialLocation),
+                        READER_NAVIGATION_TIMEOUT_MS,
+                        'restoring saved location',
+                    );
                     console.debug('[FoliateEngine] goTo result:', result ? 'success' : 'undefined/null');
                     if (!result) {
                         console.warn('[FoliateEngine] Initial CFI navigation returned undefined, CFI may be invalid');
                         // Fall back to beginning if CFI is invalid
-                        await this.view.goTo({ index: 0, fraction: 0 });
+                        await this.withTimeout(
+                            this.view.goTo({ index: 0, fraction: 0 }),
+                            READER_NAVIGATION_TIMEOUT_MS,
+                            'navigating to the start',
+                        );
                     } else {
                         console.debug('[FoliateEngine] Successfully navigated to initial location');
                     }
             } catch (err) {
                 console.warn('<FoliateEngine> Initial CFI navigation failed:', err);
                 // Fall back to beginning if CFI navigation throws
-                await this.view.goTo({ index: 0, fraction: 0 });
+                await this.withTimeout(
+                    this.view.goTo({ index: 0, fraction: 0 }),
+                    READER_NAVIGATION_TIMEOUT_MS,
+                    'navigating to the start',
+                );
                 // Clear invalid CFI by navigating to beginning
                 if (this.options.onLocationChange) {
                     this.options.onLocationChange({ cfi: '', percentage: 0, tocItem: undefined, pageItem: undefined, pageInfo: undefined });
@@ -266,7 +303,11 @@ export class FoliateEngine {
             }
             } else {
                 console.debug('[FoliateEngine] No initial location, starting at beginning');
-                await this.view.goTo({ index: 0, fraction: 0 });
+                await this.withTimeout(
+                    this.view.goTo({ index: 0, fraction: 0 }),
+                    READER_NAVIGATION_TIMEOUT_MS,
+                    'navigating to the start',
+                );
             }
 
             console.debug('[FoliateEngine] Signaling book ready');

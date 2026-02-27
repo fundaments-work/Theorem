@@ -273,6 +273,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
             await engine.open(source, filename, initialLocation, layout, savedLocations, flow, zoom, margins, format);
             if (!abortController.signal.aborted && mountedRef.current) {
                 setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
+                setInitState(prev => ({ ...prev, isLoading: false }));
             }
         } catch (err) {
             if (!abortController.signal.aborted && mountedRef.current) {

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0-beta.1] - 2026-02-27
+## [1.0.0-beta.1] - 2026-02-27
 
 ### Added
 
@@ -57,9 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resolved an EPUB reader regression where some books stayed indefinitely at `Loading book...`.
+- Added timeout and fallback safeguards in the EPUB storage/read pipeline to prevent cross-platform open hangs.
 - Added edge-case regression tests for author normalization and nullable/string-backed date fields.
 - Added a non-mutation assertion to guarantee filtering/sorting does not reorder the input array.
-- Updated desktop bundle versioning to an MSI-compatible format (`0.1.0-1`) for Windows release packaging.
+- Updated desktop bundle versioning to an MSI-compatible format (`1.0.0-1`) for Windows release packaging.
 
 ### CI
 

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing release tag for Android artifact upload (e.g. v0.1.0-beta.1)
+        description: Existing release tag to update (e.g. v1.0.0-beta.1)
         required: true
         type: string
 
@@ -34,21 +34,42 @@ jobs:
 
       - name: Get version from tag
         id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: echo "VERSION=${RELEASE_TAG#v}" >> $GITHUB_OUTPUT
 
-      - name: Create Release
+      - name: Verify existing release tag (manual update mode)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" >/dev/null
+
+      - name: Create or Update Release
         id: create-release
-        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           name: Theorem ${{ steps.get_version.outputs.VERSION }}
           body: |
-            ## What's Changed
-            
-            See [CHANGELOG.md](./CHANGELOG.md) for details.
-            
+            ## Features
+
+            - Reflowable reader support for EPUB, MOBI, AZW/AZW3, FB2, and CBZ.
+            - PDF reading via PDF.js with annotation tooling.
+            - RSS feed reading mode with article extraction.
+            - Library management with import, shelves, bookmarks, and progress tracking.
+            - Local-first Markdown export and Obsidian/Logseq vault sync.
+
+            ## Included In This Beta Update
+
+            - Fixed an EPUB issue where opening could get stuck on `Loading book...`.
+            - Added stronger storage read fallback/timeout handling for non-PDF books.
+            - Improved resume-location handling to skip invalid synthetic section targets.
+
             ## Downloads
-            
+
             | Platform | Download |
             |----------|----------|
             | Windows | `.msi` or `.exe` installer |
@@ -58,11 +79,11 @@ jobs:
             | Android | `.apk` |
           draft: true
           prerelease: ${{ contains(steps.get_version.outputs.VERSION, '-') }}
-          generate_release_notes: true
+          generate_release_notes: false
 
   build-linux:
     name: Build Linux
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     needs: create-release
     steps:
@@ -103,17 +124,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Theorem ${{ github.ref_name }}"
-          releaseBody: "See assets below."
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: "Theorem ${{ env.RELEASE_TAG }}"
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           retryAttempts: 2
           args: --target x86_64-unknown-linux-gnu
 
   build-macos-intel:
     name: Build macOS (Intel)
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     needs: create-release
     steps:
@@ -173,11 +193,10 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Theorem ${{ github.ref_name }}"
-          releaseBody: "See assets below."
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: "Theorem ${{ env.RELEASE_TAG }}"
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           retryAttempts: 2
           args: --target x86_64-apple-darwin
 
@@ -188,17 +207,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: "-"
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Theorem ${{ github.ref_name }}"
-          releaseBody: "See assets below."
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: "Theorem ${{ env.RELEASE_TAG }}"
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           retryAttempts: 2
           args: --target x86_64-apple-darwin
 
   build-macos-arm:
     name: Build macOS (Apple Silicon)
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     needs: create-release
     steps:
@@ -258,11 +276,10 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Theorem ${{ github.ref_name }}"
-          releaseBody: "See assets below."
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: "Theorem ${{ env.RELEASE_TAG }}"
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           retryAttempts: 2
           args: --target aarch64-apple-darwin
 
@@ -273,17 +290,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: "-"
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Theorem ${{ github.ref_name }}"
-          releaseBody: "See assets below."
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: "Theorem ${{ env.RELEASE_TAG }}"
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           retryAttempts: 2
           args: --target aarch64-apple-darwin
 
   build-windows:
     name: Build Windows
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     needs: create-release
     steps:
@@ -319,11 +335,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Theorem ${{ github.ref_name }}"
-          releaseBody: "See assets below."
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: "Theorem ${{ env.RELEASE_TAG }}"
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           retryAttempts: 2
 
   build-android:

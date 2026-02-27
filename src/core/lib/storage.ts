@@ -19,6 +19,7 @@ import { normalizeFilePath } from './utils';
 const STORE_NAME = 'theorem-books';
 const COVERS_STORE = 'theorem-covers';
 const BLOB_CACHE_LIMIT = 3;
+const STORAGE_READ_TIMEOUT_MS = 15000;
 
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
 
@@ -26,6 +27,23 @@ const blobCache = new Map<string, Blob>();
 const pendingDataReads = new Map<string, Promise<ArrayBuffer | null>>();
 const pendingBlobReads = new Map<string, Promise<Blob | null>>();
 const materializedPathCache = new Map<string, string>();
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+    return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+            timeoutHandle = setTimeout(() => {
+                reject(new Error(`[Storage] Timed out while ${label}.`));
+            }, timeoutMs);
+        }),
+    ]).finally(() => {
+        if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
+        }
+    });
+}
 
 function getStorageKey(id: string, filePath?: string): string {
     if (filePath) {
@@ -128,8 +146,24 @@ async function readExternalFile(path: string): Promise<ArrayBuffer | null> {
     }
 
     try {
-        const contents = await fs.readFile(path);
-        return contents.buffer as ArrayBuffer;
+        const contents = await withTimeout(
+            fs.readFile(path),
+            STORAGE_READ_TIMEOUT_MS,
+            `reading external file '${path}'`,
+        );
+        if (contents instanceof Uint8Array) {
+            return contents.buffer.slice(
+                contents.byteOffset,
+                contents.byteOffset + contents.byteLength,
+            );
+        }
+        if (contents instanceof ArrayBuffer) {
+            return contents;
+        }
+        if (Array.isArray(contents)) {
+            return new Uint8Array(contents).buffer;
+        }
+        return null;
     } catch (error) {
         console.error('[Storage] Failed to read external file path:', path, error);
         return null;
@@ -157,7 +191,11 @@ export async function getBookMaterializedPath(id: string, filePath?: string): Pr
     }
 
     try {
-        const materializedPath = await sqliteGetMaterializedBookPath(sqliteBookId);
+        const materializedPath = await withTimeout(
+            sqliteGetMaterializedBookPath(sqliteBookId),
+            STORAGE_READ_TIMEOUT_MS,
+            `resolving materialized SQLite path for '${sqliteBookId}'`,
+        );
         if (materializedPath) {
             materializedPathCache.set(sqliteBookId, materializedPath);
             return materializedPath;
@@ -232,7 +270,11 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
             }
 
             try {
-                const sqliteData = await sqliteGetBookData(sqliteBookId);
+                const sqliteData = await withTimeout(
+                    sqliteGetBookData(sqliteBookId),
+                    STORAGE_READ_TIMEOUT_MS,
+                    `reading SQLite blob for '${sqliteBookId}'`,
+                );
                 if (sqliteData && sqliteData.byteLength > 0) {
                     return sqliteData;
                 }
@@ -247,7 +289,11 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
         }
 
         try {
-            const data = await get<ArrayBuffer>(`${STORE_NAME}-${indexedDbId}`);
+            const data = await withTimeout(
+                get<ArrayBuffer>(`${STORE_NAME}-${indexedDbId}`),
+                STORAGE_READ_TIMEOUT_MS,
+                `reading IndexedDB payload for '${indexedDbId}'`,
+            );
             return data ?? null;
         } catch (error) {
             console.error('[Storage] Failed to read book data from IndexedDB:', error);
@@ -280,7 +326,11 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
     }
 
     const readPromise = (async () => {
-        const data = await getBookData(id, filePath);
+        const data = await withTimeout(
+            getBookData(id, filePath),
+            STORAGE_READ_TIMEOUT_MS,
+            `loading book data for '${id || filePath || 'unknown'}'`,
+        );
         if (!data) {
             return null;
         }

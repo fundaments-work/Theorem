@@ -112,6 +112,24 @@ function getMimeTypeForBookFormat(format: BookFormat): string {
     }
 }
 
+function isSyntheticSectionLocation(location: string): boolean {
+    return /^section-\d+$/i.test(location.trim());
+}
+
+function normalizeInitialReaderLocation(location?: string): string | undefined {
+    if (!location) {
+        return undefined;
+    }
+    const normalized = location.trim();
+    if (!normalized) {
+        return undefined;
+    }
+    if (isSyntheticSectionLocation(normalized) || normalized.startsWith('pdf:page:')) {
+        return undefined;
+    }
+    return normalized;
+}
+
 function BookReaderPage() {
     const currentBookId = useUIStore((state) => state.currentBookId);
     const setRoute = useUIStore((state) => state.setRoute);
@@ -399,7 +417,7 @@ function BookReaderPage() {
                 resumeTargetRef.current = null;
                 hasAppliedInitialLocationRef.current = true;
             } else {
-                const nextLocation = book.currentLocation || undefined;
+                const nextLocation = normalizeInitialReaderLocation(book.currentLocation);
                 setInitialLocation(nextLocation);
                 // Use lastClickFraction if available, otherwise use progress but NOT if book is nearly complete
                 // This prevents jumping to the end when reopening a completed book
@@ -798,7 +816,9 @@ function BookReaderPage() {
             });
 
             const safePercentage = Math.max(0, Math.min(1, loc.percentage || 0));
-            const safeCfi = loc.cfi || '';
+            const safeCfi = loc.cfi && !isSyntheticSectionLocation(loc.cfi)
+                ? loc.cfi
+                : '';
             const lastClickFraction = lastClickFractionRef.current ?? undefined;
             const pageProgress = loc.pageInfo ? {
                 currentPage: loc.pageInfo.currentPage,
