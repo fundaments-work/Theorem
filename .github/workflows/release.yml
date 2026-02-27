@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag for Android artifact upload (e.g. v0.1.0-beta.1)
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,6 +20,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}
 
 jobs:
   create-release:
@@ -31,6 +38,7 @@ jobs:
 
       - name: Create Release
         id: create-release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           name: Theorem ${{ steps.get_version.outputs.VERSION }}
@@ -54,6 +62,7 @@ jobs:
 
   build-linux:
     name: Build Linux
+    if: github.event_name == 'push'
     runs-on: ubuntu-22.04
     needs: create-release
     steps:
@@ -104,6 +113,7 @@ jobs:
 
   build-macos-intel:
     name: Build macOS (Intel)
+    if: github.event_name == 'push'
     runs-on: macos-latest
     needs: create-release
     steps:
@@ -188,6 +198,7 @@ jobs:
 
   build-macos-arm:
     name: Build macOS (Apple Silicon)
+    if: github.event_name == 'push'
     runs-on: macos-latest
     needs: create-release
     steps:
@@ -272,6 +283,7 @@ jobs:
 
   build-windows:
     name: Build Windows
+    if: github.event_name == 'push'
     runs-on: windows-latest
     needs: create-release
     steps:
@@ -371,23 +383,39 @@ jobs:
           sed -i '0,/isMinifyEnabled = true/s//isMinifyEnabled = false/' src-tauri/gen/android/app/build.gradle.kts
           grep -n "isMinifyEnabled" src-tauri/gen/android/app/build.gradle.kts
 
+      - name: Resolve Android signing mode
+        id: android-signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -n "$ANDROID_KEYSTORE_BASE64" \
+            && -n "$ANDROID_KEYSTORE_PASSWORD" \
+            && -n "$ANDROID_KEY_ALIAS" \
+            && -n "$ANDROID_KEY_PASSWORD" ]]; then
+            echo "mode=signed" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=unsigned" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Decode signing keystore
-        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        if: steps.android-signing.outputs.mode == 'signed'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo $ANDROID_KEYSTORE_BASE64 | base64 --decode > keystore.jks
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > src-tauri/gen/android/theorem-release.jks
 
       - name: Build Android APK (unsigned release)
-        if: env.ANDROID_KEYSTORE_BASE64 == ''
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        if: steps.android-signing.outputs.mode == 'unsigned'
         run: pnpm tauri android build
 
       - name: Build Android APK (signed)
-        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        if: steps.android-signing.outputs.mode == 'signed'
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PATH: src-tauri/gen/android/theorem-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -398,7 +426,7 @@ jobs:
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
           draft: true
           files: |
             src-tauri/gen/android/app/build/outputs/apk/**/*.apk
@@ -408,7 +436,7 @@ jobs:
         if: steps.upload-android-attempt-1.outcome == 'failure'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
           draft: true
           files: |
             src-tauri/gen/android/app/build/outputs/apk/**/*.apk
@@ -419,6 +447,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-linux, build-macos-intel, build-macos-arm, build-windows, build-android]
     if: >-
+      github.event_name == 'push' &&
       always() &&
       needs.build-linux.result == 'success' &&
       needs.build-macos-intel.result == 'success' &&
