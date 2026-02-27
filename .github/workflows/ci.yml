@@ -85,6 +85,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+        id: pnpm-cache
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-rust-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-pnpm-store-
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify PDF.js resources
+        run: |
+          test -f node_modules/pdfjs-dist/build/pdf.worker.mjs
+          test -d node_modules/pdfjs-dist/cmaps
+          test -d node_modules/pdfjs-dist/standard_fonts
+
       - name: Install dependencies (Ubuntu)
         run: |
           sudo apt-get update
