@@ -76,7 +76,8 @@ function isExternalFilePath(filePath?: string): boolean {
 
     return !filePath.startsWith('sqlite://')
         && !filePath.startsWith('idb://')
-        && !filePath.startsWith('browser://');
+        && !filePath.startsWith('browser://')
+        && !filePath.startsWith('content://');
 }
 
 function getCachedBlob(cacheKey: string): Blob | null {

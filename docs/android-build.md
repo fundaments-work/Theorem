@@ -48,9 +48,11 @@ The Android project is NOT committed to the repository. It must be regenerated o
 ```bash
 pnpm install
 pnpm tauri android init --ci
+pnpm tauri icon public/favicon.svg
 ```
 
 This creates `src-tauri/gen/android/` with the Android Studio project.
+`tauri icon` must run after each fresh `android init` so launcher assets keep Theorem branding.
 
 ## Build APK
 

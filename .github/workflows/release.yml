@@ -394,6 +394,14 @@ jobs:
       - name: Initialize Android project
         run: pnpm tauri android init --ci
 
+      - name: Generate branded Android launcher icons
+        run: pnpm tauri icon public/favicon.svg
+
+      - name: Disable Android release minification
+        run: |
+          sed -i '0,/isMinifyEnabled = true/s//isMinifyEnabled = false/' src-tauri/gen/android/app/build.gradle.kts
+          grep -n "isMinifyEnabled" src-tauri/gen/android/app/build.gradle.kts
+
       - name: Decode signing keystore
         if: env.ANDROID_KEYSTORE_BASE64 != ''
         env:
@@ -401,11 +409,11 @@ jobs:
         run: |
           echo $ANDROID_KEYSTORE_BASE64 | base64 --decode > keystore.jks
 
-      - name: Build Android APK (unsigned)
+      - name: Build Android APK (unsigned release)
         if: env.ANDROID_KEYSTORE_BASE64 == ''
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: pnpm tauri android build --debug
+        run: pnpm tauri android build --release
 
       - name: Build Android APK (signed)
         if: env.ANDROID_KEYSTORE_BASE64 != ''
