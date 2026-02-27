@@ -393,21 +393,32 @@ jobs:
           fi
 
           if ! grep -q 'signingConfigs {' "$FILE"; then
-            sed -i '/^    buildTypes {/i\
-    signingConfigs {\
-        create("release") {\
-            val keystorePropertiesFile = rootProject.file("keystore.properties")\
-            val keystoreProperties = Properties()\
-            if (keystorePropertiesFile.exists()) {\
-                keystoreProperties.load(FileInputStream(keystorePropertiesFile))\
-            }\
-            keyAlias = keystoreProperties["keyAlias"] as String\
-            keyPassword = keystoreProperties["password"] as String\
-            storeFile = file(keystoreProperties["storeFile"] as String)\
-            storePassword = keystoreProperties["password"] as String\
-        }\
-    }\
-' "$FILE"
+            printf '%s\n' \
+              'signingConfigs {' \
+              '    create("release") {' \
+              '        val keystorePropertiesFile = rootProject.file("keystore.properties")' \
+              '        val keystoreProperties = Properties()' \
+              '        if (keystorePropertiesFile.exists()) {' \
+              '            keystoreProperties.load(FileInputStream(keystorePropertiesFile))' \
+              '        }' \
+              '        keyAlias = keystoreProperties["keyAlias"] as String' \
+              '        keyPassword = keystoreProperties["password"] as String' \
+              '        storeFile = file(keystoreProperties["storeFile"] as String)' \
+              '        storePassword = keystoreProperties["password"] as String' \
+              '    }' \
+              '}' > /tmp/theorem-signing-snippet.kts
+            awk '
+              BEGIN { inserted=0 }
+              /buildTypes \{/ && !inserted {
+                while ((getline line < "/tmp/theorem-signing-snippet.kts") > 0) {
+                  print "    " line
+                }
+                close("/tmp/theorem-signing-snippet.kts")
+                inserted=1
+              }
+              { print }
+            ' "$FILE" > "$FILE.tmp"
+            mv "$FILE.tmp" "$FILE"
           fi
 
           if ! grep -q 'signingConfig = signingConfigs.getByName("release")' "$FILE"; then
