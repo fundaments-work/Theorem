@@ -386,40 +386,92 @@ jobs:
       - name: Validate Android signing secrets
         shell: bash
         env:
+          ANDROID_KEY_BASE64_VAR: ${{ vars.ANDROID_KEY_BASE64 }}
           ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          ANDROID_KEYSTORE_BASE64_VAR: ${{ vars.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD_VAR: ${{ vars.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS_VAR: ${{ vars.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD_VAR: ${{ vars.ANDROID_KEY_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           KEY_B64="$ANDROID_KEY_BASE64"
           if [[ -z "$KEY_B64" ]]; then
             KEY_B64="$ANDROID_KEYSTORE_BASE64"
           fi
-          if [[ -z "$KEY_B64" || -z "$ANDROID_KEYSTORE_PASSWORD" || -z "$ANDROID_KEY_ALIAS" || -z "$ANDROID_KEY_PASSWORD" ]]; then
-            echo "::error::Missing Android signing secrets. Configure ANDROID_KEY_BASE64 (or ANDROID_KEYSTORE_BASE64), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD."
+          if [[ -z "$KEY_B64" ]]; then
+            KEY_B64="$ANDROID_KEY_BASE64_VAR"
+          fi
+          if [[ -z "$KEY_B64" ]]; then
+            KEY_B64="$ANDROID_KEYSTORE_BASE64_VAR"
+          fi
+          KEY_ALIAS="$ANDROID_KEY_ALIAS"
+          if [[ -z "$KEY_ALIAS" ]]; then
+            KEY_ALIAS="$ANDROID_KEY_ALIAS_VAR"
+          fi
+          KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
+          if [[ -z "$KEY_PASSWORD" ]]; then
+            KEY_PASSWORD="$ANDROID_KEY_PASSWORD_VAR"
+          fi
+          STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
+          if [[ -z "$STORE_PASSWORD" ]]; then
+            STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD_VAR"
+          fi
+          if [[ -z "$STORE_PASSWORD" ]]; then
+            STORE_PASSWORD="$KEY_PASSWORD"
+          fi
+          if [[ -z "$KEY_B64" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
+            echo "::error::Missing Android signing settings. Required: ANDROID_KEY_BASE64 (or ANDROID_KEYSTORE_BASE64), ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD. Optional: ANDROID_KEYSTORE_PASSWORD (defaults to ANDROID_KEY_PASSWORD)."
             exit 1
           fi
 
       - name: Setup Android signing
         shell: bash
         env:
+          ANDROID_KEY_BASE64_VAR: ${{ vars.ANDROID_KEY_BASE64 }}
           ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          ANDROID_KEYSTORE_BASE64_VAR: ${{ vars.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD_VAR: ${{ vars.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS_VAR: ${{ vars.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD_VAR: ${{ vars.ANDROID_KEY_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           KEY_B64="$ANDROID_KEY_BASE64"
           if [[ -z "$KEY_B64" ]]; then
             KEY_B64="$ANDROID_KEYSTORE_BASE64"
           fi
+          if [[ -z "$KEY_B64" ]]; then
+            KEY_B64="$ANDROID_KEY_BASE64_VAR"
+          fi
+          if [[ -z "$KEY_B64" ]]; then
+            KEY_B64="$ANDROID_KEYSTORE_BASE64_VAR"
+          fi
+          KEY_ALIAS="$ANDROID_KEY_ALIAS"
+          if [[ -z "$KEY_ALIAS" ]]; then
+            KEY_ALIAS="$ANDROID_KEY_ALIAS_VAR"
+          fi
+          KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
+          if [[ -z "$KEY_PASSWORD" ]]; then
+            KEY_PASSWORD="$ANDROID_KEY_PASSWORD_VAR"
+          fi
+          STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
+          if [[ -z "$STORE_PASSWORD" ]]; then
+            STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD_VAR"
+          fi
+          if [[ -z "$STORE_PASSWORD" ]]; then
+            STORE_PASSWORD="$KEY_PASSWORD"
+          fi
           printf '%s' "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/theorem-release.jks"
           cat > src-tauri/gen/android/keystore.properties <<EOF
-          keyAlias=$ANDROID_KEY_ALIAS
-          password=$ANDROID_KEY_PASSWORD
-          keyPassword=$ANDROID_KEY_PASSWORD
-          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          password=$KEY_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          storePassword=$STORE_PASSWORD
           storeFile=$RUNNER_TEMP/theorem-release.jks
           EOF
 
