@@ -63,104 +63,341 @@ function runFilter({
     });
 }
 
-describe("library filtering", () => {
+function ids(books: Book[]) {
+    return books.map((book) => book.id);
+}
+
+describe("getFilteredAndSortedBooks", () => {
     const books: Book[] = [
         makeBook({
             id: "alpha",
             title: "Alpha",
             author: "Alice",
-            addedAt: new Date("2024-01-10T00:00:00.000Z"),
+            addedAt: new Date("2024-01-02T00:00:00.000Z"),
             isFavorite: false,
             tags: ["fiction"],
+            progress: 0.15,
+            rating: 1,
+            lastReadAt: undefined,
         }),
         makeBook({
             id: "beta-rss",
             title: "Beta RSS",
             author: "Bob",
-            addedAt: new Date("2024-01-11T00:00:00.000Z"),
+            addedAt: new Date("2024-01-01T00:00:00.000Z"),
             isFavorite: true,
-            tags: ["rss"],
+            tags: ["rss", "news"],
+            progress: 0.9,
+            rating: 5,
+            lastReadAt: new Date("2024-01-05T00:00:00.000Z"),
         }),
         makeBook({
             id: "beta-book",
             title: "Beta Book",
             author: "Beatrice",
-            addedAt: new Date("2024-01-12T00:00:00.000Z"),
+            addedAt: new Date("2024-01-03T00:00:00.000Z"),
             isFavorite: true,
             tags: ["fantasy"],
+            format: "pdf",
+            progress: 0.75,
+            rating: undefined,
+            lastReadAt: new Date("2024-02-01T00:00:00.000Z"),
         }),
         makeBook({
             id: "gamma",
             title: "Gamma",
             author: "Gabe",
-            addedAt: new Date("2024-01-13T00:00:00.000Z"),
+            addedAt: new Date("2024-01-04T00:00:00.000Z"),
             isFavorite: false,
-            tags: ["history"],
+            tags: ["science"],
+            format: "mobi",
+            progress: 0.45,
+            rating: 4,
+            lastReadAt: new Date("2024-01-15T00:00:00.000Z"),
         }),
     ];
 
-    it("hides rss books in main library view", () => {
-        const result = runFilter({ books });
-        expect(result.map((book) => book.id)).toEqual(["alpha", "beta-book", "gamma"]);
+    describe("rss, shelf, and favorites filtering", () => {
+        it("hides rss books in the main library view", () => {
+            const result = runFilter({ books });
+            expect(ids(result)).toEqual(["alpha", "beta-book", "gamma"]);
+        });
+
+        it("includes rss books when filtering by a selected shelf", () => {
+            const result = runFilter({
+                books,
+                selectedShelfBookIds: new Set(["beta-rss", "gamma"]),
+            });
+            expect(ids(result)).toEqual(["beta-rss", "gamma"]);
+        });
+
+        it("returns an empty list when a selected shelf has no book ids", () => {
+            const result = runFilter({
+                books,
+                selectedShelfBookIds: new Set<string>(),
+            });
+            expect(ids(result)).toEqual([]);
+        });
+
+        it("applies favorites after shelf filtering", () => {
+            const result = runFilter({
+                books,
+                selectedShelfBookIds: new Set(["alpha", "beta-book", "gamma"]),
+                showFavoritesOnly: true,
+            });
+            expect(ids(result)).toEqual(["beta-book"]);
+        });
+
+        it("keeps rss items hidden in favorites-only mode when no shelf is selected", () => {
+            const result = runFilter({
+                books,
+                showFavoritesOnly: true,
+            });
+            expect(ids(result)).toEqual(["beta-book"]);
+        });
     });
 
-    it("includes rss books when filtering by a selected shelf", () => {
-        const result = runFilter({
-            books,
-            selectedShelfBookIds: new Set(["beta-rss", "gamma"]),
+    describe("search behavior", () => {
+        it("searches only within the already filtered set", () => {
+            const result = runFilter({
+                books,
+                searchQuery: "beta",
+            });
+            expect(ids(result)).toEqual(["beta-book"]);
         });
-        expect(result.map((book) => book.id)).toEqual(["beta-rss", "gamma"]);
+
+        it("can search rss books when the current shelf includes them", () => {
+            const result = runFilter({
+                books,
+                searchQuery: "rss",
+                selectedShelfBookIds: new Set(["beta-rss", "gamma"]),
+            });
+            expect(ids(result)).toEqual(["beta-rss"]);
+        });
+
+        it("matches searchable tags and format labels", () => {
+            const tagResult = runFilter({
+                books,
+                searchQuery: "science",
+            });
+            const formatResult = runFilter({
+                books,
+                searchQuery: "pdf",
+            });
+
+            expect(ids(tagResult)).toEqual(["gamma"]);
+            expect(ids(formatResult)).toEqual(["beta-book"]);
+        });
+
+        it("uses fuzzy relevance order when searching regardless of sort settings", () => {
+            const byTitleAsc = runFilter({
+                books,
+                searchQuery: "beta",
+                selectedShelfBookIds: new Set(["beta-rss", "beta-book"]),
+                sortBy: "title",
+                sortOrder: "asc",
+            });
+            const byDateDesc = runFilter({
+                books,
+                searchQuery: "beta",
+                selectedShelfBookIds: new Set(["beta-rss", "beta-book"]),
+                sortBy: "dateAdded",
+                sortOrder: "desc",
+            });
+
+            expect(ids(byTitleAsc)).toEqual(ids(byDateDesc));
+        });
+
+        it("treats whitespace-only query as no search and falls back to configured sort", () => {
+            const result = runFilter({
+                books,
+                searchQuery: "   ",
+                sortBy: "progress",
+                sortOrder: "desc",
+            });
+            expect(ids(result)).toEqual(["beta-book", "gamma", "alpha"]);
+        });
+
+        it("normalizes non-string author values while searching", () => {
+            const result = runFilter({
+                books: [
+                    makeBook({
+                        id: "author-object",
+                        title: "Object Author",
+                        author: { name: "Jane Doe" } as unknown as string,
+                    }),
+                    makeBook({
+                        id: "author-array",
+                        title: "Array Author",
+                        author: ["Alice", { name: "Bob" }] as unknown as string,
+                    }),
+                ],
+                searchQuery: "jane",
+            });
+            expect(ids(result)).toEqual(["author-object"]);
+        });
     });
 
-    it("applies favorites filter after shelf filtering", () => {
-        const result = runFilter({
-            books,
-            selectedShelfBookIds: new Set(["alpha", "beta-book", "gamma"]),
-            showFavoritesOnly: true,
-        });
-        expect(result.map((book) => book.id)).toEqual(["beta-book"]);
-    });
+    describe("sorting behavior", () => {
+        it("sorts by title in both directions", () => {
+            const asc = runFilter({ books, sortBy: "title", sortOrder: "asc" });
+            const desc = runFilter({ books, sortBy: "title", sortOrder: "desc" });
 
-    it("searches only within the already filtered set", () => {
-        const result = runFilter({
-            books,
-            searchQuery: "beta",
-        });
-        expect(result.map((book) => book.id)).toEqual(["beta-book"]);
-    });
-
-    it("uses fuzzy ranking order when searching regardless of sort order", () => {
-        const asc = runFilter({
-            books,
-            searchQuery: "beta",
-            selectedShelfBookIds: new Set(["beta-rss", "beta-book"]),
-            sortBy: "title",
-            sortOrder: "asc",
-        });
-        const desc = runFilter({
-            books,
-            searchQuery: "beta",
-            selectedShelfBookIds: new Set(["beta-rss", "beta-book"]),
-            sortBy: "title",
-            sortOrder: "desc",
+            expect(ids(asc)).toEqual(["alpha", "beta-book", "gamma"]);
+            expect(ids(desc)).toEqual(["gamma", "beta-book", "alpha"]);
         });
 
-        expect(asc.map((book) => book.id)).toEqual(desc.map((book) => book.id));
-    });
+        it("sorts by author in both directions", () => {
+            const asc = runFilter({ books, sortBy: "author", sortOrder: "asc" });
+            const desc = runFilter({ books, sortBy: "author", sortOrder: "desc" });
 
-    it("sorts by date when no search query is active", () => {
-        const asc = runFilter({
-            books,
-            sortBy: "dateAdded",
-            sortOrder: "asc",
-        });
-        const desc = runFilter({
-            books,
-            sortBy: "dateAdded",
-            sortOrder: "desc",
+            expect(ids(asc)).toEqual(["alpha", "beta-book", "gamma"]);
+            expect(ids(desc)).toEqual(["gamma", "beta-book", "alpha"]);
         });
 
-        expect(asc.map((book) => book.id)).toEqual(["alpha", "beta-book", "gamma"]);
-        expect(desc.map((book) => book.id)).toEqual(["gamma", "beta-book", "alpha"]);
+        it("normalizes non-string author values while sorting", () => {
+            const asc = runFilter({
+                books: [
+                    makeBook({
+                        id: "author-sort-1",
+                        title: "Author Sort 1",
+                        author: { name: "Ada" } as unknown as string,
+                    }),
+                    makeBook({
+                        id: "author-sort-2",
+                        title: "Author Sort 2",
+                        author: "Bea",
+                    }),
+                    makeBook({
+                        id: "author-sort-3",
+                        title: "Author Sort 3",
+                        author: ["Zed", { name: "Yara" }] as unknown as string,
+                    }),
+                ],
+                sortBy: "author",
+                sortOrder: "asc",
+            });
+
+            expect(ids(asc)).toEqual(["author-sort-1", "author-sort-2", "author-sort-3"]);
+        });
+
+        it("sorts by dateAdded and accepts string-based date values", () => {
+            const result = runFilter({
+                books: [
+                    makeBook({
+                        id: "date-1",
+                        title: "Date 1",
+                        addedAt: new Date("2024-01-11T00:00:00.000Z"),
+                    }),
+                    makeBook({
+                        id: "date-2",
+                        title: "Date 2",
+                        addedAt: "2024-01-09T00:00:00.000Z" as unknown as Date,
+                    }),
+                    makeBook({
+                        id: "date-3",
+                        title: "Date 3",
+                        addedAt: new Date("2024-01-13T00:00:00.000Z"),
+                    }),
+                ],
+                sortBy: "dateAdded",
+                sortOrder: "asc",
+            });
+            expect(ids(result)).toEqual(["date-2", "date-1", "date-3"]);
+        });
+
+        it("sorts by lastRead and treats missing values as zero", () => {
+            const asc = runFilter({
+                books: [
+                    makeBook({
+                        id: "read-none",
+                        title: "Unread",
+                        lastReadAt: undefined,
+                    }),
+                    makeBook({
+                        id: "read-string",
+                        title: "Read String",
+                        lastReadAt: "2024-01-11T00:00:00.000Z" as unknown as Date,
+                    }),
+                    makeBook({
+                        id: "read-date",
+                        title: "Read Date",
+                        lastReadAt: new Date("2024-01-15T00:00:00.000Z"),
+                    }),
+                ],
+                sortBy: "lastRead",
+                sortOrder: "asc",
+            });
+            const desc = runFilter({
+                books: [
+                    makeBook({
+                        id: "read-none",
+                        title: "Unread",
+                        lastReadAt: undefined,
+                    }),
+                    makeBook({
+                        id: "read-string",
+                        title: "Read String",
+                        lastReadAt: "2024-01-11T00:00:00.000Z" as unknown as Date,
+                    }),
+                    makeBook({
+                        id: "read-date",
+                        title: "Read Date",
+                        lastReadAt: new Date("2024-01-15T00:00:00.000Z"),
+                    }),
+                ],
+                sortBy: "lastRead",
+                sortOrder: "desc",
+            });
+
+            expect(ids(asc)).toEqual(["read-none", "read-string", "read-date"]);
+            expect(ids(desc)).toEqual(["read-date", "read-string", "read-none"]);
+        });
+
+        it("sorts by progress in both directions", () => {
+            const asc = runFilter({ books, sortBy: "progress", sortOrder: "asc" });
+            const desc = runFilter({ books, sortBy: "progress", sortOrder: "desc" });
+
+            expect(ids(asc)).toEqual(["alpha", "gamma", "beta-book"]);
+            expect(ids(desc)).toEqual(["beta-book", "gamma", "alpha"]);
+        });
+
+        it("sorts by rating and treats unrated books as zero", () => {
+            const asc = runFilter({ books, sortBy: "rating", sortOrder: "asc" });
+            const desc = runFilter({ books, sortBy: "rating", sortOrder: "desc" });
+
+            expect(ids(asc)).toEqual(["beta-book", "alpha", "gamma"]);
+            expect(ids(desc)).toEqual(["gamma", "alpha", "beta-book"]);
+        });
+
+        it("does not mutate the original input array order while sorting", () => {
+            const sortableBooks = [
+                makeBook({
+                    id: "mut-1",
+                    title: "C Book",
+                    addedAt: new Date("2024-01-03T00:00:00.000Z"),
+                }),
+                makeBook({
+                    id: "mut-2",
+                    title: "A Book",
+                    addedAt: new Date("2024-01-01T00:00:00.000Z"),
+                }),
+                makeBook({
+                    id: "mut-3",
+                    title: "B Book",
+                    addedAt: new Date("2024-01-02T00:00:00.000Z"),
+                }),
+            ];
+            const originalOrder = ids(sortableBooks);
+
+            const sorted = runFilter({
+                books: sortableBooks,
+                sortBy: "title",
+                sortOrder: "asc",
+            });
+
+            expect(ids(sorted)).toEqual(["mut-2", "mut-3", "mut-1"]);
+            expect(ids(sortableBooks)).toEqual(originalOrder);
+        });
     });
 });

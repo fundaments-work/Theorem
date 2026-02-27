@@ -4229,7 +4229,7 @@ dependencies = [
 
 [[package]]
 name = "theorem"
-version = "0.1.0"
+version = "0.1.0-beta.2"
 dependencies = [
  "reqwest 0.11.27",
  "rusqlite",
