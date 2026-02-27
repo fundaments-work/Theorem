@@ -36,8 +36,7 @@ jobs:
         id: get_version
         run: echo "VERSION=${RELEASE_TAG#v}" >> $GITHUB_OUTPUT
 
-      - name: Verify existing release tag (manual update mode)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Verify existing release tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
