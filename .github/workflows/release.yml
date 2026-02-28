@@ -126,7 +126,7 @@ jobs:
 
   build-linux:
     name: Build Linux
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && env.ANDROID_ONLY_MODE != 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && !((github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') || (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1'))
     runs-on: ubuntu-22.04
     needs: create-release
     steps:
@@ -176,7 +176,7 @@ jobs:
 
   build-macos-intel:
     name: Build macOS (Intel)
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && env.ANDROID_ONLY_MODE != 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && !((github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') || (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1'))
     runs-on: macos-latest
     needs: create-release
     steps:
@@ -259,7 +259,7 @@ jobs:
 
   build-macos-arm:
     name: Build macOS (Apple Silicon)
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && env.ANDROID_ONLY_MODE != 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && !((github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') || (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1'))
     runs-on: macos-latest
     needs: create-release
     steps:
@@ -342,7 +342,7 @@ jobs:
 
   build-windows:
     name: Build Windows
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && env.ANDROID_ONLY_MODE != 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && !((github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') || (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1'))
     runs-on: windows-latest
     needs: create-release
     steps:
@@ -636,7 +636,10 @@ jobs:
       always() &&
       needs.build-android.result == 'success' &&
       (
-        env.ANDROID_ONLY_MODE == 'true' ||
+        (
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') ||
+          (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1')
+        ) ||
         (
           needs.build-linux.result == 'success' &&
           needs.build-macos-intel.result == 'success' &&
