@@ -10,6 +10,14 @@ on:
         description: Existing release tag to update (e.g. v1.0.0-beta.1)
         required: true
         type: string
+      build_scope:
+        description: Build scope for this run
+        required: false
+        default: all-platforms
+        type: choice
+        options:
+          - android-only
+          - all-platforms
 
 permissions:
   contents: write
@@ -21,10 +29,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}
+  ANDROID_ONLY_MODE: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') || (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1') }}
 
 jobs:
   create-release:
     name: Create Release
+    if: github.event_name == 'workflow_dispatch' || github.event.deleted == false
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.create-release.outputs.id }}
@@ -42,20 +52,43 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+          response="$(curl --silent --show-error --write-out '\n%{http_code}' \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          status="$(printf '%s' "${response}" | tail -n1)"
+          body="$(printf '%s' "${response}" | sed '$d')"
           if [[ "${status}" == "200" ]]; then
+            release_id="$(printf '%s' "${body}" | jq -r '.id // empty')"
             echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
             echo "Release for ${RELEASE_TAG} already exists and will be updated."
           elif [[ "${status}" == "404" ]]; then
             echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "release_id=" >> "$GITHUB_OUTPUT"
             echo "::notice::No release found for ${RELEASE_TAG}. A new draft release will be created."
           else
             echo "::error::GitHub API returned unexpected status ${status} while checking release tag ${RELEASE_TAG}."
             exit 1
           fi
+
+      - name: Delete existing release for android-only rerun
+        if: env.ANDROID_ONLY_MODE == 'true' && steps.release-check.outputs.exists == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          release_id="${{ steps.release-check.outputs.release_id }}"
+          if [[ -z "${release_id}" ]]; then
+            echo "::error::Unable to determine release id for ${RELEASE_TAG}."
+            exit 1
+          fi
+          curl --silent --show-error --fail \
+            -X DELETE \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}"
+          echo "Deleted existing release ${release_id} for ${RELEASE_TAG}."
 
       - name: Create or Update Release
         id: create-release
@@ -93,7 +126,7 @@ jobs:
 
   build-linux:
     name: Build Linux
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && env.ANDROID_ONLY_MODE != 'true'
     runs-on: ubuntu-22.04
     needs: create-release
     steps:
@@ -143,7 +176,7 @@ jobs:
 
   build-macos-intel:
     name: Build macOS (Intel)
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && env.ANDROID_ONLY_MODE != 'true'
     runs-on: macos-latest
     needs: create-release
     steps:
@@ -226,7 +259,7 @@ jobs:
 
   build-macos-arm:
     name: Build macOS (Apple Silicon)
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && env.ANDROID_ONLY_MODE != 'true'
     runs-on: macos-latest
     needs: create-release
     steps:
@@ -309,7 +342,7 @@ jobs:
 
   build-windows:
     name: Build Windows
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && env.ANDROID_ONLY_MODE != 'true'
     runs-on: windows-latest
     needs: create-release
     steps:
@@ -353,7 +386,7 @@ jobs:
 
   build-android:
     name: Build Android
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false)
     runs-on: ubuntu-latest
     needs: create-release
     steps:
@@ -599,12 +632,18 @@ jobs:
     needs: [build-linux, build-macos-intel, build-macos-arm, build-windows, build-android]
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (github.event_name == 'workflow_dispatch' || github.event.deleted == false) &&
       always() &&
-      needs.build-linux.result == 'success' &&
-      needs.build-macos-intel.result == 'success' &&
-      needs.build-macos-arm.result == 'success' &&
-      needs.build-windows.result == 'success' &&
-      needs.build-android.result == 'success'
+      needs.build-android.result == 'success' &&
+      (
+        env.ANDROID_ONLY_MODE == 'true' ||
+        (
+          needs.build-linux.result == 'success' &&
+          needs.build-macos-intel.result == 'success' &&
+          needs.build-macos-arm.result == 'success' &&
+          needs.build-windows.result == 'success'
+        )
+      )
     steps:
       - name: Publish Release
         run: echo "All builds completed successfully. Release is ready for review."
