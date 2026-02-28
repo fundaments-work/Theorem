@@ -10,14 +10,6 @@ on:
         description: Existing release tag to update (e.g. v1.0.0-beta.1)
         required: true
         type: string
-      build_scope:
-        description: Build scope for this run
-        required: false
-        default: all-platforms
-        type: choice
-        options:
-          - android-only
-          - all-platforms
 
 permissions:
   contents: write
@@ -29,7 +21,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}
-  ANDROID_ONLY_MODE: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') || (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1') }}
 
 jobs:
   create-release:
@@ -72,24 +63,6 @@ jobs:
             exit 1
           fi
 
-      - name: Delete existing release for android-only rerun
-        if: env.ANDROID_ONLY_MODE == 'true' && steps.release-check.outputs.exists == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          release_id="${{ steps.release-check.outputs.release_id }}"
-          if [[ -z "${release_id}" ]]; then
-            echo "::error::Unable to determine release id for ${RELEASE_TAG}."
-            exit 1
-          fi
-          curl --silent --show-error --fail \
-            -X DELETE \
-            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}"
-          echo "Deleted existing release ${release_id} for ${RELEASE_TAG}."
-
       - name: Create or Update Release
         id: create-release
         uses: softprops/action-gh-release@v2
@@ -126,7 +99,7 @@ jobs:
 
   build-linux:
     name: Build Linux
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && !((github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') || (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1'))
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false)
     runs-on: ubuntu-22.04
     needs: create-release
     steps:
@@ -176,7 +149,7 @@ jobs:
 
   build-macos-intel:
     name: Build macOS (Intel)
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && !((github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') || (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1'))
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false)
     runs-on: macos-latest
     needs: create-release
     steps:
@@ -259,7 +232,7 @@ jobs:
 
   build-macos-arm:
     name: Build macOS (Apple Silicon)
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && !((github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') || (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1'))
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false)
     runs-on: macos-latest
     needs: create-release
     steps:
@@ -342,7 +315,7 @@ jobs:
 
   build-windows:
     name: Build Windows
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false) && !((github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') || (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1'))
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false)
     runs-on: windows-latest
     needs: create-release
     steps:
@@ -634,19 +607,11 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'workflow_dispatch' || github.event.deleted == false) &&
       always() &&
-      needs.build-android.result == 'success' &&
-      (
-        (
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'android-only') ||
-          (github.event_name == 'push' && github.ref_name == 'v1.0.0-beta.1')
-        ) ||
-        (
-          needs.build-linux.result == 'success' &&
-          needs.build-macos-intel.result == 'success' &&
-          needs.build-macos-arm.result == 'success' &&
-          needs.build-windows.result == 'success'
-        )
-      )
+      needs.build-linux.result == 'success' &&
+      needs.build-macos-intel.result == 'success' &&
+      needs.build-macos-arm.result == 'success' &&
+      needs.build-windows.result == 'success' &&
+      needs.build-android.result == 'success'
     steps:
       - name: Publish Release
         run: echo "All builds completed successfully. Release is ready for review."
