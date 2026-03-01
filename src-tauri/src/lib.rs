@@ -1,4 +1,8 @@
 mod database;
+mod sync_commands;
+mod sync_crypto;
+mod sync_protocol;
+mod sync_server;
 
 use reqwest::blocking::Client;
 use serde::Serialize;
@@ -8,6 +12,7 @@ use std::env;
  */
 use std::fs;
 use tauri::ipc::Response;
+use tauri::Manager;
 
 /**
  * Metadata structure for PDF documents.
@@ -480,6 +485,28 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_app::init())
         .plugin(tauri_plugin_mobile_folder_scan::init())
+        .setup(|app| {
+            // Initialize LAN sync subsystem.
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+
+            let device_name = std::env::var("HOSTNAME")
+                .or_else(|_| std::env::var("COMPUTERNAME"))
+                .unwrap_or_else(|_| "Theorem Device".to_string());
+
+            match sync_commands::init_sync(app_data_dir, device_name, app.handle().clone()) {
+                Ok(sync_state) => {
+                    app.manage(sync_state);
+                }
+                Err(e) => {
+                    eprintln!("[theorem] Warning: Failed to initialize sync: {}", e);
+                }
+            }
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             read_file,
             read_pdf_file,
@@ -508,7 +535,19 @@ pub fn run() {
             database::sqlite_get_blob,
             database::sqlite_delete_blob,
             database::sqlite_delete_blobs_by_prefix,
-            database::sqlite_get_blob_stats
+            database::sqlite_get_blob_stats,
+            // LAN sync commands
+            sync_commands::start_sync_server,
+            sync_commands::stop_sync_server,
+            sync_commands::generate_pairing_qr,
+            sync_commands::submit_pairing_code,
+            sync_commands::get_device_identity,
+            sync_commands::get_paired_devices,
+            sync_commands::unpair_device,
+            sync_commands::set_sync_data,
+            sync_commands::get_incoming_sync_data,
+            sync_commands::update_peer_address,
+            sync_commands::initiate_sync
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
