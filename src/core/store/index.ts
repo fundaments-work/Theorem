@@ -77,6 +77,13 @@ const defaultVaultSettings: AppSettings["vault"] = {
     vocabularyFileName: "theorem-vocabulary.md",
 };
 
+const defaultDeviceSyncSettings: AppSettings["deviceSync"] = {
+    deviceId: "",
+    deviceName: "",
+    pairedDevices: [],
+    syncOnConnect: false,
+};
+
 // Default app settings
 const defaultAppSettings: AppSettings = {
     sidebarCollapsed: false,
@@ -89,6 +96,7 @@ const defaultAppSettings: AppSettings = {
     readerSettings: defaultReaderSettings,
     vocabulary: defaultVocabularySettings,
     vault: defaultVaultSettings,
+    deviceSync: defaultDeviceSyncSettings,
     hasCompletedOnboarding: false,
 };
 
@@ -123,6 +131,10 @@ interface UIStore extends UIState {
         message?: string,
         syncedAt?: string,
     ) => void;
+    setDeviceSyncStatus: (
+        status: UIState["deviceSyncStatus"],
+        message?: string,
+    ) => void;
     // Reader-specific UI
     setReaderToolbarVisible: (visible: boolean) => void;
     toggleReaderToolbar: () => void;
@@ -144,6 +156,8 @@ export const useUIStore = create<UIStore>()(
             vaultSyncStatus: "idle",
             vaultSyncMessage: undefined,
             vaultSyncAt: undefined,
+            deviceSyncStatus: "idle",
+            deviceSyncMessage: undefined,
 
             setRoute: (route, bookId, pushHistory = true) => {
                 if (pushHistory && typeof window !== "undefined") {
@@ -185,6 +199,8 @@ export const useUIStore = create<UIStore>()(
             setError: (error) => set({ error }),
             setVaultSyncStatus: (vaultSyncStatus, vaultSyncMessage, vaultSyncAt) =>
                 set({ vaultSyncStatus, vaultSyncMessage, vaultSyncAt }),
+            setDeviceSyncStatus: (deviceSyncStatus, deviceSyncMessage) =>
+                set({ deviceSyncStatus, deviceSyncMessage }),
 
             // Reader toolbar
             setReaderToolbarVisible: (visible) => set({ readerToolbarVisible: visible }),
@@ -1451,7 +1467,7 @@ export const useSettingsStore = create<SettingsStore>()(
         }),
         {
             name: "theorem-settings",
-            version: 2,
+            version: 3,
             storage: createJSONStorage(() => theoremPersistStorage),
             migrate: (persistedState, version) => {
                 const state = (
@@ -1496,6 +1512,10 @@ export const useSettingsStore = create<SettingsStore>()(
                             ...defaultVaultSettings,
                             ...(state.settings.vault || {}),
                         },
+                        deviceSync: {
+                            ...defaultDeviceSyncSettings,
+                            ...(state.settings.deviceSync || {}),
+                        },
                     };
                 }
 
@@ -1531,6 +1551,15 @@ export const useSettingsStore = create<SettingsStore>()(
                     state.settings.vault = {
                         ...defaultVaultSettings,
                         ...state.settings.vault,
+                    };
+                }
+
+                if (state && !state.settings.deviceSync) {
+                    state.settings.deviceSync = defaultDeviceSyncSettings;
+                } else if (state?.settings.deviceSync) {
+                    state.settings.deviceSync = {
+                        ...defaultDeviceSyncSettings,
+                        ...state.settings.deviceSync,
                     };
                 }
 

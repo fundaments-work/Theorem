@@ -191,8 +191,50 @@ export interface AppSettings {
     readerSettings: ReaderSettings;
     vocabulary: VocabularySettings;
     vault: VaultIntegrationSettings;
+    deviceSync: DeviceSyncSettings;
     hasCompletedOnboarding: boolean;
 }
+
+// ─── LAN Device Sync ───
+
+export interface PairedDevice {
+    deviceId: string;
+    deviceName: string;
+    lastIp: string;
+    lastPort: number;
+    pairedAt: string;
+    lastSyncAt?: string;
+}
+
+export interface DeviceSyncSettings {
+    /** This device's unique ID (generated once at first sync setup). */
+    deviceId: string;
+    /** Human-readable name for this device. */
+    deviceName: string;
+    /** List of paired peer devices. */
+    pairedDevices: PairedDevice[];
+    /** Auto-sync when peer is discovered on the network. */
+    syncOnConnect: boolean;
+}
+
+export interface DeviceIdentityInfo {
+    device_id: string;
+    device_name: string;
+    public_key_hex: string;
+}
+
+export interface SyncServerInfo {
+    ip: string;
+    port: number;
+    running: boolean;
+}
+
+export interface PairingQrData {
+    qr_svg: string;
+    pairing_code: string;
+}
+
+export type DeviceSyncStatus = "idle" | "hosting" | "pairing" | "connecting" | "syncing" | "synced" | "error";
 
 export type DictionaryMode = "online" | "offline" | "auto";
 
@@ -331,6 +373,8 @@ export interface UIState {
     vaultSyncStatus: "idle" | "syncing" | "synced" | "error";
     vaultSyncMessage?: string;
     vaultSyncAt?: string;
+    deviceSyncStatus: DeviceSyncStatus;
+    deviceSyncMessage?: string;
 }
 
 // Document Engine Types
