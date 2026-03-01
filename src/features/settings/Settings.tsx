@@ -24,6 +24,7 @@ import {
 import { formatFileSize } from "../../core";
 import { confirmClearAllData } from "../../core";
 import { clearAllApplicationStorage, getRssStorageStats } from "../../core/lib/storage-manager";
+import { DeviceSyncSection } from "./DeviceSync";
 import { Dropdown } from "../../ui";
 import {
     Settings,
@@ -218,7 +219,7 @@ export function SettingsPage() {
 
         try {
             await clearAllApplicationStorage();
-            
+
             const storesToClear: PersistableStore[] = [
                 useSettingsStore as unknown as PersistableStore,
                 useLibraryStore as unknown as PersistableStore,
@@ -982,6 +983,8 @@ export function SettingsPage() {
                             </div>
                         </div>
                     </Section>
+
+                    <DeviceSyncSection />
 
                     <Section
                         title="Data Management"
