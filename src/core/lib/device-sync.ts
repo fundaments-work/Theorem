@@ -169,3 +169,32 @@ export async function updatePeerAddress(
     return invoke("update_peer_address", { deviceId, ip, port });
 }
 
+// ─── File Transfer ───
+
+/** Result from the Rust pull_book_files command. */
+export interface FileTransferResult {
+    /** Book IDs successfully transferred and saved to disk. */
+    transferred: string[];
+    /** Book IDs that failed with error details. */
+    failed: Array<{ book_id: string; error: string }>;
+    /** Book IDs that the peer did not have files for. */
+    unavailable: string[];
+}
+
+/**
+ * Pull book binary files from a paired peer device.
+ *
+ * Checks which of the given book IDs have files on the peer,
+ * then transfers each file via chunked encrypted HTTP, verifies
+ * integrity (SHA-256), and saves to the local book-cache.
+ *
+ * Emits `sync-file-progress` events that can be listened to for UI updates.
+ */
+export async function pullBookFiles(
+    peerDeviceId: string,
+    bookIds: string[],
+): Promise<FileTransferResult> {
+    requireTauri("pullBookFiles");
+    return invoke<FileTransferResult>("pull_book_files", { peerDeviceId, bookIds });
+}
+

@@ -3,6 +3,7 @@ import {
     mergeBooks,
     mergeAnnotations,
     mergeCollections,
+    mergeTombstones,
     mergeVocabulary,
     mergeRssFeeds,
     mergeRssArticles,
@@ -13,6 +14,7 @@ import type {
     Book,
     Annotation,
     Collection,
+    DeletionTombstone,
     VocabularyTerm,
     RssFeed,
     RssArticle,
@@ -31,6 +33,7 @@ function makeBook(
         title: overrides.title,
         author: overrides.author ?? "Unknown Author",
         filePath: overrides.filePath ?? `/library/${overrides.id}.epub`,
+        storagePath: overrides.storagePath,
         format: overrides.format ?? "epub",
         fileSize: overrides.fileSize ?? 1024,
         addedAt: overrides.addedAt ?? new Date("2025-01-01"),
@@ -39,6 +42,7 @@ function makeBook(
         isFavorite: overrides.isFavorite ?? false,
         readingTime: overrides.readingTime ?? 0,
         contentHash: overrides.contentHash,
+        coverPath: overrides.coverPath,
         lastReadAt: overrides.lastReadAt,
         rating: overrides.rating,
         description: overrides.description,
@@ -46,6 +50,7 @@ function makeBook(
         language: overrides.language,
         isbn: overrides.isbn,
         currentLocation: overrides.currentLocation,
+        syncedWithoutFile: overrides.syncedWithoutFile,
     };
 }
 
@@ -74,6 +79,7 @@ function makeCollection(
         bookIds: overrides.bookIds ?? [],
         kind: "general",
         createdAt: overrides.createdAt ?? new Date("2025-01-01"),
+        updatedAt: overrides.updatedAt,
     };
 }
 
@@ -296,6 +302,62 @@ describe("mergeBooks", () => {
         const result = mergeBooks(incoming, existing);
         expect(result[0].title).toBe("A: Complete Edition");
     });
+
+    it("new remote book gets syncedWithoutFile: true and no coverPath", () => {
+        const incoming = [
+            makeBook({
+                id: "remote-1",
+                title: "Remote Book",
+                filePath: "/remote/path/book.epub",
+                coverPath: "/remote/covers/book.png",
+            }),
+        ];
+
+        const result = mergeBooks(incoming, []);
+        expect(result).toHaveLength(1);
+        expect(result[0].syncedWithoutFile).toBe(true);
+        expect(result[0].coverPath).toBeUndefined();
+    });
+
+    it("matched book preserves local filePath, storagePath, and coverPath", () => {
+        const existing = [
+            makeBook({
+                id: "a",
+                title: "A",
+                contentHash: "hash1",
+                filePath: "/local/books/a.epub",
+                storagePath: "/local/storage/a.epub",
+                coverPath: "/local/covers/a.png",
+            }),
+        ];
+        const incoming = [
+            makeBook({
+                id: "a",
+                title: "A",
+                contentHash: "hash1",
+                filePath: "/remote/books/a.epub",
+                storagePath: "/remote/storage/a.epub",
+                coverPath: "/remote/covers/a.png",
+            }),
+        ];
+
+        const result = mergeBooks(incoming, existing);
+        expect(result).toHaveLength(1);
+        expect(result[0].filePath).toBe("/local/books/a.epub");
+        expect(result[0].storagePath).toBe("/local/storage/a.epub");
+        expect(result[0].coverPath).toBe("/local/covers/a.png");
+    });
+
+    it("empty incoming array returns existing unchanged", () => {
+        const existing = [
+            makeBook({ id: "a", title: "A" }),
+            makeBook({ id: "b", title: "B" }),
+        ];
+
+        const result = mergeBooks([], existing);
+        expect(result).toHaveLength(2);
+        expect(result.map((b) => b.id).sort()).toEqual(["a", "b"]);
+    });
 });
 
 describe("mergeAnnotations", () => {
@@ -377,6 +439,17 @@ describe("mergeAnnotations", () => {
         const result = mergeAnnotations(incoming, existing);
         expect(result[0].selectedText).toBe("newer by createdAt");
     });
+
+    it("empty incoming array returns existing unchanged", () => {
+        const existing = [
+            makeAnnotation({ id: "ann1", bookId: "a" }),
+            makeAnnotation({ id: "ann2", bookId: "b" }),
+        ];
+
+        const result = mergeAnnotations([], existing);
+        expect(result).toHaveLength(2);
+        expect(result.map((a) => a.id).sort()).toEqual(["ann1", "ann2"]);
+    });
 });
 
 describe("mergeCollections", () => {
@@ -413,7 +486,29 @@ describe("mergeCollections", () => {
         expect(result[0].bookIds.sort()).toEqual(["a", "b", "c", "d"]);
     });
 
-    it("LWW name based on createdAt", () => {
+    it("LWW name based on updatedAt", () => {
+        const existing = [
+            makeCollection({
+                id: "c1",
+                name: "Old Name",
+                createdAt: new Date("2025-01-01"),
+                updatedAt: new Date("2025-02-01"),
+            }),
+        ];
+        const incoming = [
+            makeCollection({
+                id: "c1",
+                name: "New Name",
+                createdAt: new Date("2025-01-01"),
+                updatedAt: new Date("2025-06-01"),
+            }),
+        ];
+
+        const result = mergeCollections(incoming, existing);
+        expect(result[0].name).toBe("New Name");
+    });
+
+    it("falls back to createdAt when updatedAt is missing", () => {
         const existing = [
             makeCollection({
                 id: "c1",
@@ -424,13 +519,13 @@ describe("mergeCollections", () => {
         const incoming = [
             makeCollection({
                 id: "c1",
-                name: "New Name",
+                name: "Newer Name",
                 createdAt: new Date("2025-06-01"),
             }),
         ];
 
         const result = mergeCollections(incoming, existing);
-        expect(result[0].name).toBe("New Name");
+        expect(result[0].name).toBe("Newer Name");
     });
 });
 
@@ -518,8 +613,9 @@ describe("mergeRssFeeds", () => {
             makeRssFeed({ url: "https://b.com/rss", title: "B" }),
         ];
 
-        const result = mergeRssFeeds(incoming, existing);
-        expect(result).toHaveLength(2);
+        const { feeds, feedIdMap } = mergeRssFeeds(incoming, existing);
+        expect(feeds).toHaveLength(2);
+        expect(feedIdMap.size).toBe(0);
     });
 
     it("deduplicates by URL and keeps later lastFetched", () => {
@@ -538,9 +634,23 @@ describe("mergeRssFeeds", () => {
             }),
         ];
 
-        const result = mergeRssFeeds(incoming, existing);
-        expect(result).toHaveLength(1);
-        expect(new Date(result[0].lastFetched as any).getFullYear()).toBe(2025);
+        const { feeds } = mergeRssFeeds(incoming, existing);
+        expect(feeds).toHaveLength(1);
+        expect(new Date(feeds[0].lastFetched as any).getFullYear()).toBe(2025);
+    });
+
+    it("builds feedIdMap when deduplicating feeds with different IDs", () => {
+        const existing = [
+            makeRssFeed({ id: "local-feed-1", url: "https://a.com/rss", title: "A" }),
+        ];
+        const incoming = [
+            makeRssFeed({ id: "remote-feed-1", url: "https://a.com/rss", title: "A" }),
+        ];
+
+        const { feeds, feedIdMap } = mergeRssFeeds(incoming, existing);
+        expect(feeds).toHaveLength(1);
+        expect(feeds[0].id).toBe("local-feed-1");
+        expect(feedIdMap.get("remote-feed-1")).toBe("local-feed-1");
     });
 });
 
@@ -581,6 +691,22 @@ describe("mergeRssArticles", () => {
         expect(result).toHaveLength(1);
         expect(result[0].isRead).toBe(true);
         expect(result[0].isFavorite).toBe(true);
+    });
+
+    it("remaps feedId using feedIdMap", () => {
+        const existing = [
+            makeRssArticle({ id: "art1", feedId: "local-feed-1", title: "Article 1" }),
+        ];
+        const incoming = [
+            makeRssArticle({ id: "art2", feedId: "remote-feed-1", title: "Article 2" }),
+        ];
+        const feedIdMap = new Map([["remote-feed-1", "local-feed-1"]]);
+
+        const result = mergeRssArticles(incoming, existing, feedIdMap);
+        expect(result).toHaveLength(2);
+        // The incoming article's feedId should be remapped to the local feed ID
+        const art2 = result.find((a) => a.id === "art2");
+        expect(art2?.feedId).toBe("local-feed-1");
     });
 });
 
@@ -802,5 +928,202 @@ describe("mergeReadingStats", () => {
         expect(result.totalReadingTime).toBe(0);
         expect(result.dailyActivity).toEqual([]);
         expect(result.currentStreak).toBe(0);
+    });
+});
+
+// ─── Deletion Tombstones ───
+
+function makeTombstone(
+    overrides: Partial<DeletionTombstone> & Pick<DeletionTombstone, "entityId" | "entityType">,
+): DeletionTombstone {
+    return {
+        entityId: overrides.entityId,
+        entityType: overrides.entityType,
+        deletedAt: overrides.deletedAt ?? new Date().toISOString(),
+    };
+}
+
+describe("mergeTombstones", () => {
+    it("unions tombstones from both sides", () => {
+        const existing = [
+            makeTombstone({ entityId: "book-1", entityType: "book" }),
+        ];
+        const incoming = [
+            makeTombstone({ entityId: "book-2", entityType: "book" }),
+        ];
+
+        const result = mergeTombstones(incoming, existing);
+        expect(result).toHaveLength(2);
+    });
+
+    it("deduplicates by (entityId, entityType) keeping earliest deletedAt", () => {
+        // Use recent dates so they survive the 90-day GC pass
+        const earlier = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const later = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+        const existing = [
+            makeTombstone({ entityId: "book-1", entityType: "book", deletedAt: later }),
+        ];
+        const incoming = [
+            makeTombstone({ entityId: "book-1", entityType: "book", deletedAt: earlier }),
+        ];
+
+        const result = mergeTombstones(incoming, existing);
+        expect(result).toHaveLength(1);
+        expect(result[0].deletedAt).toBe(earlier);
+    });
+
+    it("garbage-collects tombstones older than 90 days", () => {
+        const old = new Date(Date.now() - 91 * 24 * 60 * 60 * 1000).toISOString();
+        const recent = new Date().toISOString();
+
+        const existing = [
+            makeTombstone({ entityId: "old-book", entityType: "book", deletedAt: old }),
+            makeTombstone({ entityId: "new-book", entityType: "book", deletedAt: recent }),
+        ];
+
+        const result = mergeTombstones([], existing);
+        expect(result).toHaveLength(1);
+        expect(result[0].entityId).toBe("new-book");
+    });
+
+    it("keeps tombstones with different entity types for same entityId", () => {
+        const existing = [
+            makeTombstone({ entityId: "id-1", entityType: "book" }),
+        ];
+        const incoming = [
+            makeTombstone({ entityId: "id-1", entityType: "annotation" }),
+        ];
+
+        const result = mergeTombstones(incoming, existing);
+        expect(result).toHaveLength(2);
+    });
+});
+
+describe("mergeBooks with tombstones", () => {
+    it("prevents resurrection of tombstoned books from remote", () => {
+        const existing = [
+            makeBook({ id: "book-1", title: "Kept" }),
+        ];
+        const incoming = [
+            makeBook({ id: "book-1", title: "Kept" }),
+            makeBook({ id: "book-2", title: "Deleted on local, incoming from remote" }),
+        ];
+        const tombstones: DeletionTombstone[] = [
+            makeTombstone({ entityId: "book-2", entityType: "book" }),
+        ];
+
+        const result = mergeBooks(incoming, existing, tombstones);
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe("book-1");
+    });
+
+    it("removes locally-existing books that are tombstoned", () => {
+        // This covers the case where tombstones arrived from a peer
+        // and should suppress a book that still exists locally.
+        const existing = [
+            makeBook({ id: "book-1", title: "Keep" }),
+            makeBook({ id: "book-2", title: "Should be removed by tombstone" }),
+        ];
+        const incoming: Book[] = [];
+        const tombstones: DeletionTombstone[] = [
+            makeTombstone({ entityId: "book-2", entityType: "book" }),
+        ];
+
+        const result = mergeBooks(incoming, existing, tombstones);
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe("book-1");
+    });
+
+    it("works normally when no tombstones are provided", () => {
+        const existing = [makeBook({ id: "book-1", title: "A" })];
+        const incoming = [makeBook({ id: "book-2", title: "B" })];
+
+        const result = mergeBooks(incoming, existing);
+        expect(result).toHaveLength(2);
+    });
+});
+
+describe("mergeAnnotations with tombstones", () => {
+    it("prevents resurrection of tombstoned annotations", () => {
+        const existing = [
+            makeAnnotation({ id: "ann-1", bookId: "book-1" }),
+        ];
+        const incoming = [
+            makeAnnotation({ id: "ann-1", bookId: "book-1" }),
+            makeAnnotation({ id: "ann-2", bookId: "book-1" }),
+        ];
+        const tombstones: DeletionTombstone[] = [
+            makeTombstone({ entityId: "ann-2", entityType: "annotation" }),
+        ];
+
+        const result = mergeAnnotations(incoming, existing, tombstones);
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe("ann-1");
+    });
+
+    it("removes annotations whose parent book is tombstoned", () => {
+        const existing = [
+            makeAnnotation({ id: "ann-1", bookId: "book-1" }),
+            makeAnnotation({ id: "ann-2", bookId: "book-2" }),
+        ];
+        const incoming = [
+            makeAnnotation({ id: "ann-3", bookId: "book-2" }),
+        ];
+        const tombstones: DeletionTombstone[] = [
+            makeTombstone({ entityId: "book-2", entityType: "book" }),
+        ];
+
+        const result = mergeAnnotations(incoming, existing, tombstones);
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe("ann-1");
+    });
+});
+
+describe("mergeCollections with tombstones", () => {
+    it("prevents resurrection of tombstoned collections", () => {
+        const existing = [
+            makeCollection({ id: "col-1", name: "Kept" }),
+        ];
+        const incoming = [
+            makeCollection({ id: "col-1", name: "Kept" }),
+            makeCollection({ id: "col-2", name: "Deleted" }),
+        ];
+        const tombstones: DeletionTombstone[] = [
+            makeTombstone({ entityId: "col-2", entityType: "collection" }),
+        ];
+
+        const result = mergeCollections(incoming, existing, tombstones);
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe("col-1");
+    });
+
+    it("strips tombstoned book IDs from collection bookIds", () => {
+        const existing = [
+            makeCollection({ id: "col-1", name: "Reading", bookIds: ["book-1", "book-2"] }),
+        ];
+        const incoming = [
+            makeCollection({ id: "col-1", name: "Reading", bookIds: ["book-1", "book-2", "book-3"] }),
+        ];
+        const tombstones: DeletionTombstone[] = [
+            makeTombstone({ entityId: "book-2", entityType: "book" }),
+        ];
+
+        const result = mergeCollections(incoming, existing, tombstones);
+        expect(result).toHaveLength(1);
+        expect(result[0].bookIds).toEqual(["book-1", "book-3"]);
+    });
+
+    it("strips tombstoned book IDs from local-only collections", () => {
+        const existing = [
+            makeCollection({ id: "col-1", name: "Local", bookIds: ["book-1", "book-2"] }),
+        ];
+        const incoming: Collection[] = [];
+        const tombstones: DeletionTombstone[] = [
+            makeTombstone({ entityId: "book-2", entityType: "book" }),
+        ];
+
+        const result = mergeCollections(incoming, existing, tombstones);
+        expect(result).toHaveLength(1);
+        expect(result[0].bookIds).toEqual(["book-1"]);
     });
 });

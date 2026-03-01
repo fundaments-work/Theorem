@@ -97,6 +97,9 @@ export interface Book {
     // Statistics
     readingTime: number; // in minutes
     completedAt?: Date; // When the book was marked completed (auto or manual)
+    // Sync metadata: set when this book arrived from a peer device without a local file.
+    // The book's filePath/storagePath point to the remote device's paths and are not usable locally.
+    syncedWithoutFile?: boolean;
 }
 
 // Reading Progress
@@ -139,6 +142,22 @@ export interface Collection {
     bookIds: string[];
     kind: "general";
     createdAt: Date;
+    updatedAt?: Date;
+}
+
+// Deletion Tombstone — records that an entity was intentionally deleted so
+// peer devices can honour the deletion during sync instead of re-creating
+// the entity from their own copy.  Tombstones are kept for a bounded period
+// (default 90 days) and then garbage-collected.
+export type TombstoneEntity = "book" | "annotation" | "collection";
+
+export interface DeletionTombstone {
+    /** ID of the deleted entity (book.id / annotation.id / collection.id). */
+    entityId: string;
+    /** What kind of entity was deleted. */
+    entityType: TombstoneEntity;
+    /** ISO-8601 timestamp of when the deletion happened. */
+    deletedAt: string;
 }
 
 // Reader Settings

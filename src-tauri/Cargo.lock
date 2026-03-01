@@ -4590,7 +4590,6 @@ dependencies = [
  "chacha20poly1305",
  "hex",
  "hkdf",
- "hmac",
  "local-ip-address",
  "qrcode",
  "rand 0.8.5",
@@ -4608,7 +4607,6 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-os",
  "tokio",
- "tower-http",
  "x25519-dalek",
 ]
 

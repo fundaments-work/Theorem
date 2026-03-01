@@ -7,7 +7,6 @@ use chacha20poly1305::{
     ChaCha20Poly1305, Nonce,
 };
 use hkdf::Hkdf;
-use hmac::{Hmac, Mac};
 use rand::rngs::OsRng;
 use sha2::Sha256;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, StaticSecret};
@@ -16,8 +15,6 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-
-type HmacSha256 = Hmac<Sha256>;
 
 /// Persistent device identity backed by an X25519 static secret.
 /// The device ID is a short hex string derived from the public key hash.
@@ -33,30 +30,27 @@ struct StoredIdentity {
     secret_bytes: Vec<u8>,
 }
 
-/// An ephemeral keypair used during QR-based pairing.
-pub struct EphemeralKeypair {
-    pub secret: EphemeralSecret,
-    pub public_key: X25519PublicKey,
-}
-
 /// Result of encrypting a payload with ChaCha20-Poly1305.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EncryptedPayload {
-    /// Nonce counter used for this message.
-    pub nonce_counter: u64,
+    /// Base64-encoded random 12-byte nonce used for this message.
+    /// Each encryption MUST use a unique nonce with the same key.
+    pub nonce_b64: String,
     /// Unix timestamp in milliseconds when the message was created.
     pub timestamp_ms: u64,
     /// Base64-encoded ciphertext (includes AEAD authentication tag).
     pub ciphertext: String,
-    /// Base64-encoded HMAC-SHA256 of the plaintext (computed before encryption).
+    /// Kept for wire-format compatibility. AEAD provides authentication;
+    /// no separate HMAC is computed. Always empty in current code.
+    #[serde(default)]
     pub hmac_tag: String,
 }
 
 // ─── Device Identity ───
 
 impl DeviceIdentity {
-    /// Create a brand new device identity with a random keypair.
-    pub fn generate() -> Self {
+    /// Generate a new random device identity.
+    fn generate() -> Self {
         let secret = StaticSecret::random_from_rng(OsRng);
         let public_key = X25519PublicKey::from(&secret);
         let device_id = Self::compute_device_id(&public_key);
@@ -67,26 +61,23 @@ impl DeviceIdentity {
         }
     }
 
-    /// Load an existing identity from the app data directory, or create one if absent.
+    /// Load existing identity from disk, or create and persist a new one.
     pub fn load_or_create(app_data_dir: &Path) -> Result<Self, String> {
         let identity_path = app_data_dir.join("sync-identity.json");
 
+        // Try to load existing identity.
         if identity_path.exists() {
             let content = fs::read_to_string(&identity_path)
                 .map_err(|e| format!("Failed to read identity file: {e}"))?;
             let stored: StoredIdentity = serde_json::from_str(&content)
                 .map_err(|e| format!("Failed to parse identity file: {e}"))?;
-
-            if stored.secret_bytes.len() != 32 {
-                return Err("Invalid identity: secret key must be 32 bytes".into());
-            }
-
-            let mut key_bytes = [0u8; 32];
-            key_bytes.copy_from_slice(&stored.secret_bytes);
-            let secret = StaticSecret::from(key_bytes);
+            let secret_bytes: [u8; 32] = stored
+                .secret_bytes
+                .try_into()
+                .map_err(|_| "Invalid secret key length".to_string())?;
+            let secret = StaticSecret::from(secret_bytes);
             let public_key = X25519PublicKey::from(&secret);
             let device_id = Self::compute_device_id(&public_key);
-
             return Ok(Self {
                 secret,
                 public_key,
@@ -124,14 +115,6 @@ impl DeviceIdentity {
     pub fn public_key_bytes(&self) -> [u8; 32] {
         *self.public_key.as_bytes()
     }
-
-    /// Perform a Diffie-Hellman key exchange with a peer's public key.
-    /// Returns the raw shared secret (must be passed through HKDF before use).
-    pub fn diffie_hellman(&self, peer_public: &[u8; 32]) -> [u8; 32] {
-        let peer_key = X25519PublicKey::from(*peer_public);
-        let shared = self.secret.diffie_hellman(&peer_key);
-        *shared.as_bytes()
-    }
 }
 
 // ─── Ephemeral Key Exchange (for pairing) ───
@@ -142,6 +125,68 @@ pub fn generate_ephemeral_keypair() -> (EphemeralSecret, X25519PublicKey) {
     let secret = EphemeralSecret::random_from_rng(OsRng);
     let public = X25519PublicKey::from(&secret);
     (secret, public)
+}
+
+// ─── Timestamp Utility ───
+
+/// Get current time as ISO 8601 string without pulling in the chrono crate.
+pub fn now_iso8601() -> String {
+    use std::time::SystemTime;
+    let duration = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = duration.as_secs();
+
+    let days = secs / 86400;
+    let remaining = secs % 86400;
+    let hours = remaining / 3600;
+    let minutes = (remaining % 3600) / 60;
+    let seconds = remaining % 60;
+
+    let mut year = 1970i64;
+    let mut remaining_days = days as i64;
+    loop {
+        let days_in_year = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
+            366
+        } else {
+            365
+        };
+        if remaining_days < days_in_year {
+            break;
+        }
+        remaining_days -= days_in_year;
+        year += 1;
+    }
+
+    let is_leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let month_days: [i64; 12] = [
+        31,
+        if is_leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut month = 1u32;
+    for &md in &month_days {
+        if remaining_days < md {
+            break;
+        }
+        remaining_days -= md;
+        month += 1;
+    }
+    let day = remaining_days + 1;
+
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        year, month, day, hours, minutes, seconds
+    )
 }
 
 /// Derive a 32-byte symmetric key from a shared secret using HKDF-SHA256.
@@ -164,25 +209,19 @@ pub fn derive_symmetric_key(
 
 // ─── Authenticated Encryption ───
 
-/// Encrypt a plaintext payload using ChaCha20-Poly1305 AEAD.
+/// Encrypt a plaintext payload using ChaCha20-Poly1305 AEAD with a random nonce.
 ///
-/// Also computes an HMAC-SHA256 of the plaintext for post-decryption integrity verification.
+/// Note: AEAD already provides authentication, so no separate HMAC is computed.
+/// The `hmac_tag` field is set to an empty string for wire-format compatibility.
 ///
 /// # Arguments
 /// * `key` — 32-byte symmetric key
-/// * `nonce_counter` — Monotonic counter (unique per message)
 /// * `plaintext` — The data to encrypt
-pub fn encrypt_payload(
-    key: &[u8; 32],
-    nonce_counter: u64,
-    plaintext: &[u8],
-) -> Result<EncryptedPayload, String> {
-    // Compute HMAC on plaintext before encryption.
-    let hmac_tag = compute_hmac(key, plaintext)?;
-
-    // Build 12-byte nonce from the counter (padded with zeros).
+pub fn encrypt_payload(key: &[u8; 32], plaintext: &[u8]) -> Result<EncryptedPayload, String> {
+    // Generate a random 12-byte nonce for each encryption.
     let mut nonce_bytes = [0u8; 12];
-    nonce_bytes[4..12].copy_from_slice(&nonce_counter.to_le_bytes());
+    use rand::RngCore;
+    OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from(nonce_bytes);
 
     let cipher = ChaCha20Poly1305::new_from_slice(key)
@@ -198,21 +237,24 @@ pub fn encrypt_payload(
         .as_millis() as u64;
 
     Ok(EncryptedPayload {
-        nonce_counter,
+        nonce_b64: BASE64.encode(nonce_bytes),
         timestamp_ms,
         ciphertext: BASE64.encode(&ciphertext),
-        hmac_tag: BASE64.encode(&hmac_tag),
+        hmac_tag: String::new(),
     })
 }
 
-/// Decrypt a ChaCha20-Poly1305 payload and verify the HMAC-SHA256 integrity tag.
+/// Decrypt a ChaCha20-Poly1305 payload.
+///
+/// AEAD decryption already verifies authenticity and integrity, so no separate
+/// HMAC check is performed. The `hmac_tag` field is accepted but ignored.
 ///
 /// # Arguments
 /// * `key` — 32-byte symmetric key (same as used for encryption)
 /// * `payload` — The encrypted payload to decrypt
 ///
 /// # Returns
-/// The original plaintext bytes, or an error if decryption or HMAC verification fails.
+/// The original plaintext bytes, or an error if decryption fails.
 pub fn decrypt_payload(key: &[u8; 32], payload: &EncryptedPayload) -> Result<Vec<u8>, String> {
     // Reject messages with unreasonable timestamps (±5 minutes).
     let now_ms = std::time::SystemTime::now()
@@ -228,9 +270,15 @@ pub fn decrypt_payload(key: &[u8; 32], payload: &EncryptedPayload) -> Result<Vec
         return Err("Message timestamp is too far from current time".into());
     }
 
-    // Reconstruct nonce.
-    let mut nonce_bytes = [0u8; 12];
-    nonce_bytes[4..12].copy_from_slice(&payload.nonce_counter.to_le_bytes());
+    // Decode the nonce from nonce_b64.
+    let nonce_bytes: [u8; 12] = {
+        let decoded = BASE64
+            .decode(&payload.nonce_b64)
+            .map_err(|e| format!("Failed to decode nonce: {e}"))?;
+        decoded
+            .try_into()
+            .map_err(|_| "Nonce must be exactly 12 bytes".to_string())?
+    };
     let nonce = Nonce::from(nonce_bytes);
 
     let ciphertext = BASE64
@@ -244,32 +292,10 @@ pub fn decrypt_payload(key: &[u8; 32], payload: &EncryptedPayload) -> Result<Vec
         .decrypt(&nonce, ciphertext.as_ref())
         .map_err(|_| "Decryption failed: invalid key or tampered ciphertext".to_string())?;
 
-    // Verify HMAC.
-    let expected_hmac = BASE64
-        .decode(&payload.hmac_tag)
-        .map_err(|e| format!("Failed to decode HMAC tag: {e}"))?;
-    verify_hmac(key, &plaintext, &expected_hmac)?;
+    // Note: HMAC verification removed — AEAD already provides authentication.
+    // The hmac_tag field is accepted but ignored for backward compatibility.
 
     Ok(plaintext)
-}
-
-// ─── HMAC-SHA256 ───
-
-/// Compute HMAC-SHA256 over the given data using the provided key.
-pub fn compute_hmac(key: &[u8], data: &[u8]) -> Result<Vec<u8>, String> {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(key)
-        .map_err(|e| format!("Failed to create HMAC: {e}"))?;
-    mac.update(data);
-    Ok(mac.finalize().into_bytes().to_vec())
-}
-
-/// Verify an HMAC-SHA256 tag against the given data and key.
-pub fn verify_hmac(key: &[u8], data: &[u8], expected_tag: &[u8]) -> Result<(), String> {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(key)
-        .map_err(|e| format!("Failed to create HMAC: {e}"))?;
-    mac.update(data);
-    mac.verify_slice(expected_tag)
-        .map_err(|_| "HMAC verification failed: data integrity compromised".to_string())
 }
 
 // ─── Random Nonce ───
@@ -280,6 +306,68 @@ pub fn generate_nonce() -> [u8; 32] {
     use rand::RngCore;
     OsRng.fill_bytes(&mut nonce);
     nonce
+}
+
+// ─── Chunked Encryption for File Transfer ───
+
+/// The chunk size for file transfers: 1 MiB.
+pub const FILE_CHUNK_SIZE: usize = 1024 * 1024;
+
+/// Encrypt raw data into individually-encrypted 1MB chunks.
+/// Each chunk gets its own random nonce and AEAD tag.
+/// Returns a vec of (chunk_index, base64_encoded_encrypted_chunk).
+pub fn encrypt_file_chunks(key: &[u8; 32], data: &[u8]) -> Result<Vec<String>, String> {
+    let cipher = ChaCha20Poly1305::new_from_slice(key)
+        .map_err(|e| format!("Failed to create cipher: {e}"))?;
+
+    let mut chunks = Vec::new();
+
+    for chunk_data in data.chunks(FILE_CHUNK_SIZE) {
+        // Generate a random 12-byte nonce per chunk.
+        let mut nonce_bytes = [0u8; 12];
+        use rand::RngCore;
+        OsRng.fill_bytes(&mut nonce_bytes);
+        let nonce = Nonce::from(nonce_bytes);
+
+        let ciphertext = cipher
+            .encrypt(&nonce, chunk_data)
+            .map_err(|e| format!("Chunk encryption failed: {e}"))?;
+
+        // Wire format: 12-byte nonce || ciphertext (includes AEAD tag)
+        let mut wire = Vec::with_capacity(12 + ciphertext.len());
+        wire.extend_from_slice(&nonce_bytes);
+        wire.extend_from_slice(&ciphertext);
+
+        chunks.push(BASE64.encode(&wire));
+    }
+
+    Ok(chunks)
+}
+
+/// Decrypt a single encrypted chunk (produced by encrypt_file_chunks).
+/// Input: base64-encoded wire format (12-byte nonce || ciphertext+tag).
+/// Returns the decrypted plaintext bytes.
+pub fn decrypt_file_chunk(key: &[u8; 32], chunk_b64: &str) -> Result<Vec<u8>, String> {
+    let wire = BASE64
+        .decode(chunk_b64)
+        .map_err(|e| format!("Failed to decode chunk: {e}"))?;
+
+    if wire.len() < 12 {
+        return Err("Chunk too small to contain nonce".into());
+    }
+
+    let nonce_bytes: [u8; 12] = wire[..12]
+        .try_into()
+        .map_err(|_| "Failed to extract nonce".to_string())?;
+    let nonce = Nonce::from(nonce_bytes);
+    let ciphertext = &wire[12..];
+
+    let cipher = ChaCha20Poly1305::new_from_slice(key)
+        .map_err(|e| format!("Failed to create cipher: {e}"))?;
+
+    cipher
+        .decrypt(&nonce, ciphertext)
+        .map_err(|_| "Chunk decryption failed: invalid key or tampered data".to_string())
 }
 
 // ─── QR Code Generation ───
@@ -330,13 +418,12 @@ mod tests {
     fn test_encrypt_decrypt_roundtrip() {
         let key = generate_nonce(); // 32 bytes
         let plaintext = b"Hello, Theorem sync!";
-        let nonce_counter = 42u64;
 
-        let encrypted =
-            encrypt_payload(&key, nonce_counter, plaintext).expect("Encryption should succeed");
+        let encrypted = encrypt_payload(&key, plaintext).expect("Encryption should succeed");
 
         assert_ne!(encrypted.ciphertext, BASE64.encode(plaintext));
         assert!(encrypted.timestamp_ms > 0);
+        assert!(!encrypted.nonce_b64.is_empty());
 
         let decrypted = decrypt_payload(&key, &encrypted).expect("Decryption should succeed");
 
@@ -344,11 +431,25 @@ mod tests {
     }
 
     #[test]
+    fn test_unique_nonces_per_encryption() {
+        let key = generate_nonce();
+        let plaintext = b"Same plaintext";
+
+        let enc1 = encrypt_payload(&key, plaintext).unwrap();
+        let enc2 = encrypt_payload(&key, plaintext).unwrap();
+
+        // Each encryption should produce a different nonce
+        assert_ne!(enc1.nonce_b64, enc2.nonce_b64);
+        // And therefore different ciphertexts
+        assert_ne!(enc1.ciphertext, enc2.ciphertext);
+    }
+
+    #[test]
     fn test_tampered_ciphertext_fails() {
         let key = generate_nonce();
         let plaintext = b"Sensitive data";
 
-        let mut encrypted = encrypt_payload(&key, 1, plaintext).expect("Encryption should succeed");
+        let mut encrypted = encrypt_payload(&key, plaintext).expect("Encryption should succeed");
 
         // Tamper with the ciphertext.
         let mut ct_bytes = BASE64.decode(&encrypted.ciphertext).unwrap();
@@ -366,28 +467,9 @@ mod tests {
         let key2 = generate_nonce();
         let plaintext = b"Secret message";
 
-        let encrypted = encrypt_payload(&key1, 1, plaintext).expect("Encryption should succeed");
+        let encrypted = encrypt_payload(&key1, plaintext).expect("Encryption should succeed");
 
         assert!(decrypt_payload(&key2, &encrypted).is_err());
-    }
-
-    #[test]
-    fn test_hmac_roundtrip() {
-        let key = b"test-key-for-hmac";
-        let data = b"some important data";
-
-        let tag = compute_hmac(key, data).expect("HMAC should succeed");
-        verify_hmac(key, data, &tag).expect("HMAC verification should succeed");
-    }
-
-    #[test]
-    fn test_hmac_tampered_data_fails() {
-        let key = b"test-key-for-hmac";
-        let data = b"some important data";
-
-        let tag = compute_hmac(key, data).expect("HMAC should succeed");
-        let result = verify_hmac(key, b"tampered data", &tag);
-        assert!(result.is_err());
     }
 
     #[test]

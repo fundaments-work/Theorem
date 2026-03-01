@@ -21,6 +21,7 @@ import {
     List,
     ArrowLeft,
     LayoutGrid,
+    CloudOff,
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode } from "../../core";
 import { confirmDeleteBook, confirmRemoveFromShelf } from "../../core";
@@ -131,6 +132,13 @@ function BookCard({
                                 />
                             </div>
                         )}
+
+                        {/* Synced Without File Badge */}
+                        {book.syncedWithoutFile && (
+                            <div className="absolute top-2 left-2 w-6 h-6 flex items-center justify-center text-white rounded-sm pointer-events-none" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
+                                <CloudOff className="w-3 h-3" />
+                            </div>
+                        )}
                     </div>
                     <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] line-clamp-1 mb-0.5">
                         {book.title}
@@ -184,6 +192,12 @@ function BookCard({
                     <p className="text-xs text-[color:var(--color-text-secondary)] truncate">
                         {normalizeAuthor(book.author) || "Unknown Author"}
                     </p>
+                    {book.syncedWithoutFile && (
+                        <div className="flex items-center gap-0.5 mt-0.5 text-[color:var(--color-warning)]" title="Book file not available locally">
+                            <CloudOff className="w-3 h-3" />
+                            <span className="text-[var(--font-size-3xs)]">No file</span>
+                        </div>
+                    )}
                 </div>
                 <button
                     onClick={async (e) => {
@@ -226,6 +240,13 @@ function BookCard({
                             className="h-full bg-[var(--color-accent)]"
                             style={{ width: `${book.progress * 100}%` }}
                         />
+                    </div>
+                )}
+
+                {/* Synced Without File Badge */}
+                {book.syncedWithoutFile && (
+                    <div className="absolute top-1 left-1 w-5 h-5 flex items-center justify-center text-white rounded-sm pointer-events-none" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
+                        <CloudOff className="w-2.5 h-2.5" />
                     </div>
                 )}
             </button>
@@ -412,6 +433,13 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     };
 
     const handleOpenBook = (book: Book) => {
+        if (book.syncedWithoutFile) {
+            window.alert(
+                "This book was synced from another device but the file hasn't been transferred yet. " +
+                "Please sync again with the source device to download the book file."
+            );
+            return;
+        }
         setRoute("reader", book.id);
     };
 

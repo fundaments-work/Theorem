@@ -37,14 +37,12 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # ── LAN Device Sync ──
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros"] }
 axum = "0.7"
-tower-http = { version = "0.6", features = ["cors"] }
 local-ip-address = "0.6"
 
 # Cryptography (RustCrypto, NCC Group audited)
 chacha20poly1305 = "0.10"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 hkdf = "0.12"
-hmac = "0.12"
 sha2 = "0.10"
 rand = "0.8"
 

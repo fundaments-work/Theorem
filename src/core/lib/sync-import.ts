@@ -13,6 +13,8 @@ import type {
     Book,
     Annotation,
     Collection,
+    DeletionTombstone,
+    TombstoneEntity,
     VocabularyTerm,
     RssFeed,
     RssArticle,
@@ -23,12 +25,67 @@ import type {
 
 // ─── Helpers ───
 
+/** Default tombstone retention period: 90 days in milliseconds. */
+const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** Build a Set of entity IDs from tombstones filtered by entity type. */
+function tombstoneIdSet(
+    tombstones: DeletionTombstone[],
+    entityType: TombstoneEntity,
+): Set<string> {
+    const ids = new Set<string>();
+    for (const t of tombstones) {
+        if (t.entityType === entityType) ids.add(t.entityId);
+    }
+    return ids;
+}
+
 /** Parse a date value (Date | string | undefined) into epoch-ms; 0 if invalid. */
 function toEpoch(d: Date | string | undefined | null): number {
     if (!d) return 0;
     const ms =
         typeof d === "string" ? new Date(d).getTime() : d.getTime();
     return Number.isNaN(ms) ? 0 : ms;
+}
+
+// ─── Deletion Tombstones ───
+
+/**
+ * Merge incoming tombstones with local tombstones.
+ *
+ * Deduplicates by (entityId, entityType) keeping the earliest `deletedAt` to
+ * maximise the suppression window.  Also garbage-collects tombstones older
+ * than `TOMBSTONE_TTL_MS` (default 90 days) to prevent unbounded growth.
+ */
+export function mergeTombstones(
+    incoming: DeletionTombstone[],
+    existing: DeletionTombstone[],
+): DeletionTombstone[] {
+    const key = (t: DeletionTombstone) => `${t.entityType}::${t.entityId}`;
+    const byKey = new Map<string, DeletionTombstone>();
+
+    for (const t of existing) {
+        byKey.set(key(t), t);
+    }
+
+    for (const t of incoming) {
+        const k = key(t);
+        const prev = byKey.get(k);
+        if (!prev || toEpoch(t.deletedAt) < toEpoch(prev.deletedAt)) {
+            byKey.set(k, t);
+        }
+    }
+
+    // Garbage-collect expired tombstones.
+    const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+    const result: DeletionTombstone[] = [];
+    for (const t of byKey.values()) {
+        if (toEpoch(t.deletedAt) >= cutoff) {
+            result.push(t);
+        }
+    }
+
+    return result;
 }
 
 // ─── Books ───
@@ -38,34 +95,53 @@ function toEpoch(d: Date | string | undefined | null): number {
  *
  * - Deduplicate by `contentHash` where available, otherwise by `id`.
  * - For duplicates keep the richer metadata set and latest reading progress.
+ * - Books whose ID appears in `tombstones` (with entityType "book") are
+ *   excluded from the result — they were intentionally deleted locally or
+ *   on a peer and should not be resurrected.
  */
 export function mergeBooks(
     incoming: Book[],
     existing: Book[],
+    tombstones: DeletionTombstone[] = [],
 ): Book[] {
-    // Build lookup maps.
+    const deletedBookIds = tombstoneIdSet(tombstones, "book");
+    // Build lookup maps — skip locally-tombstoned books so they stay deleted.
     const byId = new Map<string, Book>();
     const byHash = new Map<string, Book>();
 
     for (const book of existing) {
+        if (deletedBookIds.has(book.id)) continue;
         byId.set(book.id, book);
         if (book.contentHash) byHash.set(book.contentHash, book);
     }
 
     for (const inc of incoming) {
+        // Skip incoming books that have been tombstoned (deleted on either device).
+        if (deletedBookIds.has(inc.id)) continue;
+
         // Try to match by contentHash first (same file on both devices).
         const match =
             (inc.contentHash ? byHash.get(inc.contentHash) : undefined) ??
             byId.get(inc.id);
 
         if (!match) {
-            // New book – add it.
-            byId.set(inc.id, inc);
-            if (inc.contentHash) byHash.set(inc.contentHash, inc);
+            // New book from remote — flag it as having no local file.
+            const remoteBook: Book = {
+                ...inc,
+                coverPath: undefined, // Remote coverPath is meaningless locally
+                syncedWithoutFile: true,
+            };
+            byId.set(inc.id, remoteBook);
+            if (inc.contentHash) byHash.set(inc.contentHash, remoteBook);
             continue;
         }
 
         // Merge: keep the existing id, merge metadata.
+        // Start with all local fields via spread (preserves fields not explicitly
+        // handled below, such as publishedDate, pageProgress, pdfViewState,
+        // locations, category, manualCompletionState, progressBeforeFinish,
+        // completedAt, lastClickFraction, contentHash, etc.).
+        // Then selectively override with richer/newer remote values.
         const merged: Book = {
             ...match,
             // Prefer richer title/author.
@@ -81,6 +157,8 @@ export function mergeBooks(
             publisher: match.publisher || inc.publisher,
             language: match.language || inc.language,
             isbn: match.isbn || inc.isbn,
+            publishedDate: match.publishedDate || inc.publishedDate,
+            category: match.category || inc.category,
             // Keep higher progress.
             progress: Math.max(match.progress ?? 0, inc.progress ?? 0),
             // Keep later reading time.
@@ -92,7 +170,7 @@ export function mergeBooks(
                 toEpoch(inc.lastReadAt) > toEpoch(match.lastReadAt)
                     ? inc.currentLocation ?? match.currentLocation
                     : match.currentLocation,
-            // Sum reading time.
+            // Reading time: take max (idempotent, monotonic counter — see TS IMP 7).
             readingTime: Math.max(match.readingTime ?? 0, inc.readingTime ?? 0),
             // Keep favorite if either flagged.
             isFavorite: match.isFavorite || inc.isFavorite,
@@ -103,6 +181,18 @@ export function mergeBooks(
                 (match.rating ?? 0) >= (inc.rating ?? 0)
                     ? match.rating
                     : inc.rating,
+            // Preserve local paths — never overwrite with remote paths.
+            filePath: match.filePath,
+            storagePath: match.storagePath,
+            coverPath: match.coverPath,
+            // Fill in contentHash if local is missing.
+            contentHash: match.contentHash || inc.contentHash,
+            // If local has a file, keep current sync flag.
+            syncedWithoutFile: match.syncedWithoutFile,
+            // Completion state: adopt remote if local has no completion.
+            completedAt: match.completedAt || inc.completedAt,
+            manualCompletionState: match.manualCompletionState ?? inc.manualCompletionState,
+            progressBeforeFinish: match.progressBeforeFinish ?? inc.progressBeforeFinish,
         };
 
         byId.set(match.id, merged);
@@ -116,18 +206,30 @@ export function mergeBooks(
 /**
  * Merge annotations using LWW by `updatedAt` (or `createdAt` as fallback)
  * per annotation ID.
+ *
+ * Annotations whose ID (or whose parent bookId) appears in `tombstones` are
+ * excluded — they were part of a book or annotation deletion.
  */
 export function mergeAnnotations(
     incoming: Annotation[],
     existing: Annotation[],
+    tombstones: DeletionTombstone[] = [],
 ): Annotation[] {
+    const deletedAnnotationIds = tombstoneIdSet(tombstones, "annotation");
+    const deletedBookIds = tombstoneIdSet(tombstones, "book");
+
     const byId = new Map<string, Annotation>();
 
     for (const ann of existing) {
+        if (deletedAnnotationIds.has(ann.id)) continue;
+        if (deletedBookIds.has(ann.bookId)) continue;
         byId.set(ann.id, ann);
     }
 
     for (const inc of incoming) {
+        if (deletedAnnotationIds.has(inc.id)) continue;
+        if (deletedBookIds.has(inc.bookId)) continue;
+
         const match = byId.get(inc.id);
         if (!match) {
             // New annotation.
@@ -153,18 +255,28 @@ export function mergeAnnotations(
  * Merge collections by ID.
  * - Same ID → union of bookIds, keep later name/description.
  * - Different IDs → add as new.
+ * - Collections whose ID appears in `tombstones` are excluded.
+ * - Book IDs that have been tombstoned are stripped from the merged bookIds
+ *   so deleted books don't linger as dangling references in collections.
  */
 export function mergeCollections(
     incoming: Collection[],
     existing: Collection[],
+    tombstones: DeletionTombstone[] = [],
 ): Collection[] {
+    const deletedCollectionIds = tombstoneIdSet(tombstones, "collection");
+    const deletedBookIds = tombstoneIdSet(tombstones, "book");
+
     const byId = new Map<string, Collection>();
 
     for (const col of existing) {
+        if (deletedCollectionIds.has(col.id)) continue;
         byId.set(col.id, col);
     }
 
     for (const inc of incoming) {
+        if (deletedCollectionIds.has(inc.id)) continue;
+
         const match = byId.get(inc.id);
         if (!match) {
             byId.set(inc.id, inc);
@@ -172,8 +284,9 @@ export function mergeCollections(
         }
 
         // Merge: union of bookIds, keep later name/description.
-        const incTs = toEpoch(inc.createdAt);
-        const matchTs = toEpoch(match.createdAt);
+        // Prefer updatedAt for LWW timestamp; fall back to createdAt.
+        const incTs = toEpoch(inc.updatedAt) || toEpoch(inc.createdAt);
+        const matchTs = toEpoch(match.updatedAt) || toEpoch(match.createdAt);
         const merged: Collection = {
             ...match,
             name: incTs > matchTs ? inc.name : match.name,
@@ -181,10 +294,27 @@ export function mergeCollections(
                 incTs > matchTs
                     ? inc.description ?? match.description
                     : match.description ?? inc.description,
-            bookIds: [...new Set([...match.bookIds, ...inc.bookIds])],
+            // bookIds: grow-only set union, then strip tombstoned book IDs.
+            bookIds: [...new Set([...match.bookIds, ...inc.bookIds])].filter(
+                (id) => !deletedBookIds.has(id),
+            ),
+            // Keep the latest updatedAt from either side.
+            updatedAt:
+                incTs > matchTs ? inc.updatedAt ?? inc.createdAt : match.updatedAt ?? match.createdAt,
         };
 
         byId.set(match.id, merged);
+    }
+
+    // Also strip tombstoned book IDs from collections that weren't touched
+    // by the incoming set (i.e. local-only collections).
+    if (deletedBookIds.size > 0) {
+        for (const [id, col] of byId) {
+            const filtered = col.bookIds.filter((bId) => !deletedBookIds.has(bId));
+            if (filtered.length !== col.bookIds.length) {
+                byId.set(id, { ...col, bookIds: filtered });
+            }
+        }
     }
 
     return [...byId.values()];
@@ -298,12 +428,18 @@ function mergeMeanings(
  * Merge RSS feeds by URL.
  *
  * Uses the canonical `RssFeed` type directly to avoid type mismatch issues.
+ *
+ * Returns the merged feed list and a feedIdMap (remote ID → local ID) for any
+ * feeds that were deduplicated by URL but had different IDs. Callers should pass
+ * this map to `mergeRssArticles` so that incoming articles referencing the
+ * remote feed ID are remapped to the surviving local feed ID.
  */
 export function mergeRssFeeds(
     incoming: RssFeed[],
     existing: RssFeed[],
-): RssFeed[] {
+): { feeds: RssFeed[]; feedIdMap: Map<string, string> } {
     const byUrl = new Map<string, RssFeed>();
+    const feedIdMap = new Map<string, string>();
 
     for (const feed of existing) {
         byUrl.set(feed.url, feed);
@@ -314,6 +450,12 @@ export function mergeRssFeeds(
         if (!match) {
             byUrl.set(inc.url, inc);
             continue;
+        }
+
+        // Same feed URL but different IDs — record the remap so articles
+        // referencing the incoming ID can be redirected to the local ID.
+        if (inc.id !== match.id) {
+            feedIdMap.set(inc.id, match.id);
         }
 
         // Keep later lastFetched, merge metadata.
@@ -330,16 +472,19 @@ export function mergeRssFeeds(
         byUrl.set(inc.url, merged);
     }
 
-    return [...byUrl.values()];
+    return { feeds: [...byUrl.values()], feedIdMap };
 }
 
 /**
  * Merge RSS articles by ID.
  * - OR read/favorite states (if either marked, it stays marked).
+ * - Optionally remaps incoming feedId references using the feedIdMap from
+ *   `mergeRssFeeds`, so articles from deduplicated feeds point to the correct ID.
  */
 export function mergeRssArticles(
     incoming: RssArticle[],
     existing: RssArticle[],
+    feedIdMap?: Map<string, string>,
 ): RssArticle[] {
     const byId = new Map<string, RssArticle>();
 
@@ -348,19 +493,26 @@ export function mergeRssArticles(
     }
 
     for (const inc of incoming) {
-        const match = byId.get(inc.id);
+        // Remap feedId if this article references a remote feed that was
+        // deduplicated into a local feed with a different ID.
+        const remappedFeedId = feedIdMap?.get(inc.feedId) ?? inc.feedId;
+        const remapped = remappedFeedId !== inc.feedId ? { ...inc, feedId: remappedFeedId } : inc;
+
+        const match = byId.get(remapped.id);
         if (!match) {
-            byId.set(inc.id, inc);
+            byId.set(remapped.id, remapped);
             continue;
         }
 
         // Merge: OR read/favorite states.
         const merged: RssArticle = {
             ...match,
-            isRead: match.isRead || inc.isRead,
-            isFavorite: match.isFavorite || inc.isFavorite,
+            isRead: match.isRead || remapped.isRead,
+            isFavorite: match.isFavorite || remapped.isFavorite,
+            // If the existing article still had the old feedId, update it
+            feedId: remappedFeedId,
         };
-        byId.set(inc.id, merged);
+        byId.set(remapped.id, merged);
     }
 
     return [...byId.values()];
@@ -460,6 +612,8 @@ export function mergeReadingStats(
         .pop();
 
     return {
+        // Cumulative counters: take max (idempotent — both devices independently
+        // increment, so max gives the best approximation without double-counting).
         totalReadingTime: Math.max(existing.totalReadingTime, incoming.totalReadingTime),
         booksCompleted: Math.max(existing.booksCompleted, incoming.booksCompleted),
         averageReadingSpeed: Math.max(existing.averageReadingSpeed, incoming.averageReadingSpeed),
@@ -482,13 +636,19 @@ function calculateCurrentStreak(
 ): number {
     if (sortedActivity.length === 0) return 0;
 
+    // Local date formatter — avoids UTC conversion that toISOString() does,
+    // which can shift the date by ±1 day near midnight in non-UTC timezones.
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const toLocalDateStr = (d: Date) =>
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
     // sortedActivity is sorted date descending.
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().slice(0, 10);
+    const todayStr = toLocalDateStr(today);
     const yesterdayDate = new Date(today);
     yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    const yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
+    const yesterdayStr = toLocalDateStr(yesterdayDate);
 
     // The streak only counts if the most recent activity is today or yesterday.
     const mostRecent = sortedActivity[0].date;
@@ -500,9 +660,9 @@ function calculateCurrentStreak(
     const activeDates = new Set(sortedActivity.map((a) => a.date));
 
     let streak = 0;
-    const cursor = new Date(mostRecent);
+    const cursor = new Date(mostRecent + "T00:00:00");
     while (true) {
-        const dateStr = cursor.toISOString().slice(0, 10);
+        const dateStr = toLocalDateStr(cursor);
         if (!activeDates.has(dateStr)) break;
         streak++;
         cursor.setDate(cursor.getDate() - 1);

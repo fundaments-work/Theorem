@@ -21,6 +21,7 @@ import type {
     AppSettings,
     Book,
     Collection,
+    DeletionTombstone,
     HighlightColor,
     InstalledDictionary,
     VocabularySettings,
@@ -407,6 +408,16 @@ function mergeImportedBookMetadata(existingBook: Book, incomingBook: Book): Book
     let changed = false;
     const nextBook = { ...existingBook };
 
+    // When the existing entry was synced without a file and a real import arrives,
+    // adopt the incoming storage path and clear the sync-only flag.
+    if (existingBook.syncedWithoutFile && incomingBook.storagePath) {
+        nextBook.storagePath = incomingBook.storagePath;
+        nextBook.filePath = incomingBook.filePath;
+        nextBook.syncedWithoutFile = false;
+        nextBook.coverExtractionDone = false; // re-extract from real file
+        changed = true;
+    }
+
     if (!existingBook.contentHash && incomingBook.contentHash) {
         nextBook.contentHash = incomingBook.contentHash;
         changed = true;
@@ -637,6 +648,7 @@ interface LibraryStore {
     books: Book[];
     collections: Collection[];
     annotations: Annotation[];
+    deletionTombstones: DeletionTombstone[];
     lastScannedAt?: Date;
     // Cache for quick access to recently opened books
     recentBooksCache: CachedBookMetadata[];
@@ -701,7 +713,7 @@ interface LibraryStore {
 
 type PersistedLibraryState = Pick<
     LibraryStore,
-    "books" | "collections" | "annotations" | "lastScannedAt" | "recentBooksCache"
+    "books" | "collections" | "annotations" | "deletionTombstones" | "lastScannedAt" | "recentBooksCache"
 >;
 
 export const useLibraryStore = create<LibraryStore>()(
@@ -710,6 +722,7 @@ export const useLibraryStore = create<LibraryStore>()(
             books: [],
             collections: [],
             annotations: [],
+            deletionTombstones: [],
             recentBooksCache: [],
             coversHydrated: false,
 
@@ -725,7 +738,11 @@ export const useLibraryStore = create<LibraryStore>()(
 
                 const duplicateBook = state.books[duplicateIndex];
                 if (duplicateBook.id !== book.id) {
-                    cleanupDiscardedImportedBook(book);
+                    // When the existing book was synced without a file, the incoming import
+                    // provides the real book data — do NOT delete it.
+                    if (!duplicateBook.syncedWithoutFile) {
+                        cleanupDiscardedImportedBook(book);
+                    }
                 }
 
                 const mergedBook = mergeImportedBookMetadata(duplicateBook, book);
@@ -773,7 +790,9 @@ export const useLibraryStore = create<LibraryStore>()(
 
                     const duplicateBook = nextBooks[duplicateIndex];
                     if (duplicateBook.id !== incomingBook.id) {
-                        cleanupDiscardedImportedBook(incomingBook);
+                        if (!duplicateBook.syncedWithoutFile) {
+                            cleanupDiscardedImportedBook(incomingBook);
+                        }
                     }
 
                     const mergedBook = mergeImportedBookMetadata(duplicateBook, incomingBook);
@@ -809,12 +828,30 @@ export const useLibraryStore = create<LibraryStore>()(
             removeBook: async (bookId) => {
                 const book = get().books.find((b) => b.id === bookId);
 
-                // Clean up storage first (don't await to keep UI responsive)
-                if (book) {
+                // Clean up storage first (don't await to keep UI responsive).
+                // Skip for synced-without-file books — they have no local storage to delete.
+                if (book && !book.syncedWithoutFile) {
                     deleteBookStorage(bookId).catch((error) => {
                         console.error('[LibraryStore] Failed to delete book storage:', error);
                     });
                 }
+
+                const now = new Date().toISOString();
+
+                // Collect annotation IDs belonging to this book so we can tombstone them too.
+                const annotationIds = get().annotations
+                    .filter((a) => a.bookId === bookId)
+                    .map((a) => a.id);
+
+                // Build tombstones: one for the book + one per annotation.
+                const newTombstones: DeletionTombstone[] = [
+                    { entityId: bookId, entityType: "book", deletedAt: now },
+                    ...annotationIds.map((id) => ({
+                        entityId: id,
+                        entityType: "annotation" as const,
+                        deletedAt: now,
+                    })),
+                ];
 
                 set((state) => ({
                     books: state.books.filter((b) => b.id !== bookId),
@@ -825,6 +862,7 @@ export const useLibraryStore = create<LibraryStore>()(
                         ...c,
                         bookIds: c.bookIds.filter((id) => id !== bookId),
                     })),
+                    deletionTombstones: [...state.deletionTombstones, ...newTombstones],
                 }));
             },
 
@@ -1120,12 +1158,16 @@ export const useLibraryStore = create<LibraryStore>()(
             removeCollection: (collectionId) =>
                 set((state) => ({
                     collections: state.collections.filter((c) => c.id !== collectionId),
+                    deletionTombstones: [
+                        ...state.deletionTombstones,
+                        { entityId: collectionId, entityType: "collection" as const, deletedAt: new Date().toISOString() },
+                    ],
                 })),
 
             updateCollection: (collectionId, updates) =>
                 set((state) => ({
                     collections: state.collections.map((c) =>
-                        c.id === collectionId ? { ...c, ...updates } : c
+                        c.id === collectionId ? { ...c, ...updates, updatedAt: new Date() } : c
                     ),
                 })),
 
@@ -1136,7 +1178,7 @@ export const useLibraryStore = create<LibraryStore>()(
                     return {
                         collections: state.collections.map((c) =>
                             c.id === collectionId && !c.bookIds.includes(bookId)
-                                ? { ...c, bookIds: [...c.bookIds, bookId] }
+                                ? { ...c, bookIds: [...c.bookIds, bookId], updatedAt: new Date() }
                                 : c
                         ),
                     };
@@ -1146,7 +1188,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 set((state) => ({
                     collections: state.collections.map((c) =>
                         c.id === collectionId
-                            ? { ...c, bookIds: c.bookIds.filter((id) => id !== bookId) }
+                            ? { ...c, bookIds: c.bookIds.filter((id) => id !== bookId), updatedAt: new Date() }
                             : c
                     ),
                 })),
@@ -1195,6 +1237,10 @@ export const useLibraryStore = create<LibraryStore>()(
             removeAnnotation: (annotationId) => {
                 set((state) => ({
                     annotations: state.annotations.filter((a) => a.id !== annotationId),
+                    deletionTombstones: [
+                        ...state.deletionTombstones,
+                        { entityId: annotationId, entityType: "annotation" as const, deletedAt: new Date().toISOString() },
+                    ],
                 }));
             },
 
@@ -1284,7 +1330,7 @@ export const useLibraryStore = create<LibraryStore>()(
         }),
         {
             name: "theorem-library",
-            version: 4,
+            version: 6,
             storage: createJSONStorage(() => theoremPersistStorage),
             migrate: (persistedState, _version) => {
                 const persisted = (
@@ -1309,6 +1355,9 @@ export const useLibraryStore = create<LibraryStore>()(
                             : undefined,
                     }))
                     : [];
+                const deletionTombstones = Array.isArray(persisted.deletionTombstones)
+                    ? persisted.deletionTombstones as DeletionTombstone[]
+                    : [];
                 const lastScannedAt = persisted.lastScannedAt
                     ? new Date(persisted.lastScannedAt)
                     : undefined;
@@ -1320,6 +1369,7 @@ export const useLibraryStore = create<LibraryStore>()(
                     books,
                     collections,
                     annotations,
+                    deletionTombstones,
                     lastScannedAt,
                     recentBooksCache,
                 } as PersistedLibraryState;
@@ -1329,6 +1379,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 books: state.books.map(({ coverPath: _, ...book }) => book) as Book[],
                 collections: state.collections,
                 annotations: state.annotations,
+                deletionTombstones: state.deletionTombstones,
                 lastScannedAt: state.lastScannedAt,
                 recentBooksCache: state.recentBooksCache.map(({ coverPath: _, ...book }) => book) as CachedBookMetadata[],
             }),
@@ -1397,6 +1448,9 @@ export const useLibraryStore = create<LibraryStore>()(
 interface SettingsStore {
     settings: AppSettings;
     stats: ReadingStats;
+    /** ISO 8601 timestamp of the last user-initiated settings change.
+     *  Used by device sync for LWW comparison instead of generating "now". */
+    settingsLastModifiedAt: string;
 
     updateSettings: (updates: Partial<AppSettings>) => void;
     updateReaderSettings: (updates: Partial<ReaderSettings>) => void;
@@ -1411,10 +1465,12 @@ export const useSettingsStore = create<SettingsStore>()(
         (set, get) => ({
             settings: defaultAppSettings,
             stats: defaultReadingStats,
+            settingsLastModifiedAt: new Date(0).toISOString(),
 
             updateSettings: (updates) =>
                 set((state) => ({
                     settings: { ...state.settings, ...updates },
+                    settingsLastModifiedAt: new Date().toISOString(),
                 })),
 
             updateReaderSettings: (updates) => {
@@ -1429,6 +1485,7 @@ export const useSettingsStore = create<SettingsStore>()(
                         ...state.settings,
                         readerSettings: newSettings,
                     },
+                    settingsLastModifiedAt: new Date().toISOString(),
                 }));
             },
 
@@ -1441,6 +1498,7 @@ export const useSettingsStore = create<SettingsStore>()(
                             ...updates,
                         },
                     },
+                    settingsLastModifiedAt: new Date().toISOString(),
                 })),
 
             updateStats: (updates) =>
@@ -1451,6 +1509,7 @@ export const useSettingsStore = create<SettingsStore>()(
             resetSettings: () =>
                 set({
                     settings: defaultAppSettings,
+                    settingsLastModifiedAt: new Date().toISOString(),
                 }),
 
             resetReaderSettings: () => {
@@ -1462,6 +1521,7 @@ export const useSettingsStore = create<SettingsStore>()(
                         ...state.settings,
                         readerSettings: defaultReaderSettings,
                     },
+                    settingsLastModifiedAt: new Date().toISOString(),
                 }));
             },
         }),
@@ -1526,6 +1586,12 @@ export const useSettingsStore = create<SettingsStore>()(
                     };
                 } else if (!Array.isArray(state.stats.dailyActivity)) {
                     state.stats.dailyActivity = [];
+                }
+
+                // Backfill settingsLastModifiedAt for stores migrating from older versions.
+                // Epoch means "never locally modified" so remote settings will win on first sync.
+                if (!state.settingsLastModifiedAt) {
+                    state.settingsLastModifiedAt = new Date(0).toISOString();
                 }
 
                 return state;

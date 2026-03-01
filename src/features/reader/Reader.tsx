@@ -372,6 +372,11 @@ function BookReaderPage() {
                 loadedBookIdRef.current = null;
                 return;
             }
+            if (book.syncedWithoutFile) {
+                setLoadError('This book was synced from another device but the file has not been transferred yet. Sync again or re-import the book to read it.');
+                loadedBookIdRef.current = null;
+                return;
+            }
 
             setFile(null);
             setPdfData(null);
@@ -1879,27 +1884,44 @@ function BookReaderPage() {
     // Error state
     if (loadError) {
         const displayLoadError = loadError.replace(/\s+/g, " ").trim();
+        const isSyncedWithoutFile = displayLoadError.includes('synced from another device');
 
         return (
             <div className="fixed inset-0 flex items-center justify-center bg-[var(--color-background)] px-4 sm:px-8 py-8">
                 <div className="mx-auto w-full max-w-[26rem] min-w-0 flex flex-col items-center text-center">
-                    <div className="w-16 h-16 bg-[var(--color-error)]/10 flex items-center justify-center mb-6 text-[color:var(--color-error)]">
-                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
+                    <div className={`w-16 h-16 flex items-center justify-center mb-6 ${isSyncedWithoutFile ? 'bg-[var(--color-warning)]/10 text-[color:var(--color-warning)]' : 'bg-[var(--color-error)]/10 text-[color:var(--color-error)]'}`}>
+                        {isSyncedWithoutFile ? (
+                            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                        ) : (
+                            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        )}
                     </div>
                     <h2 className="w-full break-words text-balance text-xl font-semibold text-[color:var(--color-text-primary)] mb-2">
-                        Failed to Load Book
+                        {isSyncedWithoutFile ? 'Book Not Yet Transferred' : 'Failed to Load Book'}
                     </h2>
                     <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-secondary)] mb-8 leading-relaxed">
                         {displayLoadError}
                     </p>
-                    <button
-                        onClick={() => setRoute('library')}
-                        className="ui-btn-primary"
-                    >
-                        Back to Library
-                    </button>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => setRoute('library')}
+                            className="ui-btn-primary"
+                        >
+                            Back to Library
+                        </button>
+                        {isSyncedWithoutFile && (
+                            <button
+                                onClick={() => setRoute('settings')}
+                                className="ui-btn-secondary"
+                            >
+                                Go to Sync Settings
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         );

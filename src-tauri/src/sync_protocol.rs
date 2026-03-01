@@ -128,6 +128,11 @@ pub struct DomainVersion {
     pub item_count: u32,
     /// ISO 8601 timestamp of the last modification in this domain.
     pub last_modified_at: String,
+    /// SHA-256 hex digest of the serialized domain data.
+    /// When both sides have the same content_hash for a domain,
+    /// that domain can be skipped entirely (no push/pull/merge needed).
+    #[serde(default)]
+    pub content_hash: String,
 }
 
 /// A manifest describing the current state of all data domains on a device.
@@ -208,6 +213,96 @@ pub struct SyncCompleteMessage {
     pub sync_timestamp: String,
 }
 
+// ─── Batched Domain Transfer ───
+
+/// Batched push payload: all domains to push in a single request.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BatchedDomainPayload {
+    /// Device ID of the sender.
+    pub sender_device_id: String,
+    /// Map of domain name → serialized JSON data.
+    pub domains: HashMap<String, String>,
+}
+
+/// Batched pull request: list of domain names to pull.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BatchedPullRequest {
+    /// Domain names to pull.
+    pub domains: Vec<String>,
+}
+
+/// Batched pull response: all requested domains in one response.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BatchedPullResponse {
+    /// Map of domain name → serialized JSON data.
+    pub domains: HashMap<String, String>,
+}
+
+// ─── File Transfer ───
+
+/// Request to pull a book file from a peer.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FilePullRequest {
+    /// Book ID to pull.
+    pub book_id: String,
+}
+
+/// Metadata about a file being transferred.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FileTransferMeta {
+    /// Book ID.
+    pub book_id: String,
+    /// Total file size in bytes.
+    pub total_size: u64,
+    /// Number of chunks the file is split into.
+    pub total_chunks: u32,
+    /// File format extension (e.g., "epub", "pdf").
+    pub format: String,
+    /// SHA-256 hex digest of the complete file for integrity verification.
+    pub content_hash: String,
+}
+
+/// A single chunk of encrypted file data.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FileTransferChunk {
+    /// Book ID this chunk belongs to.
+    pub book_id: String,
+    /// Zero-based chunk index.
+    pub chunk_index: u32,
+    /// Total number of chunks.
+    pub total_chunks: u32,
+    /// Base64-encoded chunk data (encrypted individually).
+    pub data_b64: String,
+}
+
+/// Response from the file pull endpoint — either metadata or "not found".
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FilePullResponse {
+    /// Whether the file was found and is available.
+    pub available: bool,
+    /// File metadata (present only when available=true).
+    pub meta: Option<FileTransferMeta>,
+    /// All chunks of the file, each individually encrypted.
+    /// For small files this is a single chunk; for large files multiple chunks.
+    pub chunks: Vec<FileTransferChunk>,
+}
+
+/// Request to query which book files a peer has available for transfer.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FileAvailabilityRequest {
+    /// Book IDs to check.
+    pub book_ids: Vec<String>,
+}
+
+/// Response listing which books have files available.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FileAvailabilityResponse {
+    /// Book IDs that have files available for transfer.
+    pub available_ids: Vec<String>,
+    /// Map of book_id → file size in bytes (for progress estimation).
+    pub file_sizes: HashMap<String, u64>,
+}
+
 // ─── Server Info ───
 
 /// Information about the running sync server, returned to the frontend.
@@ -230,34 +325,6 @@ pub struct HealthResponse {
     pub version: String,
 }
 
-// ─── Sync Status (for frontend) ───
-
-/// Overall sync operation status reported to the frontend.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SyncStatus {
-    pub state: SyncState,
-    pub message: Option<String>,
-    pub progress: Option<SyncProgress>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum SyncState {
-    Idle,
-    ServerRunning,
-    Pairing,
-    Syncing,
-    Completed,
-    Error,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SyncProgress {
-    pub current_domain: String,
-    pub domains_completed: u32,
-    pub domains_total: u32,
-    pub bytes_transferred: u64,
-}
-
 // ─── Well-Known Sync Domains ───
 
 /// All recognized data domains for synchronization.
@@ -265,6 +332,7 @@ pub const SYNC_DOMAINS: &[&str] = &[
     "books",
     "annotations",
     "collections",
+    "deletion_tombstones",
     "vocabulary",
     "settings",
     "reading_stats",

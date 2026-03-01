@@ -14,13 +14,14 @@ use axum::{
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, Notify};
-use tower_http::cors::{Any, CorsLayer};
+
 
 // ─── Event Emitter ───
 
@@ -56,8 +57,8 @@ pub struct PendingPairing {
     pub host_secret_bytes: [u8; 32],
     /// The nonce used as HKDF salt.
     pub nonce: [u8; 32],
-    /// Hex-encoded nonce for matching.
-    pub nonce_hex: String,
+    /// When this pairing session was created — expires after 5 minutes.
+    pub created_at: std::time::Instant,
 }
 
 /// Snapshot of app data provided by the frontend for sync operations.
@@ -82,19 +83,17 @@ pub struct SyncServerHandle {
 ///
 /// Returns a handle that can be used to shut down the server.
 pub async fn start_server(state: Arc<SyncServerState>) -> Result<SyncServerHandle, String> {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
     let app = Router::new()
         .route("/health", get(handle_health))
         .route("/pair", post(handle_pair))
         .route("/sync/manifest", post(handle_sync_manifest))
         .route("/sync/push/{domain}", post(handle_sync_push))
         .route("/sync/pull/{domain}", post(handle_sync_pull))
+        .route("/sync/push-batch", post(handle_sync_push_batch))
+        .route("/sync/pull-batch", post(handle_sync_pull_batch))
         .route("/sync/complete", post(handle_sync_complete))
-        .layer(cors)
+        .route("/sync/file/availability", post(handle_file_availability))
+        .route("/sync/file/pull", post(handle_file_pull))
         .with_state(state.clone());
 
     // Bind to any available port on all interfaces.
@@ -205,7 +204,7 @@ fn encrypt_response<T: serde::Serialize>(
         )
     })?;
 
-    let payload = sync_crypto::encrypt_payload(sym_key, 0, &json).map_err(|e| {
+    let payload = sync_crypto::encrypt_payload(sym_key, &json).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Encrypt failed: {}", e),
@@ -234,6 +233,11 @@ async fn handle_pair(
     let pending = pending_guard
         .as_ref()
         .ok_or((StatusCode::BAD_REQUEST, "No pairing session active".into()))?;
+
+    // Reject if the pairing session has expired (5-minute window).
+    if pending.created_at.elapsed() > std::time::Duration::from_secs(300) {
+        return Err((StatusCode::GONE, "Pairing session has expired".into()));
+    }
 
     // Decode scanner's ephemeral public key.
     let peer_public_bytes: [u8; 32] = hex::decode(&request.ephemeral_public_key)
@@ -286,7 +290,7 @@ async fn handle_pair(
     }
 
     // Pairing successful — save the peer device.
-    let now = chrono_now_iso();
+    let now = sync_crypto::now_iso8601();
     let paired_device = PairedDevice {
         device_id: request.device_id.clone(),
         device_name: request.device_name.clone(),
@@ -303,7 +307,9 @@ async fn handle_pair(
     {
         let mut devices = state.paired_devices.lock().await;
         devices.insert(request.device_id.clone(), paired_device);
-        let _ = save_paired_devices(&state.app_data_dir, &devices);
+        if let Err(e) = save_paired_devices(&state.app_data_dir, &devices) {
+            eprintln!("[sync] Failed to persist paired devices after pairing: {e}");
+        }
     }
 
     // Clear the pending pairing session.
@@ -313,7 +319,7 @@ async fn handle_pair(
     }
 
     // Create encrypted acknowledgment.
-    let ack_payload = sync_crypto::encrypt_payload(&symmetric_key, 0, b"THEOREM_PAIR_ACK")
+    let ack_payload = sync_crypto::encrypt_payload(&symmetric_key, b"THEOREM_PAIR_ACK")
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let ack_json = serde_json::to_string(&ack_payload).map_err(|e| {
         (
@@ -354,14 +360,21 @@ async fn handle_sync_manifest(
     let mut actions = Vec::new();
     for domain_name in SYNC_DOMAINS {
         let domain = domain_name.to_string();
-        let local_ver = local_manifest.get(&domain).map(|v| v.version).unwrap_or(0);
-        let remote_ver = remote_manifest
-            .domains
-            .get(&domain)
-            .map(|v| v.version)
-            .unwrap_or(0);
+        let local_dv = local_manifest.get(&domain);
+        let remote_dv = remote_manifest.domains.get(&domain);
+
+        let local_ver = local_dv.map(|v| v.version).unwrap_or(0);
+        let remote_ver = remote_dv.map(|v| v.version).unwrap_or(0);
+        let local_hash = local_dv.map(|v| v.content_hash.as_str()).unwrap_or("");
+        let remote_hash = remote_dv.map(|v| v.content_hash.as_str()).unwrap_or("");
 
         let direction = if local_ver == 0 && remote_ver == 0 {
+            SyncDirection::Skip
+        } else if !local_hash.is_empty()
+            && !remote_hash.is_empty()
+            && local_hash == remote_hash
+        {
+            // Content hashes match — data is identical, skip entirely.
             SyncDirection::Skip
         } else if local_ver == 0 && remote_ver > 0 {
             // Only remote has data → remote should push to us.
@@ -389,12 +402,25 @@ async fn handle_sync_manifest(
     encrypt_response(&sym_key, &plan)
 }
 
+/// Validate that a domain name is in the SYNC_DOMAINS whitelist.
+fn validate_domain(domain: &str) -> Result<(), (StatusCode, String)> {
+    if !SYNC_DOMAINS.contains(&domain) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Unknown sync domain: {}", domain),
+        ));
+    }
+    Ok(())
+}
+
 /// POST /sync/push/:domain — Receive domain data from a peer.
 async fn handle_sync_push(
     State(state): State<Arc<SyncServerState>>,
     axum::extract::Path(domain): axum::extract::Path<String>,
     Json(req): Json<AuthenticatedRequest>,
 ) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
+    validate_domain(&domain)?;
+
     // Decrypt the domain payload from the peer
     let (payload, sym_key): (SyncDomainPayload, [u8; 32]) = decrypt_request(&state, &req).await?;
 
@@ -427,6 +453,8 @@ async fn handle_sync_pull(
     axum::extract::Path(domain): axum::extract::Path<String>,
     Json(req): Json<AuthenticatedRequest>,
 ) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
+    validate_domain(&domain)?;
+
     // Decrypt the request empty trigger
     let (_request, sym_key): (Value, [u8; 32]) = decrypt_request(&state, &req).await?;
 
@@ -452,6 +480,75 @@ async fn handle_sync_pull(
     encrypt_response(&sym_key, &payload)
 }
 
+/// POST /sync/push-batch — Receive multiple domains from a peer in one request.
+async fn handle_sync_push_batch(
+    State(state): State<Arc<SyncServerState>>,
+    Json(req): Json<AuthenticatedRequest>,
+) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
+    let (payload, sym_key): (BatchedDomainPayload, [u8; 32]) =
+        decrypt_request(&state, &req).await?;
+
+    // Validate all domain names before processing any.
+    for domain in payload.domains.keys() {
+        validate_domain(domain)?;
+    }
+
+    let domain_count = payload.domains.len();
+
+    {
+        let mut sync_data = state.sync_data.lock().await;
+        if let Some(data) = sync_data.as_mut() {
+            for (domain, data_json) in &payload.domains {
+                data.domains
+                    .insert(format!("incoming_{}", domain), data_json.clone());
+            }
+        }
+    }
+
+    // Notify the frontend that new data arrived.
+    if let Some(ref emitter) = state.event_emitter {
+        let event_payload = serde_json::json!({ "domains": payload.domains.keys().collect::<Vec<_>>() }).to_string();
+        emitter("sync-incoming-data", &event_payload);
+    }
+
+    let response = serde_json::json!({
+        "status": "received",
+        "domain_count": domain_count,
+    });
+    encrypt_response(&sym_key, &response)
+}
+
+/// POST /sync/pull-batch — Send multiple domains to a peer in one response.
+async fn handle_sync_pull_batch(
+    State(state): State<Arc<SyncServerState>>,
+    Json(req): Json<AuthenticatedRequest>,
+) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
+    let (pull_req, sym_key): (BatchedPullRequest, [u8; 32]) =
+        decrypt_request(&state, &req).await?;
+
+    // Validate all requested domain names.
+    for domain in &pull_req.domains {
+        validate_domain(domain)?;
+    }
+
+    let sync_data = state.sync_data.lock().await;
+    let mut response_domains: HashMap<String, String> = HashMap::new();
+
+    for domain in &pull_req.domains {
+        let data_json = sync_data
+            .as_ref()
+            .and_then(|d| d.domains.get(domain))
+            .cloned()
+            .unwrap_or_else(|| "[]".to_string());
+        response_domains.insert(domain.clone(), data_json);
+    }
+
+    let response = BatchedPullResponse {
+        domains: response_domains,
+    };
+    encrypt_response(&sym_key, &response)
+}
+
 /// POST /sync/complete — Record sync completion.
 async fn handle_sync_complete(
     State(state): State<Arc<SyncServerState>>,
@@ -462,7 +559,9 @@ async fn handle_sync_complete(
     let mut devices = state.paired_devices.lock().await;
     if let Some(device) = devices.get_mut(&message.device_id) {
         device.last_sync_at = Some(message.sync_timestamp.clone());
-        let _ = save_paired_devices(&state.app_data_dir, &devices);
+        if let Err(e) = save_paired_devices(&state.app_data_dir, &devices) {
+            eprintln!("[sync] Failed to persist paired devices after sync complete: {e}");
+        }
     }
     drop(devices);
 
@@ -483,66 +582,192 @@ async fn handle_sync_complete(
     encrypt_response(&sym_key, &response)
 }
 
+// ─── File Transfer Handlers ───
+
+/// The subdirectory under app_data_dir where materialized book files are stored.
+const BOOK_CACHE_DIR: &str = "book-cache";
+
+/// Validate that a book ID is safe for use in file paths.
+/// Rejects path traversal characters, null bytes, and non-alphanumeric chars
+/// (only allows alphanumeric, hyphens, and underscores).
+fn validate_book_id(book_id: &str) -> Result<(), (StatusCode, String)> {
+    if book_id.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Empty book ID".into()));
+    }
+    if book_id.len() > 256 {
+        return Err((StatusCode::BAD_REQUEST, "Book ID too long".into()));
+    }
+    if book_id.contains('\0')
+        || book_id.contains('/')
+        || book_id.contains('\\')
+        || book_id.contains("..")
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Book ID contains illegal characters".into(),
+        ));
+    }
+    // Only allow alphanumeric, hyphens, underscores, and colons (for rss:articleId).
+    if !book_id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Book ID contains disallowed characters".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Resolve the on-disk path for a book's binary data.
+/// Caller MUST validate book_id with `validate_book_id` before calling.
+fn book_file_path(app_data_dir: &Path, book_id: &str) -> PathBuf {
+    app_data_dir
+        .join(BOOK_CACHE_DIR)
+        .join(format!("{book_id}.book"))
+}
+
+/// POST /sync/file/availability — Check which book files this device has on disk.
+///
+/// Accepts a list of book IDs and returns which ones have `.book` files available
+/// along with their file sizes (for progress estimation on the requesting side).
+async fn handle_file_availability(
+    State(state): State<Arc<SyncServerState>>,
+    Json(req): Json<AuthenticatedRequest>,
+) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
+    let (availability_req, sym_key): (FileAvailabilityRequest, [u8; 32]) =
+        decrypt_request(&state, &req).await?;
+
+    let mut available_ids = Vec::new();
+    let mut file_sizes: HashMap<String, u64> = HashMap::new();
+
+    for book_id in &availability_req.book_ids {
+        // Skip book IDs that fail path-safety validation.
+        if validate_book_id(book_id).is_err() {
+            continue;
+        }
+        let path = book_file_path(&state.app_data_dir, book_id);
+        if let Ok(metadata) = tokio::fs::metadata(&path).await {
+            if metadata.is_file() && metadata.len() > 0 {
+                available_ids.push(book_id.clone());
+                file_sizes.insert(book_id.clone(), metadata.len());
+            }
+        }
+    }
+
+    let response = FileAvailabilityResponse {
+        available_ids,
+        file_sizes,
+    };
+    encrypt_response(&sym_key, &response)
+}
+
+/// POST /sync/file/pull — Serve a single book file to a peer.
+///
+/// Reads the book's binary data from disk, computes a SHA-256 content hash,
+/// encrypts the data in 1 MiB chunks (each with its own random nonce + AEAD tag),
+/// and returns the `FilePullResponse` directly as JSON.
+///
+/// Note: The response is NOT wrapped in an outer `EncryptedPayload` envelope
+/// because each chunk is already individually AEAD-encrypted. Double-encrypting
+/// a 100+ MB payload would waste CPU and inflate the response size by ~33%.
+///
+/// For a 100 MB file this produces ~100 chunks. Each chunk is base64-encoded,
+/// so the JSON response will be ~135 MB. LAN bandwidth makes this acceptable,
+/// and the peer reassembles + writes to disk on its end.
+async fn handle_file_pull(
+    State(state): State<Arc<SyncServerState>>,
+    Json(req): Json<AuthenticatedRequest>,
+) -> Result<Json<FilePullResponse>, (StatusCode, String)> {
+    let (pull_req, sym_key): (FilePullRequest, [u8; 32]) = decrypt_request(&state, &req).await?;
+
+    validate_book_id(&pull_req.book_id)?;
+    let path = book_file_path(&state.app_data_dir, &pull_req.book_id);
+
+    // Check if the file exists.
+    if !path.is_file() {
+        let response = FilePullResponse {
+            available: false,
+            meta: None,
+            chunks: Vec::new(),
+        };
+        return Ok(Json(response));
+    }
+
+    // Read the entire file into memory.
+    // Book files are typically 1-50 MB (epubs) up to ~500 MB (large PDFs).
+    // This is acceptable for a LAN-only sync where memory is not as constrained.
+    let file_data = tokio::task::spawn_blocking({
+        let path = path.clone();
+        move || std::fs::read(&path)
+    })
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Task join failed: {e}"),
+        )
+    })?
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read book file: {e}"),
+        )
+    })?;
+
+    let total_size = file_data.len() as u64;
+
+    // Compute SHA-256 content hash for integrity verification on the receiver side.
+    let content_hash = {
+        let mut hasher = Sha256::new();
+        hasher.update(&file_data);
+        hex::encode(hasher.finalize())
+    };
+
+    // Infer format from the sync_data snapshot's books domain (if available),
+    // or fall back to empty string (the receiver already has the Book metadata
+    // which includes the format).
+    let format = String::new();
+
+    // Encrypt the file data in chunks.
+    let encrypted_chunks = sync_crypto::encrypt_file_chunks(&sym_key, &file_data).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("File encryption failed: {e}"),
+        )
+    })?;
+
+    let total_chunks = encrypted_chunks.len() as u32;
+
+    let meta = FileTransferMeta {
+        book_id: pull_req.book_id.clone(),
+        total_size,
+        total_chunks,
+        format,
+        content_hash,
+    };
+
+    let chunks: Vec<FileTransferChunk> = encrypted_chunks
+        .into_iter()
+        .enumerate()
+        .map(|(i, data_b64)| FileTransferChunk {
+            book_id: pull_req.book_id.clone(),
+            chunk_index: i as u32,
+            total_chunks,
+            data_b64,
+        })
+        .collect();
+
+    let response = FilePullResponse {
+        available: true,
+        meta: Some(meta),
+        chunks,
+    };
+
+    Ok(Json(response))
+}
+
 // ─── Helpers ───
 
-/// Get current time as ISO 8601 string without pulling in the chrono crate.
-fn chrono_now_iso() -> String {
-    use std::time::SystemTime;
-    let duration = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default();
-    let secs = duration.as_secs();
 
-    // Simple ISO 8601 approximation (good enough for sync timestamps).
-    let days = secs / 86400;
-    let remaining = secs % 86400;
-    let hours = remaining / 3600;
-    let minutes = (remaining % 3600) / 60;
-    let seconds = remaining % 60;
-
-    // Days since 1970-01-01 → approximate date.
-    let mut year = 1970i64;
-    let mut remaining_days = days as i64;
-    loop {
-        let days_in_year = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
-            366
-        } else {
-            365
-        };
-        if remaining_days < days_in_year {
-            break;
-        }
-        remaining_days -= days_in_year;
-        year += 1;
-    }
-
-    let is_leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
-    let month_days: [i64; 12] = [
-        31,
-        if is_leap { 29 } else { 28 },
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    ];
-    let mut month = 1u32;
-    for &md in &month_days {
-        if remaining_days < md {
-            break;
-        }
-        remaining_days -= md;
-        month += 1;
-    }
-    let day = remaining_days + 1;
-
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        year, month, day, hours, minutes, seconds
-    )
-}
