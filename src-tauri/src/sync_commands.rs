@@ -577,10 +577,9 @@ pub async fn initiate_sync(
     {
         let mut devices = sync_state.server_state.paired_devices.lock().await;
         devices.insert(peer.device_id.clone(), peer);
-        if let Err(e) = crate::sync_server::save_paired_devices(
-            &sync_state.server_state.app_data_dir,
-            &devices,
-        ) {
+        if let Err(e) =
+            crate::sync_server::save_paired_devices(&sync_state.server_state.app_data_dir, &devices)
+        {
             eprintln!("[sync] Failed to persist paired devices after sync: {e}");
         }
     }
@@ -718,9 +717,15 @@ pub async fn pull_book_files(
 
     // 2. Pull each available file one at a time.
     for (file_index, book_id) in availability.available_ids.iter().enumerate() {
-        let result =
-            pull_single_file(&client, &base_url, my_device_id, &sym_key, book_id, &cache_dir)
-                .await;
+        let result = pull_single_file(
+            &client,
+            &base_url,
+            my_device_id,
+            &sym_key,
+            book_id,
+            &cache_dir,
+        )
+        .await;
 
         match result {
             Ok(bytes_written) => {
@@ -824,9 +829,7 @@ async fn pull_single_file(
         return Err("File not available on peer".to_string());
     }
 
-    let meta = pull_response
-        .meta
-        .ok_or("File response missing metadata")?;
+    let meta = pull_response.meta.ok_or("File response missing metadata")?;
 
     if pull_response.chunks.len() != meta.total_chunks as usize {
         return Err(format!(
@@ -840,13 +843,8 @@ async fn pull_single_file(
     let mut file_data = Vec::with_capacity(meta.total_size as usize);
 
     for chunk in &pull_response.chunks {
-        let decrypted =
-            sync_crypto::decrypt_file_chunk(sym_key, &chunk.data_b64).map_err(|e| {
-                format!(
-                    "Chunk {} decryption failed: {}",
-                    chunk.chunk_index, e
-                )
-            })?;
+        let decrypted = sync_crypto::decrypt_file_chunk(sym_key, &chunk.data_b64)
+            .map_err(|e| format!("Chunk {} decryption failed: {}", chunk.chunk_index, e))?;
         file_data.extend_from_slice(&decrypted);
     }
 

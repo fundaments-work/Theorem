@@ -320,14 +320,11 @@ export function AppTitlebar({
                                 : "Sync devices"
                         }
                         data-active={
-                            deviceSyncStatus === "hosting" ||
-                            deviceSyncStatus === "syncing" ||
-                            deviceSyncStatus === "synced" ||
-                            deviceSyncStatus === "pairing" ||
-                            deviceSyncStatus === "connecting"
+                            isQuickSyncing || deviceSyncStatus === "syncing"
                                 ? "true"
                                 : undefined
                         }
+                        aria-pressed={isQuickSyncing || deviceSyncStatus === "syncing"}
                         aria-label="Sync devices"
                     >
                         <ArrowDownUp

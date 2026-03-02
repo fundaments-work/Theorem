@@ -11,7 +11,13 @@
  * Supports progress callbacks and structured error reporting.
  */
 
-import { setSyncData, initiateSync, startSyncServer, getIncomingSyncData, pullBookFiles } from "./device-sync";
+import {
+    setSyncData,
+    initiateSync,
+    startSyncServer,
+    getIncomingSyncData,
+    pullBookFiles,
+} from "./device-sync";
 import {
     useLibraryStore,
     useVocabularyStore,
@@ -63,6 +69,11 @@ function computeLatestDate<T>(
 function setStatus(status: DeviceSyncStatus, msg?: string) {
     useUIStore.getState().setDeviceSyncStatus(status, msg);
 }
+
+/** Guards concurrent responder bootstrap attempts. */
+let responderReadyPromise: Promise<void> | null = null;
+/** Shared unlisten reference for the global responder event listener. */
+let responderEventUnlisten: (() => void) | null = null;
 
 // ─── Domain manifest builder ───
 
@@ -408,6 +419,41 @@ export interface SyncResult {
 }
 
 /**
+ * Ensure responder mode is ready in this runtime:
+ * - server is running
+ * - latest local snapshot is provisioned
+ * - incoming sync-complete events are listened to exactly once
+ *
+ * This is called from global app bootstrap and before manual sync runs,
+ * so "push from peer" flows work without requiring users to open Settings.
+ */
+export async function ensureResponderSyncReady(): Promise<void> {
+    if (!isTauri()) {
+        return;
+    }
+
+    if (responderReadyPromise) {
+        await responderReadyPromise;
+        return;
+    }
+
+    responderReadyPromise = (async () => {
+        await startSyncServer();
+        await provisionSyncData();
+
+        if (!responderEventUnlisten) {
+            responderEventUnlisten = await initSyncEventListener();
+        }
+    })();
+
+    try {
+        await responderReadyPromise;
+    } finally {
+        responderReadyPromise = null;
+    }
+}
+
+/**
  * Orchestrates a complete LAN sync session with a paired peer device.
  *
  * @param peerDeviceId - The paired device's unique ID.
@@ -429,12 +475,8 @@ export async function runDeviceSync(
 
         const { domains, manifest, settingsUpdatedAt } = await buildDomainsAndManifest();
 
-        log("Ensuring sync server is running...");
-        try {
-            await startSyncServer();
-        } catch {
-            // Server might already be running; that's fine.
-        }
+        log("Ensuring sync responder is ready...");
+        await ensureResponderSyncReady();
 
         log("Sending data snapshot to backend...");
         await setSyncData(JSON.stringify(domains), JSON.stringify(manifest));
@@ -581,11 +623,15 @@ export async function initSyncEventListener(): Promise<() => void> {
         return () => {};
     }
 
+    if (responderEventUnlisten) {
+        return responderEventUnlisten;
+    }
+
     // Dynamic import to avoid issues in web builds where @tauri-apps/api
     // may not be available at parse time.
     const { listen } = await import("@tauri-apps/api/event");
 
-    const unlisten = await listen<string>("sync-incoming-complete", (event) => {
+    const rawUnlisten = await listen<string>("sync-incoming-complete", (event) => {
         // Parse the peer device ID from the event payload.
         // Persist across debounce firings so a parse failure on one event
         // doesn't lose a successfully-parsed ID from a prior event.
@@ -611,6 +657,11 @@ export async function initSyncEventListener(): Promise<() => void> {
         }, 300);
     });
 
+    responderEventUnlisten = () => {
+        rawUnlisten();
+        responderEventUnlisten = null;
+    };
+
     console.log("[sync-orchestrator] Responder event listener registered.");
-    return unlisten;
+    return responderEventUnlisten;
 }

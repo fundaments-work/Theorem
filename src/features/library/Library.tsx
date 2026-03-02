@@ -1070,6 +1070,7 @@ export function LibraryPage() {
                 (book) => {
                     const attempts = metadataExtractionAttemptsRef.current.get(book.id) ?? 0;
                     return attempts < MAX_METADATA_EXTRACTION_ATTEMPTS && (
+                        !book.syncedWithoutFile &&
                         (
                             (
                                 !book.coverPath
@@ -1117,8 +1118,6 @@ export function LibraryPage() {
                             return;
                         }
                         extractedBookIdsRef.current.add(book.id);
-                        const nextAttempts = (metadataExtractionAttemptsRef.current.get(book.id) ?? 0) + 1;
-                        metadataExtractionAttemptsRef.current.set(book.id, nextAttempts);
 
                         try {
                             let data: ArrayBuffer | null = null;
@@ -1142,6 +1141,9 @@ export function LibraryPage() {
                             if (!data) {
                                 return;
                             }
+
+                            const nextAttempts = (metadataExtractionAttemptsRef.current.get(book.id) ?? 0) + 1;
+                            metadataExtractionAttemptsRef.current.set(book.id, nextAttempts);
 
                             const filename = ensureFilenameForFormat(
                                 extractFilenameFromPath(book.filePath),

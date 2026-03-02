@@ -39,7 +39,11 @@ import {
     getPairedDevices,
     unpairDevice,
 } from "../../core/lib/device-sync";
-import { runDeviceSync, provisionSyncData, initSyncEventListener } from "../../core/lib/sync-orchestrator";
+import {
+    runDeviceSync,
+    provisionSyncData,
+    ensureResponderSyncReady,
+} from "../../core/lib/sync-orchestrator";
 import { useUIStore } from "../../core/store";
 import type {
     PairedDevice,
@@ -127,7 +131,6 @@ export function DeviceSyncSection() {
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [copiedCode, setCopiedCode] = useState(false);
     const syncAbortRef = useRef(false);
-    const syncEventUnlistenRef = useRef<(() => void) | null>(null);
 
     const syncStatus = useUIStore((state) => state.deviceSyncStatus);
     const syncMessage = useUIStore((state) => state.deviceSyncMessage);
@@ -163,16 +166,6 @@ export function DeviceSyncSection() {
         }
     }, [successMessage]);
 
-    // Cleanup sync event listener on unmount.
-    useEffect(() => {
-        return () => {
-            if (syncEventUnlistenRef.current) {
-                syncEventUnlistenRef.current();
-                syncEventUnlistenRef.current = null;
-            }
-        };
-    }, []);
-
     const handleStartServer = useCallback(async () => {
         setError(null);
         setIsLoading(true);
@@ -187,16 +180,10 @@ export function DeviceSyncSection() {
             } catch (e) {
                 console.warn("[DeviceSync] Failed to provision sync data:", e);
             }
-            // Start listening for incoming sync events (responder mode)
             try {
-                if (syncEventUnlistenRef.current) {
-                    syncEventUnlistenRef.current();
-                    syncEventUnlistenRef.current = null;
-                }
-                const unlisten = await initSyncEventListener();
-                syncEventUnlistenRef.current = unlisten;
+                await ensureResponderSyncReady();
             } catch (e) {
-                console.warn("[DeviceSync] Failed to init sync event listener:", e);
+                console.warn("[DeviceSync] Failed to initialize responder sync:", e);
             }
         } catch (e: any) {
             setError(e?.message || String(e));
@@ -207,11 +194,6 @@ export function DeviceSyncSection() {
 
     const handleStopServer = useCallback(async () => {
         try {
-            // Tear down responder event listener
-            if (syncEventUnlistenRef.current) {
-                syncEventUnlistenRef.current();
-                syncEventUnlistenRef.current = null;
-            }
             await stopSyncServer();
             setIsServerRunning(false);
             setServerInfo(null);
@@ -242,14 +224,10 @@ export function DeviceSyncSection() {
             } catch (e) {
                 console.warn("[DeviceSync] Failed to provision sync data:", e);
             }
-            // Start listening for incoming sync events (responder mode)
             try {
-                if (!syncEventUnlistenRef.current) {
-                    const unlisten = await initSyncEventListener();
-                    syncEventUnlistenRef.current = unlisten;
-                }
+                await ensureResponderSyncReady();
             } catch (e) {
-                console.warn("[DeviceSync] Failed to init sync event listener:", e);
+                console.warn("[DeviceSync] Failed to initialize responder sync:", e);
             }
         } catch (e: any) {
             setError(e?.message || String(e));
@@ -271,6 +249,11 @@ export function DeviceSyncSection() {
             setSuccessMessage(
                 `Paired with ${device.deviceName || device.deviceId}`,
             );
+            try {
+                await ensureResponderSyncReady();
+            } catch (e) {
+                console.warn("[DeviceSync] Failed to auto-enable responder sync:", e);
+            }
             setDeviceSyncStatus("idle");
         } catch (e: any) {
             setError(e?.message || String(e));

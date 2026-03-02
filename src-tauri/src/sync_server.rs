@@ -13,6 +13,7 @@ use axum::{
     Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -21,7 +22,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, Notify};
-
 
 // ─── Event Emitter ───
 
@@ -370,10 +370,7 @@ async fn handle_sync_manifest(
 
         let direction = if local_ver == 0 && remote_ver == 0 {
             SyncDirection::Skip
-        } else if !local_hash.is_empty()
-            && !remote_hash.is_empty()
-            && local_hash == remote_hash
-        {
+        } else if !local_hash.is_empty() && !remote_hash.is_empty() && local_hash == remote_hash {
             // Content hashes match — data is identical, skip entirely.
             SyncDirection::Skip
         } else if local_ver == 0 && remote_ver > 0 {
@@ -507,7 +504,9 @@ async fn handle_sync_push_batch(
 
     // Notify the frontend that new data arrived.
     if let Some(ref emitter) = state.event_emitter {
-        let event_payload = serde_json::json!({ "domains": payload.domains.keys().collect::<Vec<_>>() }).to_string();
+        let event_payload =
+            serde_json::json!({ "domains": payload.domains.keys().collect::<Vec<_>>() })
+                .to_string();
         emitter("sync-incoming-data", &event_payload);
     }
 
@@ -523,8 +522,7 @@ async fn handle_sync_pull_batch(
     State(state): State<Arc<SyncServerState>>,
     Json(req): Json<AuthenticatedRequest>,
 ) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
-    let (pull_req, sym_key): (BatchedPullRequest, [u8; 32]) =
-        decrypt_request(&state, &req).await?;
+    let (pull_req, sym_key): (BatchedPullRequest, [u8; 32]) = decrypt_request(&state, &req).await?;
 
     // Validate all requested domain names.
     for domain in &pull_req.domains {
@@ -586,6 +584,8 @@ async fn handle_sync_complete(
 
 /// The subdirectory under app_data_dir where materialized book files are stored.
 const BOOK_CACHE_DIR: &str = "book-cache";
+/// SQLite database filename under app_data_dir.
+const SQLITE_DB_FILE: &str = "theorem.db";
 
 /// Validate that a book ID is safe for use in file paths.
 /// Rejects path traversal characters, null bytes, and non-alphanumeric chars
@@ -628,6 +628,77 @@ fn book_file_path(app_data_dir: &Path, book_id: &str) -> PathBuf {
         .join(format!("{book_id}.book"))
 }
 
+fn sqlite_database_path(app_data_dir: &Path) -> PathBuf {
+    app_data_dir.join(SQLITE_DB_FILE)
+}
+
+/// Ensure a transferable `.book` file exists for the given book ID.
+///
+/// Fast path: use existing `book-cache/<id>.book`.
+/// Fallback: if cache file is missing, try materializing from SQLite `books.data`.
+fn resolve_book_file_for_transfer(
+    app_data_dir: &Path,
+    book_id: &str,
+) -> Result<Option<(PathBuf, u64)>, String> {
+    let cache_path = book_file_path(app_data_dir, book_id);
+
+    if let Ok(metadata) = std::fs::metadata(&cache_path) {
+        if metadata.is_file() && metadata.len() > 0 {
+            return Ok(Some((cache_path, metadata.len())));
+        }
+    }
+
+    let db_path = sqlite_database_path(app_data_dir);
+    if !db_path.exists() {
+        return Ok(None);
+    }
+
+    let connection = Connection::open(&db_path)
+        .map_err(|error| format!("Failed to open SQLite database '{db_path:?}': {error}"))?;
+
+    let blob = connection
+        .query_row(
+            "SELECT data FROM books WHERE id = ?1",
+            params![book_id],
+            |row| row.get::<_, Vec<u8>>(0),
+        )
+        .optional()
+        .map_err(|error| format!("Failed to query SQLite book blob for '{book_id}': {error}"))?;
+
+    let Some(blob_data) = blob else {
+        return Ok(None);
+    };
+    if blob_data.is_empty() {
+        return Ok(None);
+    }
+
+    if let Some(parent_dir) = cache_path.parent() {
+        std::fs::create_dir_all(parent_dir).map_err(|error| {
+            format!("Failed to create book cache directory '{parent_dir:?}': {error}")
+        })?;
+    }
+    std::fs::write(&cache_path, &blob_data).map_err(|error| {
+        format!("Failed to materialize book file for '{book_id}' at '{cache_path:?}': {error}")
+    })?;
+
+    // Best-effort cleanup: once materialized, we no longer need duplicate blob bytes in SQLite.
+    let _ = connection.execute(
+        "UPDATE books SET data = X'' WHERE id = ?1",
+        params![book_id],
+    );
+
+    let metadata = std::fs::metadata(&cache_path).map_err(|error| {
+        format!(
+            "Failed to stat materialized book file for '{book_id}' at '{cache_path:?}': {error}"
+        )
+    })?;
+    if metadata.is_file() && metadata.len() > 0 {
+        return Ok(Some((cache_path, metadata.len())));
+    }
+
+    Ok(None)
+}
+
 /// POST /sync/file/availability — Check which book files this device has on disk.
 ///
 /// Accepts a list of book IDs and returns which ones have `.book` files available
@@ -639,22 +710,41 @@ async fn handle_file_availability(
     let (availability_req, sym_key): (FileAvailabilityRequest, [u8; 32]) =
         decrypt_request(&state, &req).await?;
 
-    let mut available_ids = Vec::new();
-    let mut file_sizes: HashMap<String, u64> = HashMap::new();
+    let app_data_dir = state.app_data_dir.clone();
+    let requested_book_ids = availability_req.book_ids;
+    let (available_ids, file_sizes) = tokio::task::spawn_blocking(move || {
+        let mut available_ids = Vec::new();
+        let mut file_sizes: HashMap<String, u64> = HashMap::new();
 
-    for book_id in &availability_req.book_ids {
-        // Skip book IDs that fail path-safety validation.
-        if validate_book_id(book_id).is_err() {
-            continue;
-        }
-        let path = book_file_path(&state.app_data_dir, book_id);
-        if let Ok(metadata) = tokio::fs::metadata(&path).await {
-            if metadata.is_file() && metadata.len() > 0 {
-                available_ids.push(book_id.clone());
-                file_sizes.insert(book_id.clone(), metadata.len());
+        for book_id in requested_book_ids {
+            // Skip book IDs that fail path-safety validation.
+            if validate_book_id(&book_id).is_err() {
+                continue;
+            }
+
+            match resolve_book_file_for_transfer(&app_data_dir, &book_id) {
+                Ok(Some((_path, size))) => {
+                    available_ids.push(book_id.clone());
+                    file_sizes.insert(book_id, size);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    eprintln!(
+                        "[sync] File availability resolution failed for '{book_id}': {error}"
+                    );
+                }
             }
         }
-    }
+
+        (available_ids, file_sizes)
+    })
+    .await
+    .map_err(|error| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("File availability task failed: {error}"),
+        )
+    })?;
 
     let response = FileAvailabilityResponse {
         available_ids,
@@ -683,17 +773,28 @@ async fn handle_file_pull(
     let (pull_req, sym_key): (FilePullRequest, [u8; 32]) = decrypt_request(&state, &req).await?;
 
     validate_book_id(&pull_req.book_id)?;
-    let path = book_file_path(&state.app_data_dir, &pull_req.book_id);
+    let app_data_dir = state.app_data_dir.clone();
+    let book_id = pull_req.book_id.clone();
+    let resolved = tokio::task::spawn_blocking(move || {
+        resolve_book_file_for_transfer(&app_data_dir, &book_id)
+    })
+    .await
+    .map_err(|error| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("File pull preparation task failed: {error}"),
+        )
+    })?
+    .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?;
 
-    // Check if the file exists.
-    if !path.is_file() {
+    let Some((path, _size)) = resolved else {
         let response = FilePullResponse {
             available: false,
             meta: None,
             chunks: Vec::new(),
         };
         return Ok(Json(response));
-    }
+    };
 
     // Read the entire file into memory.
     // Book files are typically 1-50 MB (epubs) up to ~500 MB (large PDFs).
@@ -769,5 +870,3 @@ async fn handle_file_pull(
 }
 
 // ─── Helpers ───
-
-

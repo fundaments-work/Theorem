@@ -5,8 +5,11 @@ import {
     useUIStore,
     useSettingsStore,
     isTauriDesktop,
+    isTauri,
     isMobile,
     initReaderStyles,
+    ensureResponderSyncReady,
+    getPairedDevices,
     cn,
 } from "./core";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
@@ -64,6 +67,7 @@ function App() {
     const currentRoute = useUIStore((state) => state.currentRoute);
     const setRoute = useUIStore((state) => state.setRoute);
     const isDesktopTauriRuntime = isTauriDesktop();
+    const isTauriRuntime = isTauri();
     const mainScrollRef = useRef<HTMLElement>(null);
     const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
     const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
@@ -160,6 +164,34 @@ function App() {
             }
         };
     }, []);
+
+    // Keep responder sync infrastructure ready globally so incoming peer sync
+    // can merge without requiring users to open the Settings screen.
+    useEffect(() => {
+        if (!isTauriRuntime || !hasCompletedOnboarding) {
+            return;
+        }
+
+        let cancelled = false;
+        const bootstrapResponderSync = async () => {
+            try {
+                const pairedDevices = await getPairedDevices();
+                if (cancelled || pairedDevices.length === 0) {
+                    return;
+                }
+                await ensureResponderSyncReady();
+            } catch (error) {
+                if (!cancelled) {
+                    console.warn("[App] Failed to bootstrap responder sync:", error);
+                }
+            }
+        };
+
+        void bootstrapResponderSync();
+        return () => {
+            cancelled = true;
+        };
+    }, [hasCompletedOnboarding, isTauriRuntime]);
 
     // Ensure the desktop window doesn't start in a mobile-like size.
     useEffect(() => {
