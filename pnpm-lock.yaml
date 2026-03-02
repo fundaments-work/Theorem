@@ -20,6 +20,9 @@ importers:
       '@tauri-apps/plugin-app':
         specifier: 2.0.0-alpha.1
         version: 2.0.0-alpha.1
+      '@tauri-apps/plugin-barcode-scanner':
+        specifier: ^2.4.4
+        version: 2.4.4
       '@tauri-apps/plugin-dialog':
         specifier: ^2.0.0
         version: 2.6.0
@@ -828,6 +831,9 @@ packages:
 
   '@tauri-apps/plugin-app@2.0.0-alpha.1':
     resolution: {integrity: sha512-DKlbG4ymoa8xDKdK36adPlZYeY8wcDQfi/XJG4qxhK6YC4GLrM1sG5eQgjVKheDI6wDQC5CiUjhnvddXVFUPTg==}
+
+  '@tauri-apps/plugin-barcode-scanner@2.4.4':
+    resolution: {integrity: sha512-uXvyMI8UgQjSrGxzTU5isNoQarMGRxFmTmb4TsgiWZHf/g7LsIyAQCwoFShjax0fXCK5mdVKDOvlkfOr21fo6g==}
 
   '@tauri-apps/plugin-dialog@2.6.0':
     resolution: {integrity: sha512-q4Uq3eY87TdcYzXACiYSPhmpBA76shgmQswGkSVio4C82Sz2W4iehe9TnKYwbq7weHiL88Yw19XZm7v28+Micg==}
@@ -2316,6 +2322,10 @@ snapshots:
   '@tauri-apps/plugin-app@2.0.0-alpha.1':
     dependencies:
       '@tauri-apps/api': 2.0.0-alpha.6
+
+  '@tauri-apps/plugin-barcode-scanner@2.4.4':
+    dependencies:
+      '@tauri-apps/api': 2.10.1
 
   '@tauri-apps/plugin-dialog@2.6.0':
     dependencies:

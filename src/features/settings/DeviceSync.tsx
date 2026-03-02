@@ -27,8 +27,9 @@ import {
     ArrowDownUp,
     ShieldCheck,
     Signal,
+    ScanLine,
 } from "lucide-react";
-import { cn, isTauri } from "../../core";
+import { cn, isMobile, isTauri } from "../../core";
 import { Modal, ModalBody, ModalHeader } from "../../ui";
 import {
     startSyncServer,
@@ -167,6 +168,7 @@ export function DeviceSyncSection() {
     );
 
     const available = isTauri();
+    const mobilePlatform = isMobile();
 
     // Load identity + paired devices on mount.
     useEffect(() => {
@@ -288,13 +290,14 @@ export function DeviceSyncSection() {
         }
     }, [qrData, setDeviceSyncStatus]);
 
-    const handleSubmitPairingCode = useCallback(async () => {
-        if (!pairingCode.trim()) return;
+    const submitPairingCodeValue = useCallback(async (code: string) => {
+        const trimmedCode = code.trim();
+        if (!trimmedCode) return;
         setError(null);
         setIsPairing(true);
         setDeviceSyncStatus("pairing");
         try {
-            const device = await submitPairingCode(pairingCode.trim());
+            const device = await submitPairingCode(trimmedCode);
             setPairedDevices((prev) => [...prev, device]);
             setPairingCode("");
             setSuccessMessage(
@@ -307,7 +310,60 @@ export function DeviceSyncSection() {
         } finally {
             setIsPairing(false);
         }
-    }, [pairingCode, setDeviceSyncStatus]);
+    }, [setDeviceSyncStatus]);
+
+    const handleSubmitPairingCode = useCallback(async () => {
+        if (!pairingCode.trim()) return;
+        await submitPairingCodeValue(pairingCode);
+    }, [pairingCode, submitPairingCodeValue]);
+
+    const handleScanPairingQr = useCallback(async () => {
+        if (!available || !mobilePlatform) {
+            setError("QR scanning is only available in the mobile app.");
+            return;
+        }
+
+        setError(null);
+        setIsPairing(true);
+        try {
+            const {
+                checkPermissions,
+                requestPermissions,
+                scan,
+                Format,
+            } = await import("@tauri-apps/plugin-barcode-scanner");
+
+            let permission = await checkPermissions();
+            if (permission !== "granted") {
+                permission = await requestPermissions();
+            }
+            if (permission !== "granted") {
+                setError("Camera permission is required to scan pairing QR codes.");
+                return;
+            }
+
+            const result = await scan({
+                windowed: false,
+                formats: [Format.QRCode],
+            });
+            const scannedCode = result?.content?.trim();
+            if (!scannedCode) {
+                setError("No QR code data detected.");
+                return;
+            }
+
+            setPairingCode(scannedCode);
+            await submitPairingCodeValue(scannedCode);
+        } catch (e: any) {
+            const msg = e?.message || String(e);
+            // User-cancelled scanner should not surface as an error state.
+            if (!/cancel|closed|dismiss/i.test(msg)) {
+                setError(msg);
+            }
+        } finally {
+            setIsPairing(false);
+        }
+    }, [available, mobilePlatform, submitPairingCodeValue]);
 
     const handleUnpair = useCallback(
         async (deviceId: string) => {
@@ -508,6 +564,37 @@ export function DeviceSyncSection() {
                     </div>
                     <ChevronRight className="w-4 h-4" />
                 </button>
+
+                {mobilePlatform && (
+                    <button
+                        onClick={() => {
+                            void handleScanPairingQr();
+                        }}
+                        disabled={isPairing}
+                        className={cn(
+                            "w-full flex items-center gap-3 p-4",
+                            "border border-[var(--color-border)]",
+                            "text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]",
+                            "transition-colors text-left",
+                            isPairing && "opacity-50 cursor-not-allowed",
+                        )}
+                    >
+                        <ScanLine className="w-5 h-5 text-[color:var(--color-accent)]" />
+                        <div className="flex-1">
+                            <p className="font-medium text-sm">
+                                Scan Pairing QR Code
+                            </p>
+                            <p className="text-xs text-[color:var(--color-text-muted)]">
+                                Use your camera to pair from another Theorem device
+                            </p>
+                        </div>
+                        {isPairing ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <ChevronRight className="w-4 h-4" />
+                        )}
+                    </button>
+                )}
 
                 {qrData && (
                     <div className="flex flex-wrap items-center justify-between gap-3 p-3 border border-[var(--color-border)] bg-[var(--color-surface-muted)]">

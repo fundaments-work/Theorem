@@ -28,6 +28,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-os = "2"
 tauri-plugin-app = "2.0.0-alpha.1"
+tauri-plugin-barcode-scanner = "2"
 tauri-plugin-mobile-folder-scan = { path = "plugins/mobile-folder-scan" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -478,13 +478,18 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     apply_linux_webkit_workarounds();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_app::init())
-        .plugin(tauri_plugin_mobile_folder_scan::init())
+        .plugin(tauri_plugin_mobile_folder_scan::init());
+
+    #[cfg(mobile)]
+    let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+
+    builder
         .setup(|app| {
             // Initialize LAN sync subsystem.
             let app_data_dir = app
