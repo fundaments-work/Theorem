@@ -5,23 +5,26 @@
 
 import { useState, useEffect } from "react";
 import type { KeyboardEvent } from "react";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
     Minus,
     Square,
     X,
     Search,
     BarChart3,
+    ArrowDownUp,
 } from "lucide-react";
-import { cn } from "../core";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { isMobile, isTauri } from "../core";
 import {
+    cn,
+    getPairedDevices,
     getSearchPlaceholder,
     hasSearchDomain,
+    isMobile,
+    isTauri,
     resolveSearchDomain,
+    runDeviceSync,
+    useUIStore,
 } from "../core";
-
-import { useUIStore } from "../core";
 import { TheoremLogo } from "./TheoremLogo";
 
 interface AppTitlebarProps {
@@ -43,11 +46,14 @@ export function AppTitlebar({
 }: AppTitlebarProps) {
     const [isMaximized, setIsMaximized] = useState(false);
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+    const [isQuickSyncing, setIsQuickSyncing] = useState(false);
     const currentRoute = useUIStore((state) => state.currentRoute);
     const searchQuery = useUIStore((state) => state.searchQuery);
     const setSearchQuery = useUIStore((state) => state.setSearchQuery);
     const commitSearch = useUIStore((state) => state.commitSearch);
     const setRoute = useUIStore((state) => state.setRoute);
+    const setDeviceSyncStatus = useUIStore((state) => state.setDeviceSyncStatus);
+    const deviceSyncStatus = useUIStore((state) => state.deviceSyncStatus);
     const isTauriRuntime = isTauri();
     const isMobileRuntime = isMobile();
     const showDesktopWindowControls = isTauriRuntime && !isMobileRuntime;
@@ -167,6 +173,65 @@ export function AppTitlebar({
         }
     };
 
+    const openDeviceSyncSettings = () => {
+        if (typeof window !== "undefined") {
+            window.sessionStorage.setItem("theorem-settings:active-tab", "integrations");
+            window.sessionStorage.setItem("theorem-settings:focus-section", "device-sync");
+        }
+        setRoute("settings");
+    };
+
+    const handleQuickSync = async () => {
+        if (isQuickSyncing || deviceSyncStatus === "syncing") {
+            return;
+        }
+
+        if (!isTauriRuntime) {
+            setDeviceSyncStatus("idle", "Device sync is available in desktop/mobile app.");
+            return;
+        }
+
+        setIsQuickSyncing(true);
+
+        try {
+            const pairedDevices = await getPairedDevices();
+
+            if (pairedDevices.length === 0) {
+                setDeviceSyncStatus("idle", "No paired devices yet. Pair one in Settings > Device Sync.");
+                openDeviceSyncSettings();
+                return;
+            }
+
+            if (pairedDevices.length > 1) {
+                setDeviceSyncStatus("idle", "Multiple devices found. Choose one in Settings > Device Sync.");
+                openDeviceSyncSettings();
+                return;
+            }
+
+            const target = pairedDevices[0];
+            setDeviceSyncStatus(
+                "syncing",
+                `Syncing with ${target.deviceName || target.deviceId}...`,
+            );
+
+            const result = await runDeviceSync(target.deviceId);
+            if (result.success) {
+                const summary = result.domainsUpdated.length > 0
+                    ? `Updated ${result.domainsUpdated.length} domain(s)`
+                    : "Already in sync";
+                setDeviceSyncStatus("synced", summary);
+                return;
+            }
+
+            setDeviceSyncStatus("error", result.error || "Sync failed");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            setDeviceSyncStatus("error", message);
+        } finally {
+            setIsQuickSyncing(false);
+        }
+    };
+
     return (
         <div
             className={cn(
@@ -239,6 +304,39 @@ export function AppTitlebar({
                             <Search className="w-5 h-5" />
                         </button>
                     )}
+
+                    <button
+                        onClick={() => {
+                            void handleQuickSync();
+                        }}
+                        className={cn(
+                            TITLEBAR_ICON_BUTTON,
+                            (deviceSyncStatus === "syncing" || isQuickSyncing) && "text-[color:var(--color-accent)]",
+                            deviceSyncStatus === "error" && "text-[color:var(--color-error)]",
+                        )}
+                        title={
+                            isQuickSyncing || deviceSyncStatus === "syncing"
+                                ? "Syncing devices..."
+                                : "Sync devices"
+                        }
+                        data-active={
+                            deviceSyncStatus === "hosting" ||
+                            deviceSyncStatus === "syncing" ||
+                            deviceSyncStatus === "synced" ||
+                            deviceSyncStatus === "pairing" ||
+                            deviceSyncStatus === "connecting"
+                                ? "true"
+                                : undefined
+                        }
+                        aria-label="Sync devices"
+                    >
+                        <ArrowDownUp
+                            className={cn(
+                                "w-5 h-5",
+                                (deviceSyncStatus === "syncing" || isQuickSyncing) && "animate-spin",
+                            )}
+                        />
+                    </button>
 
                     <button
                         onClick={() => setRoute("statistics")}

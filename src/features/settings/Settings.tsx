@@ -47,6 +47,10 @@ import {
     Target,
 } from "lucide-react";
 
+type SettingsTab = "general" | "dictionary" | "integrations" | "storage";
+const SETTINGS_TAB_SESSION_KEY = "theorem-settings:active-tab";
+const SETTINGS_FOCUS_SECTION_SESSION_KEY = "theorem-settings:focus-section";
+
 type PersistableStore = {
     persist?: {
         clearStorage?: () => void | Promise<void>;
@@ -195,11 +199,25 @@ export function SettingsPage() {
     const vaultSyncMessage = useUIStore((state) => state.vaultSyncMessage);
     const vaultSyncAt = useUIStore((state) => state.vaultSyncAt);
     const { vocabularyTerms, installedDictionaries, importStarDict, removeDictionary } = useVocabularyStore();
-    const [activeTab, setActiveTab] = useState<
-        "general" | "dictionary" | "integrations" | "storage"
-    >("general");
+    const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+        if (typeof window === "undefined") {
+            return "general";
+        }
+        const persisted = window.sessionStorage.getItem(SETTINGS_TAB_SESSION_KEY);
+        if (
+            persisted === "general" ||
+            persisted === "dictionary" ||
+            persisted === "integrations" ||
+            persisted === "storage"
+        ) {
+            return persisted;
+        }
+        return "general";
+    });
 
     const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
+    const deviceSyncSectionRef = useRef<HTMLDivElement | null>(null);
+    const markdownExportSectionRef = useRef<HTMLDivElement | null>(null);
 
     const totalStorage = books.reduce((acc, b) => acc + b.fileSize, 0);
     const offlineDictionarySize = installedDictionaries.reduce(
@@ -212,6 +230,38 @@ export function SettingsPage() {
     useEffect(() => {
         getRssStorageStats().then(setRssStats);
     }, []);
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+        window.sessionStorage.setItem(SETTINGS_TAB_SESSION_KEY, activeTab);
+    }, [activeTab]);
+
+    useEffect(() => {
+        if (typeof window === "undefined" || activeTab !== "integrations") {
+            return;
+        }
+
+        const requestedFocus = window.sessionStorage.getItem(
+            SETTINGS_FOCUS_SECTION_SESSION_KEY,
+        );
+        if (
+            requestedFocus !== "device-sync" &&
+            requestedFocus !== "markdown-export"
+        ) {
+            return;
+        }
+
+        const targetRef = requestedFocus === "device-sync"
+            ? deviceSyncSectionRef
+            : markdownExportSectionRef;
+
+        window.sessionStorage.removeItem(SETTINGS_FOCUS_SECTION_SESSION_KEY);
+        window.requestAnimationFrame(() => {
+            targetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    }, [activeTab]);
 
     const handleClearData = async () => {
         const confirmed = await confirmClearAllData();
@@ -244,22 +294,34 @@ export function SettingsPage() {
     };
 
     const updateVaultSettings = (updates: Partial<typeof settings.vault>) => {
+        const nextVault = {
+            ...settings.vault,
+            ...updates,
+        };
+        const hasVaultPath = nextVault.vaultPath.trim().length > 0;
+
+        // Keep markdown-export UX simple: configured folder means export is enabled.
+        if (!("enabled" in updates)) {
+            nextVault.enabled = hasVaultPath;
+        }
+        if (!hasVaultPath) {
+            nextVault.enabled = false;
+        }
+        nextVault.autoExportHighlights = true;
+
         updateSettings({
-            vault: {
-                ...settings.vault,
-                ...updates,
-            },
+            vault: nextVault,
         });
     };
 
     const handlePickVaultDirectory = async () => {
         if (isMobilePlatform) {
-            alert("Folder selection is not supported on mobile. Configure export path on desktop.");
+            alert("Folder selection is not supported on mobile. Configure the Obsidian vault folder on desktop.");
             return;
         }
 
         const selectedPath = await showOpenDirectoryDialog({
-            title: "Choose Export Folder",
+            title: "Choose Obsidian Vault Folder",
             defaultPath: settings.vault.vaultPath || undefined,
         });
 
@@ -314,14 +376,24 @@ export function SettingsPage() {
         }
     };
 
-    const handleSyncVaultNow = async () => {
+    const handleExportMarkdownNow = async () => {
+        if (!settings.vault.vaultPath.trim()) {
+            setVaultSyncStatus("idle", "Pick an Obsidian vault folder first.");
+            return;
+        }
+
         setVaultSyncStatus("syncing", "STATUS: SYNCING_MARKDOWN_EXPORT");
+        const normalizedVaultSettings = {
+            ...settings.vault,
+            enabled: settings.vault.vaultPath.trim().length > 0,
+            autoExportHighlights: true,
+        };
         const result = await syncVaultMarkdownSnapshot({
             books,
             annotations,
             rssArticles: articles,
             vocabularyTerms,
-            settings: settings.vault,
+            settings: normalizedVaultSettings,
         });
 
         if (result.status === "synced") {
@@ -346,7 +418,7 @@ export function SettingsPage() {
 
             if (isTauri()) {
                 const outputPath = await showSaveFileDialog({
-                    title: "Export Unified Sync Bundle",
+                    title: "Save Theorem Backup",
                     defaultPath: defaultFileName,
                     filters: [{ name: "JSON", extensions: ["json"] }],
                 });
@@ -372,17 +444,17 @@ export function SettingsPage() {
             const warningSuffix = warnings.length > 0
                 ? ` Warnings: ${warnings.length} missing binary item(s).`
                 : "";
-            alert(`Export complete (${formatFileSize(bundleSize)}).${warningSuffix}`);
+            alert(`Backup saved (${formatFileSize(bundleSize)}).${warningSuffix}`);
         } catch (error) {
             console.error("[Settings] Failed to export unified sync bundle:", error);
-            alert(error instanceof Error ? error.message : "Failed to export data.");
+            alert(error instanceof Error ? error.message : "Failed to save backup.");
         }
     };
 
     const tabButtons = [
         { id: "general" as const, label: "General" },
         { id: "dictionary" as const, label: "Dictionary" },
-        { id: "integrations" as const, label: "Sync & Devices" },
+        { id: "integrations" as const, label: "Devices & Export" },
         { id: "storage" as const, label: "Data & Storage" },
     ];
 
@@ -792,126 +864,143 @@ export function SettingsPage() {
             {/* Integrations Settings */}
             {activeTab === "integrations" && (
                 <div className="space-y-8">
-                    <Section
-                        title="Export and sync"
-                        description="Local-first markdown sync for highlights, notes, and vocabulary"
-                        icon={<BookOpen className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Enable Export Sync"
-                            description="Enable markdown sync in your selected export folder"
-                        >
-                            <Toggle
-                                checked={settings.vault.enabled}
-                                onChange={(checked) => updateVaultSettings({ enabled: checked })}
-                            />
-                        </SettingRow>
+                    <div ref={deviceSyncSectionRef}>
+                        <DeviceSyncSection />
+                    </div>
 
-                        <SettingRow
-                            label="Export Folder"
-                            description={
-                                isMobilePlatform
-                                    ? "Folder selection is unavailable on mobile. Configure export path on desktop."
-                                    : "Pick the local folder to receive markdown updates"
-                            }
+                    <div ref={markdownExportSectionRef}>
+                        <Section
+                            title="Obsidian Markdown Export"
+                            description="Writes markdown files for highlights and vocabulary. This does not sync app data between devices."
+                            icon={<BookOpen className="w-5 h-5" />}
                         >
-                            <div className="flex flex-wrap items-center gap-2">
-                                <input
-                                    type="text"
-                                    value={settings.vault.vaultPath}
-                                    onChange={(e) => updateVaultSettings({ vaultPath: e.target.value })}
-                                    placeholder="/Users/you/Documents/Reading-Exports"
-                                    className={cn(
-                                        "ui-input",
-                                        "min-w-[20rem] sm:w-[28rem]"
+                            <div className="mb-4 border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-xs text-[color:var(--color-text-secondary)]">
+                                Use Device Sync above for real device-to-device sync. Use this section only for Obsidian markdown export.
+                            </div>
+
+                            <SettingRow
+                                label="Obsidian Vault Folder"
+                                description={
+                                    isMobilePlatform
+                                        ? "Folder selection is unavailable on mobile. Configure vault folder on desktop."
+                                        : "Choose the Obsidian vault folder where markdown files will be exported"
+                                }
+                            >
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={settings.vault.vaultPath}
+                                        onChange={(e) => updateVaultSettings({
+                                            vaultPath: e.target.value,
+                                        })}
+                                        placeholder="/Users/you/Documents/ObsidianVault"
+                                        className={cn(
+                                            "ui-input",
+                                            "min-w-[20rem] sm:w-[28rem]"
+                                        )}
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            void handlePickVaultDirectory();
+                                        }}
+                                        disabled={isMobilePlatform}
+                                        className={cn("ui-btn", isMobilePlatform && "pointer-events-none opacity-50")}
+                                    >
+                                        Pick folder
+                                    </button>
+                                    {settings.vault.vaultPath.trim() && (
+                                        <button
+                                            onClick={() => updateVaultSettings({
+                                                vaultPath: "",
+                                                enabled: false,
+                                            })}
+                                            className="ui-btn"
+                                        >
+                                            Clear
+                                        </button>
                                     )}
-                                />
+                                </div>
+                            </SettingRow>
+
+                            <SettingRow
+                                label="Export Markdown Now"
+                                description="Write latest highlights, RSS highlights, and vocabulary markdown files now"
+                            >
                                 <button
                                     onClick={() => {
-                                        void handlePickVaultDirectory();
+                                        void handleExportMarkdownNow();
                                     }}
-                                    disabled={isMobilePlatform}
-                                    className={cn("ui-btn", isMobilePlatform && "pointer-events-none opacity-50")}
+                                    disabled={vaultSyncStatus === "syncing"}
+                                    className={cn(
+                                        "ui-btn",
+                                        vaultSyncStatus === "syncing" && "pointer-events-none opacity-60",
+                                    )}
                                 >
-                                    Pick folder
+                                    {vaultSyncStatus === "syncing" ? "Exporting..." : "Export now"}
                                 </button>
-                            </div>
-                        </SettingRow>
+                            </SettingRow>
 
-                        <SettingRow
-                            label="Auto Export Highlights"
-                            description="Rebuild markdown pages when a highlight or note is saved"
-                        >
-                            <Toggle
-                                checked={settings.vault.autoExportHighlights}
-                                onChange={(checked) => updateVaultSettings({ autoExportHighlights: checked })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Highlights Export Name"
-                            description="Base name for highlights pages folder (<name>-books). .md suffix is ignored."
-                        >
-                            <input
-                                type="text"
-                                value={highlightsExportName}
-                                onChange={(e) => (
-                                    updateVaultSettings({
-                                        highlightsFileName: normalizeHighlightsExportName(e.target.value),
-                                    })
-                                )}
-                                placeholder="theorem-highlights"
-                                className={cn("ui-input", "min-w-[16rem]")}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Vocabulary File"
-                            description="Vocabulary markdown file generated inside selected export folder"
-                        >
-                            <input
-                                type="text"
-                                value={settings.vault.vocabularyFileName}
-                                onChange={(e) => updateVaultSettings({ vocabularyFileName: e.target.value })}
-                                placeholder="theorem-vocabulary.md"
-                                className={cn("ui-input", "min-w-[16rem]")}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Sync Markdown Now"
-                            description="Export all book/article highlight pages and vocabulary immediately"
-                        >
-                            <button
-                                onClick={() => {
-                                    void handleSyncVaultNow();
-                                }}
-                                disabled={vaultSyncStatus === "syncing"}
-                                className={cn(
-                                    "ui-btn",
-                                    vaultSyncStatus === "syncing" && "pointer-events-none opacity-60",
-                                )}
+                            <SettingRow
+                                label="Export Status"
+                                description="Latest markdown export status"
                             >
-                                {vaultSyncStatus === "syncing" ? "Syncing..." : "Sync now"}
-                            </button>
-                        </SettingRow>
+                                <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] font-medium text-[color:var(--color-text-primary)]">
+                                    {vaultSyncStatus === "synced" && "Status: Export complete"}
+                                    {vaultSyncStatus === "syncing" && "Status: Exporting markdown files"}
+                                    {vaultSyncStatus === "error" && "Status: Export error"}
+                                    {vaultSyncStatus === "idle" && "Status: Idle"}
+                                    {vaultSyncMessage ? ` | ${vaultSyncMessage}` : ""}
+                                    {vaultSyncAt ? ` | ${new Date(vaultSyncAt).toLocaleTimeString()}` : ""}
+                                </div>
+                            </SettingRow>
 
-                        <SettingRow
-                            label="Live Sync Status"
-                            description="Latest markdown export status"
-                        >
-                            <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] font-medium text-[color:var(--color-text-primary)]">
-                                {vaultSyncStatus === "synced" && "Status: Synced to export folder"}
-                                {vaultSyncStatus === "syncing" && "Status: Syncing markdown pages"}
-                                {vaultSyncStatus === "error" && "Status: Sync error"}
-                                {vaultSyncStatus === "idle" && "Status: Idle"}
-                                {vaultSyncMessage ? ` | ${vaultSyncMessage}` : ""}
-                                {vaultSyncAt ? ` | ${new Date(vaultSyncAt).toLocaleTimeString()}` : ""}
-                            </div>
-                        </SettingRow>
-                    </Section>
-
-                    <DeviceSyncSection />
+                            <details className="border border-[var(--color-border)] bg-[var(--color-surface-muted)]">
+                                <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-[color:var(--color-text-primary)]">
+                                    Advanced export file names
+                                </summary>
+                                <div className="space-y-3 border-t border-[var(--color-border)] p-3">
+                                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                                        <div>
+                                            <p className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
+                                                Highlights folder name
+                                            </p>
+                                            <p className="mt-1 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
+                                                Base name for generated highlights pages (for example, `theorem-highlights-books`).
+                                            </p>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={highlightsExportName}
+                                            onChange={(e) => (
+                                                updateVaultSettings({
+                                                    highlightsFileName: normalizeHighlightsExportName(e.target.value),
+                                                })
+                                            )}
+                                            placeholder="theorem-highlights"
+                                            className={cn("ui-input", "min-w-[16rem]")}
+                                        />
+                                    </div>
+                                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                                        <div>
+                                            <p className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
+                                                Vocabulary file name
+                                            </p>
+                                            <p className="mt-1 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
+                                                Markdown file name for vocabulary export in your vault folder.
+                                            </p>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={settings.vault.vocabularyFileName}
+                                            onChange={(e) => updateVaultSettings({ vocabularyFileName: e.target.value })}
+                                            placeholder="theorem-vocabulary.md"
+                                            className={cn("ui-input", "min-w-[16rem]")}
+                                        />
+                                    </div>
+                                </div>
+                            </details>
+                        </Section>
+                    </div>
                 </div>
             )}
 
@@ -987,7 +1076,7 @@ export function SettingsPage() {
 
                     <Section
                         title="Data Management"
-                        description="Clear and export your data"
+                        description="Clear app data or create a backup file"
                         icon={<Trash2 className="w-5 h-5" />}
                     >
                         <div className="space-y-3">
@@ -1021,9 +1110,9 @@ export function SettingsPage() {
                             >
                                 <Download className="w-5 h-5" />
                                 <div className="flex-1">
-                                    <p className="font-medium text-sm">Export Data</p>
+                                    <p className="font-medium text-sm">Create Backup File</p>
                                     <p className="text-xs text-[color:var(--color-text-muted)]">
-                                        Export full sync bundle with books, highlights, vocabulary, RSS, and dictionaries
+                                        Save a full backup bundle with books, highlights, vocabulary, RSS, and dictionaries
                                     </p>
                                 </div>
                                 <ChevronRight className="w-4 h-4" />

@@ -17,7 +17,6 @@ import {
     Wifi,
     WifiOff,
     Trash2,
-    RefreshCw,
     Copy,
     Check,
     Loader2,
@@ -81,37 +80,6 @@ function Section({
             </div>
             <div className="space-y-3">{children}</div>
         </div>
-    );
-}
-
-function Toggle({
-    checked,
-    onChange,
-}: {
-    checked: boolean;
-    onChange: (checked: boolean) => void;
-}) {
-    return (
-        <button
-            role="switch"
-            aria-checked={checked}
-            onClick={() => onChange(!checked)}
-            className={cn(
-                "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full",
-                "border-2 border-transparent transition-colors duration-200",
-                checked
-                    ? "bg-[var(--color-accent)]"
-                    : "bg-[var(--color-surface-muted)]",
-            )}
-        >
-            <span
-                className={cn(
-                    "inline-block h-5 w-5 transform rounded-full bg-white",
-                    "shadow transition-transform duration-200",
-                    checked ? "translate-x-5" : "translate-x-0",
-                )}
-            />
-        </button>
     );
 }
 
@@ -436,7 +404,7 @@ export function DeviceSyncSection() {
         return (
             <Section
                 title="Device Sync"
-                description="Sync data between your devices over LAN"
+                description="Real app-data sync between your devices over LAN"
                 icon={<Smartphone className="w-5 h-5" />}
             >
                 <div className="p-4 bg-[var(--color-surface-muted)] text-center">
@@ -452,7 +420,7 @@ export function DeviceSyncSection() {
     return (
         <Section
             title="Device Sync"
-            description="Sync data between your devices over the local network"
+            description="Real app-data sync between your devices over the local network"
             icon={<Smartphone className="w-5 h-5" />}
         >
             {/* Error / Success */}
@@ -509,7 +477,7 @@ export function DeviceSyncSection() {
                 </div>
             )}
 
-            {/* Server Toggle */}
+            {/* Server Sharing */}
             <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
                 <div className="flex items-center gap-3">
                     {isServerRunning ? (
@@ -519,25 +487,41 @@ export function DeviceSyncSection() {
                     )}
                     <div>
                         <p className="font-medium text-sm text-[color:var(--color-text-primary)]">
-                            Sync Server
+                            Share this device
                         </p>
                         <p className="text-xs text-[color:var(--color-text-muted)]">
                             {isServerRunning
-                                ? "Listening for connections"
-                                : "Start to allow pairing and sync"}
+                                ? "Other paired devices can connect and sync now"
+                                : "Start only when you want this device to accept incoming sync"}
                         </p>
                     </div>
                 </div>
-                {isLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-[color:var(--color-text-muted)]" />
-                ) : (
-                    <Toggle
-                        checked={isServerRunning}
-                        onChange={(checked) =>
-                            checked ? handleStartServer() : handleStopServer()
-                        }
-                    />
-                )}
+                <button
+                    onClick={() => {
+                        void (isServerRunning
+                            ? handleStopServer()
+                            : handleStartServer());
+                    }}
+                    disabled={isLoading}
+                    className={cn(
+                        "px-3 py-2 text-xs font-semibold border transition-colors",
+                        isServerRunning
+                            ? "border-[var(--color-error)]/30 text-[color:var(--color-error)] hover:bg-[var(--color-error)]/5"
+                            : "border-[var(--color-accent)]/30 text-[color:var(--color-accent)] hover:bg-[var(--color-accent)]/10",
+                        isLoading && "opacity-60 pointer-events-none",
+                    )}
+                >
+                    {isLoading ? (
+                        <span className="inline-flex items-center gap-1.5">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Working...
+                        </span>
+                    ) : isServerRunning ? (
+                        "Stop sharing"
+                    ) : (
+                        "Start sharing"
+                    )}
+                </button>
             </div>
 
             {/* QR Pairing */}
@@ -636,11 +620,11 @@ export function DeviceSyncSection() {
             </div>
 
             {/* Manual Pairing Code Entry */}
-            <div className="space-y-2">
-                <p className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider">
-                    Or enter pairing code manually
-                </p>
-                <div className="flex gap-2">
+            <details className="border border-[var(--color-border)] bg-[var(--color-surface-muted)]">
+                <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-[color:var(--color-text-primary)]">
+                    Manual pairing code
+                </summary>
+                <div className="flex gap-2 border-t border-[var(--color-border)] p-3">
                     <input
                         type="text"
                         value={pairingCode}
@@ -671,7 +655,7 @@ export function DeviceSyncSection() {
                         )}
                     </button>
                 </div>
-            </div>
+            </details>
 
             {/* Paired Devices */}
             {pairedDevices.length > 0 && (
@@ -712,17 +696,21 @@ export function DeviceSyncSection() {
                                             onClick={() => handleSyncNow(device.deviceId)}
                                             disabled={!!syncingDeviceId}
                                             className={cn(
-                                                "p-2 text-[color:var(--color-text-muted)]",
-                                                "hover:text-[color:var(--color-accent)]",
-                                                "transition-colors",
+                                                "inline-flex items-center gap-1.5 border border-[var(--color-border)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] transition-colors",
+                                                "hover:text-[color:var(--color-accent)] hover:border-[var(--color-accent)]/30",
                                                 "disabled:opacity-40 disabled:cursor-not-allowed",
                                             )}
-                                            title="Sync now"
                                         >
                                             {isSyncing ? (
-                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <>
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    Syncing
+                                                </>
                                             ) : (
-                                                <ArrowDownUp className="w-4 h-4" />
+                                                <>
+                                                    <ArrowDownUp className="w-3.5 h-3.5" />
+                                                    Sync now
+                                                </>
                                             )}
                                         </button>
                                         <button
@@ -731,14 +719,13 @@ export function DeviceSyncSection() {
                                             }
                                             disabled={isSyncing}
                                             className={cn(
-                                                "p-2 text-[color:var(--color-text-muted)]",
-                                                "hover:text-[color:var(--color-error)]",
-                                                "transition-colors",
-                                                "disabled:opacity-40",
+                                                "inline-flex items-center gap-1.5 border border-[var(--color-border)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] transition-colors",
+                                                "hover:text-[color:var(--color-error)] hover:border-[var(--color-error)]/30",
+                                                "disabled:opacity-40 disabled:cursor-not-allowed",
                                             )}
-                                            title="Unpair device"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                            Unpair
                                         </button>
                                     </div>
                                 </div>
