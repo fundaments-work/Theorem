@@ -484,10 +484,27 @@ function cleanupDiscardedImportedBook(book: Book): void {
 function normalizePersistedBook(book: Book): Book {
     const contentHash = normalizeContentHash(book.contentHash);
     const hasLegacyPersistedCoverPath = typeof book.coverPath === "string" && book.coverPath.length > 0;
+    const fallbackPath = `sqlite://${book.id}`;
+    const normalizedFilePath = (
+        typeof book.filePath === "string" && book.filePath.length > 0
+    )
+        ? book.filePath
+        : (
+            typeof book.storagePath === "string" && book.storagePath.length > 0
+                ? book.storagePath
+                : fallbackPath
+        );
+    const normalizedStoragePath = (
+        typeof book.storagePath === "string" && book.storagePath.length > 0
+    )
+        ? book.storagePath
+        : normalizedFilePath;
 
     return {
         ...book,
         contentHash,
+        filePath: normalizedFilePath,
+        storagePath: normalizedStoragePath,
         coverExtractionDone: Boolean(book.coverExtractionDone || hasLegacyPersistedCoverPath),
     };
 }

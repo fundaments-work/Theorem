@@ -564,12 +564,19 @@ pub async fn initiate_sync(
     };
 
     let complete_req = encrypt_request(my_device_id, &sym_key, &complete_msg)?;
-    let _ = client
+    let complete_response = client
         .post(&format!("{base_url}/complete"))
         .json(&complete_req)
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
         .send()
-        .await; // we don't strictly care if they acknowledge complete
+        .await
+        .map_err(|e| format!("Sync completion notify failed: {e}"))?;
+    if !complete_response.status().is_success() {
+        return Err(format!(
+            "Sync completion rejected by peer: {}",
+            complete_response.status()
+        ));
+    }
 
     peer.last_sync_at = Some(now);
 

@@ -9,7 +9,6 @@ import {
     isMobile,
     initReaderStyles,
     ensureResponderSyncReady,
-    getPairedDevices,
     cn,
 } from "./core";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
@@ -175,10 +174,6 @@ function App() {
         let cancelled = false;
         const bootstrapResponderSync = async () => {
             try {
-                const pairedDevices = await getPairedDevices();
-                if (cancelled || pairedDevices.length === 0) {
-                    return;
-                }
                 await ensureResponderSyncReady();
             } catch (error) {
                 if (!cancelled) {

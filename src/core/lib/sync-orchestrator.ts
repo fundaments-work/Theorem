@@ -190,9 +190,15 @@ function mergeIncomingData(
     localSettingsUpdatedAt?: string,
 ): { domainsUpdated: string[] } {
     const domainsUpdated: string[] = [];
+    const markUpdated = (domain: string) => {
+        if (!domainsUpdated.includes(domain)) {
+            domainsUpdated.push(domain);
+        }
+    };
 
     // ── Merge tombstones FIRST so books/annotations/collections can respect them ──
     let allTombstones = useLibraryStore.getState().deletionTombstones;
+    let tombstonesChanged = false;
 
     if (incomingMap["deletion_tombstones"]) {
         try {
@@ -200,10 +206,37 @@ function mergeIncomingData(
             if (Array.isArray(incoming)) {
                 allTombstones = mergeTombstones(incoming, allTombstones);
                 useLibraryStore.setState({ deletionTombstones: allTombstones });
-                domainsUpdated.push("deletion_tombstones");
+                tombstonesChanged = true;
+                markUpdated("deletion_tombstones");
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge deletion_tombstones:", e);
+        }
+    }
+
+    // Tombstones can arrive without the books/annotations/collections domains.
+    // In that case, we still must prune local entities immediately so deletions
+    // propagate correctly cross-device.
+    if (tombstonesChanged) {
+        const libraryState = useLibraryStore.getState();
+        const prunedBooks = mergeBooks([], libraryState.books, allTombstones);
+        const prunedAnnotations = mergeAnnotations([], libraryState.annotations, allTombstones);
+        const prunedCollections = mergeCollections([], libraryState.collections, allTombstones);
+
+        useLibraryStore.setState({
+            books: prunedBooks,
+            annotations: prunedAnnotations,
+            collections: prunedCollections,
+        });
+
+        if (prunedBooks.length !== libraryState.books.length) {
+            markUpdated("books");
+        }
+        if (prunedAnnotations.length !== libraryState.annotations.length) {
+            markUpdated("annotations");
+        }
+        if (prunedCollections.length !== libraryState.collections.length) {
+            markUpdated("collections");
         }
     }
 
@@ -214,7 +247,7 @@ function mergeIncomingData(
                 // Read fresh state to avoid overwriting concurrent user changes.
                 const merged = mergeBooks(incoming, useLibraryStore.getState().books, allTombstones);
                 useLibraryStore.setState({ books: merged });
-                domainsUpdated.push("books");
+                markUpdated("books");
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge books:", e);
@@ -227,7 +260,7 @@ function mergeIncomingData(
             if (Array.isArray(incoming)) {
                 const merged = mergeAnnotations(incoming, useLibraryStore.getState().annotations, allTombstones);
                 useLibraryStore.setState({ annotations: merged });
-                domainsUpdated.push("annotations");
+                markUpdated("annotations");
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge annotations:", e);
@@ -240,7 +273,7 @@ function mergeIncomingData(
             if (Array.isArray(incoming)) {
                 const merged = mergeCollections(incoming, useLibraryStore.getState().collections, allTombstones);
                 useLibraryStore.setState({ collections: merged });
-                domainsUpdated.push("collections");
+                markUpdated("collections");
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge collections:", e);
@@ -253,7 +286,7 @@ function mergeIncomingData(
             if (Array.isArray(incoming)) {
                 const merged = mergeVocabulary(incoming, useVocabularyStore.getState().vocabularyTerms);
                 useVocabularyStore.setState({ vocabularyTerms: merged });
-                domainsUpdated.push("vocabulary");
+                markUpdated("vocabulary");
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge vocabulary:", e);
@@ -279,7 +312,7 @@ function mergeIncomingData(
                 localSettingsUpdatedAt,
             );
             useSettingsStore.setState({ settings: merged });
-            domainsUpdated.push("settings");
+            markUpdated("settings");
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge settings:", e);
         }
@@ -291,7 +324,7 @@ function mergeIncomingData(
             if (incoming && typeof incoming === "object") {
                 const merged = mergeReadingStats(incoming, useSettingsStore.getState().stats);
                 useSettingsStore.setState({ stats: merged });
-                domainsUpdated.push("reading_stats");
+                markUpdated("reading_stats");
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge reading_stats:", e);
@@ -308,7 +341,7 @@ function mergeIncomingData(
                 const result = mergeRssFeeds(incoming, useRssStore.getState().feeds);
                 useRssStore.setState({ feeds: result.feeds });
                 feedIdMap = result.feedIdMap;
-                domainsUpdated.push("rss_feeds");
+                markUpdated("rss_feeds");
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge rss_feeds:", e);
@@ -321,7 +354,7 @@ function mergeIncomingData(
             if (Array.isArray(incoming)) {
                 const merged = mergeRssArticles(incoming, useRssStore.getState().articles, feedIdMap);
                 useRssStore.setState({ articles: merged });
-                domainsUpdated.push("rss_articles");
+                markUpdated("rss_articles");
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge rss_articles:", e);
@@ -382,6 +415,7 @@ async function pullMissingBookFiles(
         for (const id of result.transferred) {
             useLibraryStore.getState().updateBook(id, {
                 syncedWithoutFile: false,
+                filePath: `sqlite://${id}`,
                 storagePath: `sqlite://${id}`,
                 coverExtractionDone: false,
             });
@@ -487,7 +521,8 @@ export async function runDeviceSync(
 
         const incomingDomainCount = Object.keys(incomingMap).length;
         if (incomingDomainCount === 0) {
-            log("No updates received from peer — already in sync.");
+            log("No domain updates from peer. Checking for missing book files...");
+            await pullMissingBookFiles(peerDeviceId, log);
             setStatus("synced", "Already in sync");
             return { success: true, domainsUpdated: [] };
         }
@@ -499,10 +534,10 @@ export async function runDeviceSync(
             incomingMap, settingsUpdatedAt,
         );
 
-        // After metadata merge, pull any missing book files from the peer.
-        if (domainsUpdated.includes("books")) {
-            await pullMissingBookFiles(peerDeviceId, log);
-        }
+        // Pull any missing book files on every sync pass.
+        // This allows retrying previously-unavailable files even when the
+        // books domain itself has no new metadata changes.
+        await pullMissingBookFiles(peerDeviceId, log);
 
         const summary = domainsUpdated.length > 0
             ? `Updated: ${domainsUpdated.join(", ")}`
@@ -565,7 +600,11 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
         const domainCount = Object.keys(incomingMap).length;
 
         if (domainCount === 0) {
-            console.log("[sync-orchestrator] Responder: no incoming data to merge.");
+            console.log("[sync-orchestrator] Responder: no incoming data to merge. Checking missing book files...");
+            if (peerDeviceId) {
+                const responderLog = (msg: string) => console.log(`[sync-orchestrator] Responder: ${msg}`);
+                await pullMissingBookFiles(peerDeviceId, responderLog);
+            }
             setStatus("synced", "No new data from peer");
             return;
         }
@@ -589,8 +628,8 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
 
         console.log(`[sync-orchestrator] Responder: merge complete. ${summary}`);
 
-        // After metadata merge, pull any missing book files from the peer.
-        if (peerDeviceId && domainsUpdated.includes("books")) {
+        // Pull any missing book files on every responder merge pass.
+        if (peerDeviceId) {
             const responderLog = (msg: string) => console.log(`[sync-orchestrator] Responder: ${msg}`);
             await pullMissingBookFiles(peerDeviceId, responderLog);
         }

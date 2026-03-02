@@ -6,7 +6,7 @@
  * - QR code pairing flow
  * - Manual pairing code entry
  * - Paired devices list with unpair + sync-now
- * - Sync server start/stop
+ * - Auto-managed sync receiver status
  * - Live sync status + progress
  */
 
@@ -32,7 +32,6 @@ import { cn, isMobile, isTauri } from "../../core";
 import { Modal, ModalBody, ModalHeader } from "../../ui";
 import {
     startSyncServer,
-    stopSyncServer,
     generatePairingQr,
     submitPairingCode,
     getDeviceIdentity,
@@ -158,6 +157,34 @@ export function DeviceSyncSection() {
         })();
     }, [available]);
 
+    // Auto-manage incoming sync receiver once at least one device is paired.
+    useEffect(() => {
+        if (!available || pairedDevices.length === 0) {
+            return;
+        }
+
+        let cancelled = false;
+        const ensureReceiverReady = async () => {
+            try {
+                await ensureResponderSyncReady();
+                const info = await startSyncServer();
+                if (!cancelled) {
+                    setServerInfo(info);
+                    setIsServerRunning(true);
+                }
+            } catch (e) {
+                if (!cancelled) {
+                    console.warn("[DeviceSync] Failed to auto-manage sync receiver:", e);
+                }
+            }
+        };
+
+        void ensureReceiverReady();
+        return () => {
+            cancelled = true;
+        };
+    }, [available, pairedDevices.length]);
+
     // Auto-clear success message.
     useEffect(() => {
         if (successMessage) {
@@ -165,45 +192,6 @@ export function DeviceSyncSection() {
             return () => clearTimeout(timer);
         }
     }, [successMessage]);
-
-    const handleStartServer = useCallback(async () => {
-        setError(null);
-        setIsLoading(true);
-        try {
-            const info = await startSyncServer();
-            setServerInfo(info);
-            setIsServerRunning(true);
-            setDeviceSyncStatus("hosting");
-            // Provision data so the server can respond to sync requests
-            try {
-                await provisionSyncData();
-            } catch (e) {
-                console.warn("[DeviceSync] Failed to provision sync data:", e);
-            }
-            try {
-                await ensureResponderSyncReady();
-            } catch (e) {
-                console.warn("[DeviceSync] Failed to initialize responder sync:", e);
-            }
-        } catch (e: any) {
-            setError(e?.message || String(e));
-        } finally {
-            setIsLoading(false);
-        }
-    }, [setDeviceSyncStatus]);
-
-    const handleStopServer = useCallback(async () => {
-        try {
-            await stopSyncServer();
-            setIsServerRunning(false);
-            setServerInfo(null);
-            setQrData(null);
-            setIsQrModalOpen(false);
-            setDeviceSyncStatus("idle");
-        } catch (e: any) {
-            setError(e?.message || String(e));
-        }
-    }, [setDeviceSyncStatus]);
 
     const handleGenerateQr = useCallback(async () => {
         if (qrData) {
@@ -226,6 +214,8 @@ export function DeviceSyncSection() {
             }
             try {
                 await ensureResponderSyncReady();
+                const info = await startSyncServer();
+                setServerInfo(info);
             } catch (e) {
                 console.warn("[DeviceSync] Failed to initialize responder sync:", e);
             }
@@ -460,51 +450,28 @@ export function DeviceSyncSection() {
                 </div>
             )}
 
-            {/* Server Sharing */}
-            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
-                <div className="flex items-center gap-3">
-                    {isServerRunning ? (
-                        <Wifi className="w-5 h-5 text-[color:var(--color-accent)]" />
-                    ) : (
-                        <WifiOff className="w-5 h-5 text-[color:var(--color-text-muted)]" />
-                    )}
-                    <div>
-                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">
-                            Share this device
-                        </p>
-                        <p className="text-xs text-[color:var(--color-text-muted)]">
-                            {isServerRunning
-                                ? "Other paired devices can connect and sync now"
-                                : "Start only when you want this device to accept incoming sync"}
-                        </p>
-                    </div>
+            {/* Receiver Status */}
+            <div className="flex items-center gap-3 p-4 bg-[var(--color-surface-muted)]">
+                {isServerRunning ? (
+                    <Wifi className="w-5 h-5 text-[color:var(--color-accent)]" />
+                ) : (
+                    <WifiOff className="w-5 h-5 text-[color:var(--color-text-muted)]" />
+                )}
+                <div className="flex-1">
+                    <p className="font-medium text-sm text-[color:var(--color-text-primary)]">
+                        Incoming sync receiver
+                    </p>
+                    <p className="text-xs text-[color:var(--color-text-muted)]">
+                        {pairedDevices.length > 0
+                            ? "Auto-enabled while the app is running. No manual start/stop needed."
+                            : "Pair at least one device to auto-enable incoming sync."}
+                    </p>
                 </div>
-                <button
-                    onClick={() => {
-                        void (isServerRunning
-                            ? handleStopServer()
-                            : handleStartServer());
-                    }}
-                    disabled={isLoading}
-                    className={cn(
-                        "px-3 py-2 text-xs font-semibold border transition-colors",
-                        isServerRunning
-                            ? "border-[var(--color-error)]/30 text-[color:var(--color-error)] hover:bg-[var(--color-error)]/5"
-                            : "border-[var(--color-accent)]/30 text-[color:var(--color-accent)] hover:bg-[var(--color-accent)]/10",
-                        isLoading && "opacity-60 pointer-events-none",
-                    )}
-                >
-                    {isLoading ? (
-                        <span className="inline-flex items-center gap-1.5">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            Working...
-                        </span>
-                    ) : isServerRunning ? (
-                        "Stop sharing"
-                    ) : (
-                        "Start sharing"
-                    )}
-                </button>
+                {isServerRunning && serverInfo && (
+                    <span className="text-xs text-[color:var(--color-accent)] font-mono whitespace-nowrap">
+                        {serverInfo.ip}:{serverInfo.port}
+                    </span>
+                )}
             </div>
 
             {/* QR Pairing */}

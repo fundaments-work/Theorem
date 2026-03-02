@@ -126,8 +126,11 @@ export function mergeBooks(
 
         if (!match) {
             // New book from remote — flag it as having no local file.
+            const localPlaceholderPath = `sqlite://${inc.id}`;
             const remoteBook: Book = {
                 ...inc,
+                filePath: localPlaceholderPath,
+                storagePath: localPlaceholderPath,
                 coverPath: undefined, // Remote coverPath is meaningless locally
                 syncedWithoutFile: true,
             };
@@ -182,8 +185,11 @@ export function mergeBooks(
                     ? match.rating
                     : inc.rating,
             // Preserve local paths — never overwrite with remote paths.
-            filePath: match.filePath,
-            storagePath: match.storagePath,
+            // If an old synced record is missing filePath/storagePath, repair it
+            // with a local sqlite placeholder path so downstream consumers that
+            // call `startsWith` do not crash.
+            filePath: match.filePath || match.storagePath || `sqlite://${match.id}`,
+            storagePath: match.storagePath || match.filePath || `sqlite://${match.id}`,
             coverPath: match.coverPath,
             // Fill in contentHash if local is missing.
             contentHash: match.contentHash || inc.contentHash,

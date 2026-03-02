@@ -508,6 +508,17 @@ async fn handle_sync_push_batch(
             serde_json::json!({ "domains": payload.domains.keys().collect::<Vec<_>>() })
                 .to_string();
         emitter("sync-incoming-data", &event_payload);
+
+        // Fallback: trigger a merge opportunity immediately after batched push.
+        // This keeps responder-side convergence robust even if the initiator's
+        // later /sync/complete notification is delayed or dropped.
+        let complete_like_payload = serde_json::json!({
+            "peer_device_id": payload.sender_device_id,
+            "timestamp": sync_crypto::now_iso8601(),
+            "source": "push_batch",
+        })
+        .to_string();
+        emitter("sync-incoming-complete", &complete_like_payload);
     }
 
     let response = serde_json::json!({
