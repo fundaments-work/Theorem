@@ -10,7 +10,7 @@
  * - Live sync status + progress
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
     Smartphone,
     QrCode,
@@ -29,6 +29,7 @@ import {
     Signal,
 } from "lucide-react";
 import { cn, isTauri } from "../../core";
+import { Modal, ModalBody, ModalHeader } from "../../ui";
 import {
     startSyncServer,
     stopSyncServer,
@@ -150,6 +151,7 @@ export function DeviceSyncSection() {
     const [isServerRunning, setIsServerRunning] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isPairing, setIsPairing] = useState(false);
+    const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [syncingDeviceId, setSyncingDeviceId] = useState<string | null>(null);
     const [syncProgress, setSyncProgress] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -244,6 +246,7 @@ export function DeviceSyncSection() {
             setIsServerRunning(false);
             setServerInfo(null);
             setQrData(null);
+            setIsQrModalOpen(false);
             setDeviceSyncStatus("idle");
         } catch (e: any) {
             setError(e?.message || String(e));
@@ -251,11 +254,16 @@ export function DeviceSyncSection() {
     }, [setDeviceSyncStatus]);
 
     const handleGenerateQr = useCallback(async () => {
+        if (qrData) {
+            setIsQrModalOpen(true);
+            return;
+        }
         setError(null);
         setIsLoading(true);
         try {
             const data = await generatePairingQr();
             setQrData(data);
+            setIsQrModalOpen(true);
             setIsServerRunning(true);
             setDeviceSyncStatus("hosting");
             // Provision data after QR generation starts server
@@ -278,7 +286,7 @@ export function DeviceSyncSection() {
         } finally {
             setIsLoading(false);
         }
-    }, [setDeviceSyncStatus]);
+    }, [qrData, setDeviceSyncStatus]);
 
     const handleSubmitPairingCode = useCallback(async () => {
         if (!pairingCode.trim()) return;
@@ -360,6 +368,13 @@ export function DeviceSyncSection() {
             setTimeout(() => setCopiedCode(false), 2000);
         }
     }, [qrData]);
+
+    const qrSvgDataUri = useMemo(() => {
+        if (!qrData?.qr_svg) {
+            return "";
+        }
+        return `data:image/svg+xml;utf8,${encodeURIComponent(qrData.qr_svg)}`;
+    }, [qrData?.qr_svg]);
 
     if (!available) {
         return (
@@ -495,43 +510,40 @@ export function DeviceSyncSection() {
                 </button>
 
                 {qrData && (
-                    <div className="p-4 bg-[var(--color-surface-muted)] space-y-3">
-                        {/* QR SVG */}
-                        <div className="flex justify-center">
-                            <div
-                                className="w-56 h-56 bg-white p-3"
-                                dangerouslySetInnerHTML={{
-                                    __html: qrData.qr_svg,
-                                }}
-                            />
-                        </div>
-                        <p className="text-xs text-center text-[color:var(--color-text-muted)]">
-                            Scan this QR code from the other device's Theorem
-                            app
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3 border border-[var(--color-border)] bg-[var(--color-surface-muted)]">
+                        <p className="text-xs text-[color:var(--color-text-muted)]">
+                            Pairing QR is ready. Open the overlay or copy the manual
+                            code.
                         </p>
-
-                        {/* Copy pairing code */}
-                        <button
-                            onClick={handleCopyCode}
-                            className={cn(
-                                "w-full flex items-center justify-center gap-2 p-2",
-                                "border border-[var(--color-border)]",
-                                "text-xs text-[color:var(--color-text-muted)]",
-                                "hover:bg-[var(--color-surface-muted)] transition-colors",
-                            )}
-                        >
-                            {copiedCode ? (
-                                <>
-                                    <Check className="w-3 h-3" />
-                                    Copied!
-                                </>
-                            ) : (
-                                <>
-                                    <Copy className="w-3 h-3" />
-                                    Copy pairing code (for manual entry)
-                                </>
-                            )}
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setIsQrModalOpen(true)}
+                                className="ui-btn"
+                            >
+                                Open QR
+                            </button>
+                            <button
+                                onClick={handleCopyCode}
+                                className={cn(
+                                    "flex items-center justify-center gap-2 px-3 py-2",
+                                    "border border-[var(--color-border)]",
+                                    "text-xs text-[color:var(--color-text-muted)]",
+                                    "hover:bg-[var(--color-surface)] transition-colors",
+                                )}
+                            >
+                                {copiedCode ? (
+                                    <>
+                                        <Check className="w-3 h-3" />
+                                        Copied!
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="w-3 h-3" />
+                                        Copy code
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
@@ -658,6 +670,54 @@ export function DeviceSyncSection() {
                     Data never leaves your local network.
                 </p>
             </div>
+
+            <Modal
+                isOpen={isQrModalOpen && !!qrData}
+                onClose={() => setIsQrModalOpen(false)}
+                size="sm"
+            >
+                <ModalHeader
+                    title="Pair Device"
+                    onClose={() => setIsQrModalOpen(false)}
+                />
+                <ModalBody className="space-y-4 overflow-x-hidden">
+                    <div className="mx-auto w-full max-w-[18rem]">
+                        <div className="aspect-square w-full overflow-hidden border border-[var(--color-border)] bg-white p-3">
+                            {qrSvgDataUri && (
+                                <img
+                                    src={qrSvgDataUri}
+                                    alt="Pairing QR code"
+                                    className="h-full w-full object-contain"
+                                />
+                            )}
+                        </div>
+                    </div>
+                    <p className="text-sm text-center text-[color:var(--color-text-muted)]">
+                        Scan this QR code from the other device&apos;s Theorem app.
+                    </p>
+                    <button
+                        onClick={handleCopyCode}
+                        className={cn(
+                            "w-full flex items-center justify-center gap-2 p-2",
+                            "border border-[var(--color-border)]",
+                            "text-sm text-[color:var(--color-text-primary)]",
+                            "hover:bg-[var(--color-surface-muted)] transition-colors",
+                        )}
+                    >
+                        {copiedCode ? (
+                            <>
+                                <Check className="w-3.5 h-3.5" />
+                                Copied pairing code
+                            </>
+                        ) : (
+                            <>
+                                <Copy className="w-3.5 h-3.5" />
+                                Copy pairing code (for manual entry)
+                            </>
+                        )}
+                    </button>
+                </ModalBody>
+            </Modal>
         </Section>
     );
 }

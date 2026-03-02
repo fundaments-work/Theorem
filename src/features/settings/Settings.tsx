@@ -196,7 +196,7 @@ export function SettingsPage() {
     const vaultSyncAt = useUIStore((state) => state.vaultSyncAt);
     const { vocabularyTerms, installedDictionaries, importStarDict, removeDictionary } = useVocabularyStore();
     const [activeTab, setActiveTab] = useState<
-        "general" | "dictionary" | "rss" | "integrations" | "storage"
+        "general" | "dictionary" | "integrations" | "storage"
     >("general");
 
     const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
@@ -382,8 +382,8 @@ export function SettingsPage() {
     const tabButtons = [
         { id: "general" as const, label: "General" },
         { id: "dictionary" as const, label: "Dictionary" },
-        { id: "integrations" as const, label: "Sync" },
-        { id: "storage" as const, label: "Storage" },
+        { id: "integrations" as const, label: "Sync & Devices" },
+        { id: "storage" as const, label: "Data & Storage" },
     ];
 
     return (
@@ -911,6 +911,7 @@ export function SettingsPage() {
                         </SettingRow>
                     </Section>
 
+                    <DeviceSyncSection />
                 </div>
             )}
 
@@ -983,8 +984,6 @@ export function SettingsPage() {
                             </div>
                         </div>
                     </Section>
-
-                    <DeviceSyncSection />
 
                     <Section
                         title="Data Management"
