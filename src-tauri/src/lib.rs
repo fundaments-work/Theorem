@@ -552,6 +552,7 @@ pub fn run() {
             sync_commands::set_sync_data,
             sync_commands::get_incoming_sync_data,
             sync_commands::update_peer_address,
+            sync_commands::discover_peer,
             sync_commands::initiate_sync,
             sync_commands::pull_book_files
         ])

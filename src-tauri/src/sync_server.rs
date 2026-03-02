@@ -77,9 +77,28 @@ pub struct SyncServerHandle {
     pub shutdown_notify: Arc<Notify>,
 }
 
+// ─── Port Persistence ───
+
+const PREFERRED_PORT_FILE: &str = "sync-preferred-port";
+
+/// Load the preferred port from disk.
+fn load_preferred_port(app_data_dir: &Path) -> Option<u16> {
+    let path = app_data_dir.join(PREFERRED_PORT_FILE);
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| s.trim().parse::<u16>().ok())
+        .filter(|&p| p > 0)
+}
+
+/// Save the preferred port to disk.
+fn save_preferred_port(app_data_dir: &Path, port: u16) {
+    let path = app_data_dir.join(PREFERRED_PORT_FILE);
+    let _ = std::fs::write(&path, port.to_string());
+}
+
 // ─── Server Lifecycle ───
 
-/// Start the sync server on a random available port.
+/// Start the sync server, reusing the previously bound port if possible.
 ///
 /// Returns a handle that can be used to shut down the server.
 pub async fn start_server(state: Arc<SyncServerState>) -> Result<SyncServerHandle, String> {
@@ -96,14 +115,30 @@ pub async fn start_server(state: Arc<SyncServerState>) -> Result<SyncServerHandl
         .route("/sync/file/pull", post(handle_file_pull))
         .with_state(state.clone());
 
-    // Bind to any available port on all interfaces.
-    let listener = TcpListener::bind("0.0.0.0:0")
-        .await
-        .map_err(|e| format!("Failed to bind sync server: {e}"))?;
+    // Try to reuse the previously bound port. Fall back to a random port.
+    let preferred_port = load_preferred_port(&state.app_data_dir);
+    let listener = if let Some(port) = preferred_port {
+        match TcpListener::bind(format!("0.0.0.0:{port}")).await {
+            Ok(l) => l,
+            Err(_) => {
+                // Port unavailable (another process took it) — fall back to random.
+                TcpListener::bind("0.0.0.0:0")
+                    .await
+                    .map_err(|e| format!("Failed to bind sync server: {e}"))?
+            }
+        }
+    } else {
+        TcpListener::bind("0.0.0.0:0")
+            .await
+            .map_err(|e| format!("Failed to bind sync server: {e}"))?
+    };
 
     let addr = listener
         .local_addr()
         .map_err(|e| format!("Failed to get server address: {e}"))?;
+
+    // Persist the port so next restart tries the same one.
+    save_preferred_port(&state.app_data_dir, addr.port());
 
     let shutdown_notify = Arc::new(Notify::new());
     let shutdown_clone = shutdown_notify.clone();
@@ -568,6 +603,14 @@ async fn handle_sync_complete(
     let mut devices = state.paired_devices.lock().await;
     if let Some(device) = devices.get_mut(&message.device_id) {
         device.last_sync_at = Some(message.sync_timestamp.clone());
+
+        // Save the initiator's current server address so this device (the responder)
+        // can connect back to pull book files or initiate reverse syncs.
+        if !message.server_ip.is_empty() && message.server_port > 0 {
+            device.last_ip = message.server_ip.clone();
+            device.last_port = message.server_port;
+        }
+
         if let Err(e) = save_paired_devices(&state.app_data_dir, &devices) {
             eprintln!("[sync] Failed to persist paired devices after sync complete: {e}");
         }

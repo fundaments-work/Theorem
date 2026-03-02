@@ -17,6 +17,7 @@ import {
     startSyncServer,
     getIncomingSyncData,
     pullBookFiles,
+    discoverPeer,
 } from "./device-sync";
 import {
     useLibraryStore,
@@ -515,6 +516,20 @@ export async function runDeviceSync(
         log("Sending data snapshot to backend...");
         await setSyncData(JSON.stringify(domains), JSON.stringify(manifest));
 
+        // Discover the peer's current address before connecting.
+        // The persistent port feature means the stored port is usually correct,
+        // but this handles the case where it changed (e.g. port was unavailable).
+        log("Discovering peer on network...");
+        try {
+            const [peerIp, peerPort] = await discoverPeer(peerDeviceId);
+            log(`Peer found at ${peerIp}:${peerPort}`);
+        } catch (discoveryErr) {
+            const errMsg = discoveryErr instanceof Error ? discoveryErr.message : String(discoveryErr);
+            log(`Peer discovery failed (${errMsg}), trying stored address...`);
+            // Fall through — initiateSync will use whatever address is stored.
+            // If the stored address is also stale, initiateSync will fail with a clear error.
+        }
+
         log("Initiating sync with peer...");
         setStatus("syncing", "Exchanging data with peer...");
         const incomingMap = await initiateSync(peerDeviceId);
@@ -603,6 +618,11 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
             console.log("[sync-orchestrator] Responder: no incoming data to merge. Checking missing book files...");
             if (peerDeviceId) {
                 const responderLog = (msg: string) => console.log(`[sync-orchestrator] Responder: ${msg}`);
+                try {
+                    await discoverPeer(peerDeviceId);
+                } catch {
+                    // Non-fatal: address may already be correct from SyncCompleteMessage.
+                }
                 await pullMissingBookFiles(peerDeviceId, responderLog);
             }
             setStatus("synced", "No new data from peer");
@@ -629,8 +649,16 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
         console.log(`[sync-orchestrator] Responder: merge complete. ${summary}`);
 
         // Pull any missing book files on every responder merge pass.
+        // The initiator's SyncCompleteMessage includes its server address,
+        // which handle_sync_complete already saved. Discover to verify reachability.
         if (peerDeviceId) {
             const responderLog = (msg: string) => console.log(`[sync-orchestrator] Responder: ${msg}`);
+            try {
+                await discoverPeer(peerDeviceId);
+            } catch {
+                // Discovery failed — peer may have gone offline. pullMissingBookFiles
+                // will fail gracefully (non-fatal) if the address is stale.
+            }
             await pullMissingBookFiles(peerDeviceId, responderLog);
         }
 

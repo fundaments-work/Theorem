@@ -8,7 +8,7 @@ import type { KeyboardEvent } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
     Minus,
-    Square,
+    Maximize2,
     X,
     Search,
     BarChart3,
@@ -35,8 +35,8 @@ interface AppTitlebarProps {
 const TITLEBAR_ICON_BUTTON =
     "ui-icon-btn !h-9 !w-9";
 const TITLEBAR_WINDOW_BUTTON =
-    "ui-icon-btn hidden sm:inline-flex !h-8 !w-8 border-transparent bg-transparent";
-const TITLEBAR_CLOSE_BUTTON = `${TITLEBAR_WINDOW_BUTTON} hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)] hover:border-[color:color-mix(in_srgb,var(--color-error)_35%,var(--color-border))]`;
+    "inline-flex h-8 w-8 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
+const TITLEBAR_CLOSE_BUTTON = `${TITLEBAR_WINDOW_BUTTON} hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]`;
 const TITLEBAR_SEARCH_INPUT =
     "ui-input bg-[var(--color-surface)] pl-[calc(var(--control-padding-x)+var(--icon-size-sm)+var(--spacing-md))]";
 
@@ -348,8 +348,7 @@ export function AppTitlebar({
                     </button>
 
                     {showDesktopWindowControls && (
-                        <>
-                            <div className="hidden sm:block w-px h-5 bg-[var(--color-border)] mx-1" />
+                        <div className="hidden sm:flex items-center gap-1 ml-2 pl-2 border-l border-[var(--color-border)]">
                             <button
                                 onClick={handleMinimize}
                                 className={TITLEBAR_WINDOW_BUTTON}
@@ -362,7 +361,7 @@ export function AppTitlebar({
                                 className={TITLEBAR_WINDOW_BUTTON}
                                 title={isMaximized ? "Restore" : "Maximize"}
                             >
-                                <Square className="w-3.5 h-3.5" />
+                                <Maximize2 className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={handleClose}
@@ -371,7 +370,7 @@ export function AppTitlebar({
                             >
                                 <X className="w-4 h-4" />
                             </button>
-                        </>
+                        </div>
                     )}
                 </div>
             </div>

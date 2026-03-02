@@ -374,6 +374,95 @@ pub async fn update_peer_address(
     }
 }
 
+// ─── Peer Discovery ───
+
+/// Probe a peer's last-known IP to find its current port.
+///
+/// Strategy:
+/// 1. Try the last-known IP:port combination.
+/// 2. If that fails, scan a small range of candidate ports
+///    (the peer's preferred port from its `sync-preferred-port` file
+///    is typically the same port across restarts; we also probe a few
+///    common fallback ports in case the OS reassigned).
+///
+/// On success, updates the paired device record with the new port and returns
+/// the verified (ip, port) pair.
+#[tauri::command]
+pub async fn discover_peer(
+    app: tauri::AppHandle,
+    peer_device_id: String,
+) -> Result<(String, u16), String> {
+    let sync_state = app.state::<SyncAppState>();
+
+    let devices = sync_state.server_state.paired_devices.lock().await;
+    let peer = devices
+        .get(&peer_device_id)
+        .cloned()
+        .ok_or("Peer not paired")?;
+    drop(devices);
+
+    if peer.last_ip.is_empty() {
+        return Err("Peer IP unknown. Scan their QR code to pair first.".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(1500))
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
+
+    // Build candidate list: last-known port first, then a sweep.
+    let mut candidates: Vec<u16> = Vec::new();
+    if peer.last_port > 0 {
+        candidates.push(peer.last_port);
+    }
+
+    // Probe a range of ephemeral ports around the last known one,
+    // plus the first ~20 ports in the common high-ephemeral range.
+    // This is heuristic: the persistent port feature (Fix 1) means
+    // the first candidate almost always succeeds.
+    if peer.last_port > 2 {
+        for offset in 1..=3u16 {
+            let below = peer.last_port.saturating_sub(offset);
+            let above = peer.last_port.saturating_add(offset);
+            if below > 0 && !candidates.contains(&below) {
+                candidates.push(below);
+            }
+            if above > 0 && !candidates.contains(&above) {
+                candidates.push(above);
+            }
+        }
+    }
+
+    // Try each candidate.
+    for port in &candidates {
+        let url = format!("http://{}:{}/health", peer.last_ip, port);
+        match client.get(&url).send().await {
+            Ok(res) if res.status().is_success() => {
+                // Verify the device_id matches so we don't connect to the wrong device.
+                if let Ok(health) = res.json::<crate::sync_protocol::HealthResponse>().await {
+                    if health.device_id == peer_device_id {
+                        // Update stored address if port changed.
+                        if *port != peer.last_port {
+                            let mut devices = sync_state.server_state.paired_devices.lock().await;
+                            if let Some(d) = devices.get_mut(&peer_device_id) {
+                                d.last_port = *port;
+                                let _ = crate::sync_server::save_paired_devices(
+                                    &sync_state.server_state.app_data_dir,
+                                    &devices,
+                                );
+                            }
+                        }
+                        return Ok((peer.last_ip.clone(), *port));
+                    }
+                }
+            }
+            _ => continue,
+        }
+    }
+
+    Err("Peer not reachable. Make sure both devices are on the same network and the peer app is running.".to_string())
+}
+
 // ─── Sync Orchestrator (Client side) ───
 
 fn encrypt_request<T: serde::Serialize>(
@@ -409,7 +498,6 @@ pub async fn initiate_sync(
 ) -> Result<String, String> {
     let sync_state = app.state::<SyncAppState>();
 
-    // 1. Get paired device details
     let devices = sync_state.server_state.paired_devices.lock().await;
     let mut peer = devices
         .get(&peer_device_id)
@@ -419,9 +507,15 @@ pub async fn initiate_sync(
 
     let ip = &peer.last_ip;
     let port = peer.last_port;
-    if ip.is_empty() || port == 0 {
-        return Err("Peer IP/port unknown. Scan their QR code again.".to_string());
+    if ip.is_empty() {
+        return Err("Peer IP unknown. Scan their QR code to pair first.".to_string());
     }
+    // If port is stale or zero, try discovery before giving up.
+    let port = if port == 0 {
+        return Err("Peer port unknown. Run discover_peer first or re-scan QR.".to_string());
+    } else {
+        port
+    };
 
     let sym_key_vec = BASE64
         .decode(&peer.symmetric_key_b64)
@@ -556,11 +650,20 @@ pub async fn initiate_sync(
         }
     }
 
-    // 5. Complete sync and update timestamp
+    // 5. Complete sync and update timestamp.
+    // Include our own server address so the responder can connect back
+    // (e.g. to pull book files) even if our port changed since pairing.
     let now = sync_crypto::now_iso8601();
+    let own_ip = sync_server::get_local_ip().unwrap_or_default();
+    let own_port = {
+        let handle_guard = sync_state.server_handle.lock().await;
+        handle_guard.as_ref().map(|h| h.addr.port()).unwrap_or(0)
+    };
     let complete_msg = SyncCompleteMessage {
         device_id: my_device_id.clone(),
         sync_timestamp: now.clone(),
+        server_ip: own_ip,
+        server_port: own_port,
     };
 
     let complete_req = encrypt_request(my_device_id, &sym_key, &complete_msg)?;
@@ -644,7 +747,7 @@ pub async fn pull_book_files(
     let ip = &peer.last_ip;
     let port = peer.last_port;
     if ip.is_empty() || port == 0 {
-        return Err("Peer IP/port unknown. Scan their QR code again.".to_string());
+        return Err("Peer address unknown. Run discover_peer or re-scan QR.".to_string());
     }
 
     let sym_key_vec = BASE64

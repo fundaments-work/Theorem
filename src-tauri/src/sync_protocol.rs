@@ -211,6 +211,12 @@ pub struct SyncCompleteMessage {
     pub device_id: String,
     /// ISO 8601 timestamp to record as the new last-sync time.
     pub sync_timestamp: String,
+    /// Sender's sync server IP (so the responder can connect back).
+    #[serde(default)]
+    pub server_ip: String,
+    /// Sender's sync server port.
+    #[serde(default)]
+    pub server_port: u16,
 }
 
 // ─── Batched Domain Transfer ───

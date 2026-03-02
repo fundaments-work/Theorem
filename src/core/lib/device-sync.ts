@@ -169,6 +169,20 @@ export async function updatePeerAddress(
     return invoke("update_peer_address", { deviceId, ip, port });
 }
 
+/**
+ * Discover a paired peer's current address on the LAN.
+ *
+ * Probes the peer's last-known IP on a range of candidate ports.
+ * On success, updates the stored address and returns [ip, port].
+ * On failure, throws with a descriptive error message.
+ */
+export async function discoverPeer(
+    peerDeviceId: string,
+): Promise<[string, number]> {
+    requireTauri("discoverPeer");
+    return invoke<[string, number]>("discover_peer", { peerDeviceId });
+}
+
 // ─── File Transfer ───
 
 /** Result from the Rust pull_book_files command. */
