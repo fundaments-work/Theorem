@@ -34,6 +34,8 @@ interface AppTitlebarProps {
 
 const TITLEBAR_ICON_BUTTON =
     "ui-icon-btn !h-9 !w-9";
+const TITLEBAR_DESKTOP_ACTION_BUTTON =
+    "inline-flex h-9 w-9 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)] data-[active=true]:border-[var(--color-text-primary)] data-[active=true]:bg-[var(--color-surface-muted)] data-[active=true]:text-[color:var(--color-text-primary)]";
 const TITLEBAR_WINDOW_BUTTON =
     "inline-flex h-8 w-8 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
 const TITLEBAR_CLOSE_BUTTON = `${TITLEBAR_WINDOW_BUTTON} hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]`;
@@ -236,13 +238,14 @@ export function AppTitlebar({
         <div
             className={cn(
                 "w-full z-50 select-none border-b border-[var(--color-border)] bg-[var(--color-surface)]",
-                "px-4 pb-3 pt-[calc(env(safe-area-inset-top)+var(--spacing-sm))] lg:h-[4rem] lg:py-4 lg:px-14",
+                "px-4 pb-2 pt-[max(env(safe-area-inset-top,0px),4px)] lg:py-0",
+                showDesktopWindowControls ? "lg:pl-14 lg:pr-2" : "lg:px-14",
                 className
             )}
             data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
         >
             <div
-                className="flex items-center justify-between gap-3 sm:gap-4"
+                className="flex h-12 items-center justify-between gap-3 sm:gap-4 lg:h-11"
                 data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
             >
                 {/* Left side - Menu + Title */}
@@ -289,7 +292,12 @@ export function AppTitlebar({
                 )}
 
                 {/* Right side - Stats button + Window controls */}
-                <div className="flex items-center gap-1 shrink-0">
+                <div
+                    className={cn(
+                        "flex items-center shrink-0",
+                        showDesktopWindowControls ? "gap-0.5" : "gap-1",
+                    )}
+                >
                     {isSearchVisible && (
                         <button
                             onClick={() => setIsMobileSearchOpen((prev) => !prev)}
@@ -310,7 +318,7 @@ export function AppTitlebar({
                             void handleQuickSync();
                         }}
                         className={cn(
-                            TITLEBAR_ICON_BUTTON,
+                            showDesktopWindowControls ? TITLEBAR_DESKTOP_ACTION_BUTTON : TITLEBAR_ICON_BUTTON,
                             (deviceSyncStatus === "syncing" || isQuickSyncing) && "text-[color:var(--color-accent)]",
                             deviceSyncStatus === "error" && "text-[color:var(--color-error)]",
                         )}
@@ -338,7 +346,7 @@ export function AppTitlebar({
                     <button
                         onClick={() => setRoute("statistics")}
                         className={cn(
-                            TITLEBAR_ICON_BUTTON
+                            showDesktopWindowControls ? TITLEBAR_DESKTOP_ACTION_BUTTON : TITLEBAR_ICON_BUTTON
                         )}
                         title="Statistics"
                         data-active={currentRoute === "statistics" ? "true" : undefined}
@@ -348,7 +356,7 @@ export function AppTitlebar({
                     </button>
 
                     {showDesktopWindowControls && (
-                        <div className="hidden sm:flex items-center gap-1 ml-2 pl-2 border-l border-[var(--color-border)]">
+                        <div className="hidden sm:flex items-center gap-1 ml-1.5 pl-2.5 border-l border-[var(--color-border)]">
                             <button
                                 onClick={handleMinimize}
                                 className={TITLEBAR_WINDOW_BUTTON}
@@ -377,7 +385,7 @@ export function AppTitlebar({
 
             {/* Search - Mobile (toggle from icon) */}
             {isSearchVisible && isMobileSearchOpen && (
-                <div className="mt-2 sm:hidden">
+                <div className="mt-1.5 sm:hidden">
                     <div className="relative w-full">
                         <input
                             type="text"
@@ -407,7 +415,7 @@ export function AppTitlebar({
 
             {/* Search - Tablet layouts (hidden on phone sizes) */}
             {isSearchVisible && (
-                <div className="mt-2 hidden sm:block lg:hidden">
+                <div className="mt-1.5 hidden sm:block lg:hidden">
                     <div className="relative w-full">
                         <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                         <input
