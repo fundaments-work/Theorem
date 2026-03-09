@@ -11,6 +11,7 @@ use std::env;
  * Tauri Library Module
  */
 use std::fs;
+use std::io::{Read, Seek, SeekFrom};
 use tauri::ipc::Response;
 use tauri::Manager;
 
@@ -69,6 +70,46 @@ fn read_pdf_file(path: String) -> Result<Response, String> {
     // should be accessible.
     let data = fs::read(&path).map_err(|e| format!("Failed to read PDF file '{}': {}", path, e))?;
     Ok(Response::new(data))
+}
+
+#[tauri::command]
+fn read_pdf_file_size(path: String) -> Result<u64, String> {
+    fs::metadata(&path)
+        .map(|metadata| metadata.len())
+        .map_err(|e| format!("Failed to read PDF file metadata '{}': {}", path, e))
+}
+
+#[tauri::command]
+fn read_pdf_range(path: String, offset: u64, length: u64) -> Result<Response, String> {
+    if length == 0 {
+        return Ok(Response::new(Vec::new()));
+    }
+
+    let metadata = fs::metadata(&path)
+        .map_err(|e| format!("Failed to read PDF file metadata '{}': {}", path, e))?;
+    let file_size = metadata.len();
+    if offset >= file_size {
+        return Ok(Response::new(Vec::new()));
+    }
+
+    let clamped_len = length.min(file_size.saturating_sub(offset));
+    let read_len = usize::try_from(clamped_len).map_err(|_| {
+        format!(
+            "Requested PDF range is too large for this platform: {}",
+            clamped_len
+        )
+    })?;
+
+    let mut file =
+        fs::File::open(&path).map_err(|e| format!("Failed to open PDF file '{}': {}", path, e))?;
+    file.seek(SeekFrom::Start(offset))
+        .map_err(|e| format!("Failed to seek PDF file '{}': {}", path, e))?;
+
+    let mut buffer = vec![0_u8; read_len];
+    file.read_exact(&mut buffer)
+        .map_err(|e| format!("Failed to read PDF range from '{}': {}", path, e))?;
+
+    Ok(Response::new(buffer))
 }
 
 /**
@@ -515,6 +556,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_file,
             read_pdf_file,
+            read_pdf_file_size,
+            read_pdf_range,
             get_pdf_metadata,
             fetch_rss_feed,
             fetch_url_content,
