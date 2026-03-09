@@ -10,7 +10,7 @@ use crate::sync_server::{
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
@@ -543,7 +543,7 @@ pub async fn initiate_sync(
     // 3. POST /manifest
     let req_manifest = encrypt_request(my_device_id, &sym_key, &local_manifest)?;
     let res = client
-        .post(&format!("{base_url}/manifest"))
+        .post(format!("{base_url}/manifest"))
         .json(&req_manifest)
         .timeout(std::time::Duration::from_secs(10))
         .send()
@@ -606,7 +606,7 @@ pub async fn initiate_sync(
         let req_payload = encrypt_request(my_device_id, &sym_key, &batch_payload)?;
 
         let res = client
-            .post(&format!("{base_url}/push-batch"))
+            .post(format!("{base_url}/push-batch"))
             .json(&req_payload)
             .timeout(std::time::Duration::from_secs(60))
             .send()
@@ -626,7 +626,7 @@ pub async fn initiate_sync(
         let req_payload = encrypt_request(my_device_id, &sym_key, &pull_req)?;
 
         let res = client
-            .post(&format!("{base_url}/pull-batch"))
+            .post(format!("{base_url}/pull-batch"))
             .json(&req_payload)
             .timeout(std::time::Duration::from_secs(60))
             .send()
@@ -668,7 +668,7 @@ pub async fn initiate_sync(
 
     let complete_req = encrypt_request(my_device_id, &sym_key, &complete_msg)?;
     let complete_response = client
-        .post(&format!("{base_url}/complete"))
+        .post(format!("{base_url}/complete"))
         .json(&complete_req)
         .timeout(std::time::Duration::from_secs(10))
         .send()
@@ -767,7 +767,7 @@ pub async fn pull_book_files(
     };
     let enc_req = encrypt_request(my_device_id, &sym_key, &avail_req)?;
     let res = client
-        .post(&format!("{base_url}/file/availability"))
+        .post(format!("{base_url}/file/availability"))
         .json(&enc_req)
         .timeout(std::time::Duration::from_secs(15))
         .send()
@@ -894,7 +894,7 @@ async fn pull_single_file(
     my_device_id: &str,
     sym_key: &[u8; 32],
     book_id: &str,
-    cache_dir: &PathBuf,
+    cache_dir: &Path,
 ) -> Result<u64, String> {
     // Validate book_id before using it in file paths to prevent path traversal.
     if book_id.is_empty()
@@ -917,7 +917,7 @@ async fn pull_single_file(
 
     // Use a longer timeout for file transfers — large files need time.
     let res = client
-        .post(&format!("{base_url}/file/pull"))
+        .post(format!("{base_url}/file/pull"))
         .json(&enc_req)
         .timeout(std::time::Duration::from_secs(300))
         .send()

@@ -261,11 +261,7 @@ pub fn decrypt_payload(key: &[u8; 32], payload: &EncryptedPayload) -> Result<Vec
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64;
-    let drift = if now_ms > payload.timestamp_ms {
-        now_ms - payload.timestamp_ms
-    } else {
-        payload.timestamp_ms - now_ms
-    };
+    let drift = now_ms.abs_diff(payload.timestamp_ms);
     if drift > 5 * 60 * 1000 {
         return Err("Message timestamp is too far from current time".into());
     }
