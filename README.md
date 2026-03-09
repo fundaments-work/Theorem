@@ -32,6 +32,7 @@ No cloud account. No subscription wall. No vendor lock-in.
 
 - **Read across formats:** EPUB, MOBI, AZW, AZW3, FB2, CBZ, PDF, and RSS.
 - **Highlight and annotate:** Capture passages and notes while you read.
+- **Sync between devices:** Pair Theorem installs over your local network and keep books, progress, and annotations in sync.
 - **Sync to Markdown:** Export highlights, notes, and vocabulary to local files.
 - **Build vocabulary:** Use built-in dictionary flows during reading.
 - **Stay offline-first:** Use Theorem without an account or cloud dependency.
@@ -53,7 +54,7 @@ If your stack is "read -> highlight -> connect ideas in Markdown," Theorem remov
 Theorem is in **beta**. It is functional for daily reading and note capture, with a clear local-first architecture and transparent open-source code.
 
 **Current limitations:**
-- Cross-device sync is not built in yet.
+- Device Sync is currently LAN-first and still beta.
 - You are responsible for backups (your data is local).
 - CBR is recognized for compatibility but intentionally unsupported for import/render.
 - Android build requires manual setup (see [Android Build Guide](./docs/android-build.md)).
@@ -78,7 +79,7 @@ Yes. Markdown sync is designed for vault-based workflows.
 
 ### Is there built-in device sync?
 
-Not yet. Theorem prioritizes local ownership and exportability. This is planned for a future release.
+Yes. Device Sync is available in beta for encrypted LAN pairing and sync between Theorem installs.
 
 ## Development
 
@@ -134,6 +135,33 @@ pnpm tauri build
 # Android (requires setup - see docs/android-build.md)
 pnpm tauri android build
 ```
+
+### Build Linux Packages
+
+```bash
+./scripts/makepackage-linux.sh
+```
+
+This builds the Linux bundle that best matches the current machine by default:
+
+- `.rpm` on Fedora/RHEL/openSUSE systems
+- `.deb` everywhere else
+
+```bash
+./scripts/makepackage-linux.sh --bundle deb
+./scripts/makepackage-linux.sh --bundle appimage
+./scripts/makepackage-linux.sh --bundle all
+```
+
+Generated artifacts are copied to `dist/packages/linux/`.
+
+### Install on Linux
+
+```bash
+./scripts/install-linux.sh
+```
+
+This builds the right Linux bundle and installs it. On distros without native `.deb` or `.rpm` flows, it extracts the generated `.deb` into `~/.local/` and adds a launcher.
 
 See [Android Build Guide](./docs/android-build.md) for Android-specific instructions.
 

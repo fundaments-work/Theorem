@@ -76,13 +76,14 @@ jobs:
             - PDF reading via PDF.js with annotation tooling.
             - RSS feed reading mode with article extraction.
             - Library management with import, shelves, bookmarks, and progress tracking.
-            - Local-first Markdown export and Obsidian/Logseq vault sync.
+            - Local-first Markdown export, Obsidian/Logseq vault sync, and encrypted LAN device sync.
 
             ## Included In This Beta Update
 
-            - Fixed an EPUB issue where opening could get stuck on `Loading book...`.
-            - Added stronger storage read fallback/timeout handling for non-PDF books.
-            - Improved resume-location handling to skip invalid synthetic section targets.
+            - Added encrypted LAN device sync with pairing, merge logic, and sync controls.
+            - Added mobile QR pairing flow and improved paired-device UX.
+            - Hardened sync conflict resolution, deletion tombstones, and cover extraction.
+            - Added Linux packaging/install scripts for local distro-aware installs.
 
             ## Downloads
 
