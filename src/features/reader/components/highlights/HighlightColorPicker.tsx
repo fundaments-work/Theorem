@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, X, Check, Trash2, Languages, Loader2, ArrowLeft } from 'lucide-react';
+import { Check, Loader2, ArrowLeft } from 'lucide-react';
 import { ask } from '@tauri-apps/plugin-dialog';
 import {
     cn,
@@ -93,6 +93,24 @@ const ANIMATION_STYLES = `
         animation: picker-disappear 150ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
 `;
+
+const PICKER_ACTION_BUTTON_CLASS = [
+    "flex w-full items-center justify-center",
+    "border border-[var(--color-border)] bg-[var(--color-surface)]",
+    "px-3 py-2.5 text-sm font-medium text-[color:var(--color-text-secondary)]",
+    "transition-[background-color,border-color,color,opacity] duration-200 ease-out",
+    "hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]",
+    "disabled:cursor-not-allowed disabled:opacity-[0.45]",
+].join(" ");
+
+const PICKER_DANGER_BUTTON_CLASS = [
+    "flex w-full items-center justify-center",
+    "border border-[color:color-mix(in_srgb,var(--color-error)_24%,var(--color-border))]",
+    "bg-[color:color-mix(in_srgb,var(--color-error)_8%,var(--color-surface))]",
+    "px-3 py-2.5 text-sm font-medium text-[color:var(--color-error)]",
+    "transition-[background-color,border-color,color,opacity] duration-200 ease-out",
+    "hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,var(--color-surface))]",
+].join(" ");
 
 export function HighlightColorPicker({
     isOpen,
@@ -425,10 +443,11 @@ export function HighlightColorPicker({
                 onMouseDownCapture={handlePopupMouseDownCapture}
                 className={cn(
                     "fixed",
+                    "w-[15.5rem] max-w-[calc(100vw-2rem)]",
                     "bg-[var(--color-surface)]",
-                    "border border-[var(--color-border)]",
-                    "shadow-[var(--shadow-md)]",
-                    "p-2",
+                    "border-2 border-[var(--color-border)]",
+                    "shadow-none",
+                    "p-3",
                     isDictionaryView && "w-[20rem] max-w-[calc(100vw-2rem)]",
                     isClosing ? "picker-animate-out" : "picker-animate-in"
                 )}
@@ -438,34 +457,18 @@ export function HighlightColorPicker({
                     zIndex: "calc(var(--z-tooltip) + 40)",
                 }}
             >
-                {/* Header with close button */}
-                <div className="flex items-center justify-between px-1 mb-2">
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-[color:var(--color-text-secondary)] uppercase tracking-wide">
-                            {isDictionaryView ? "Dictionary" : "Highlight"}
-                        </p>
-                        {isDictionaryView && dictionary?.term ? (
-                            <p className="truncate text-sm font-semibold text-[color:var(--color-text-primary)]">
-                                {dictionary.term}
-                            </p>
-                        ) : null}
-                    </div>
-                    <button
-                        onClick={handleClose}
-                        className={cn(
-                            "p-1",
-                            "text-[color:var(--color-text-muted)]",
-                            "hover:bg-[var(--color-surface-muted)]",
-                            "hover:text-[color:var(--color-text-primary)]",
-                            "transition-colors duration-150"
-                        )}
-                    >
-                        <X className="w-3.5 h-3.5" />
-                    </button>
-                </div>
-
                 {isDictionaryView && dictionary ? (
                     <>
+                        <div className="mb-3 border-b border-[var(--color-border)] px-1 pb-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                                Dictionary
+                            </p>
+                            {dictionary.term ? (
+                                <p className="truncate text-sm font-semibold text-[color:var(--color-text-primary)]">
+                                    {dictionary.term}
+                                </p>
+                            ) : null}
+                        </div>
                         <div className="max-h-60 overflow-y-auto px-1 py-1">
                             {dictionary.loading && (
                                 <div className="flex items-center gap-2 text-sm text-[color:var(--color-text-secondary)]">
@@ -509,7 +512,7 @@ export function HighlightColorPicker({
                             {dictionary.onBack ? (
                                 <button
                                     onClick={dictionary.onBack}
-                                    className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+                                    className="inline-flex items-center gap-1.5 border border-[var(--color-border)] px-3 py-2 text-xs font-medium text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
                                 >
                                     <ArrowLeft className="h-3.5 w-3.5" />
                                     Back
@@ -526,10 +529,10 @@ export function HighlightColorPicker({
                                     || dictionary.canSaveToVocabulary === false
                                 }
                                 className={cn(
-                                    "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium",
+                                    "inline-flex items-center gap-1.5 border px-3 py-2 text-xs font-medium transition-[background-color,border-color,color,opacity] duration-200 ease-out",
                                     dictionary.saved
-                                        ? "bg-[var(--color-success)]/10 text-[color:var(--color-success)]"
-                                        : "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] hover:opacity-90",
+                                        ? "border-[color:color-mix(in_srgb,var(--color-success)_24%,var(--color-border))] bg-[var(--color-success)]/10 text-[color:var(--color-success)]"
+                                        : "border-[var(--color-accent)] bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] hover:border-[var(--color-accent-hover)] hover:bg-[var(--color-accent-hover)]",
                                     (
                                         dictionary.loading
                                         || !dictionary.result
@@ -556,28 +559,13 @@ export function HighlightColorPicker({
                         <div className="flex gap-1.5">
                             <button
                                 onClick={handleDeleteCancelled}
-                                className={cn(
-                                    "flex-1 px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                    
-                                    "bg-[var(--color-surface-variant)]",
-                                    "text-[color:var(--color-text-secondary)]",
-                                    "hover:bg-[var(--color-surface-muted)]",
-                                    "hover:text-[color:var(--color-text-primary)]",
-                                    "transition-colors duration-150",
-                                    "active:scale-95"
-                                )}
+                                className={cn(PICKER_ACTION_BUTTON_CLASS, "flex-1 px-2 py-2 text-xs")}
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleDeleteConfirmed}
-                                className={cn(
-                                    "reader-danger-action flex-1 px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                    
-                                    "bg-[color-mix(in_srgb,var(--color-error)_10%,transparent)]",
-                                    "transition-colors duration-150",
-                                    "active:scale-95"
-                                )}
+                                className={cn(PICKER_DANGER_BUTTON_CLASS, "flex-1 px-2 py-2 text-xs")}
                             >
                                 Delete
                             </button>
@@ -585,21 +573,18 @@ export function HighlightColorPicker({
                     </div>
                 ) : (
                     <>
-                        {/* Color grid */}
-                        <div className="flex gap-1 px-1 mb-3">
+                        <div className="grid grid-cols-6 gap-1.5">
                             {COLOR_OPTIONS.map(({ color, label }) => (
                                 <button
                                     key={color}
                                     onClick={() => handleColorClick(color)}
                                     className={cn(
-                                        "w-7 h-7",
+                                        "h-9 min-w-0",
                                         "flex items-center justify-center",
-                                        "border border-[var(--color-overlay-subtle)]",
-                                        "shadow-sm",
-                                        "hover:scale-110",
-                                        "hover:shadow-md",
-                                        "active:scale-95",
-                                        "transition-[transform,box-shadow] duration-150",
+                                        "border transition-[background-color,border-color,color] duration-150",
+                                        selectedColor === color
+                                            ? "border-[color:var(--color-text-primary)]"
+                                            : "border-[var(--color-overlay-subtle)] hover:border-[color:color-mix(in_srgb,var(--color-accent)_30%,var(--color-border))]",
                                         "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-1"
                                     )}
                                     style={{
@@ -617,70 +602,35 @@ export function HighlightColorPicker({
                             ))}
                         </div>
 
-                        {/* Action buttons */}
-                        <div className="grid gap-1">
+                        <div className="mt-3 grid gap-1.5">
                             <button
                                 onClick={() => {
                                     onAddNote();
                                     handleClose();
                                 }}
-                                className={cn(
-                                    "flex-1 flex items-center justify-center gap-1.5",
-                                    "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                    
-                                    "bg-[var(--color-surface-variant)]",
-                                    "text-[color:var(--color-text-secondary)]",
-                                    "hover:bg-[var(--color-surface-muted)]",
-                                    "hover:text-[color:var(--color-text-primary)]",
-                                    "transition-colors duration-150",
-                                    "active:scale-95"
-                                )}
+                                className={PICKER_ACTION_BUTTON_CLASS}
                             >
-                                <MessageSquare className="w-3 h-3" />
                                 Add Note
                             </button>
 
-                            <div className="grid grid-cols-1 gap-1">
-                                <button
-                                    onClick={() => {
-                                        onDefine?.();
-                                    }}
-                                    className={cn(
-                                        "flex items-center justify-center gap-1.5",
-                                        "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                        
-                                        "bg-[var(--color-surface-variant)]",
-                                        "text-[color:var(--color-text-secondary)]",
-                                        "hover:bg-[var(--color-surface-muted)]",
-                                        "hover:text-[color:var(--color-text-primary)]",
-                                        "transition-colors duration-150",
-                                        "active:scale-95",
-                                        !onDefine && "opacity-50 cursor-not-allowed"
-                                    )}
-                                    disabled={!onDefine}
-                                >
-                                    <Languages className="w-3 h-3" />
-                                    Define
-                                </button>
-                            </div>
+                            <button
+                                onClick={() => {
+                                    onDefine?.();
+                                }}
+                                className={PICKER_ACTION_BUTTON_CLASS}
+                                disabled={!onDefine}
+                            >
+                                Define
+                            </button>
                         </div>
 
-                        {/* Delete button - only shown when onDelete is provided */}
                         {onDelete && (
                             <>
-                                <div className="my-2 border-t border-[var(--color-border)]" />
+                                <div className="my-3 border-t border-[var(--color-border)]" />
                                 <button
                                     onClick={handleDeleteClick}
-                                    className={cn(
-                                        "reader-danger-action w-full flex items-center justify-center gap-1.5",
-                                        "px-2 py-1.5 text-[var(--font-size-2xs)] font-medium",
-                                        
-                                        "hover:bg-[color-mix(in_srgb,var(--color-error)_10%,transparent)]",
-                                        "transition-colors duration-150",
-                                        "active:scale-95"
-                                    )}
+                                    className={PICKER_DANGER_BUTTON_CLASS}
                                 >
-                                    <Trash2 className="w-3 h-3" />
                                     Delete
                                 </button>
                             </>
