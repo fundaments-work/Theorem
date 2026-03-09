@@ -39,6 +39,9 @@
     transform-origin: 0 0;
     caret-color: CanvasText;
     z-index: 2;
+    pointer-events: auto;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .textLayer :is(span, br) {
@@ -49,6 +52,8 @@
     cursor: text;
     transform-origin: 0% 0%;
     text-shadow: none;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .textLayer > :not(.markedContent),

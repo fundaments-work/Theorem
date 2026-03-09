@@ -1036,6 +1036,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
 
         const isDesktopWebKit = useMemo(() => isWebKitBrowserEngine(), []);
         const canvasRenderWindow = isDesktopWebKit ? WEBKIT_CANVAS_RENDER_PAGE_WINDOW : DEFAULT_CANVAS_RENDER_PAGE_WINDOW;
+        // Keep text selectable on all pages that are likely visible. Restricting
+        // text layers too aggressively can make selection feel randomly broken.
+        const textLayerPageWindow = isDesktopWebKit
+            ? Math.max(WEBKIT_TEXT_LAYER_PAGE_WINDOW, canvasRenderWindow)
+            : Math.max(1, canvasRenderWindow);
         const enableTextLayer = true;
         const useStreamTextLayer = !isDesktopWebKit;
 
@@ -1697,7 +1702,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         {pages.map((page) => {
                             const pageDistanceFromCurrent = Math.abs(page.pageNumber - currentPage);
                             const pageIsInCanvasRenderWindow = pageDistanceFromCurrent <= canvasRenderWindow;
-                            const pageTextLayerEnabled = enableTextLayer && (isDesktopWebKit ? pageDistanceFromCurrent <= WEBKIT_TEXT_LAYER_PAGE_WINDOW : pageDistanceFromCurrent <= 1);
+                            const pageTextLayerEnabled = enableTextLayer && pageDistanceFromCurrent <= textLayerPageWindow;
                             const pageUseStreamTextLayer = isDesktopWebKit ? page.pageNumber !== currentPage : useStreamTextLayer;
                             return (
                                 <div key={`page-${page.pageNumber}`} className="pdf-page-wrapper" data-page-number={page.pageNumber}>
