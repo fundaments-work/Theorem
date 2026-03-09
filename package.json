@@ -23,6 +23,7 @@
         "package:linux:rpm": "bash ./scripts/makepackage-linux.sh --bundle rpm",
         "package:linux:appimage": "bash ./scripts/makepackage-linux.sh --bundle appimage",
         "install:linux": "bash ./scripts/install-linux.sh",
+        "uninstall:linux": "bash ./scripts/uninstall-linux.sh",
         "audit:design-tokens": "node scripts/analyze-design-token-usage.mjs",
         "test": "vitest run",
         "test:watch": "vitest",

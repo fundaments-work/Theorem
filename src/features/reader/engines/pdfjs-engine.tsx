@@ -4,7 +4,7 @@
  * A React component that renders PDF documents using PDF.js.
  *
  * Performance / memory improvements vs original:
- *  1. PAGE_PROXY_KEEP_WINDOW reduced 60 → 25 (cuts proxy memory ~58%)
+ *  1. PAGE proxy cache and render windows tuned for smoother dynamic loading.
  *  2. prefetchedOperatorPagesRef pruned when it exceeds OPERATOR_PREFETCH_MAX_SET_SIZE
  *  3. Search fallback array bounded by PDF_SEARCH_FALLBACK_TOTAL_CHAR_BUDGET (~600 KB)
  *  4. ResizeObserver debounced (120 ms) to prevent rapid layout-flush bursts
@@ -119,12 +119,17 @@ const DEFAULT_SCALE = 1.0;
 const PDF_TO_CSS_UNITS = pdfjsLib.PixelsPerInch?.PDF_TO_CSS_UNITS ?? (96 / 72);
 const PAGE_PRERENDER_MARGIN = "90% 0px";
 const INITIAL_PAGE_LOAD_SIZE = 1;
-const PAGE_LOAD_BATCH_SIZE = 5;
-const PAGE_LOAD_AHEAD_THRESHOLD = 2;
+const PAGE_LOAD_BATCH_SIZE = 9;
+const PAGE_LOAD_AHEAD_THRESHOLD = 4;
+const PAGE_EDGE_PREFETCH_COUNT = 8;
+const EDGE_PREFETCH_MIN_INTERVAL_MS = 140;
+const PAGE_PROXY_LOAD_CONCURRENCY = 3;
+const KEYBOARD_SCROLL_STEP_RATIO = 0.82;
+const KEYBOARD_SCROLL_STEP_MIN_PX = 72;
 
-// FIX 1 — was 60. Each proxy retains PDF.js internal rendering state; 25 pages
-//          is more than enough for smooth scrolling while cutting memory ~58%.
-const PAGE_PROXY_KEEP_WINDOW = 25;
+// Keep a larger live page window to avoid visible load gaps during rapid
+// reverse scrolling on large PDFs.
+const PAGE_PROXY_KEEP_WINDOW = 45;
 
 const OPERATOR_PREFETCH_AHEAD = 1;
 const OPERATOR_PREFETCH_IDLE_TIMEOUT_MS = 1200;
@@ -334,6 +339,12 @@ function findScrollableAncestor(node: HTMLElement | null): HTMLElement | null {
     }
     const root = document.scrollingElement;
     return root instanceof HTMLElement ? root : null;
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+    const element = target instanceof Element ? target : null;
+    if (!element) return false;
+    return Boolean(element.closest("input,textarea,select,[contenteditable='true'],[role='textbox']"));
 }
 
 function ensureGlobalTextLayerSelectionListeners(): void {
@@ -1117,6 +1128,9 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const pendingScrollAdjustmentRef = useRef<{ left: number; top: number; scale: number } | null>(null);
         const loadingPageNumbersRef = useRef<Set<number>>(new Set());
         const prefetchedOperatorPagesRef = useRef<Set<number>>(new Set());
+        const loadedPageBoundsRef = useRef<{ min: number; max: number }>({ min: 0, max: 0 });
+        const lastEdgePrefetchAtRef = useRef(0);
+        const lastScrollTopRef = useRef(0);
         const pageLayoutRef = useRef<PageLayoutEntry[]>([]);
         const currentPageRef = useRef(initialPage);
         const totalPagesRef = useRef(0);
@@ -1157,6 +1171,16 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         useEffect(() => { currentPageRef.current = currentPage; }, [currentPage]);
         useEffect(() => { totalPagesRef.current = totalPages; }, [totalPages]);
         useEffect(() => { scaleRef.current = scale; }, [scale]);
+        useEffect(() => {
+            if (pages.length === 0) {
+                loadedPageBoundsRef.current = { min: 0, max: 0 };
+                return;
+            }
+            loadedPageBoundsRef.current = {
+                min: pages[0]?.pageNumber ?? 0,
+                max: pages[pages.length - 1]?.pageNumber ?? 0,
+            };
+        }, [pages]);
 
         const markViewportInteracting = useCallback(() => {
             setIsViewportInteracting((prev) => (prev ? prev : true));
@@ -1276,15 +1300,32 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             if (numbersToLoad.length === 0) return false;
             numbersToLoad.forEach((pn) => loadingPageNumbersRef.current.add(pn));
             try {
-                const loadedPages: PDFPageProxy[] = [];
-                for (const pn of numbersToLoad) loadedPages.push(await pdfDocument.getPage(pn));
-                setPages((previousPages) => {
-                    const pageMap = new Map(previousPages.map((p) => [p.pageNumber, p]));
-                    for (const p of loadedPages) pageMap.set(p.pageNumber, p);
-                    const mergedPages = Array.from(pageMap.values()).sort((l, r) => l.pageNumber - r.pageNumber);
-                    return prunePageProxyCache(mergedPages, currentPageRef.current, pdfDocument.numPages);
-                });
-                return true;
+                let loadedAnyPage = false;
+                for (let offset = 0; offset < numbersToLoad.length; offset += PAGE_PROXY_LOAD_CONCURRENCY) {
+                    const batchNumbers = numbersToLoad.slice(offset, offset + PAGE_PROXY_LOAD_CONCURRENCY);
+                    if (batchNumbers.length === 0) continue;
+                    const loadedBatch = await Promise.all(batchNumbers.map(async (pageNumber) => {
+                        try {
+                            return await pdfDocument.getPage(pageNumber);
+                        } catch (error) {
+                            const msg = error instanceof Error ? error.message : String(error);
+                            if (!msg.includes("Transport") && !msg.includes("destroyed")) {
+                                console.error("[PDFJsEngine] Error loading page:", pageNumber, error);
+                            }
+                            return null;
+                        }
+                    }));
+                    const resolvedPages = loadedBatch.filter((page): page is PDFPageProxy => page !== null);
+                    if (resolvedPages.length === 0) continue;
+                    loadedAnyPage = true;
+                    setPages((previousPages) => {
+                        const pageMap = new Map(previousPages.map((p) => [p.pageNumber, p]));
+                        for (const page of resolvedPages) pageMap.set(page.pageNumber, page);
+                        const mergedPages = Array.from(pageMap.values()).sort((l, r) => l.pageNumber - r.pageNumber);
+                        return prunePageProxyCache(mergedPages, currentPageRef.current, pdfDocument.numPages);
+                    });
+                }
+                return loadedAnyPage;
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
                 if (!msg.includes("Transport") && !msg.includes("destroyed")) console.error("[PDFJsEngine] Error loading specific pages:", error);
@@ -1423,6 +1464,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     pageLayoutRef.current = [];
                     prefetchedOperatorPagesRef.current.clear();
                     loadingPageNumbersRef.current.clear();
+                    lastEdgePrefetchAtRef.current = 0;
+                    lastScrollTopRef.current = 0;
                     pendingScrollPageRef.current = null;
                     clearPageTextContentCache();
                     searchSessionRef.current += 1;
@@ -1509,7 +1552,14 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         const initialInfo: PDFDocumentInfo = cachedInfo ?? { title: displayFilename, totalPages: totalPageCount, filename: displayFilename, hasOutline: false, toc: [] };
                         callbacksRef.current.onLoad?.(initialInfo);
                         callbacksRef.current.onPageChange?.(clampedInitialPage, totalPageCount, scaleRef.current);
-                        void loadSpecificPages([clampedInitialPage + 1, clampedInitialPage - 1]);
+                        const warmupTargets: number[] = [];
+                        for (let offset = 1; offset <= PAGE_LOAD_AHEAD_THRESHOLD * 2; offset++) {
+                            warmupTargets.push(clampedInitialPage + offset);
+                        }
+                        for (let offset = 1; offset <= PAGE_LOAD_AHEAD_THRESHOLD; offset++) {
+                            warmupTargets.push(clampedInitialPage - offset);
+                        }
+                        void loadSpecificPages(warmupTargets);
                     } else {
                         initialPages.forEach((p) => p.cleanup());
                         pdf.destroy();
@@ -1551,6 +1601,8 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             return () => {
                 cancelled = true;
                 loadingPageNumbersRef.current.clear();
+                lastEdgePrefetchAtRef.current = 0;
+                lastScrollTopRef.current = 0;
                 pendingScrollPageRef.current = null;
                 if (initialPageRestoreTimeoutRef.current) { clearTimeout(initialPageRestoreTimeoutRef.current); initialPageRestoreTimeoutRef.current = null; }
                 if (interactionIdleTimeoutRef.current) { clearTimeout(interactionIdleTimeoutRef.current); interactionIdleTimeoutRef.current = null; }
@@ -1655,18 +1707,49 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             let pendingWheelDelta = 0;
             let lastWheelCommitAt = 0;
             let wheelCommitTimeoutId: ReturnType<typeof setTimeout> | null = null;
+            lastScrollTopRef.current = container.scrollTop;
 
             const handleScroll = () => {
                 if (rafId !== null) return;
                 rafId = window.requestAnimationFrame(() => {
                     rafId = null;
                     if (isInitialRenderStabilizing) return;
-                    const centerY = container.scrollTop + (container.clientHeight / 2);
+                    const scrollTop = container.scrollTop;
+                    const scrollDelta = scrollTop - lastScrollTopRef.current;
+                    const scrollDirection = scrollDelta > 0 ? 1 : scrollDelta < 0 ? -1 : 0;
+                    lastScrollTopRef.current = scrollTop;
+                    const centerY = scrollTop + (container.clientHeight / 2);
                     const newPage = findPageForScrollCenter(pageLayoutRef.current, centerY) ?? currentPageRef.current;
                     const totalPageCount = totalPagesRef.current;
                     if (newPage !== currentPageRef.current && newPage >= 1 && newPage <= totalPageCount) {
                         currentPageRef.current = newPage; setCurrentPage(newPage);
                         callbacksRef.current.onPageChange?.(newPage, totalPageCount, scaleRef.current);
+                    }
+
+                    const { min: minLoadedPage, max: maxLoadedPage } = loadedPageBoundsRef.current;
+                    if (maxLoadedPage >= minLoadedPage && totalPageCount > 0) {
+                        const edgeThreshold = Math.max(120, Math.round(container.clientHeight * 0.9));
+                        const distanceToTop = scrollTop;
+                        const distanceToBottom = container.scrollHeight - (scrollTop + container.clientHeight);
+                        const shouldPrefetchPrevious = distanceToTop <= edgeThreshold && scrollDirection <= 0;
+                        const shouldPrefetchNext = distanceToBottom <= edgeThreshold && scrollDirection >= 0;
+
+                        if (shouldPrefetchPrevious || shouldPrefetchNext) {
+                            const edgeTargets: number[] = [];
+                            if (shouldPrefetchPrevious) {
+                                for (let offset = 1; offset <= PAGE_EDGE_PREFETCH_COUNT; offset++) edgeTargets.push(minLoadedPage - offset);
+                            }
+                            if (shouldPrefetchNext) {
+                                for (let offset = 1; offset <= PAGE_EDGE_PREFETCH_COUNT; offset++) edgeTargets.push(maxLoadedPage + offset);
+                            }
+                            if (edgeTargets.length > 0) {
+                                const now = performance.now();
+                                if (now - lastEdgePrefetchAtRef.current >= EDGE_PREFETCH_MIN_INTERVAL_MS) {
+                                    lastEdgePrefetchAtRef.current = now;
+                                    void loadSpecificPages(edgeTargets);
+                                }
+                            }
+                        }
                     }
                 });
             };
@@ -1748,7 +1831,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 if (zoomRafId !== null) cancelAnimationFrame(zoomRafId);
                 if (wheelCommitTimeoutId !== null) clearTimeout(wheelCommitTimeoutId);
             };
-        }, [pages.length, applyZoom, rebuildPageLayout, markViewportInteracting, isInitialRenderStabilizing]);
+        }, [pages.length, applyZoom, rebuildPageLayout, markViewportInteracting, isInitialRenderStabilizing, loadSpecificPages]);
 
         // Touch pinch-to-zoom
         useEffect(() => {
@@ -1839,7 +1922,11 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             }
             if (scrollToPage(targetPage, behavior)) { pendingScrollPageRef.current = null; return; }
             pendingScrollPageRef.current = targetPage;
-            void loadSpecificPages([targetPage, targetPage + 1, targetPage - 1, targetPage + 2, targetPage - 2]);
+            const nearTargets: number[] = [targetPage];
+            for (let offset = 1; offset <= PAGE_LOAD_AHEAD_THRESHOLD; offset++) {
+                nearTargets.push(targetPage + offset, targetPage - offset);
+            }
+            void loadSpecificPages(nearTargets);
         }, [loadSpecificPages, scrollToPage]);
 
         useEffect(() => {
@@ -1849,15 +1936,75 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             if (scrollToPage(pendingPage, "auto")) pendingScrollPageRef.current = null;
         }, [pages, scrollToPage]);
 
+        useEffect(() => {
+            const container = containerRef.current;
+            if (!container || isLoading || !!error) return;
+
+            const handleKeyDown = (event: KeyboardEvent) => {
+                if (event.defaultPrevented) return;
+                if (event.ctrlKey || event.metaKey || event.altKey) return;
+                if (isEditableKeyboardTarget(event.target)) return;
+
+                const targetElement = event.target instanceof Element ? event.target : null;
+                if (targetElement
+                    && !container.contains(targetElement)
+                    && targetElement !== document.body
+                    && targetElement !== document.documentElement) {
+                    return;
+                }
+
+                if (event.key === "ArrowLeft" || event.key === "PageUp") {
+                    if (currentPageRef.current <= 1) return;
+                    event.preventDefault();
+                    navigateToPage(currentPageRef.current - 1, "smooth");
+                    return;
+                }
+
+                if (event.key === "ArrowRight" || event.key === "PageDown") {
+                    if (currentPageRef.current >= totalPagesRef.current) return;
+                    event.preventDefault();
+                    navigateToPage(currentPageRef.current + 1, "smooth");
+                    return;
+                }
+
+                if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                    event.preventDefault();
+                    markViewportInteracting();
+                    const scrollStep = Math.max(
+                        KEYBOARD_SCROLL_STEP_MIN_PX,
+                        Math.round(container.clientHeight * KEYBOARD_SCROLL_STEP_RATIO),
+                    );
+                    const delta = event.key === "ArrowUp" ? -scrollStep : scrollStep;
+                    container.scrollBy({ top: delta, behavior: "auto" });
+                }
+            };
+
+            window.addEventListener("keydown", handleKeyDown);
+            return () => { window.removeEventListener("keydown", handleKeyDown); };
+        }, [error, isLoading, markViewportInteracting, navigateToPage]);
+
         const firstLoadedPage = useMemo(() => pages.length > 0 ? pages[0] : undefined, [pages]);
         const getRenderPriority = useCallback((pageNumber: number) => Math.abs(pageNumber - currentPageRef.current), []);
 
         useImperativeHandle(ref, () => ({
-            goToPage: (page: number) => { if (page >= 1 && page <= totalPages) navigateToPage(page, "smooth"); },
-            nextPage: () => { if (currentPage < totalPages) navigateToPage(currentPage + 1, "smooth"); },
-            prevPage: () => { if (currentPage > 1) navigateToPage(currentPage - 1, "smooth"); },
+            goToPage: (page: number) => { if (page >= 1 && page <= totalPagesRef.current) navigateToPage(page, "smooth"); },
+            nextPage: () => {
+                const page = currentPageRef.current;
+                if (page < totalPagesRef.current) navigateToPage(page + 1, "smooth");
+            },
+            prevPage: () => {
+                const page = currentPageRef.current;
+                if (page > 1) navigateToPage(page - 1, "smooth");
+            },
             zoomIn: () => { applyZoom(scaleRef.current + ZOOM_STEP); },
-            zoomOut: () => { applyZoom(scaleRef.current - ZOOM_STEP); },
+            zoomOut: () => {
+                const currentScale = scaleRef.current;
+                if (currentScale <= MIN_ZOOM + 0.001) {
+                    applyZoom(DEFAULT_SCALE, { mode: "custom" });
+                    return;
+                }
+                applyZoom(currentScale - ZOOM_STEP);
+            },
             zoomReset: () => { applyZoom(DEFAULT_SCALE, { mode: "custom" }); },
             setZoom: (newScale: number) => { applyZoom(newScale, { mode: "custom" }); },
             getZoom: () => scaleRef.current,
@@ -1869,7 +2016,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             zoomFitWidth: () => { if (!containerRef.current || !firstLoadedPage) return; applyZoom(getFitWidthScale(containerRef.current, firstLoadedPage), { mode: "width-fit", preserveMode: true }); },
             search: (query: string) => search(query),
             clearSearch: () => clearSearch(),
-        }), [applyZoom, clearSearch, currentPage, firstLoadedPage, navigateToPage, search, totalPages]);
+        }), [applyZoom, clearSearch, firstLoadedPage, navigateToPage, search]);
 
         const displayError = error?.replace(/\s+/g, " ").trim();
 
@@ -1926,7 +2073,15 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         <span className="mx-1 text-[color:var(--color-text-muted)]">/</span>
                         <span>{totalPages}</span>
                         <span className="mx-2 w-px h-3 bg-[var(--color-border)] hidden sm:inline-block" />
-                        <span className="opacity-80 hidden sm:inline">{Math.round(scale * 100)}%</span>
+                        <button
+                            type="button"
+                            onClick={() => { applyZoom(DEFAULT_SCALE, { mode: "custom" }); }}
+                            className="hidden sm:inline-flex opacity-80 hover:opacity-100 transition-opacity pointer-events-auto [font-variant-numeric:tabular-nums]"
+                            aria-label="Reset zoom to 100 percent"
+                            title="Reset zoom to 100%"
+                        >
+                            {Math.round(scale * 100)}%
+                        </button>
                     </div>
                 )}
             </div>
