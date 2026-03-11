@@ -19,10 +19,11 @@ const MAX_IMPORT_CONCURRENCY = 8;
 const INSTANT_IMPORT_MODE = true;
 const CONTENT_HASH_MAX_BYTES = 4 * 1024 * 1024;
 const CONTENT_URI_READ_TIMEOUT_MS = 20000;
-const IMPORT_ENTRY_TIMEOUT_MS = 30000;
+const IMPORT_ENTRY_TIMEOUT_MS = 90000;
 const SUPPORTED_IMPORT_EXTENSIONS = ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'fb2.zip', 'cbz', 'pdf'];
 const SUPPORTED_IMPORT_SUFFIXES = SUPPORTED_IMPORT_EXTENSIONS.map((extension) => `.${extension}`);
 const BROWSER_IMPORT_ACCEPT = SUPPORTED_IMPORT_SUFFIXES.join(',');
+type ImportFailureHandler = (source: string, error: unknown) => void;
 
 function getImportConcurrency(): number {
     if (isMobile()) {
@@ -521,6 +522,7 @@ export async function importBooksFromFiles(files: File[]): Promise<Book[]> {
 export async function importBooksFromFilesIncremental(
     files: File[],
     onBookImported?: (book: Book) => void,
+    onBookFailed?: ImportFailureHandler,
 ): Promise<Book[]> {
     const imported = await runWithConcurrency(
         files,
@@ -530,10 +532,13 @@ export async function importBooksFromFilesIncremental(
                 const book = await createBookEntryFromFile(file);
                 if (book) {
                     onBookImported?.(book);
+                } else {
+                    onBookFailed?.(file.name, new Error('[Import] Failed to import file'));
                 }
                 return book;
             } catch (error) {
                 console.error('Failed to import book:', file.name, error);
+                onBookFailed?.(file.name, error);
                 return null;
             }
         },
@@ -682,6 +687,7 @@ export async function importBooks(filePaths: string[]): Promise<Book[]> {
 export async function importBooksIncremental(
     filePaths: string[],
     onBookImported?: (book: Book) => void,
+    onBookFailed?: ImportFailureHandler,
 ): Promise<Book[]> {
     const imported = await runWithConcurrency(
         filePaths,
@@ -695,10 +701,13 @@ export async function importBooksIncremental(
                 );
                 if (book) {
                     onBookImported?.(book);
+                } else {
+                    onBookFailed?.(filePath, new Error('[Import] Failed to import file'));
                 }
                 return book;
             } catch (error) {
                 console.error('Failed to import book:', filePath, error);
+                onBookFailed?.(filePath, error);
                 return null;
             }
         },
@@ -717,6 +726,7 @@ export async function pickAndImportBooks(): Promise<Book[]> {
 
 export async function pickAndImportBooksIncremental(
     onBookImported?: (book: Book) => void,
+    onBookFailed?: ImportFailureHandler,
 ): Promise<Book[]> {
     if (isTauri() && !isMobile()) {
         // Desktop Tauri: use native file picker
@@ -724,7 +734,7 @@ export async function pickAndImportBooksIncremental(
         if (filePaths.length === 0) {
             return [];
         }
-        return importBooksIncremental(filePaths, onBookImported);
+        return importBooksIncremental(filePaths, onBookImported, onBookFailed);
     } else if (isTauri() && isMobile()) {
         // Mobile Tauri (Android): Use browser file picker for better compatibility
         // The native dialog on Android returns content:// URIs which are hard to handle
@@ -733,14 +743,14 @@ export async function pickAndImportBooksIncremental(
         if (files.length === 0) {
             return [];
         }
-        return importBooksFromFilesIncremental(files, onBookImported);
+        return importBooksFromFilesIncremental(files, onBookImported, onBookFailed);
     } else {
         // Browser: use HTML5 file picker
         const files = await pickBookFilesBrowser();
         if (files.length === 0) {
             return [];
         }
-        return importBooksFromFilesIncremental(files, onBookImported);
+        return importBooksFromFilesIncremental(files, onBookImported, onBookFailed);
     }
 }
 
