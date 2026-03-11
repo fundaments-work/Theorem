@@ -3,6 +3,7 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import {
     useUIStore,
+    useLibraryStore,
     useSettingsStore,
     isTauriDesktop,
     isTauri,
@@ -10,6 +11,10 @@ import {
     initReaderStyles,
     ensureResponderSyncReady,
     cn,
+    importBooksIncremental,
+    getBookFormat,
+    isImportFormatSupported,
+    normalizeFilePath,
 } from "./core";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 import { OnboardingFlow } from "./features/onboarding";
@@ -115,6 +120,109 @@ function App() {
         window.addEventListener("popstate", handlePopState);
         return () => window.removeEventListener("popstate", handlePopState);
     }, [setRoute]); // Only setup once, but include setRoute in deps for safety
+
+    // Handle desktop file associations ("Open With Theorem") via Tauri.
+    useEffect(() => {
+        if (!isTauriRuntime || typeof window === "undefined") {
+            return;
+        }
+
+        let cancelled = false;
+        let unlistenPromise: Promise<() => void> | null = null;
+
+        const openPaths = async (paths: string[]) => {
+            if (cancelled || paths.length === 0) {
+                return;
+            }
+
+            const uniquePaths = Array.from(
+                new Set(paths.map((path) => path.trim()).filter(Boolean)),
+            );
+
+            for (const rawPath of uniquePaths) {
+                if (cancelled) {
+                    return;
+                }
+
+                const normalizedPath = normalizeFilePath(rawPath);
+                const format = getBookFormat(normalizedPath);
+                if (!format || !isImportFormatSupported(format)) {
+                    continue;
+                }
+
+                const existing = useLibraryStore
+                    .getState()
+                    .books
+                    .find((book) => normalizeFilePath(book.filePath) === normalizedPath);
+
+                if (existing) {
+                    useUIStore.getState().setRoute("reader", existing.id);
+                    continue;
+                }
+
+                const failures: Array<{ source: string; message: string }> = [];
+                const imported = await importBooksIncremental(
+                    [normalizedPath],
+                    (book) => {
+                        useLibraryStore.getState().addBook(book);
+                    },
+                    (source, error) => {
+                        failures.push({
+                            source,
+                            message: error instanceof Error ? error.message : String(error),
+                        });
+                    },
+                );
+
+                if (cancelled) {
+                    return;
+                }
+
+                const importedBook = imported[0];
+                if (importedBook) {
+                    useUIStore.getState().setRoute("reader", importedBook.id);
+                } else if (failures.length > 0) {
+                    window.alert(`Failed to open file.\n\n${failures[0]?.source}\n${failures[0]?.message}`);
+                }
+            }
+        };
+
+        const initOpenWith = async () => {
+            try {
+                const { invoke } = await import("@tauri-apps/api/core");
+                const pending = await invoke<unknown>("take_pending_open_files");
+                if (Array.isArray(pending)) {
+                    await openPaths(pending.filter((value): value is string => typeof value === "string"));
+                }
+            } catch (error) {
+                console.warn("[App] Failed to fetch pending open files:", error);
+            }
+
+            try {
+                const { listen } = await import("@tauri-apps/api/event");
+                unlistenPromise = listen<unknown>("theorem://open-files", (event) => {
+                    const payload = event.payload;
+                    const paths = Array.isArray(payload)
+                        ? payload.filter((value): value is string => typeof value === "string")
+                        : typeof payload === "string"
+                            ? [payload]
+                            : [];
+                    void openPaths(paths);
+                });
+            } catch (error) {
+                console.warn("[App] Failed to listen for open-file events:", error);
+            }
+        };
+
+        void initOpenWith();
+
+        return () => {
+            cancelled = true;
+            if (unlistenPromise) {
+                void unlistenPromise.then((unlisten) => unlisten());
+            }
+        };
+    }, [isTauriRuntime]);
 
     // Initialize reader styles on app load
     useEffect(() => {
