@@ -1267,15 +1267,34 @@ export function LibraryPage() {
     // Handle importing books (works in both Tauri and browser)
     const handleAddBooks = useCallback(async () => {
         setIsImporting(true);
+        const failedImports: Array<{ source: string; message: string }> = [];
         try {
-            await pickAndImportBooksIncremental((book) => {
-                addBook(book);
-                void extractImportedBookMetadata(book);
-            });
+            await pickAndImportBooksIncremental(
+                (book) => {
+                    addBook(book);
+                    void extractImportedBookMetadata(book);
+                },
+                (source, error) => {
+                    failedImports.push({
+                        source,
+                        message: error instanceof Error ? error.message : String(error),
+                    });
+                },
+            );
         } catch (err) {
             console.error('Import error:', err);
         } finally {
             setIsImporting(false);
+        }
+        if (failedImports.length > 0) {
+            const preview = failedImports
+                .slice(0, 3)
+                .map((failure) => `- ${failure.source}: ${failure.message}`)
+                .join('\n');
+            window.alert(
+                `Some books failed to import (${failedImports.length}).\n\n${preview}` +
+                (failedImports.length > 3 ? `\n\n(+${failedImports.length - 3} more)` : ''),
+            );
         }
     }, [addBook, extractImportedBookMetadata]);
 
@@ -1285,11 +1304,31 @@ export function LibraryPage() {
             return;
         }
 
-        await importBooksIncremental(bookPaths, (book) => {
-            addBook(book);
-            void extractImportedBookMetadata(book);
-        });
+        const failedImports: Array<{ source: string; message: string }> = [];
+        await importBooksIncremental(
+            bookPaths,
+            (book) => {
+                addBook(book);
+                void extractImportedBookMetadata(book);
+            },
+            (source, error) => {
+                failedImports.push({
+                    source,
+                    message: error instanceof Error ? error.message : String(error),
+                });
+            },
+        );
         setLastScannedAt(new Date());
+        if (failedImports.length > 0) {
+            const preview = failedImports
+                .slice(0, 3)
+                .map((failure) => `- ${failure.source}: ${failure.message}`)
+                .join('\n');
+            window.alert(
+                `Some books failed to import (${failedImports.length}).\n\n${preview}` +
+                (failedImports.length > 3 ? `\n\n(+${failedImports.length - 3} more)` : ''),
+            );
+        }
     }, [addBook, extractImportedBookMetadata, setLastScannedAt]);
 
     const scanAndImportFolder = useCallback(async (folderPath: string) => {
