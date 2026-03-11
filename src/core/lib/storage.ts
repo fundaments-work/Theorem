@@ -19,7 +19,7 @@ import { normalizeFilePath } from './utils';
 const STORE_NAME = 'theorem-books';
 const COVERS_STORE = 'theorem-covers';
 const BLOB_CACHE_LIMIT = 3;
-const STORAGE_READ_TIMEOUT_MS = 15000;
+const STORAGE_READ_TIMEOUT_MS = 30000;
 
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
 
