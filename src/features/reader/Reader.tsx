@@ -1093,6 +1093,13 @@ function BookReaderPage() {
 
     const handleBack = useCallback(() => {
         flushPendingProgressUpdate();
+        // On mobile, the History stack may contain interceptor states (Android back handling),
+        // so a single `history.back()` can be a no-op for exiting the reader. Prefer an
+        // explicit route change to ensure the in-app back button works reliably.
+        if (isMobile()) {
+            setRoute("library");
+            return;
+        }
         // If we have a history stack, going back will be caught by our popstate listeners
         if (typeof window !== "undefined" && window.history.length > 1) {
             window.history.back();
