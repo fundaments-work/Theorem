@@ -12,8 +12,146 @@ use std::env;
  */
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use tauri::ipc::Response;
+use tauri::Emitter;
 use tauri::Manager;
+
+#[derive(Default)]
+struct PendingOpenFiles(Mutex<Vec<String>>);
+
+fn decode_percent_escapes(value: &str) -> String {
+    fn from_hex(b: u8) -> Option<u8> {
+        match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(b - b'a' + 10),
+            b'A'..=b'F' => Some(b - b'A' + 10),
+            _ => None,
+        }
+    }
+
+    let bytes = value.as_bytes();
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let (Some(high), Some(low)) =
+                (from_hex(bytes[index + 1]), from_hex(bytes[index + 2]))
+            {
+                output.push(high << 4 | low);
+                index += 3;
+                continue;
+            }
+        }
+
+        output.push(bytes[index]);
+        index += 1;
+    }
+
+    String::from_utf8_lossy(&output).to_string()
+}
+
+fn file_uri_to_path(candidate: &str) -> Option<String> {
+    if !candidate.starts_with("file://") {
+        return None;
+    }
+
+    let mut rest = candidate.trim_start_matches("file://");
+    if let Some(after_localhost) = rest.strip_prefix("localhost") {
+        rest = after_localhost;
+    }
+
+    let decoded = decode_percent_escapes(rest);
+
+    // Windows file URL shape: file:///C:/Users/...
+    if decoded.starts_with('/') {
+        let bytes = decoded.as_bytes();
+        if bytes.len() > 3 && bytes[2] == b':' {
+            return Some(decoded.trim_start_matches('/').to_string());
+        }
+    }
+
+    Some(decoded)
+}
+
+fn is_supported_open_path(candidate: &str) -> bool {
+    let lower = candidate.to_ascii_lowercase();
+    lower.ends_with(".epub")
+        || lower.ends_with(".mobi")
+        || lower.ends_with(".azw")
+        || lower.ends_with(".azw3")
+        || lower.ends_with(".fb2")
+        || lower.ends_with(".fbz")
+        || lower.ends_with(".fb2.zip")
+        || lower.ends_with(".cbz")
+        || lower.ends_with(".pdf")
+}
+
+fn normalize_open_path(candidate: &str, cwd: Option<&str>) -> Option<String> {
+    let trimmed = candidate.trim();
+    if trimmed.is_empty() || trimmed.starts_with('-') {
+        return None;
+    }
+
+    // Ignore non-file scheme arguments.
+    if trimmed.contains("://") && !trimmed.starts_with("file://") {
+        return None;
+    }
+
+    let candidate_path = file_uri_to_path(trimmed).unwrap_or_else(|| trimmed.to_string());
+    let mut path = PathBuf::from(&candidate_path);
+    if !path.is_absolute() {
+        if let Some(cwd) = cwd {
+            path = Path::new(cwd).join(path);
+        }
+    }
+
+    let as_string = path.to_string_lossy().to_string();
+    if !is_supported_open_path(&as_string) {
+        return None;
+    }
+
+    if path.exists() {
+        Some(as_string)
+    } else {
+        None
+    }
+}
+
+fn collect_open_paths(args: Vec<String>, cwd: Option<&str>) -> Vec<String> {
+    args.into_iter()
+        .filter_map(|arg| normalize_open_path(&arg, cwd))
+        .collect()
+}
+
+fn enqueue_open_paths(app: &tauri::AppHandle, paths: Vec<String>, emit_event: bool) {
+    if paths.is_empty() {
+        return;
+    }
+
+    {
+        let state = app.state::<PendingOpenFiles>();
+        let mut guard = state.0.lock().unwrap_or_else(|poison| poison.into_inner());
+        guard.extend(paths.clone());
+    }
+
+    if emit_event {
+        let _ = app.emit("theorem://open-files", paths);
+    }
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+#[tauri::command]
+fn take_pending_open_files(state: tauri::State<PendingOpenFiles>) -> Vec<String> {
+    let mut guard = state.0.lock().unwrap_or_else(|poison| poison.into_inner());
+    guard.drain(..).collect()
+}
 
 /**
  * Metadata structure for PDF documents.
@@ -520,12 +658,20 @@ pub fn run() {
     apply_linux_webkit_workarounds();
 
     let builder = tauri::Builder::default()
+        .manage(PendingOpenFiles::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_app::init())
         .plugin(tauri_plugin_mobile_folder_scan::init());
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+        // Called when a secondary instance is invoked (e.g. "Open With").
+        let paths = collect_open_paths(argv, Some(&cwd));
+        enqueue_open_paths(app, paths, true);
+    }));
 
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
@@ -551,6 +697,12 @@ pub fn run() {
                 }
             }
 
+            // Collect any file association / CLI open targets at startup so the frontend can
+            // import and open them once it is ready.
+            let startup_args: Vec<String> = std::env::args().skip(1).collect();
+            let open_paths = collect_open_paths(startup_args, None);
+            enqueue_open_paths(&app.handle(), open_paths, false);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -559,6 +711,7 @@ pub fn run() {
             read_pdf_file_size,
             read_pdf_range,
             get_pdf_metadata,
+            take_pending_open_files,
             fetch_rss_feed,
             fetch_url_content,
             fetch_binary_content,
