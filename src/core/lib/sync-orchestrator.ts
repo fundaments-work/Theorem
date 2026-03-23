@@ -39,6 +39,7 @@ import {
     mergeReadingStats,
 } from "./sync-import";
 import { isTauri } from "./env";
+import { saveCoverImage } from "./storage";
 
 // ─── Helpers ───
 
@@ -102,7 +103,12 @@ async function buildDomainsAndManifest() {
     };
 
     const domains: Record<string, string> = {
-        books: JSON.stringify(library.books.map(({ coverPath: _, filePath: _f, storagePath: _s, ...book }) => book)),
+        books: JSON.stringify(library.books.map(({ filePath: _f, storagePath: _s, coverPath, ...book }) => ({
+            ...book,
+            // Include cover data URLs so the peer gets covers immediately
+            // without needing to re-extract from the book file.
+            ...(coverPath && coverPath.startsWith("data:") ? { coverPath } : {}),
+        }))),
         annotations: JSON.stringify(library.annotations),
         collections: JSON.stringify(library.collections),
         deletion_tombstones: JSON.stringify(gcTombstones),
@@ -249,6 +255,24 @@ function mergeIncomingData(
                 const merged = mergeBooks(incoming, useLibraryStore.getState().books, allTombstones);
                 useLibraryStore.setState({ books: merged });
                 markUpdated("books");
+
+                // Persist incoming cover data URLs to storage so they survive
+                // page reloads (partialize strips coverPath from Zustand persistence).
+                const incomingWithCovers = (incoming as { id: string; coverPath?: string }[])
+                    .filter((b) => b.coverPath && b.coverPath.startsWith("data:"));
+                for (const inc of incomingWithCovers) {
+                    void (async () => {
+                        try {
+                            const response = await fetch(inc.coverPath!);
+                            const blob = await response.blob();
+                            if (blob.size > 0) {
+                                await saveCoverImage(inc.id, blob);
+                            }
+                        } catch {
+                            // Non-critical: cover displays from in-memory state.
+                        }
+                    })();
+                }
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge books:", e);
@@ -414,11 +438,13 @@ async function pullMissingBookFiles(
 
         // Update store for successfully transferred books.
         for (const id of result.transferred) {
+            const currentBook = useLibraryStore.getState().books.find((b) => b.id === id);
             useLibraryStore.getState().updateBook(id, {
                 syncedWithoutFile: false,
                 filePath: `sqlite://${id}`,
                 storagePath: `sqlite://${id}`,
-                coverExtractionDone: false,
+                // Skip re-extraction if cover was already received via sync metadata.
+                coverExtractionDone: Boolean(currentBook?.coverPath),
             });
         }
 

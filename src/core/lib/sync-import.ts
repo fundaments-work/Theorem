@@ -127,11 +127,17 @@ export function mergeBooks(
         if (!match) {
             // New book from remote — flag it as having no local file.
             const localPlaceholderPath = `sqlite://${inc.id}`;
+            // Preserve cover data URL from the peer so it displays immediately
+            // without waiting for file transfer + re-extraction.
+            const incomingCover = (typeof inc.coverPath === "string" && inc.coverPath.startsWith("data:"))
+                ? inc.coverPath
+                : undefined;
             const remoteBook: Book = {
                 ...inc,
                 filePath: localPlaceholderPath,
                 storagePath: localPlaceholderPath,
-                coverPath: undefined, // Remote coverPath is meaningless locally
+                coverPath: incomingCover,
+                coverExtractionDone: Boolean(incomingCover),
                 syncedWithoutFile: true,
             };
             byId.set(inc.id, remoteBook);
@@ -190,7 +196,11 @@ export function mergeBooks(
             // call `startsWith` do not crash.
             filePath: match.filePath || match.storagePath || `sqlite://${match.id}`,
             storagePath: match.storagePath || match.filePath || `sqlite://${match.id}`,
-            coverPath: match.coverPath,
+            coverPath: match.coverPath || (
+                typeof inc.coverPath === "string" && inc.coverPath.startsWith("data:")
+                    ? inc.coverPath
+                    : match.coverPath
+            ),
             // Fill in contentHash if local is missing.
             contentHash: match.contentHash || inc.contentHash,
             // If local has a file, keep current sync flag.
