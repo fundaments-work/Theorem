@@ -1,6 +1,6 @@
 [package]
 name = "theorem"
-version = "1.0.0-2"
+version = "1.0.0-3"
 description = "Local-first reader for PDFs, EPUBs, and RSS with markdown export."
 authors = ["Fundamentals"]
 license = "MIT"

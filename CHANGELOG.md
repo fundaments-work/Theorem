@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.3] - 2026-03-23
+
+### Added
+
+- Support for importing and opening files directly from OS file associations ("Open With") via Tauri events.
+- Added alerts in the library when book imports fail.
+
+### Changed
+
+- Enhanced book format detection to properly handle Android content URIs and various ZIP archives.
+
+### Fixed
+
+- Increased storage read timeout to reliably handle large books.
+- Relaxed the import timeout and improved failure reporting.
+- Fixed mobile reader back button to correctly exit to the library.
+- Prevented redundant navigation actions during routing.
+
 ## [1.0.0-beta.2] - 2026-03-09
 
 ### Added

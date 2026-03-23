@@ -4612,7 +4612,7 @@ dependencies = [
 
 [[package]]
 name = "theorem"
-version = "1.0.0-2"
+version = "1.0.0-3"
 dependencies = [
  "axum",
  "base64 0.22.1",
