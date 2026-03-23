@@ -120,9 +120,11 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
                                 <li key={item.id}>
                                     <button
                                         onClick={() => {
-                                            setRoute(item.id);
-                                            if (item.id !== "library") {
-                                                sessionStorage.removeItem("theorem-selected-shelf");
+                                            if (currentRoute !== item.id) {
+                                                setRoute(item.id);
+                                                if (item.id !== "library") {
+                                                    sessionStorage.removeItem("theorem-selected-shelf");
+                                                }
                                             }
                                             if (isMobile) {
                                                 onClose?.();

@@ -243,6 +243,21 @@ function isSupportedImportFilename(lowerName: string): boolean {
 }
 
 function normalizePathForFormatLookup(filePath: string): string {
+    // For content URIs (Android), extract the filename from query parameters first
+    if (filePath.startsWith('content://')) {
+        try {
+            const uri = new URL(filePath);
+            const nameParam = uri.searchParams.get('name') || 
+                             uri.searchParams.get('displayName') ||
+                             uri.searchParams.get('filename');
+            if (nameParam) {
+                return nameParam.toLowerCase();
+            }
+        } catch {
+            // Fall through to normal processing
+        }
+    }
+    
     const normalizedPath = normalizeImportPath(filePath);
     return normalizedPath.split(/[?#]/, 1)[0].toLowerCase();
 }
@@ -291,16 +306,43 @@ function detectFormatFromBuffer(buffer: ArrayBuffer): BookFormat | null {
     }
 
     if (isZipSignature(bytes)) {
-        const zipProbe = new TextDecoder().decode(bytes.slice(0, Math.min(bytes.length, 262144))).toLowerCase();
-        if (zipProbe.includes('application/epub+zip') || zipProbe.includes('meta-inf/container.xml') || zipProbe.includes('.opf')) {
+        // Probe multiple segments of the ZIP file for better detection
+        const probeSize = Math.min(bytes.length, 524288); // Increased from 262144 to 524288
+        const zipProbe = new TextDecoder().decode(bytes.slice(0, probeSize)).toLowerCase();
+        
+        // Check for EPUB-specific patterns
+        // EPUB must contain mimetype file with "application/epub+zip" content
+        // and META-INF/container.xml pointing to OPF file
+        // Also check for EPUB directory structure patterns
+        const hasEpubMimetype = zipProbe.includes('application/epub+zip') || 
+            zipProbe.includes('mimetypeapplication/epub+zip') || // Some EPUBs have mimetype without separator
+            zipProbe.includes(' mimetype'); // EPUB mimetype file
+        
+        const hasEpubStructure = zipProbe.includes('meta-inf/container.xml') || 
+            zipProbe.includes('.opf') ||
+            zipProbe.includes('container.xml') ||
+            zipProbe.includes('meta-inf/');
+        
+        if (hasEpubMimetype || hasEpubStructure) {
             return 'epub';
         }
-        if (zipProbe.includes('.fb2')) {
+        
+        // Check for FB2 patterns
+        if (zipProbe.includes('.fb2') || zipProbe.includes('fictionbook')) {
             return 'fb2';
         }
-        if (/\.(png|jpe?g|webp|gif|bmp|avif)/.test(zipProbe) && !zipProbe.includes('.opf')) {
+        
+        // Check for CBZ patterns (images but no OPF)
+        // Only detect as CBZ if it contains images but no OPF or container files
+        if (/\.(png|jpe?g|webp|gif|bmp|avif)/.test(zipProbe) && 
+            !zipProbe.includes('.opf') && 
+            !zipProbe.includes('container.xml') &&
+            !zipProbe.includes('mimetype')) {
             return 'cbz';
         }
+        
+        // Default to epub for ZIP files with no clear indication
+        // This is safer than returning null, as most ZIP files are likely EPUBs
         return 'epub';
     }
 
@@ -329,19 +371,62 @@ async function initTauriPlugins() {
 export function getBookFormat(filePath: string): BookFormat | null {
     const lowerPath = normalizePathForFormatLookup(filePath);
 
+    // Extract the filename from the path
+    const filename = lowerPath.split(/[\\/]/).pop() || '';
+    
     // Multi-part extensions must be checked before single-part matches.
-    if (lowerPath.endsWith('.fb2.zip')) return 'fb2';
+    // Check both filename and full path for compatibility
+    if (filename.endsWith('.fb2.zip') || lowerPath.endsWith('.fb2.zip')) return 'fb2';
 
-    if (lowerPath.endsWith('.epub')) return 'epub';
-    if (lowerPath.endsWith('.mobi')) return 'mobi';
-    if (lowerPath.endsWith('.azw3')) return 'azw3';
-    if (lowerPath.endsWith('.azw')) return 'azw';
-    if (lowerPath.endsWith('.fb2')) return 'fb2';
-    if (lowerPath.endsWith('.fbz')) return 'fb2';
-    if (lowerPath.endsWith('.cbz')) return 'cbz';
-    if (lowerPath.endsWith('.cbr')) return 'cbr';
-    if (lowerPath.endsWith('.pdf')) return 'pdf';
+    // Check against known extensions
+    // We check the filename specifically, not the full path, to avoid issues with
+    // directory names that might contain extension-like patterns
+    // But we also check the full path for cases where the extension might be in a query string
+    const extensions: [string, BookFormat][] = [
+        ['.epub', 'epub'],
+        ['.mobi', 'mobi'],
+        ['.azw3', 'azw3'],
+        ['.azw', 'azw'],
+        ['.fb2', 'fb2'],
+        ['.fbz', 'fb2'],
+        ['.cbz', 'cbz'],
+        ['.cbr', 'cbr'],
+        ['.pdf', 'pdf'],
+    ];
 
+    // First, check if the filename ends with a known extension
+    for (const [ext, format] of extensions) {
+        if (filename.endsWith(ext) || lowerPath.endsWith(ext)) {
+            return format;
+        }
+    }
+
+    // If no match, check if the filename contains a known extension
+    // This handles cases like "book.epub.backup" or "book.sk.epub"
+    // We look for the LAST occurrence of a known extension in the filename
+    let lastMatch: { ext: string; format: BookFormat; position: number } | null = null;
+    
+    for (const [ext, format] of extensions) {
+        const position = filename.lastIndexOf(ext);
+        if (position !== -1) {
+            // Only consider it a match if the extension is followed by nothing or another extension separator
+            // This prevents matching "book.epub" in "book.epub.backup" as epub
+            const afterExt = filename.substring(position + ext.length);
+            if (afterExt === '' || afterExt.startsWith('.')) {
+                if (!lastMatch || position > lastMatch.position) {
+                    lastMatch = { ext, format, position };
+                }
+            }
+        }
+    }
+    
+    if (lastMatch) {
+        return lastMatch.format;
+    }
+
+    // If still no match, try to detect format from file content
+    // This handles cases where the file has a non-standard extension
+    // but the content is a known format
     return null;
 }
 

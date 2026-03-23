@@ -36,9 +36,11 @@ export function BottomNav() {
                         <li key={item.id} className="flex-1">
                             <button
                                 onClick={() => {
-                                    setRoute(item.id);
-                                    if (item.id !== "library") {
-                                        sessionStorage.removeItem("theorem-selected-shelf");
+                                    if (!isActive) {
+                                        setRoute(item.id);
+                                        if (item.id !== "library") {
+                                            sessionStorage.removeItem("theorem-selected-shelf");
+                                        }
                                     }
                                 }}
                                 className="ui-bottom-nav-btn"

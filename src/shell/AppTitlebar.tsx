@@ -255,7 +255,11 @@ export function AppTitlebar({
                 >
 
                     <button
-                        onClick={() => setRoute("library")}
+                        onClick={() => {
+                            if (currentRoute !== "library") {
+                                setRoute("library");
+                            }
+                        }}
                         className="sm:hidden inline-flex items-center p-1 -ml-1"
                         title="Go to Library"
                     >

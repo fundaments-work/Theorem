@@ -183,6 +183,8 @@ function App() {
                     useUIStore.getState().setRoute("reader", importedBook.id);
                 } else if (failures.length > 0) {
                     window.alert(`Failed to open file.\n\n${failures[0]?.source}\n${failures[0]?.message}`);
+                } else {
+                    console.warn(`Failed to import file: ${normalizedPath}`);
                 }
             }
         };

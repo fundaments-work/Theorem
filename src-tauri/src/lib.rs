@@ -141,10 +141,8 @@ fn enqueue_open_paths(app: &tauri::AppHandle, paths: Vec<String>, emit_event: bo
         let _ = app.emit("theorem://open-files", paths);
     }
 
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+    // Window management is handled by the frontend
+    // The window should already be visible when the app starts
 }
 
 #[tauri::command]

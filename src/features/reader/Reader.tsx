@@ -12,7 +12,6 @@ import {
     isMobile,
     isTauri,
     isTauriMobile,
-    useAndroidBackButton,
     useVocabularyStore,
     useLibraryStore,
     useRssStore,
@@ -1028,35 +1027,7 @@ function BookReaderPage() {
     const [dictionaryLookupLoading, setDictionaryLookupLoading] = useState(false);
     const [dictionaryLookupSaved, setDictionaryLookupSaved] = useState(false);
 
-    // Handle Android back button
-    const handleAndroidBack = useCallback(() => {
-        // Check if any panel is open - close them first
-        if (activePanel) {
-            setActivePanel(null);
-            return true; // Handled, re-push interceptor
-        }
-
-        // Close color picker if open
-        if (showColorPicker) {
-            setShowColorPicker(false);
-            return true;
-        }
-
-        // Close note editor if open
-        if (showNoteEditor) {
-            setShowNoteEditor(false);
-            return true;
-        }
-
-        // No panels open - go back to library
-        // We return false to the hook so it doesn't re-push the dummy state
-        // allowing the system back action to proceed to the previous route.
-        flushPendingProgressUpdate();
-        goBack();
-        return false;
-    }, [activePanel, showColorPicker, showNoteEditor, goBack, flushPendingProgressUpdate]);
-
-    useAndroidBackButton(handleAndroidBack);
+    // Removed Android back button handler - letting WebView handle gestures natively
 
     // Web-based back button handling for desktop browsers and mobile web
     useEffect(() => {
@@ -1092,22 +1063,34 @@ function BookReaderPage() {
     }, [setRoute, flushPendingProgressUpdate]);
 
     const handleBack = useCallback(() => {
-        flushPendingProgressUpdate();
-        // On mobile, the History stack may contain interceptor states (Android back handling),
-        // so a single `history.back()` can be a no-op for exiting the reader. Prefer an
-        // explicit route change to ensure the in-app back button works reliably.
-        if (isMobile()) {
-            setRoute("library");
+        // Check if any panel is open - close them first
+        if (activePanel) {
+            setActivePanel(null);
             return;
         }
-        // If we have a history stack, going back will be caught by our popstate listeners
+
+        // Close color picker if open
+        if (showColorPicker) {
+            setShowColorPicker(false);
+            return;
+        }
+
+        // Close note editor if open
+        if (showNoteEditor) {
+            setShowNoteEditor(false);
+            return;
+        }
+
+        flushPendingProgressUpdate();
+        // Use history.back() for both mobile and desktop
+        // The WebView handles gestures natively, and the popstate listener in App.tsx handles route updates
         if (typeof window !== "undefined" && window.history.length > 1) {
             window.history.back();
         } else {
-            // Fallback for direct entry
+            // Fallback for direct entry or empty history
             setRoute("library");
         }
-    }, [setRoute, flushPendingProgressUpdate]);
+    }, [activePanel, showColorPicker, showNoteEditor, setRoute, flushPendingProgressUpdate]);
 
     useEffect(() => {
         if (!isPdfFormat || !isMobileViewport || !showToolbar || activePanel !== null) {
