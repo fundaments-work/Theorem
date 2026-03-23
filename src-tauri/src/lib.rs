@@ -699,7 +699,7 @@ pub fn run() {
             // import and open them once it is ready.
             let startup_args: Vec<String> = std::env::args().skip(1).collect();
             let open_paths = collect_open_paths(startup_args, None);
-            enqueue_open_paths(&app.handle(), open_paths, false);
+            enqueue_open_paths(app.handle(), open_paths, false);
 
             Ok(())
         })
