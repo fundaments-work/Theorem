@@ -277,19 +277,19 @@ export function WindowTitlebar({
         >
             <div className="h-14 lg:h-11 flex items-center gap-1 pl-3 pr-2">
                 {/* Left: Back + Title */}
-                <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none max-w-[55%] lg:max-w-[400px]">
+                <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none lg:max-w-[400px]">
                     <button
                         onClick={onBack}
-                        className={cn(ICON_BUTTON_CLASS, "mr-1")}
+                        className={cn(ICON_BUTTON_CLASS, "mr-1 shrink-0")}
                         style={{ color: 'var(--reader-fg, var(--color-text))' }}
                         title="Back"
                     >
                         <ArrowLeft className="w-5 h-5 lg:w-4 lg:h-4" />
                     </button>
 
-                    <div className="flex-1 min-w-0 text-left overflow-hidden">
+                    <div className="flex-1 min-w-0 text-left overflow-hidden pr-2">
                         <h1
-                            className="text-base lg:text-sm font-bold lg:font-medium truncate leading-tight"
+                            className="text-sm lg:text-sm font-bold lg:font-medium truncate leading-tight"
                             style={{ color: 'var(--reader-fg, var(--color-text))' }}
                         >
                             {metadata?.title || "Loading..."}
@@ -301,7 +301,7 @@ export function WindowTitlebar({
                 </div>
 
                 {/* Spacer */}
-                <div className="flex-1" />
+                <div className="hidden lg:block lg:flex-1" />
 
                 {/* Content: Standard Tools - Always Visible */}
                 <div className="flex items-center gap-0.5 mr-0.5">

@@ -624,21 +624,21 @@ export function FeedsPage() {
                 "md:flex"
             )}>
                 {/* Page Header Area */}
-                <header className="shrink-0 px-6 pt-8 pb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3 overflow-hidden">
+                <header className="shrink-0 px-4 sm:px-6 pt-8 pb-4 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         {/* Mobile Back Button */}
                         <button
                             onClick={handleBackToFeeds}
-                            className="md:hidden -ml-2 p-1.5 text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                            className="md:hidden -ml-2 p-1.5 shrink-0 text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
 
-                        <div>
-                            <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem] truncate">
+                        <div className="min-w-0">
+                            <h1 className="m-0 font-sans text-xl sm:text-[1.45rem] md:text-[1.6rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] truncate">
                                 {selectedFeed ? selectedFeed.title : "All Articles"}
                             </h1>
-                            <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
+                            <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)] truncate">
                                 {displayedArticles.length} articles
                             </p>
                         </div>
@@ -646,14 +646,14 @@ export function FeedsPage() {
 
                     <button
                         onClick={handleRefreshAll}
-                        disabled={isRefreshing}
+                        disabled={isRefreshing || isLoading}
                         className={cn(
-                            "ui-btn",
+                            "ui-btn shrink-0",
                             "disabled:opacity-50",
                         )}
                         title="Refresh feeds"
                     >
-                        <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+                        <RefreshCw className={cn("w-4 h-4", (isRefreshing || isLoading) && "animate-spin")} />
                         <span className="hidden sm:inline">Refresh</span>
                     </button>
                 </header>

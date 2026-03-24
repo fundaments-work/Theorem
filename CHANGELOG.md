@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.4] - 2026-03-24
+
+### Fixed
+
+- Fixed reader screen title truncation on mobile devices by adjusting titlebar flex layouts to properly wrap or truncate long titles.
+- Fixed site title overlap with the sync button on the feeds page for mobile devices.
+- Added spinning animation to the sync button on the feeds page to better indicate active refresh and load states.
+
 ## [1.0.0-beta.3] - 2026-03-23
 
 ### Added
