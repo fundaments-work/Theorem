@@ -311,35 +311,25 @@ pub fn generate_nonce() -> [u8; 32] {
 /// base64-encoding overhead per file (a 20 MB EPUB → 5 chunks instead of 20).
 pub const FILE_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
-/// Encrypt raw data into individually-encrypted 1MB chunks.
-/// Each chunk gets its own random nonce and AEAD tag.
-/// Returns a vec of (chunk_index, base64_encoded_encrypted_chunk).
-pub fn encrypt_file_chunks(key: &[u8; 32], data: &[u8]) -> Result<Vec<String>, String> {
+/// Encrypts a single chunk of data. Used to avoid building massive Vecs in memory.
+pub fn encrypt_single_file_chunk(key: &[u8; 32], chunk_data: &[u8]) -> Result<String, String> {
     let cipher = ChaCha20Poly1305::new_from_slice(key)
         .map_err(|e| format!("Failed to create cipher: {e}"))?;
 
-    let mut chunks = Vec::new();
+    let mut nonce_bytes = [0u8; 12];
+    use rand::RngCore;
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
 
-    for chunk_data in data.chunks(FILE_CHUNK_SIZE) {
-        // Generate a random 12-byte nonce per chunk.
-        let mut nonce_bytes = [0u8; 12];
-        use rand::RngCore;
-        OsRng.fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from(nonce_bytes);
+    let ciphertext = cipher
+        .encrypt(&nonce, chunk_data)
+        .map_err(|e| format!("Chunk encryption failed: {e}"))?;
 
-        let ciphertext = cipher
-            .encrypt(&nonce, chunk_data)
-            .map_err(|e| format!("Chunk encryption failed: {e}"))?;
+    let mut wire = Vec::with_capacity(12 + ciphertext.len());
+    wire.extend_from_slice(&nonce_bytes);
+    wire.extend_from_slice(&ciphertext);
 
-        // Wire format: 12-byte nonce || ciphertext (includes AEAD tag)
-        let mut wire = Vec::with_capacity(12 + ciphertext.len());
-        wire.extend_from_slice(&nonce_bytes);
-        wire.extend_from_slice(&ciphertext);
-
-        chunks.push(BASE64.encode(&wire));
-    }
-
-    Ok(chunks)
+    Ok(BASE64.encode(&wire))
 }
 
 /// Decrypt a single encrypted chunk (produced by encrypt_file_chunks).

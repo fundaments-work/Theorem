@@ -125,11 +125,11 @@ export async function unpairDevice(deviceId: string): Promise<void> {
  * Must be called before the server can respond to sync requests.
  */
 export async function setSyncData(
-    domainsJson: string,
-    manifestJson: string,
+    domainsMap: Record<string, string>,
+    manifestMap: Record<string, any>,
 ): Promise<void> {
     requireTauri("setSyncData");
-    return invoke("set_sync_data", { domainsJson, manifestJson });
+    return invoke("set_sync_data", { domainsMap, manifestMap });
 }
 
 // ─── Sync Trigger ───

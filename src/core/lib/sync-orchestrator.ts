@@ -193,10 +193,10 @@ async function buildDomainsAndManifest() {
 
 // ─── Merge incoming data ───
 
-function mergeIncomingData(
+async function mergeIncomingData(
     incomingMap: Record<string, string>,
     localSettingsUpdatedAt?: string,
-): { domainsUpdated: string[] } {
+): Promise<{ domainsUpdated: string[] }> {
     const domainsUpdated: string[] = [];
     const markUpdated = (domain: string) => {
         if (!domainsUpdated.includes(domain)) {
@@ -261,19 +261,18 @@ function mergeIncomingData(
                 // page reloads (partialize strips coverPath from Zustand persistence).
                 const incomingWithCovers = (incoming as { id: string; coverPath?: string }[])
                     .filter((b) => b.coverPath && b.coverPath.startsWith("data:"));
-                for (const inc of incomingWithCovers) {
-                    void (async () => {
-                        try {
-                            const response = await fetch(inc.coverPath!);
-                            const blob = await response.blob();
-                            if (blob.size > 0) {
-                                await saveCoverImage(inc.id, blob);
-                            }
-                        } catch {
-                            // Non-critical: cover displays from in-memory state.
+                
+                await Promise.allSettled(incomingWithCovers.map(async (inc) => {
+                    try {
+                        const response = await fetch(inc.coverPath!);
+                        const blob = await response.blob();
+                        if (blob.size > 0) {
+                            await saveCoverImage(inc.id, blob);
                         }
-                    })();
-                }
+                    } catch {
+                        // Non-critical: cover displays from in-memory state.
+                    }
+                }));
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge books:", e);
@@ -578,7 +577,7 @@ export async function runDeviceSync(
         await ensureResponderSyncReady();
 
         log("Sending data snapshot to backend...");
-        await setSyncData(JSON.stringify(domains), JSON.stringify(manifest));
+        await setSyncData(domains, manifest);
 
         // Discover the peer's current address before connecting.
         // The persistent port feature means the stored port is usually correct,
@@ -613,7 +612,7 @@ export async function runDeviceSync(
         log(`Received updates for ${incomingDomainCount} domain(s). Merging...`);
         setStatus("syncing", "Merging data...");
 
-        const { domainsUpdated } = mergeIncomingData(
+        const { domainsUpdated } = await mergeIncomingData(
             incomingMap, settingsUpdatedAt,
         );
 
@@ -666,7 +665,7 @@ export async function runDeviceSync(
  */
 export async function provisionSyncData(): Promise<void> {
     const { domains, manifest } = await buildDomainsAndManifest();
-    await setSyncData(JSON.stringify(domains), JSON.stringify(manifest));
+    await setSyncData(domains, manifest);
 }
 
 // ─── Responder-side event listener ───
@@ -675,6 +674,8 @@ export async function provisionSyncData(): Promise<void> {
 let _syncCompleteTimer: ReturnType<typeof setTimeout> | null = null;
 /** Persistent peer device ID — survives across debounced event firings. */
 let _lastValidPeerDeviceId: string | undefined;
+
+let _isMerging = false;
 
 /**
  * Handles the "sync-incoming-complete" event from the Rust backend.
@@ -686,6 +687,11 @@ let _lastValidPeerDeviceId: string | undefined;
  * @param peerDeviceId - The device ID of the peer that pushed data, from event payload.
  */
 async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
+    if (_isMerging) {
+        console.warn("[sync-orchestrator] Responder merge already in progress, skipping overlapping run.");
+        return;
+    }
+    _isMerging = true;
     try {
         console.log("[sync-orchestrator] Responder: sync-incoming-complete received, merging...");
         setStatus("syncing", "Receiving data from peer...");
@@ -719,7 +725,7 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
         // instead of generating "now" which biases the responder to always win.
         const localSettingsUpdatedAt = useSettingsStore.getState().settingsLastModifiedAt || new Date(0).toISOString();
 
-        const { domainsUpdated } = mergeIncomingData(
+        const { domainsUpdated } = await mergeIncomingData(
             incomingMap,
             localSettingsUpdatedAt,
         );
@@ -762,6 +768,8 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
         const errMsg = error instanceof Error ? error.message : String(error);
         console.error("[sync-orchestrator] Responder merge failed:", errMsg);
         setStatus("error", `Responder merge failed: ${errMsg}`);
+    } finally {
+        _isMerging = false;
     }
 }
 

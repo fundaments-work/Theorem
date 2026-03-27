@@ -13,9 +13,10 @@ use axum::{
     Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use futures::stream::{self, StreamExt};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -770,42 +771,37 @@ async fn handle_file_availability(
 
     let app_data_dir = state.app_data_dir.clone();
     let requested_book_ids = availability_req.book_ids;
-    let (available_ids, file_sizes, cover_sizes) = tokio::task::spawn_blocking(move || {
-        let mut available_ids = Vec::new();
-        let mut file_sizes: HashMap<String, u64> = HashMap::new();
 
-        for book_id in &requested_book_ids {
-            // Skip book IDs that fail path-safety validation.
-            if validate_book_id(book_id).is_err() {
-                continue;
-            }
-
-            match resolve_book_file_for_transfer(&app_data_dir, book_id) {
-                Ok(Some((_path, size))) => {
-                    available_ids.push(book_id.clone());
-                    file_sizes.insert(book_id.clone(), size);
-                }
-                Ok(None) => {}
-                Err(error) => {
-                    eprintln!(
-                        "[sync] File availability resolution failed for '{book_id}': {error}"
-                    );
-                }
-            }
-        }
-
-        // Also resolve cover availability.
-        let cover_sizes = resolve_cover_sizes(&app_data_dir, &requested_book_ids);
-
-        (available_ids, file_sizes, cover_sizes)
+    let cover_sizes_ids = requested_book_ids.clone();
+    let app_data_dir_covers = app_data_dir.clone();
+    let cover_sizes = tokio::task::spawn_blocking(move || {
+        resolve_cover_sizes(&app_data_dir_covers, &cover_sizes_ids)
     })
     .await
-    .map_err(|error| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("File availability task failed: {error}"),
-        )
-    })?;
+    .unwrap_or_default();
+
+    let mut available_ids = Vec::new();
+    let mut file_sizes: HashMap<String, u64> = HashMap::new();
+
+    let mut stream = stream::iter(requested_book_ids.into_iter())
+        .map(|book_id| {
+            let app_data_dir_clone = app_data_dir.clone();
+            tokio::task::spawn_blocking(move || {
+                if validate_book_id(&book_id).is_err() {
+                    return (book_id, Ok(None));
+                }
+                let res = resolve_book_file_for_transfer(&app_data_dir_clone, &book_id);
+                (book_id, res)
+            })
+        })
+        .buffer_unordered(4);
+
+    while let Some(res) = stream.next().await {
+        if let Ok((book_id, Ok(Some((_path, size))))) = res {
+            available_ids.push(book_id.clone());
+            file_sizes.insert(book_id.clone(), size);
+        }
+    }
 
     let response = FileAvailabilityResponse {
         available_ids,
@@ -889,12 +885,38 @@ async fn handle_file_pull(
         return Ok(Json(response));
     };
 
-    // Read the entire file into memory.
+    // Read the file in memory while extracting chunks immediately
     // Book files are typically 1-50 MB (epubs) up to ~500 MB (large PDFs).
-    // This is acceptable for a LAN-only sync where memory is not as constrained.
-    let file_data = tokio::task::spawn_blocking({
+    let (total_size, content_hash, encrypted_chunks) = tokio::task::spawn_blocking({
         let path = path.clone();
-        move || std::fs::read(&path)
+        move || -> Result<(u64, String, Vec<String>), String> {
+            let mut file =
+                std::fs::File::open(&path).map_err(|e| format!("Failed to open book file: {e}"))?;
+
+            let mut hasher = Sha256::new();
+            use sha2::Digest;
+            use std::io::Read;
+
+            let mut chunks = Vec::new();
+            let mut buffer = vec![0u8; sync_crypto::FILE_CHUNK_SIZE];
+            let mut total_size = 0u64;
+
+            loop {
+                let n = file
+                    .read(&mut buffer)
+                    .map_err(|e| format!("Read failed: {e}"))?;
+                if n == 0 {
+                    break;
+                }
+
+                hasher.update(&buffer[..n]);
+                total_size += n as u64;
+
+                let encoded = sync_crypto::encrypt_single_file_chunk(&sym_key, &buffer[..n])?;
+                chunks.push(encoded);
+            }
+            Ok((total_size, hex::encode(hasher.finalize()), chunks))
+        }
     })
     .await
     .map_err(|e| {
@@ -903,34 +925,12 @@ async fn handle_file_pull(
             format!("Task join failed: {e}"),
         )
     })?
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to read book file: {e}"),
-        )
-    })?;
-
-    let total_size = file_data.len() as u64;
-
-    // Compute SHA-256 content hash for integrity verification on the receiver side.
-    let content_hash = {
-        let mut hasher = Sha256::new();
-        hasher.update(&file_data);
-        hex::encode(hasher.finalize())
-    };
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     // Infer format from the sync_data snapshot's books domain (if available),
     // or fall back to empty string (the receiver already has the Book metadata
     // which includes the format).
     let format = String::new();
-
-    // Encrypt the file data in chunks.
-    let encrypted_chunks = sync_crypto::encrypt_file_chunks(&sym_key, &file_data).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("File encryption failed: {e}"),
-        )
-    })?;
 
     let total_chunks = encrypted_chunks.len() as u32;
 

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.5] - 2026-03-27
+
+### Changed
+
+- Completely overhauled LAN Sync performance logic, changing blocking synchronous file payloads into asynchronous encrypted stream chunks for ultra-fast transfers without extreme RAM overheads.
+- Reduced strict file transferring limits to avoid OOM memory crashes on Android and lower-memory systems.
+- Re-architected data serialization structures eliminating CPU-heavy "Double JSON" stringification lags occurring during peer connections.
+
+### Fixed
+
+- Resolved asynchronous race conditions overlapping library updates simultaneously when rapid data pushes arrived.
+- Fixed severe sync timeouts where SQLite-to-disk metadata file conversions were sequentially blocking `reqwest` transfers on the `tokio` thread.
+
 ## [1.0.0-beta.4] - 2026-03-24
 
 ### Fixed

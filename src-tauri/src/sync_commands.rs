@@ -306,19 +306,16 @@ pub async fn unpair_device(app: tauri::AppHandle, device_id: String) -> Result<(
 #[tauri::command]
 pub async fn set_sync_data(
     app: tauri::AppHandle,
-    domains_json: String,
-    manifest_json: String,
+    domains_map: HashMap<String, String>,
+    manifest_map: HashMap<String, DomainVersion>,
 ) -> Result<(), String> {
     let sync_state = app.state::<SyncAppState>();
 
-    let domains: HashMap<String, String> =
-        serde_json::from_str(&domains_json).map_err(|e| format!("Invalid domains JSON: {e}"))?;
-
-    let manifest: HashMap<String, DomainVersion> =
-        serde_json::from_str(&manifest_json).map_err(|e| format!("Invalid manifest JSON: {e}"))?;
-
     let mut sync_data = sync_state.server_state.sync_data.lock().await;
-    *sync_data = Some(SyncDataSnapshot { domains, manifest });
+    *sync_data = Some(SyncDataSnapshot {
+        domains: domains_map,
+        manifest: manifest_map,
+    });
 
     Ok(())
 }
@@ -778,7 +775,7 @@ pub async fn pull_book_files(
     let res = client
         .post(format!("{base_url}/file/availability"))
         .json(&enc_req)
-        .timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(60))
         .send()
         .await
         .map_err(|e| format!("File availability check failed: {e}"))?;
@@ -910,7 +907,7 @@ pub async fn pull_book_files(
                     (book_id, result)
                 }
             })
-            .buffer_unordered(4) // ≤4 concurrent file pulls
+            .buffer_unordered(2) // ≤2 concurrent file pulls
             .collect()
             .await;
 
