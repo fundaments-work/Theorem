@@ -307,6 +307,29 @@ pub struct FileAvailabilityResponse {
     pub available_ids: Vec<String>,
     /// Map of book_id → file size in bytes (for progress estimation).
     pub file_sizes: HashMap<String, u64>,
+    /// Map of book_id → cover data_url size in bytes.
+    /// Only populated for books that have cover images in SQLite.
+    #[serde(default)]
+    pub cover_sizes: HashMap<String, u64>,
+}
+
+// ─── Cover Transfer ───
+
+/// Request to pull a book's cover image from a peer.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CoverPullRequest {
+    /// Book ID whose cover to pull.
+    pub book_id: String,
+}
+
+/// Response from the cover pull endpoint.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CoverPullResponse {
+    /// Whether a cover was found.
+    pub available: bool,
+    /// The cover data URL (e.g. "data:image/jpeg;base64,...").
+    /// Present only when available=true.
+    pub data_url: Option<String>,
 }
 
 // ─── Server Info ───

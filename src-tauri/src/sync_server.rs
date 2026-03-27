@@ -113,6 +113,7 @@ pub async fn start_server(state: Arc<SyncServerState>) -> Result<SyncServerHandl
         .route("/sync/complete", post(handle_sync_complete))
         .route("/sync/file/availability", post(handle_file_availability))
         .route("/sync/file/pull", post(handle_file_pull))
+        .route("/sync/file/cover", post(handle_cover_pull))
         .with_state(state.clone());
 
     // Try to reuse the previously bound port. Fall back to a random port.
@@ -696,10 +697,13 @@ fn resolve_book_file_for_transfer(
 ) -> Result<Option<(PathBuf, u64)>, String> {
     let cache_path = book_file_path(app_data_dir, book_id);
 
+    // If a stale 0-byte file exists on disk, remove it and re-try from SQLite.
     if let Ok(metadata) = std::fs::metadata(&cache_path) {
         if metadata.is_file() && metadata.len() > 0 {
             return Ok(Some((cache_path, metadata.len())));
         }
+        // Stale empty file — delete it so we fall through to SQLite.
+        let _ = std::fs::remove_file(&cache_path);
     }
 
     let db_path = sqlite_database_path(app_data_dir);
@@ -766,20 +770,20 @@ async fn handle_file_availability(
 
     let app_data_dir = state.app_data_dir.clone();
     let requested_book_ids = availability_req.book_ids;
-    let (available_ids, file_sizes) = tokio::task::spawn_blocking(move || {
+    let (available_ids, file_sizes, cover_sizes) = tokio::task::spawn_blocking(move || {
         let mut available_ids = Vec::new();
         let mut file_sizes: HashMap<String, u64> = HashMap::new();
 
-        for book_id in requested_book_ids {
+        for book_id in &requested_book_ids {
             // Skip book IDs that fail path-safety validation.
-            if validate_book_id(&book_id).is_err() {
+            if validate_book_id(book_id).is_err() {
                 continue;
             }
 
-            match resolve_book_file_for_transfer(&app_data_dir, &book_id) {
+            match resolve_book_file_for_transfer(&app_data_dir, book_id) {
                 Ok(Some((_path, size))) => {
                     available_ids.push(book_id.clone());
-                    file_sizes.insert(book_id, size);
+                    file_sizes.insert(book_id.clone(), size);
                 }
                 Ok(None) => {}
                 Err(error) => {
@@ -790,7 +794,10 @@ async fn handle_file_availability(
             }
         }
 
-        (available_ids, file_sizes)
+        // Also resolve cover availability.
+        let cover_sizes = resolve_cover_sizes(&app_data_dir, &requested_book_ids);
+
+        (available_ids, file_sizes, cover_sizes)
     })
     .await
     .map_err(|error| {
@@ -803,8 +810,40 @@ async fn handle_file_availability(
     let response = FileAvailabilityResponse {
         available_ids,
         file_sizes,
+        cover_sizes,
     };
     encrypt_response(&sym_key, &response)
+}
+
+/// Look up cover data_url sizes from SQLite for a set of book IDs.
+/// Returns a map of book_id → data_url byte length for books that have covers.
+fn resolve_cover_sizes(app_data_dir: &Path, book_ids: &[String]) -> HashMap<String, u64> {
+    let db_path = app_data_dir.join(SQLITE_DB_FILE);
+    if !db_path.exists() || book_ids.is_empty() {
+        return HashMap::new();
+    }
+
+    let connection = match Connection::open(&db_path) {
+        Ok(c) => c,
+        Err(_) => return HashMap::new(),
+    };
+
+    let mut sizes = HashMap::new();
+    for book_id in book_ids {
+        if let Ok(Some(len)) = connection
+            .query_row(
+                "SELECT length(data_url) FROM covers WHERE book_id = ?1",
+                params![book_id],
+                |row| row.get::<_, u64>(0),
+            )
+            .optional()
+        {
+            if len > 0 {
+                sizes.insert(book_id.clone(), len);
+            }
+        }
+    }
+    sizes
 }
 
 /// POST /sync/file/pull — Serve a single book file to a peer.
@@ -924,3 +963,50 @@ async fn handle_file_pull(
 }
 
 // ─── Helpers ───
+
+/// POST /sync/file/cover — Serve a book's cover image to a peer.
+///
+/// Reads the cover data_url from SQLite and returns it as an encrypted response.
+/// Covers are small (typically <1 MB data URLs), so no chunking is needed.
+async fn handle_cover_pull(
+    State(state): State<Arc<SyncServerState>>,
+    Json(req): Json<AuthenticatedRequest>,
+) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
+    let (cover_req, sym_key): (CoverPullRequest, [u8; 32]) = decrypt_request(&state, &req).await?;
+
+    validate_book_id(&cover_req.book_id)?;
+
+    let app_data_dir = state.app_data_dir.clone();
+    let book_id = cover_req.book_id.clone();
+
+    let cover_data_url = tokio::task::spawn_blocking(move || -> Option<String> {
+        let db_path = app_data_dir.join(SQLITE_DB_FILE);
+        if !db_path.exists() {
+            return None;
+        }
+        let connection = Connection::open(&db_path).ok()?;
+        connection
+            .query_row(
+                "SELECT data_url FROM covers WHERE book_id = ?1",
+                params![book_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .ok()
+            .flatten()
+            .filter(|s| !s.is_empty())
+    })
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Cover pull task failed: {e}"),
+        )
+    })?;
+
+    let response = CoverPullResponse {
+        available: cover_data_url.is_some(),
+        data_url: cover_data_url,
+    };
+    encrypt_response(&sym_key, &response)
+}
