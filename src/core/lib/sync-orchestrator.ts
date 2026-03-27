@@ -17,6 +17,7 @@ import {
     startSyncServer,
     getIncomingSyncData,
     pullBookFiles,
+    pullBookCovers,
     discoverPeer,
 } from "./device-sync";
 import {
@@ -409,65 +410,102 @@ function mergeIncomingData(
 // ─── File transfer after metadata merge ───
 
 /**
- * After metadata merge, check for books that arrived without files
- * and attempt to pull the binary book data from the peer.
+ * After metadata merge, attempt to pull the binary book data and covers
+ * from the peer.
  *
- * For each successfully transferred book:
+ * For each successfully transferred book file:
  *  - Clears `syncedWithoutFile`
  *  - Sets `storagePath` to `sqlite://<id>` so the storage layer resolves it
  *  - Resets `coverExtractionDone` so Library auto-extracts the cover
  */
-async function pullMissingBookFiles(
+async function pullMissingBookFilesAndCovers(
     peerDeviceId: string,
+    syncedBookIds: string[],
     log: (msg: string) => void,
 ): Promise<void> {
-    const books = useLibraryStore.getState().books;
+    const libraryStore = useLibraryStore.getState();
+    const books = libraryStore.books;
+    
+    // 1. Files
     const needFiles = books.filter((b) => b.syncedWithoutFile === true);
+    let unlisten: (() => void) | null = null;
+    
+    if (needFiles.length > 0) {
+        const fileIds = needFiles.map((b) => b.id);
+        log(`Pulling ${fileIds.length} book file(s) from peer...`);
+        setStatus("syncing", `Transferring ${fileIds.length} book(s)...`);
 
-    if (needFiles.length === 0) {
-        log("No book files to transfer.");
-        return;
+        try {
+            if (isTauri()) {
+                const { listen } = await import("@tauri-apps/api/event");
+                unlisten = await listen<string>("sync-file-progress", (event) => {
+                    try {
+                        const payload = typeof event.payload === "string" 
+                            ? JSON.parse(event.payload) 
+                            : event.payload;
+                        
+                        if (payload.phase === "transferring") {
+                            const mbDone = (payload.completed_bytes / 1024 / 1024).toFixed(1);
+                            const mbTotal = (payload.total_bytes / 1024 / 1024).toFixed(1);
+                            setStatus("syncing", `Transferring ${payload.completed_files}/${payload.total_files} files (${mbDone}/${mbTotal} MB)...`);
+                        } else if (payload.phase === "complete") {
+                            setStatus("syncing", `Finalizing transfer of ${payload.total_files} files...`);
+                        }
+                    } catch (err) {}
+                });
+            }
+
+            const result = await pullBookFiles(peerDeviceId, fileIds);
+
+            for (const id of result.transferred) {
+                const currentBook = useLibraryStore.getState().books.find((b) => b.id === id);
+                useLibraryStore.getState().updateBook(id, {
+                    syncedWithoutFile: false,
+                    filePath: `sqlite://${id}`,
+                    storagePath: `sqlite://${id}`,
+                    coverExtractionDone: Boolean(currentBook?.coverPath),
+                });
+            }
+
+            const parts: string[] = [];
+            if (result.transferred.length > 0) parts.push(`${result.transferred.length} files transferred`);
+            if (result.unavailable.length > 0) parts.push(`${result.unavailable.length} files unavailable`);
+            if (result.failed.length > 0) {
+                parts.push(`${result.failed.length} files failed`);
+                for (const f of result.failed) console.warn(`[sync] File transfer failed for ${f.book_id}: ${f.error}`);
+            }
+            log(`File transfer: ${parts.join(", ")}`);
+        } catch (error: unknown) {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            log(`File transfer error: ${errMsg}`);
+        } finally {
+            if (unlisten) unlisten();
+        }
     }
 
-    const bookIds = needFiles.map((b) => b.id);
-    log(`Pulling ${bookIds.length} book file(s) from peer...`);
-    setStatus("syncing", `Transferring ${bookIds.length} book file(s)...`);
-
-    try {
-        const result = await pullBookFiles(peerDeviceId, bookIds);
-
-        // Update store for successfully transferred books.
-        for (const id of result.transferred) {
-            const currentBook = useLibraryStore.getState().books.find((b) => b.id === id);
-            useLibraryStore.getState().updateBook(id, {
-                syncedWithoutFile: false,
-                filePath: `sqlite://${id}`,
-                storagePath: `sqlite://${id}`,
-                // Skip re-extraction if cover was already received via sync metadata.
-                coverExtractionDone: Boolean(currentBook?.coverPath),
-            });
+    // 2. Covers
+    // We attempt to pull covers for all books that were part of this sync round,
+    // plus any books that have syncedWithoutFile=true (since their cover extraction
+    // will be blocked until the file is pulled).
+    if (syncedBookIds.length > 0) {
+        setStatus("syncing", "Fletching cover images...");
+        try {
+            const result = await pullBookCovers(peerDeviceId, syncedBookIds);
+            
+            // For books whose covers transferred successfully, trigger a re-render 
+            // by bumping a superficial value or relying on the storage cache updating.
+            // Since the covers are saved to SQLite, the components will load them
+            // via the custom protocol automatically.
+            const parts: string[] = [];
+            if (result.transferred.length > 0) parts.push(`${result.transferred.length} covers transferred`);
+            if (result.unavailable.length > 0) parts.push(`${result.unavailable.length} no cover available`);
+            if (result.failed.length > 0) parts.push(`${result.failed.length} covers failed`);
+            
+            log(`Cover transfer: ${parts.join(", ")}`);
+        } catch (error: unknown) {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            log(`Cover transfer error: ${errMsg}`);
         }
-
-        const parts: string[] = [];
-        if (result.transferred.length > 0) {
-            parts.push(`${result.transferred.length} transferred`);
-        }
-        if (result.unavailable.length > 0) {
-            parts.push(`${result.unavailable.length} unavailable on peer`);
-        }
-        if (result.failed.length > 0) {
-            parts.push(`${result.failed.length} failed`);
-            for (const f of result.failed) {
-                console.warn(`[sync-orchestrator] File transfer failed for ${f.book_id}: ${f.error}`);
-            }
-        }
-        log(`File transfer: ${parts.join(", ")}`);
-    } catch (error: unknown) {
-        const errMsg = error instanceof Error ? error.message : String(error);
-        console.error("[sync-orchestrator] File transfer failed:", errMsg);
-        log(`File transfer error: ${errMsg}`);
-        // Non-fatal: metadata sync already succeeded. Books remain with syncedWithoutFile=true
-        // and the user can retry or re-import manually.
     }
 }
 
@@ -563,7 +601,11 @@ export async function runDeviceSync(
         const incomingDomainCount = Object.keys(incomingMap).length;
         if (incomingDomainCount === 0) {
             log("No domain updates from peer. Checking for missing book files...");
-            await pullMissingBookFiles(peerDeviceId, log);
+            // Extract the needFiles since there's no incoming payload
+            const needFilesIds = useLibraryStore.getState().books
+                .filter((b) => b.syncedWithoutFile)
+                .map((b) => b.id);
+            await pullMissingBookFilesAndCovers(peerDeviceId, needFilesIds, log);
             setStatus("synced", "Already in sync");
             return { success: true, domainsUpdated: [] };
         }
@@ -575,10 +617,21 @@ export async function runDeviceSync(
             incomingMap, settingsUpdatedAt,
         );
 
+        // Parse incomingMap books to get all book IDs part of this sync exchange.
+        let syncedBookIds: string[] = [];
+        try {
+            if (incomingMap["books"]) {
+                const books = JSON.parse(incomingMap["books"]);
+                if (Array.isArray(books)) {
+                    syncedBookIds = books.map((b) => b.id);
+                }
+            }
+        } catch (_err) {}
+
         // Pull any missing book files on every sync pass.
-        // This allows retrying previously-unavailable files even when the
-        // books domain itself has no new metadata changes.
-        await pullMissingBookFiles(peerDeviceId, log);
+        // Also fetches cover images for ALL books synchronized in this cycle
+        // ensuring high-fidelity metadata.
+        await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, log);
 
         const summary = domainsUpdated.length > 0
             ? `Updated: ${domainsUpdated.join(", ")}`
@@ -649,7 +702,10 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
                 } catch {
                     // Non-fatal: address may already be correct from SyncCompleteMessage.
                 }
-                await pullMissingBookFiles(peerDeviceId, responderLog);
+                const needFilesIds = useLibraryStore.getState().books
+                    .filter((b) => b.syncedWithoutFile)
+                    .map((b) => b.id);
+                await pullMissingBookFilesAndCovers(peerDeviceId, needFilesIds, responderLog);
             }
             setStatus("synced", "No new data from peer");
             return;
@@ -678,14 +734,24 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
         // The initiator's SyncCompleteMessage includes its server address,
         // which handle_sync_complete already saved. Discover to verify reachability.
         if (peerDeviceId) {
+            let syncedBookIds: string[] = [];
+            try {
+                if (incomingMap["books"]) {
+                    const books = JSON.parse(incomingMap["books"]);
+                    if (Array.isArray(books)) {
+                        syncedBookIds = books.map((b) => b.id);
+                    }
+                }
+            } catch (_err) {}
+            
             const responderLog = (msg: string) => console.log(`[sync-orchestrator] Responder: ${msg}`);
             try {
                 await discoverPeer(peerDeviceId);
             } catch {
-                // Discovery failed — peer may have gone offline. pullMissingBookFiles
+                // Discovery failed — peer may have gone offline. pullMissingBookFilesAndCovers
                 // will fail gracefully (non-fatal) if the address is stale.
             }
-            await pullMissingBookFiles(peerDeviceId, responderLog);
+            await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, responderLog);
         }
 
         setStatus("synced", summary);

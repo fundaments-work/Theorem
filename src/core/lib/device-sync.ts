@@ -212,3 +212,21 @@ export async function pullBookFiles(
     return invoke<FileTransferResult>("pull_book_files", { peerDeviceId, bookIds });
 }
 
+export interface CoverTransferResult {
+    transferred: string[];
+    failed: Array<{ book_id: string; error: string }>;
+    unavailable: string[];
+}
+
+/**
+ * Pull cover images for books from a paired peer device.
+ * Covers are fetched in parallel and saved to the SQLite covers table.
+ */
+export async function pullBookCovers(
+    peerDeviceId: string,
+    bookIds: string[],
+): Promise<CoverTransferResult> {
+    requireTauri("pullBookCovers");
+    return invoke<CoverTransferResult>("pull_book_covers", { peerDeviceId, bookIds });
+}
+
