@@ -306,8 +306,10 @@ pub fn generate_nonce() -> [u8; 32] {
 
 // ─── Chunked Encryption for File Transfer ───
 
-/// The chunk size for file transfers: 1 MiB.
-pub const FILE_CHUNK_SIZE: usize = 1024 * 1024;
+/// The chunk size for file transfers: 4 MiB.
+/// Larger chunks reduce the number of encrypt/decrypt round-trips and
+/// base64-encoding overhead per file (a 20 MB EPUB → 5 chunks instead of 20).
+pub const FILE_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
 /// Encrypt raw data into individually-encrypted 1MB chunks.
 /// Each chunk gets its own random nonce and AEAD tag.
