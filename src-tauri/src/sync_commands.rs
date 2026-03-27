@@ -8,9 +8,11 @@ use crate::sync_server::{
 };
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use futures::stream::{self, StreamExt};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
@@ -724,10 +726,11 @@ pub struct FileTransferError {
 /// Pull book files from a paired peer device.
 ///
 /// 1. Queries file availability for the given book IDs.
-/// 2. For each available book: pulls the encrypted file, decrypts chunks,
-///    verifies SHA-256 integrity, and saves to local `book-cache/`.
-/// 3. Emits `sync-file-progress` events for frontend progress tracking.
-/// 4. Returns which books succeeded, failed, or were unavailable.
+/// 2. Pulls available books **in parallel** (up to 4 concurrent transfers).
+///    Each file is encrypted in chunks, decrypted, SHA-256 verified, and saved.
+/// 3. Skips files that already exist locally with matching size.
+/// 4. Emits `sync-file-progress` events for frontend progress tracking.
+/// 5. Returns which books succeeded, failed, or were unavailable.
 #[tauri::command]
 pub async fn pull_book_files(
     app: tauri::AppHandle,
@@ -758,7 +761,13 @@ pub async fn pull_book_files(
         .map_err(|_| "Key length invalid".to_string())?;
     let my_device_id = &sync_state.server_state.identity.device_id;
 
-    let client = reqwest::Client::new();
+    // Shared HTTP client with connection pooling for parallel transfers.
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(8)
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+
     let base_url = format!("http://{ip}:{port}/sync");
 
     // 1. Check file availability.
@@ -821,49 +830,101 @@ pub async fn pull_book_files(
     std::fs::create_dir_all(&cache_dir)
         .map_err(|e| format!("Failed to create book cache dir: {e}"))?;
 
+    // Shared atomic counters for progress tracking across parallel tasks.
+    let completed_files = Arc::new(AtomicU64::new(0));
+    let completed_bytes = Arc::new(AtomicU64::new(0));
+
+    // 2. Pull files in parallel with bounded concurrency (up to 4 concurrent).
+    let results: Vec<(String, Result<u64, String>)> =
+        stream::iter(availability.available_ids.iter().cloned())
+            .map(|book_id| {
+                let client = client.clone();
+                let base_url = base_url.clone();
+                let my_device_id = my_device_id.clone();
+                let cache_dir = cache_dir.clone();
+                let app = app.clone();
+                let completed_files = completed_files.clone();
+                let completed_bytes = completed_bytes.clone();
+                let total_files = total_files;
+                let total_bytes = total_bytes;
+                let file_size = availability.file_sizes.get(&book_id).copied().unwrap_or(0);
+
+                async move {
+                    // Skip if the file already exists locally with matching size.
+                    let local_path = cache_dir.join(format!("{book_id}.book"));
+                    if let Ok(meta) = tokio::fs::metadata(&local_path).await {
+                        if meta.is_file() && meta.len() > 0 && meta.len() == file_size {
+                            // File already exists with matching size — skip download.
+                            let new_files = completed_files.fetch_add(1, Ordering::Relaxed) + 1;
+                            let new_bytes =
+                                completed_bytes.fetch_add(file_size, Ordering::Relaxed) + file_size;
+                            let _ = app.emit(
+                                "sync-file-progress",
+                                serde_json::json!({
+                                    "phase": "transferring",
+                                    "total_files": total_files,
+                                    "total_bytes": total_bytes,
+                                    "completed_files": new_files,
+                                    "completed_bytes": new_bytes,
+                                    "current_book_id": book_id,
+                                    "skipped": true,
+                                })
+                                .to_string(),
+                            );
+                            return (book_id, Ok(file_size));
+                        }
+                    }
+
+                    let result = pull_single_file(
+                        &client,
+                        &base_url,
+                        &my_device_id,
+                        &sym_key,
+                        &book_id,
+                        &cache_dir,
+                    )
+                    .await;
+
+                    let bytes_done = match &result {
+                        Ok(b) => *b,
+                        Err(_) => 0,
+                    };
+
+                    let new_files = completed_files.fetch_add(1, Ordering::Relaxed) + 1;
+                    let new_bytes =
+                        completed_bytes.fetch_add(bytes_done, Ordering::Relaxed) + bytes_done;
+
+                    let _ = app.emit(
+                        "sync-file-progress",
+                        serde_json::json!({
+                            "phase": "transferring",
+                            "total_files": total_files,
+                            "total_bytes": total_bytes,
+                            "completed_files": new_files,
+                            "completed_bytes": new_bytes,
+                            "current_book_id": book_id,
+                        })
+                        .to_string(),
+                    );
+
+                    (book_id, result)
+                }
+            })
+            .buffer_unordered(4) // ≤4 concurrent file pulls
+            .collect()
+            .await;
+
+    // Partition results.
     let mut transferred: Vec<String> = Vec::new();
     let mut failed: Vec<FileTransferError> = Vec::new();
-    let mut completed_bytes: u64 = 0;
-
-    // 2. Pull each available file one at a time.
-    for (file_index, book_id) in availability.available_ids.iter().enumerate() {
-        let result = pull_single_file(
-            &client,
-            &base_url,
-            my_device_id,
-            &sym_key,
-            book_id,
-            &cache_dir,
-        )
-        .await;
-
+    for (book_id, result) in results {
         match result {
-            Ok(bytes_written) => {
-                completed_bytes += bytes_written;
-                transferred.push(book_id.clone());
-            }
-            Err(e) => {
-                failed.push(FileTransferError {
-                    book_id: book_id.clone(),
-                    error: e,
-                });
-            }
+            Ok(_) => transferred.push(book_id),
+            Err(e) => failed.push(FileTransferError { book_id, error: e }),
         }
-
-        // Emit progress after each file.
-        let _ = app.emit(
-            "sync-file-progress",
-            serde_json::json!({
-                "phase": "transferring",
-                "total_files": total_files,
-                "total_bytes": total_bytes,
-                "completed_files": file_index + 1,
-                "completed_bytes": completed_bytes,
-                "current_book_id": book_id,
-            })
-            .to_string(),
-        );
     }
+
+    let final_bytes = completed_bytes.load(Ordering::Relaxed);
 
     // Emit completion.
     let _ = app.emit(
@@ -873,7 +934,7 @@ pub async fn pull_book_files(
             "total_files": total_files,
             "total_bytes": total_bytes,
             "completed_files": transferred.len(),
-            "completed_bytes": completed_bytes,
+            "completed_bytes": final_bytes,
             "failed_count": failed.len(),
         })
         .to_string(),
@@ -985,4 +1046,184 @@ async fn pull_single_file(
     .map_err(|e| format!("Failed to write book file: {e}"))?;
 
     Ok(bytes_written)
+}
+
+// ─── Cover Transfer ───
+
+/// Result of a cover transfer operation, returned to the frontend.
+#[derive(serde::Serialize, Clone, Debug)]
+pub struct CoverTransferResult {
+    /// Book IDs whose covers were successfully transferred.
+    pub transferred: Vec<String>,
+    /// Book IDs whose covers failed to transfer.
+    pub failed: Vec<FileTransferError>,
+    /// Book IDs that the peer did not have covers for.
+    pub unavailable: Vec<String>,
+}
+
+/// Pull cover images from a paired peer device.
+///
+/// Uses the `/sync/file/cover` endpoint to fetch data_url cover images.
+/// Fetches covers in parallel (up to 6 concurrent, since they're small).
+/// Saves each cover into the local SQLite `covers` table.
+#[tauri::command]
+pub async fn pull_book_covers(
+    app: tauri::AppHandle,
+    peer_device_id: String,
+    book_ids: Vec<String>,
+) -> Result<CoverTransferResult, String> {
+    let sync_state = app.state::<SyncAppState>();
+
+    let devices = sync_state.server_state.paired_devices.lock().await;
+    let peer = devices
+        .get(&peer_device_id)
+        .cloned()
+        .ok_or("Peer not paired")?;
+    drop(devices);
+
+    let ip = &peer.last_ip;
+    let port = peer.last_port;
+    if ip.is_empty() || port == 0 {
+        return Err("Peer address unknown.".to_string());
+    }
+
+    let sym_key_vec = BASE64
+        .decode(&peer.symmetric_key_b64)
+        .map_err(|e| format!("Decode key failed: {e}"))?;
+    let sym_key: [u8; 32] = sym_key_vec
+        .try_into()
+        .map_err(|_| "Key length invalid".to_string())?;
+    let my_device_id = sync_state.server_state.identity.device_id.clone();
+
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(8)
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+
+    let base_url = format!("http://{ip}:{port}/sync");
+    let app_data_dir = sync_state.server_state.app_data_dir.clone();
+
+    // Pull covers in parallel (up to 6 concurrent — covers are small).
+    let results: Vec<(String, Result<(), String>)> = stream::iter(book_ids.into_iter())
+        .map(|book_id| {
+            let client = client.clone();
+            let base_url = base_url.clone();
+            let my_device_id = my_device_id.clone();
+            let app_data_dir = app_data_dir.clone();
+
+            async move {
+                let result = pull_single_cover(
+                    &client,
+                    &base_url,
+                    &my_device_id,
+                    &sym_key,
+                    &book_id,
+                    &app_data_dir,
+                )
+                .await;
+                (book_id, result)
+            }
+        })
+        .buffer_unordered(6)
+        .collect()
+        .await;
+
+    let mut transferred = Vec::new();
+    let mut failed = Vec::new();
+    let mut unavailable_list = Vec::new();
+
+    for (book_id, result) in results {
+        match result {
+            Ok(()) => transferred.push(book_id),
+            Err(e) if e.contains("not available") => unavailable_list.push(book_id),
+            Err(e) => failed.push(FileTransferError { book_id, error: e }),
+        }
+    }
+
+    Ok(CoverTransferResult {
+        transferred,
+        failed,
+        unavailable: unavailable_list,
+    })
+}
+
+/// Pull a single cover image from the peer and save to SQLite.
+async fn pull_single_cover(
+    client: &reqwest::Client,
+    base_url: &str,
+    my_device_id: &str,
+    sym_key: &[u8; 32],
+    book_id: &str,
+    app_data_dir: &Path,
+) -> Result<(), String> {
+    let cover_req = CoverPullRequest {
+        book_id: book_id.to_string(),
+    };
+    let enc_req = encrypt_request(my_device_id, sym_key, &cover_req)?;
+
+    let res = client
+        .post(format!("{base_url}/file/cover"))
+        .json(&enc_req)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+        .map_err(|e| format!("Cover pull request failed: {e}"))?;
+
+    if !res.status().is_success() {
+        return Err(format!("Cover pull rejected: {}", res.status()));
+    }
+
+    let enc_res: crate::sync_crypto::EncryptedPayload = res
+        .json()
+        .await
+        .map_err(|e| format!("Cover response parse fail: {e}"))?;
+
+    let cover_response: CoverPullResponse = decrypt_response(sym_key, &enc_res).await?;
+
+    if !cover_response.available {
+        return Err("Cover not available on peer".to_string());
+    }
+
+    let data_url = cover_response
+        .data_url
+        .ok_or("Cover response missing data_url")?;
+
+    if data_url.is_empty() {
+        return Err("Cover data_url is empty".to_string());
+    }
+
+    // Save to SQLite covers table.
+    let db_path = app_data_dir.join("theorem.db");
+    let book_id_owned = book_id.to_string();
+    tokio::task::spawn_blocking(move || {
+        let connection = rusqlite::Connection::open(&db_path)
+            .map_err(|e| format!("Failed to open SQLite for cover save: {e}"))?;
+
+        // Ensure covers table exists.
+        connection
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS covers (
+                    book_id TEXT PRIMARY KEY,
+                    data_url TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+                )",
+            )
+            .map_err(|e| format!("Failed to ensure covers table: {e}"))?;
+
+        connection
+            .execute(
+                r#"INSERT INTO covers (book_id, data_url, updated_at)
+                   VALUES (?1, ?2, unixepoch())
+                   ON CONFLICT(book_id) DO UPDATE SET
+                       data_url = excluded.data_url,
+                       updated_at = unixepoch()"#,
+                rusqlite::params![book_id_owned, data_url],
+            )
+            .map_err(|e| format!("Failed to save cover: {e}"))?;
+
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| format!("Cover save task failed: {e}"))?
 }

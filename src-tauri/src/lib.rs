@@ -748,7 +748,8 @@ pub fn run() {
             sync_commands::update_peer_address,
             sync_commands::discover_peer,
             sync_commands::initiate_sync,
-            sync_commands::pull_book_files
+            sync_commands::pull_book_files,
+            sync_commands::pull_book_covers
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
