@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Sync foliate-js submodule to runtime directory
+# Copies only required files and patches PDF.js imports
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+SUBMODULE_DIR="$REPO_ROOT/src/features/reader/foliate-js"
+RUNTIME_DIR="$REPO_ROOT/src/features/reader/foliate-js-runtime"
+VENDOR_DIR="$RUNTIME_DIR/vendor"
+
+echo "Syncing foliate-js from submodule..."
+
+# Clean and create runtime directory
+rm -rf "$RUNTIME_DIR"
+mkdir -p "$RUNTIME_DIR"
+mkdir -p "$VENDOR_DIR"
+
+# Files to copy from submodule root
+CORE_FILES=(
+    "view.js"
+    "dict.js"
+    "epub.js"
+    "comic-book.js"
+    "fb2.js"
+    "mobi.js"
+    "paginator.js"
+    "fixed-layout.js"
+    "epubcfi.js"
+    "progress.js"
+    "overlayer.js"
+    "text-walker.js"
+    "search.js"
+    "tts.js"
+    "types.d.ts"
+    "LICENSE"
+)
+
+echo "Copying core files..."
+for file in "${CORE_FILES[@]}"; do
+    if [[ -f "$SUBMODULE_DIR/$file" ]]; then
+        cp "$SUBMODULE_DIR/$file" "$RUNTIME_DIR/"
+        echo "  ✓ $file"
+    else
+        echo "  ✗ $file (not found)"
+    fi
+done
+
+# Copy vendor dependencies (zip.js, fflate.js) - NOT pdfjs
+echo "Copying vendor dependencies..."
+cp "$SUBMODULE_DIR/vendor/zip.js" "$VENDOR_DIR/"
+cp "$SUBMODULE_DIR/vendor/fflate.js" "$VENDOR_DIR/"
+echo "  ✓ vendor/zip.js"
+echo "  ✓ vendor/fflate.js"
+
+# Patch imports in view.js to use pdfjs-dist instead of vendored PDF.js
+echo "Patching PDF.js imports..."
+VIEW_FILE="$RUNTIME_DIR/view.js"
+
+# Replace the PDF.js import in view.js
+# Original: await import('./vendor/pdfjs/pdf.mjs')
+# New: import * as pdfjsLib from 'pdfjs-dist'
+sed -i "s|await import('./vendor/pdfjs/pdf.mjs')|import('pdfjs-dist')|g" "$VIEW_FILE"
+
+# Also need to handle the PDF.js usage in fixed-layout.js if it imports pdfjs
+# Check fixed-layout.js for PDF.js usage
+if grep -q "vendor/pdfjs" "$RUNTIME_DIR/fixed-layout.js" 2>/dev/null; then
+    echo "Patching fixed-layout.js PDF.js imports..."
+    sed -i "s|await import('./vendor/pdfjs/pdf.mjs')|import('pdfjs-dist')|g" "$RUNTIME_DIR/fixed-layout.js"
+fi
+
+# Verify no remaining references to vendor/pdfjs
+if grep -r "vendor/pdfjs" "$RUNTIME_DIR" --include="*.js" 2>/dev/null; then
+    echo "WARNING: Found remaining vendor/pdfjs references:"
+    grep -r "vendor/pdfjs" "$RUNTIME_DIR" --include="*.js"
+else
+    echo "  ✓ No vendor/pdfjs references remain"
+fi
+
+echo "Sync complete. Runtime at: $RUNTIME_DIR"
+echo "Size: $(du -sh "$RUNTIME_DIR" | cut -f1)"
