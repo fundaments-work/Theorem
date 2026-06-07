@@ -354,7 +354,7 @@ export async function extractMetadata(
     }
 
     try {
-        const { makeBook } = await import('../../features/reader/foliate-js/view.js');
+        const { makeBook } = await import('../../features/reader/foliate-js-runtime/view.js');
         const mimeType = getMimeType(format);
 
         let bookInput: File | Blob;

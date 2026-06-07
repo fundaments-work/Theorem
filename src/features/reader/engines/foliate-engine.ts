@@ -194,8 +194,8 @@ export class FoliateEngine {
         }
 
         try {
-            // Dynamically import foliate-js
-            const { makeBook } = await import('../foliate-js/view.js');
+            // Dynamically import foliate-js runtime
+            const { makeBook } = await import('../foliate-js-runtime/view.js');
 
             // Open book - ensure we pass a File object with name for foliate-js
             let file: File | Blob;
