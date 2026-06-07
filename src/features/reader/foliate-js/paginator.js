@@ -959,26 +959,12 @@ export class Paginator extends HTMLElement {
 
         const index = this.#index
         const detail = { reason, range, index }
-        if (this.scrolled) {
-            // Clamp scrolled fraction to [0, 1]
-            const rawFraction = this.viewSize > 0 ? this.start / this.viewSize : 0
-            detail.fraction = Math.max(0, Math.min(1, rawFraction))
-        }
+        if (this.scrolled) detail.fraction = this.start / this.viewSize
         else if (this.pages > 0) {
             const { page, pages } = this
             this.#header.style.visibility = page > 1 ? 'visible' : 'hidden'
-            // Prevent division by zero and clamp to valid range [0, 1]
-            // pages - 2 accounts for the padding pages at start and end
-            const denominator = pages - 2
-            if (denominator > 0) {
-                const rawFraction = (page - 1) / denominator
-                detail.fraction = Math.max(0, Math.min(1, rawFraction))
-                detail.size = 1 / denominator
-            } else {
-                // Very short section with 2 or fewer pages - treat as single page at fraction 0
-                detail.fraction = 0
-                detail.size = 1
-            }
+            detail.fraction = (page - 1) / (pages - 2)
+            detail.size = 1 / (pages - 2)
         }
         this.dispatchEvent(new CustomEvent('relocate', { detail }))
     }
