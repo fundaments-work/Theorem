@@ -56,3 +56,4 @@ PDFIUM_IMPLEMENTATION_STATUS.md
 PDFIUM_INTEGRATION_GUIDE.md
 QUICK_FIX.md
 setup-pdfium.sh
+src/features/reader/foliate-js-runtime/
