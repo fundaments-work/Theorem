@@ -102,6 +102,7 @@ export class FoliateEngine {
     private cfiCacheMaxSize = 100;
     private searchSectionCache: ReaderSearchSectionCacheItem[] | null = null;
     private searchCacheBookRef: unknown = null;
+    private _awaitingInitialRelocate = false;
 
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
@@ -127,7 +128,15 @@ export class FoliateEngine {
     }
 
     private getMinZoomLevelForFlow(flow: ReadingFlow = this.flow): number {
-        return flow === 'scroll' ? MIN_READER_ZOOM_LEVEL : MIN_PAGED_READER_ZOOM_LEVEL;
+        if (flow === 'scroll') {
+            return MIN_READER_ZOOM_LEVEL;
+        }
+        // For paged reflowable content, allow zoom down to 0.5 (50%) for smaller text
+        // For fixed-layout in paged mode, keep minimum at 1.0 (fit-page)
+        if (this.isFixedLayoutFormat) {
+            return MIN_PAGED_READER_ZOOM_LEVEL;
+        }
+        return MIN_READER_ZOOM_LEVEL;
     }
 
     private clampZoomLevel(level: number, flow: ReadingFlow = this.flow): number {
@@ -137,33 +146,33 @@ export class FoliateEngine {
         );
     }
 
-    private shouldUseTransformZoom(): boolean {
-        if (typeof window === 'undefined') {
-            return false;
-        }
-
-        const isMobileViewport = window.matchMedia('(max-width: 768px)').matches;
-        return isMobileViewport && this.flow !== 'scroll' && !this.isFixedLayoutFormat;
-    }
-
     private applyZoomToDocument(doc: Document): void {
         const root = doc.documentElement;
         if (!root) {
             return;
         }
 
-        if (this.shouldUseTransformZoom()) {
-            root.style.zoom = '1';
-            root.style.transformOrigin = 'top left';
-            root.style.transform = `scale(${this.zoom_level})`;
-            root.style.width = `${100 / this.zoom_level}%`;
-            return;
+        if (this.isFixedLayoutFormat) {
+            root.style.removeProperty('transform');
+            root.style.removeProperty('transform-origin');
+            root.style.removeProperty('width');
+            root.style.removeProperty('zoom');
+        } else {
+            root.style.removeProperty('transform');
+            root.style.removeProperty('transform-origin');
+            root.style.removeProperty('width');
+            root.style.removeProperty('zoom');
+            root.style.removeProperty('font-size');
+            
+            // Set inline zoom and font-size so paginator layout calculates perfectly
+            // before the async CSS stylesheet arrives.
+            const currentSettings = getCurrentReaderSettings();
+            const baseFontSize = currentSettings?.fontSize ?? 16;
+            const effectiveFontSize = baseFontSize * this.zoom_level;
+            
+            root.style.setProperty('--reader-zoom', String(this.zoom_level));
+            root.style.setProperty('font-size', `${effectiveFontSize}px`, 'important');
         }
-
-        root.style.removeProperty('transform');
-        root.style.removeProperty('transform-origin');
-        root.style.removeProperty('width');
-        root.style.zoom = String(this.zoom_level);
     }
 
     async init(container: HTMLElement): Promise<void> {
@@ -251,12 +260,23 @@ export class FoliateEngine {
             this.flow = flow;
             this.zoom_level = this.clampZoomLevel(zoom / 100, this.flow);
             this._marginValue = margins;
+            console.debug('[FoliateEngine] Initial settings applied', {
+                layout: this.layout,
+                flow: this.flow,
+                zoom_level: this.zoom_level,
+                zoom_input: zoom,
+            });
 
             // Apply settings synchronously where possible
             this.applySettingsSync();
             
             // Async settings application
             await this.applySettingsAsync();
+            
+            // Ensure a final synchronized render now that async CSS is applied
+            // This guarantees columns and font sizes are correct at startup.
+            this.applyZoomSync();
+            console.debug('[FoliateEngine] Initial applyZoomSync completed before navigation');
 
             // Extract metadata and TOC
             const metadata = this.extractMetadata();
@@ -266,6 +286,16 @@ export class FoliateEngine {
             console.debug('[FoliateEngine] Initial navigation:', {
                 hasInitialLocation: !!initialLocation,
                 initialLocation: initialLocation?.substring(0, 50),
+            });
+            
+            // Set flag BEFORE navigation - relocate fires synchronously during goTo()
+            this._awaitingInitialRelocate = true;
+            console.debug('[FoliateEngine] Set _awaitingInitialRelocate=true before navigation', {
+                zoom_level: this.zoom_level,
+                flow: this.flow,
+                layout: this.layout,
+                isFixedLayoutFormat: this.isFixedLayoutFormat,
+                initialLocation: initialLocation?.substring(0, 50) || 'none',
             });
             
             if (initialLocation) {
@@ -337,6 +367,7 @@ export class FoliateEngine {
         // See foliate-js view.js #onRelocate: this.lastLocation = { ...progress, tocItem, pageItem, cfi, range }
         this.view.addEventListener('relocate', (e: any) => {
             const detail = e.detail;
+            console.debug('[FoliateEngine] relocate handler START', { _awaitingInitialRelocate: this._awaitingInitialRelocate });
             
             // Use CFI directly from event detail (already calculated by view.js)
             // The view.js getCFI is called in #onRelocate and included in lastLocation
@@ -412,6 +443,27 @@ export class FoliateEngine {
             };
 
             this.currentLocation = location;
+            
+            // After initial navigation, wait for first relocate then apply full settings update
+            if (this._awaitingInitialRelocate) {
+                this._awaitingInitialRelocate = false;
+                console.debug('[FoliateEngine] Initial relocate received, scheduling full settings update', {
+                    zoom_level: this.zoom_level,
+                    flow: this.flow,
+                    layout: this.layout,
+                    isFixedLayoutFormat: this.isFixedLayoutFormat,
+                    hasRenderer: !!this.view?.renderer,
+                    contentsCount: this.view?.renderer?.getContents?.()?.length ?? 0,
+                });
+                this.scheduleSettingsUpdate();
+            } else {
+                console.debug('[FoliateEngine] Relocate (not initial)', {
+                    zoom_level: this.zoom_level,
+                    flow: this.flow,
+                    layout: this.layout,
+                });
+            }
+
             this.options.onLocationChange?.(location);
         });
 
@@ -670,11 +722,6 @@ export class FoliateEngine {
         // These can be applied synchronously
         renderer.setAttribute('flow', this.flow === 'scroll' ? 'scrolled' : 'paginated');
         renderer.setAttribute('gap', '5%');
-        renderer.setAttribute(
-            'max-inline-size',
-            `${currentSettings?.fontSize ? Math.max(480, currentSettings.fontSize * 40) : 720}px`,
-        );
-        renderer.setAttribute('max-block-size', '800px');
         // Auto layout: use double columns for paged mode on larger screens, single for scroll or small screens
         const isMobileViewport = typeof window !== 'undefined'
             && window.matchMedia('(max-width: 768px)').matches;
@@ -687,11 +734,27 @@ export class FoliateEngine {
                     : this.flow === 'scroll'
                         ? 1
                         : 2;
-        renderer.setAttribute('max-column-count', columnCount);
+        
+        // Set column count BEFORE inline-size because setting inline-size synchronously triggers a render
+        renderer.setAttribute('max-column-count', String(columnCount));
+        
+        renderer.setAttribute(
+            'max-inline-size',
+            `${currentSettings?.fontSize ? Math.max(480, currentSettings.fontSize * 40) : 720}px`,
+        );
+        renderer.setAttribute('max-block-size', '800px');
         if (currentSettings?.enableAnimations) {
             renderer.setAttribute('animated', '');
         } else {
             renderer.removeAttribute('animated');
+        }
+
+        // Apply zoom for fixed-layout formats (CBZ, etc.) via renderer attribute
+        if (this.isFixedLayoutFormat && this.flow !== 'scroll') {
+            const zoomValue = this.zoom_level === 1.0 ? 'fit-page' : this.zoom_level;
+            renderer.setAttribute('zoom', String(zoomValue));
+        } else {
+            renderer.removeAttribute('zoom');
         }
         
         // Apply zoom synchronously to existing contents
@@ -797,7 +860,7 @@ export class FoliateEngine {
                 
                 @media screen {
                     html {
-                        font-size: ${currentSettings.fontSize}px !important;
+                        font-size: calc(${currentSettings.fontSize}px * var(--reader-zoom, 1)) !important;
                         line-height: ${currentSettings.lineHeight} !important;
                         color: ${colors.fg} !important;
                         background: ${colors.bg} !important;
@@ -983,6 +1046,15 @@ export class FoliateEngine {
             this.zoom_level = clampedZoom;
             this.applyZoomSync();
         }
+        // For fixed-layout, update zoom attribute when flow changes
+        if (this.isFixedLayoutFormat && this.view?.renderer) {
+            if (this.flow !== 'scroll') {
+                const zoomValue = this.zoom_level === 1.0 ? 'fit-page' : this.zoom_level;
+                this.view.renderer.setAttribute('zoom', String(zoomValue));
+            } else {
+                this.view.renderer.removeAttribute('zoom');
+            }
+        }
         this.scheduleSettingsUpdate();
     }
 
@@ -1019,7 +1091,17 @@ export class FoliateEngine {
      * Synchronous zoom application - instant visual feedback
      */
     private applyZoomSync(): void {
-        if (!this.view?.renderer) return;
+        console.debug('[FoliateEngine] applyZoomSync called', {
+            zoom_level: this.zoom_level,
+            flow: this.flow,
+            layout: this.layout,
+            hasRenderer: !!this.view?.renderer,
+            contentsCount: this.view?.renderer?.getContents?.()?.length ?? 0,
+        });
+        if (!this.view?.renderer) {
+            console.warn('[FoliateEngine] applyZoomSync: no renderer');
+            return;
+        }
 
         const contents = this.view.renderer.getContents?.() || [];
         for (const content of contents) {
@@ -1028,6 +1110,11 @@ export class FoliateEngine {
                 this.applyZoomToDocument(doc);
             }
         }
+        
+        if (!this.isFixedLayoutFormat && typeof this.view.renderer.render === 'function') {
+            this.view.renderer.render();
+        }
+        console.debug('[FoliateEngine] applyZoomSync completed');
     }
 
     setMargins(margins: number): void {
@@ -1052,6 +1139,15 @@ export class FoliateEngine {
         // Apply zoom immediately if changed
         if (settings.zoom) {
             this.applyZoomSync();
+        }
+        // For fixed-layout, update zoom attribute
+        if (this.isFixedLayoutFormat && this.view?.renderer && settings.zoom) {
+            if (this.flow !== 'scroll') {
+                const zoomValue = this.zoom_level === 1.0 ? 'fit-page' : this.zoom_level;
+                this.view.renderer.setAttribute('zoom', String(zoomValue));
+            } else {
+                this.view.renderer.removeAttribute('zoom');
+            }
         }
     }
 
