@@ -1,7 +1,10 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./shell";
+import { initSentry } from "./core/lib/sentry";
 import "./index.css";
+
+initSentry(import.meta.env.VITE_SENTRY_DSN as string | undefined, import.meta.env.MODE);
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {
