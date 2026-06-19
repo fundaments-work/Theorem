@@ -18,6 +18,10 @@ use tauri::ipc::Response;
 use tauri::Emitter;
 use tauri::Manager;
 
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::WindowEvent;
+
 #[derive(Default)]
 struct PendingOpenFiles(Mutex<Vec<String>>);
 
@@ -657,6 +661,13 @@ pub fn run() {
 
     let builder = tauri::Builder::default()
         .manage(PendingOpenFiles::default())
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // Hide to tray instead of closing — user must use tray "Quit"
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
@@ -700,6 +711,50 @@ pub fn run() {
             let startup_args: Vec<String> = std::env::args().skip(1).collect();
             let open_paths = collect_open_paths(startup_args, None);
             enqueue_open_paths(app.handle(), open_paths, false);
+
+            // ── System tray (desktop only) ──
+            #[cfg(desktop)]
+            {
+                let show = MenuItemBuilder::with_id("show", "Show Theorem").build(app)?;
+                let sync_now = MenuItemBuilder::with_id("sync_now", "Sync Now").build(app)?;
+                let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+
+                let menu = MenuBuilder::new(app)
+                    .item(&show)
+                    .item(&sync_now)
+                    .separator()
+                    .item(&quit)
+                    .build()?;
+
+                TrayIconBuilder::new()
+                    .menu(&menu)
+                    .tooltip("Theorem")
+                    .on_menu_event(|app, event| match event.id().as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "sync_now" => {
+                            let _ = app.emit("tray-sync-now", ());
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click { .. } = event {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    })
+                    .build(app)?;
+            }
 
             Ok(())
         })
@@ -749,8 +804,22 @@ pub fn run() {
             sync_commands::discover_peer,
             sync_commands::initiate_sync,
             sync_commands::pull_book_files,
-            sync_commands::pull_book_covers
+            sync_commands::pull_book_covers,
+            hide_to_tray
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Hide the main window to the system tray.
+/// The app continues running in the background with the sync server alive.
+#[tauri::command]
+fn hide_to_tray(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .hide()
+            .map_err(|e| format!("Failed to hide window: {e}"))
+    } else {
+        Ok(())
+    }
 }
