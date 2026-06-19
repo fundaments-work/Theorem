@@ -368,7 +368,7 @@ export function AppTitlebar({
                             aria-pressed={isQuickSyncing || deviceSyncStatus === "syncing"}
                             aria-label="Sync devices"
                         >
-                            <span className="relative">
+                            <span className="relative inline-flex">
                                 <ArrowDownUp
                                     className={cn(
                                         "w-5 h-5",
@@ -378,7 +378,7 @@ export function AppTitlebar({
                                 {(deviceSyncStatus === "synced" || deviceSyncStatus === "error") && (
                                     <span
                                         className={cn(
-                                            "absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-[var(--color-surface)]",
+                                            "absolute -bottom-px -right-px w-2.5 h-2.5 rounded-full ring-2 ring-[var(--color-surface)]",
                                             deviceSyncStatus === "synced" && "bg-green-500",
                                             deviceSyncStatus === "error" && "bg-red-500",
                                         )}
