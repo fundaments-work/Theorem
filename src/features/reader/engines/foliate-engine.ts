@@ -1050,7 +1050,7 @@ export class FoliateEngine {
     private reassertColumnAttributes(): void {
         if (this._isSettingColumns) return;
         const renderer = this.view?.renderer;
-        if (!renderer) return;
+        if (!renderer || this.isFixedLayoutFormat) return;
 
         const currentSettings = getCurrentReaderSettings();
         const isMobileViewport = typeof window !== 'undefined'
@@ -1068,6 +1068,13 @@ export class FoliateEngine {
                 'max-inline-size',
                 `${currentSettings?.fontSize ? Math.max(480, currentSettings.fontSize * 40) : 720}px`,
             );
+            // Follow up with a direct render call — the same path that zoom
+            // uses to reliably fix column layout. The attribute observer's
+            // render() may fire during setAttribute too, but this ensures
+            // #beforeRender runs with both attributes updated.
+            if (typeof renderer.render === 'function') {
+                renderer.render();
+            }
         } finally {
             this._isSettingColumns = false;
         }
