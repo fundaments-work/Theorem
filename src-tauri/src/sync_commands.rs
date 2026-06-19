@@ -537,28 +537,145 @@ pub async fn initiate_sync(
     drop(sync_data_guard);
 
     let client = reqwest::Client::new();
-    let base_url = format!("http://{ip}:{port}/sync");
 
-    // 3. POST /manifest
-    let req_manifest = encrypt_request(my_device_id, &sym_key, &local_manifest)?;
-    let res = client
-        .post(format!("{base_url}/manifest"))
-        .json(&req_manifest)
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await
-        .map_err(|e| format!("Manifest request failed: {e}"))?;
+    // Helper to perform manifest exchange and return (plan, base_url, peer_ip, peer_port)
+    async fn do_manifest_exchange(
+        client: &reqwest::Client,
+        peer_ip: &str,
+        peer_port: u16,
+        my_device_id: &str,
+        sym_key: &[u8; 32],
+        local_manifest: &SyncManifest,
+    ) -> Result<(SyncPlan, String), String> {
+        let base_url = format!("http://{peer_ip}:{peer_port}/sync");
+        let req_manifest = encrypt_request(my_device_id, sym_key, local_manifest)?;
+        let res = client
+            .post(format!("{base_url}/manifest"))
+            .json(&req_manifest)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+            .map_err(|e| format!("Manifest request failed: {e}"))?;
 
-    if !res.status().is_success() {
-        return Err(format!("Manifest rejected: {}", res.status()));
+        if !res.status().is_success() {
+            return Err(format!("Manifest rejected: {}", res.status()));
+        }
+
+        let enc_res: crate::sync_crypto::EncryptedPayload = res
+            .json()
+            .await
+            .map_err(|e| format!("Manifest response parse fail: {e}"))?;
+
+        let plan = decrypt_response(sym_key, &enc_res).await?;
+        Ok((plan, base_url))
     }
 
-    let enc_res: crate::sync_crypto::EncryptedPayload = res
-        .json()
-        .await
-        .map_err(|e| format!("Manifest response parse fail: {e}"))?;
+    // Try stored address first
+    let (plan, base_url) = match do_manifest_exchange(
+        &client,
+        ip,
+        port,
+        my_device_id,
+        &sym_key,
+        &local_manifest,
+    )
+    .await
+    {
+        Ok(result) => (result.0, result.1),
+        Err(e) => {
+            // If connection refused or timeout, try discovering peer's current port
+            let is_connection_error = e.contains("Connection refused")
+                || e.contains("connect error")
+                || e.contains("timeout")
+                || e.contains("Connection reset")
+                || e.contains("No route to host");
+            if is_connection_error {
+                eprintln!(
+                    "[sync] Stored address failed ({}), attempting discovery...",
+                    e
+                );
+                let sync_state = app.state::<SyncAppState>();
+                let mut devices = sync_state.server_state.paired_devices.lock().await;
+                let (peer_ip, peer_port) = {
+                    if let Some(peer) = devices.get_mut(&peer_device_id) {
+                        (peer.last_ip.clone(), peer.last_port)
+                    } else {
+                        return Err(e);
+                    }
+                };
+                if peer_ip.is_empty() {
+                    return Err(e);
+                }
 
-    let plan: SyncPlan = decrypt_response(&sym_key, &enc_res).await?;
+                // Try to discover peer at its last-known IP
+                let discovery_client = reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_millis(1500))
+                    .build()
+                    .map_err(|e| format!("HTTP client error: {e}"))?;
+
+                let mut candidates: Vec<u16> = Vec::new();
+                if peer_port > 0 {
+                    candidates.push(peer_port);
+                }
+                if peer_port > 2 {
+                    for offset in 1..=3u16 {
+                        let below = peer_port.saturating_sub(offset);
+                        let above = peer_port.saturating_add(offset);
+                        if below > 0 && !candidates.contains(&below) {
+                            candidates.push(below);
+                        }
+                        if above > 0 && !candidates.contains(&above) {
+                            candidates.push(above);
+                        }
+                    }
+                }
+
+                let mut discovered_port: Option<u16> = None;
+                for candidate_port in &candidates {
+                    let health_url = format!("http://{}:{}/health", peer_ip, candidate_port);
+                    if let Ok(res) = discovery_client.get(&health_url).send().await {
+                        if res.status().is_success() {
+                            if let Ok(health) =
+                                res.json::<crate::sync_protocol::HealthResponse>().await
+                            {
+                                if health.device_id == peer_device_id {
+                                    discovered_port = Some(*candidate_port);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Some(new_port) = discovered_port {
+                    // Update stored port
+                    if let Some(peer) = devices.get_mut(&peer_device_id) {
+                        peer.last_port = new_port;
+                    }
+                    let _ = crate::sync_server::save_paired_devices(
+                        &sync_state.server_state.app_data_dir,
+                        &devices,
+                    );
+                    drop(devices);
+                    eprintln!("[sync] Peer discovered at {}:{}", peer_ip, new_port);
+                    do_manifest_exchange(
+                        &client,
+                        &peer_ip,
+                        new_port,
+                        my_device_id,
+                        &sym_key,
+                        &local_manifest,
+                    )
+                    .await?
+                } else {
+                    drop(devices);
+                    return Err(e);
+                }
+            } else {
+                return Err(e);
+            }
+        }
+    };
 
     let mut incoming_domains: HashMap<String, String> = HashMap::new();
 
