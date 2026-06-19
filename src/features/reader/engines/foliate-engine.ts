@@ -867,8 +867,9 @@ export class FoliateEngine {
                     font-size: inherit !important;
                 }
                 
-                /* Override inline font-size styles from book */
-                [style*="font-size"] {
+                /* Override inline font-size styles from book.
+                   Exclude html and body to preserve engine-set zoom font-size. */
+                :not(html):not(body)[style*="font-size"] {
                     font-size: inherit !important;
                 }
             `;
