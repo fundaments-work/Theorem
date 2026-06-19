@@ -1,0 +1,141 @@
+{
+    "translation": {
+        "app": {
+            "title": "Theorem"
+        },
+        "sidebar": {
+            "library": "Library",
+            "shelves": "Shelves",
+            "bookmarks": "Bookmarks",
+            "annotations": "Notes",
+            "statistics": "Statistics",
+            "vocabulary": "Vocabulary",
+            "feeds": "Feeds",
+            "settings": "Settings"
+        },
+        "library": {
+            "empty": "No books yet. Drop files or choose a folder.",
+            "noMatch": "No documents match criteria",
+            "resetSearch": "Reset search",
+            "import": "Import",
+            "scanFolder": "Scan Folder",
+            "search": "Search books...",
+            "sortBy": "Sort by",
+            "viewGrid": "Grid",
+            "viewList": "List",
+            "viewCompact": "Compact"
+        },
+        "reader": {
+            "openBook": "Open Book",
+            "readingProgress": "Reading progress",
+            "tableOfContents": "Table of Contents",
+            "search": "Search",
+            "bookmarks": "Bookmarks",
+            "notes": "Notes",
+            "settings": "Settings",
+            "readAloud": "Read Aloud",
+            "previous": "Previous",
+            "next": "Next",
+            "close": "Close",
+            "back": "Back",
+            "noToc": "No table of contents available",
+            "notFound": "Book not found",
+            "cbrUnsupported": "CBR archives are not supported",
+            "syncedWithoutFile": "This book was synced from another device but the file hasn't been transferred yet",
+            "loadError": "Failed to load book",
+            "opening": "Opening reader..."
+        },
+        "annotations": {
+            "title": "Notes & Highlights",
+            "noAnnotations": "No annotations yet",
+            "highlight": "Highlight",
+            "note": "Note",
+            "bookmark": "Bookmark",
+            "addNote": "Add Note",
+            "editNote": "Edit Note",
+            "delete": "Delete",
+            "define": "Define",
+            "exportMarkdown": "Export to Markdown"
+        },
+        "vocabulary": {
+            "title": "Vocabulary",
+            "empty": "No saved terms yet",
+            "search": "Search terms...",
+            "lookup": "Lookup",
+            "save": "Save",
+            "delete": "Delete",
+            "pronunciation": "Pronunciation",
+            "definitions": "Definitions",
+            "noDefinitions": "No definition found"
+        },
+        "settings": {
+            "title": "Settings",
+            "general": "General",
+            "reader": "Reader",
+            "dictionary": "Dictionary",
+            "integrations": "Integrations",
+            "storage": "Storage",
+            "theme": "Theme",
+            "themeLight": "Light",
+            "themeDark": "Dark",
+            "themeSystem": "System",
+            "language": "Language",
+            "font": "Font",
+            "fontSize": "Font Size",
+            "lineHeight": "Line Height",
+            "margin": "Margin",
+            "readingGoals": "Reading Goals",
+            "dailyMinutes": "Daily minutes",
+            "yearlyBooks": "Yearly books",
+            "clearData": "Clear All Data",
+            "resetSettings": "Reset Settings"
+        },
+        "statistics": {
+            "title": "Statistics",
+            "totalTime": "Total Reading Time",
+            "booksCompleted": "Books Completed",
+            "readingSpeed": "Reading Speed",
+            "currentStreak": "Current Streak",
+            "longestStreak": "Longest Streak",
+            "dailyGoal": "Daily Goal",
+            "yearlyGoal": "Yearly Goal"
+        },
+        "feeds": {
+            "title": "Feeds",
+            "addFeed": "Add Feed",
+            "allArticles": "All Articles",
+            "noFeeds": "No feed subscriptions yet",
+            "noArticles": "No articles",
+            "deleteFeed": "Delete Feed",
+            "refresh": "Refresh",
+            "feedUrl": "Feed URL"
+        },
+        "sync": {
+            "title": "Device Sync",
+            "pairDevice": "Pair Device",
+            "unpair": "Unpair",
+            "syncNow": "Sync Now",
+            "noDevices": "No paired devices",
+            "pairing": "Scan the QR code with another device running Theorem"
+        },
+        "common": {
+            "cancel": "Cancel",
+            "confirm": "Confirm",
+            "delete": "Delete",
+            "edit": "Edit",
+            "save": "Save",
+            "close": "Close",
+            "back": "Back",
+            "loading": "Loading...",
+            "error": "Something went wrong",
+            "retry": "Try Again",
+            "noResults": "No results",
+            "done": "Done"
+        },
+        "error": {
+            "pageError": "This page encountered an error",
+            "applicationError": "Application Error",
+            "reload": "Reload Page"
+        }
+    }
+}

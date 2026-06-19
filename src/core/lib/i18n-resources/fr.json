@@ -1,0 +1,141 @@
+{
+    "translation": {
+        "app": {
+            "title": "Theorem"
+        },
+        "sidebar": {
+            "library": "Bibliothèque",
+            "shelves": "Étagères",
+            "bookmarks": "Signets",
+            "annotations": "Notes",
+            "statistics": "Statistiques",
+            "vocabulary": "Vocabulaire",
+            "feeds": "Flux",
+            "settings": "Paramètres"
+        },
+        "library": {
+            "empty": "Aucun livre. Glissez des fichiers ou choisissez un dossier.",
+            "noMatch": "Aucun document correspondant",
+            "resetSearch": "Réinitialiser la recherche",
+            "import": "Importer",
+            "scanFolder": "Analyser le dossier",
+            "search": "Rechercher des livres...",
+            "sortBy": "Trier par",
+            "viewGrid": "Grille",
+            "viewList": "Liste",
+            "viewCompact": "Compact"
+        },
+        "reader": {
+            "openBook": "Ouvrir le livre",
+            "readingProgress": "Progression",
+            "tableOfContents": "Table des matières",
+            "search": "Rechercher",
+            "bookmarks": "Signets",
+            "notes": "Notes",
+            "settings": "Paramètres",
+            "readAloud": "Lire à voix haute",
+            "previous": "Précédent",
+            "next": "Suivant",
+            "close": "Fermer",
+            "back": "Retour",
+            "noToc": "Aucune table des matières disponible",
+            "notFound": "Livre introuvable",
+            "cbrUnsupported": "Les archives CBR ne sont pas prises en charge",
+            "syncedWithoutFile": "Ce livre a été synchronisé mais le fichier n'a pas encore été transféré",
+            "loadError": "Erreur lors du chargement du livre",
+            "opening": "Ouverture du lecteur..."
+        },
+        "annotations": {
+            "title": "Notes et Surlignages",
+            "noAnnotations": "Aucune annotation",
+            "highlight": "Surligner",
+            "note": "Note",
+            "bookmark": "Signet",
+            "addNote": "Ajouter une note",
+            "editNote": "Modifier la note",
+            "delete": "Supprimer",
+            "define": "Définir",
+            "exportMarkdown": "Exporter en Markdown"
+        },
+        "vocabulary": {
+            "title": "Vocabulaire",
+            "empty": "Aucun terme enregistré",
+            "search": "Rechercher des termes...",
+            "lookup": "Rechercher",
+            "save": "Enregistrer",
+            "delete": "Supprimer",
+            "pronunciation": "Prononciation",
+            "definitions": "Définitions",
+            "noDefinitions": "Aucune définition trouvée"
+        },
+        "settings": {
+            "title": "Paramètres",
+            "general": "Général",
+            "reader": "Lecteur",
+            "dictionary": "Dictionnaire",
+            "integrations": "Intégrations",
+            "storage": "Stockage",
+            "theme": "Thème",
+            "themeLight": "Clair",
+            "themeDark": "Sombre",
+            "themeSystem": "Système",
+            "language": "Langue",
+            "font": "Police",
+            "fontSize": "Taille de police",
+            "lineHeight": "Interligne",
+            "margin": "Marge",
+            "readingGoals": "Objectifs de lecture",
+            "dailyMinutes": "Minutes quotidiennes",
+            "yearlyBooks": "Livres annuels",
+            "clearData": "Effacer toutes les données",
+            "resetSettings": "Réinitialiser les paramètres"
+        },
+        "statistics": {
+            "title": "Statistiques",
+            "totalTime": "Temps total de lecture",
+            "booksCompleted": "Livres terminés",
+            "readingSpeed": "Vitesse de lecture",
+            "currentStreak": "Série actuelle",
+            "longestStreak": "Série la plus longue",
+            "dailyGoal": "Objectif quotidien",
+            "yearlyGoal": "Objectif annuel"
+        },
+        "feeds": {
+            "title": "Flux",
+            "addFeed": "Ajouter un flux",
+            "allArticles": "Tous les articles",
+            "noFeeds": "Aucun abonnement",
+            "noArticles": "Aucun article",
+            "deleteFeed": "Supprimer le flux",
+            "refresh": "Actualiser",
+            "feedUrl": "URL du flux"
+        },
+        "sync": {
+            "title": "Synchronisation",
+            "pairDevice": "Associer un appareil",
+            "unpair": "Dissocier",
+            "syncNow": "Synchroniser",
+            "noDevices": "Aucun appareil associé",
+            "pairing": "Scannez le code QR avec un autre appareil exécutant Theorem"
+        },
+        "common": {
+            "cancel": "Annuler",
+            "confirm": "Confirmer",
+            "delete": "Supprimer",
+            "edit": "Modifier",
+            "save": "Enregistrer",
+            "close": "Fermer",
+            "back": "Retour",
+            "loading": "Chargement...",
+            "error": "Une erreur est survenue",
+            "retry": "Réessayer",
+            "noResults": "Aucun résultat",
+            "done": "Terminé"
+        },
+        "error": {
+            "pageError": "Cette page a rencontré une erreur",
+            "applicationError": "Erreur d'application",
+            "reload": "Recharger la page"
+        }
+    }
+}
