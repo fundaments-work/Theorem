@@ -882,7 +882,7 @@ export function LibraryPage() {
                 {
                     metadataTimeoutMs: IMPORT_METADATA_TIMEOUT_MS,
                     coverTimeoutMs: IMPORT_COVER_TIMEOUT_MS,
-                    allowFallbackCover: false,
+                    allowFallbackCover: true,
                 },
             );
 
@@ -1157,7 +1157,7 @@ export function LibraryPage() {
                                 {
                                     metadataTimeoutMs: BATCH_METADATA_TIMEOUT_MS,
                                     coverTimeoutMs: BATCH_COVER_TIMEOUT_MS,
-                                    allowFallbackCover: false,
+                                    allowFallbackCover: true,
                                 },
                             );
 

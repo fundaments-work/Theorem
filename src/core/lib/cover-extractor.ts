@@ -150,7 +150,14 @@ async function normalizeCoverBlob(rawCover: unknown, fallbackMimeType: string): 
     }
 
     if (rawCover instanceof Blob) {
-        return rawCover.size > 0 ? rawCover : null;
+        if (rawCover.size > 0) {
+            // If the blob has no MIME type (common for MOBI), use the fallback
+            if (!rawCover.type) {
+                return new Blob([rawCover], { type: fallbackMimeType });
+            }
+            return rawCover;
+        }
+        return null;
     }
 
     if (rawCover instanceof ArrayBuffer) {
@@ -168,6 +175,30 @@ async function normalizeCoverBlob(rawCover: unknown, fallbackMimeType: string): 
             return blob.size > 0 ? blob : null;
         } catch {
             return null;
+        }
+    }
+
+    // Handle raw binary string or URL that isn't a data: URI
+    if (typeof rawCover === 'string' && rawCover.length > 0) {
+        try {
+            const response = await fetch(rawCover);
+            if (response.ok) {
+                const blob = await response.blob();
+                return blob.size > 0 ? blob : null;
+            }
+        } catch {
+            // Not a fetchable URL, may be raw data
+        }
+    }
+
+    // Handle object with array/buffer properties (some foliate versions)
+    if (typeof rawCover === 'object' && rawCover !== null) {
+        const obj = rawCover as Record<string, unknown>;
+        if (obj.data instanceof ArrayBuffer) {
+            return normalizeCoverBlob(obj.data, fallbackMimeType);
+        }
+        if (obj.buffer instanceof ArrayBuffer) {
+            return normalizeCoverBlob(obj.buffer, fallbackMimeType);
         }
     }
 
