@@ -163,16 +163,6 @@ function AnnotationCard({
                     </p>
                 )}
             </div>
-
-            {/* Footer */}
-            <div className="mt-4 border-t border-[var(--color-border)] pt-4">
-                <button
-                    onClick={() => book && onGoToBook(annotation.bookId)}
-                    className="font-sans text-[11px] font-medium text-[color:var(--color-text-secondary)] transition-colors hover:text-[color:var(--color-text-primary)]"
-                >
-                    Open book
-                </button>
-            </div>
         </div>
     );
 }
