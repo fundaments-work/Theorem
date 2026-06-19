@@ -21,6 +21,58 @@ interface ParsedFeed {
     articles: Omit<RssArticle, 'id' | 'feedId' | 'fetchedAt' | 'isRead' | 'isFavorite'>[];
 }
 
+// ── Rate Limiter ──
+
+class TokenBucket {
+    private tokens: number;
+    private lastRefill: number;
+    private readonly maxTokens: number;
+    private readonly refillRate: number;
+    private pendingWaiters: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
+
+    constructor(maxTokens: number, refillRatePerSecond: number) {
+        this.maxTokens = maxTokens;
+        this.tokens = maxTokens;
+        this.refillRate = refillRatePerSecond;
+        this.lastRefill = Date.now();
+    }
+
+    private refill(): void {
+        const now = Date.now();
+        const elapsed = (now - this.lastRefill) / 1000;
+        this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.refillRate);
+        this.lastRefill = now;
+    }
+
+    async acquire(tokenCount = 1, timeoutMs = 30000): Promise<void> {
+        this.refill();
+
+        if (this.tokens >= tokenCount) {
+            this.tokens -= tokenCount;
+            return;
+        }
+
+        return new Promise<void>((resolve, reject) => {
+            const waiter = { resolve, reject };
+            this.pendingWaiters.push(waiter);
+
+            setTimeout(() => {
+                const idx = this.pendingWaiters.indexOf(waiter);
+                if (idx >= 0) {
+                    this.pendingWaiters.splice(idx, 1);
+                    resolve();
+                }
+            }, timeoutMs);
+        });
+    }
+}
+
+const FEED_REQUESTS_PER_SECOND = 2;
+const ARTICLE_REQUESTS_PER_SECOND = 1;
+
+const feedRateLimiter = new TokenBucket(4, FEED_REQUESTS_PER_SECOND);
+const articleRateLimiter = new TokenBucket(2, ARTICLE_REQUESTS_PER_SECOND);
+
 export interface ExtractedArticleContent {
     content: string;
     title?: string;
@@ -1018,6 +1070,7 @@ async function fetchUrlContent(url: string): Promise<string> {
  * Falls back to feed content if extraction fails.
  */
 export async function fetchAndExtractArticleContent(articleUrl: string): Promise<ExtractedArticleContent> {
+    await articleRateLimiter.acquire();
     const htmlText = await fetchUrlContent(articleUrl);
     const extracted = extractArticleContentWithReadability(htmlText, articleUrl)
         || extractArticleContentFallback(htmlText, articleUrl);
@@ -1034,6 +1087,7 @@ export async function fetchAndExtractArticleContent(articleUrl: string): Promise
 export async function fetchAndParseFeed(
     url: string,
 ): Promise<{ feed: Omit<ParsedFeed, 'articles'>; articles: ParsedFeed['articles'] }> {
+    await feedRateLimiter.acquire();
     let xmlText = getCachedResponse(feedResponseCache, url) ?? "";
 
     if (!xmlText && isTauri()) {

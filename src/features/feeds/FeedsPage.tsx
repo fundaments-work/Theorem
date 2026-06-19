@@ -10,7 +10,7 @@ import { useRssStore } from "../../core";
 import type { RssFeed, RssArticle } from "../../core";
 import {
     Rss, Plus, RefreshCw, Trash2, Loader2,
-    ExternalLink, AlertCircle,
+    AlertCircle,
     LayoutTemplate, ArrowLeft, MoreHorizontal
 } from "lucide-react";
 import { AddFeedModal } from "./AddFeedModal";
@@ -269,18 +269,15 @@ function ArticleCard({
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 mt-4">
-                        {article.url && (
-                            <a
-                                href={article.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                            >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                                <span>Original</span>
-                            </a>
-                        )}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onRead();
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                        >
+                            <span>Read Full Article</span>
+                        </button>
                     </div>
                 </div>
 

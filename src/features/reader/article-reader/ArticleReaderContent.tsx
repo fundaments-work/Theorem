@@ -64,6 +64,24 @@ export function ArticleReaderContent({
 
     const sanitizedContent = sanitizedContentProp ?? sanitizedContentFallback;
 
+    // Check if the article HTML content already contains the featured image.
+    // RSS feeds often include the hero image both as a separate field AND
+    // inline in the content HTML — we deduplicate to avoid showing it twice.
+    const contentHasImage = useMemo(() => {
+        if (!article.imageUrl) return false;
+        const temp = document.createElement("div");
+        temp.innerHTML = sanitizedContent;
+        const firstImg = temp.querySelector("img");
+        if (!firstImg) return false;
+        try {
+            const imgSrc = new URL(firstImg.getAttribute("src") || "", article.url || undefined).href;
+            const articleImgSrc = new URL(article.imageUrl, article.url || undefined).href;
+            return imgSrc === articleImgSrc;
+        } catch {
+            return firstImg.getAttribute("src") === article.imageUrl;
+        }
+    }, [sanitizedContent, article.imageUrl, article.url]);
+
     // Track the last HTML string we wrote to innerHTML so we never reset the
     // DOM when the content hasn't actually changed.  This is the key guard
     // that prevents highlight <mark> elements from being destroyed.
@@ -193,7 +211,7 @@ export function ArticleReaderContent({
                     )}
                 </header>
 
-                {article.imageUrl && (
+                {article.imageUrl && !contentHasImage && (
                     <figure className="mb-10">
                         <img
                             src={article.imageUrl}
