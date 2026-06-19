@@ -30,7 +30,6 @@ export function Modal({
     children,
     className,
     size = "md",
-    showCloseButton = true,
 }: ModalProps) {
     const overlayRef = useRef<HTMLDivElement>(null);
 

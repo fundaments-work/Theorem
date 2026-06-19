@@ -15,7 +15,6 @@ import {
     BookOpen,
     Clock,
     ExternalLink,
-    ChevronDown,
     LayoutGrid,
     List,
 } from "lucide-react";
@@ -275,7 +274,7 @@ export function BookmarksPage() {
         }
     };
 
-    const handleGoToBookmark = (bookId: string, location: string) => {
+    const handleGoToBookmark = (bookId: string, _location: string) => {
         setRoute("reader", bookId);
     };
 

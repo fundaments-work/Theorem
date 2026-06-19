@@ -14,7 +14,7 @@ import {
     removeStarDictDictionary,
 } from "../services/StarDictService";
 import { scheduleMutationSync } from "../lib/sync-orchestrator";
-import { deleteBookStorage, cleanupOrphanedStorage } from "../lib/storage-manager";
+import { deleteBookStorage } from "../lib/storage-manager";
 import { getCoverImage } from "../lib/storage";
 import type {
     Annotation,
@@ -56,6 +56,7 @@ const defaultReaderSettings: ReaderSettings = {
     zoom: 100,
     wordSpacing: 0,
     forcePublisherStyles: false,
+    ttsEnabled: false,
     // Performance settings
     prefetchDistance: 1,
     enableAnimations: false,
@@ -84,6 +85,7 @@ const defaultDeviceSyncSettings: AppSettings["deviceSync"] = {
     deviceName: "",
     pairedDevices: [],
     syncOnConnect: false,
+    autoSyncEnabled: true,
 };
 
 // Default app settings
@@ -167,7 +169,7 @@ export const useUIStore = create<UIStore>()(
                 if (pushHistory && typeof window !== "undefined") {
                     window.history.pushState({ route, bookId }, "");
                 }
-                set((state) => ({
+                set((_state) => ({
                     currentRoute: route,
                     currentBookId: bookId,
                     searchQuery: "",
@@ -178,7 +180,7 @@ export const useUIStore = create<UIStore>()(
                 if (typeof window !== "undefined" && window.history.length > 1) {
                     window.history.back();
                 } else {
-                    set((state) => ({
+                    set((_state) => ({
                         currentRoute: "library",
                         currentBookId: undefined,
                     }));
@@ -1150,7 +1152,6 @@ export const useLibraryStore = create<LibraryStore>()(
                 const book = get().books.find((b) => b.id === bookId);
                 if (!book) return false;
 
-                const restoredProgress = Math.max(0, Math.min(1, book.progressBeforeFinish ?? 0));
                 const isAlreadyUnread = !book.completedAt && book.manualCompletionState === "unread";
 
                 if (isAlreadyUnread) {
@@ -1748,6 +1749,7 @@ interface VocabularyStore {
 
     importStarDict: (files: FileList | File[]) => Promise<InstalledDictionary>;
     removeDictionary: (dictionaryId: string) => Promise<void>;
+    addInstalledDictionary: (dict: InstalledDictionary) => void;
 }
 
 interface SaveVocabularyContextInput {
@@ -2124,6 +2126,12 @@ export const useVocabularyStore = create<VocabularyStore>()(
                     ),
                 }));
             },
+
+            addInstalledDictionary: (dict: InstalledDictionary) => {
+                set((state) => ({
+                    installedDictionaries: [...state.installedDictionaries, dict],
+                }));
+            },
         }),
         {
             name: "theorem-vocabulary",
@@ -2432,18 +2440,25 @@ export const useRssStore = create<RssStore>()(
                     return;
                 }
 
-                const plainTextLength = article.content
-                    .replace(/<[^>]*>/g, ' ')
-                    .replace(/\s+/g, ' ')
-                    .trim()
-                    .length;
-                if (plainTextLength >= 2200) {
-                    // Looks like a full-text article already; avoid unnecessary network fetches.
-                    return;
-                }
-
                 try {
                     const extracted = await fetchAndExtractArticleContent(article.url);
+                    // Only replace if the extracted content is substantially longer
+                    // than what the feed provided (ensures we don't replace good
+                    // full-text feeds with a worse extraction).
+                    const plainTextLength = article.content
+                        .replace(/<[^>]*>/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .length;
+                    const extractedLength = extracted.content
+                        .replace(/<[^>]*>/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .length;
+                    if (extractedLength < plainTextLength) {
+                        return;
+                    }
+
                     const articlePatch: Partial<RssArticle> = {
                         content: extracted.content,
                     };

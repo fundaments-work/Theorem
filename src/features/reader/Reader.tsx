@@ -13,7 +13,6 @@ import {
     extractMetadata,
     extractFilenameFromPath,
     ensureFilenameForFormat,
-    isMobile,
     isTauri,
     isTauriMobile,
     useVocabularyStore,
@@ -51,6 +50,8 @@ import { useReaderFullscreen, useToolbarHeight } from "./hooks";
 import type { PDFJsEngineRef } from "./engines/pdfjs-engine";
 import type { ReaderViewportHandle } from "./components/ReaderViewport";
 import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
+import { ReadAloudBar } from "./components/ReadAloudBar";
+import { useTtsController } from "./hooks/useTtsController";
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -137,7 +138,6 @@ function normalizeInitialReaderLocation(location?: string): string | undefined {
 function BookReaderPage() {
     const currentBookId = useUIStore((state) => state.currentBookId);
     const setRoute = useUIStore((state) => state.setRoute);
-    const goBack = useUIStore((state) => state.goBack);
 
     const getBook = useLibraryStore((state) => state.getBook);
     const updateBook = useLibraryStore((state) => state.updateBook);
@@ -203,6 +203,7 @@ function BookReaderPage() {
             : false
     ));
     const [showToolbar, setShowToolbar] = useState(true);
+    const [isTtsActive, setIsTtsActive] = useState(false);
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | 'menu' | null;
     const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -231,6 +232,17 @@ function BookReaderPage() {
     const togglePanel = useCallback((panel: ReaderPanel) => {
         setActivePanel(current => current === panel ? null : panel);
     }, []);
+
+    const toggleTts = useCallback(() => {
+        if (!settings.readerSettings.ttsEnabled) return;
+        setIsTtsActive(prev => !prev);
+    }, [settings.readerSettings.ttsEnabled]);
+
+    const getCurrentSectionText = useCallback((): string => {
+        return readerRef.current?.getCurrentSectionText?.() ?? "";
+    }, []);
+
+    const ttsController = useTtsController(getCurrentSectionText);
 
     // Get current book format
     const currentBook = currentBookId ? getBook(currentBookId) : null;
@@ -998,10 +1010,6 @@ function BookReaderPage() {
         }
     }, []);
 
-    const handleError = useCallback((err: Error) => {
-        setLoadError(err.message);
-    }, []);
-
     const handleZoomGestureChange = useCallback((zoom: number) => {
         const clampedZoom = clampReaderZoomByFlow(zoom, settings.readerSettings.flow);
         if (readerZoomRef.current === clampedZoom) {
@@ -1115,7 +1123,7 @@ function BookReaderPage() {
             );
         }
 
-        const handlePopState = (event: PopStateEvent) => {
+        const handlePopState = (_event: PopStateEvent) => {
             // If the state we popped to is our reader entry state, we want to exit
             // but we check if we were already handled by another listener
             if (useUIStore.getState().currentRoute === "reader") {
@@ -2024,6 +2032,8 @@ function BookReaderPage() {
                     activePanel={activePanel}
                     fullscreen={settings.readerSettings.fullscreen}
                     onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
+                    isTtsActive={settings.readerSettings.ttsEnabled ? isTtsActive : undefined}
+                    onToggleTts={settings.readerSettings.ttsEnabled ? toggleTts : undefined}
 
                 />
             </div>
@@ -2089,6 +2099,14 @@ function BookReaderPage() {
                     />
                 )}
             </div>
+
+            {/* Read Aloud Bar — only for non-PDF */}
+            {isTtsActive && !isPdfFormat && (
+                <ReadAloudBar
+                    controller={ttsController}
+                    onClose={toggleTts}
+                />
+            )}
 
             {/* PDF Floating Toolbar & TOC Button */}
             {isBookReady && isPdfFormat && (

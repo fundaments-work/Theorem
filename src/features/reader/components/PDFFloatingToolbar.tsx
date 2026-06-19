@@ -1,15 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import {
     Highlighter,
-    PenLine,
     Type,
     Eraser,
     X,
-    Palette,
     Pencil,
-    ChevronUp,
-    ChevronDown,
-    Check,
     Edit3
 } from "lucide-react";
 import { cn } from "../../../core";
@@ -40,28 +35,15 @@ const annotationColorSwatches: Array<{ color: HighlightColor; label: string; fil
 export function PDFFloatingToolbar({
     annotationMode,
     highlightColor,
-    penColor,
-    penWidth,
+    penColor: _penColor,
+    penWidth: _penWidth,
     onAnnotationModeChange,
     onHighlightColorChange,
-    onPenColorChange,
-    onPenWidthChange,
+    onPenColorChange: _onPenColorChange,
+    onPenWidthChange: _onPenWidthChange,
     className,
 }: PDFFloatingToolbarProps) {
     const [isOpen, setIsOpen] = useState(false);
-    const [showColors, setShowColors] = useState(false);
-
-    // Auto-open colors when highlighting or pen is active
-    useEffect(() => {
-        if (annotationMode === 'highlight' || annotationMode === 'pen') {
-            setShowColors(true);
-        } else {
-            setShowColors(false);
-        }
-    }, [annotationMode]);
-
-    const activeColor = annotationMode === 'pen' ? penColor : highlightColor;
-    const onColorChange = annotationMode === 'pen' ? onPenColorChange : onHighlightColorChange;
 
     const toggleOpen = () => {
         if (isOpen) {
@@ -148,10 +130,10 @@ export function PDFFloatingToolbar({
                             {annotationColorSwatches.map((swatch) => (
                                 <button
                                     key={swatch.color}
-                                    onClick={() => onColorChange(swatch.color)}
+                                    onClick={() => onHighlightColorChange(swatch.color)}
                                     className={cn(
                                         "w-6 h-6 transition-transform ring-2 ring-transparent",
-                                        activeColor === swatch.color ? "scale-110 ring-[var(--color-border)] shadow-sm" : "hover:scale-110"
+                                        highlightColor === swatch.color ? "scale-110 ring-[var(--color-border)] shadow-sm" : "hover:scale-110"
                                     )}
                                     style={{ backgroundColor: swatch.fill }}
                                     title={swatch.label}

@@ -6,7 +6,7 @@
 import { useState, useMemo } from "react";
 import { cn, normalizeAuthor } from "../../core";
 import { rankByFuzzyQuery } from "../../core";
-import { useLibraryStore, useUIStore, useSettingsStore } from "../../core";
+import { useLibraryStore, useUIStore } from "../../core";
 import { ShelfModal } from "./components/modals/ShelfModal";
 import { getShelfColor, getShelfInitials } from "../../core";
 import {
@@ -24,7 +24,7 @@ import {
     CloudOff,
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode } from "../../core";
-import { confirmDeleteBook, confirmRemoveFromShelf } from "../../core";
+import { confirmRemoveFromShelf } from "../../core";
 
 // View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
@@ -405,9 +405,8 @@ interface ShelfDetailProps {
 }
 
 function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
-    const { books, removeBookFromCollection, removeBook } = useLibraryStore();
+    const { books, removeBookFromCollection } = useLibraryStore();
     const { setRoute } = useUIStore();
-    const { settings, updateSettings } = useSettingsStore();
     const [viewMode, setViewMode] = useState<LibraryViewMode>("grid");
 
     // Get actual books that exist in the library
@@ -422,14 +421,6 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
         const confirmed = await confirmRemoveFromShelf(book?.title || "this book", shelf.name);
         if (confirmed) {
             removeBookFromCollection(bookId, shelf.id);
-        }
-    };
-
-    const handleDeleteBook = async (bookId: string) => {
-        const book = books.find(b => b.id === bookId);
-        const confirmed = await confirmDeleteBook(book?.title || "this book");
-        if (confirmed) {
-            removeBook(bookId);
         }
     };
 
@@ -560,9 +551,8 @@ export function ShelvesPage() {
         addCollection,
         removeCollection,
         updateCollection,
-        removeBook
     } = useLibraryStore();
-    const { setRoute, searchQuery } = useUIStore();
+    const { searchQuery } = useUIStore();
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingShelf, setEditingShelf] = useState<{ id: string; name: string; description?: string } | undefined>();

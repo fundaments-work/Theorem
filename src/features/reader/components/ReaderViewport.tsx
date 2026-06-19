@@ -7,7 +7,7 @@
  * - Minimal re-renders through efficient change detection
  */
 
-import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useMemo, useState } from 'react';
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState } from 'react';
 import { useDocumentReader } from '../hooks/useDocumentReader';
 import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, BookFormat } from '../../../core';
 import type { ReaderSettings } from '../../../core';
@@ -38,6 +38,7 @@ export interface ReaderViewportHandle {
     removeHighlight: (id: string) => Promise<void>;
     loadAnnotations: (annotations: Annotation[]) => Promise<void>;
     clearSelection: () => void;
+    getCurrentSectionText: () => string;
     // Progress data
     getSectionFractions: () => number[];
 }
@@ -127,6 +128,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         loadAnnotations,
         clearSelection,
         getSelection,
+        getCurrentSectionText,
     } = useDocumentReader({
         onReady,
         onLocationsGenerated: () => {},
@@ -153,8 +155,9 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         removeHighlight: (id: string) => removeHighlight(id),
         loadAnnotations: (annotations: Annotation[]) => loadAnnotations(annotations),
         clearSelection: () => clearSelection(),
+        getCurrentSectionText: () => getCurrentSectionText(),
         getSectionFractions: () => getEngine()?.getSectionFractions() ?? [],
-    }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getEngine]);
+    }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getCurrentSectionText, getEngine]);
 
     // Cleanup on unmount
     useEffect(() => {

@@ -4,7 +4,7 @@
  * Inspired by Foliate GTK4's navbar implementation
  */
 
-import { useCallback, useMemo, useState, useRef, useEffect, memo } from "react";
+import { useCallback, useMemo, useState, useRef, memo } from "react";
 import { List } from "lucide-react";
 import { cn } from "../../../../core";
 import type { TocItem, DocLocation } from "../../../../core";

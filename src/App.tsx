@@ -1,5 +1,6 @@
-import { Suspense, lazy, useCallback, useEffect, useRef } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { RouteErrorBoundary, KeyboardShortcutsHelp } from "./ui";
 import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import {
     useUIStore,
@@ -11,11 +12,13 @@ import {
     initReaderStyles,
     ensureResponderSyncReady,
     startAutoSync,
-    cn,
     importBooksIncremental,
     getBookFormat,
     isImportFormatSupported,
     normalizeFilePath,
+    registerShortcuts,
+    useKeyboardShortcuts,
+    initI18n,
 } from "./core";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 import { OnboardingFlow } from "./features/onboarding";
@@ -78,6 +81,57 @@ function App() {
     const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
     const hasCompletedOnboarding = useSettingsStore((state) => state.settings.hasCompletedOnboarding);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
+    const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+
+    useKeyboardShortcuts(currentRoute);
+
+    // Register app-level keyboard shortcuts
+    useEffect(() => {
+        return registerShortcuts("app", [
+            {
+                label: "Show keyboard shortcuts",
+                keys: "?",
+                category: "App",
+                handler: () => setShowShortcutsHelp((prev) => !prev),
+            },
+            {
+                label: "Go to Library",
+                keys: "Ctrl+1",
+                category: "Navigation",
+                handler: () => setRoute("library"),
+            },
+            {
+                label: "Go to Shelves",
+                keys: "Ctrl+2",
+                category: "Navigation",
+                handler: () => setRoute("shelves"),
+            },
+            {
+                label: "Go to Feeds",
+                keys: "Ctrl+3",
+                category: "Navigation",
+                handler: () => setRoute("feeds"),
+            },
+            {
+                label: "Go to Vocabulary",
+                keys: "Ctrl+4",
+                category: "Navigation",
+                handler: () => setRoute("vocabulary"),
+            },
+            {
+                label: "Go to Settings",
+                keys: "Ctrl+,",
+                category: "Navigation",
+                handler: () => setRoute("settings"),
+            },
+            {
+                label: "Go to Statistics",
+                keys: "Ctrl+5",
+                category: "Navigation",
+                handler: () => setRoute("statistics"),
+            },
+        ]);
+    }, [setRoute]);
 
     const handleOnboardingComplete = useCallback(() => {
         updateSettings({ hasCompletedOnboarding: true });
@@ -232,6 +286,11 @@ function App() {
         initReaderStyles(useSettingsStore.getState().settings.readerSettings);
     }, []); // Only on mount - the store's onRehydrate will handle persisted settings
 
+    // Initialize i18n on app load
+    useEffect(() => {
+        void initI18n();
+    }, []);
+
     useEffect(() => {
         if (typeof window === "undefined") {
             return;
@@ -280,6 +339,11 @@ function App() {
     // Also start auto-sync (startup, periodic, visibility-change, tray).
     useEffect(() => {
         if (!isTauriRuntime || !hasCompletedOnboarding) {
+            return;
+        }
+
+        const syncSettings = useSettingsStore.getState().settings.deviceSync;
+        if (!syncSettings.autoSyncEnabled) {
             return;
         }
 
@@ -379,9 +443,11 @@ function App() {
 
     if (isReaderMode) {
         return (
-            <Suspense fallback={<ReaderFallback />}>
-                <ReaderPage />
-            </Suspense>
+            <RouteErrorBoundary>
+                <Suspense fallback={<ReaderFallback />}>
+                    <ReaderPage />
+                </Suspense>
+            </RouteErrorBoundary>
         );
     }
 
@@ -400,14 +466,21 @@ function App() {
 
                 {/* Page Content */}
                 <main ref={mainScrollRef} className="flex-1 overflow-y-auto pb-16 md:pb-0 md:px-8 md:py-6 custom-scrollbar">
-                    <Suspense fallback={<PageFallback />}>
-                        {renderPage()}
-                    </Suspense>
+                    <RouteErrorBoundary key={currentRoute}>
+                        <Suspense fallback={<PageFallback />}>
+                            {renderPage()}
+                        </Suspense>
+                    </RouteErrorBoundary>
                 </main>
 
                 {/* Mobile Navigation */}
                 <BottomNav />
             </div>
+
+            <KeyboardShortcutsHelp
+                isOpen={showShortcutsHelp}
+                onClose={() => setShowShortcutsHelp(false)}
+            />
         </div>
     );
 }

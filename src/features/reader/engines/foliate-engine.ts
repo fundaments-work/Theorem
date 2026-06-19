@@ -21,7 +21,7 @@ import type {
     ReaderTheme,
     BookFormat,
 } from '../../../core';
-import { isFixedLayout, isReflowable } from '../../../core';
+import { isFixedLayout } from '../../../core';
 import { getTheme } from '../foliate/themes';
 import { 
     registerEngineStyleCallback,
@@ -82,13 +82,10 @@ export class FoliateEngine {
     private layout: PageLayout = 'single';
     private flow: ReadingFlow = 'paged';
     private zoom_level = 1;
-    private _marginValue = 10;
     private theme: ReaderTheme = 'light';
-    private settings: ThemeSettings = {};
     
     // Batch update mechanism
     private pendingUpdateFrame: number | null = null;
-    private pendingSettingsUpdate = false;
 
     // CSS cache — avoid rebuilding large CSS strings on every settings change
     private _lastCssSettingsKey = '';
@@ -97,16 +94,9 @@ export class FoliateEngine {
     // Style update unsubscribe
     private unsubscribeFromStyles: (() => void) | null = null;
 
-    // History tracking
-    private _navigationHistory: string[] = [];
-    private _currentHistoryIndex = -1;
-
     // Keyboard listeners attached to iframe documents
     private _keyboardAttached = new WeakSet<Document>();
 
-    // CFI cache to avoid re-parsing
-    private cfiCache = new Map<string, string>();
-    private cfiCacheMaxSize = 100;
     private searchSectionCache: ReaderSearchSectionCacheItem[] | null = null;
     private searchCacheBookRef: unknown = null;
     private _awaitingInitialRelocate = false;
@@ -199,7 +189,7 @@ export class FoliateEngine {
         _savedLocations?: string,
         flow: ReadingFlow = 'paged',
         zoom: number = 100,
-        margins: number = 10,
+        _margins: number = 10,
         format: BookFormat = 'epub'
     ): Promise<void> {
         // Store format for format-specific behavior
@@ -266,7 +256,6 @@ export class FoliateEngine {
             this.layout = layout;
             this.flow = flow;
             this.zoom_level = this.clampZoomLevel(zoom / 100, this.flow);
-            this._marginValue = margins;
             console.debug('[FoliateEngine] Initial settings applied', {
                 layout: this.layout,
                 flow: this.flow,
@@ -510,9 +499,7 @@ export class FoliateEngine {
         });
 
         // Handle history changes
-        this.view.history?.addEventListener('popstate', (e: any) => {
-            this._navigationHistory = this.view?.history?.items || [];
-            this._currentHistoryIndex = this.view?.history?.index || -1;
+        this.view.history?.addEventListener('popstate', (_e: any) => {
         });
 
         // Handle section load - re-attach selection listeners for new sections
@@ -1013,9 +1000,7 @@ export class FoliateEngine {
             cancelAnimationFrame(this.pendingUpdateFrame);
         }
         
-        this.pendingSettingsUpdate = true;
         this.pendingUpdateFrame = requestAnimationFrame(() => {
-            this.pendingSettingsUpdate = false;
             this.pendingUpdateFrame = null;
             this.applySettingsSync();
             this.applySettingsAsync().catch(console.error);
@@ -1219,15 +1204,13 @@ export class FoliateEngine {
         console.debug('[FoliateEngine] applyZoomSync completed');
     }
 
-    setMargins(margins: number): void {
-        this._marginValue = margins;
+    setMargins(_margins: number): void {
     }
 
     /**
      * Apply theme/settings - optimized with batching
      */
     applyTheme(settings: ThemeSettings): void {
-        this.settings = settings;
         
         if (settings.flow) {
             this.flow = settings.flow;
@@ -1975,7 +1958,6 @@ export class FoliateEngine {
             let touchStartX = 0;
             let touchStartY = 0;
             let touchStartAt = 0;
-            let touchMoved = false;
             let selectionCaptureTimeout: number | null = null;
             let lastSelectionCapturedAt = 0;
 
@@ -2117,7 +2099,6 @@ export class FoliateEngine {
                 (event: TouchEvent) => {
                     if (event.touches.length !== 1) {
                         touchStartAt = 0;
-                        touchMoved = false;
                         return;
                     }
 
@@ -2125,7 +2106,6 @@ export class FoliateEngine {
                     touchStartX = touch.clientX;
                     touchStartY = touch.clientY;
                     touchStartAt = Date.now();
-                    touchMoved = false;
                 },
                 { capture: true, passive: true },
             );
@@ -2136,15 +2116,6 @@ export class FoliateEngine {
                     if (touchStartAt === 0 || event.touches.length !== 1) {
                         return;
                     }
-
-                    const touch = event.touches[0];
-                    const distance = Math.hypot(
-                        touch.clientX - touchStartX,
-                        touch.clientY - touchStartY,
-                    );
-                    if (distance > TAP_MAX_DISTANCE) {
-                        touchMoved = true;
-                    }
                 },
                 { capture: true, passive: true },
             );
@@ -2154,20 +2125,17 @@ export class FoliateEngine {
                 (event: TouchEvent) => {
                     if (touchStartAt === 0 || event.changedTouches.length !== 1) {
                         touchStartAt = 0;
-                        touchMoved = false;
                         return;
                     }
                     scheduleSelectionCapture(event);
 
                     if (this.flow === 'scroll') {
                         touchStartAt = 0;
-                        touchMoved = false;
                         return;
                     }
 
                     if (this.isInteractiveTapTarget(event.target)) {
                         touchStartAt = 0;
-                        touchMoved = false;
                         return;
                     }
 
@@ -2176,7 +2144,6 @@ export class FoliateEngine {
                         event.preventDefault();
                         event.stopPropagation();
                         touchStartAt = 0;
-                        touchMoved = false;
                         return;
                     }
 
@@ -2195,11 +2162,9 @@ export class FoliateEngine {
                         || absX <= absY
                         || absY > SWIPE_MAX_VERTICAL_DISTANCE
                     ) {
-                        touchMoved = false;
                         return;
                     }
 
-                    touchMoved = false;
                     event.preventDefault();
                     window.setTimeout(() => {
                         const shouldSuppressInteraction =
@@ -2415,40 +2380,6 @@ export class FoliateEngine {
         }
     }
 
-    private checkAndReportSelection(
-        index: number, 
-        doc: Document, 
-        callback: (cfi: string, text: string, event: MouseEvent) => void,
-        event: MouseEvent
-    ): void {
-        const selection = doc.getSelection();
-        console.debug('[FoliateEngine] Checking selection in section', index, {
-            rangeCount: selection?.rangeCount,
-            isCollapsed: selection?.isCollapsed,
-            type: selection?.type
-        });
-        
-        if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
-            const text = selection.toString().trim();
-            console.debug('[FoliateEngine] Found text in section', index, ':', text.substring(0, 50));
-            
-            if (text && text.length > 0) {
-                try {
-                    const range = selection.getRangeAt(0);
-                    const cfi = this.getCFIFromRange(index, range);
-                    if (cfi) {
-                        console.debug('[FoliateEngine] Selection detected - calling callback:', { text: text.substring(0, 50), cfi });
-                        callback(cfi, text, event);
-                    } else {
-                        console.warn('[FoliateEngine] Failed to get CFI from selection in section', index);
-                    }
-                } catch (err) {
-                    console.warn('[FoliateEngine] Error getting selection in section', index, ':', err);
-                }
-            }
-        }
-    }
-
     private setupSelectionPolling(_callback: (cfi: string, text: string, event: MouseEvent) => void): void {
         // NOTE: Polling removed for performance. Event-based detection is sufficient.
         // This method is kept for API compatibility but does nothing.
@@ -2494,49 +2425,6 @@ export class FoliateEngine {
         return content?.doc || null;
     }
 
-    private findSectionIndex(fraction: number): number {
-        // Handle edge cases
-        if (this.sectionFractions.length === 0) {
-            return 0;
-        }
-        
-        if (fraction <= 0) {
-            return 0;
-        }
-        
-        if (fraction >= 1) {
-            return this.sectionFractions.length - 1;
-        }
-        
-        // Find the correct section - the section where fraction falls within [start, end)
-        for (let i = 0; i < this.sectionFractions.length - 1; i++) {
-            const start = this.sectionFractions[i];
-            const end = this.sectionFractions[i + 1];
-            
-            // Check if fraction falls within this section
-            if (fraction >= start && fraction < end) {
-                return i;
-            }
-        }
-        
-        // If we get here, fraction is beyond the last section boundary - return last section
-        return this.sectionFractions.length - 1;
-    }
-
-    private calculateSectionFraction(totalFraction: number, sectionIndex: number): number {
-        // sectionFractions is structured as: [0, end_of_0, end_of_1, ..., 1]
-        // So for section i: start = sectionFractions[i], end = sectionFractions[i+1]
-        const sectionStart = this.sectionFractions[sectionIndex] ?? 0;
-        const sectionEnd = this.sectionFractions[sectionIndex + 1] ?? 1;
-        const sectionSize = sectionEnd - sectionStart;
-        
-        if (sectionSize <= 0) return 0;
-        
-        // Calculate the fraction within this section and clamp to [0, 1]
-        const result = (totalFraction - sectionStart) / sectionSize;
-        return Math.max(0, Math.min(1, result));
-    }
-
     /**
      * Get the current document format
      */
@@ -2558,6 +2446,27 @@ export class FoliateEngine {
      */
     isReflowable(): boolean {
         return !this.isFixedLayoutFormat;
+    }
+
+    /**
+     * Get the visible text content from the current section for TTS.
+     * Returns empty string if no content is available.
+     */
+    getCurrentSectionText(): string {
+        if (!this.view) return "";
+
+        try {
+            const contents = this.view.renderer?.getContents?.() || [];
+            if (contents.length === 0) return "";
+
+            const doc = contents[0].doc;
+            if (!doc || !doc.body) return "";
+
+            const text = doc.body.textContent || "";
+            return text.replace(/\s+/g, " ").trim();
+        } catch {
+            return "";
+        }
     }
 
     destroy(): void {

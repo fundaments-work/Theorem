@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "../core";
 
 const LONG_PRESS_DURATION_MS = 420;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;

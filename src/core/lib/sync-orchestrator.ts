@@ -866,20 +866,6 @@ let _autoSyncCleanups: Array<() => void> = [];
 let _isAutoSyncing = false;
 
 /**
- * Check whether there are paired devices to sync with.
- * Reads directly from the Tauri backend.
- */
-async function hasPairedDevices(): Promise<boolean> {
-    if (!isTauri()) return false;
-    try {
-        const devices = await getPairedDevices();
-        return devices.length > 0;
-    } catch {
-        return false;
-    }
-}
-
-/**
  * Run a sync round with all paired peers.
  * Syncs with the first available peer (the most recently synced one).
  * Silently skips if no peers are reachable — no error surface.

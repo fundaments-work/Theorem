@@ -26,7 +26,7 @@ import {
 import {
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
-    ChevronDown, Star, X, ArrowUpDown, Check, CloudOff
+    ChevronDown, Star, Check, CloudOff
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "../../core";
 import { FORMAT_DISPLAY_NAMES } from "../../core";
@@ -34,11 +34,9 @@ import { isMobile, isTauri } from "../../core";
 import { getBookData } from "../../core";
 import { ContextMenu } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
-import { Dropdown } from "../../ui";
 import { Modal, ModalBody, ModalFooter } from "../../ui";
 import { confirmDeleteBook } from "../../core";
 import { showOpenDirectoryDialog } from "../../core";
-import { getShelfColor, getShelfInitials } from "../../core";
 import { getFilteredAndSortedBooks } from "./filtering";
 
 // View mode icons
@@ -56,13 +54,9 @@ const TOOLBAR_ICON_BUTTON = "h-10 w-10 px-0";
 
 type ExtractMetadataFn = typeof import("../../core").extractMetadata;
 
-const COVER_EXTRACTION_BATCH_SIZE = 3;
 const IMPORT_METADATA_TIMEOUT_MS = isMobile() ? 9000 : 6000;
 const IMPORT_COVER_TIMEOUT_MS = isMobile() ? 7000 : 4000;
 const IMPORT_METADATA_QUEUE_CONCURRENCY = isMobile() ? 1 : 3;
-const BATCH_METADATA_TIMEOUT_MS = isMobile() ? 22000 : 10000;
-const BATCH_COVER_TIMEOUT_MS = isMobile() ? 16000 : 5000;
-const MAX_METADATA_EXTRACTION_ATTEMPTS = isMobile() ? 4 : 6;
 let extractMetadataPromise: Promise<ExtractMetadataFn> | null = null;
 
 async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
@@ -127,30 +121,6 @@ function shouldUseExtractedAuthor(book: Book, extractedAuthor: string | undefine
     );
 
     return currentAuthor === "Unknown Author" || currentIsFilenameFallback;
-}
-
-function hasEncodedContentUriFallbackTitle(book: Book): boolean {
-    return book.filePath.startsWith("content://") && /%[0-9a-f]{2}/i.test(book.title);
-}
-
-function isLikelyGeneratedFallbackCover(coverPath?: string): boolean {
-    if (!coverPath || !coverPath.startsWith("data:image/svg+xml")) {
-        return false;
-    }
-
-    try {
-        const [, payload = ""] = coverPath.split(",", 2);
-        const content = coverPath.includes(";base64,")
-            ? atob(payload)
-            : decodeURIComponent(payload);
-        return content.includes("Book cover fallback");
-    } catch {
-        return false;
-    }
-}
-
-function shouldRetryMissingCoverExtraction(book: Book): boolean {
-    return !book.coverPath && book.coverExtractionDone === true;
 }
 
 function isBookMarkedRead(book: Book): boolean {
@@ -817,7 +787,6 @@ export function LibraryPage() {
     const [isImporting, setIsImporting] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [isExtractingCovers, setIsExtractingCovers] = useState(false);
-    const [extractionProgress, setExtractionProgress] = useState({ current: 0, total: 0 });
 
     // Filter dropdown state
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -833,7 +802,6 @@ export function LibraryPage() {
 
     // Tracks cover extraction jobs currently in progress.
     const extractedBookIdsRef = useRef<Set<string>>(new Set());
-    const metadataExtractionAttemptsRef = useRef<Map<string, number>>(new Map());
     const pendingImportMetadataQueueRef = useRef<Book[]>([]);
     const queuedImportMetadataIdsRef = useRef<Set<string>>(new Set());
     const activeImportMetadataTasksRef = useRef(0);
@@ -1004,11 +972,6 @@ export function LibraryPage() {
 
     // Favorites filter state
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-    const generalCollections = useMemo(
-        () => collections.filter((collection) => collection.kind === "general"),
-        [collections],
-    );
-
     // Initialize selected shelf from session storage on mount
     useEffect(() => {
         const shelfId = sessionStorage.getItem("theorem-selected-shelf");
@@ -1085,8 +1048,6 @@ export function LibraryPage() {
         const generateFallbacks = async () => {
             setIsExtractingCovers(true);
             let processedCount = 0;
-            const total = booksNeedingFallback.length;
-            setExtractionProgress({ current: 0, total });
 
             try {
                 const extractMetadata = await getExtractMetadataFn();
@@ -1155,9 +1116,6 @@ export function LibraryPage() {
                     }
 
                     processedCount++;
-                    if (!isCancelled) {
-                        setExtractionProgress({ current: processedCount, total });
-                    }
                 }
             } finally {
                 if (!isCancelled) {
@@ -1546,7 +1504,7 @@ export function LibraryPage() {
                     </div>
 
                     {/* Books Grid/List/Compact */}
-                    <section>
+                    <section className="flex-1 min-h-0 overflow-y-auto">
                         {sortedBooks.length === 0 ? (
                             <div className="text-center py-16 border-2 border-dashed border-[var(--color-border)]">
                                 <p className="text-[color:var(--color-text-muted)] font-bold uppercase text-xs tracking-widest">
@@ -1562,7 +1520,7 @@ export function LibraryPage() {
                                 )}
                             </div>
                         ) : settings.libraryViewMode === "list" ? (
-                            <div className="space-y-1">
+                            <div className="space-y-1 pb-8">
                                 {sortedBooks.map((book) => (
                                     <BookCard
                                         key={book.id}
@@ -1579,7 +1537,7 @@ export function LibraryPage() {
                                 ))}
                             </div>
                         ) : settings.libraryViewMode === "compact" ? (
-                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 pb-8">
                                 {sortedBooks.map((book) => (
                                     <BookCard
                                         key={book.id}
@@ -1596,7 +1554,7 @@ export function LibraryPage() {
                                 ))}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8">
+                            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 pb-8">
                                 {sortedBooks.map((book) => (
                                     <BookCard
                                         key={book.id}

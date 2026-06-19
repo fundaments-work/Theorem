@@ -90,7 +90,6 @@ function AnnotationCard({
     book,
     onDelete,
     onEdit,
-    onGoToBook,
 }: AnnotationCardProps) {
     const [showMenu, setShowMenu] = useState(false);
 

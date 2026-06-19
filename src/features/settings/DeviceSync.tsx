@@ -21,9 +21,8 @@ import {
     Monitor,
     Link2,
     ArrowDownUp,
-    ShieldCheck,
-    Signal,
     ScanLine,
+    Signal,
     Lock,
 } from "lucide-react";
 import { cn, isMobile, isTauri } from "../../core";
@@ -41,7 +40,7 @@ import {
     provisionSyncData,
     ensureResponderSyncReady,
 } from "../../core/lib/sync-orchestrator";
-import { useUIStore } from "../../core/store";
+import { useUIStore, useSettingsStore } from "../../core/store";
 import type {
     PairedDevice,
     DeviceIdentityInfo,
@@ -187,6 +186,9 @@ export function DeviceSyncSection() {
     const setDeviceSyncStatus = useUIStore(
         (state) => state.setDeviceSyncStatus,
     );
+
+    const deviceSyncSettings = useSettingsStore((state) => state.settings.deviceSync);
+    const updateSettings = useSettingsStore((state) => state.updateSettings);
 
     const available = isTauri();
     const mobilePlatform = isMobile();
@@ -546,7 +548,41 @@ export function DeviceSyncSection() {
             </Card>
 
             {/* ════════════════════════════════════════════
-                CARD 2 — Pair a Device
+                CARD 2 — Sync Settings
+            ════════════════════════════════════════════ */}
+            <Card label="Sync Settings">
+                <div className="p-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="font-medium text-sm text-[color:var(--color-text-primary)]">
+                                Auto-sync
+                            </p>
+                            <p className="text-xs text-[color:var(--color-text-muted)] mt-0.5">
+                                Periodically sync with paired devices in the background
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => updateSettings({
+                                deviceSync: {
+                                    ...deviceSyncSettings,
+                                    autoSyncEnabled: !deviceSyncSettings.autoSyncEnabled,
+                                },
+                            })}
+                            className={cn(
+                                "px-3 py-1.5 text-[11px] font-medium border transition-colors shrink-0",
+                                deviceSyncSettings.autoSyncEnabled
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                    : "text-[color:var(--color-text-secondary)] border-[var(--color-border)]",
+                            )}
+                        >
+                            {deviceSyncSettings.autoSyncEnabled ? "On" : "Off"}
+                        </button>
+                    </div>
+                </div>
+            </Card>
+
+            {/* ════════════════════════════════════════════
+                CARD 3 — Pair a Device
             ════════════════════════════════════════════ */}
             <Card label="Pair a Device">
                 <div className="divide-y divide-[var(--color-border)]">

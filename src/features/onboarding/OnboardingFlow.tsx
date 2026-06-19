@@ -6,7 +6,6 @@ import {
     FolderSync,
     ArrowRight,
     ArrowLeft,
-    Rss,
 } from "lucide-react";
 import { cn } from "../../core";
 import { TheoremLogo } from "../../shell/TheoremLogo";

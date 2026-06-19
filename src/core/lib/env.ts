@@ -3,7 +3,7 @@
  * Tauri-only desktop application
  */
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 /**
  * Check if running in a Tauri environment
@@ -82,10 +82,9 @@ export function useAndroidBackButton(handler: () => boolean) {
         // We only do this once on mount of the component using the hook
         window.history.pushState({ __theorem_back: true }, '');
 
-        const handlePopState = (event: PopStateEvent) => {
+        const handlePopState = (_event: PopStateEvent) => {
             // Only handle our specific back interceptor state
             // If the state being popped ISN'T ours, let App.tsx handle it
-            const state = event.state;
 
             // If we find ourselves back at a state without our flag, it means we've
             // already "popped" the interceptor.

@@ -25,9 +25,9 @@ import { formatFileSize } from "../../core";
 import { confirmClearAllData } from "../../core";
 import { clearAllApplicationStorage, getRssStorageStats } from "../../core/lib/storage-manager";
 import { DeviceSyncSection } from "./DeviceSync";
+import { DictionaryDownloadModal } from "./DictionaryDownloadModal";
 import { Dropdown } from "../../ui";
 import {
-    Settings,
     Layout,
     Database,
     RotateCcw,
@@ -38,7 +38,6 @@ import {
     BookOpen,
     Languages,
     Rss,
-    Puzzle,
     Download,
     Globe,
     WifiOff,
@@ -184,6 +183,7 @@ export function SettingsPage() {
     const {
         settings,
         updateSettings,
+        updateReaderSettings,
         updateVocabularySettings,
         resetSettings,
         stats,
@@ -216,6 +216,7 @@ export function SettingsPage() {
     });
 
     const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
+    const [showDictDownloadModal, setShowDictDownloadModal] = useState(false);
     const deviceSyncSectionRef = useRef<HTMLDivElement | null>(null);
     const markdownExportSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -459,6 +460,7 @@ export function SettingsPage() {
     ];
 
     return (
+        <>
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             {/* Header */}
             <div className="flex items-center justify-between mb-10">
@@ -687,6 +689,16 @@ export function SettingsPage() {
                         </SettingRow>
 
                         <SettingRow
+                            label="Read Aloud (TTS)"
+                            description="Enable text-to-speech in the reader"
+                        >
+                            <Toggle
+                                checked={settings.readerSettings.ttsEnabled}
+                                onChange={(checked) => updateReaderSettings({ ttsEnabled: checked })}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
                             label="Dark Mode"
                             description="Use dark theme throughout the app"
                         >
@@ -815,9 +827,15 @@ export function SettingsPage() {
                                 />
                                 <button
                                     onClick={() => dictionaryFileInputRef.current?.click()}
-                                    className="ui-btn-primary"
+                                    className="ui-btn-primary text-[11px]"
                                 >
                                     <Download className="w-4 h-4" /> Import Files
+                                </button>
+                                <button
+                                    onClick={() => setShowDictDownloadModal(true)}
+                                    className="ui-btn text-[11px]"
+                                >
+                                    <Download className="w-4 h-4" /> Browse Dictionaries
                                 </button>
                                 <span className="text-xs text-[color:var(--color-text-muted)]">
                                     {installedDictionaries.length} installed
@@ -1122,5 +1140,12 @@ export function SettingsPage() {
                 </div>
             )}
         </div>
+
+        <DictionaryDownloadModal
+            isOpen={showDictDownloadModal}
+            onClose={() => setShowDictDownloadModal(false)}
+            onImported={() => {}}
+        />
+        </>
     );
 }

@@ -119,7 +119,7 @@ export function HighlightColorPicker({
     onSelectColor,
     onAddNote,
     onDefine,
-    onBookmark,
+    onBookmark: _onBookmark,
     onDelete,
     dictionary,
     viewportPadding,
