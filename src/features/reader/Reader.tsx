@@ -9,6 +9,9 @@ import {
     getBookMaterializedPath,
     getBookBlob,
     getBookData,
+    extractMetadata,
+    extractFilenameFromPath,
+    ensureFilenameForFormat,
     isMobile,
     isTauri,
     isTauriMobile,
@@ -19,6 +22,7 @@ import {
     useUIStore,
     vocabularyTermFromLookup,
     type Annotation,
+    type Book,
     type BookFormat,
     type DictionaryLookupResult,
     type DocLocation,
@@ -135,6 +139,7 @@ function BookReaderPage() {
     const goBack = useUIStore((state) => state.goBack);
 
     const getBook = useLibraryStore((state) => state.getBook);
+    const updateBook = useLibraryStore((state) => state.updateBook);
     const updateProgress = useLibraryStore((state) => state.updateProgress);
     const updatePdfReadingState = useLibraryStore((state) => state.updatePdfReadingState);
     const saveBookLocations = useLibraryStore((state) => state.saveBookLocations);
@@ -689,7 +694,41 @@ function BookReaderPage() {
             const fractions = readerRef.current?.getSectionFractions() ?? [];
             setSectionFractions(fractions);
         }, 100);
-    }, [currentBookId, getBook]);
+
+        // Background cover extraction — the book data is already loaded in memory
+        void (async () => {
+            const book = loadedBook;
+            if (!book || book.coverExtractionDone) return;
+
+            try {
+                const storagePath = book.storagePath || book.filePath;
+                const data = await getBookData(book.id, storagePath);
+                if (!data) return;
+
+                const filename = ensureFilenameForFormat(
+                    extractFilenameFromPath(book.filePath),
+                    book.format,
+                );
+                const metadata = await extractMetadata(data, book.format, filename, book.id, {
+                    allowFallbackCover: true,
+                });
+
+                const updates: Partial<Book> = {};
+                if (metadata.coverDataUrl) updates.coverPath = metadata.coverDataUrl;
+                if (metadata.title && !/[./]/.test(book.title.replace(/ /g, ''))) {
+                    updates.title = metadata.title;
+                }
+                if (metadata.author && !book.author) updates.author = metadata.author;
+                updates.coverExtractionDone = true;
+
+                if (Object.keys(updates).length > 0) {
+                    updateBook(book.id, updates);
+                }
+            } catch {
+                // Silent — cover extraction is best-effort
+            }
+        })();
+    }, [currentBookId, getBook, updateBook]);
 
     const lastClickFractionRef = useRef<number | null>(null);
     const handleBookCompletionProgress = useCallback((bookId: string, progress: number) => {

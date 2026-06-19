@@ -1054,7 +1054,8 @@ export function LibraryPage() {
         showFavoritesOnly,
     ]);
 
-    // Auto-extract covers for books that don't have them
+    // Lightweight fallback cover generation for books that need covers.
+    // Real cover/metadata extraction happens when books are opened in the reader.
     useEffect(() => {
         if (!coversHydrated || isExtractingCovers || books.length === 0) {
             return;
@@ -1066,116 +1067,55 @@ export function LibraryPage() {
                 extractedBookIdsRef.current.delete(bookId);
             }
         });
-        metadataExtractionAttemptsRef.current.forEach((_attempts, bookId) => {
-            if (!knownBookIds.has(bookId)) {
-                metadataExtractionAttemptsRef.current.delete(bookId);
-            }
-        });
-        queuedImportMetadataIdsRef.current.forEach((bookId) => {
-            if (!knownBookIds.has(bookId)) {
-                queuedImportMetadataIdsRef.current.delete(bookId);
-            }
-        });
-        pendingImportMetadataQueueRef.current = pendingImportMetadataQueueRef.current.filter(
-            (book) => knownBookIds.has(book.id),
+
+        const booksNeedingFallback = books.filter(
+            (book) => (
+                !book.coverPath
+                && !extractedBookIdsRef.current.has(book.id)
+                && !book.syncedWithoutFile
+            ),
         );
 
-        const booksNeedingMetadata = books
-            .filter(
-                (book) => {
-                    const attempts = metadataExtractionAttemptsRef.current.get(book.id) ?? 0;
-                    return attempts < MAX_METADATA_EXTRACTION_ATTEMPTS && (
-                        !book.syncedWithoutFile &&
-                        (
-                            (
-                                !book.coverPath
-                                && book.coverExtractionDone !== true
-                            )
-                            || shouldRetryMissingCoverExtraction(book)
-                            || hasEncodedContentUriFallbackTitle(book)
-                            || (
-                                book.filePath.startsWith("content://")
-                                && isLikelyGeneratedFallbackCover(book.coverPath)
-                            )
-                        )
-                        && !extractedBookIdsRef.current.has(book.id)
-                        && !queuedImportMetadataIdsRef.current.has(book.id)
-                    );
-                },
-            )
-            .sort((a, b) => {
-                const aAddedAt = new Date(a.addedAt).getTime();
-                const bAddedAt = new Date(b.addedAt).getTime();
-                return bAddedAt - aAddedAt;
-            });
-
-        if (booksNeedingMetadata.length === 0) {
+        if (booksNeedingFallback.length === 0) {
             return;
         }
 
         let isCancelled = false;
 
-        const extractCovers = async () => {
+        const generateFallbacks = async () => {
             setIsExtractingCovers(true);
-            const total = booksNeedingMetadata.length;
+            let processedCount = 0;
+            const total = booksNeedingFallback.length;
             setExtractionProgress({ current: 0, total });
 
             try {
                 const extractMetadata = await getExtractMetadataFn();
-                let processedCount = 0;
-                const batchSize = isMobile() ? 1 : COVER_EXTRACTION_BATCH_SIZE;
 
-                for (let i = 0; i < booksNeedingMetadata.length && !isCancelled; i += batchSize) {
-                    const batch = booksNeedingMetadata.slice(i, i + batchSize);
+                for (const book of booksNeedingFallback) {
+                    if (isCancelled) break;
+                    extractedBookIdsRef.current.add(book.id);
 
-                    await Promise.all(batch.map(async (book) => {
-                        if (extractedBookIdsRef.current.has(book.id)) {
-                            return;
+                    try {
+                        // Only try to read data for books with accessible file paths
+                        const isContentUri = book.filePath.startsWith("content://");
+                        const hasOriginalFilePath = (
+                            !book.filePath.startsWith('browser://')
+                            && !book.filePath.startsWith('idb://')
+                            && !book.filePath.startsWith('sqlite://')
+                            && !isContentUri
+                        );
+
+                        let data: ArrayBuffer | null = null;
+                        if (hasOriginalFilePath) {
+                            data = await getBookData('', book.filePath);
                         }
-                        extractedBookIdsRef.current.add(book.id);
+                        if (!data) {
+                            const storagePath = book.storagePath || book.filePath;
+                            data = await getBookData(book.id, storagePath);
+                        }
 
-                        try {
-                            const nextAttempts = (metadataExtractionAttemptsRef.current.get(book.id) ?? 0) + 1;
-                            metadataExtractionAttemptsRef.current.set(book.id, nextAttempts);
-
-                            let data: ArrayBuffer | null = null;
-                            const isContentUri = book.filePath.startsWith("content://");
-                            const hasOriginalFilePath = (
-                                !book.filePath.startsWith('browser://')
-                                && !book.filePath.startsWith('idb://')
-                                && !book.filePath.startsWith('sqlite://')
-                                && !isContentUri
-                            );
-
-                            if (hasOriginalFilePath) {
-                                data = await getBookData('', book.filePath);
-                            }
-
-                            if (!data) {
-                                const storagePath = book.storagePath || book.filePath;
-                                data = await getBookData(book.id, storagePath);
-                            }
-
-                            if (!data) {
-                                // Book data unavailable — generate fallback cover from existing metadata
-                                if (!book.coverPath) {
-                                    const fallbackSvg = buildFallbackCoverSvg(
-                                        book.title,
-                                        book.author || 'Unknown Author',
-                                    );
-                                    const blob = new Blob([fallbackSvg], { type: 'image/svg+xml' });
-                                    const dataUrl = await saveCoverImage(book.id, blob);
-                                    if (!isCancelled) {
-                                        updateBook(book.id, {
-                                            coverPath: dataUrl,
-                                            coverExtractionDone: true,
-                                        });
-                                    }
-                                    metadataExtractionAttemptsRef.current.delete(book.id);
-                                }
-                                return;
-                            }
-
+                        if (data) {
+                            // File available — do real extraction
                             const filename = ensureFilenameForFormat(
                                 extractFilenameFromPath(book.filePath),
                                 book.format,
@@ -1185,78 +1125,38 @@ export function LibraryPage() {
                                 book.format,
                                 filename,
                                 book.id,
-                                {
-                                    metadataTimeoutMs: BATCH_METADATA_TIMEOUT_MS,
-                                    coverTimeoutMs: BATCH_COVER_TIMEOUT_MS,
-                                    allowFallbackCover: true,
-                                },
+                                { allowFallbackCover: true },
                             );
-
                             const updates: Partial<Book> = {};
                             if (metadata.coverDataUrl) {
                                 updates.coverPath = metadata.coverDataUrl;
                             }
-
-                            const shouldUpdateTitle = shouldUseExtractedTitle(book, metadata.title);
-                            const shouldUpdateAuthor = shouldUseExtractedAuthor(book, metadata.author);
-
-                            if (shouldUpdateTitle) {
-                                updates.title = normalizeMetadataText(metadata.title);
-                            }
-                            if (shouldUpdateAuthor) {
-                                updates.author = normalizeMetadataText(metadata.author);
-                            }
-
-                            if (metadata.description && !book.description) {
-                                updates.description = metadata.description;
-                            }
-                            if (metadata.publisher && !book.publisher) {
-                                updates.publisher = metadata.publisher;
-                            }
-                            if (metadata.language && !book.language) {
-                                updates.language = metadata.language;
-                            }
-                            if (metadata.publishedDate && !book.publishedDate) {
-                                updates.publishedDate = metadata.publishedDate;
-                            }
-
-                            const hasUsefulMetadataUpdate = (
-                                Boolean(metadata.coverDataUrl)
-                                || shouldUpdateTitle
-                                || shouldUpdateAuthor
-                                || Boolean(metadata.description && !book.description)
-                                || Boolean(metadata.publisher && !book.publisher)
-                                || Boolean(metadata.language && !book.language)
-                                || Boolean(metadata.publishedDate && !book.publishedDate)
-                            );
-                            if (Boolean(metadata.coverDataUrl) || hasUsefulMetadataUpdate) {
+                            if (updates.coverPath) {
                                 updates.coverExtractionDone = true;
+                                if (!isCancelled) updateBook(book.id, updates);
                             }
-
-                            if (!isCancelled && Object.keys(updates).length > 0) {
-                                updateBook(book.id, updates);
+                        } else {
+                            // Data unavailable — generate fallback from existing metadata
+                            const fallbackSvg = buildFallbackCoverSvg(
+                                book.title,
+                                book.author || 'Unknown Author',
+                            );
+                            const blob = new Blob([fallbackSvg], { type: 'image/svg+xml' });
+                            const dataUrl = await saveCoverImage(book.id, blob);
+                            if (!isCancelled) {
+                                updateBook(book.id, {
+                                    coverPath: dataUrl,
+                                    coverExtractionDone: true,
+                                });
                             }
-                            if (metadata.coverDataUrl) {
-                                metadataExtractionAttemptsRef.current.delete(book.id);
-                            }
-                        } catch (error) {
-                            console.error('[Library] Failed to extract cover for book:', book.id, error);
-                        } finally {
-                            extractedBookIdsRef.current.delete(book.id);
                         }
-                    }));
-
-                    processedCount += batch.length;
-                    if (!isCancelled) {
-                        setExtractionProgress({
-                            current: Math.min(processedCount, total),
-                            total,
-                        });
+                    } catch {
+                        // Silent — fallback cover will be generated by the reader
                     }
 
-                    // Yield to keep UI responsive while processing large libraries.
+                    processedCount++;
                     if (!isCancelled) {
-                        await new Promise((resolve) => setTimeout(resolve, 0));
+                        setExtractionProgress({ current: processedCount, total });
                     }
                 }
             } finally {
@@ -1266,15 +1166,9 @@ export function LibraryPage() {
             }
         };
 
-        const timeoutId = setTimeout(() => {
-            void extractCovers();
-        }, 300);
-
-        return () => {
-            isCancelled = true;
-            clearTimeout(timeoutId);
-        };
-    }, [books, coversHydrated, isExtractingCovers, updateBook]);
+        void generateFallbacks();
+        return () => { isCancelled = true; };
+    }, [coversHydrated, books, updateBook]);
 
     // Close filter dropdown when clicking outside
     useEffect(() => {
