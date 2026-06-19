@@ -97,6 +97,9 @@ export class FoliateEngine {
     private _navigationHistory: string[] = [];
     private _currentHistoryIndex = -1;
 
+    // Keyboard listeners attached to iframe documents
+    private _keyboardAttached = new WeakSet<Document>();
+
     // CFI cache to avoid re-parsing
     private cfiCache = new Map<string, string>();
     private cfiCacheMaxSize = 100;
@@ -359,6 +362,33 @@ export class FoliateEngine {
             if (detail?.doc?.documentElement) {
                 // Apply zoom immediately
                 this.applyZoomToDocument(detail.doc);
+
+                // Attach keyboard navigation to iframe document (keydown events in
+                // iframes don't bubble to the parent window, so we must listen inside).
+                const doc = detail.doc;
+                const win = doc?.defaultView;
+                if (win && !this._keyboardAttached.has(doc)) {
+                    this._keyboardAttached.add(doc);
+                    win.addEventListener('keydown', (ev: KeyboardEvent) => {
+                        if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) return;
+                        switch (ev.key) {
+                            case 'ArrowLeft': ev.preventDefault(); this.prev(); break;
+                            case 'ArrowRight': ev.preventDefault(); this.next(); break;
+                            case 'ArrowUp': case 'PageUp':
+                                ev.preventDefault();
+                                if (this.flow === 'scroll') this.scrollUp();
+                                else this.prev();
+                                break;
+                            case 'ArrowDown': case 'PageDown': case ' ':
+                                ev.preventDefault();
+                                if (this.flow === 'scroll') this.scrollDown();
+                                else this.next();
+                                break;
+                            case 'Home': ev.preventDefault(); this.goToFraction(0); break;
+                            case 'End': ev.preventDefault(); this.goToFraction(0.999); break;
+                        }
+                    }, { capture: true, passive: false });
+                }
             }
         });
 
@@ -465,6 +495,14 @@ export class FoliateEngine {
             }
 
             this.options.onLocationChange?.(location);
+
+            // When the paginator auto-navigates after a cross-column text selection
+            // (reason === 'selection'), re-render annotations so highlights from
+            // the previous visible area stay painted in the new scroll position.
+            if (detail.reason === 'selection') {
+                const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
+                this.renderAnnotationsForSection(sectionIndex);
+            }
         });
 
         // Handle history changes
