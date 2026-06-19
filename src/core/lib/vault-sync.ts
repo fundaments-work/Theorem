@@ -248,6 +248,8 @@ function isHighlightColor(value: string | undefined): value is HighlightColor {
     return value in FALLBACK_HIGHLIGHT_COLORS;
 }
 
+const highlightColorCache = new Map<string, string | null>();
+
 function readRootCssVariable(variableName: string): string | null {
     if (typeof window === "undefined" || typeof document === "undefined") {
         return null;
@@ -263,8 +265,14 @@ function getAnnotationHighlightColor(annotation: Annotation): string | null {
         return null;
     }
 
-    return readRootCssVariable(`--highlight-${annotation.color}`)
-        ?? FALLBACK_HIGHLIGHT_COLORS[annotation.color];
+    const key = annotation.color;
+    if (highlightColorCache.has(key)) {
+        return highlightColorCache.get(key) ?? FALLBACK_HIGHLIGHT_COLORS[key];
+    }
+    const resolved = readRootCssVariable(`--highlight-${key}`)
+        ?? FALLBACK_HIGHLIGHT_COLORS[key];
+    highlightColorCache.set(key, resolved);
+    return resolved;
 }
 
 function toHighlightedQuote(quote: string, color: string | null): string {
@@ -631,21 +639,23 @@ export async function syncVaultMarkdownSnapshot({
         const fs = await getTauriFs();
         await fs.mkdir(vaultPath, { recursive: true });
         await fs.mkdir(pagesDirectoryPath, { recursive: true });
-        if (await fs.exists(legacyHighlightsIndexPath)) {
-            await fs.remove(legacyHighlightsIndexPath);
-        }
+        try { await fs.remove(legacyHighlightsIndexPath); } catch {}
 
         const pages = buildBookPages(books, rssArticles, annotations, vaultPath, pagesDirectoryName);
 
-        await Promise.all(
-            pages.map((page) => (
+        // Write pages in batches to avoid exceeding file descriptor limits.
+        const BATCH_SIZE = 16;
+        for (let i = 0; i < pages.length; i += BATCH_SIZE) {
+            const batch = pages.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map((page) =>
                 fs.writeTextFile(
                     page.absolutePath,
                     buildBookPageMarkdown(page.source, page.annotations, generatedAt),
-                )
-            )),
-        );
+                ),
+            ));
+        }
 
+        // Write vocabulary in parallel with the last page batch (already awaited above).
         await fs.writeTextFile(
             vocabularyPath,
             buildVocabularyMarkdown(vocabularyTerms, generatedAt),

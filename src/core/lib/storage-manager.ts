@@ -116,16 +116,13 @@ export async function getBookStorageStats(): Promise<{
     const bookKeys = await getIndexedDBKeysByPrefix(`${STORE_NAME}-`);
     const coverKeys = await getIndexedDBKeysByPrefix(`${COVERS_STORE}-`);
 
-    let binariesSize = 0;
-    let coversSize = 0;
+    const [binariesSizes, coversSizes] = await Promise.all([
+        Promise.all(bookKeys.map((key) => getIndexedDBKeySize(key))),
+        Promise.all(coverKeys.map((key) => getIndexedDBKeySize(key))),
+    ]);
 
-    for (const key of bookKeys) {
-        binariesSize += await getIndexedDBKeySize(key);
-    }
-
-    for (const key of coverKeys) {
-        coversSize += await getIndexedDBKeySize(key);
-    }
+    const binariesSize = binariesSizes.reduce((sum, s) => sum + s, 0);
+    const coversSize = coversSizes.reduce((sum, s) => sum + s, 0);
 
     return {
         totalBooks: bookKeys.length,
@@ -169,11 +166,8 @@ export async function getRssStorageStats(): Promise<{
     }
 
     const rssKeys = await getIndexedDBKeysByPrefix('theorem-rss-');
-    let totalSize = 0;
-
-    for (const key of rssKeys) {
-        totalSize += await getIndexedDBKeySize(key);
-    }
+    const sizes = await Promise.all(rssKeys.map((key) => getIndexedDBKeySize(key)));
+    const totalSize = sizes.reduce((sum, s) => sum + s, 0);
 
     return {
         articleCount: rssKeys.length,
@@ -198,11 +192,8 @@ export async function getStarDictStorageStats(): Promise<{
     }
 
     const dictionaryKeys = await getIndexedDBKeysByPrefix(`${STARDICT_PREFIX}:`);
-    let totalSize = 0;
-
-    for (const key of dictionaryKeys) {
-        totalSize += await getIndexedDBKeySize(key);
-    }
+    const sizes = await Promise.all(dictionaryKeys.map((key) => getIndexedDBKeySize(key)));
+    const totalSize = sizes.reduce((sum, s) => sum + s, 0);
 
     return {
         dictionaryCount: dictionaryKeys.length / 4,
@@ -289,44 +280,35 @@ export async function cleanupOrphanedStorage(existingBookIds: string[]): Promise
         };
     }
 
-    const bookKeys = await getIndexedDBKeysByPrefix(`${STORE_NAME}-`);
-    const coverKeys = await getIndexedDBKeysByPrefix(`${COVERS_STORE}-`);
-    const metadataKeys = await getIndexedDBKeysByPrefix(`${METADATA_STORE}-`);
+    const [bookKeys, coverKeys, metadataKeys] = await Promise.all([
+        getIndexedDBKeysByPrefix(`${STORE_NAME}-`),
+        getIndexedDBKeysByPrefix(`${COVERS_STORE}-`),
+        getIndexedDBKeysByPrefix(`${METADATA_STORE}-`),
+    ]);
 
     const existingIds = new Set(existingBookIds);
 
-    let removedBooks = 0;
-    let removedCovers = 0;
-    let removedMetadata = 0;
+    const collectOrphaned = (keys: string[], prefix: string): string[] =>
+        keys.reduce<string[]>((acc, key) => {
+            const id = key.replace(prefix, '');
+            if (!existingIds.has(id)) acc.push(key);
+            return acc;
+        }, []);
 
-    for (const key of bookKeys) {
-        const bookId = key.replace(`${STORE_NAME}-`, '');
-        if (!existingIds.has(bookId)) {
-            await del(key);
-            removedBooks += 1;
-        }
-    }
+    const orphanedBooks = collectOrphaned(bookKeys, `${STORE_NAME}-`);
+    const orphanedCovers = collectOrphaned(coverKeys, `${COVERS_STORE}-`);
+    const orphanedMetadata = collectOrphaned(metadataKeys, `${METADATA_STORE}-`);
 
-    for (const key of coverKeys) {
-        const bookId = key.replace(`${COVERS_STORE}-`, '');
-        if (!existingIds.has(bookId)) {
-            await del(key);
-            removedCovers += 1;
-        }
-    }
-
-    for (const key of metadataKeys) {
-        const bookId = key.replace(`${METADATA_STORE}-`, '');
-        if (!existingIds.has(bookId)) {
-            await del(key);
-            removedMetadata += 1;
-        }
-    }
+    await Promise.all([
+        Promise.all(orphanedBooks.map((key) => del(key))),
+        Promise.all(orphanedCovers.map((key) => del(key))),
+        Promise.all(orphanedMetadata.map((key) => del(key))),
+    ]);
 
     return {
-        removedBooks,
-        removedCovers,
-        removedMetadata,
+        removedBooks: orphanedBooks.length,
+        removedCovers: orphanedCovers.length,
+        removedMetadata: orphanedMetadata.length,
     };
 }
 

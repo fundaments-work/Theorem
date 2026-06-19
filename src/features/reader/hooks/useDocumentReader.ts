@@ -108,11 +108,10 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
     const containerRef = useRef<HTMLDivElement | null>(null);
     const engineRef = useRef<FoliateEngine | null>(null);
 
-    // Store callbacks in ref to avoid re-renders when options change
+    // Store callbacks in ref to avoid re-renders when options change.
+    // Assigning during render avoids an extra effect commit on every render.
     const callbacksRef = useRef(options);
-    useEffect(() => {
-        callbacksRef.current = options;
-    });
+    callbacksRef.current = options;
 
     // State - grouped by update frequency for optimal render performance
     const [initState, setInitState] = useState({

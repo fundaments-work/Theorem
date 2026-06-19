@@ -299,6 +299,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                                             src={book.coverPath}
                                             alt={book.title}
                                             className="w-full h-full object-cover"
+                                            loading="lazy"
                                         />
                                     ) : (
                                         <div className="w-full h-full bg-[var(--color-surface)] flex items-center justify-center">
@@ -567,6 +568,12 @@ export function ShelvesPage() {
     const [editingShelf, setEditingShelf] = useState<{ id: string; name: string; description?: string } | undefined>();
     const generalCollections = useMemo(() => collections, [collections]);
 
+    // O(1) book lookup map to avoid O(N*M) find() in loops
+    const bookLookup = useMemo(
+        () => new Map(books.map((book) => [book.id, book])),
+        [books],
+    );
+
     // Filter shelves by search query
     const filteredShelves = useMemo(() => {
         if (!searchQuery.trim()) {
@@ -592,13 +599,13 @@ export function ShelvesPage() {
 
     // Helper to get actual books count (excluding deleted books)
     const getActualBookCount = (bookIds: string[]) => {
-        return bookIds.filter((id) => books.some((b) => b.id === id)).length;
+        return bookIds.filter((id) => bookLookup.has(id)).length;
     };
 
     // Helper to get actual books for display
     const getShelfBooks = (bookIds: string[]): Book[] => {
         return bookIds
-            .map((id) => books.find((b) => b.id === id))
+            .map((id) => bookLookup.get(id))
             .filter((book): book is Book => book !== undefined);
     };
 

@@ -211,15 +211,19 @@ async function mergeIncomingData(
 
     // ── Merge tombstones FIRST so books/annotations/collections can respect them ──
     let allTombstones = useLibraryStore.getState().deletionTombstones;
-    let tombstonesChanged = false;
+
+    // Collect library store changes in a single batch to avoid cascading subscriber re-renders.
+    const libraryPatch: Partial<ReturnType<typeof useLibraryStore.getState>> = {};
+    const applyLibraryPatch = (patch: Partial<ReturnType<typeof useLibraryStore.getState>>) => {
+        Object.assign(libraryPatch, patch);
+    };
 
     if (incomingMap["deletion_tombstones"]) {
         try {
             const incoming = JSON.parse(incomingMap["deletion_tombstones"]);
             if (Array.isArray(incoming)) {
                 allTombstones = mergeTombstones(incoming, allTombstones);
-                useLibraryStore.setState({ deletionTombstones: allTombstones });
-                tombstonesChanged = true;
+                applyLibraryPatch({ deletionTombstones: allTombstones });
                 markUpdated("deletion_tombstones");
             }
         } catch (e) {
@@ -230,54 +234,49 @@ async function mergeIncomingData(
     // Tombstones can arrive without the books/annotations/collections domains.
     // In that case, we still must prune local entities immediately so deletions
     // propagate correctly cross-device.
-    if (tombstonesChanged) {
+    if (incomingMap["deletion_tombstones"]) {
         const libraryState = useLibraryStore.getState();
         const prunedBooks = mergeBooks([], libraryState.books, allTombstones);
         const prunedAnnotations = mergeAnnotations([], libraryState.annotations, allTombstones);
         const prunedCollections = mergeCollections([], libraryState.collections, allTombstones);
 
-        useLibraryStore.setState({
+        applyLibraryPatch({
             books: prunedBooks,
             annotations: prunedAnnotations,
             collections: prunedCollections,
         });
 
-        if (prunedBooks.length !== libraryState.books.length) {
-            markUpdated("books");
-        }
-        if (prunedAnnotations.length !== libraryState.annotations.length) {
-            markUpdated("annotations");
-        }
-        if (prunedCollections.length !== libraryState.collections.length) {
-            markUpdated("collections");
-        }
+        if (prunedBooks.length !== libraryState.books.length) markUpdated("books");
+        if (prunedAnnotations.length !== libraryState.annotations.length) markUpdated("annotations");
+        if (prunedCollections.length !== libraryState.collections.length) markUpdated("collections");
+    }
+
+    // Read a snapshot of current state for merges that depends on it.
+    let currentLibState = useLibraryStore.getState();
+    // Apply pending patches so subsequent domain merges work on the pruned state.
+    if (Object.keys(libraryPatch).length > 0) {
+        currentLibState = { ...currentLibState, ...libraryPatch };
     }
 
     if (incomingMap["books"]) {
         try {
             const incoming = JSON.parse(incomingMap["books"]);
             if (Array.isArray(incoming)) {
-                // Read fresh state to avoid overwriting concurrent user changes.
-                const merged = mergeBooks(incoming, useLibraryStore.getState().books, allTombstones);
-                useLibraryStore.setState({ books: merged });
+                const merged = mergeBooks(incoming, currentLibState.books, allTombstones);
+                applyLibraryPatch({ books: merged });
                 markUpdated("books");
 
-                // Persist incoming cover data URLs to storage so they survive
-                // page reloads (partialize strips coverPath from Zustand persistence).
                 const incomingWithCovers = (incoming as { id: string; coverPath?: string }[])
                     .filter((b) => b.coverPath && b.coverPath.startsWith("data:"));
-                
+
                 await Promise.allSettled(incomingWithCovers.map(async (inc) => {
                     try {
                         const response = await fetch(inc.coverPath!);
                         const blob = await response.blob();
-                        if (blob.size > 0) {
-                            await saveCoverImage(inc.id, blob);
-                        }
-                    } catch {
-                        // Non-critical: cover displays from in-memory state.
-                    }
+                        if (blob.size > 0) await saveCoverImage(inc.id, blob);
+                    } catch {}
                 }));
+                currentLibState = { ...currentLibState, books: merged };
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge books:", e);
@@ -288,9 +287,10 @@ async function mergeIncomingData(
         try {
             const incoming = JSON.parse(incomingMap["annotations"]);
             if (Array.isArray(incoming)) {
-                const merged = mergeAnnotations(incoming, useLibraryStore.getState().annotations, allTombstones);
-                useLibraryStore.setState({ annotations: merged });
+                const merged = mergeAnnotations(incoming, currentLibState.annotations, allTombstones);
+                applyLibraryPatch({ annotations: merged });
                 markUpdated("annotations");
+                currentLibState = { ...currentLibState, annotations: merged };
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge annotations:", e);
@@ -301,13 +301,19 @@ async function mergeIncomingData(
         try {
             const incoming = JSON.parse(incomingMap["collections"]);
             if (Array.isArray(incoming)) {
-                const merged = mergeCollections(incoming, useLibraryStore.getState().collections, allTombstones);
-                useLibraryStore.setState({ collections: merged });
+                const merged = mergeCollections(incoming, currentLibState.collections, allTombstones);
+                applyLibraryPatch({ collections: merged });
                 markUpdated("collections");
+                currentLibState = { ...currentLibState, collections: merged };
             }
         } catch (e) {
             console.error("[sync-orchestrator] Failed to merge collections:", e);
         }
+    }
+
+    // Flush all library store changes in a single setState call.
+    if (Object.keys(libraryPatch).length > 0) {
+        useLibraryStore.setState(libraryPatch as Parameters<typeof useLibraryStore.setState>[0]);
     }
 
     if (incomingMap["vocabulary"]) {
@@ -396,11 +402,16 @@ async function mergeIncomingData(
     if (domainsUpdated.includes("rss_feeds") || domainsUpdated.includes("rss_articles")) {
         try {
             const currentRss = useRssStore.getState();
+            // Pre-compute unread counts in O(A) instead of O(F * A)
+            const unreadByFeed = new Map<string, number>();
+            for (const a of currentRss.articles) {
+                if (!a.isRead && a.feedId) {
+                    unreadByFeed.set(a.feedId, (unreadByFeed.get(a.feedId) ?? 0) + 1);
+                }
+            }
             const updatedFeeds = currentRss.feeds.map((feed) => ({
                 ...feed,
-                unreadCount: currentRss.articles.filter(
-                    (a) => a.feedId === feed.id && !a.isRead,
-                ).length,
+                unreadCount: unreadByFeed.get(feed.id) ?? 0,
             }));
             useRssStore.setState({ feeds: updatedFeeds });
         } catch (e) {

@@ -71,6 +71,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                             src={book.coverPath}
                             alt={book.title}
                             className="w-10 h-14 object-cover shadow-sm"
+                            loading="lazy"
                         />
                     ) : (
                         <div className="w-10 h-14 bg-[var(--color-surface-muted)] flex items-center justify-center">
@@ -135,6 +136,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                             src={book.coverPath}
                             alt={book.title}
                             className="w-full h-full object-cover"
+                            loading="lazy"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-overlay-strong)] to-transparent" />
                         <div className="absolute bottom-3 left-3 right-3">
@@ -278,7 +280,7 @@ export function BookmarksPage() {
     };
 
     const getBookInfo = (bookId: string) => {
-        return books.find((b) => b.id === bookId);
+        return bookLookup.get(bookId);
     };
 
     if (bookmarks.length === 0) {

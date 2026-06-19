@@ -283,8 +283,17 @@ function updateBookById(
 }
 
 const bookLookupCache = new WeakMap<Book[], Map<string, Book>>();
+
 const cachedBookLookupCache = new WeakMap<CachedBookMetadata[], Map<string, CachedBookMetadata>>();
+
 const annotationsByBookCache = new WeakMap<Annotation[], Map<string, Annotation[]>>();
+
+// Caches for unstable selectors — keyed by source array identity
+const recentBooksResultCache = new WeakMap<Book[], Book[]>();
+const favoriteBooksResultCache = new WeakMap<Book[], Book[]>();
+const booksByCategoryResultCache = new WeakMap<Book[], Map<string, Book[]>>();
+const highlightsResultCache = new WeakMap<Annotation[], Map<string, Annotation[]>>();
+const bookmarksResultCache = new WeakMap<Annotation[], Map<string, Annotation[]>>();
 const COVER_RESTORE_BATCH_SIZE = 24;
 
 function getBookLookup(books: Book[]): Map<string, Book> {
@@ -1287,13 +1296,35 @@ export const useLibraryStore = create<LibraryStore>()(
             getBookAnnotations: (bookId) =>
                 getBookAnnotationSlice(get().annotations, bookId),
 
-            getHighlights: (bookId) =>
-                getBookAnnotationSlice(get().annotations, bookId)
-                    .filter((annotation) => annotation.type === 'highlight' || annotation.type === 'note'),
+            getHighlights: (bookId) => {
+                const annotations = get().annotations;
+                let cache = highlightsResultCache.get(annotations);
+                if (!cache) {
+                    cache = new Map();
+                    highlightsResultCache.set(annotations, cache);
+                }
+                const cached = cache.get(bookId);
+                if (cached) return cached;
+                const slice = getBookAnnotationSlice(annotations, bookId)
+                    .filter((annotation) => annotation.type === 'highlight' || annotation.type === 'note');
+                cache.set(bookId, slice);
+                return slice;
+            },
 
-            getBookmarks: (bookId) =>
-                getBookAnnotationSlice(get().annotations, bookId)
-                    .filter((annotation) => annotation.type === 'bookmark'),
+            getBookmarks: (bookId) => {
+                const annotations = get().annotations;
+                let cache = bookmarksResultCache.get(annotations);
+                if (!cache) {
+                    cache = new Map();
+                    bookmarksResultCache.set(annotations, cache);
+                }
+                const cached = cache.get(bookId);
+                if (cached) return cached;
+                const slice = getBookAnnotationSlice(annotations, bookId)
+                    .filter((annotation) => annotation.type === 'bookmark');
+                cache.set(bookId, slice);
+                return slice;
+            },
 
             exportAnnotationsToMarkdown: (bookId: string) => {
                 const book = get().getBook(bookId);
@@ -1338,23 +1369,49 @@ export const useLibraryStore = create<LibraryStore>()(
             // Getters
             getBook: (bookId) => getBookLookup(get().books).get(bookId),
 
-            getRecentBooks: (limit = 10) =>
-                [...get().books]
+            getRecentBooks: (limit = 10) => {
+                const books = get().books;
+                const cached = recentBooksResultCache.get(books);
+                if (cached) return cached.slice(0, limit);
+                const sorted = [...books]
                     .filter((b) => b.lastReadAt)
                     .sort((a, b) => {
                         const aDate = a.lastReadAt instanceof Date ? a.lastReadAt : new Date(a.lastReadAt!);
                         const bDate = b.lastReadAt instanceof Date ? b.lastReadAt : new Date(b.lastReadAt!);
                         return (bDate.getTime() || 0) - (aDate.getTime() || 0);
-                    })
-                    .slice(0, limit),
+                    });
+                recentBooksResultCache.set(books, sorted);
+                return sorted.slice(0, limit);
+            },
 
-            getFavoriteBooks: () => get().books.filter((b) => b.isFavorite),
+            getFavoriteBooks: () => {
+                const books = get().books;
+                const cached = favoriteBooksResultCache.get(books);
+                if (cached) return cached;
+                const result = books.filter((b) => b.isFavorite);
+                favoriteBooksResultCache.set(books, result);
+                return result;
+            },
 
-            getBooksByCategory: (category) =>
-                get().books.filter((b) => b.category === category),
+            getBooksByCategory: (category) => {
+                const books = get().books;
+                let catCache = booksByCategoryResultCache.get(books);
+                if (!catCache) {
+                    catCache = new Map();
+                    for (const b of books) {
+                        if (!b.category) continue;
+                        const arr = catCache.get(b.category);
+                        if (arr) arr.push(b);
+                        else catCache.set(b.category, [b]);
+                    }
+                    booksByCategoryResultCache.set(books, catCache);
+                }
+                return catCache.get(category) ?? [];
+            },
 
             searchBooks: (query) => {
                 const q = query.toLowerCase();
+                if (!q) return [];
                 return get().books.filter(
                     (b) =>
                         b.title.toLowerCase().includes(q) ||
@@ -1929,18 +1986,15 @@ export const useVocabularyStore = create<VocabularyStore>()(
                 }
 
                 const mergedMeanings = [...existing.meanings];
+                const existingSigs = new Set(
+                    mergedMeanings.map((candidate) =>
+                        `${candidate.provider || ''}::${candidate.partOfSpeech || ''}::${(candidate.definitions || []).join('|')}`,
+                    ),
+                );
                 for (const meaning of incomingTerm.meanings) {
-                    const signature = JSON.stringify({
-                        provider: meaning.provider,
-                        partOfSpeech: meaning.partOfSpeech,
-                        definitions: meaning.definitions,
-                    });
-                    const alreadyPresent = mergedMeanings.some((candidate) => JSON.stringify({
-                        provider: candidate.provider,
-                        partOfSpeech: candidate.partOfSpeech,
-                        definitions: candidate.definitions,
-                    }) === signature);
-                    if (!alreadyPresent) {
+                    const sig = `${meaning.provider || ''}::${meaning.partOfSpeech || ''}::${(meaning.definitions || []).join('|')}`;
+                    if (!existingSigs.has(sig)) {
+                        existingSigs.add(sig);
                         mergedMeanings.push(meaning);
                     }
                 }

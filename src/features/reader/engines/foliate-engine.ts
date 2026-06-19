@@ -89,7 +89,11 @@ export class FoliateEngine {
     // Batch update mechanism
     private pendingUpdateFrame: number | null = null;
     private pendingSettingsUpdate = false;
-    
+
+    // CSS cache — avoid rebuilding large CSS strings on every settings change
+    private _lastCssSettingsKey = '';
+    private _lastCssResult: string | null = null;
+
     // Style update unsubscribe
     private unsubscribeFromStyles: (() => void) | null = null;
 
@@ -808,6 +812,29 @@ export class FoliateEngine {
         const currentSettings = getCurrentReaderSettings();
         if (!currentSettings) return;
 
+        // Cache CSS output by settings key to avoid rebuilding ~4 KB of CSS
+        // on every font-size slider tick or theme toggle.
+        const cssKey = [
+            currentSettings.fontSize,
+            currentSettings.lineHeight,
+            currentSettings.fontFamily,
+            currentSettings.letterSpacing,
+            currentSettings.wordSpacing,
+            currentSettings.textAlign,
+            currentSettings.hyphenation,
+            currentSettings.forcePublisherStyles ?? false,
+            this.theme,
+            this.zoom_level,
+        ].join('|');
+
+        const renderer = this.view.renderer;
+
+        if (this._lastCssSettingsKey === cssKey && this._lastCssResult) {
+            if (renderer.setStyles) renderer.setStyles(this._lastCssResult);
+            return;
+        }
+        this._lastCssSettingsKey = cssKey;
+
         // Compute text alignment value for CSS
         const alignValue = currentSettings.textAlign === 'justify' ? 'justify' :
                           currentSettings.textAlign === 'center' ? 'center' : 'left';
@@ -824,8 +851,6 @@ export class FoliateEngine {
             theme,
             overrideFont: currentSettings.forcePublisherStyles,
         };
-
-        const renderer = this.view.renderer;
         
         if (renderer.setStyles) {
             // Create CSS with current actual values, not CSS variables
@@ -964,11 +989,15 @@ export class FoliateEngine {
             `;
             
             const foliateCSS = getCSS(readerStyle);
+            const cssResult = Array.isArray(foliateCSS)
+                ? `${foliateCSS[1]}\n${customCSS}`
+                : `${foliateCSS}\n${customCSS}`;
+            this._lastCssResult = cssResult;
+
             if (Array.isArray(foliateCSS)) {
-                const [beforeStyle = '', style = ''] = foliateCSS;
-                renderer.setStyles([beforeStyle, `${style}\n${customCSS}`]);
+                renderer.setStyles([foliateCSS[0], cssResult]);
             } else {
-                renderer.setStyles(`${foliateCSS}\n${customCSS}`);
+                renderer.setStyles(cssResult);
             }
         }
     }
@@ -1369,33 +1398,37 @@ export class FoliateEngine {
             return;
         }
 
-        // Clear existing
-        for (const annotation of this.annotations.values()) {
-            try {
-                await this.view?.deleteAnnotation?.({ value: annotation.location });
-            } catch (e) {
-                // Ignore errors for non-existent annotations
-            }
-        }
+        // Clear existing in parallel
+        const deleteOps = Array.from(this.annotations.values())
+            .map((annotation) =>
+                this.view?.deleteAnnotation?.({ value: annotation.location })
+                    ?.catch(() => {}) ?? Promise.resolve(),
+            );
+        await Promise.all(deleteOps);
         this.annotations.clear();
 
-        // Add new annotations with delay between each to avoid overwhelming the renderer
-        for (const annotation of annotations) {
+        // Add new annotations in small concurrent batches
+        const toRender = annotations.filter(
+            (a) => a.location && (a.type === 'highlight' || a.type === 'note'),
+        );
+        for (const annotation of toRender) {
             this.annotations.set(annotation.id, annotation);
-            
-            // Render highlights for both 'highlight' and 'note' types
-            // Notes should still show the highlighted text
-            if (annotation.location && (annotation.type === 'highlight' || annotation.type === 'note')) {
-                try {
-                    await this.view?.addAnnotation?.({
-                        value: annotation.location,
-                        color: annotation.color,
-                    });
-                    // Small delay to allow renderer to process
-                    await new Promise(resolve => setTimeout(resolve, 10));
-                } catch (e) {
+        }
+
+        const BATCH_SIZE = 12;
+        for (let i = 0; i < toRender.length; i += BATCH_SIZE) {
+            const batch = toRender.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map((annotation) =>
+                this.view?.addAnnotation?.({
+                    value: annotation.location,
+                    color: annotation.color,
+                })?.catch((e: unknown) => {
                     console.warn('[FoliateEngine] Failed to load annotation:', annotation.id, e);
-                }
+                }) ?? Promise.resolve(),
+            ));
+            // Yield to the renderer between batches
+            if (i + BATCH_SIZE < toRender.length) {
+                await new Promise((resolve) => setTimeout(resolve, 4));
             }
         }
     }

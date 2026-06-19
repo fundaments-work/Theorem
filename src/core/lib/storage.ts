@@ -27,6 +27,7 @@ const blobCache = new Map<string, Blob>();
 const pendingDataReads = new Map<string, Promise<ArrayBuffer | null>>();
 const pendingBlobReads = new Map<string, Promise<Blob | null>>();
 const materializedPathCache = new Map<string, string>();
+const coverCache = new Map<string, string>();
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
@@ -392,6 +393,7 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
  */
 export async function saveCoverImage(bookId: string, blob: Blob): Promise<string> {
     const dataUrl = await blobToDataUrl(blob);
+    coverCache.set(bookId, dataUrl);
 
     if (isTauri()) {
         try {
@@ -415,10 +417,14 @@ export async function saveCoverImage(bookId: string, blob: Blob): Promise<string
  * Get cover image data URL.
  */
 export async function getCoverImage(bookId: string): Promise<string | null> {
+    const cached = coverCache.get(bookId);
+    if (cached !== undefined) return cached || null;
+
     if (isTauri()) {
         try {
             const cover = await sqliteGetCoverImage(bookId);
             if (cover) {
+                coverCache.set(bookId, cover);
                 return cover;
             }
         } catch (error) {
@@ -428,9 +434,12 @@ export async function getCoverImage(bookId: string): Promise<string | null> {
 
     try {
         const dataUrl = await get<string>(`${COVERS_STORE}-${bookId}`);
-        return dataUrl ?? null;
+        const result = dataUrl ?? null;
+        coverCache.set(bookId, result || '');
+        return result;
     } catch (error) {
         console.error('[Storage] Failed to get cover image from IndexedDB:', error);
+        coverCache.set(bookId, '');
         return null;
     }
 }
@@ -439,6 +448,8 @@ export async function getCoverImage(bookId: string): Promise<string | null> {
  * Delete cover image.
  */
 export async function deleteCoverImage(bookId: string): Promise<void> {
+    coverCache.delete(bookId);
+
     if (isTauri()) {
         try {
             await sqliteDeleteCoverImage(bookId);
