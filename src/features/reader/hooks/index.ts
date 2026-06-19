@@ -5,3 +5,4 @@ export type {
 } from "./useDocumentReader";
 export { useReaderFullscreen } from "./useReaderFullscreen";
 export { useToolbarHeight } from "./useToolbarHeight";
+export { useTtsController } from "./useTtsController";
