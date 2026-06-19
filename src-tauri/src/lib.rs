@@ -805,7 +805,8 @@ pub fn run() {
             sync_commands::initiate_sync,
             sync_commands::pull_book_files,
             sync_commands::pull_book_covers,
-            hide_to_tray
+            hide_to_tray,
+            download_and_extract_stardict
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -822,4 +823,89 @@ fn hide_to_tray(app: tauri::AppHandle) -> Result<(), String> {
     } else {
         Ok(())
     }
+}
+
+/// Download and extract a StarDict dictionary from a URL.
+/// Returns { ifo, idx, dict, syn? } as base64-encoded strings.
+#[tauri::command]
+fn download_and_extract_stardict(url: String) -> Result<serde_json::Value, String> {
+    let client = Client::builder()
+        .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+    let response = client
+        .get(&url)
+        .send()
+        .map_err(|e| format!("Download failed: {e}"))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("Server returned HTTP {}", status.as_u16()));
+    }
+
+    let body = response
+        .bytes()
+        .map_err(|e| format!("Failed to read response body: {e}"))?;
+
+    // Decompress bzip2 and parse tar archive
+    let decompressed = {
+        let mut decoder = bzip2::read::BzDecoder::new(&body[..]);
+        let mut buf = Vec::new();
+        std::io::Read::read_to_end(&mut decoder, &mut buf)
+            .map_err(|e| format!("Bzip2 decompression failed: {e}"))?;
+        buf
+    };
+
+    let mut archive = tar::Archive::new(&decompressed[..]);
+
+    let mut ifo_bytes: Option<Vec<u8>> = None;
+    let mut idx_bytes: Option<Vec<u8>> = None;
+    let mut dict_bytes: Option<Vec<u8>> = None;
+    let mut syn_bytes: Option<Vec<u8>> = None;
+
+    for entry in archive.entries().map_err(|e| format!("Tar parsing failed: {e}"))? {
+        let mut entry = entry.map_err(|e| format!("Tar entry error: {e}"))?;
+        let name = {
+            let path = entry.path().map_err(|e| format!("Tar path error: {e}"))?;
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_owned()
+        };
+
+        let mut data = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut data)
+            .map_err(|e| format!("Failed to read tar entry '{name}': {e}"))?;
+
+        if name.ends_with(".ifo") {
+            ifo_bytes = Some(data);
+        } else if name.ends_with(".idx") && !name.ends_with(".idx.gz") {
+            idx_bytes = Some(data);
+        } else if name.ends_with(".dict.dz") || name.ends_with(".dict") {
+            dict_bytes = Some(data);
+        } else if name.ends_with(".syn") {
+            syn_bytes = Some(data);
+        }
+    }
+
+    let ifo = ifo_bytes.ok_or("Archive missing .ifo file")?;
+    let idx = idx_bytes.ok_or("Archive missing .idx file")?;
+    let dict = dict_bytes.ok_or("Archive missing .dict.dz/.dict file")?;
+
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD;
+
+    let mut result = serde_json::json!({
+        "ifo": b64.encode(&ifo),
+        "idx": b64.encode(&idx),
+        "dict": b64.encode(&dict),
+    });
+
+    if let Some(syn) = syn_bytes {
+        result["syn"] = serde_json::Value::String(b64.encode(&syn));
+    }
+
+    Ok(result)
 }

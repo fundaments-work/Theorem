@@ -303,6 +303,59 @@ export async function importStarDictDictionary(
 }
 
 /**
+ * Import a StarDict dictionary from raw byte arrays.
+ * Useful for programmatic imports (e.g., downloaded dictionaries).
+ */
+export async function importStarDictFromBytes(
+    ifoBytes: Uint8Array,
+    idxBytes: Uint8Array,
+    dictBytes: Uint8Array,
+    synBytes?: Uint8Array,
+): Promise<InstalledDictionary> {
+    const ifoBuffer = ifoBytes.buffer.slice(ifoBytes.byteOffset, ifoBytes.byteOffset + ifoBytes.byteLength);
+    const idxBuffer = idxBytes.buffer.slice(idxBytes.byteOffset, idxBytes.byteOffset + idxBytes.byteLength);
+    const dictBuffer = dictBytes.buffer.slice(dictBytes.byteOffset, dictBytes.byteOffset + dictBytes.byteLength);
+    const synBuffer = synBytes ? synBytes.buffer.slice(synBytes.byteOffset, synBytes.byteOffset + synBytes.byteLength) : undefined;
+
+    const parsed = parseIfoContent(textDecoder.decode(ifoBuffer));
+    const id = crypto.randomUUID();
+    const sizeBytes = ifoBytes.byteLength + idxBytes.byteLength + dictBytes.byteLength + (synBytes?.byteLength || 0);
+
+    const manifest: StoredStarDictManifest = {
+        id,
+        name: parsed.name,
+        language: parsed.language,
+        sizeBytes,
+        hasSyn: Boolean(synBuffer),
+    };
+
+    await writeManifest(manifest);
+    await writeDictionaryPart(id, "ifo", ifoBuffer);
+    await writeDictionaryPart(id, "idx", idxBuffer);
+    await writeDictionaryPart(id, "dict", dictBuffer);
+    if (synBuffer) {
+        await writeDictionaryPart(id, "syn", synBuffer);
+    }
+
+    const runtime = await createRuntimeDictionary({
+        ifo: ifoBuffer,
+        idx: idxBuffer,
+        dict: dictBuffer,
+        syn: synBuffer,
+    });
+    loadedDictionaries.set(id, runtime);
+
+    return {
+        id,
+        name: parsed.name,
+        language: parsed.language,
+        format: "stardict",
+        sizeBytes,
+        importedAt: new Date(),
+    };
+}
+
+/**
  * Removes an imported StarDict dictionary from storage and memory.
  */
 export async function removeStarDictDictionary(id: string): Promise<void> {

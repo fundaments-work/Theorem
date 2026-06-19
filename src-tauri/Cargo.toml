@@ -53,3 +53,5 @@ rand = "0.8"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 base64 = "0.22"
 hex = "0.4"
+bzip2 = "0.4"
+tar = "0.4"
