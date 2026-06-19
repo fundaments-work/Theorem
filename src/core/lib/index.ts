@@ -17,3 +17,5 @@ export * from './device-sync';
 export * from './sync-orchestrator';
 export * from './sync-import';
 export * from './mobile-folder-scan';
+export * from './keyboard-shortcuts';
+export * from './i18n';
