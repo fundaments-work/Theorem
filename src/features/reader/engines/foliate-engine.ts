@@ -110,7 +110,6 @@ export class FoliateEngine {
     private searchSectionCache: ReaderSearchSectionCacheItem[] | null = null;
     private searchCacheBookRef: unknown = null;
     private _awaitingInitialRelocate = false;
-    private _isSettingColumns = false;
 
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
@@ -512,10 +511,11 @@ export class FoliateEngine {
                 });
                 this.scheduleSettingsUpdate();
             } else {
-                // Re-assert column attributes on every navigation to prevent
-                // column drift from ResizeObserver races during same-section
-                // jumps (e.g., progress bar navigation via goToFraction).
-                this.reassertColumnAttributes();
+                console.debug('[FoliateEngine] Relocate (not initial)', {
+                    zoom_level: this.zoom_level,
+                    flow: this.flow,
+                    layout: this.layout,
+                });
             }
 
             this.options.onLocationChange?.(location);
@@ -1040,37 +1040,6 @@ export class FoliateEngine {
             this.applySettingsSync();
             this.applySettingsAsync().catch(console.error);
         });
-    }
-
-    /**
-     * Lightweight column re-assertion — sets only the two renderer attributes
-     * that control column layout. Called after every navigation to guard against
-     * column drift from ResizeObserver races during same-section jumps.
-     */
-    private reassertColumnAttributes(): void {
-        if (this._isSettingColumns) return;
-        const renderer = this.view?.renderer;
-        if (!renderer) return;
-
-        const currentSettings = getCurrentReaderSettings();
-        const isMobileViewport = typeof window !== 'undefined'
-            && window.matchMedia('(max-width: 768px)').matches;
-        const columnCount = isMobileViewport && this.flow !== 'scroll'
-            ? 1 : this.layout === 'single'
-                ? 1 : this.layout === 'double'
-                    ? 2 : this.flow === 'scroll'
-                        ? 1 : 2;
-
-        this._isSettingColumns = true;
-        try {
-            renderer.setAttribute('max-column-count', String(columnCount));
-            renderer.setAttribute(
-                'max-inline-size',
-                `${currentSettings?.fontSize ? Math.max(480, currentSettings.fontSize * 40) : 720}px`,
-            );
-        } finally {
-            this._isSettingColumns = false;
-        }
     }
 
     // Navigation methods
