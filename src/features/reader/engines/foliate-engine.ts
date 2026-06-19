@@ -849,6 +849,30 @@ export class FoliateEngine {
                 }
             `;
             
+            // Force font-size inheritance on all text elements to override book CSS.
+            // Only applied when NOT forcing publisher styles.
+            const fontSizeOverrideCSS = currentSettings.forcePublisherStyles ? '' : `
+                /* Force font-size inheritance on ALL text elements to override book CSS */
+                p, div, span,
+                h1, h2, h3, h4, h5, h6,
+                li, ul, ol,
+                blockquote, q,
+                td, th, tr, table,
+                dd, dt, dl,
+                pre, code,
+                em, strong, b, i, u,
+                small, sub, sup,
+                label, figcaption,
+                a, abbr, cite {
+                    font-size: inherit !important;
+                }
+                
+                /* Override inline font-size styles from book */
+                [style*="font-size"] {
+                    font-size: inherit !important;
+                }
+            `;
+
             const customCSS = `
                 @namespace epub "http://www.idpf.org/2007/ops";
                 
@@ -876,6 +900,8 @@ export class FoliateEngine {
                         letter-spacing: inherit !important;
                         word-spacing: inherit !important;
                     }
+                    
+                    ${fontSizeOverrideCSS}
                     
                     ${fontFamilyCSS}
                     

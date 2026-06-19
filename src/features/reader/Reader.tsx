@@ -316,6 +316,7 @@ function BookReaderPage() {
             publisher: currentBookData?.publisher || '',
             pubdate: currentBookData?.publishedDate,
             identifier: currentBookData?.isbn,
+            cover: currentBookData?.coverPath,
         });
         setToc(Array.isArray(info.toc) ? info.toc : []);
         setPdfHasOutline(Boolean(info.hasOutline ?? ((info.toc?.length || 0) > 0)));
@@ -676,6 +677,7 @@ function BookReaderPage() {
         const mergedMetadata: DocMetadata = {
             ...meta,
             pubdate: loadedBook?.publishedDate || meta.pubdate,
+            cover: loadedBook?.coverPath || meta.cover,
         };
 
         setMetadata(mergedMetadata);
