@@ -954,6 +954,7 @@ export class FoliateEngine {
                         background: ${colors.bg} !important;
                         letter-spacing: ${currentSettings.letterSpacing}em !important;
                         word-spacing: ${currentSettings.wordSpacing}em !important;
+                        column-count: auto !important;
                     }
                     
                     body {
@@ -963,6 +964,8 @@ export class FoliateEngine {
                         background: ${colors.bg} !important;
                         letter-spacing: inherit !important;
                         word-spacing: inherit !important;
+                        column-count: auto !important;
+                        column-width: auto !important;
                     }
                     
                     ${fontSizeOverrideCSS}
