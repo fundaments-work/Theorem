@@ -394,6 +394,7 @@ export interface UIState {
     vaultSyncAt?: string;
     deviceSyncStatus: DeviceSyncStatus;
     deviceSyncMessage?: string;
+    deviceSyncAt?: string;
 }
 
 // Document Engine Types

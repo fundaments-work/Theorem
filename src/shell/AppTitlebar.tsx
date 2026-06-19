@@ -56,8 +56,10 @@ export function AppTitlebar({
     const setRoute = useUIStore((state) => state.setRoute);
     const setDeviceSyncStatus = useUIStore((state) => state.setDeviceSyncStatus);
     const deviceSyncStatus = useUIStore((state) => state.deviceSyncStatus);
+    const deviceSyncAt = useUIStore((state) => state.deviceSyncAt);
     const isTauriRuntime = isTauri();
     const isMobileRuntime = isMobile();
+    const [lastSyncedLabel, setLastSyncedLabel] = useState("");
     const showDesktopWindowControls = isTauriRuntime && !isMobileRuntime;
     const searchDomain = resolveSearchDomain({
         placement: "appTitlebar",
@@ -97,6 +99,31 @@ export function AppTitlebar({
     useEffect(() => {
         setIsMobileSearchOpen(false);
     }, [currentRoute]);
+
+    useEffect(() => {
+        updateLastSyncedLabel();
+        const interval = setInterval(updateLastSyncedLabel, 30000);
+        return () => clearInterval(interval);
+    }, [deviceSyncAt]);
+
+    function updateLastSyncedLabel() {
+        if (!deviceSyncAt) {
+            setLastSyncedLabel("");
+            return;
+        }
+        const seconds = Math.floor((Date.now() - new Date(deviceSyncAt).getTime()) / 1000);
+        if (seconds < 10) {
+            setLastSyncedLabel("just now");
+        } else if (seconds < 60) {
+            setLastSyncedLabel(`${seconds}s ago`);
+        } else if (seconds < 3600) {
+            setLastSyncedLabel(`${Math.floor(seconds / 60)}m ago`);
+        } else if (seconds < 86400) {
+            setLastSyncedLabel(`${Math.floor(seconds / 3600)}h ago`);
+        } else {
+            setLastSyncedLabel(`${Math.floor(seconds / 86400)}d ago`);
+        }
+    }
 
     useEffect(() => {
         if (!isSearchVisible) {
@@ -317,35 +344,53 @@ export function AppTitlebar({
                         </button>
                     )}
 
-                    <button
-                        onClick={() => {
-                            void handleQuickSync();
-                        }}
-                        className={cn(
-                            showDesktopWindowControls ? TITLEBAR_DESKTOP_ACTION_BUTTON : TITLEBAR_ICON_BUTTON,
-                            (deviceSyncStatus === "syncing" || isQuickSyncing) && "text-[color:var(--color-accent)]",
-                            deviceSyncStatus === "error" && "text-[color:var(--color-error)]",
-                        )}
-                        title={
-                            isQuickSyncing || deviceSyncStatus === "syncing"
-                                ? "Syncing devices..."
-                                : "Sync devices"
-                        }
-                        data-active={
-                            isQuickSyncing || deviceSyncStatus === "syncing"
-                                ? "true"
-                                : undefined
-                        }
-                        aria-pressed={isQuickSyncing || deviceSyncStatus === "syncing"}
-                        aria-label="Sync devices"
-                    >
-                        <ArrowDownUp
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            onClick={() => {
+                                void handleQuickSync();
+                            }}
                             className={cn(
-                                "w-5 h-5",
-                                (deviceSyncStatus === "syncing" || isQuickSyncing) && "animate-spin",
+                                showDesktopWindowControls ? TITLEBAR_DESKTOP_ACTION_BUTTON : TITLEBAR_ICON_BUTTON,
+                                (deviceSyncStatus === "syncing" || isQuickSyncing) && "text-[color:var(--color-accent)]",
+                                deviceSyncStatus === "error" && "text-[color:var(--color-error)]",
                             )}
-                        />
-                    </button>
+                            title={
+                                isQuickSyncing || deviceSyncStatus === "syncing"
+                                    ? "Syncing devices..."
+                                    : "Sync devices" + (lastSyncedLabel ? ` (${lastSyncedLabel})` : "")
+                            }
+                            data-active={
+                                isQuickSyncing || deviceSyncStatus === "syncing"
+                                    ? "true"
+                                    : undefined
+                            }
+                            aria-pressed={isQuickSyncing || deviceSyncStatus === "syncing"}
+                            aria-label="Sync devices"
+                        >
+                            <span className="relative">
+                                <ArrowDownUp
+                                    className={cn(
+                                        "w-5 h-5",
+                                        (deviceSyncStatus === "syncing" || isQuickSyncing) && "animate-spin",
+                                    )}
+                                />
+                                {(deviceSyncStatus === "synced" || deviceSyncStatus === "error") && (
+                                    <span
+                                        className={cn(
+                                            "absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-[var(--color-surface)]",
+                                            deviceSyncStatus === "synced" && "bg-green-500",
+                                            deviceSyncStatus === "error" && "bg-red-500",
+                                        )}
+                                    />
+                                )}
+                            </span>
+                        </button>
+                        {lastSyncedLabel && (
+                            <span className="hidden lg:block text-xs text-[color:var(--color-text-tertiary)] whitespace-nowrap">
+                                {lastSyncedLabel}
+                            </span>
+                        )}
+                    </div>
 
                     <button
                         onClick={() => setRoute("statistics")}

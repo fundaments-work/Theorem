@@ -13,6 +13,7 @@ import {
     importStarDictDictionary,
     removeStarDictDictionary,
 } from "../services/StarDictService";
+import { scheduleMutationSync } from "../lib/sync-orchestrator";
 import { deleteBookStorage, cleanupOrphanedStorage } from "../lib/storage-manager";
 import { getCoverImage } from "../lib/storage";
 import type {
@@ -135,6 +136,7 @@ interface UIStore extends UIState {
     setDeviceSyncStatus: (
         status: UIState["deviceSyncStatus"],
         message?: string,
+        syncedAt?: string,
     ) => void;
     // Reader-specific UI
     setReaderToolbarVisible: (visible: boolean) => void;
@@ -159,6 +161,7 @@ export const useUIStore = create<UIStore>()(
             vaultSyncAt: undefined,
             deviceSyncStatus: "idle",
             deviceSyncMessage: undefined,
+            deviceSyncAt: undefined,
 
             setRoute: (route, bookId, pushHistory = true) => {
                 if (pushHistory && typeof window !== "undefined") {
@@ -200,8 +203,8 @@ export const useUIStore = create<UIStore>()(
             setError: (error) => set({ error }),
             setVaultSyncStatus: (vaultSyncStatus, vaultSyncMessage, vaultSyncAt) =>
                 set({ vaultSyncStatus, vaultSyncMessage, vaultSyncAt }),
-            setDeviceSyncStatus: (deviceSyncStatus, deviceSyncMessage) =>
-                set({ deviceSyncStatus, deviceSyncMessage }),
+            setDeviceSyncStatus: (deviceSyncStatus, deviceSyncMessage, deviceSyncAt) =>
+                set({ deviceSyncStatus, deviceSyncMessage, deviceSyncAt }),
 
             // Reader toolbar
             setReaderToolbarVisible: (visible) => set({ readerToolbarVisible: visible }),
@@ -215,6 +218,9 @@ export const useUIStore = create<UIStore>()(
                 currentRoute: state.currentRoute,
                 currentBookId: state.currentBookId,
                 sidebarOpen: state.sidebarOpen,
+                deviceSyncStatus: state.deviceSyncStatus,
+                deviceSyncMessage: state.deviceSyncMessage,
+                deviceSyncAt: state.deviceSyncAt,
             }),
         }
     )
@@ -780,6 +786,7 @@ export const useLibraryStore = create<LibraryStore>()(
                         ? { books }
                         : { books, recentBooksCache },
                 );
+                scheduleMutationSync();
             },
 
             addBooks: (incomingBooks) => {
@@ -840,6 +847,7 @@ export const useLibraryStore = create<LibraryStore>()(
                         ? { books: nextBooks, recentBooksCache: nextRecentBooksCache }
                         : { books: nextBooks },
                 );
+                scheduleMutationSync();
             },
 
             removeBook: async (bookId) => {
@@ -881,6 +889,7 @@ export const useLibraryStore = create<LibraryStore>()(
                     })),
                     deletionTombstones: [...state.deletionTombstones, ...newTombstones],
                 }));
+                scheduleMutationSync();
             },
 
             updateBook: (bookId, updates) =>
@@ -1169,26 +1178,32 @@ export const useLibraryStore = create<LibraryStore>()(
             },
 
             // Collection actions
-            addCollection: (collection) =>
-                set((state) => ({ collections: [...state.collections, collection] })),
+            addCollection: (collection) => {
+                set((state) => ({ collections: [...state.collections, collection] }));
+                scheduleMutationSync();
+            },
 
-            removeCollection: (collectionId) =>
+            removeCollection: (collectionId) => {
                 set((state) => ({
                     collections: state.collections.filter((c) => c.id !== collectionId),
                     deletionTombstones: [
                         ...state.deletionTombstones,
                         { entityId: collectionId, entityType: "collection" as const, deletedAt: new Date().toISOString() },
                     ],
-                })),
+                }));
+                scheduleMutationSync();
+            },
 
-            updateCollection: (collectionId, updates) =>
+            updateCollection: (collectionId, updates) => {
                 set((state) => ({
                     collections: state.collections.map((c) =>
                         c.id === collectionId ? { ...c, ...updates, updatedAt: new Date() } : c
                     ),
-                })),
+                }));
+                scheduleMutationSync();
+            },
 
-            addBookToCollection: (bookId, collectionId) =>
+            addBookToCollection: (bookId, collectionId) => {
                 set((state) => {
                     const bookExists = state.books.some((b) => b.id === bookId);
                     if (!bookExists) return state;
@@ -1199,21 +1214,26 @@ export const useLibraryStore = create<LibraryStore>()(
                                 : c
                         ),
                     };
-                }),
+                });
+                scheduleMutationSync();
+            },
 
-            removeBookFromCollection: (bookId, collectionId) =>
+            removeBookFromCollection: (bookId, collectionId) => {
                 set((state) => ({
                     collections: state.collections.map((c) =>
                         c.id === collectionId
                             ? { ...c, bookIds: c.bookIds.filter((id) => id !== bookId), updatedAt: new Date() }
                             : c
                     ),
-                })),
+                }));
+                scheduleMutationSync();
+            },
 
             // Annotation actions
             addAnnotation: (annotation) => {
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
                 queueVaultSync(annotation);
+                scheduleMutationSync();
             },
 
             addHighlightWithNote: (cfi, text, color, note) => {
@@ -1231,6 +1251,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 };
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
                 queueVaultSync(annotation);
+                scheduleMutationSync();
                 return annotation;
             },
 
@@ -1248,6 +1269,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 const syncedAnnotation = get().annotations.find((annotation) => annotation.id === annotationId);
                 if (syncedAnnotation) {
                     queueVaultSync(syncedAnnotation);
+                    scheduleMutationSync();
                 }
             },
 
@@ -1259,6 +1281,7 @@ export const useLibraryStore = create<LibraryStore>()(
                         { entityId: annotationId, entityType: "annotation" as const, deletedAt: new Date().toISOString() },
                     ],
                 }));
+                scheduleMutationSync();
             },
 
             getBookAnnotations: (bookId) =>

@@ -10,6 +10,7 @@ import {
     isMobile,
     initReaderStyles,
     ensureResponderSyncReady,
+    startAutoSync,
     cn,
     importBooksIncremental,
     getBookFormat,
@@ -276,13 +277,14 @@ function App() {
 
     // Keep responder sync infrastructure ready globally so incoming peer sync
     // can merge without requiring users to open the Settings screen.
+    // Also start auto-sync (startup, periodic, visibility-change, tray).
     useEffect(() => {
         if (!isTauriRuntime || !hasCompletedOnboarding) {
             return;
         }
 
         let cancelled = false;
-        const bootstrapResponderSync = async () => {
+        const bootstrap = async () => {
             try {
                 await ensureResponderSyncReady();
             } catch (error) {
@@ -290,9 +292,12 @@ function App() {
                     console.warn("[App] Failed to bootstrap responder sync:", error);
                 }
             }
+            if (!cancelled) {
+                await startAutoSync();
+            }
         };
 
-        void bootstrapResponderSync();
+        void bootstrap();
         return () => {
             cancelled = true;
         };

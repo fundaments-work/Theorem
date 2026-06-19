@@ -19,6 +19,7 @@ import {
     pullBookFiles,
     pullBookCovers,
     discoverPeer,
+    getPairedDevices,
 } from "./device-sync";
 import {
     useLibraryStore,
@@ -70,7 +71,11 @@ function computeLatestDate<T>(
 }
 
 function setStatus(status: DeviceSyncStatus, msg?: string) {
-    useUIStore.getState().setDeviceSyncStatus(status, msg);
+    useUIStore.getState().setDeviceSyncStatus(
+        status,
+        msg,
+        status === "synced" ? new Date().toISOString() : undefined,
+    );
 }
 
 /** Guards concurrent responder bootstrap attempts. */
@@ -831,4 +836,161 @@ export async function initSyncEventListener(): Promise<() => void> {
 
     console.log("[sync-orchestrator] Responder event listener registered.");
     return responderEventUnlisten;
+}
+
+// ─── Auto-Sync ───
+
+/** How often to auto-sync in the background (milliseconds). */
+const AUTO_SYNC_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+
+/** Delay before the first sync after app startup. */
+const STARTUP_SYNC_DELAY_MS = 3000;
+
+/** Debounce window for mutation-triggered sync. */
+const MUTATION_SYNC_DEBOUNCE_MS = 5000;
+
+let _autoSyncTimer: ReturnType<typeof setInterval> | null = null;
+let _mutationSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let _autoSyncCleanups: Array<() => void> = [];
+let _isAutoSyncing = false;
+
+/**
+ * Check whether there are paired devices to sync with.
+ * Reads directly from the Tauri backend.
+ */
+async function hasPairedDevices(): Promise<boolean> {
+    if (!isTauri()) return false;
+    try {
+        const devices = await getPairedDevices();
+        return devices.length > 0;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Run a sync round with all paired peers.
+ * Syncs with the first available peer (the most recently synced one).
+ * Silently skips if no peers are reachable — no error surface.
+ */
+async function autoSyncRound(): Promise<void> {
+    if (!isTauri() || _isAutoSyncing) return;
+
+    const devices = await getPairedDevices().catch(() => []);
+    if (devices.length === 0) return;
+
+    // Pick the most recently synced peer, or the first one
+    let target = devices[0];
+    for (const d of devices) {
+        if (d.lastSyncAt && (!target.lastSyncAt || d.lastSyncAt > target.lastSyncAt)) {
+            target = d;
+        }
+    }
+
+    _isAutoSyncing = true;
+    try {
+        await runDeviceSync(target.deviceId);
+    } catch {
+        // Silent — peer might be offline; retry next cycle
+    } finally {
+        _isAutoSyncing = false;
+    }
+}
+
+/**
+ * Schedule a debounced sync triggered by data mutations.
+ * Call this after annotations, books, or settings change.
+ * The sync is batched: rapid mutations only trigger one sync.
+ */
+export function scheduleMutationSync(): void {
+    if (_mutationSyncTimer) {
+        clearTimeout(_mutationSyncTimer);
+    }
+    _mutationSyncTimer = setTimeout(() => {
+        _mutationSyncTimer = null;
+        void autoSyncRound();
+    }, MUTATION_SYNC_DEBOUNCE_MS);
+}
+
+/**
+ * Start all auto-sync mechanisms.
+ *
+ * Sets up:
+ * - Startup sync (after initial delay)
+ * - Periodic background sync (every N minutes)
+ * - App visibility change sync (on tab/window focus)
+ * - Tray "sync now" event listener
+ *
+ * Returns a cleanup function to stop all auto-sync.
+ * Safe to call multiple times — cleans up previous runs.
+ */
+export async function startAutoSync(): Promise<() => void> {
+    // Clean up any previous auto-sync
+    stopAutoSync();
+
+    if (!isTauri()) {
+        return () => {};
+    }
+
+    const cleanups: Array<() => void> = [];
+
+    // 1. Startup sync — delay to let the app fully initialize
+    const startupTimer = setTimeout(() => {
+        void autoSyncRound();
+    }, STARTUP_SYNC_DELAY_MS);
+    cleanups.push(() => clearTimeout(startupTimer));
+
+    // 2. Periodic background sync
+    _autoSyncTimer = setInterval(() => {
+        void autoSyncRound();
+    }, AUTO_SYNC_INTERVAL_MS);
+    cleanups.push(() => {
+        if (_autoSyncTimer) {
+            clearInterval(_autoSyncTimer);
+            _autoSyncTimer = null;
+        }
+    });
+
+    // 3. Visibility change (tab/window focus)
+    const onVisibilityChange = () => {
+        if (document.visibilityState === "visible") {
+            void autoSyncRound();
+        }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    cleanups.push(() => document.removeEventListener("visibilitychange", onVisibilityChange));
+
+    // 4. Tray "sync now" event
+    if (isTauri()) {
+        try {
+            const { listen } = await import("@tauri-apps/api/event");
+            const unlisten = await listen("tray-sync-now", () => {
+                void autoSyncRound();
+            });
+            cleanups.push(unlisten);
+        } catch {
+            // Tray event not available (web fallback)
+        }
+    }
+
+    _autoSyncCleanups = cleanups;
+    return () => stopAutoSync();
+}
+
+/**
+ * Stop all auto-sync mechanisms.
+ */
+export function stopAutoSync(): void {
+    for (const cleanup of _autoSyncCleanups) {
+        cleanup();
+    }
+    _autoSyncCleanups = [];
+    if (_autoSyncTimer) {
+        clearInterval(_autoSyncTimer);
+        _autoSyncTimer = null;
+    }
+    if (_mutationSyncTimer) {
+        clearTimeout(_mutationSyncTimer);
+        _mutationSyncTimer = null;
+    }
 }
