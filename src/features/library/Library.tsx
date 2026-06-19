@@ -8,6 +8,8 @@ import {
     cn,
     normalizeFilePath,
     normalizeAuthor,
+    saveCoverImage,
+    buildFallbackCoverSvg,
 } from "../../core";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core";
 import { formatProgress, formatFileSize, formatRelativeDate } from "../../core";
@@ -867,6 +869,19 @@ export function LibraryPage() {
             }
 
             if (!data) {
+                // Book data unavailable — generate fallback cover from existing metadata
+                if (!latestBook.coverPath) {
+                    const fallbackSvg = buildFallbackCoverSvg(
+                        latestBook.title,
+                        latestBook.author || 'Unknown Author',
+                    );
+                    const blob = new Blob([fallbackSvg], { type: 'image/svg+xml' });
+                    const dataUrl = await saveCoverImage(latestBook.id, blob);
+                    updateBook(latestBook.id, {
+                        coverPath: dataUrl,
+                        coverExtractionDone: true,
+                    });
+                }
                 return;
             }
 
@@ -1120,6 +1135,9 @@ export function LibraryPage() {
                         extractedBookIdsRef.current.add(book.id);
 
                         try {
+                            const nextAttempts = (metadataExtractionAttemptsRef.current.get(book.id) ?? 0) + 1;
+                            metadataExtractionAttemptsRef.current.set(book.id, nextAttempts);
+
                             let data: ArrayBuffer | null = null;
                             const isContentUri = book.filePath.startsWith("content://");
                             const hasOriginalFilePath = (
@@ -1139,11 +1157,24 @@ export function LibraryPage() {
                             }
 
                             if (!data) {
+                                // Book data unavailable — generate fallback cover from existing metadata
+                                if (!book.coverPath) {
+                                    const fallbackSvg = buildFallbackCoverSvg(
+                                        book.title,
+                                        book.author || 'Unknown Author',
+                                    );
+                                    const blob = new Blob([fallbackSvg], { type: 'image/svg+xml' });
+                                    const dataUrl = await saveCoverImage(book.id, blob);
+                                    if (!isCancelled) {
+                                        updateBook(book.id, {
+                                            coverPath: dataUrl,
+                                            coverExtractionDone: true,
+                                        });
+                                    }
+                                    metadataExtractionAttemptsRef.current.delete(book.id);
+                                }
                                 return;
                             }
-
-                            const nextAttempts = (metadataExtractionAttemptsRef.current.get(book.id) ?? 0) + 1;
-                            metadataExtractionAttemptsRef.current.set(book.id, nextAttempts);
 
                             const filename = ensureFilenameForFormat(
                                 extractFilenameFromPath(book.filePath),
@@ -1169,10 +1200,10 @@ export function LibraryPage() {
                             const shouldUpdateTitle = shouldUseExtractedTitle(book, metadata.title);
                             const shouldUpdateAuthor = shouldUseExtractedAuthor(book, metadata.author);
 
-                            if (shouldUseExtractedTitle(book, metadata.title)) {
+                            if (shouldUpdateTitle) {
                                 updates.title = normalizeMetadataText(metadata.title);
                             }
-                            if (shouldUseExtractedAuthor(book, metadata.author)) {
+                            if (shouldUpdateAuthor) {
                                 updates.author = normalizeMetadataText(metadata.author);
                             }
 
@@ -1198,7 +1229,7 @@ export function LibraryPage() {
                                 || Boolean(metadata.language && !book.language)
                                 || Boolean(metadata.publishedDate && !book.publishedDate)
                             );
-                            if (Boolean(metadata.coverDataUrl) || (hasUsefulMetadataUpdate && Boolean(book.coverPath))) {
+                            if (Boolean(metadata.coverDataUrl) || hasUsefulMetadataUpdate) {
                                 updates.coverExtractionDone = true;
                             }
 

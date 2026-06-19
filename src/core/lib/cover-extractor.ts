@@ -205,7 +205,7 @@ async function normalizeCoverBlob(rawCover: unknown, fallbackMimeType: string): 
     return null;
 }
 
-function buildFallbackCoverSvg(title: string, author: string): string {
+export function buildFallbackCoverSvg(title: string, author: string): string {
     const normalizedTitle = (title || 'Untitled').trim();
     const normalizedAuthor = (author || 'Unknown Author').trim();
     const initials = normalizedTitle
