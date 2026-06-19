@@ -9,6 +9,7 @@ import {
     getBookMaterializedPath,
     getBookBlob,
     getBookData,
+    saveCoverImage,
     extractMetadata,
     extractFilenameFromPath,
     ensureFilenameForFormat,
@@ -329,7 +330,65 @@ function BookReaderPage() {
         setPdfCurrentPage((currentPage) => Math.max(1, currentPage));
         setPdfTotalPages(Math.max(0, info.totalPages || 0));
         setIsBookReady(true);
+
+        // Background cover extraction for PDF books
+        void extractBookCover(currentBookId ?? null);
     }, [currentBookId, getBook]);
+
+    // Shared cover extraction helper — runs when any book opens in the reader
+    const extractBookCover = useCallback(async (bookId: string | null) => {
+        if (!bookId) return;
+        const book = getBook(bookId);
+        if (!book) return;
+
+        // Only skip if the book already has a real cover (not a generated SVG fallback)
+        if (book.coverPath && !book.coverPath.startsWith('data:image/svg+xml')) return;
+
+        try {
+            const storagePath = book.storagePath || book.filePath;
+            const data = await getBookData(book.id, storagePath);
+            if (!data) return;
+
+            const filename = ensureFilenameForFormat(
+                extractFilenameFromPath(book.filePath),
+                book.format,
+            );
+            const metadata = await extractMetadata(data, book.format, filename, book.id, {
+                allowFallbackCover: true,
+                metadataTimeoutMs: 8000,
+                coverTimeoutMs: 5000,
+            });
+
+            const updates: Partial<Book> = {};
+            if (metadata.coverDataUrl) {
+                updates.coverPath = metadata.coverDataUrl;
+            } else if (!book.coverPath) {
+                // No cover extracted and no existing cover — generate fallback
+                const { buildFallbackCoverSvg } = await import('../../core');
+                const fallbackSvg = buildFallbackCoverSvg(
+                    metadata.title || book.title,
+                    metadata.author || book.author || 'Unknown Author',
+                );
+                const blob = new Blob([fallbackSvg], { type: 'image/svg+xml' });
+                const dataUrl = await saveCoverImage(book.id, blob);
+                updates.coverPath = dataUrl;
+            }
+            // Only update title if extracted one looks more meaningful than a filename
+            if (metadata.title && !/^\s*[\w-]+\s*$/.test(book.title) && book.title === extractFilenameFromPath(book.filePath).replace(/\.[^.]+$/, '')) {
+                updates.title = metadata.title;
+            }
+            if (metadata.author && !book.author) {
+                updates.author = metadata.author;
+            }
+            updates.coverExtractionDone = true;
+
+            if (Object.keys(updates).length > 0) {
+                updateBook(book.id, updates);
+            }
+        } catch {
+            // Silent — cover extraction is best-effort
+        }
+    }, [getBook, updateBook]);
 
     const handlePdfError = useCallback((err: Error) => {
         setLoadError(err.message);
@@ -688,47 +747,15 @@ function BookReaderPage() {
         setMetadata(mergedMetadata);
         setToc(Array.isArray(tocItems) ? tocItems : []);
         setIsBookReady(true);
-        // Get section fractions from the reader after it's ready
-        // Use a small delay to ensure the engine has processed the book
+
         setTimeout(() => {
             const fractions = readerRef.current?.getSectionFractions() ?? [];
             setSectionFractions(fractions);
         }, 100);
 
-        // Background cover extraction — the book data is already loaded in memory
-        void (async () => {
-            const book = loadedBook;
-            if (!book || book.coverExtractionDone) return;
-
-            try {
-                const storagePath = book.storagePath || book.filePath;
-                const data = await getBookData(book.id, storagePath);
-                if (!data) return;
-
-                const filename = ensureFilenameForFormat(
-                    extractFilenameFromPath(book.filePath),
-                    book.format,
-                );
-                const metadata = await extractMetadata(data, book.format, filename, book.id, {
-                    allowFallbackCover: true,
-                });
-
-                const updates: Partial<Book> = {};
-                if (metadata.coverDataUrl) updates.coverPath = metadata.coverDataUrl;
-                if (metadata.title && !/[./]/.test(book.title.replace(/ /g, ''))) {
-                    updates.title = metadata.title;
-                }
-                if (metadata.author && !book.author) updates.author = metadata.author;
-                updates.coverExtractionDone = true;
-
-                if (Object.keys(updates).length > 0) {
-                    updateBook(book.id, updates);
-                }
-            } catch {
-                // Silent — cover extraction is best-effort
-            }
-        })();
-    }, [currentBookId, getBook, updateBook]);
+        // Background cover extraction — book data is already loaded in memory
+        void extractBookCover(currentBookId ?? null);
+    }, [currentBookId, getBook, extractBookCover]);
 
     const lastClickFractionRef = useRef<number | null>(null);
     const handleBookCompletionProgress = useCallback((bookId: string, progress: number) => {
