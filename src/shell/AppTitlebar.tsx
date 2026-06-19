@@ -279,6 +279,7 @@ export function AppTitlebar({
                 <div
                     className="flex items-center gap-2 shrink-0 min-w-0"
                     data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
+                    onDoubleClick={showDesktopWindowControls ? handleMaximize : undefined}
                 >
 
                     <button
