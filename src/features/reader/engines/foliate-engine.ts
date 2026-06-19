@@ -367,26 +367,6 @@ export class FoliateEngine {
                 // Apply zoom immediately
                 this.applyZoomToDocument(detail.doc);
 
-                // Re-assert renderer attributes after section load to prevent
-                // any book CSS or section-specific styling from inadvertently
-                // changing column count or inline size.
-                const renderer = this.view?.renderer;
-                if (renderer) {
-                    const currentSettings = getCurrentReaderSettings();
-                    const isMobileViewport = typeof window !== 'undefined'
-                        && window.matchMedia('(max-width: 768px)').matches;
-                    const columnCount = isMobileViewport && this.flow !== 'scroll'
-                        ? 1 : this.layout === 'single'
-                            ? 1 : this.layout === 'double'
-                                ? 2 : this.flow === 'scroll'
-                                    ? 1 : 2;
-                    renderer.setAttribute('max-column-count', String(columnCount));
-                    renderer.setAttribute(
-                        'max-inline-size',
-                        `${currentSettings?.fontSize ? Math.max(480, currentSettings.fontSize * 40) : 720}px`,
-                    );
-                }
-
                 // Attach keyboard navigation to iframe document (keydown events in
                 // iframes don't bubble to the parent window, so we must listen inside).
                 const doc = detail.doc;
