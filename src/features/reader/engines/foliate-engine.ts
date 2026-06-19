@@ -1026,19 +1026,24 @@ export class FoliateEngine {
     async goTo(target: string | number): Promise<void> {
         if (!this.view) return;
         await this.view.goTo(target);
+        if (!this.isFixedLayoutFormat) {
+            this.view.renderer?.render?.();
+        }
     }
 
     async goToFraction(fraction: number): Promise<void> {
         if (!this.view) return;
         
-        // Clamp fraction to valid range
         const clampedFraction = Math.max(0, Math.min(1, fraction));
-        
         console.debug('[FoliateEngine] goToFraction:', { fraction: clampedFraction });
         
-        // Use foliate-js's built-in goToFraction which correctly calculates
-        // section index and anchor fraction internally using its sectionProgress
         await this.view.goToFraction(clampedFraction);
+
+        // After jump navigation, re-render to fix column layout that may have
+        // drifted during the ResizeObserver race in view.load() / #display.
+        if (!this.isFixedLayoutFormat) {
+            this.view.renderer?.render?.();
+        }
     }
 
     async next(distance?: number): Promise<void> {
