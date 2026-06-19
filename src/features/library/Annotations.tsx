@@ -170,11 +170,8 @@ function AnnotationCard({
                     onClick={() => book && onGoToBook(annotation.bookId)}
                     className="font-sans text-[11px] font-medium text-[color:var(--color-text-secondary)] transition-colors hover:text-[color:var(--color-text-primary)]"
                 >
-                    Open source
+                    Open book
                 </button>
-                <div className="mt-3 border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
-                    Location: {annotation.location}
-                </div>
             </div>
         </div>
     );

@@ -189,9 +189,9 @@ function FeedListItem({
                                 setIsActionMenuOpen(false);
                                 onDelete();
                             }}
-                            className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs font-medium text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10"
+                            className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs font-medium text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 whitespace-nowrap"
                         >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5 flex-shrink-0" />
                             <span>Remove feed</span>
                         </button>
                     </div>
