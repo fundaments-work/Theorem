@@ -16,16 +16,22 @@ Operational guide for AI coding agents working in this repository.
 - `src/features/reader/foliate-js/**` is vendored upstream code. Do not edit it unless explicitly required.
 - CBR is recognized for compatibility but intentionally unsupported for import/render.
 
+## Import Architecture
+- `src/core/index.ts` is the primary barrel: re-exports `lib/`, `store/`, `types/`, `services/`.
+- Most app code imports from `"./core"` or `"../core"` — prefer this pattern.
+- There are no path aliases (`@/`, `@theorem/*`); tsconfig has none.
+
 ## Repository Map
 ```text
 src/
   App.tsx                         # Route switch driven by useUIStore
   core/
+    index.ts                      # Barrel re-exporting lib, store, types, services
     types/index.ts                # Core domain contracts (Book, Annotation, settings, routes)
     store/index.ts                # Zustand stores + persistence + migrations
-    lib/                          # Runtime helpers (storage/import/design tokens/dialogs/vault sync)
+    lib/                          # Runtime helpers (env, storage, import, design tokens, dialogs, vault sync)
     services/                     # Dictionary, StarDict, RSS services
-  shell/                          # App chrome (sidebar/titlebar/error boundary)
+  shell/                          # App chrome (sidebar, titlebar, bottom nav, error boundary)
   ui/                             # Shared UI primitives (Modal/Dropdown/Panel/ContextMenu/Backdrop)
   features/
     reader/                       # Book + article reader flows and engines
@@ -34,6 +40,7 @@ src/
     feeds/                        # Feed subscriptions + article list
     settings/                     # App settings and data management
     statistics/                   # Reading stats
+    onboarding/                   # First-run onboarding flow
 src-tauri/
   src/lib.rs                      # Tauri commands and runtime bootstrap
   tauri.conf.json                 # Window config, CSP, bundling resources
@@ -50,7 +57,8 @@ src-tauri/
 
 Notes:
 - Run root `pnpm` commands from repo root.
-- `pnpm test` runs Vitest (currently focused and not yet comprehensive).
+- `pnpm build` runs `pnpm typecheck && vite build` — typecheck is a prerequisite.
+- `pnpm test` runs Vitest with jsdom. Test files live in `tests/**/*.test.ts`, setup in `tests/setup.ts`.
 
 ## Git Ignore Policy
 - Treat generated/build outputs as uncommitted artifacts.
@@ -96,13 +104,15 @@ Notes:
   - `ReaderViewport` -> `useDocumentReader` -> `FoliateEngine`.
 - PDF rendering path:
   - `PDFReader` -> `PDFJsEngine`.
+- `App.tsx` pre-warms PDF.js via `prewarmPdfJsRuntime()` (from `src/core/lib/pdfjs-runtime.ts`) for faster first PDF open.
 - High-risk area: annotation logic. Preserve annotation IDs and sync behavior across:
   - store mutations
   - viewport rendering
   - panel state
 
 ### Runtime split (web vs desktop)
-- Always guard desktop-only behavior with `isTauri()`.
+- Always guard desktop-only behavior with `isTauri()` (from `src/core/lib/env.ts`).
+- Additional guards: `isTauriDesktop()`, `isTauriMobile()`, `isMobile()` for finer-grained checks.
 - Keep browser fallbacks for dialogs/storage/network where already implemented.
 - RSS/article fetch logic intentionally uses Tauri invokes in desktop mode to bypass browser CORS restrictions.
 
@@ -152,10 +162,14 @@ Notes:
 - Frontend relies on command names:
   - `read_file`
   - `read_pdf_file`
+  - `read_pdf_file_size`
+  - `read_pdf_range`
   - `get_pdf_metadata`
+  - `take_pending_open_files`
   - `fetch_rss_feed`
   - `fetch_url_content`
   - `fetch_binary_content`
+- SQLite-backed persistence (desktop Tauri only) uses `database::sqlite_*` commands, channeled through `src/core/lib/sqlite-storage.ts`.
 - If command payload/return changes, update both Rust and TS call sites together.
 - Run `cargo fmt` after Rust changes.
 
