@@ -32,7 +32,7 @@ import {
     type ReaderSettings as ReaderSettingsState,
     type TocItem,
 } from "../../core";
-import { List, Loader2, X } from "lucide-react";
+import { List } from "lucide-react";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import { TableOfContents } from "./components/TableOfContents";
 import { ReaderSettings } from "./components/ReaderSettings";
@@ -2121,7 +2121,7 @@ function BookReaderPage() {
             </div>
 
             {/* TTS — audiobook-style bottom player bar + voice settings overlay */}
-            {isTtsActive && !isPdfFormat && kokoroTts.isReady && (
+            {isTtsActive && !isPdfFormat && (
                 <div
                     className={cn(
                         "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",
@@ -2149,38 +2149,6 @@ function BookReaderPage() {
                         }}
                         onOpenSettings={() => setShowTtsSettings(true)}
                     />
-                </div>
-            )}
-
-            {/* TTS loading state — minimal bar while engine loads */}
-            {isTtsActive && !isPdfFormat && !kokoroTts.isReady && (
-                <div
-                    className={cn(
-                        "fixed bottom-0 left-0 right-0 z-40 flex items-center justify-center gap-2 py-2.5 px-4",
-                        "bg-[var(--color-surface)] border-t border-[var(--color-border)]",
-                        "transition-transform duration-300",
-                        shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
-                    )}
-                >
-                    {kokoroTts.state.status === "error" ? (
-                        <span className="text-xs text-[color:var(--color-error)] truncate">
-                            {(kokoroTts.state as { status: "error"; message: string }).message}
-                        </span>
-                    ) : (
-                        <>
-                            <Loader2 className="w-4 h-4 text-[color:var(--color-accent)] animate-spin" />
-                            <span className="text-xs text-[color:var(--color-text-muted)] animate-pulse">
-                                Loading speech engine…
-                            </span>
-                        </>
-                    )}
-                    <button
-                        onClick={toggleTts}
-                        className="ml-auto p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors"
-                        aria-label="Cancel"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
                 </div>
             )}
 

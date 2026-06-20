@@ -39,7 +39,7 @@ export function TtsPlayerBar({
     onOpenSettings,
     className,
 }: TtsPlayerBarProps) {
-    const fraction = progress.total > 0 ? progress.current / progress.total : 0;
+    const fraction = progress.total > 0 ? progress.chunk / progress.total : 0;
     const pct = Math.round(fraction * 100);
     const errMsg = state.status === "error" ? (state as { status: "error"; message: string }).message : null;
 
@@ -55,7 +55,7 @@ export function TtsPlayerBar({
             {/* Skip back */}
             <button
                 onClick={onSkipBack}
-                disabled={!isReady || progress.current === 0}
+                disabled={!isReady || progress.chunk === 0}
                 className="p-1.5 rounded-md text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors disabled:opacity-40 disabled:pointer-events-none"
                 aria-label="Previous sentence"
             >
@@ -87,7 +87,7 @@ export function TtsPlayerBar({
             {/* Skip forward */}
             <button
                 onClick={onSkipForward}
-                disabled={!isReady || progress.current + 1 >= progress.total}
+                disabled={!isReady || progress.chunk + 1 >= progress.total}
                 className="p-1.5 rounded-md text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors disabled:opacity-40 disabled:pointer-events-none"
                 aria-label="Next sentence"
             >
@@ -108,7 +108,7 @@ export function TtsPlayerBar({
                     ) : isLoading ? (
                         "Loading…"
                     ) : progress.total > 0 ? (
-                        `${progress.current + 1}/${progress.total}`
+                        `${progress.chunk + 1}/${progress.total}`
                     ) : (
                         `${pct}%`
                     )}

@@ -30,7 +30,7 @@ export function useKokoroTts(): UseKokoroTtsReturn {
     const [voices, setVoices] = useState<TtsVoiceGroup[]>([]);
     const [selectedVoice, setSelectedVoice] = useState(ttsManager.selectedVoice);
     const [speed, setSpeedState] = useState(1.0);
-    const [progress, setProgress] = useState<TtsProgress>({ current: 0, total: 0 });
+    const [progress, setProgress] = useState<TtsProgress>({ chunk: 0, total: 0 });
 
     useEffect(() => {
         const unsub = ttsManager.subscribe((s, p) => {
