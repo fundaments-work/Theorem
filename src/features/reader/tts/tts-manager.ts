@@ -329,18 +329,34 @@ class TtsManager {
         }
     }
 
-    /** Create an AudioBuffer from raw f32 samples. */
+    /** Create an AudioBuffer from raw f32 samples and normalize the volume. */
     private _createAudioBuffer(samples: number[]): AudioBuffer {
         const ctx = this._audioCtx!;
         const buffer = ctx.createBuffer(1, samples.length, SAMPLE_RATE);
         const channelData = buffer.getChannelData(0);
+        
+        // 1. Find the maximum absolute amplitude to calculate the normalization scale
         let maxAbs = 0;
         for (let i = 0; i < samples.length; i++) {
-            const v = Math.max(-1.0, Math.min(1.0, samples[i]));
-            channelData[i] = v;
-            if (Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
+            const v = samples[i];
+            if (!Number.isNaN(v)) {
+                const abs = Math.abs(v);
+                if (abs > maxAbs) maxAbs = abs;
+            }
         }
-        console.log(`[TTS] AudioBuffer created: ${samples.length} samples, ${(buffer.duration).toFixed(2)}s, peak=${maxAbs.toFixed(4)}, first5=[${samples.slice(0, 5).map((s) => s.toFixed(6)).join(", ")}]`);
+        
+        // 2. Scale samples to 90% of max volume to prevent clipping while maintaining loudness.
+        // If the audio is completely silent (maxAbs === 0), don't scale it.
+        const scale = maxAbs > 0 ? (1.0 / maxAbs) * 0.9 : 1.0;
+        
+        for (let i = 0; i < samples.length; i++) {
+            let v = samples[i];
+            // Filter out NaN values which could break the Web Audio API playback entirely
+            if (Number.isNaN(v)) v = 0;
+            channelData[i] = Math.max(-1.0, Math.min(1.0, v * scale));
+        }
+        
+        console.log(`[TTS] AudioBuffer created: ${samples.length} samples, ${(buffer.duration).toFixed(2)}s, original_peak=${maxAbs.toFixed(4)}, scale_applied=${scale.toFixed(4)}`);
         return buffer;
     }
 
