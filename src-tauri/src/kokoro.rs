@@ -183,17 +183,23 @@ fn list_voice_groups() -> Vec<KokoroVoiceGroup> {
 // ── Tauri Commands ──
 
 #[tauri::command]
-pub fn tts_is_ready() -> bool {
-    INNER
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_ref()
-        .map_or(false, |inner| inner.engine.is_some())
+pub async fn tts_is_ready() -> bool {
+    tokio::task::spawn_blocking(|| {
+        INNER
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map_or(false, |inner| inner.engine.is_some())
+    })
+    .await
+    .unwrap_or(false)
 }
 
 #[tauri::command]
-pub fn tts_get_voices() -> Vec<KokoroVoiceGroup> {
-    list_voice_groups()
+pub async fn tts_get_voices() -> Vec<KokoroVoiceGroup> {
+    tokio::task::spawn_blocking(|| list_voice_groups())
+        .await
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -295,56 +301,68 @@ pub async fn tts_load(app: AppHandle) -> Result<(), String> {
 /// The frontend plays these via the Web Audio API.
 ///
 /// Returns samples at 24 kHz, mono (1 channel).
+///
+/// CRITICAL: This must be `async` with `spawn_blocking` because
+/// `engine.synthesize()` takes 200ms–5s. If it were sync, it would
+/// block the Tauri main thread and freeze the entire UI.
 #[tauri::command]
-pub fn tts_synthesize(text: String, voice: String, speed: Option<f32>) -> Result<Vec<f32>, String> {
-    let speed = speed.unwrap_or(1.0).clamp(0.5, 2.0);
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return Err("No text to synthesize".into());
-    }
-
-    // Take the engine out of the mutex so we don't hold the lock
-    // during the blocking synthesize() call.
-    let engine = {
-        let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
-        guard.as_mut().and_then(|inner| inner.engine.take())
-    };
-
-    let Some(mut engine) = engine else {
-        return Err("TTS engine not loaded".into());
-    };
-
-    let params = KokoroInferenceParams {
-        voice,
-        speed,
-        style_index: Some(0),
-    };
-
-    let result = engine
-        .synthesize(trimmed, Some(params))
-        .map_err(|e| format!("Synthesis failed: {e}"));
-
-    // Put engine back
-    {
-        let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(inner) = guard.as_mut() {
-            inner.engine = Some(engine);
+pub async fn tts_synthesize(
+    text: String,
+    voice: String,
+    speed: Option<f32>,
+) -> Result<Vec<f32>, String> {
+    tokio::task::spawn_blocking(move || {
+        let speed = speed.unwrap_or(1.0).clamp(0.5, 2.0);
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return Err("No text to synthesize".into());
         }
-    }
 
-    let synthesis = result?;
-    if synthesis.samples.is_empty() {
-        return Err("Synthesis produced empty audio".into());
-    }
+        // Take the engine out of the mutex so we don't hold the lock
+        // during the blocking synthesize() call.
+        let engine = {
+            let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+            guard.as_mut().and_then(|inner| inner.engine.take())
+        };
 
-    eprintln!(
-        "[TTS] Synthesized {} chars → {} samples ({:.1}s at 24kHz)",
-        trimmed.len(),
-        synthesis.samples.len(),
-        synthesis.samples.len() as f64 / 24000.0
-    );
+        let Some(mut engine) = engine else {
+            return Err("TTS engine not loaded".into());
+        };
 
-    Ok(synthesis.samples)
+        let params = KokoroInferenceParams {
+            voice,
+            speed,
+            style_index: Some(0),
+        };
+
+        let result = engine
+            .synthesize(trimmed, Some(params))
+            .map_err(|e| format!("Synthesis failed: {e}"));
+
+        // Put engine back
+        {
+            let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(inner) = guard.as_mut() {
+                inner.engine = Some(engine);
+            }
+        }
+
+        let synthesis = result?;
+        if synthesis.samples.is_empty() {
+            return Err("Synthesis produced empty audio".into());
+        }
+
+        eprintln!(
+            "[TTS] Synthesized {} chars → {} samples ({:.1}s at 24kHz)",
+            trimmed.len(),
+            synthesis.samples.len(),
+            synthesis.samples.len() as f64 / 24000.0
+        );
+
+        Ok(synthesis.samples)
+    })
+    .await
+    .map_err(|e| format!("Spawn error: {e}"))?
 }
 
 /// Stop any in-progress synthesis (bumps generation counter).

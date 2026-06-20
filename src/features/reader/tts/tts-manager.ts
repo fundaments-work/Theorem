@@ -200,16 +200,11 @@ class TtsManager {
             return;
         }
 
+        // Skip tts_is_ready — it's a Rust command that locks INNER,
+        // and if the background preload is loading the model, it would
+        // block. Just call tts_load directly — it handles deduplication
+        // via IS_LOADING + Condvar and is async (non-blocking).
         try {
-            const ready = await invoke<boolean>("tts_is_ready");
-            if (ready) {
-                if (this._voiceCache.length === 0) {
-                    this._voiceCache = await invoke<TtsVoiceGroup[]>("tts_get_voices");
-                }
-                this._engineEverLoaded = true;
-                this.emit({ status: "ready", voices: this._voiceCache });
-                return;
-            }
             await invoke("tts_load");
             // Wait for the "ready" event from tts_load
             await this._waitForStatus("ready");
@@ -244,7 +239,10 @@ class TtsManager {
     /** Initialize the Web Audio API context. */
     private _ensureAudioContext(): void {
         if (this._audioCtx) return;
-        this._audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+        // Don't request a specific sample rate — the WebView may not support
+        // custom rates. AudioBuffer specifies its own rate and the Web Audio
+        // API resamples automatically.
+        this._audioCtx = new AudioContext();
         this._gainNode = this._audioCtx.createGain();
         this._gainNode.gain.value = AUDIO_GAIN;
         this._gainNode.connect(this._audioCtx.destination);
