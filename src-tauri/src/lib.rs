@@ -828,10 +828,13 @@ pub fn run() {
             sync_commands::pull_book_covers,
             hide_to_tray,
             download_and_extract_stardict,
-            kokoro::kokoro_prepare,
-            kokoro::kokoro_generate,
-            kokoro::kokoro_list_voices,
-            kokoro::kokoro_is_ready,
+            kokoro::tts_load,
+            kokoro::tts_play,
+            kokoro::tts_stop,
+            kokoro::tts_pause,
+            kokoro::tts_resume,
+            kokoro::tts_get_voices,
+            kokoro::tts_is_ready,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

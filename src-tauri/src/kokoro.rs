@@ -1,13 +1,16 @@
-/// Kokoro TTS — offline text-to-speech via tts-rs + espeak-ng.
+/// Kokoro TTS — offline text-to-speech via tts-rs + espeak-ng + rodio.
 ///
 /// Downloads the quantized Kokoro ONNX model (~88 MB) and voice archive
 /// (~27 MB) from GitHub releases on first use, caches them to the app data
-/// directory, then runs synthesis on a blocking thread.
+/// directory, then runs streaming synthesis + audio playback on background threads.
 use serde::{Deserialize, Serialize};
+use std::num::NonZero;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
-use tauri::AppHandle;
-use tauri::Manager;
+use std::thread;
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, Manager};
 use tts_rs::engines::kokoro::{KokoroEngine, KokoroInferenceParams, KokoroModelParams};
 use tts_rs::SynthesisEngine;
 
@@ -17,6 +20,9 @@ const MODEL_FILENAME: &str = "kokoro-quant-convinteger.onnx";
 const VOICES_URL: &str =
     "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin";
 const VOICES_FILENAME: &str = "voices-v1.0.bin";
+
+/// Max chars per synthesis chunk — keeps first-chunk latency low.
+const CHUNK_CHARS: usize = 1200;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KokoroVoice {
@@ -32,7 +38,30 @@ pub struct KokoroVoiceGroup {
     pub voices: Vec<KokoroVoice>,
 }
 
-static ENGINE: Mutex<Option<KokoroEngine>> = Mutex::new(None);
+#[derive(Debug, Clone, Serialize)]
+struct TtsStateEvent {
+    status: String,
+    voices: Option<Vec<KokoroVoiceGroup>>,
+    message: Option<String>,
+}
+
+// ── Global TTS state ──
+
+struct ActivePlayback {
+    player: rodio::Player,
+    generation: u64,
+}
+
+struct TtsInner {
+    engine: Option<KokoroEngine>,
+    sink: Option<rodio::MixerDeviceSink>,
+}
+
+static INNER: Mutex<Option<TtsInner>> = Mutex::new(None);
+static PLAYBACK: Mutex<Option<ActivePlayback>> = Mutex::new(None);
+static GENERATION: AtomicU64 = AtomicU64::new(0);
+
+// ── Paths / download helpers ──
 
 fn tts_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let mut dir = app
@@ -79,11 +108,7 @@ fn download_if_missing(
 fn ensure_model_files(app: &AppHandle) -> Result<PathBuf, String> {
     let cache_dir = tts_cache_dir(app)?;
 
-    // Clean up stale files from the old HuggingFace-based download scheme.
-    // The old model was at onnx/model_quantized.onnx; tts-rs expects files
-    // directly in the cache dir with different names. Also delete the old
-    // config.json which lacks the 'vocab' field tts-rs needs — it falls
-    // back to a hardcoded vocab when no config.json is present.
+    // Clean stale files from previous download schemes
     let old_onnx_dir = cache_dir.join("onnx");
     let old_config = cache_dir.join("config.json");
     let old_voices_dir = cache_dir.join("voices");
@@ -98,8 +123,6 @@ fn ensure_model_files(app: &AppHandle) -> Result<PathBuf, String> {
     if old_voices_dir.exists() {
         let _ = std::fs::remove_dir_all(&old_voices_dir);
     }
-    // Always delete stale optimized cache — it may contain baked-in tensor
-    // shapes from a previous ort/model version that cause dimension errors.
     if stale_optimized.exists() {
         let _ = std::fs::remove_file(&stale_optimized);
     }
@@ -122,15 +145,19 @@ fn ensure_model_files(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(cache_dir)
 }
 
-fn load_engine(app: &AppHandle) -> Result<(), String> {
-    let mut guard = ENGINE.lock().unwrap_or_else(|e| e.into_inner());
-    if guard.is_some() {
+// ── Engine lifecycle ──
+
+fn ensure_engine(app: &AppHandle) -> Result<(), String> {
+    let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+    if guard.as_ref().map_or(false, |inner| inner.engine.is_some()) {
         return Ok(());
     }
 
-    let model_dir = ensure_model_files(app)?;
+    // Open the default audio output device
+    let sink = rodio::DeviceSinkBuilder::open_default_sink()
+        .map_err(|e| format!("Failed to open audio output: {e}"))?;
 
-    // Resolve optimized cache path so subsequent loads skip re-optimization
+    let model_dir = ensure_model_files(app)?;
     let optimized_cache = tts_cache_dir(app)?.join("kokoro-optimized.onnx");
 
     let mut engine = KokoroEngine::new();
@@ -138,73 +165,374 @@ fn load_engine(app: &AppHandle) -> Result<(), String> {
         .load_model_with_params(
             &model_dir,
             KokoroModelParams {
-                num_threads: None, // auto
+                num_threads: None,
                 optimized_model_cache_path: Some(optimized_cache),
             },
         )
         .map_err(|e| format!("Failed to load Kokoro engine: {e}"))?;
 
-    *guard = Some(engine);
+    *guard = Some(TtsInner {
+        engine: Some(engine),
+        sink: Some(sink),
+    });
+
     Ok(())
+}
+
+fn list_voice_groups() -> Vec<KokoroVoiceGroup> {
+    let guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(inner) = guard.as_ref() else {
+        return vec![];
+    };
+    let Some(engine) = inner.engine.as_ref() else {
+        return vec![];
+    };
+    group_voices(&engine.list_voices())
+}
+
+// ── Audio playback helpers ──
+
+fn clear_playback() {
+    if let Ok(mut guard) = PLAYBACK.lock() {
+        if let Some(pb) = guard.take() {
+            pb.player.stop();
+        }
+    }
+}
+
+fn pause_playback() -> bool {
+    match PLAYBACK.lock() {
+        Ok(guard) => {
+            if let Some(pb) = guard.as_ref() {
+                pb.player.pause();
+                return true;
+            }
+            false
+        }
+        Err(_) => false,
+    }
+}
+
+fn resume_playback() -> bool {
+    match PLAYBACK.lock() {
+        Ok(guard) => {
+            if let Some(pb) = guard.as_ref() {
+                pb.player.play();
+                return true;
+            }
+            false
+        }
+        Err(_) => false,
+    }
+}
+
+// ── Text chunking ──
+
+fn split_text(text: &str) -> Vec<String> {
+    let mut chunks: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut remaining = text;
+
+    while !remaining.is_empty() {
+        let sentence_end = remaining.find(|c: char| matches!(c, '.' | '!' | '?' | '\n'));
+        match sentence_end {
+            Some(idx) => {
+                let sentence = &remaining[..=idx];
+                if current.len() + sentence.len() > CHUNK_CHARS && !current.is_empty() {
+                    chunks.push(current.trim().to_string());
+                    current = String::new();
+                }
+                current.push_str(sentence);
+                remaining = &remaining[idx + 1..];
+            }
+            None => {
+                if current.len() + remaining.len() > CHUNK_CHARS && !current.is_empty() {
+                    chunks.push(current.trim().to_string());
+                    chunks.push(remaining.trim().to_string());
+                } else {
+                    current.push_str(remaining);
+                    chunks.push(current.trim().to_string());
+                }
+                break;
+            }
+        }
+    }
+
+    if !current.trim().is_empty() && chunks.last().map_or(true, |c| c != current.trim()) {
+        chunks.push(current.trim().to_string());
+    }
+
+    chunks.retain(|c| !c.is_empty());
+    chunks
 }
 
 // ── Tauri Commands ──
 
 #[tauri::command]
-pub fn kokoro_is_ready() -> bool {
-    ENGINE.lock().unwrap_or_else(|e| e.into_inner()).is_some()
+pub fn tts_is_ready() -> bool {
+    INNER
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map_or(false, |inner| inner.engine.is_some())
 }
 
 #[tauri::command]
-pub fn kokoro_list_voices() -> Vec<KokoroVoiceGroup> {
-    let guard = ENGINE.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(engine) = guard.as_ref() else {
-        return vec![];
-    };
-    let raw_voices = engine.list_voices();
-    group_voices(&raw_voices)
+pub fn tts_get_voices() -> Vec<KokoroVoiceGroup> {
+    list_voice_groups()
 }
 
 #[tauri::command]
-pub async fn kokoro_prepare(app: AppHandle) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || load_engine(&app))
-        .await
-        .map_err(|e| format!("Spawn error: {e}"))?
-}
-
-#[tauri::command]
-pub async fn kokoro_generate(
-    text: String,
-    voice: String,
-    speed: Option<f32>,
-) -> Result<Vec<f32>, String> {
-    let speed = speed.unwrap_or(1.0).clamp(0.5, 2.0);
-
+pub async fn tts_load(app: AppHandle) -> Result<(), String> {
+    let app = app.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = ENGINE.lock().unwrap_or_else(|e| e.into_inner());
-        let engine = guard
-            .as_mut()
-            .ok_or_else(|| "TTS engine not loaded — call kokoro_prepare first".to_string())?;
-
-        let params = KokoroInferenceParams {
-            voice,
-            speed,
-            style_index: Some(0), // default style — None (auto) can produce incorrect tensor dims
-        };
-
-        let result = engine
-            .synthesize(&text, Some(params))
-            .map_err(|e| format!("Synthesis failed: {e}"))?;
-
-        if result.samples.is_empty() {
-            return Err("Synthesis produced no audio".to_string());
+        let _ = app.emit(
+            "tts-state",
+            TtsStateEvent {
+                status: "loading".into(),
+                voices: None,
+                message: None,
+            },
+        );
+        match ensure_engine(&app) {
+            Ok(()) => {
+                let voices = list_voice_groups();
+                let _ = app.emit(
+                    "tts-state",
+                    TtsStateEvent {
+                        status: "ready".into(),
+                        voices: Some(voices),
+                        message: None,
+                    },
+                );
+                Ok(())
+            }
+            Err(e) => {
+                let _ = app.emit(
+                    "tts-state",
+                    TtsStateEvent {
+                        status: "error".into(),
+                        voices: None,
+                        message: Some(e.clone()),
+                    },
+                );
+                Err(e)
+            }
         }
-
-        Ok(result.samples)
     })
     .await
     .map_err(|e| format!("Spawn error: {e}"))?
 }
+
+#[tauri::command]
+pub async fn tts_play(
+    app: AppHandle,
+    text: String,
+    voice: String,
+    speed: Option<f32>,
+) -> Result<(), String> {
+    let speed = speed.unwrap_or(1.0).clamp(0.5, 2.0);
+    let trimmed = text.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("No text to speak".into());
+    }
+
+    // Cancel any active playback
+    clear_playback();
+    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+
+    let app_clone = app.clone();
+    let voice_clone = voice.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let _ = app_clone.emit(
+            "tts-state",
+            TtsStateEvent {
+                status: "playing".into(),
+                voices: None,
+                message: None,
+            },
+        );
+
+        // Get the mixer from the long-lived sink
+        let mixer = {
+            let guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+            guard
+                .as_ref()
+                .and_then(|inner| inner.sink.as_ref())
+                .map(|sink| sink.mixer().clone())
+        };
+
+        let Some(mixer) = mixer else {
+            let _ = app_clone.emit(
+                "tts-state",
+                TtsStateEvent {
+                    status: "error".into(),
+                    voices: None,
+                    message: Some("Audio output not initialized".into()),
+                },
+            );
+            return;
+        };
+
+        let player = rodio::Player::connect_new(&mixer);
+        // Start paused until first audio is appended
+        player.pause();
+
+        {
+            let mut pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
+            *pb = Some(ActivePlayback { player, generation });
+        }
+
+        let chunks = split_text(&trimmed);
+        if chunks.is_empty() {
+            let _ = app_clone.emit(
+                "tts-state",
+                TtsStateEvent {
+                    status: "error".into(),
+                    voices: None,
+                    message: Some("No readable text found".into()),
+                },
+            );
+            return;
+        }
+
+        let total_chunks = chunks.len();
+
+        for (i, chunk) in chunks.iter().enumerate() {
+            // Check if this generation is still active
+            if GENERATION.load(Ordering::SeqCst) != generation {
+                return;
+            }
+
+            let samples = {
+                let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+                let Some(inner) = guard.as_mut() else {
+                    return;
+                };
+                let Some(engine) = inner.engine.as_mut() else {
+                    return;
+                };
+
+                let params = KokoroInferenceParams {
+                    voice: voice_clone.clone(),
+                    speed,
+                    style_index: Some(0),
+                };
+
+                match engine.synthesize(chunk, Some(params)) {
+                    Ok(result) => {
+                        if result.samples.is_empty() {
+                            continue;
+                        }
+                        result.samples
+                    }
+                    Err(e) => {
+                        let _ = app_clone.emit(
+                            "tts-state",
+                            TtsStateEvent {
+                                status: "error".into(),
+                                voices: None,
+                                message: Some(format!("Synthesis failed: {e}")),
+                            },
+                        );
+                        return;
+                    }
+                }
+            };
+
+            // Check again before appending
+            if GENERATION.load(Ordering::SeqCst) != generation {
+                return;
+            }
+
+            // Append to player
+            {
+                let pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(pb) = pb.as_ref() {
+                    if pb.generation == generation {
+                        let buf = rodio::buffer::SamplesBuffer::new(
+                            NonZero::new(1u16).unwrap(),
+                            NonZero::new(24000u32).unwrap(),
+                            samples,
+                        );
+                        pb.player.append(buf);
+
+                        // Start playback on first chunk
+                        if i == 0 {
+                            pb.player.play();
+                        }
+                    }
+                }
+            }
+
+            // Emit progress
+            let _ = app_clone.emit(
+                "tts-progress",
+                serde_json::json!({
+                    "chunk": i + 1,
+                    "total": total_chunks,
+                }),
+            );
+        }
+
+        // Wait for playback to finish
+        {
+            loop {
+                if GENERATION.load(Ordering::SeqCst) != generation {
+                    return;
+                }
+
+                let done = {
+                    let pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
+                    pb.as_ref().map_or(true, |pb| pb.player.empty())
+                };
+
+                if done {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+
+            // Clean up
+            let mut pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
+            if pb.as_ref().map_or(false, |p| p.generation == generation) {
+                *pb = None;
+            }
+        }
+
+        let _ = app_clone.emit(
+            "tts-state",
+            TtsStateEvent {
+                status: "ready".into(),
+                voices: Some(list_voice_groups()),
+                message: None,
+            },
+        );
+    })
+    .await
+    .map_err(|e| format!("Spawn error: {e}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn tts_stop() {
+    clear_playback();
+    GENERATION.fetch_add(1, Ordering::SeqCst);
+}
+
+#[tauri::command]
+pub fn tts_pause() -> bool {
+    pause_playback()
+}
+
+#[tauri::command]
+pub fn tts_resume() -> bool {
+    resume_playback()
+}
+
+// ── Voice grouping ──
 
 fn group_voices(voice_ids: &[&str]) -> Vec<KokoroVoiceGroup> {
     use std::collections::HashMap;
@@ -258,7 +586,6 @@ fn group_voices(voice_ids: &[&str]) -> Vec<KokoroVoiceGroup> {
         });
     }
 
-    // Sort groups and voices within groups for consistent display
     let mut sorted_groups: Vec<KokoroVoiceGroup> = groups
         .into_iter()
         .map(|(label, mut voices)| {

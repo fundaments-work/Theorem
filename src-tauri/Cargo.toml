@@ -61,3 +61,5 @@ zip = "0.6"
 tts-rs = { version = "2026.2.3", features = ["kokoro"] }
 # Pin ort to rc.10 — tts-rs 2026.2.3 expects pre-SessionBuilder error types
 ort = { version = "=2.0.0-rc.11", default-features = true }
+# Audio playback (rodio streams PCM to system output)
+rodio = "0.22"

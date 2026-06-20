@@ -2,17 +2,13 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Play, Pause, SkipBack, SkipForward, X, Volume2 } from "lucide-react";
 import { cn } from "../../../core";
 
-/** Check if browser Speech Synthesis is available. */
 function hasSpeechSynthesis(): boolean {
     return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
 export interface ReadAloudController {
-    /** Get the next chunk of text to speak. Returns null when done. */
     getNextChunk: () => string | null;
-    /** Get the previous chunk of text. Returns null when at start. */
     getPrevChunk: () => string | null;
-    /** Resume from current position. */
     getCurrentChunk: () => string | null;
 }
 
@@ -116,25 +112,28 @@ export function ReadAloudBar({ controller, onClose, className }: ReadAloudBarPro
     return (
         <div
             className={cn(
-                "flex items-center gap-3 px-4 py-2 border-t border-[var(--color-border)] bg-[var(--color-surface)]",
+                "absolute bottom-0 left-0 right-0 z-[var(--z-tooltip)]",
+                "flex items-center gap-2 px-4 py-2.5",
+                "bg-[var(--color-surface)]/95 backdrop-blur-xl border-t border-[var(--color-border-subtle)]",
+                "shadow-[0_-4px_24px_rgba(0,0,0,0.12)]",
                 className,
             )}
         >
-            <Volume2 className="w-4 h-4 text-[color:var(--color-accent)]" />
+            <Volume2 className="w-4 h-4 text-[color:var(--color-accent)] shrink-0" />
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
                 <button
                     onClick={skipBack}
-                    className="p-1.5 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text)] transition-colors"
-                    aria-label="Previous"
+                    className="p-1.5 rounded-md text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                    aria-label="Previous sentence"
                 >
                     <SkipBack className="w-4 h-4" />
                 </button>
 
                 <button
                     onClick={isPlaying ? pause : resume}
-                    className="p-1.5 text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)] transition-colors"
-                    aria-label={isPlaying ? "Pause" : "Play"}
+                    className="p-1.5 rounded-md text-[color:var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+                    aria-label={isPlaying ? "Pause" : "Resume"}
                 >
                     {isPlaying ? (
                         <Pause className="w-4 h-4" />
@@ -145,8 +144,8 @@ export function ReadAloudBar({ controller, onClose, className }: ReadAloudBarPro
 
                 <button
                     onClick={skipForward}
-                    className="p-1.5 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text)] transition-colors"
-                    aria-label="Next"
+                    className="p-1.5 rounded-md text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                    aria-label="Next sentence"
                 >
                     <SkipForward className="w-4 h-4" />
                 </button>
@@ -154,7 +153,7 @@ export function ReadAloudBar({ controller, onClose, className }: ReadAloudBarPro
 
             <button
                 onClick={onClose}
-                className="ml-auto p-1.5 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] transition-colors"
+                className="ml-auto p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors"
                 aria-label="Stop reading"
             >
                 <X className="w-4 h-4" />

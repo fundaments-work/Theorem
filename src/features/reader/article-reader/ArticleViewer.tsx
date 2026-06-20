@@ -40,6 +40,7 @@ import {
 } from "./index";
 import { buildArticleDescription, formatArticleDate, sanitizeArticleHtml } from "./utils";
 import { useKokoroTts } from "../tts/useKokoroTts";
+import { Pause, Play, X } from "lucide-react";
 
 interface ArticleViewerProps {
     article: RssArticle | null;
@@ -678,11 +679,10 @@ export function ArticleViewer({
     }, [isFullscreen, updateReaderSetting]);
 
     const handleToggleTts = useCallback(() => {
-        if (kokoroTts.isSpeaking) {
+        if (kokoroTts.isSpeaking || kokoroTts.isPaused) {
             kokoroTts.stop();
             return;
         }
-        // Get visible text from the article content
         const text = contentRef.current?.textContent?.trim();
         if (!text) return;
         kokoroTts.prepare().then(() => {
@@ -1538,46 +1538,80 @@ export function ArticleViewer({
 
                 <Backdrop visible={activePanel !== null && !usesSharedPanelBackdrop} onClick={closePanel} blur />
 
-                {/* Kokoro TTS control bar */}
-                {ttsEnabled && (
-                    <div className="absolute left-0 right-0 z-40 flex items-center justify-center gap-3 py-2 px-4 bg-[var(--color-surface)] border-b border-[var(--color-border-subtle)]"
-                        style={{ top: shouldShowReaderChrome ? toolbarHeight : 0 }}>
+                {/* TTS floating control panel */}
+                {ttsEnabled && (kokoroTts.isSpeaking || kokoroTts.isPaused || kokoroTts.isReady || kokoroTts.state.status === "loading" || kokoroTts.state.status === "error") && (
+                    <div
+                        className={cn(
+                            "absolute bottom-0 left-0 right-0 z-40",
+                            "flex items-center gap-2 px-4 py-2.5",
+                            "bg-[var(--color-surface)]/95 backdrop-blur-xl border-t border-[var(--color-border-subtle)]",
+                            "shadow-[0_-4px_24px_rgba(0,0,0,0.12)]",
+                        )}
+                    >
+                        {/* Play / Pause / Resume */}
+                        {kokoroTts.isReady && (
+                            <div className="flex items-center gap-0.5">
+                                {kokoroTts.isSpeaking ? (
+                                    <button
+                                        onClick={() => kokoroTts.pause()}
+                                        className="p-1.5 rounded-md text-[color:var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+                                        aria-label="Pause"
+                                    >
+                                        <Pause className="w-4 h-4" />
+                                    </button>
+                                ) : kokoroTts.isPaused ? (
+                                    <button
+                                        onClick={() => kokoroTts.resume()}
+                                        className="p-1.5 rounded-md text-[color:var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+                                        aria-label="Resume"
+                                    >
+                                        <Play className="w-4 h-4" />
+                                    </button>
+                                ) : null}
+                            </div>
+                        )}
+
+                        {/* Status text */}
+                        <span className={cn(
+                            "text-xs min-w-0 truncate",
+                            kokoroTts.state.status === "playing" && "text-[color:var(--color-accent)] animate-pulse",
+                            kokoroTts.state.status === "paused" && "text-[color:var(--color-text-muted)]",
+                            kokoroTts.state.status === "loading" && "text-[color:var(--color-accent)] animate-pulse",
+                            kokoroTts.state.status === "error" && "text-[color:var(--color-error)]",
+                            kokoroTts.state.status === "ready" && "text-[color:var(--color-text-muted)]",
+                        )}>
+                            {kokoroTts.state.status === "playing" && "Speaking…"}
+                            {kokoroTts.state.status === "paused" && "Paused"}
+                            {kokoroTts.state.status === "loading" && "Loading speech engine…"}
+                            {kokoroTts.state.status === "error" && kokoroTts.state.message}
+                            {kokoroTts.state.status === "ready" && "Ready"}
+                        </span>
+
+                        {/* Voice selector */}
                         {kokoroTts.voices.length > 0 && (
-                            <>
-                                <span className="text-[11px] uppercase tracking-wider text-[color:var(--color-text-muted)]">Voice</span>
-                                <select
-                                    value={kokoroTts.selectedVoice}
-                                    onChange={(e) => kokoroTts.setVoice(e.target.value)}
-                                    className="text-xs px-2 py-1 border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-primary)]"
-                                >
-                                    {kokoroTts.voices.map((group) => (
-                                        <optgroup key={group.label} label={group.label}>
-                                            {group.voices.map((v) => (
-                                                <option key={v.id} value={v.id}>{v.name} ({v.gender})</option>
-                                            ))}
-                                        </optgroup>
-                                    ))}
-                                </select>
-                            </>
+                            <select
+                                value={kokoroTts.selectedVoice}
+                                onChange={(e) => kokoroTts.setVoice(e.target.value)}
+                                className="ml-auto text-xs px-2 py-1 max-w-[140px] truncate border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-primary)] rounded"
+                            >
+                                {kokoroTts.voices.map((group) => (
+                                    <optgroup key={group.label} label={group.label}>
+                                        {group.voices.map((v) => (
+                                            <option key={v.id} value={v.id}>{v.name} ({v.gender})</option>
+                                        ))}
+                                    </optgroup>
+                                ))}
+                            </select>
                         )}
-                        {kokoroTts.state.status === "playing" && (
-                            <span className="text-xs text-[color:var(--color-accent)] animate-pulse">
-                                Speaking…
-                            </span>
-                        )}
-                        {kokoroTts.state.status === "downloading" && (
-                            <span className="text-xs text-[color:var(--color-accent)] animate-pulse">
-                                Downloading Kokoro TTS model (~115 MB)…
-                            </span>
-                        )}
-                        {kokoroTts.state.status === "loading" && (
-                            <span className="text-xs text-[color:var(--color-accent)] animate-pulse">
-                                Loading speech engine…
-                            </span>
-                        )}
-                        {kokoroTts.state.status === "error" && (
-                            <span className="text-xs text-[color:var(--color-error)]">{kokoroTts.state.message}</span>
-                        )}
+
+                        {/* Close button */}
+                        <button
+                            onClick={handleToggleTts}
+                            className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors shrink-0"
+                            aria-label="Stop TTS"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
                     </div>
                 )}
 

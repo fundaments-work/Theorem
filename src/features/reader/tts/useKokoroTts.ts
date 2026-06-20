@@ -1,7 +1,7 @@
 /**
  * React hook for Kokoro TTS integration in the reader.
  *
- * Provides speak/stop controls and reactive state for UI components.
+ * Provides speak/stop/pause/resume controls and reactive state for UI components.
  */
 import { useCallback, useEffect, useState } from "react";
 import { ttsManager, type TtsState, type TtsVoiceGroup } from "./tts-manager";
@@ -11,10 +11,13 @@ interface UseKokoroTtsReturn {
     voices: TtsVoiceGroup[];
     selectedVoice: string;
     isSpeaking: boolean;
+    isPaused: boolean;
     isReady: boolean;
     prepare: () => Promise<void>;
     speak: (text: string) => Promise<void>;
     stop: () => void;
+    pause: () => void;
+    resume: () => void;
     setVoice: (voiceId: string) => void;
 }
 
@@ -45,6 +48,14 @@ export function useKokoroTts(): UseKokoroTtsReturn {
         ttsManager.stop();
     }, []);
 
+    const pause = useCallback(() => {
+        ttsManager.pause();
+    }, []);
+
+    const resume = useCallback(() => {
+        ttsManager.resume();
+    }, []);
+
     const setVoice = useCallback((voiceId: string) => {
         setSelectedVoice(voiceId);
         ttsManager.setVoice(voiceId);
@@ -61,10 +72,13 @@ export function useKokoroTts(): UseKokoroTtsReturn {
         voices,
         selectedVoice,
         isSpeaking: state.status === "playing",
+        isPaused: state.status === "paused",
         isReady: state.status === "ready",
         prepare,
         speak,
         stop,
+        pause,
+        resume,
         setVoice,
     };
 }

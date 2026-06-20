@@ -1,10 +1,11 @@
 /**
  * TTS Manager — orchestrates Kokoro TTS lifecycle.
  *
- * Handles model download, voice selection, full-text speech synthesis
- * and audio playback via Web Audio API.
+ * Audio playback runs natively via rodio in the Rust backend.
+ * Commands are relayed through Tauri IPC; state changes arrive via events.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export interface TtsVoice {
     id: string;
@@ -20,23 +21,27 @@ export interface TtsVoiceGroup {
 
 export type TtsState =
     | { status: "idle" }
-    | { status: "downloading" }
     | { status: "loading" }
     | { status: "ready"; voices: TtsVoiceGroup[] }
     | { status: "playing" }
+    | { status: "paused" }
     | { status: "error"; message: string };
 
 type TtsListener = (state: TtsState) => void;
 
+interface TtsStatePayload {
+    status: string;
+    voices: TtsVoiceGroup[] | null;
+    message: string | null;
+}
+
 class TtsManager {
     private _state: TtsState = { status: "idle" };
     private _listeners: Set<TtsListener> = new Set();
-    private _audioContext: AudioContext | null = null;
-    private _currentSource: AudioBufferSourceNode | null = null;
     private _voiceCache: TtsVoiceGroup[] = [];
     private _selectedVoice = "af_heart";
     private _speed = 1.0;
-    private _abortController: AbortController | null = null;
+    private _unlistenState: UnlistenFn | null = null;
 
     get state(): TtsState {
         return this._state;
@@ -57,22 +62,47 @@ class TtsManager {
         for (const l of this._listeners) l(state);
     }
 
+    private async _ensureEventListener(): Promise<void> {
+        if (this._unlistenState) return;
+        this._unlistenState = await listen<TtsStatePayload>("tts-state", (event) => {
+            const p = event.payload;
+            const status = p.status;
+            switch (status) {
+                case "ready":
+                    this._voiceCache = p.voices ?? this._voiceCache;
+                    this.emit({ status: "ready", voices: this._voiceCache });
+                    break;
+                case "loading":
+                    this.emit({ status: "loading" });
+                    break;
+                case "playing":
+                    this.emit({ status: "playing" });
+                    break;
+                case "paused":
+                    this.emit({ status: "paused" });
+                    break;
+                case "error":
+                    this.emit({ status: "error", message: p.message ?? "Unknown error" });
+                    break;
+                default:
+                    break;
+            }
+        });
+    }
+
     /** Ensure the ONNX model and voices are downloaded and loaded. */
     async prepare(): Promise<void> {
+        await this._ensureEventListener();
+
         try {
-            const ready = await invoke<boolean>("kokoro_is_ready");
+            const ready = await invoke<boolean>("tts_is_ready");
             if (ready) {
-                this._voiceCache = await invoke<TtsVoiceGroup[]>("kokoro_list_voices");
+                this._voiceCache = await invoke<TtsVoiceGroup[]>("tts_get_voices");
                 this.emit({ status: "ready", voices: this._voiceCache });
                 return;
             }
 
-            this.emit({ status: "downloading" });
-
-            await invoke("kokoro_prepare");
-
-            this._voiceCache = await invoke<TtsVoiceGroup[]>("kokoro_list_voices");
-            this.emit({ status: "ready", voices: this._voiceCache });
+            await invoke("tts_load");
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             this.emit({ status: "error", message });
@@ -88,16 +118,15 @@ class TtsManager {
         this._speed = Math.max(0.5, Math.min(2.0, speed));
     }
 
-    /** Synthesize and play the full text via Kokoro. */
+    /** Start synthesizing and playing text via Kokoro. */
     async speak(text: string): Promise<void> {
-        if (this._state.status === "playing") {
+        await this._ensureEventListener();
+
+        if (this._state.status === "playing" || this._state.status === "paused") {
             this.stop();
         }
 
-        if (this._state.status === "error") {
-            return;
-        }
-
+        // Ensure engine is loaded and ready
         if (this._state.status !== "ready") {
             await this.prepare();
         }
@@ -108,102 +137,40 @@ class TtsManager {
         const trimmed = text.trim();
         if (!trimmed) return;
 
-        // Pre-create and resume AudioContext while we still have user gesture.
-        // If created lazily after an async invoke(), autoplay policy may block it.
         try {
-            if (!this._audioContext) {
-                this._audioContext = new AudioContext({ sampleRate: 24000 });
-            }
-            if (this._audioContext.state === "suspended") {
-                await this._audioContext.resume();
-            }
-        } catch (err) {
-            console.error("[TTS] Failed to create/resume AudioContext:", err);
-            this.emit({ status: "error", message: "Audio context blocked — click again to enable audio" });
-            return;
-        }
-
-        this._abortController = new AbortController();
-        const signal = this._abortController.signal;
-
-        this.emit({ status: "playing" });
-
-        try {
-            const audio = await invoke<number[]>("kokoro_generate", {
+            await invoke("tts_play", {
                 text: trimmed,
                 voice: this._selectedVoice,
                 speed: this._speed,
             });
-
-            if (signal.aborted) return;
-
-            if (audio.length > 0) {
-                await this._playAudio(audio, this._audioContext);
-            } else {
-                console.warn("[TTS] kokoro_generate returned 0 samples");
-            }
         } catch (err) {
-            if (!signal.aborted) {
-                const message = err instanceof Error ? err.message : String(err);
-                console.error("[TTS] Generation failed:", message);
-                this.emit({ status: "error", message });
-                return;
-            }
+            const message = err instanceof Error ? err.message : String(err);
+            console.error("[TTS] Play failed:", message);
+            this.emit({ status: "error", message });
         }
+    }
 
-        if (!signal.aborted) {
+    pause(): void {
+        invoke("tts_pause").catch(() => {});
+    }
+
+    resume(): void {
+        invoke("tts_resume").catch(() => {});
+    }
+
+    stop(): void {
+        invoke("tts_stop").catch(() => {});
+        if (this._state.status === "playing" || this._state.status === "paused" || this._state.status === "error") {
             this.emit({ status: "ready", voices: this._voiceCache });
         }
     }
 
-    /** Play raw f32 PCM audio at 24kHz via Web Audio API. */
-    private async _playAudio(samples: number[], ctx: AudioContext): Promise<void> {
-        const sampleRate = 24000; // Kokoro native output rate
-        const buffer = ctx.createBuffer(1, samples.length, sampleRate);
-        const channel = buffer.getChannelData(0);
-        for (let i = 0; i < samples.length; i++) {
-            channel[i] = samples[i];
-        }
-
-        return new Promise<void>((resolve) => {
-            const source = ctx.createBufferSource();
-            source.buffer = buffer;
-            source.connect(ctx.destination);
-
-            source.onended = () => {
-                this._currentSource = null;
-                resolve();
-            };
-
-            this._currentSource = source;
-            source.start();
-        });
-    }
-
-    stop() {
-        this._abortController?.abort();
-        this._abortController = null;
-
-        if (this._currentSource) {
-            try {
-                this._currentSource.stop();
-            } catch {
-                // May have already stopped
-            }
-            this._currentSource = null;
-        }
-
-        if (this._state.status === "playing" || this._state.status === "error") {
-            this.emit({ status: "ready", voices: this._voiceCache });
-        }
-    }
-
-    /** Release the audio context (call when reader closes). */
+    /** Release event listeners (call when reader closes). */
     dispose() {
         this.stop();
-        if (this._audioContext) {
-            this._audioContext.close();
-            this._audioContext = null;
+        if (this._unlistenState) {
+            this._unlistenState();
+            this._unlistenState = null;
         }
     }
 }
