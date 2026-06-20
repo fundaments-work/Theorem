@@ -233,20 +233,36 @@ export function StatisticsPage() {
     const { setRoute } = useUIStore();
     const [showShareModal, setShowShareModal] = useState(false);
 
-    const shareStatsData = useMemo(() => ({
-        totalBooks: books.length,
-        completedBooks: books.filter((book) => {
+    const shareStatsData = useMemo(() => {
+        const completedBooks = books.filter((book) => {
             if (book.manualCompletionState === "read") return true;
             if (book.manualCompletionState === "unread") return false;
             return !!book.completedAt || book.progress >= 0.99;
-        }).length,
-        totalReadingTime: stats.totalReadingTime,
-        currentStreak: stats.currentStreak,
-        longestStreak: stats.longestStreak,
-        booksReadThisYear: stats.booksReadThisYear,
-        yearlyBookGoal: stats.yearlyBookGoal,
-        totalHighlights: annotations.filter((a) => a.type === "highlight").length
-    }), [books, stats, annotations]);
+        });
+
+        // Most recently read book that is still in progress
+        const currentlyReading = [...books]
+            .filter((b) => b.lastReadAt && b.progress > 0 && b.progress < 0.99 && b.manualCompletionState !== "read")
+            .sort((a, b) => getDateTimestamp(b.lastReadAt) - getDateTimestamp(a.lastReadAt))[0];
+
+        return {
+            totalBooks: books.length,
+            completedBooks: completedBooks.length,
+            totalReadingTime: stats.totalReadingTime,
+            currentStreak: stats.currentStreak,
+            longestStreak: stats.longestStreak,
+            booksReadThisYear: stats.booksReadThisYear,
+            yearlyBookGoal: stats.yearlyBookGoal,
+            totalHighlights: annotations.filter((a) => a.type === "highlight").length,
+            recentlyReading: currentlyReading
+                ? {
+                      title: currentlyReading.title,
+                      author: currentlyReading.author || "",
+                      progress: currentlyReading.progress,
+                  }
+                : undefined,
+        };
+    }, [books, stats, annotations]);
 
     function isBookCompleted(book: (typeof books)[number]) {
         if (book.manualCompletionState === "read") return true;
