@@ -13,7 +13,7 @@ use tauri::AppHandle;
 use tauri::Manager;
 
 const MODEL_REPO: &str = "onnx-community/Kokoro-82M-v1.0-ONNX";
-const MODEL_FILE: &str = "model_quantized.onnx";
+const MODEL_FILE: &str = "onnx/model_quantized.onnx";
 const CONFIG_FILE: &str = "config.json";
 const VOICES_DIR: &str = "voices";
 
