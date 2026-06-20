@@ -62,7 +62,7 @@ interface FloatingPanelProps {
     visible: boolean;
     children: ReactNode;
     className?: string;
-    anchor?: 'top-left' | 'top-right';
+    anchor?: 'top-left' | 'top-right' | 'bottom';
 }
 
 export function FloatingPanel({
@@ -71,16 +71,26 @@ export function FloatingPanel({
     className,
     anchor = 'top-right',
 }: FloatingPanelProps) {
+    const isBottom = anchor === 'bottom';
     return (
         <div
             className={cn(
                 'fixed z-[var(--z-dropdown)] flex flex-col reader-sheet border-2',
+                // Mobile: bottom sheet (all anchors)
                 'left-0 right-0 bottom-0 max-h-[var(--layout-floating-panel-max-height)]',
-                'sm:bottom-auto sm:top-[var(--layout-floating-panel-top-offset)] sm:max-h-[var(--layout-floating-panel-max-height-desktop)] sm:w-[var(--layout-floating-panel-width)]',
-                anchor === 'top-right' && 'sm:left-auto sm:right-5',
-                anchor === 'top-left' && 'sm:left-5 sm:right-auto',
+                // Desktop: position by anchor
+                isBottom
+                    ? 'sm:top-auto sm:bottom-5 sm:left-auto sm:right-5 sm:max-h-[var(--layout-floating-panel-max-height-desktop)] sm:w-[var(--layout-floating-panel-width)]'
+                    : 'sm:bottom-auto sm:top-[var(--layout-floating-panel-top-offset)] sm:max-h-[var(--layout-floating-panel-max-height-desktop)] sm:w-[var(--layout-floating-panel-width)]',
+                !isBottom && anchor === 'top-right' && 'sm:left-auto sm:right-5',
+                !isBottom && anchor === 'top-left' && 'sm:left-5 sm:right-auto',
+                // Animation
                 'transform transition-[transform,opacity] duration-240 ease-[cubic-bezier(0.22,1,0.36,1)]',
-                visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none sm:-translate-y-2',
+                visible
+                    ? 'translate-y-0 opacity-100'
+                    : isBottom
+                        ? 'translate-y-8 opacity-0 pointer-events-none'
+                        : 'translate-y-8 opacity-0 pointer-events-none sm:-translate-y-2',
                 className
             )}
         >

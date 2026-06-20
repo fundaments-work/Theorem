@@ -1540,11 +1540,12 @@ export function ArticleViewer({
 
                 {/* TTS Panel — overlay like ReaderSettings */}
                 <TtsPanel
-                    visible={ttsEnabled && (kokoroTts.isSpeaking || kokoroTts.isPaused || kokoroTts.isReady || kokoroTts.state.status === "loading" || kokoroTts.state.status === "error")}
+                    visible={ttsEnabled && kokoroTts.state.status !== "idle"}
                     onClose={handleToggleTts}
                     state={kokoroTts.state}
                     voices={kokoroTts.voices}
                     selectedVoice={kokoroTts.selectedVoice}
+                    speed={kokoroTts.speed}
                     isSpeaking={kokoroTts.isSpeaking}
                     isPaused={kokoroTts.isPaused}
                     isReady={kokoroTts.isReady}
@@ -1554,6 +1555,7 @@ export function ArticleViewer({
                     }}
                     onStop={handleToggleTts}
                     onVoiceChange={kokoroTts.setVoice}
+                    onSpeedChange={kokoroTts.setSpeed}
                 />
 
                 <TableOfContents

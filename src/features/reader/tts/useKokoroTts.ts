@@ -10,6 +10,7 @@ interface UseKokoroTtsReturn {
     state: TtsState;
     voices: TtsVoiceGroup[];
     selectedVoice: string;
+    speed: number;
     isSpeaking: boolean;
     isPaused: boolean;
     isReady: boolean;
@@ -19,12 +20,14 @@ interface UseKokoroTtsReturn {
     pause: () => void;
     resume: () => void;
     setVoice: (voiceId: string) => void;
+    setSpeed: (speed: number) => void;
 }
 
 export function useKokoroTts(): UseKokoroTtsReturn {
     const [state, setState] = useState<TtsState>(ttsManager.state);
     const [voices, setVoices] = useState<TtsVoiceGroup[]>([]);
     const [selectedVoice, setSelectedVoice] = useState(ttsManager.selectedVoice);
+    const [speed, setSpeedState] = useState(1.0);
 
     useEffect(() => {
         const unsub = ttsManager.subscribe((s) => {
@@ -61,6 +64,11 @@ export function useKokoroTts(): UseKokoroTtsReturn {
         ttsManager.setVoice(voiceId);
     }, []);
 
+    const setSpeed = useCallback((value: number) => {
+        setSpeedState(value);
+        ttsManager.setSpeed(value);
+    }, []);
+
     useEffect(() => {
         return () => {
             ttsManager.dispose();
@@ -71,6 +79,7 @@ export function useKokoroTts(): UseKokoroTtsReturn {
         state,
         voices,
         selectedVoice,
+        speed,
         isSpeaking: state.status === "playing",
         isPaused: state.status === "paused",
         isReady: state.status === "ready",
@@ -80,5 +89,6 @@ export function useKokoroTts(): UseKokoroTtsReturn {
         pause,
         resume,
         setVoice,
+        setSpeed,
     };
 }

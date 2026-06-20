@@ -2119,11 +2119,12 @@ function BookReaderPage() {
 
             {/* TTS Panel — overlay like ReaderSettings */}
             <TtsPanel
-                visible={isTtsActive && !isPdfFormat && kokoroTts.isReady}
+                visible={isTtsActive && !isPdfFormat}
                 onClose={toggleTts}
                 state={kokoroTts.state}
                 voices={kokoroTts.voices}
                 selectedVoice={kokoroTts.selectedVoice}
+                speed={kokoroTts.speed}
                 isSpeaking={kokoroTts.isSpeaking}
                 isPaused={kokoroTts.isPaused}
                 isReady={kokoroTts.isReady}
@@ -2133,6 +2134,7 @@ function BookReaderPage() {
                 }}
                 onStop={toggleTts}
                 onVoiceChange={kokoroTts.setVoice}
+                onSpeedChange={kokoroTts.setSpeed}
             />
 
             {/* Read Aloud (browser speechSynthesis fallback) */}
