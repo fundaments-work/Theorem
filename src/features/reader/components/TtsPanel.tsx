@@ -2,12 +2,13 @@
  * TtsPanel — voice settings overlay (FloatingPanel).
  *
  * Opens from the gear icon on TtsPlayerBar.
- * Contains voice selector and speed presets.
+ * Contains voice selector (using the app's Dropdown component) and
+ * speed presets (chip buttons matching ReaderSettings pattern).
  * Uses same Backdrop + FloatingPanel pattern as ReaderSettings.
  */
 import { Volume2, X } from "lucide-react";
 import { cn } from "../../../core";
-import { Backdrop, FloatingPanel } from "../../../ui";
+import { Backdrop, FloatingPanel, Dropdown } from "../../../ui";
 import type { TtsVoiceGroup } from "../tts/tts-manager";
 
 interface TtsPanelProps {
@@ -23,6 +24,23 @@ interface TtsPanelProps {
 
 const SPEED_PRESETS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
+/** Flatten voice groups into Dropdown-compatible options. */
+function buildVoiceOptions(voices: TtsVoiceGroup[]) {
+    const opts: { value: string; label: string; group: string }[] = [];
+    for (const group of voices) {
+        for (const v of group.voices) {
+            opts.push({
+                value: v.id,
+                label: `${v.name} (${v.gender})`,
+                group: group.label,
+            });
+        }
+    }
+    // Sort by group then name
+    opts.sort((a, b) => a.group.localeCompare(b.group) || a.label.localeCompare(b.label));
+    return opts;
+}
+
 export function TtsPanel({
     visible,
     onClose,
@@ -33,6 +51,12 @@ export function TtsPanel({
     onSpeedChange,
     className,
 }: TtsPanelProps) {
+    const voiceOptions = buildVoiceOptions(voices);
+
+    // Find the current voice's group for display
+    const currentVoice = voiceOptions.find((o) => o.value === selectedVoice);
+    const currentGroup = currentVoice?.group;
+
     return (
         <>
             <Backdrop visible={visible} onClick={onClose} />
@@ -42,7 +66,7 @@ export function TtsPanel({
                 anchor="top-right"
                 className={cn("overflow-hidden bg-[var(--color-surface)]", className)}
             >
-                {/* Header — same pattern as ReaderSettings */}
+                {/* Header — matches ReaderSettings pattern */}
                 <div className="reader-panel-header flex items-center justify-between border-b border-[var(--color-border)] p-4">
                     <div className="flex items-center gap-2">
                         <Volume2 className="w-5 h-5 text-[color:var(--color-accent)]" />
@@ -59,33 +83,31 @@ export function TtsPanel({
                     </button>
                 </div>
 
-                {/* Body */}
-                <div className="p-4 space-y-5 overflow-y-auto">
-                    {/* Voice selector */}
-                    {voices.length > 0 && (
-                        <div className="space-y-2">
-                            <label className="text-xs font-medium leading-snug text-[color:var(--color-text-muted)]">
-                                Voice
-                            </label>
-                            <select
-                                value={selectedVoice}
-                                onChange={(e) => onVoiceChange(e.target.value)}
-                                className="w-full text-sm px-3 py-2 border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-primary)] rounded-md"
-                            >
-                                {voices.map((group) => (
-                                    <optgroup key={group.label} label={group.label}>
-                                        {group.voices.map((v) => (
-                                            <option key={v.id} value={v.id}>
-                                                {v.name} ({v.gender})
-                                            </option>
-                                        ))}
-                                    </optgroup>
-                                ))}
-                            </select>
-                        </div>
-                    )}
+                {/* Body — matches ReaderSettings scrollable body pattern */}
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-5">
+                    {/* Voice selector — using app Dropdown component */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium leading-snug text-[color:var(--color-text-muted)]">
+                            Voice
+                        </label>
+                        <Dropdown
+                            options={voiceOptions}
+                            value={selectedVoice}
+                            onChange={onVoiceChange}
+                            placeholder="Choose a voice…"
+                            size="sm"
+                            variant="default"
+                            className="w-full"
+                            align="left"
+                        />
+                        {currentGroup && (
+                            <p className="text-[10px] leading-snug text-[color:var(--color-text-muted)]">
+                                {currentGroup}
+                            </p>
+                        )}
+                    </div>
 
-                    {/* Speed presets */}
+                    {/* Speed presets — chips matching ReaderSettings pattern */}
                     <div className="space-y-2">
                         <label className="text-xs font-medium leading-snug text-[color:var(--color-text-muted)]">
                             Speed
