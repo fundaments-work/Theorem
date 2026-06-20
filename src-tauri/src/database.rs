@@ -65,7 +65,7 @@ fn remove_materialized_cache_file(app: &AppHandle, book_id: &str) {
     }
 }
 
-fn with_connection<T, F>(app: &AppHandle, operation: F) -> Result<T, String>
+pub fn with_connection<T, F>(app: &AppHandle, operation: F) -> Result<T, String>
 where
     F: FnOnce(&Connection) -> rusqlite::Result<T>,
 {

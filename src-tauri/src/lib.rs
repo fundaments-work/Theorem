@@ -13,10 +13,24 @@ use std::env;
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use tauri::ipc::Response;
+use tauri::AppHandle;
 use tauri::Emitter;
 use tauri::Manager;
+
+fn shared_http_client() -> &'static Client {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder()
+            .cookie_store(true)
+            .timeout(std::time::Duration::from_secs(60))
+            .redirect(reqwest::redirect::Policy::limited(10))
+            .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36")
+            .build()
+            .expect("Failed to create shared HTTP client — install OpenSSL (libssl-dev)")
+    })
+}
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
@@ -436,13 +450,9 @@ fn decode_hex_string(hex: &str) -> Option<String> {
  */
 #[tauri::command]
 fn fetch_rss_feed(url: String) -> Result<String, String> {
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
-    let response = client
+    let response = shared_http_client()
         .get(&url)
+        .timeout(std::time::Duration::from_secs(30))
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .header("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml, */*")
         .send()
@@ -484,12 +494,6 @@ fn fetch_url_content(url: String) -> Result<String, String> {
         origin.to_string()
     };
 
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(45))
-        .redirect(reqwest::redirect::Policy::limited(10))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
     let user_agents = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:134.0) Gecko/20100101 Firefox/134.0",
@@ -497,10 +501,15 @@ fn fetch_url_content(url: String) -> Result<String, String> {
     ];
 
     let mut last_error: Option<String> = None;
-    for user_agent in user_agents {
-        let response = client
+    for (attempt, user_agent) in user_agents.iter().enumerate() {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+
+        let response = shared_http_client()
             .get(parsed_url.clone())
-            .header("User-Agent", user_agent)
+            .timeout(std::time::Duration::from_secs(45))
+            .header("User-Agent", *user_agent)
             .header(
                 "Accept",
                 "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -526,11 +535,27 @@ fn fetch_url_content(url: String) -> Result<String, String> {
         }
 
         let status = response.status();
-        if status.as_u16() == 403 {
+        let status_code = status.as_u16();
+
+        if status_code == 429 || status_code == 403 {
+            if status_code == 429 {
+                let retry_after = response
+                    .headers()
+                    .get("Retry-After")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(3)
+                    .clamp(2, 8);
+                std::thread::sleep(std::time::Duration::from_secs(retry_after));
+            }
             last_error = Some(format!(
                 "HTTP error: {} {}",
                 status,
-                status.canonical_reason().unwrap_or("Forbidden")
+                status.canonical_reason().unwrap_or(if status_code == 429 {
+                    "Too Many Requests"
+                } else {
+                    "Forbidden"
+                })
             ));
             continue;
         }
@@ -561,14 +586,9 @@ fn fetch_binary_content(url: String) -> Result<Vec<u8>, String> {
         origin.to_string()
     };
 
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(90))
-        .redirect(reqwest::redirect::Policy::limited(10))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
-    let response = client
+    let response = shared_http_client()
         .get(parsed_url)
+        .timeout(std::time::Duration::from_secs(90))
         .header(
             "User-Agent",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
@@ -826,32 +846,154 @@ fn hide_to_tray(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// Download and extract a StarDict dictionary from a URL.
-/// Returns { ifo, idx, dict, syn? } as base64-encoded strings.
+/// Supports both .tar.bz2 and .zip archives.
+/// Writes extracted files directly to SQLite blob storage and returns
+/// dictionary metadata so the frontend never handles large blobs over IPC.
+/// Runs the download on a blocking thread so the UI stays responsive.
 #[tauri::command]
-fn download_and_extract_stardict(url: String) -> Result<serde_json::Value, String> {
-    let client = Client::builder()
-        .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
-        .timeout(std::time::Duration::from_secs(120))
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+async fn download_and_extract_stardict(
+    app: AppHandle,
+    url: String,
+) -> Result<serde_json::Value, String> {
+    tokio::task::spawn_blocking(move || {
+        let response = shared_http_client()
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(300))
+            .send()
+            .map_err(|e| format!("Download failed: {e}"))?;
 
-    let response = client
-        .get(&url)
-        .send()
-        .map_err(|e| format!("Download failed: {e}"))?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(format!("Server returned HTTP {}", status.as_u16()));
+        }
 
-    let status = response.status();
-    if !status.is_success() {
-        return Err(format!("Server returned HTTP {}", status.as_u16()));
+        let body = response
+            .bytes()
+            .map_err(|e| format!("Failed to read response body: {e}"))?;
+
+        let is_zip = url.ends_with(".zip");
+
+        let (ifo, idx, dict, syn) = if is_zip {
+            extract_stardict_parts_from_zip(&body)?
+        } else {
+            extract_stardict_parts_from_tar_bz2(&body)?
+        };
+
+        // Parse .ifo to get dictionary metadata
+        let ifo_text = String::from_utf8_lossy(&ifo);
+        let mut name = String::from("Unknown Dictionary");
+        let mut lang = String::from("en");
+        for line in ifo_text.lines() {
+            let trimmed = line.trim();
+            if let Some(value) = trimmed.strip_prefix("bookname=") {
+                name = value.trim().to_string();
+            } else if trimmed.starts_with("sametypesequence=") {
+                // Dictionary format indicator — captured for info, not needed elsewhere
+            }
+        }
+        // Derive language from URL (e.g., .../file/en/dict-en-en.zip)
+        if let Some(segments) = url.split('/').nth(4) {
+            if segments.len() == 2 {
+                lang = segments.to_string();
+            }
+        }
+
+        let id = uuid_v4();
+        let size_bytes =
+            (ifo.len() + idx.len() + dict.len() + syn.as_ref().map_or(0, |s| s.len())) as u64;
+
+        let manifest_key = format!("theorem-stardict:{id}:manifest");
+        let manifest = serde_json::json!({
+            "id": id,
+            "name": name,
+            "language": lang,
+            "sizeBytes": size_bytes,
+            "hasSyn": syn.is_some(),
+        });
+        database::sqlite_set_kv(
+            app.clone(),
+            manifest_key,
+            serde_json::to_string(&manifest).map_err(|e| e.to_string())?,
+        )?;
+
+        database::sqlite_set_blob(app.clone(), format!("theorem-stardict:{id}:ifo"), ifo)?;
+        database::sqlite_set_blob(app.clone(), format!("theorem-stardict:{id}:idx"), idx)?;
+        database::sqlite_set_blob(app.clone(), format!("theorem-stardict:{id}:dict"), dict)?;
+        if let Some(syn_data) = syn {
+            database::sqlite_set_blob(app, format!("theorem-stardict:{id}:syn"), syn_data)?;
+        }
+
+        Ok(serde_json::json!({
+            "id": id,
+            "name": name,
+            "language": lang,
+            "sizeBytes": size_bytes,
+        }))
+    })
+    .await
+    .map_err(|e| format!("Download task failed: {e}"))?
+}
+
+fn uuid_v4() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let random_part: u128 = now.as_nanos() as u128;
+    format!(
+        "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
+        (random_part >> 96) as u32,
+        ((random_part >> 80) & 0xFFFF) as u16,
+        ((random_part >> 64) & 0x0FFF) as u16,
+        ((random_part >> 48) & 0xFFFF) as u16,
+        random_part & 0xFFFFFFFFFFFF,
+    )
+}
+
+fn extract_stardict_parts_from_zip(
+    data: &[u8],
+) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>, Option<Vec<u8>>), String> {
+    let reader = std::io::Cursor::new(data);
+    let mut archive =
+        zip::ZipArchive::new(reader).map_err(|e| format!("ZIP parsing failed: {e}"))?;
+
+    let mut ifo_bytes: Option<Vec<u8>> = None;
+    let mut idx_bytes: Option<Vec<u8>> = None;
+    let mut dict_bytes: Option<Vec<u8>> = None;
+    let mut syn_bytes: Option<Vec<u8>> = None;
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("ZIP entry error: {e}"))?;
+        let name = entry.name().to_owned();
+        let mut data = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut data)
+            .map_err(|e| format!("Failed to read ZIP entry '{name}': {e}"))?;
+
+        if name.ends_with(".ifo") {
+            ifo_bytes = Some(data);
+        } else if name.ends_with(".idx") && !name.ends_with(".idx.gz") {
+            idx_bytes = Some(data);
+        } else if name.ends_with(".dict.dz") || name.ends_with(".dict") {
+            dict_bytes = Some(data);
+        } else if name.ends_with(".syn") {
+            syn_bytes = Some(data);
+        }
     }
 
-    let body = response
-        .bytes()
-        .map_err(|e| format!("Failed to read response body: {e}"))?;
+    let ifo = ifo_bytes.ok_or("Archive missing .ifo file")?;
+    let idx = idx_bytes.ok_or("Archive missing .idx file")?;
+    let dict = dict_bytes.ok_or("Archive missing .dict.dz/.dict file")?;
 
-    // Decompress bzip2 and parse tar archive
+    Ok((ifo, idx, dict, syn_bytes))
+}
+
+fn extract_stardict_parts_from_tar_bz2(
+    data: &[u8],
+) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>, Option<Vec<u8>>), String> {
     let decompressed = {
-        let mut decoder = bzip2::read::BzDecoder::new(&body[..]);
+        let mut decoder = bzip2::read::BzDecoder::new(data);
         let mut buf = Vec::new();
         std::io::Read::read_to_end(&mut decoder, &mut buf)
             .map_err(|e| format!("Bzip2 decompression failed: {e}"))?;
@@ -865,7 +1007,10 @@ fn download_and_extract_stardict(url: String) -> Result<serde_json::Value, Strin
     let mut dict_bytes: Option<Vec<u8>> = None;
     let mut syn_bytes: Option<Vec<u8>> = None;
 
-    for entry in archive.entries().map_err(|e| format!("Tar parsing failed: {e}"))? {
+    for entry in archive
+        .entries()
+        .map_err(|e| format!("Tar parsing failed: {e}"))?
+    {
         let mut entry = entry.map_err(|e| format!("Tar entry error: {e}"))?;
         let name = {
             let path = entry.path().map_err(|e| format!("Tar path error: {e}"))?;
@@ -894,18 +1039,5 @@ fn download_and_extract_stardict(url: String) -> Result<serde_json::Value, Strin
     let idx = idx_bytes.ok_or("Archive missing .idx file")?;
     let dict = dict_bytes.ok_or("Archive missing .dict.dz/.dict file")?;
 
-    use base64::Engine;
-    let b64 = base64::engine::general_purpose::STANDARD;
-
-    let mut result = serde_json::json!({
-        "ifo": b64.encode(&ifo),
-        "idx": b64.encode(&idx),
-        "dict": b64.encode(&dict),
-    });
-
-    if let Some(syn) = syn_bytes {
-        result["syn"] = serde_json::Value::String(b64.encode(&syn));
-    }
-
-    Ok(result)
+    Ok((ifo, idx, dict, syn_bytes))
 }
