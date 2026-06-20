@@ -2164,7 +2164,6 @@ function BookReaderPage() {
                         state={kokoroTts.state}
                         progress={kokoroTts.progress}
                         isSpeaking={kokoroTts.isSpeaking}
-                        isReady={kokoroTts.isReady}
                         isLoading={kokoroTts.isLoading}
                         speed={kokoroTts.speed}
                         onPlayPause={() => {

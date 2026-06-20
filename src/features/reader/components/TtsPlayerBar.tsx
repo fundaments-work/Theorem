@@ -12,7 +12,6 @@ interface TtsPlayerBarProps {
     state: TtsState;
     progress: TtsProgress;
     isSpeaking: boolean;
-    isReady: boolean;
     isLoading: boolean;
     speed: number;
     onPlayPause: () => void;
@@ -28,7 +27,6 @@ export function TtsPlayerBar({
     state,
     progress,
     isSpeaking,
-    isReady,
     isLoading,
     speed,
     onPlayPause,
@@ -43,6 +41,8 @@ export function TtsPlayerBar({
     const pct = Math.round(fraction * 100);
     const errMsg = state.status === "error" ? (state as { status: "error"; message: string }).message : null;
 
+    const disabled = isLoading || state.status === "error";
+
     return (
         <div
             className={cn(
@@ -55,7 +55,7 @@ export function TtsPlayerBar({
             {/* Skip back */}
             <button
                 onClick={onSkipBack}
-                disabled={!isReady || progress.chunk === 0}
+                disabled={disabled || progress.chunk === 0}
                 className="p-1.5 rounded-md text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors disabled:opacity-40 disabled:pointer-events-none"
                 aria-label="Previous sentence"
             >
@@ -65,7 +65,7 @@ export function TtsPlayerBar({
             {/* Play / Pause */}
             <button
                 onClick={onPlayPause}
-                disabled={!isReady || isLoading}
+                disabled={isLoading}
                 className={cn(
                     "flex items-center justify-center w-9 h-9 rounded-full transition-all shrink-0",
                     isSpeaking
@@ -87,7 +87,7 @@ export function TtsPlayerBar({
             {/* Skip forward */}
             <button
                 onClick={onSkipForward}
-                disabled={!isReady || progress.chunk + 1 >= progress.total}
+                disabled={disabled || progress.chunk + 1 >= progress.total}
                 className="p-1.5 rounded-md text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors disabled:opacity-40 disabled:pointer-events-none"
                 aria-label="Next sentence"
             >
@@ -118,7 +118,7 @@ export function TtsPlayerBar({
             {/* Speed */}
             <button
                 onClick={onSpeedCycle}
-                disabled={!isReady}
+                disabled={disabled}
                 className="px-2 py-1 text-xs font-medium rounded-md text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors tabular-nums shrink-0 disabled:opacity-40 disabled:pointer-events-none"
                 aria-label="Change speed"
             >
@@ -128,7 +128,7 @@ export function TtsPlayerBar({
             {/* Settings — opens voice overlay */}
             <button
                 onClick={onOpenSettings}
-                disabled={!isReady}
+                disabled={disabled}
                 className="p-1.5 rounded-md text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors shrink-0 disabled:opacity-40 disabled:pointer-events-none"
                 aria-label="Voice settings"
             >

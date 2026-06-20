@@ -176,7 +176,43 @@ fn ensure_engine(app: &AppHandle) -> Result<(), String> {
         sink: Some(sink),
     });
 
+    // Drop the lock so warmup_inference can acquire it independently.
+    drop(guard);
+
+    // Run a dummy synthesis to warm up the ONNX session.
+    // The first real call will be much faster (~200ms vs ~3s cold).
+    warmup_inference("af_heart");
+
     Ok(())
+}
+
+/// Run a single short inference to warm the ONNX runtime session.
+/// Without this, the first user-visible synthesis call incurs a multi-second
+/// cold-start penalty.
+fn warmup_inference(voice: &str) {
+    let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(inner) = guard.as_mut() else { return };
+    let Some(engine) = inner.engine.as_mut() else {
+        return;
+    };
+
+    let params = KokoroInferenceParams {
+        voice: voice.to_string(),
+        speed: 1.0,
+        style_index: Some(0),
+    };
+    match engine.synthesize("Hello.", Some(params)) {
+        Ok(result) => {
+            eprintln!(
+                "[TTS] ONNX warmup complete — {} samples ({:.1}s)",
+                result.samples.len(),
+                result.samples.len() as f64 / 24000.0
+            );
+        }
+        Err(e) => {
+            eprintln!("[TTS] ONNX warmup failed (non-fatal): {e}");
+        }
+    }
 }
 
 fn list_voice_groups() -> Vec<KokoroVoiceGroup> {
@@ -500,7 +536,12 @@ pub fn tts_play(
                         let buf = rodio::buffer::SamplesBuffer::new(
                             NonZero::new(1u16).unwrap(),
                             NonZero::new(24000u32).unwrap(),
-                            samples,
+                            // Apply gain — Kokoro quantized model can be quiet.
+                            // Soft-clip to [-1.0, 1.0] to avoid distortion.
+                            samples
+                                .into_iter()
+                                .map(|s| (s * 1.8).clamp(-1.0, 1.0))
+                                .collect::<Vec<f32>>(),
                         );
                         pb.player.append(buf);
                         eprintln!("[TTS] Chunk {} appended to player", i + 1);

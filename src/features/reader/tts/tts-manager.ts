@@ -239,7 +239,7 @@ class TtsManager {
     /** Poll _state until it reaches the expected status or errors out. */
     private async _waitForStatus(
         target: "ready" | "error",
-        timeoutMs = 5000,
+        timeoutMs = 1000,
     ): Promise<void> {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
