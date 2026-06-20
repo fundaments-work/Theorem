@@ -2033,26 +2033,6 @@ export const useVocabularyStore = create<VocabularyStore>()(
                 return mergedTerm;
             },
 
-            updateVocabularyTerm: (termId, updates) => {
-                const now = new Date();
-                set((state) => ({
-                    vocabularyTerms: state.vocabularyTerms.map((term) => (
-                        term.id === termId
-                            ? {
-                                ...term,
-                                ...updates,
-                                contexts: Array.isArray(updates.contexts)
-                                    ? updates.contexts
-                                        .map((entry) => normalizeVocabularyContext(entry, term.createdAt))
-                                        .filter((entry): entry is VocabularyContext => Boolean(entry))
-                                    : term.contexts,
-                                updatedAt: now,
-                            }
-                            : term
-                    )),
-                }));
-            },
-
             deleteVocabularyTerm: (termId) => {
                 set((state) => ({
                     vocabularyTerms: state.vocabularyTerms.filter((term) => term.id !== termId),
@@ -2203,7 +2183,6 @@ export const useVocabularyStore = create<VocabularyStore>()(
 
 import type { RssFeed, RssArticle } from '../types';
 import {
-    fetchAndExtractArticleContent,
     fetchAndParseFeed,
     materializeFeed,
 } from '../services/RssService';
@@ -2282,7 +2261,7 @@ interface RssStore {
     toggleArticleFavorite: (articleId: string) => void;
     getArticlesForFeed: (feedId: string) => RssArticle[];
     getAllArticles: () => RssArticle[];
-    openArticleInReader: (article: RssArticle) => Promise<void>;
+    openArticleInReader: (article: RssArticle) => void;
     closeArticleViewer: () => void;
     setCurrentArticle: (article: RssArticle | null) => void;
     setError: (error?: string) => void;
@@ -2424,83 +2403,13 @@ export const useRssStore = create<RssStore>()(
                 return getSortedRssArticleLookup(get().articles).allSorted;
             },
 
-            openArticleInReader: async (article: RssArticle) => {
+            openArticleInReader: (article: RssArticle) => {
                 // Mark article as read
                 get().markArticleRead(article.id);
 
                 // Open article in the unified reader route
-                set({
-                    currentArticle: article,
-                });
+                set({ currentArticle: article });
                 useUIStore.getState().setRoute('reader');
-
-                // Try to fetch and extract the full article content from the source URL.
-                // If extraction fails, we keep using feed-provided content as a safe fallback.
-                if (!article.url) {
-                    return;
-                }
-
-                try {
-                    const extracted = await fetchAndExtractArticleContent(article.url);
-                    // Only replace if the extracted content is substantially longer
-                    // than what the feed provided (ensures we don't replace good
-                    // full-text feeds with a worse extraction).
-                    const plainTextLength = article.content
-                        .replace(/<[^>]*>/g, ' ')
-                        .replace(/\s+/g, ' ')
-                        .trim()
-                        .length;
-                    const extractedLength = extracted.content
-                        .replace(/<[^>]*>/g, ' ')
-                        .replace(/\s+/g, ' ')
-                        .trim()
-                        .length;
-                    if (extractedLength < plainTextLength) {
-                        return;
-                    }
-
-                    const articlePatch: Partial<RssArticle> = {
-                        content: extracted.content,
-                    };
-
-                    if (extracted.title) {
-                        articlePatch.title = extracted.title;
-                    }
-                    if (extracted.summary) {
-                        articlePatch.summary = extracted.summary;
-                    }
-                    if (extracted.author) {
-                        articlePatch.author = extracted.author;
-                    }
-                    if (extracted.imageUrl) {
-                        articlePatch.imageUrl = extracted.imageUrl;
-                    }
-                    if (extracted.publishedAt) {
-                        articlePatch.publishedAt = extracted.publishedAt;
-                    }
-
-                    const articleAnnotationBookId = `rss:${article.id}`;
-                    const hasExistingArticleAnnotations = useLibraryStore.getState().annotations
-                        .some((entry) => entry.bookId === articleAnnotationBookId);
-
-                    set((state) => ({
-                        articles: state.articles.map((entry) => (
-                            entry.id === article.id
-                                ? { ...entry, ...articlePatch }
-                                : entry
-                        )),
-                        // Do not replace currently-open reader content once annotations exist,
-                        // otherwise highlight render anchors can be invalidated mid-session.
-                        currentArticle: (
-                            !hasExistingArticleAnnotations
-                            && state.currentArticle?.id === article.id
-                        )
-                            ? { ...state.currentArticle, ...articlePatch }
-                            : state.currentArticle,
-                    }));
-                } catch (error) {
-                    console.warn('[RssStore] Failed to load full article content, using feed content fallback:', error);
-                }
             },
 
             closeArticleViewer: () => {

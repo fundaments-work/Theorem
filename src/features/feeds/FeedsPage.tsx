@@ -6,6 +6,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core";
+import { isTauri } from "../../core";
 import { useRssStore } from "../../core";
 import type { RssFeed, RssArticle } from "../../core";
 import {
@@ -269,15 +270,24 @@ function ArticleCard({
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 mt-4">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onRead();
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                        >
-                            <span>Read Full Article</span>
-                        </button>
+                        {article.url && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isTauri()) {
+                                        import("@tauri-apps/plugin-opener").then(
+                                            ({ openUrl }) => openUrl(article.url),
+                                        );
+                                    } else {
+                                        window.open(article.url, "_blank", "noopener,noreferrer");
+                                    }
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                            >
+                                <span>Read Full Article</span>
+                            </button>
+                        )}
                     </div>
                 </div>
 

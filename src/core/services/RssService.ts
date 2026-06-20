@@ -28,7 +28,6 @@ class TokenBucket {
     private lastRefill: number;
     private readonly maxTokens: number;
     private readonly refillRate: number;
-    private pendingWaiters: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
 
     constructor(maxTokens: number, refillRatePerSecond: number) {
         this.maxTokens = maxTokens;
@@ -45,25 +44,18 @@ class TokenBucket {
     }
 
     async acquire(tokenCount = 1, timeoutMs = 30000): Promise<void> {
-        this.refill();
-
-        if (this.tokens >= tokenCount) {
-            this.tokens -= tokenCount;
-            return;
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+            this.refill();
+            if (this.tokens >= tokenCount) {
+                this.tokens -= tokenCount;
+                return;
+            }
+            const deficit = tokenCount - this.tokens;
+            const waitMs = Math.min(500, Math.ceil((deficit / this.refillRate) * 1000));
+            await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
         }
-
-        return new Promise<void>((resolve, reject) => {
-            const waiter = { resolve, reject };
-            this.pendingWaiters.push(waiter);
-
-            setTimeout(() => {
-                const idx = this.pendingWaiters.indexOf(waiter);
-                if (idx >= 0) {
-                    this.pendingWaiters.splice(idx, 1);
-                    resolve();
-                }
-            }, timeoutMs);
-        });
+        throw new Error('Rate limit acquire timeout');
     }
 }
 

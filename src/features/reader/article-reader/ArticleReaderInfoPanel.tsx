@@ -1,5 +1,5 @@
 import { Calendar, ExternalLink, Globe, User, X } from "lucide-react";
-import type { RssArticle } from "../../../core";
+import { isTauri, type RssArticle } from "../../../core";
 import { FloatingPanel } from "../../../ui";
 import { formatArticleDate } from "./utils";
 
@@ -60,15 +60,22 @@ export function ArticleReaderInfoPanel({
                 </div>
 
                 {article.url && (
-                    <a
-                        href={article.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (isTauri()) {
+                                import("@tauri-apps/plugin-opener").then(
+                                    ({ openUrl }) => openUrl(article.url),
+                                );
+                            } else {
+                                window.open(article.url, "_blank", "noopener,noreferrer");
+                            }
+                        }}
                         className="flex h-10 w-full items-center justify-center gap-2 border border-[var(--color-border)] font-mono text-[11px] font-bold uppercase tracking-[0.1em] transition-colors hover:bg-[var(--color-surface-muted)]"
                     >
                         <ExternalLink className="w-4 h-4" />
                         Open Original
-                    </a>
+                    </button>
                 )}
             </div>
         </FloatingPanel>

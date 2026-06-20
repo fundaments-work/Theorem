@@ -1403,6 +1403,10 @@ export function ArticleViewer({
             saved: false,
         });
 
+        // Yield to the browser so React renders the spinner before the
+        // potentially-long first dictionary index parse blocks the UI.
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
         try {
             const result = await lookupTerm(term, "en");
             setDictionaryState((previous) => ({
