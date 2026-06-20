@@ -258,7 +258,7 @@ function BookReaderPage() {
             if (text) {
                 kokoroTts.prepare().then(() => {
                     kokoroTts.speak(text);
-                });
+                }).catch(() => {});
             }
         } else {
             kokoroTts.stop();

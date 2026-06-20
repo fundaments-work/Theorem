@@ -58,5 +58,5 @@ tar = "0.4"
 zip = "0.6"
 
 # ── Kokoro TTS (ONNX Runtime) ──
-ort = { version = "2.0.0-rc.12", features = ["download-binaries"] }
+ort = { version = "2.0.0-rc.12", default-features = true }
 ndarray = "0.17"

@@ -687,7 +687,7 @@ export function ArticleViewer({
         if (!text) return;
         kokoroTts.prepare().then(() => {
             if (text) kokoroTts.speak(text);
-        });
+        }).catch(() => {});
     }, [kokoroTts]);
 
     const handleArticleExitFullscreen = useCallback(() => {

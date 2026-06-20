@@ -78,6 +78,7 @@ class TtsManager {
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             this.emit({ status: "error", message });
+            throw err;
         }
     }
 
@@ -95,12 +96,16 @@ class TtsManager {
             this.stop();
         }
 
+        // If prepare already failed, don't retry — the error message is already shown
+        if (this._state.status === "error") {
+            return;
+        }
+
         // Ensure engine is loaded before generating
         if (this._state.status !== "ready") {
             await this.prepare();
         }
         if (this._state.status !== "ready") {
-            this.emit({ status: "error", message: "TTS engine failed to load" });
             return;
         }
 
