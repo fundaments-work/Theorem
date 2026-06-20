@@ -1429,11 +1429,7 @@ export function ArticleViewer({
         }
 
         const term = vocabularyTermFromLookup(dictionaryState.result);
-        saveVocabularyTerm(term, {
-            sourceType: "site",
-            sourceId: article.id,
-            label: article.title,
-        });
+        saveVocabularyTerm(term);
 
         setDictionaryState((previous) => ({ ...previous, saved: true }));
     }, [article, dictionaryState.result, saveVocabularyTerm]);

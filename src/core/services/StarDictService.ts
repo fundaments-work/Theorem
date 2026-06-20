@@ -1,5 +1,5 @@
 import { del, get, set } from "idb-keyval";
-import { inflateSync } from "fflate";
+import { Inflate } from "fflate";
 import type {
     DictionaryProvider,
     InstalledDictionary,
@@ -190,10 +190,34 @@ async function createRuntimeDictionary(buffers: {
     const dictionary = new StarDict();
 
     await dictionary.loadIfo(new Blob([buffers.ifo]));
+
+    // DictZip stores compressed chunks as contiguous deflate blocks in a
+    // single gzip stream. Only the *last* block carries the BFINAL marker;
+    // intermediate chunks are non-final so inflateSync fails with
+    // "unexpected EOF".  We use fflate's streaming Inflate class which
+    // decompresses partial deflate blocks without requiring BFINAL.
+    const inflateChunk = (data: Uint8Array): Uint8Array => {
+        const outputs: Uint8Array[] = [];
+        const inflater = new Inflate({});
+        inflater.ondata = (data) => {
+            outputs.push(data);
+        };
+        inflater.push(data, false);
+        const total = outputs.reduce((s, o) => s + o.length, 0);
+        const result = new Uint8Array(total);
+        let offset = 0;
+        for (const o of outputs) {
+            result.set(o, offset);
+            offset += o.length;
+        }
+        return result;
+    };
+
     await dictionary.loadDict(
         new Blob([buffers.dict]),
-        async (data: Uint8Array) => inflateSync(data),
+        async (data: Uint8Array) => inflateChunk(data),
     );
+
     await dictionary.loadIdx(new Blob([buffers.idx]));
 
     if (buffers.syn) {

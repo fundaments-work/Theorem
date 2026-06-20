@@ -1585,6 +1585,12 @@ function BookReaderPage() {
         setDictionaryLookupSaved(false);
         setDictionaryLookupLoading(true);
 
+        // Yield to the browser so React renders the "Loading..." spinner
+        // before the potentially-long first dictionary index parse.  The
+        // StarDict index is parsed synchronously on first use and can
+        // take 1-2 s for large dictionaries, freezing the UI.
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
         try {
             const result = await lookupTerm(term, "en");
             setDictionaryLookupResult(result);
@@ -1618,18 +1624,9 @@ function BookReaderPage() {
             return;
         }
 
-        saveVocabularyTerm(
-            vocabularyTermFromLookup(dictionaryLookupResult),
-            currentBook
-                ? {
-                    sourceType: "book",
-                    sourceId: currentBook.id,
-                    label: currentBook.title,
-                }
-                : undefined,
-        );
+        saveVocabularyTerm(vocabularyTermFromLookup(dictionaryLookupResult));
         setDictionaryLookupSaved(true);
-    }, [currentBook, dictionaryLookupResult, saveVocabularyTerm, settings.vocabulary.vocabularyEnabled]);
+    }, [dictionaryLookupResult, saveVocabularyTerm, settings.vocabulary.vocabularyEnabled]);
 
     const handleColorSelect = useCallback(async (color: HighlightColor) => {
         if (!selectedCfi || !currentBookId) return;

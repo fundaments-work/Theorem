@@ -387,11 +387,14 @@ export function HighlightColorPicker({
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [isDictionaryView, isOpen, showDeleteConfirm, handleClose, handleColorClick]);
 
-    // Click outside handler - also handles clicks in iframe
+    // Click outside handler - also handles clicks in iframe.
+    // In dictionary view the popup stays open so the user can scroll/read
+    // the definition; only explicit Back/Save/Escape closes it.
     useEffect(() => {
         if (!isOpen) return;
 
         const handleClickOutside = (e: MouseEvent) => {
+            if (isDictionaryView) return;
             if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
                 handleClose();
             }
@@ -404,8 +407,9 @@ export function HighlightColorPicker({
             document.addEventListener('click', handleClickOutside, true);
         }, 50);
 
-        // Also close on scroll or resize
+        // Close on scroll or resize, unless we're showing dictionary results.
         const handleScrollOrResize = () => {
+            if (isDictionaryView) return;
             handleClose();
         };
 
@@ -420,7 +424,7 @@ export function HighlightColorPicker({
             window.removeEventListener('scroll', handleScrollOrResize, true);
             window.removeEventListener('resize', handleScrollOrResize);
         };
-    }, [isOpen, handleClose]);
+    }, [isOpen, isDictionaryView, handleClose]);
 
     useEffect(() => {
         return () => {
@@ -495,12 +499,21 @@ export function HighlightColorPicker({
                                             <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
                                                 {meaning.partOfSpeech || "Meaning"}
                                             </p>
-                                            <ul className="space-y-1 text-sm text-[color:var(--color-text-primary)]">
-                                                {meaning.definitions.slice(0, 3).map((definition) => (
-                                                    <li key={definition} className="leading-snug">
-                                                        • {definition}
-                                                    </li>
-                                                ))}
+                                            <ul className="space-y-1 text-sm text-[color:var(--color-text-primary)] list-disc pl-4">
+                                                {meaning.definitions.slice(0, 3).map((definition) => {
+                                                    const isHtml = definition.includes("<") && definition.includes(">");
+                                                    return isHtml ? (
+                                                        <li
+                                                            key={definition}
+                                                            className="leading-snug dict-definition"
+                                                            dangerouslySetInnerHTML={{ __html: definition }}
+                                                        />
+                                                    ) : (
+                                                        <li key={definition} className="leading-snug">
+                                                            {definition}
+                                                        </li>
+                                                    );
+                                                })}
                                             </ul>
                                         </div>
                                     ))}

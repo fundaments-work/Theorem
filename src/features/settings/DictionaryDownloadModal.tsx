@@ -12,71 +12,26 @@ interface DictEntry {
 }
 
 const AVAILABLE_DICTS: DictEntry[] = [
-    {
-        name: "English (GCIDE)",
-        language: "en",
-        url: "https://github.com/BoboTiG/ebook-reader-dict/raw/master/en/en-en-gcide.tar.bz2",
-        sizeApprox: "~30 MB",
-    },
-    {
-        name: "English (Wiktionary)",
-        language: "en",
-        url: "https://github.com/BoboTiG/ebook-reader-dict/raw/master/en/en-en-wiktionary.tar.bz2",
-        sizeApprox: "~8 MB",
-    },
-    {
-        name: "English (WordNet)",
-        language: "en",
-        url: "https://github.com/BoboTiG/ebook-reader-dict/raw/master/en/en-en-wordnet.tar.bz2",
-        sizeApprox: "~4 MB",
-    },
-    {
-        name: "Français (Littré)",
-        language: "fr",
-        url: "https://github.com/BoboTiG/ebook-reader-dict/raw/master/fr/fr-fr-littre.tar.bz2",
-        sizeApprox: "~22 MB",
-    },
-    {
-        name: "Español (DRAE)",
-        language: "es",
-        url: "https://github.com/BoboTiG/ebook-reader-dict/raw/master/es/es-es-drae.tar.bz2",
-        sizeApprox: "~18 MB",
-    },
-    {
-        name: "Deutsch (Wiktionary)",
-        language: "de",
-        url: "https://github.com/BoboTiG/ebook-reader-dict/raw/master/de/de-en-wiktionary.tar.bz2",
-        sizeApprox: "~10 MB",
-    },
+    { name: "English", language: "en", url: "https://www.reader-dict.com/file/en/dict-en-en.zip", sizeApprox: "~40 MB" },
+    { name: "Français", language: "fr", url: "https://www.reader-dict.com/file/fr/dict-fr-fr.zip", sizeApprox: "~30 MB" },
+    { name: "Deutsch", language: "de", url: "https://www.reader-dict.com/file/de/dict-de-de.zip", sizeApprox: "~40 MB" },
+    { name: "Español", language: "es", url: "https://www.reader-dict.com/file/es/dict-es-es.zip", sizeApprox: "~30 MB" },
+    { name: "Italiano", language: "it", url: "https://www.reader-dict.com/file/it/dict-it-it.zip", sizeApprox: "~30 MB" },
+    { name: "Português", language: "pt", url: "https://www.reader-dict.com/file/pt/dict-pt-pt.zip", sizeApprox: "~30 MB" },
+    { name: "Русский", language: "ru", url: "https://www.reader-dict.com/file/ru/dict-ru-ru.zip", sizeApprox: "~40 MB" },
+    { name: "日本語", language: "ja", url: "https://www.reader-dict.com/file/ja/dict-ja-ja.zip", sizeApprox: "~5 MB" },
+    { name: "中文", language: "zh", url: "https://www.reader-dict.com/file/zh/dict-zh-zh.zip", sizeApprox: "~25 MB" },
+    { name: "Svenska", language: "sv", url: "https://www.reader-dict.com/file/sv/dict-sv-sv.zip", sizeApprox: "~10 MB" },
+    { name: "Norsk", language: "no", url: "https://www.reader-dict.com/file/no/dict-no-no.zip", sizeApprox: "~10 MB" },
+    { name: "Dansk", language: "da", url: "https://www.reader-dict.com/file/da/dict-da-da.zip", sizeApprox: "~8 MB" },
 ];
-
-async function importDictFromParts(parts: {
-    ifo: string;
-    idx: string;
-    dict: string;
-    syn?: string;
-}): Promise<void> {
-    const { importStarDictFromBytes } = await import("../../core/services/StarDictService");
-
-    const b64ToBytes = (b64: string) =>
-        Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-
-    const ifoBytes = b64ToBytes(parts.ifo);
-    const idxBytes = b64ToBytes(parts.idx);
-    const dictBytes = b64ToBytes(parts.dict);
-    const synBytes = parts.syn ? b64ToBytes(parts.syn) : undefined;
-
-    const dict = await importStarDictFromBytes(ifoBytes, idxBytes, dictBytes, synBytes);
-    useVocabularyStore.getState().addInstalledDictionary(dict);
-}
 
 interface DictionaryDownloadModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onImported: () => void;
 }
 
-export function DictionaryDownloadModal({ isOpen, onClose, onImported }: DictionaryDownloadModalProps) {
+export function DictionaryDownloadModal({ isOpen, onClose }: DictionaryDownloadModalProps) {
     const [downloading, setDownloading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [installed, setInstalled] = useState<Set<string>>(new Set());
@@ -91,17 +46,33 @@ export function DictionaryDownloadModal({ isOpen, onClose, onImported }: Diction
         setDownloading(dict.name);
         setError(null);
 
+        // Yield to the browser so React can paint the spinner and
+        // size indicator before the blocking Rust download starts.
+        // Without this the app appears frozen for the entire download.
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
         try {
             const { invoke } = await import("@tauri-apps/api/core");
-            const parts = await invoke<{ ifo: string; idx: string; dict: string; syn?: string }>(
-                "download_and_extract_stardict",
-                { url: dict.url },
-            );
-            await importDictFromParts(parts);
+            const metadata = await invoke<{
+                id: string;
+                name: string;
+                language: string;
+                sizeBytes: number;
+            }>("download_and_extract_stardict", { url: dict.url });
+
+            useVocabularyStore.getState().addInstalledDictionary({
+                id: metadata.id,
+                name: metadata.name,
+                language: metadata.language,
+                format: "stardict" as const,
+                sizeBytes: metadata.sizeBytes,
+                importedAt: new Date(),
+            });
             setInstalled((prev) => new Set([...prev, dict.name]));
-            onImported();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Download failed");
+            const message = err instanceof Error ? err.message : (typeof err === "string" ? err : JSON.stringify(err));
+            console.error("[DictionaryDownload]", message, err);
+            setError(message || "Download failed");
         } finally {
             setDownloading(null);
         }
@@ -128,7 +99,7 @@ export function DictionaryDownloadModal({ isOpen, onClose, onImported }: Diction
                 )}
 
                 <p className="text-sm text-[color:var(--color-text-secondary)] mb-4">
-                    One-click download and install of free StarDict dictionaries for offline word lookup.
+                    One-click install of free StarDict dictionaries for offline word lookup.
                 </p>
 
                 <div className="space-y-3">
@@ -138,7 +109,7 @@ export function DictionaryDownloadModal({ isOpen, onClose, onImported }: Diction
 
                         return (
                             <div
-                                key={dict.name}
+                                key={dict.language}
                                 className="flex items-center justify-between gap-4 p-3 border border-[var(--color-border)]"
                             >
                                 <div className="min-w-0 flex-1">
@@ -161,7 +132,10 @@ export function DictionaryDownloadModal({ isOpen, onClose, onImported }: Diction
                                     )}
                                 >
                                     {downloading === dict.name ? (
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        <span className="flex items-center gap-1.5">
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            Downloading {dict.sizeApprox}…
+                                        </span>
                                     ) : isInstalled ? (
                                         <>
                                             <Check className="w-3.5 h-3.5 inline mr-1" />
