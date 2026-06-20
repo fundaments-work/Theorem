@@ -773,61 +773,24 @@ export function SettingsPage() {
             {activeTab === "dictionary" && (
                 <div className="space-y-8">
                     <Section
-                        title="Dictionary Source"
-                        description="Choose how word lookups are handled"
+                        title="Dictionary"
+                        description="Install and manage offline dictionaries"
                         icon={<Globe className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="Dictionary Source"
-                            description="Uses installed StarDict dictionaries for offline lookup"
-                        >
-                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)]">
-                                StarDict (offline)
-                            </span>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Primary API"
-                            description="Online dictionary service"
-                        >
-                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)]">
-                                Free Dictionary API
-                            </span>
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Fallback"
-                            description="Secondary dictionary source"
-                        >
-                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)]">
-                                Wiktionary
-                            </span>
-                        </SettingRow>
-
-                        <SettingRow
                             label="Show Pronunciation"
-                            description="Display phonetic pronunciation"
+                            description="Display phonetic pronunciation when available"
                         >
                             <Toggle
                                 checked={settings.vocabulary.showPronunciation}
                                 onChange={(checked) => updateVocabularySettings({ showPronunciation: checked })}
                             />
                         </SettingRow>
-
-                        <SettingRow
-                            label="Play Audio"
-                            description="Auto-play pronunciation audio"
-                        >
-                            <Toggle
-                                checked={settings.vocabulary.playPronunciationAudio}
-                                onChange={(checked) => updateVocabularySettings({ playPronunciationAudio: checked })}
-                            />
-                        </SettingRow>
                     </Section>
 
                     <Section
-                        title="Offline Dictionaries"
-                        description="Import StarDict files for offline dictionary lookups"
+                        title="Installed Dictionaries"
+                        description="StarDict dictionaries for offline word lookup"
                         icon={<WifiOff className="w-5 h-5" />}
                     >
                         <SettingRow
