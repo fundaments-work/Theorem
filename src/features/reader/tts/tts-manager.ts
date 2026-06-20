@@ -4,6 +4,11 @@
  * Sends full text to the Rust backend for continuous streaming playback.
  * The backend splits internally and emits progress events.
  * Frontend tracks sentence position for skip controls.
+ *
+ * State machine:
+ *   idle → loading → ready → playing ↔ paused
+ *                            ↓
+ *                          error → ready (on stop)
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -19,6 +24,8 @@ export interface TtsVoiceGroup {
     label: string;
     voices: TtsVoice[];
 }
+
+export type TtsStatus = "idle" | "loading" | "ready" | "playing" | "paused" | "error";
 
 export type TtsState =
     | { status: "idle" }
@@ -49,6 +56,29 @@ function splitSentences(text: string): string[] {
     return parts.map((s) => s.trim()).filter((s) => s.length > 0);
 }
 
+/** Valid transitions: [from, to][] */
+const VALID_TRANSITIONS: [TtsStatus, TtsStatus][] = [
+    ["idle", "loading"],
+    ["loading", "ready"],
+    ["loading", "error"],
+    ["ready", "playing"],
+    ["ready", "loading"],
+    ["playing", "paused"],
+    ["paused", "playing"],
+    ["playing", "ready"],
+    ["playing", "error"],
+    ["paused", "ready"],
+    ["paused", "error"],
+    ["error", "ready"],
+    ["error", "loading"],
+    ["error", "idle"],
+    ["ready", "idle"],
+];
+
+function isValidTransition(from: TtsStatus, to: TtsStatus): boolean {
+    return VALID_TRANSITIONS.some(([f, t]) => f === from && t === to);
+}
+
 class TtsManager {
     private _state: TtsState = { status: "idle" };
     private _listeners: Set<TtsListener> = new Set();
@@ -58,6 +88,11 @@ class TtsManager {
     private _unlistenState: UnlistenFn | null = null;
     private _unlistenProgress: UnlistenFn | null = null;
     private _listenersPromise: Promise<void> | null = null;
+    private _refCount = 0; // safety: multiple components can hold listeners
+
+    // Once the engine has been successfully loaded, we skip ALL Rust IPC
+    // (tts_is_ready, tts_get_voices, tts_load) to avoid blocking on mutexes.
+    private _engineEverLoaded = false;
 
     // Sentence tracking for skip/progress
     private _sentences: string[] = [];
@@ -76,19 +111,39 @@ class TtsManager {
         return this._selectedVoice;
     }
 
+    get speed(): number {
+        return this._speed;
+    }
+
     subscribe(listener: TtsListener): () => void {
         this._listeners.add(listener);
+        this._refCount++;
         listener(this._state, this._progress);
-        return () => this._listeners.delete(listener);
+        return () => {
+            this._refCount--;
+            this._listeners.delete(listener);
+            // Don't dispose here — other components may still be listening.
+        };
     }
 
     private emit(state: TtsState) {
+        const prev = this._state.status;
+        const next = state.status;
+        if (!isValidTransition(prev, next)) {
+            // Allow same-status re-emits (e.g. ready→ready with updated voices)
+            if (prev !== next) {
+                console.warn(
+                    `[TTS] Unexpected transition: ${prev} → ${next}`,
+                );
+            }
+        } else if (prev !== next) {
+            console.log(`[TTS] ${prev} → ${next}`);
+        }
         this._state = state;
         for (const l of this._listeners) l(state, this._progress);
     }
 
     private async _ensureEventListeners(): Promise<void> {
-        // Race-safe: if setup is in flight, return the same promise
         if (this._listenersPromise) {
             return this._listenersPromise;
         }
@@ -110,6 +165,7 @@ class TtsManager {
             switch (p.status) {
                 case "ready":
                     this._voiceCache = p.voices ?? this._voiceCache;
+                    this._engineEverLoaded = true;
                     this.emit({ status: "ready", voices: this._voiceCache });
                     break;
                 case "loading":
@@ -142,13 +198,16 @@ class TtsManager {
         );
     }
 
-    /** Ensure the ONNX model and voices are downloaded and loaded. */
+    /**
+     * Ensure the ONNX model and voices are downloaded and loaded.
+     * Idempotent — fast return if engine was already loaded.
+     */
     async prepare(): Promise<void> {
         await this._ensureEventListeners();
 
-        // If voices are cached, engine was loaded successfully — skip all
-        // Rust commands to avoid blocking on INNER.lock() during synthesis.
-        if (this._voiceCache.length > 0) {
+        // If the engine was ever successfully loaded, all state is cached.
+        // Avoid ALL Rust IPC to prevent blocking on INNER/PARAMS mutexes.
+        if (this._engineEverLoaded) {
             if (this._state.status !== "ready") {
                 this.emit({ status: "ready", voices: this._voiceCache });
             }
@@ -161,15 +220,37 @@ class TtsManager {
                 if (this._voiceCache.length === 0) {
                     this._voiceCache = await invoke<TtsVoiceGroup[]>("tts_get_voices");
                 }
+                this._engineEverLoaded = true;
                 this.emit({ status: "ready", voices: this._voiceCache });
                 return;
             }
             await invoke("tts_load");
+            // After tts_load resolves, poll until the "ready" event has been
+            // processed by our listener — the event may arrive after the IPC
+            // promise resolves due to Tauri event loop timing.
+            await this._waitForStatus("ready");
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             this.emit({ status: "error", message });
             throw err;
         }
+    }
+
+    /** Poll _state until it reaches the expected status or errors out. */
+    private async _waitForStatus(
+        target: "ready" | "error",
+        timeoutMs = 5000,
+    ): Promise<void> {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            if (this._state.status === target) return;
+            if (this._state.status === "error") return;
+            // yield to the event loop so listeners can process incoming events
+            await new Promise((r) => setTimeout(r, 10));
+        }
+        console.warn(
+            `[TTS] Timed out waiting for "${target}" status after ${timeoutMs}ms`,
+        );
     }
 
     setVoice(voiceId: string) {
@@ -187,14 +268,14 @@ class TtsManager {
         // Stop any current playback first
         this.stop();
 
-        // CRITICAL FIX: Always ensure engine is loaded.
-        // prepare() is idempotent — fast return if already loaded.
-        // Do NOT gate this on UI state; stop() sets state to "ready"
-        // even when the engine isn't actually initialized yet.
+        // Ensure engine is loaded (idempotent, fast if cached)
         await this.prepare();
 
         if (this._state.status !== "ready") {
-            console.error("[TTS] Cannot speak: engine not ready after prepare(), state =", this._state.status);
+            console.error(
+                "[TTS] Cannot speak: engine not ready, state =",
+                this._state.status,
+            );
             return;
         }
 
@@ -265,8 +346,11 @@ class TtsManager {
         }
     }
 
-    /** Release event listeners. */
+    /** Release event listeners only when ALL subscribers are gone. */
     dispose() {
+        this._refCount--;
+        if (this._refCount > 0) return;
+        // Actually last subscriber — tear down
         this.stop();
         if (this._unlistenState) {
             this._unlistenState();

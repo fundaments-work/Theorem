@@ -1,5 +1,12 @@
 /**
  * React hook for Kokoro TTS — audiobook-style controls.
+ *
+ * Uses the singleton ttsManager for all state; the hook just mirrors
+ * state into React for re-renders and provides action callbacks.
+ *
+ * Disposal happens only when the last subscribing component unmounts
+ * (ref-counted in ttsManager), so ephemeral mounts (panels, overlays)
+ * don't tear down event listeners needed by the main reader.
  */
 import { useCallback, useEffect, useState } from "react";
 import { ttsManager, type TtsState, type TtsVoiceGroup, type TtsProgress } from "./tts-manager";
@@ -29,7 +36,7 @@ export function useKokoroTts(): UseKokoroTtsReturn {
     const [state, setState] = useState<TtsState>(ttsManager.state);
     const [voices, setVoices] = useState<TtsVoiceGroup[]>([]);
     const [selectedVoice, setSelectedVoice] = useState(ttsManager.selectedVoice);
-    const [speed, setSpeedState] = useState(1.0);
+    const [speed, setSpeedState] = useState(ttsManager.speed);
     const [progress, setProgress] = useState<TtsProgress>({ chunk: 0, total: 0 });
 
     useEffect(() => {
@@ -40,7 +47,10 @@ export function useKokoroTts(): UseKokoroTtsReturn {
                 setVoices(s.voices);
             }
         });
-        return unsub;
+        return () => {
+            unsub();
+            ttsManager.dispose();
+        };
     }, []);
 
     const prepare = useCallback(async () => {
@@ -79,12 +89,6 @@ export function useKokoroTts(): UseKokoroTtsReturn {
     const setSpeed = useCallback((value: number) => {
         setSpeedState(value);
         ttsManager.setSpeed(value);
-    }, []);
-
-    useEffect(() => {
-        return () => {
-            ttsManager.dispose();
-        };
     }, []);
 
     return {

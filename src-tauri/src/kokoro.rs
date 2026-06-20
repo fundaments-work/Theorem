@@ -176,7 +176,50 @@ fn ensure_engine(app: &AppHandle) -> Result<(), String> {
         sink: Some(sink),
     });
 
+    // Play a brief test tone to verify the audio pipeline works end-to-end.
+    // If audio output is misconfigured, this will surface the issue immediately
+    // during engine init rather than silently during first playback attempt.
+    play_test_tone();
+
     Ok(())
+}
+
+/// Emit a 440 Hz sine wave for 100 ms through the current audio sink.
+/// If nothing is heard, the audio pipeline (device / ALSA / permissions)
+/// is the problem, not TTS synthesis.
+fn play_test_tone() {
+    let mixer = {
+        let guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+        guard
+            .as_ref()
+            .and_then(|inner| inner.sink.as_ref())
+            .map(|sink| sink.mixer().clone())
+    };
+    let Some(mixer) = mixer else {
+        return;
+    };
+
+    let sample_rate: u32 = 44100;
+    let duration_secs = 0.1;
+    let freq = 440.0;
+    let num_samples = (sample_rate as f64 * duration_secs) as usize;
+    let samples: Vec<f32> = (0..num_samples)
+        .map(|i| {
+            let t = i as f64 / sample_rate as f64;
+            let envelope = 1.0 - (t / duration_secs); // quick fade-out
+            (envelope * 0.3 * (2.0 * std::f64::consts::PI * freq * t).sin()) as f32
+        })
+        .collect();
+
+    let player = rodio::Player::connect_new(&mixer);
+    let buf = rodio::buffer::SamplesBuffer::new(
+        NonZero::new(1u16).unwrap(),
+        NonZero::new(sample_rate).unwrap(),
+        samples,
+    );
+    player.append(buf);
+    // The player autoplays; when the tone buffer drains the Player is dropped,
+    // removing its source from the mixer.
 }
 
 fn list_voice_groups() -> Vec<KokoroVoiceGroup> {
@@ -378,7 +421,12 @@ pub fn tts_play(
         };
 
         let player = rodio::Player::connect_new(&mixer);
-        player.pause();
+        // Unpause immediately — the mixer will output silence until the first
+        // chunk is appended.  We MUST call play() here rather than inside the
+        // i==0 branch below, because if the first chunk produces empty samples
+        // (continue), the player would stay paused forever and no audio would
+        // ever be heard.
+        player.play();
 
         {
             let mut pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
@@ -469,10 +517,6 @@ pub fn tts_play(
                             samples,
                         );
                         pb.player.append(buf);
-
-                        if i == 0 {
-                            pb.player.play();
-                        }
                     }
                 }
             }
