@@ -829,11 +829,8 @@ pub fn run() {
             hide_to_tray,
             download_and_extract_stardict,
             kokoro::tts_load,
-            kokoro::tts_play,
+            kokoro::tts_synthesize,
             kokoro::tts_stop,
-            kokoro::tts_pause,
-            kokoro::tts_resume,
-            kokoro::tts_test_audio,
             kokoro::tts_get_voices,
             kokoro::tts_is_ready,
         ])

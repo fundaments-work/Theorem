@@ -1,15 +1,13 @@
-/// Kokoro TTS — offline text-to-speech via tts-rs + espeak-ng + rodio.
+/// Kokoro TTS — offline text-to-speech via tts-rs + espeak-ng + ONNX.
 ///
-/// Downloads the quantized Kokoro ONNX model (~88 MB) and voice archive
-/// (~27 MB) from GitHub releases on first use, caches them to the app data
-/// directory, then runs streaming synthesis + audio playback on background threads.
+/// The Rust backend ONLY handles model loading and synthesis.
+/// Audio playback is handled by the frontend via the Web Audio API,
+/// which gives precise scheduling, instant pause/resume, and eliminates
+/// all ALSA/rodio/cpal audio device issues.
 use serde::{Deserialize, Serialize};
-use std::num::NonZero;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
-use std::thread;
-use std::time::Duration;
+use std::sync::{Condvar, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use tts_rs::engines::kokoro::{KokoroEngine, KokoroInferenceParams, KokoroModelParams};
 use tts_rs::SynthesisEngine;
@@ -20,14 +18,6 @@ const MODEL_FILENAME: &str = "kokoro-quant-convinteger.onnx";
 const VOICES_URL: &str =
     "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin";
 const VOICES_FILENAME: &str = "voices-v1.0.bin";
-
-/// Max chars per synthesis chunk — keeps first-chunk latency low.
-const CHUNK_CHARS: usize = 1200;
-
-/// Number of samples to crossfade between chunks (10 ms @ 24 kHz).
-/// Eliminates audible clicks/pops at chunk boundaries.
-/// Matches the crossfade length used by Parrot and tts-rs internally.
-const CROSSFADE_SAMPLES: usize = 240;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KokoroVoice {
@@ -52,18 +42,13 @@ struct TtsStateEvent {
 
 // ── Global TTS state ──
 
-struct ActivePlayback {
-    player: rodio::Player,
-    generation: u64,
-}
-
 struct TtsInner {
     engine: Option<KokoroEngine>,
-    sink: Option<rodio::MixerDeviceSink>,
 }
 
 static INNER: Mutex<Option<TtsInner>> = Mutex::new(None);
-static PLAYBACK: Mutex<Option<ActivePlayback>> = Mutex::new(None);
+static IS_LOADING: Mutex<bool> = Mutex::new(false);
+static LOADING_CONDVAR: Condvar = Condvar::new();
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 // ── Paths / download helpers ──
@@ -113,11 +98,11 @@ fn download_if_missing(
 fn ensure_model_files(app: &AppHandle) -> Result<PathBuf, String> {
     let cache_dir = tts_cache_dir(app)?;
 
-    // Clean stale files from previous download schemes
+    // Clean stale files from previous download schemes (but NOT the
+    // optimized ONNX cache — that's our current optimization cache!)
     let old_onnx_dir = cache_dir.join("onnx");
     let old_config = cache_dir.join("config.json");
     let old_voices_dir = cache_dir.join("voices");
-    let stale_optimized = cache_dir.join("kokoro-optimized.onnx");
 
     if old_onnx_dir.exists() {
         let _ = std::fs::remove_dir_all(&old_onnx_dir);
@@ -128,9 +113,7 @@ fn ensure_model_files(app: &AppHandle) -> Result<PathBuf, String> {
     if old_voices_dir.exists() {
         let _ = std::fs::remove_dir_all(&old_voices_dir);
     }
-    if stale_optimized.exists() {
-        let _ = std::fs::remove_file(&stale_optimized);
-    }
+    // NOTE: Do NOT delete kokoro-optimized.onnx — it's our active cache.
 
     let client = crate::shared_http_client();
 
@@ -158,10 +141,6 @@ fn ensure_engine(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    // Open the default audio output device
-    let sink = rodio::DeviceSinkBuilder::open_default_sink()
-        .map_err(|e| format!("Failed to open audio output: {e}"))?;
-
     let model_dir = ensure_model_files(app)?;
     let optimized_cache = tts_cache_dir(app)?.join("kokoro-optimized.onnx");
 
@@ -176,48 +155,16 @@ fn ensure_engine(app: &AppHandle) -> Result<(), String> {
         )
         .map_err(|e| format!("Failed to load Kokoro engine: {e}"))?;
 
+    // Warm up the ONNX session with a short dummy synthesis.
+    // Without this, the first real call takes 2-5 seconds (cold start).
+    let _ = engine.synthesize("Hello.", None);
+    eprintln!("[TTS] ONNX warmup complete");
+
     *guard = Some(TtsInner {
         engine: Some(engine),
-        sink: Some(sink),
     });
 
-    // Drop the lock so warmup_inference can acquire it independently.
-    drop(guard);
-
-    // Run a dummy synthesis to warm up the ONNX session.
-    // The first real call will be much faster (~200ms vs ~3s cold).
-    warmup_inference("af_heart");
-
     Ok(())
-}
-
-/// Run a single short inference to warm the ONNX runtime session.
-/// Without this, the first user-visible synthesis call incurs a multi-second
-/// cold-start penalty.
-fn warmup_inference(voice: &str) {
-    let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(inner) = guard.as_mut() else { return };
-    let Some(engine) = inner.engine.as_mut() else {
-        return;
-    };
-
-    let params = KokoroInferenceParams {
-        voice: voice.to_string(),
-        speed: 1.0,
-        style_index: Some(0),
-    };
-    match engine.synthesize("Hello.", Some(params)) {
-        Ok(result) => {
-            eprintln!(
-                "[TTS] ONNX warmup complete — {} samples ({:.1}s)",
-                result.samples.len(),
-                result.samples.len() as f64 / 24000.0
-            );
-        }
-        Err(e) => {
-            eprintln!("[TTS] ONNX warmup failed (non-fatal): {e}");
-        }
-    }
 }
 
 fn list_voice_groups() -> Vec<KokoroVoiceGroup> {
@@ -231,100 +178,7 @@ fn list_voice_groups() -> Vec<KokoroVoiceGroup> {
     group_voices(&engine.list_voices())
 }
 
-// ── Audio playback helpers ──
-
-fn clear_playback() {
-    if let Ok(mut guard) = PLAYBACK.lock() {
-        if let Some(pb) = guard.take() {
-            pb.player.stop();
-        }
-    }
-}
-
-fn pause_playback() -> bool {
-    match PLAYBACK.lock() {
-        Ok(guard) => {
-            if let Some(pb) = guard.as_ref() {
-                pb.player.pause();
-                return true;
-            }
-            false
-        }
-        Err(_) => false,
-    }
-}
-
-fn resume_playback() -> bool {
-    match PLAYBACK.lock() {
-        Ok(guard) => {
-            if let Some(pb) = guard.as_ref() {
-                pb.player.play();
-                return true;
-            }
-            false
-        }
-        Err(_) => false,
-    }
-}
-
 // ── Text chunking ──
-
-fn split_text(text: &str) -> Vec<String> {
-    let mut chunks: Vec<String> = Vec::new();
-    let mut current = String::new();
-    let mut remaining = text;
-
-    while !remaining.is_empty() {
-        let sentence_end = remaining.find(|c: char| matches!(c, '.' | '!' | '?' | '\n'));
-        match sentence_end {
-            Some(idx) => {
-                let sentence = &remaining[..=idx];
-                if current.len() + sentence.len() > CHUNK_CHARS && !current.is_empty() {
-                    chunks.push(current.trim().to_string());
-                    current = String::new();
-                }
-                current.push_str(sentence);
-                remaining = &remaining[idx + 1..];
-            }
-            None => {
-                if current.len() + remaining.len() > CHUNK_CHARS && !current.is_empty() {
-                    chunks.push(current.trim().to_string());
-                    chunks.push(remaining.trim().to_string());
-                } else {
-                    current.push_str(remaining);
-                    chunks.push(current.trim().to_string());
-                }
-                break;
-            }
-        }
-    }
-
-    if !current.trim().is_empty() && chunks.last().map_or(true, |c| c != current.trim()) {
-        chunks.push(current.trim().to_string());
-    }
-
-    chunks.retain(|c| !c.is_empty());
-    chunks
-}
-
-// ── Audio smoothing ──
-
-/// Linear crossfade between two consecutive chunks.
-/// Blends the tail of `prev` into the beginning of `samples` so there
-/// is no audible click at the boundary.  10 ms of overlap eliminates
-/// transients while preserving intelligibility.
-fn apply_crossfade(prev_tail: &[f32], samples: &mut Vec<f32>) {
-    let overlap = prev_tail.len().min(samples.len());
-    for i in 0..overlap {
-        let t = (i + 1) as f32 / (overlap + 1) as f32;
-        samples[i] = prev_tail[prev_tail.len() - overlap + i] * (1.0 - t) + samples[i] * t;
-    }
-    // If the tail is longer than the new chunk (unlikely), prepend the excess.
-    if prev_tail.len() > overlap {
-        let prefix = &prev_tail[..prev_tail.len() - overlap];
-        samples.splice(0..0, prefix.iter().copied());
-    }
-}
 
 // ── Tauri Commands ──
 
@@ -346,6 +200,50 @@ pub fn tts_get_voices() -> Vec<KokoroVoiceGroup> {
 pub async fn tts_load(app: AppHandle) -> Result<(), String> {
     let app = app.clone();
     tokio::task::spawn_blocking(move || {
+        // Check if already loaded
+        {
+            let guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+            if guard.as_ref().map_or(false, |inner| inner.engine.is_some()) {
+                let voices = list_voice_groups();
+                let _ = app.emit(
+                    "tts-state",
+                    TtsStateEvent {
+                        status: "ready".into(),
+                        voices: Some(voices),
+                        message: None,
+                    },
+                );
+                return Ok(());
+            }
+        }
+
+        // Check if already loading — wait for it
+        {
+            let mut loading = IS_LOADING.lock().unwrap();
+            if *loading {
+                // Wait for the other load to finish
+                while *loading {
+                    loading = LOADING_CONDVAR.wait(loading).unwrap();
+                }
+                // Check result
+                let guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+                if guard.as_ref().map_or(false, |inner| inner.engine.is_some()) {
+                    let voices = list_voice_groups();
+                    let _ = app.emit(
+                        "tts-state",
+                        TtsStateEvent {
+                            status: "ready".into(),
+                            voices: Some(voices),
+                            message: None,
+                        },
+                    );
+                    return Ok(());
+                }
+                // Loading failed, fall through to retry
+            }
+            *loading = true;
+        }
+
         let _ = app.emit(
             "tts-state",
             TtsStateEvent {
@@ -354,7 +252,16 @@ pub async fn tts_load(app: AppHandle) -> Result<(), String> {
                 message: None,
             },
         );
-        match ensure_engine(&app) {
+
+        let result = ensure_engine(&app);
+
+        {
+            let mut loading = IS_LOADING.lock().unwrap();
+            *loading = false;
+            LOADING_CONDVAR.notify_all();
+        }
+
+        match result {
             Ok(()) => {
                 let voices = list_voice_groups();
                 let _ = app.emit(
@@ -384,344 +291,66 @@ pub async fn tts_load(app: AppHandle) -> Result<(), String> {
     .map_err(|e| format!("Spawn error: {e}"))?
 }
 
+/// Synthesize a single chunk of text and return the raw f32 PCM samples.
+/// The frontend plays these via the Web Audio API.
+///
+/// Returns samples at 24 kHz, mono (1 channel).
 #[tauri::command]
-pub fn tts_play(
-    app: AppHandle,
-    text: String,
-    voice: String,
-    speed: Option<f32>,
-) -> Result<(), String> {
+pub fn tts_synthesize(text: String, voice: String, speed: Option<f32>) -> Result<Vec<f32>, String> {
     let speed = speed.unwrap_or(1.0).clamp(0.5, 2.0);
-    let trimmed = text.trim().to_string();
+    let trimmed = text.trim();
     if trimmed.is_empty() {
-        return Err("No text to speak".into());
+        return Err("No text to synthesize".into());
     }
 
-    // Cancel any active playback
-    clear_playback();
-    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    // Take the engine out of the mutex so we don't hold the lock
+    // during the blocking synthesize() call.
+    let engine = {
+        let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+        guard.as_mut().and_then(|inner| inner.engine.take())
+    };
 
-    let app_clone = app.clone();
-    let voice_clone = voice.clone();
+    let Some(mut engine) = engine else {
+        return Err("TTS engine not loaded".into());
+    };
 
-    // Spawn speech in a dedicated OS thread — returns immediately.
-    // The thread runs independently; stop/pause/resume commands work
-    // by checking GENERATION or mutating the Player through PLAYBACK.
-    std::thread::spawn(move || {
-        eprintln!(
-            "[TTS] Synthesis thread started, gen={}, chunks={}",
-            generation,
-            split_text(&trimmed).len()
-        );
+    let params = KokoroInferenceParams {
+        voice,
+        speed,
+        style_index: Some(0),
+    };
 
-        let _ = app_clone.emit(
-            "tts-state",
-            TtsStateEvent {
-                status: "playing".into(),
-                voices: None,
-                message: None,
-            },
-        );
+    let result = engine
+        .synthesize(trimmed, Some(params))
+        .map_err(|e| format!("Synthesis failed: {e}"));
 
-        let mixer = {
-            let guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
-            guard
-                .as_ref()
-                .and_then(|inner| inner.sink.as_ref())
-                .map(|sink| sink.mixer().clone())
-        };
-
-        let Some(mixer) = mixer else {
-            eprintln!("[TTS] ERROR: Audio output not initialized (sink missing)");
-            let _ = app_clone.emit(
-                "tts-state",
-                TtsStateEvent {
-                    status: "error".into(),
-                    voices: None,
-                    message: Some("Audio output not initialized".into()),
-                },
-            );
-            return;
-        };
-        eprintln!("[TTS] Mixer acquired, creating player...");
-
-        let player = rodio::Player::connect_new(&mixer);
-        // Start paused — we'll unpause after the first real chunk is appended.
-        // This ensures audio starts exactly when samples are ready, avoiding
-        // any gap between the first chunk and playback start.
-        player.pause();
-        eprintln!("[TTS] Player created (paused)");
-
-        {
-            let mut pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
-            *pb = Some(ActivePlayback { player, generation });
+    // Put engine back
+    {
+        let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(inner) = guard.as_mut() {
+            inner.engine = Some(engine);
         }
+    }
 
-        let chunks = split_text(&trimmed);
-        if chunks.is_empty() {
-            let _ = app_clone.emit(
-                "tts-state",
-                TtsStateEvent {
-                    status: "error".into(),
-                    voices: None,
-                    message: Some("No readable text found".into()),
-                },
-            );
-            return;
-        }
+    let synthesis = result?;
+    if synthesis.samples.is_empty() {
+        return Err("Synthesis produced empty audio".into());
+    }
 
-        let total_chunks = chunks.len();
-        eprintln!("[TTS] Synthesizing {} chunks...", total_chunks);
+    eprintln!(
+        "[TTS] Synthesized {} chars → {} samples ({:.1}s at 24kHz)",
+        trimmed.len(),
+        synthesis.samples.len(),
+        synthesis.samples.len() as f64 / 24000.0
+    );
 
-        // Shorten the first chunk to get audio playing sooner.
-        let first_chunk_max = 400usize;
-
-        // Track the tail of the previous chunk for crossfading.
-        let mut crossfade_tail: Option<Vec<f32>> = None;
-        // Track whether playback has started yet.
-        let mut started = false;
-
-        for (i, chunk) in chunks.iter().enumerate() {
-            if GENERATION.load(Ordering::SeqCst) != generation {
-                eprintln!("[TTS] Generation changed, aborting");
-                return;
-            }
-
-            let effective_chunk = if i == 0 && chunk.len() > first_chunk_max {
-                &chunk[..first_chunk_max]
-            } else {
-                chunk.as_str()
-            };
-
-            eprintln!(
-                "[TTS] Chunk {}/{} — {} chars: {:?}...",
-                i + 1,
-                total_chunks,
-                effective_chunk.len(),
-                &effective_chunk[..effective_chunk.len().min(80)]
-            );
-
-            // Take the engine OUT of the mutex so we don't hold the lock
-            // during the blocking synthesize() call.
-            let engine = {
-                let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
-                guard.as_mut().and_then(|inner| inner.engine.take())
-            };
-
-            let Some(mut engine) = engine else {
-                eprintln!("[TTS] Engine not available, aborting");
-                return;
-            };
-
-            let params = KokoroInferenceParams {
-                voice: voice_clone.clone(),
-                speed,
-                style_index: Some(0),
-            };
-
-            let mut samples = match engine.synthesize(effective_chunk, Some(params)) {
-                Ok(result) => {
-                    // Put engine back immediately after synthesis
-                    if let Ok(mut guard) = INNER.lock() {
-                        if let Some(inner) = guard.as_mut() {
-                            inner.engine = Some(engine);
-                        }
-                    }
-                    if result.samples.is_empty() {
-                        eprintln!("[TTS] Chunk {} produced EMPTY samples, skipping", i + 1);
-                        continue;
-                    }
-                    eprintln!(
-                        "[TTS] Chunk {} OK — {} samples ({:.1}s at 24kHz)",
-                        i + 1,
-                        result.samples.len(),
-                        result.samples.len() as f64 / 24000.0
-                    );
-                    result.samples
-                }
-                Err(e) => {
-                    eprintln!("[TTS] Synthesis FAILED: {}", e);
-                    if let Ok(mut guard) = INNER.lock() {
-                        if let Some(inner) = guard.as_mut() {
-                            inner.engine = Some(engine);
-                        }
-                    }
-                    let _ = app_clone.emit(
-                        "tts-state",
-                        TtsStateEvent {
-                            status: "error".into(),
-                            voices: None,
-                            message: Some(format!("Synthesis failed: {e}")),
-                        },
-                    );
-                    return;
-                }
-            };
-
-            if GENERATION.load(Ordering::SeqCst) != generation {
-                eprintln!("[TTS] Generation changed mid-synthesis, aborting");
-                return;
-            }
-
-            // ── Crossfade with previous chunk's tail ──
-            // This eliminates clicks/pops at chunk boundaries, making
-            // audio sound like one continuous stream.
-            if let Some(prev_tail) = crossfade_tail.take() {
-                apply_crossfade(&prev_tail, &mut samples);
-            }
-            // Hold back the last CROSSFADE_SAMPLES for the next chunk.
-            if samples.len() > CROSSFADE_SAMPLES {
-                let split = samples.len() - CROSSFADE_SAMPLES;
-                crossfade_tail = Some(samples[split..].to_vec());
-                samples.truncate(split);
-            }
-
-            // Apply gain and append to player.
-            {
-                let pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
-                if let Some(pb) = pb.as_ref() {
-                    if pb.generation == generation {
-                        let buf = rodio::buffer::SamplesBuffer::new(
-                            NonZero::new(1u16).unwrap(),
-                            NonZero::new(24000u32).unwrap(),
-                            samples
-                                .into_iter()
-                                .map(|s| (s * 1.8).clamp(-1.0, 1.0))
-                                .collect::<Vec<f32>>(),
-                        );
-                        pb.player.append(buf);
-                        if !started {
-                            started = true;
-                            pb.player.play();
-                            eprintln!("[TTS] Playback started (first chunk appended)");
-                        }
-                        eprintln!("[TTS] Chunk {} appended to player", i + 1);
-                    }
-                }
-            }
-
-            let _ = app_clone.emit(
-                "tts-progress",
-                serde_json::json!({
-                    "chunk": i + 1,
-                    "total": total_chunks,
-                }),
-            );
-        }
-
-        // Flush any held-back crossfade tail from the final chunk.
-        if let Some(tail) = crossfade_tail.take() {
-            let pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(pb) = pb.as_ref() {
-                if pb.generation == generation {
-                    let buf = rodio::buffer::SamplesBuffer::new(
-                        NonZero::new(1u16).unwrap(),
-                        NonZero::new(24000u32).unwrap(),
-                        tail.into_iter()
-                            .map(|s| (s * 1.8).clamp(-1.0, 1.0))
-                            .collect::<Vec<f32>>(),
-                    );
-                    pb.player.append(buf);
-                    eprintln!("[TTS] Crossfade tail flushed");
-                }
-            }
-        }
-
-        // Wait for playback to finish
-        eprintln!("[TTS] All chunks synthesized, waiting for playback to drain...");
-        {
-            loop {
-                if GENERATION.load(Ordering::SeqCst) != generation {
-                    eprintln!("[TTS] Generation changed during drain, aborting");
-                    return;
-                }
-
-                let done = {
-                    let pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
-                    pb.as_ref().map_or(true, |pb| pb.player.empty())
-                };
-
-                if done {
-                    break;
-                }
-                thread::sleep(Duration::from_millis(50));
-            }
-
-            let mut pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
-            if pb.as_ref().map_or(false, |p| p.generation == generation) {
-                *pb = None;
-            }
-        }
-
-        eprintln!("[TTS] Playback finished");
-        let _ = app_clone.emit(
-            "tts-state",
-            TtsStateEvent {
-                status: "finished".into(),
-                voices: Some(list_voice_groups()),
-                message: None,
-            },
-        );
-    });
-
-    Ok(())
+    Ok(synthesis.samples)
 }
 
+/// Stop any in-progress synthesis (bumps generation counter).
 #[tauri::command]
 pub fn tts_stop() {
-    clear_playback();
     GENERATION.fetch_add(1, Ordering::SeqCst);
-}
-
-#[tauri::command]
-pub fn tts_pause() -> bool {
-    pause_playback()
-}
-
-#[tauri::command]
-pub fn tts_resume() -> bool {
-    resume_playback()
-}
-
-/// Play a 440 Hz sine wave for 1 second at full volume.
-/// Use this to verify that audio output is working on the system.
-/// If you hear a beep: audio pipeline is fine, issue is in Kokoro synthesis.
-/// If no beep: audio device / ALSA / permissions problem.
-#[tauri::command]
-pub fn tts_test_audio() -> Result<(), String> {
-    let mixer = {
-        let guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
-        guard
-            .as_ref()
-            .and_then(|inner| inner.sink.as_ref())
-            .map(|sink| sink.mixer().clone())
-    };
-    let Some(mixer) = mixer else {
-        return Err("Audio not initialized — engine must be loaded first".into());
-    };
-
-    let sample_rate: u32 = 44100;
-    let duration_secs = 1.0;
-    let freq = 440.0;
-    let num_samples = (sample_rate as f64 * duration_secs) as usize;
-    let samples: Vec<f32> = (0..num_samples)
-        .map(|i| {
-            let t = i as f64 / sample_rate as f64;
-            (0.5 * (2.0 * std::f64::consts::PI * freq * t).sin()) as f32
-        })
-        .collect();
-
-    let player = rodio::Player::connect_new(&mixer);
-    let buf = rodio::buffer::SamplesBuffer::new(
-        NonZero::new(1u16).unwrap(),
-        NonZero::new(sample_rate).unwrap(),
-        samples,
-    );
-    player.append(buf);
-    // Let the tone play (1s tone + margin)
-    thread::sleep(Duration::from_millis(1500));
-    eprintln!("[TTS] Test tone played (440 Hz, 1s). If you didn't hear it, check system audio.");
-    Ok(())
 }
 
 // ── Voice grouping ──
