@@ -148,37 +148,39 @@ fn ensure_model_files(app: &AppHandle) -> Result<PathBuf, String> {
 // ── Engine lifecycle ──
 
 fn ensure_engine(app: &AppHandle) -> Result<(), String> {
-    let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
-    if guard.as_ref().map_or(false, |inner| inner.engine.is_some()) {
-        return Ok(());
-    }
+    {
+        let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+        if guard.as_ref().map_or(false, |inner| inner.engine.is_some()) {
+            return Ok(());
+        }
 
-    // Open the default audio output device
-    let sink = rodio::DeviceSinkBuilder::open_default_sink()
-        .map_err(|e| format!("Failed to open audio output: {e}"))?;
+        // Open the default audio output device
+        let sink = rodio::DeviceSinkBuilder::open_default_sink()
+            .map_err(|e| format!("Failed to open audio output: {e}"))?;
 
-    let model_dir = ensure_model_files(app)?;
-    let optimized_cache = tts_cache_dir(app)?.join("kokoro-optimized.onnx");
+        let model_dir = ensure_model_files(app)?;
+        let optimized_cache = tts_cache_dir(app)?.join("kokoro-optimized.onnx");
 
-    let mut engine = KokoroEngine::new();
-    engine
-        .load_model_with_params(
-            &model_dir,
-            KokoroModelParams {
-                num_threads: None,
-                optimized_model_cache_path: Some(optimized_cache),
-            },
-        )
-        .map_err(|e| format!("Failed to load Kokoro engine: {e}"))?;
+        let mut engine = KokoroEngine::new();
+        engine
+            .load_model_with_params(
+                &model_dir,
+                KokoroModelParams {
+                    num_threads: None,
+                    optimized_model_cache_path: Some(optimized_cache),
+                },
+            )
+            .map_err(|e| format!("Failed to load Kokoro engine: {e}"))?;
 
-    *guard = Some(TtsInner {
-        engine: Some(engine),
-        sink: Some(sink),
-    });
+        *guard = Some(TtsInner {
+            engine: Some(engine),
+            sink: Some(sink),
+        });
+    } // ── INNER lock DROPPED here ──
 
     // Play a brief test tone to verify the audio pipeline works end-to-end.
-    // If audio output is misconfigured, this will surface the issue immediately
-    // during engine init rather than silently during first playback attempt.
+    // Must be called AFTER the INNER lock is released — play_test_tone()
+    // acquires its own INNER lock, and std::sync::Mutex is NOT reentrant.
     play_test_tone();
 
     Ok(())
@@ -218,8 +220,9 @@ fn play_test_tone() {
         samples,
     );
     player.append(buf);
-    // The player autoplays; when the tone buffer drains the Player is dropped,
-    // removing its source from the mixer.
+    // Let the mixer's audio thread process the tone (100 ms tone + margin).
+    thread::sleep(Duration::from_millis(200));
+    // Player is dropped here — the mixer continues until the buffer drains.
 }
 
 fn list_voice_groups() -> Vec<KokoroVoiceGroup> {
