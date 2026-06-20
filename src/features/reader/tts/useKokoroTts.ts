@@ -22,6 +22,7 @@ interface UseKokoroTtsReturn {
     isReady: boolean;
     isLoading: boolean;
     prepare: () => Promise<void>;
+    prepareAudio: () => void;
     speak: (text: string, startIndex?: number) => Promise<void>;
     stop: () => void;
     pause: () => void;
@@ -55,6 +56,10 @@ export function useKokoroTts(): UseKokoroTtsReturn {
 
     const prepare = useCallback(async () => {
         await ttsManager.prepare();
+    }, []);
+
+    const prepareAudio = useCallback(() => {
+        ttsManager.prepareAudio();
     }, []);
 
     const speak = useCallback(async (text: string, startIndex?: number) => {
@@ -102,6 +107,7 @@ export function useKokoroTts(): UseKokoroTtsReturn {
         isReady: state.status === "ready",
         isLoading: state.status === "loading",
         prepare,
+        prepareAudio,
         speak,
         stop,
         pause,

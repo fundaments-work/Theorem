@@ -707,6 +707,8 @@ export function ArticleViewer({
         }
         const text = contentRef.current?.textContent?.trim();
         if (!text) return;
+        // Resume AudioContext within the user gesture — critical for audio
+        kokoroTts.prepareAudio();
         setIsTtsActive(true);
     }, [isTtsActive, kokoroTts]);
 

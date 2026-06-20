@@ -242,10 +242,34 @@ class TtsManager {
         // Don't request a specific sample rate — the WebView may not support
         // custom rates. AudioBuffer specifies its own rate and the Web Audio
         // API resamples automatically.
-        this._audioCtx = new AudioContext();
+        const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        this._audioCtx = new Ctx();
         this._gainNode = this._audioCtx.createGain();
         this._gainNode.gain.value = AUDIO_GAIN;
         this._gainNode.connect(this._audioCtx.destination);
+        console.log("[TTS] AudioContext created, state:", this._audioCtx.state, "sampleRate:", this._audioCtx.sampleRate);
+    }
+
+    /**
+     * Create and resume the AudioContext — MUST be called synchronously
+     * from a user gesture (e.g. click handler) BEFORE any await.
+     *
+     * Browsers/WebKitGTK require a user gesture to start audio.
+     * If we call resume() after an await, the gesture has expired
+     * and the AudioContext stays suspended forever → silence.
+     */
+    prepareAudio(): void {
+        this._ensureAudioContext();
+        if (this._audioCtx!.state === "suspended") {
+            // Fire and forget — don't await, we're in a sync click handler
+            void this._audioCtx!.resume().then(() => {
+                console.log("[TTS] AudioContext resumed, state:", this._audioCtx?.state);
+            }).catch((err) => {
+                console.error("[TTS] AudioContext resume failed:", err);
+            });
+        } else {
+            console.log("[TTS] AudioContext already running, state:", this._audioCtx!.state);
+        }
     }
 
     /** Create an AudioBuffer from raw f32 samples. */
@@ -253,9 +277,13 @@ class TtsManager {
         const ctx = this._audioCtx!;
         const buffer = ctx.createBuffer(1, samples.length, SAMPLE_RATE);
         const channelData = buffer.getChannelData(0);
+        let maxAbs = 0;
         for (let i = 0; i < samples.length; i++) {
-            channelData[i] = Math.max(-1.0, Math.min(1.0, samples[i]));
+            const v = Math.max(-1.0, Math.min(1.0, samples[i]));
+            channelData[i] = v;
+            if (Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
         }
+        console.log(`[TTS] AudioBuffer created: ${samples.length} samples, ${(buffer.duration).toFixed(2)}s, peak=${maxAbs.toFixed(4)}, first5=[${samples.slice(0, 5).map((s) => s.toFixed(6)).join(", ")}]`);
         return buffer;
     }
 
@@ -271,6 +299,7 @@ class TtsManager {
             const idx = this._activeSources.indexOf(source);
             if (idx >= 0) this._activeSources.splice(idx, 1);
         };
+        console.log(`[TTS] Scheduled buffer at ${startTime.toFixed(3)}s (ctx.currentTime=${ctx.currentTime.toFixed(3)}s, ctx.state=${ctx.state})`);
         return source;
     }
 
@@ -313,11 +342,14 @@ class TtsManager {
             return;
         }
 
-        // Initialize Web Audio API
+        // AudioContext was already created/resumed by prepareAudio()
+        // in the click handler. Just verify it's running.
         this._ensureAudioContext();
         if (this._audioCtx!.state === "suspended") {
+            // Try to resume again — shouldn't be needed but just in case
             await this._audioCtx!.resume();
         }
+        console.log("[TTS] AudioContext state before playback:", this._audioCtx!.state);
 
         this.emit({ status: "playing" });
         console.log(`[TTS] Starting playback: ${this._chunks.length} chunks, ${trimmed.length} chars`);

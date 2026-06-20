@@ -254,6 +254,10 @@ function BookReaderPage() {
             setShowTtsSettings(false);
             return;
         }
+        // Resume AudioContext IMMEDIATELY within the user gesture.
+        // If we wait until after the useEffect/await, the browser will
+        // refuse to start audio (user gesture expired → silence).
+        kokoroTts.prepareAudio();
         setIsTtsActive(true);
     }, [settings.readerSettings.ttsEnabled, kokoroTts.isSpeaking, kokoroTts.isPaused, kokoroTts.stop]);
 
