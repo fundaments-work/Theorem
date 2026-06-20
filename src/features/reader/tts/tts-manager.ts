@@ -57,6 +57,7 @@ class TtsManager {
     private _speed = 1.0;
     private _unlistenState: UnlistenFn | null = null;
     private _unlistenProgress: UnlistenFn | null = null;
+    private _listenersPromise: Promise<void> | null = null;
 
     // Sentence tracking for skip/progress
     private _sentences: string[] = [];
@@ -87,8 +88,23 @@ class TtsManager {
     }
 
     private async _ensureEventListeners(): Promise<void> {
-        if (this._unlistenState) return;
+        // Race-safe: if setup is in flight, return the same promise
+        if (this._listenersPromise) {
+            return this._listenersPromise;
+        }
+        if (this._unlistenState) {
+            return;
+        }
 
+        this._listenersPromise = this._setupListeners();
+        try {
+            await this._listenersPromise;
+        } finally {
+            this._listenersPromise = null;
+        }
+    }
+
+    private async _setupListeners(): Promise<void> {
         this._unlistenState = await listen<TtsStatePayload>("tts-state", (event) => {
             const p = event.payload;
             switch (p.status) {
@@ -132,7 +148,9 @@ class TtsManager {
         try {
             const ready = await invoke<boolean>("tts_is_ready");
             if (ready) {
-                this._voiceCache = await invoke<TtsVoiceGroup[]>("tts_get_voices");
+                if (this._voiceCache.length === 0) {
+                    this._voiceCache = await invoke<TtsVoiceGroup[]>("tts_get_voices");
+                }
                 this.emit({ status: "ready", voices: this._voiceCache });
                 return;
             }
@@ -156,17 +174,25 @@ class TtsManager {
     async speak(text: string, startSentence = 0): Promise<void> {
         await this._ensureEventListeners();
 
-        // Stop any current playback
+        // Stop any current playback first
         this.stop();
 
-        // Ensure engine is loaded
+        // CRITICAL FIX: Always ensure engine is loaded.
+        // prepare() is idempotent — fast return if already loaded.
+        // Do NOT gate this on UI state; stop() sets state to "ready"
+        // even when the engine isn't actually initialized yet.
+        await this.prepare();
+
         if (this._state.status !== "ready") {
-            await this.prepare();
+            console.error("[TTS] Cannot speak: engine not ready after prepare(), state =", this._state.status);
+            return;
         }
-        if (this._state.status !== "ready") return;
 
         const trimmed = text.trim();
-        if (!trimmed) return;
+        if (!trimmed) {
+            console.warn("[TTS] No text to speak");
+            return;
+        }
 
         // Store sentences for skip tracking
         this._sentences = splitSentences(trimmed);
@@ -175,6 +201,7 @@ class TtsManager {
 
         // Send full text to Rust for continuous streaming playback
         try {
+            console.log("[TTS] Starting playback, text length:", trimmed.length);
             await invoke("tts_play", {
                 text: trimmed,
                 voice: this._selectedVoice,

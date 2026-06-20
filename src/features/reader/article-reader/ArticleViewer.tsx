@@ -719,7 +719,10 @@ export function ArticleViewer({
             return;
         }
         if (!kokoroTts.isSpeaking && !kokoroTts.isPaused) {
-            kokoroTts.speak(text).catch(() => {});
+            kokoroTts.speak(text).catch((err) => {
+                console.error("[ArticleViewer] TTS speak failed:", err);
+                setIsTtsActive(false);
+            });
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isTtsActive, ttsEnabled]);

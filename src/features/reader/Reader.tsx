@@ -246,6 +246,7 @@ function BookReaderPage() {
     const kokoroTts = useKokoroTts();
 
     const toggleTts = useCallback(() => {
+        console.log("[Reader] TTS toggle clicked, enabled:", settings.readerSettings.ttsEnabled, "speaking:", kokoroTts.isSpeaking, "paused:", kokoroTts.isPaused);
         if (!settings.readerSettings.ttsEnabled) return;
         if (kokoroTts.isSpeaking || kokoroTts.isPaused) {
             kokoroTts.stop();
@@ -260,7 +261,9 @@ function BookReaderPage() {
     useEffect(() => {
         if (!settings.readerSettings.ttsEnabled) return;
         // Fire-and-forget: start loading so it's ready when user clicks
-        kokoroTts.prepare().catch(() => {});
+        kokoroTts.prepare().catch((err) => {
+            console.error("[Reader] TTS background preload failed:", err);
+        });
     }, [settings.readerSettings.ttsEnabled]);
 
     // Stop TTS when user navigates to a different section/page
@@ -281,9 +284,18 @@ function BookReaderPage() {
 
         if (isTtsActive) {
             const text = getCurrentSectionText();
-            if (text && !kokoroTts.isSpeaking && !kokoroTts.isPaused) {
-                // Model is preloaded in background; speak immediately if ready
-                kokoroTts.speak(text).catch(() => {});
+            console.log("[Reader] TTS effect fired, text length:", text?.length ?? 0);
+            if (!text) {
+                console.warn("[Reader] No text available for TTS");
+                setIsTtsActive(false);
+                return;
+            }
+            if (!kokoroTts.isSpeaking && !kokoroTts.isPaused) {
+                console.log("[Reader] Calling kokoroTts.speak()...");
+                kokoroTts.speak(text).catch((err) => {
+                    console.error("[Reader] TTS speak failed:", err);
+                    setIsTtsActive(false);
+                });
             }
         } else {
             kokoroTts.stop();
