@@ -19,3 +19,5 @@ export * from './sync-import';
 export * from './mobile-folder-scan';
 export * from './keyboard-shortcuts';
 export * from './i18n';
+export * from './share';
+export * from './share-canvas';

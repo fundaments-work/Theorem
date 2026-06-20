@@ -3,7 +3,7 @@
  * User statistics, reading progress, and achievements
  */
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { cn, normalizeAuthor } from "../../core";
 import { useLibraryStore, useSettingsStore, useUIStore } from "../../core";
 import { formatReadingTime } from "../../core";
@@ -19,7 +19,9 @@ import {
     Star,
     Bookmark,
     Highlighter,
+    Share2,
 } from "lucide-react";
+import { ShareStatsStudioModal } from "./ShareStatsStudioModal";
 
 // Stat card component
 interface StatCardProps {
@@ -229,6 +231,22 @@ export function StatisticsPage() {
     const { books, annotations } = useLibraryStore();
     const { stats } = useSettingsStore();
     const { setRoute } = useUIStore();
+    const [showShareModal, setShowShareModal] = useState(false);
+
+    const shareStatsData = useMemo(() => ({
+        totalBooks: books.length,
+        completedBooks: books.filter((book) => {
+            if (book.manualCompletionState === "read") return true;
+            if (book.manualCompletionState === "unread") return false;
+            return !!book.completedAt || book.progress >= 0.99;
+        }).length,
+        totalReadingTime: stats.totalReadingTime,
+        currentStreak: stats.currentStreak,
+        longestStreak: stats.longestStreak,
+        booksReadThisYear: stats.booksReadThisYear,
+        yearlyBookGoal: stats.yearlyBookGoal,
+        totalHighlights: annotations.filter((a) => a.type === "highlight").length
+    }), [books, stats, annotations]);
 
     function isBookCompleted(book: (typeof books)[number]) {
         if (book.manualCompletionState === "read") return true;
@@ -270,6 +288,13 @@ export function StatisticsPage() {
                         Track your reading progress and achievements
                     </p>
                 </div>
+                <button
+                    onClick={() => setShowShareModal(true)}
+                    className="ui-btn flex items-center gap-2 text-xs font-semibold px-3.5 py-2 hover:bg-[color:var(--color-surface-muted)] active:scale-95 transition-all"
+                >
+                    <Share2 className="w-3.5 h-3.5 text-[color:var(--color-text-secondary)]" />
+                    <span>Share Stats</span>
+                </button>
             </div>
 
             {/* Stats Grid — 2 cols on mobile, 4 on md+ */}
@@ -487,6 +512,12 @@ export function StatisticsPage() {
                     </section>
                 </div>
             </div>
+            {showShareModal && (
+                <ShareStatsStudioModal
+                    statsData={shareStatsData}
+                    onClose={() => setShowShareModal(false)}
+                />
+            )}
         </div>
     );
 }

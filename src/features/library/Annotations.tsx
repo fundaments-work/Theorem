@@ -16,6 +16,7 @@ import {
     StickyNote,
     MoreVertical,
 } from "lucide-react";
+import { ShareMenu } from "./components/ShareMenu";
 
 // Color badge component
 function ColorBadge({ color }: { color: HighlightColor }) {
@@ -80,16 +81,20 @@ interface AnnotationCardProps {
         author: string;
         coverPath?: string;
     } | undefined;
+    shareId: string | null;
     onDelete: (id: string) => void;
     onEdit: (id: string) => void;
     onGoToBook: (bookId: string) => void;
+    onShare: (id: string | null) => void;
 }
 
 function AnnotationCard({
     annotation,
     book,
+    shareId,
     onDelete,
     onEdit,
+    onShare,
 }: AnnotationCardProps) {
     const [showMenu, setShowMenu] = useState(false);
 
@@ -136,6 +141,15 @@ function AnnotationCard({
                                 </button>
                                 <button
                                     onClick={() => {
+                                        onShare(annotation.id);
+                                        setShowMenu(false);
+                                    }}
+                                    className="w-full whitespace-nowrap px-3 py-2 text-left font-sans text-[11px] font-medium text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
+                                >
+                                    Share
+                                </button>
+                                <button
+                                    onClick={() => {
                                         onDelete(annotation.id);
                                         setShowMenu(false);
                                     }}
@@ -144,6 +158,19 @@ function AnnotationCard({
                                     Delete
                                 </button>
                             </div>
+                        </>
+                    )}
+                    {shareId === annotation.id && (
+                        <>
+                            <div
+                                className="fixed inset-0 z-10"
+                                onClick={() => onShare(null)}
+                            />
+                            <ShareMenu
+                                annotation={annotation}
+                                book={book}
+                                onClose={() => onShare(null)}
+                            />
                         </>
                     )}
                 </div>
@@ -180,13 +207,12 @@ export function AnnotationsPage() {
         currentBookId,
         setRoute,
         searchQuery,
-        vaultSyncStatus,
-        vaultSyncMessage,
     } = useUIStore();
     const [activeFilter, setActiveFilter] = useState<"all" | "highlights" | "notes">("all");
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
+    const [sharingId, setSharingId] = useState<string | null>(null);
     const bookTitleLookup = useMemo(
         () => new Map(books.map((book) => [book.id, book.title])),
         [books],
@@ -274,6 +300,10 @@ export function AnnotationsPage() {
         setRoute("reader", bookId);
     };
 
+    const handleShare = (id: string | null) => {
+        setSharingId(id);
+    };
+
     const getBookInfo = (bookId: string) => {
         return books.find((b) => b.id === bookId);
     };
@@ -305,14 +335,6 @@ export function AnnotationsPage() {
                         {new Set(filteredAnnotations.map((a) => a.bookId)).size} books
                     </p>
                 </div>
-            </div>
-
-            <div className="mb-8 border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] font-medium text-[color:var(--color-text-primary)]">
-                {vaultSyncStatus === "synced" && "Status: Synced to export folder"}
-                {vaultSyncStatus === "syncing" && "Status: Syncing markdown pages"}
-                {vaultSyncStatus === "error" && "Status: Sync error"}
-                {vaultSyncStatus === "idle" && "Status: Idle"}
-                {vaultSyncMessage ? ` | ${vaultSyncMessage}` : ""}
             </div>
 
             {currentBookId && (
@@ -391,9 +413,11 @@ export function AnnotationsPage() {
                             key={annotation.id}
                             annotation={annotation}
                             book={getBookInfo(annotation.bookId)}
+                            shareId={sharingId}
                             onDelete={handleDelete}
                             onEdit={handleEdit}
                             onGoToBook={handleGoToBook}
+                            onShare={handleShare}
                         />
                     ))}
                 </div>
