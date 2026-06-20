@@ -100,6 +100,7 @@ export class FoliateEngine {
     private searchSectionCache: ReaderSearchSectionCacheItem[] | null = null;
     private searchCacheBookRef: unknown = null;
     private _awaitingInitialRelocate = false;
+    private _lastVisibleRange?: Range;
 
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
@@ -390,6 +391,9 @@ export class FoliateEngine {
         // See foliate-js view.js #onRelocate: this.lastLocation = { ...progress, tocItem, pageItem, cfi, range }
         this.view.addEventListener('relocate', (e: any) => {
             const detail = e.detail;
+            if (detail.range) {
+                this._lastVisibleRange = detail.range;
+            }
             console.debug('[FoliateEngine] relocate handler START', { _awaitingInitialRelocate: this._awaitingInitialRelocate });
             
             // Use CFI directly from event detail (already calculated by view.js)
@@ -2456,6 +2460,13 @@ export class FoliateEngine {
         if (!this.view) return "";
 
         try {
+            if (this._lastVisibleRange) {
+                const text = this._lastVisibleRange.toString();
+                if (text && text.trim().length > 0) {
+                    return text.replace(/\s+/g, " ").trim();
+                }
+            }
+
             const contents = this.view.renderer?.getContents?.() || [];
             if (contents.length === 0) return "";
 

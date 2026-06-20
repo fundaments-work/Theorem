@@ -69,8 +69,8 @@ const FIRST_CHUNK_CHARS = 300;
 const CROSSFADE_SECS = 0.01;
 /// Sample rate from Kokoro (always 24kHz).
 const SAMPLE_RATE = 24000;
-/// Audio gain — Kokoro quantized model can be quiet.
-const AUDIO_GAIN = 1.8;
+/// Audio gain — Kokoro quantized model can be quiet, but 1.8 causes hard clipping.
+const AUDIO_GAIN = 1.0;
 
 /** Split text into sentence chunks for streaming synthesis. */
 function splitSentences(text: string): string[] {
