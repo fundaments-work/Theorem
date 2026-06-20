@@ -148,81 +148,35 @@ fn ensure_model_files(app: &AppHandle) -> Result<PathBuf, String> {
 // ── Engine lifecycle ──
 
 fn ensure_engine(app: &AppHandle) -> Result<(), String> {
-    {
-        let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
-        if guard.as_ref().map_or(false, |inner| inner.engine.is_some()) {
-            return Ok(());
-        }
+    let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+    if guard.as_ref().map_or(false, |inner| inner.engine.is_some()) {
+        return Ok(());
+    }
 
-        // Open the default audio output device
-        let sink = rodio::DeviceSinkBuilder::open_default_sink()
-            .map_err(|e| format!("Failed to open audio output: {e}"))?;
+    // Open the default audio output device
+    let sink = rodio::DeviceSinkBuilder::open_default_sink()
+        .map_err(|e| format!("Failed to open audio output: {e}"))?;
 
-        let model_dir = ensure_model_files(app)?;
-        let optimized_cache = tts_cache_dir(app)?.join("kokoro-optimized.onnx");
+    let model_dir = ensure_model_files(app)?;
+    let optimized_cache = tts_cache_dir(app)?.join("kokoro-optimized.onnx");
 
-        let mut engine = KokoroEngine::new();
-        engine
-            .load_model_with_params(
-                &model_dir,
-                KokoroModelParams {
-                    num_threads: None,
-                    optimized_model_cache_path: Some(optimized_cache),
-                },
-            )
-            .map_err(|e| format!("Failed to load Kokoro engine: {e}"))?;
+    let mut engine = KokoroEngine::new();
+    engine
+        .load_model_with_params(
+            &model_dir,
+            KokoroModelParams {
+                num_threads: None,
+                optimized_model_cache_path: Some(optimized_cache),
+            },
+        )
+        .map_err(|e| format!("Failed to load Kokoro engine: {e}"))?;
 
-        *guard = Some(TtsInner {
-            engine: Some(engine),
-            sink: Some(sink),
-        });
-    } // ── INNER lock DROPPED here ──
-
-    // Play a brief test tone to verify the audio pipeline works end-to-end.
-    // Must be called AFTER the INNER lock is released — play_test_tone()
-    // acquires its own INNER lock, and std::sync::Mutex is NOT reentrant.
-    play_test_tone();
+    *guard = Some(TtsInner {
+        engine: Some(engine),
+        sink: Some(sink),
+    });
 
     Ok(())
-}
-
-/// Emit a 440 Hz sine wave for 100 ms through the current audio sink.
-/// If nothing is heard, the audio pipeline (device / ALSA / permissions)
-/// is the problem, not TTS synthesis.
-fn play_test_tone() {
-    let mixer = {
-        let guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
-        guard
-            .as_ref()
-            .and_then(|inner| inner.sink.as_ref())
-            .map(|sink| sink.mixer().clone())
-    };
-    let Some(mixer) = mixer else {
-        return;
-    };
-
-    let sample_rate: u32 = 44100;
-    let duration_secs = 0.1;
-    let freq = 440.0;
-    let num_samples = (sample_rate as f64 * duration_secs) as usize;
-    let samples: Vec<f32> = (0..num_samples)
-        .map(|i| {
-            let t = i as f64 / sample_rate as f64;
-            let envelope = 1.0 - (t / duration_secs); // quick fade-out
-            (envelope * 0.3 * (2.0 * std::f64::consts::PI * freq * t).sin()) as f32
-        })
-        .collect();
-
-    let player = rodio::Player::connect_new(&mixer);
-    let buf = rodio::buffer::SamplesBuffer::new(
-        NonZero::new(1u16).unwrap(),
-        NonZero::new(sample_rate).unwrap(),
-        samples,
-    );
-    player.append(buf);
-    // Let the mixer's audio thread process the tone (100 ms tone + margin).
-    thread::sleep(Duration::from_millis(200));
-    // Player is dropped here — the mixer continues until the buffer drains.
 }
 
 fn list_voice_groups() -> Vec<KokoroVoiceGroup> {
@@ -394,6 +348,12 @@ pub fn tts_play(
     // The thread runs independently; stop/pause/resume commands work
     // by checking GENERATION or mutating the Player through PLAYBACK.
     std::thread::spawn(move || {
+        eprintln!(
+            "[TTS] Synthesis thread started, gen={}, chunks={}",
+            generation,
+            split_text(&trimmed).len()
+        );
+
         let _ = app_clone.emit(
             "tts-state",
             TtsStateEvent {
@@ -412,6 +372,7 @@ pub fn tts_play(
         };
 
         let Some(mixer) = mixer else {
+            eprintln!("[TTS] ERROR: Audio output not initialized (sink missing)");
             let _ = app_clone.emit(
                 "tts-state",
                 TtsStateEvent {
@@ -422,6 +383,7 @@ pub fn tts_play(
             );
             return;
         };
+        eprintln!("[TTS] Mixer acquired, creating player...");
 
         let player = rodio::Player::connect_new(&mixer);
         // Unpause immediately — the mixer will output silence until the first
@@ -430,6 +392,7 @@ pub fn tts_play(
         // (continue), the player would stay paused forever and no audio would
         // ever be heard.
         player.play();
+        eprintln!("[TTS] Player created and playing");
 
         {
             let mut pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
@@ -450,11 +413,21 @@ pub fn tts_play(
         }
 
         let total_chunks = chunks.len();
+        eprintln!("[TTS] Synthesizing {} chunks...", total_chunks);
 
         for (i, chunk) in chunks.iter().enumerate() {
             if GENERATION.load(Ordering::SeqCst) != generation {
+                eprintln!("[TTS] Generation changed, aborting");
                 return;
             }
+
+            eprintln!(
+                "[TTS] Chunk {}/{} — {} chars: {:?}...",
+                i + 1,
+                total_chunks,
+                chunk.len(),
+                &chunk[..chunk.len().min(80)]
+            );
 
             // Take the engine OUT of the mutex so we don't hold the lock
             // during the blocking synthesize() call.  This keeps tts_is_ready
@@ -465,6 +438,7 @@ pub fn tts_play(
             };
 
             let Some(mut engine) = engine else {
+                eprintln!("[TTS] Engine not available (taken?), aborting");
                 return;
             };
 
@@ -483,11 +457,19 @@ pub fn tts_play(
                         }
                     }
                     if result.samples.is_empty() {
+                        eprintln!("[TTS] Chunk {} produced EMPTY samples, skipping", i + 1);
                         continue;
                     }
+                    eprintln!(
+                        "[TTS] Chunk {} OK — {} samples ({:.1}s at 24kHz)",
+                        i + 1,
+                        result.samples.len(),
+                        result.samples.len() as f64 / 24000.0
+                    );
                     result.samples
                 }
                 Err(e) => {
+                    eprintln!("[TTS] Synthesis FAILED: {}", e);
                     // Put engine back before returning
                     if let Ok(mut guard) = INNER.lock() {
                         if let Some(inner) = guard.as_mut() {
@@ -507,6 +489,7 @@ pub fn tts_play(
             };
 
             if GENERATION.load(Ordering::SeqCst) != generation {
+                eprintln!("[TTS] Generation changed mid-synthesis, aborting");
                 return;
             }
 
@@ -520,6 +503,7 @@ pub fn tts_play(
                             samples,
                         );
                         pb.player.append(buf);
+                        eprintln!("[TTS] Chunk {} appended to player", i + 1);
                     }
                 }
             }
@@ -534,9 +518,11 @@ pub fn tts_play(
         }
 
         // Wait for playback to finish
+        eprintln!("[TTS] All chunks synthesized, waiting for playback to drain...");
         {
             loop {
                 if GENERATION.load(Ordering::SeqCst) != generation {
+                    eprintln!("[TTS] Generation changed during drain, aborting");
                     return;
                 }
 
@@ -557,6 +543,7 @@ pub fn tts_play(
             }
         }
 
+        eprintln!("[TTS] Playback finished");
         let _ = app_clone.emit(
             "tts-state",
             TtsStateEvent {
@@ -584,6 +571,47 @@ pub fn tts_pause() -> bool {
 #[tauri::command]
 pub fn tts_resume() -> bool {
     resume_playback()
+}
+
+/// Play a 440 Hz sine wave for 1 second at full volume.
+/// Use this to verify that audio output is working on the system.
+/// If you hear a beep: audio pipeline is fine, issue is in Kokoro synthesis.
+/// If no beep: audio device / ALSA / permissions problem.
+#[tauri::command]
+pub fn tts_test_audio() -> Result<(), String> {
+    let mixer = {
+        let guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
+        guard
+            .as_ref()
+            .and_then(|inner| inner.sink.as_ref())
+            .map(|sink| sink.mixer().clone())
+    };
+    let Some(mixer) = mixer else {
+        return Err("Audio not initialized — engine must be loaded first".into());
+    };
+
+    let sample_rate: u32 = 44100;
+    let duration_secs = 1.0;
+    let freq = 440.0;
+    let num_samples = (sample_rate as f64 * duration_secs) as usize;
+    let samples: Vec<f32> = (0..num_samples)
+        .map(|i| {
+            let t = i as f64 / sample_rate as f64;
+            (0.5 * (2.0 * std::f64::consts::PI * freq * t).sin()) as f32
+        })
+        .collect();
+
+    let player = rodio::Player::connect_new(&mixer);
+    let buf = rodio::buffer::SamplesBuffer::new(
+        NonZero::new(1u16).unwrap(),
+        NonZero::new(sample_rate).unwrap(),
+        samples,
+    );
+    player.append(buf);
+    // Let the tone play (1s tone + margin)
+    thread::sleep(Duration::from_millis(1500));
+    eprintln!("[TTS] Test tone played (440 Hz, 1s). If you didn't hear it, check system audio.");
+    Ok(())
 }
 
 // ── Voice grouping ──

@@ -833,6 +833,7 @@ pub fn run() {
             kokoro::tts_stop,
             kokoro::tts_pause,
             kokoro::tts_resume,
+            kokoro::tts_test_audio,
             kokoro::tts_get_voices,
             kokoro::tts_is_ready,
         ])

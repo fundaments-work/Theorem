@@ -266,18 +266,6 @@ function BookReaderPage() {
         });
     }, [settings.readerSettings.ttsEnabled]);
 
-    // Stop TTS when user navigates to a different section/page
-    // — the text being read no longer matches visible content
-    useEffect(() => {
-        if (!isTtsActive) return;
-        if (kokoroTts.isSpeaking || kokoroTts.isPaused) {
-            kokoroTts.stop();
-            setIsTtsActive(false);
-            setShowTtsSettings(false);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [location?.cfi, location?.percentage, pdfCurrentPage]);
-
     // When TTS is toggled, start/stop Kokoro with current section text
     useEffect(() => {
         if (!settings.readerSettings.ttsEnabled) return;
