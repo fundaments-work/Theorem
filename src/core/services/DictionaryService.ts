@@ -69,9 +69,6 @@ function toVocabularyTerm(result: DictionaryLookupResult): VocabularyTerm {
         audioUrl: result.audioUrl,
         meanings: result.meanings,
         providerHistory: result.providersUsed,
-        lookupCount: 1,
-        tags: [],
-        contexts: [],
         createdAt: now,
         updatedAt: now,
     };

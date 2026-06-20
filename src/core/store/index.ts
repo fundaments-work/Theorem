@@ -30,8 +30,6 @@ import type {
     ReaderSettings,
     ReadingStats,
     UIState,
-    VocabularyContext,
-    VocabularyContextSourceType,
     VocabularyTerm,
 } from "../types";
 
@@ -1741,8 +1739,7 @@ interface VocabularyStore {
     installedDictionaries: InstalledDictionary[];
     lookupCache: Record<string, DictionaryLookupResult>;
 
-    saveVocabularyTerm: (term: VocabularyTerm, context?: SaveVocabularyContextInput) => VocabularyTerm;
-    updateVocabularyTerm: (termId: string, updates: Partial<VocabularyTerm>) => void;
+    saveVocabularyTerm: (term: VocabularyTerm) => VocabularyTerm;
     deleteVocabularyTerm: (termId: string) => void;
     lookupTerm: (term: string, language?: string) => Promise<DictionaryLookupResult | null>;
     lookupAndSaveTerm: (term: string, language?: string) => Promise<VocabularyTerm | null>;
@@ -1750,22 +1747,6 @@ interface VocabularyStore {
     importStarDict: (files: FileList | File[]) => Promise<InstalledDictionary>;
     removeDictionary: (dictionaryId: string) => Promise<void>;
     addInstalledDictionary: (dict: InstalledDictionary) => void;
-}
-
-interface SaveVocabularyContextInput {
-    sourceType: VocabularyContextSourceType;
-    sourceId: string;
-    label: string;
-}
-
-const LEGACY_VOCABULARY_CONTEXT_LABEL = "Legacy / Unknown source";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-}
-
-function isVocabularyContextSourceType(value: unknown): value is VocabularyContextSourceType {
-    return value === "book" || value === "site" || value === "legacy";
 }
 
 function toValidDate(value: Date | string | number | undefined, fallback: Date): Date {
@@ -1783,109 +1764,8 @@ function toValidDate(value: Date | string | number | undefined, fallback: Date):
     return fallback;
 }
 
-function toVocabularyContextKey(
-    sourceType: VocabularyContextSourceType,
-    sourceId: string,
-): string {
-    return `${sourceType}:${sourceId}`;
-}
-
-function createLegacyVocabularyContext(
-    sourceDate: Date,
-): VocabularyContext {
-    return {
-        key: toVocabularyContextKey("legacy", "legacy"),
-        sourceType: "legacy",
-        sourceId: "legacy",
-        label: LEGACY_VOCABULARY_CONTEXT_LABEL,
-        firstSeenAt: sourceDate,
-        lastSeenAt: sourceDate,
-        occurrences: 1,
-    };
-}
-
-function normalizeVocabularyContext(
-    value: unknown,
-    fallbackDate: Date,
-): VocabularyContext | null {
-    if (!isRecord(value)) {
-        return null;
-    }
-
-    const sourceType = isVocabularyContextSourceType(value.sourceType)
-        ? value.sourceType
-        : null;
-    const rawSourceId = typeof value.sourceId === "string"
-        ? value.sourceId.trim()
-        : "";
-    if (!sourceType || !rawSourceId) {
-        return null;
-    }
-
-    const firstSeenAt = toValidDate(
-        value.firstSeenAt as Date | string | number | undefined,
-        fallbackDate,
-    );
-    const lastSeenAt = toValidDate(
-        value.lastSeenAt as Date | string | number | undefined,
-        firstSeenAt,
-    );
-    const rawOccurrences = Number(value.occurrences);
-    const occurrences = Number.isFinite(rawOccurrences)
-        ? Math.max(1, Math.trunc(rawOccurrences))
-        : 1;
-
-    const label = typeof value.label === "string" && value.label.trim()
-        ? value.label.trim()
-        : sourceType === "legacy"
-            ? LEGACY_VOCABULARY_CONTEXT_LABEL
-            : rawSourceId;
-
-    const keyFromState = typeof value.key === "string" && value.key.trim()
-        ? value.key.trim()
-        : "";
-    const key = keyFromState || toVocabularyContextKey(sourceType, rawSourceId);
-
-    return {
-        key,
-        sourceType,
-        sourceId: rawSourceId,
-        label,
-        firstSeenAt,
-        lastSeenAt,
-        occurrences,
-    };
-}
-
-function mergeVocabularyContexts(
-    existingContexts: VocabularyContext[],
-    incomingContexts: VocabularyContext[],
-): VocabularyContext[] {
-    const mergedByKey = new Map(existingContexts.map((context) => [context.key, context]));
-
-    for (const context of incomingContexts) {
-        const existing = mergedByKey.get(context.key);
-        if (!existing) {
-            mergedByKey.set(context.key, context);
-            continue;
-        }
-
-        mergedByKey.set(context.key, {
-            ...existing,
-            sourceType: context.sourceType,
-            sourceId: context.sourceId,
-            label: context.label || existing.label,
-            firstSeenAt: existing.firstSeenAt.getTime() <= context.firstSeenAt.getTime()
-                ? existing.firstSeenAt
-                : context.firstSeenAt,
-            lastSeenAt: existing.lastSeenAt.getTime() >= context.lastSeenAt.getTime()
-                ? existing.lastSeenAt
-                : context.lastSeenAt,
-            occurrences: Math.max(1, existing.occurrences + context.occurrences),
-        });
-    }
-
-    return Array.from(mergedByKey.values());
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
 }
 
 function normalizeVocabularyTerm(term: VocabularyTerm): VocabularyTerm {
@@ -1899,20 +1779,9 @@ function normalizeVocabularyTerm(term: VocabularyTerm): VocabularyTerm {
     if ("lastReviewedAt" in normalized) {
         delete normalized.lastReviewedAt;
     }
-    const createdAt = toValidDate(normalized.createdAt, now);
-    const sourceContexts = Array.isArray(normalized.contexts)
-        ? normalized.contexts
-            .map((context) => normalizeVocabularyContext(context, createdAt))
-            .filter((context): context is VocabularyContext => Boolean(context))
-        : [];
-    const contexts = sourceContexts.length > 0
-        ? sourceContexts
-        : [createLegacyVocabularyContext(createdAt)];
-
     return {
         ...normalized,
-        contexts,
-        createdAt,
+        createdAt: toValidDate(normalized.createdAt, now),
         updatedAt: normalized.updatedAt
             ? toValidDate(normalized.updatedAt, now)
             : undefined,
@@ -1936,31 +1805,12 @@ export const useVocabularyStore = create<VocabularyStore>()(
             installedDictionaries: [],
             lookupCache: {},
 
-            saveVocabularyTerm: (incomingTerm, context) => {
+            saveVocabularyTerm: (incomingTerm) => {
                 const now = new Date();
                 const incomingCreatedAt = toValidDate(incomingTerm.createdAt, now);
                 const incomingUpdatedAt = incomingTerm.updatedAt
                     ? toValidDate(incomingTerm.updatedAt, now)
                     : now;
-                const incomingContexts = Array.isArray(incomingTerm.contexts)
-                    ? incomingTerm.contexts
-                        .map((entry) => normalizeVocabularyContext(entry, incomingCreatedAt))
-                        .filter((entry): entry is VocabularyContext => Boolean(entry))
-                    : [];
-                const contextFromSave = context && context.sourceId.trim()
-                    ? {
-                        key: toVocabularyContextKey(context.sourceType, context.sourceId.trim()),
-                        sourceType: context.sourceType,
-                        sourceId: context.sourceId.trim(),
-                        label: context.label.trim() || context.sourceId.trim(),
-                        firstSeenAt: now,
-                        lastSeenAt: now,
-                        occurrences: 1,
-                    } satisfies VocabularyContext
-                    : null;
-                const contextEntriesToMerge = contextFromSave
-                    ? [...incomingContexts, contextFromSave]
-                    : incomingContexts;
 
                 const normalizedKey = normalizeTermKey(
                     incomingTerm.normalizedTerm,
@@ -1972,12 +1822,8 @@ export const useVocabularyStore = create<VocabularyStore>()(
                 ));
 
                 if (!existing) {
-                    const mergedContexts = mergeVocabularyContexts([], contextEntriesToMerge);
                     const termToSave: VocabularyTerm = {
                         ...incomingTerm,
-                        contexts: mergedContexts.length > 0
-                            ? mergedContexts
-                            : [createLegacyVocabularyContext(incomingCreatedAt)],
                         createdAt: incomingCreatedAt,
                         updatedAt: incomingUpdatedAt,
                     };
@@ -2005,9 +1851,6 @@ export const useVocabularyStore = create<VocabularyStore>()(
                     ...existing.providerHistory,
                     ...incomingTerm.providerHistory,
                 ]));
-                const mergedContexts = contextEntriesToMerge.length > 0
-                    ? mergeVocabularyContexts(existing.contexts, contextEntriesToMerge)
-                    : existing.contexts;
 
                 const mergedTerm: VocabularyTerm = {
                     ...existing,
@@ -2018,10 +1861,6 @@ export const useVocabularyStore = create<VocabularyStore>()(
                     audioUrl: incomingTerm.audioUrl || existing.audioUrl,
                     meanings: mergedMeanings,
                     providerHistory: mergedProviderHistory,
-                    lookupCount: existing.lookupCount + Math.max(1, incomingTerm.lookupCount || 1),
-                    contexts: mergedContexts.length > 0
-                        ? mergedContexts
-                        : [createLegacyVocabularyContext(toValidDate(existing.createdAt, now))],
                     updatedAt: now,
                 };
 

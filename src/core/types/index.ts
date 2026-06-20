@@ -289,18 +289,6 @@ export interface VocabularyMeaning {
     provider: DictionaryProvider;
 }
 
-export type VocabularyContextSourceType = "book" | "site" | "legacy";
-
-export interface VocabularyContext {
-    key: string;
-    sourceType: VocabularyContextSourceType;
-    sourceId: string;
-    label: string;
-    firstSeenAt: Date;
-    lastSeenAt: Date;
-    occurrences: number;
-}
-
 export interface VocabularyTerm {
     id: string;
     term: string;
@@ -310,10 +298,6 @@ export interface VocabularyTerm {
     audioUrl?: string;
     meanings: VocabularyMeaning[];
     providerHistory: DictionaryProvider[];
-    lookupCount: number;
-    personalNote?: string;
-    tags: string[];
-    contexts: VocabularyContext[];
     createdAt: Date;
     updatedAt?: Date;
 }

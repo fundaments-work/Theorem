@@ -514,11 +514,6 @@ function buildVocabularyMarkdown(terms: VocabularyTerm[], generatedAt: string): 
     sortedTerms.forEach((term, index) => {
         const providers = Array.from(new Set(term.providerHistory)).sort((left, right) => left.localeCompare(right));
         const definitions = collectDefinitions(term);
-        const contexts = Array.from(
-            new Set(term.contexts.map((context) => toSingleLineText(context.label || context.sourceId)).filter(Boolean)),
-        );
-        const tags = Array.from(new Set(term.tags.map((tag) => toSingleLineText(tag)).filter(Boolean)));
-        const note = toMultilineText(term.personalNote);
 
         lines.push(`## ${index + 1}. ${term.term}`);
         lines.push(`- Term ID: \`${term.id}\``);
@@ -526,19 +521,12 @@ function buildVocabularyMarkdown(terms: VocabularyTerm[], generatedAt: string): 
         if (term.phonetic) {
             lines.push(`- Phonetic: /${toSingleLineText(term.phonetic)}/`);
         }
-        lines.push(`- Lookup count: ${Math.max(1, term.lookupCount || 1)}`);
         lines.push(`- Created: ${toIso(term.createdAt)}`);
         if (term.updatedAt) {
             lines.push(`- Updated: ${toIso(term.updatedAt)}`);
         }
         if (providers.length > 0) {
             lines.push(`- Providers: ${providers.join(", ")}`);
-        }
-        if (contexts.length > 0) {
-            lines.push(`- Sources: ${contexts.join(", ")}`);
-        }
-        if (tags.length > 0) {
-            lines.push(`- Tags: ${tags.join(", ")}`);
         }
         lines.push("");
 
@@ -548,10 +536,6 @@ function buildVocabularyMarkdown(terms: VocabularyTerm[], generatedAt: string): 
                 lines.push(`${definitionIndex + 1}. ${definition}`);
             });
             lines.push("");
-        }
-
-        if (note) {
-            lines.push("### Personal Note", "", note, "");
         }
 
         lines.push("---", "");

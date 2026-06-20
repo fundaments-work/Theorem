@@ -340,7 +340,7 @@ export function mergeCollections(
 
 /**
  * Merge vocabulary terms by normalized term + language key.
- * - Same key → merge meanings, contexts; keep higher lookupCount.
+ * - Same key → merge meanings; keep later updatedAt.
  * - Different keys → add as new.
  */
 export function mergeVocabulary(
@@ -363,30 +363,15 @@ export function mergeVocabulary(
             continue;
         }
 
-        // Merge.
         const merged: VocabularyTerm = {
             ...match,
-            // Keep higher lookup count.
-            lookupCount: Math.max(match.lookupCount, inc.lookupCount),
-            // Keep later personal note.
-            personalNote:
-                toEpoch(inc.updatedAt) > toEpoch(match.updatedAt)
-                    ? inc.personalNote ?? match.personalNote
-                    : match.personalNote ?? inc.personalNote,
-            // Union tags.
-            tags: [...new Set([...(match.tags ?? []), ...(inc.tags ?? [])])],
-            // Union contexts by key.
-            contexts: mergeContexts(match.contexts ?? [], inc.contexts ?? []),
-            // Union meanings by provider.
             meanings: mergeMeanings(match.meanings, inc.meanings),
-            // Union provider history.
             providerHistory: [
                 ...new Set([
                     ...(match.providerHistory ?? []),
                     ...(inc.providerHistory ?? []),
                 ]),
             ],
-            // Keep later updatedAt.
             updatedAt:
                 toEpoch(inc.updatedAt) > toEpoch(match.updatedAt)
                     ? inc.updatedAt
@@ -396,30 +381,6 @@ export function mergeVocabulary(
         byKey.set(k, merged);
     }
 
-    return [...byKey.values()];
-}
-
-function mergeContexts(
-    a: VocabularyTerm["contexts"],
-    b: VocabularyTerm["contexts"],
-): VocabularyTerm["contexts"] {
-    const byKey = new Map<string, VocabularyTerm["contexts"][0]>();
-    for (const ctx of a) byKey.set(ctx.key, ctx);
-    for (const ctx of b) {
-        if (!byKey.has(ctx.key)) {
-            byKey.set(ctx.key, ctx);
-        } else {
-            const existing = byKey.get(ctx.key)!;
-            byKey.set(ctx.key, {
-                ...existing,
-                occurrences: Math.max(existing.occurrences, ctx.occurrences),
-                lastSeenAt:
-                    toEpoch(ctx.lastSeenAt) > toEpoch(existing.lastSeenAt)
-                        ? ctx.lastSeenAt
-                        : existing.lastSeenAt,
-            });
-        }
-    }
     return [...byKey.values()];
 }
 
