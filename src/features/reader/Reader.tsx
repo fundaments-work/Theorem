@@ -32,7 +32,7 @@ import {
     type ReaderSettings as ReaderSettingsState,
     type TocItem,
 } from "../../core";
-import { List, Pause, Play, X } from "lucide-react";
+import { List } from "lucide-react";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import { TableOfContents } from "./components/TableOfContents";
 import { ReaderSettings } from "./components/ReaderSettings";
@@ -51,6 +51,7 @@ import type { PDFJsEngineRef } from "./engines/pdfjs-engine";
 import type { ReaderViewportHandle } from "./components/ReaderViewport";
 import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
 import { ReadAloudBar } from "./components/ReadAloudBar";
+import { TtsPanel } from "./components/TtsPanel";
 import { useTtsController } from "./hooks/useTtsController";
 import { useKokoroTts } from "./tts/useKokoroTts";
 
@@ -2064,7 +2065,7 @@ function BookReaderPage() {
                 )}
                 style={{
                     paddingTop: shouldShowReaderChrome
-                        ? `${toolbarHeight + (isTtsActive ? 40 : 0)}px`
+                        ? `${toolbarHeight}px`
                         : "max(env(safe-area-inset-top, 0px), var(--spacing-md, 16px))",
                     paddingBottom: shouldShowReaderChrome
                         ? undefined
@@ -2116,84 +2117,23 @@ function BookReaderPage() {
                 )}
             </div>
 
-            {/* TTS control bar — positioned below toolbar, same style as toolbar */}
-            {isTtsActive && !isPdfFormat && (
-                <div
-                    className={cn(
-                        "absolute left-0 right-0 z-[139]",
-                        "flex items-center gap-2 px-4 py-2",
-                        "bg-[var(--color-surface)]/95 backdrop-blur-xl border-b border-[var(--color-border-subtle)]",
-                        "transition-transform duration-300",
-                        shouldShowReaderChrome ? "translate-y-0" : "-translate-y-full",
-                    )}
-                    style={{ top: shouldShowReaderChrome ? toolbarHeight : 0 }}
-                >
-                    {/* Play / Pause / Resume */}
-                    {kokoroTts.isReady && (
-                        <div className="flex items-center gap-0.5">
-                            {kokoroTts.isSpeaking ? (
-                                <button
-                                    onClick={() => kokoroTts.pause()}
-                                    className="p-1.5 rounded-md text-[color:var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
-                                    aria-label="Pause"
-                                >
-                                    <Pause className="w-4 h-4" />
-                                </button>
-                            ) : kokoroTts.isPaused ? (
-                                <button
-                                    onClick={() => kokoroTts.resume()}
-                                    className="p-1.5 rounded-md text-[color:var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
-                                    aria-label="Resume"
-                                >
-                                    <Play className="w-4 h-4" />
-                                </button>
-                            ) : null}
-                        </div>
-                    )}
-
-                    {/* Status text */}
-                    <span className={cn(
-                        "text-xs min-w-0 truncate",
-                        kokoroTts.state.status === "playing" && "text-[color:var(--color-accent)] animate-pulse",
-                        kokoroTts.state.status === "paused" && "text-[color:var(--color-text-muted)]",
-                        kokoroTts.state.status === "loading" && "text-[color:var(--color-accent)] animate-pulse",
-                        kokoroTts.state.status === "error" && "text-[color:var(--color-error)]",
-                        kokoroTts.state.status === "ready" && "text-[color:var(--color-text-muted)]",
-                    )}>
-                        {kokoroTts.state.status === "playing" && "Speaking…"}
-                        {kokoroTts.state.status === "paused" && "Paused"}
-                        {kokoroTts.state.status === "loading" && "Loading speech engine…"}
-                        {kokoroTts.state.status === "error" && kokoroTts.state.message}
-                        {kokoroTts.state.status === "ready" && "Ready"}
-                    </span>
-
-                    {/* Voice selector */}
-                    {kokoroTts.voices.length > 0 && (
-                        <select
-                            value={kokoroTts.selectedVoice}
-                            onChange={(e) => kokoroTts.setVoice(e.target.value)}
-                            className="ml-auto text-xs px-2 py-1 max-w-[140px] truncate border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-primary)] rounded"
-                        >
-                            {kokoroTts.voices.map((group) => (
-                                <optgroup key={group.label} label={group.label}>
-                                    {group.voices.map((v) => (
-                                        <option key={v.id} value={v.id}>{v.name} ({v.gender})</option>
-                                    ))}
-                                </optgroup>
-                            ))}
-                        </select>
-                    )}
-
-                    {/* Close */}
-                    <button
-                        onClick={toggleTts}
-                        className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors shrink-0"
-                        aria-label="Stop TTS"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-            )}
+            {/* TTS Panel — overlay like ReaderSettings */}
+            <TtsPanel
+                visible={isTtsActive && !isPdfFormat && kokoroTts.isReady}
+                onClose={toggleTts}
+                state={kokoroTts.state}
+                voices={kokoroTts.voices}
+                selectedVoice={kokoroTts.selectedVoice}
+                isSpeaking={kokoroTts.isSpeaking}
+                isPaused={kokoroTts.isPaused}
+                isReady={kokoroTts.isReady}
+                onPlayPause={() => {
+                    if (kokoroTts.isSpeaking) kokoroTts.pause();
+                    else if (kokoroTts.isPaused) kokoroTts.resume();
+                }}
+                onStop={toggleTts}
+                onVoiceChange={kokoroTts.setVoice}
+            />
 
             {/* Read Aloud (browser speechSynthesis fallback) */}
             {isTtsActive && !isPdfFormat && !kokoroTts.isReady && typeof speechSynthesis !== "undefined" && (

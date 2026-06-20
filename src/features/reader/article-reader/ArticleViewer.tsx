@@ -40,7 +40,7 @@ import {
 } from "./index";
 import { buildArticleDescription, formatArticleDate, sanitizeArticleHtml } from "./utils";
 import { useKokoroTts } from "../tts/useKokoroTts";
-import { Pause, Play, X } from "lucide-react";
+import { TtsPanel } from "../components/TtsPanel";
 
 interface ArticleViewerProps {
     article: RssArticle | null;
@@ -1538,84 +1538,23 @@ export function ArticleViewer({
 
                 <Backdrop visible={activePanel !== null && !usesSharedPanelBackdrop} onClick={closePanel} blur />
 
-                {/* TTS control bar — positioned below toolbar */}
-                {ttsEnabled && (kokoroTts.isSpeaking || kokoroTts.isPaused || kokoroTts.isReady || kokoroTts.state.status === "loading" || kokoroTts.state.status === "error") && (
-                    <div
-                        className={cn(
-                            "absolute left-0 right-0 z-40",
-                            "flex items-center gap-2 px-4 py-2",
-                            "bg-[var(--color-surface)]/95 backdrop-blur-xl border-b border-[var(--color-border-subtle)]",
-                            "transition-transform duration-300",
-                            shouldShowReaderChrome ? "translate-y-0" : "-translate-y-full",
-                        )}
-                        style={{ top: shouldShowReaderChrome ? toolbarHeight : 0 }}
-                    >
-                        {/* Play / Pause / Resume */}
-                        {kokoroTts.isReady && (
-                            <div className="flex items-center gap-0.5">
-                                {kokoroTts.isSpeaking ? (
-                                    <button
-                                        onClick={() => kokoroTts.pause()}
-                                        className="p-1.5 rounded-md text-[color:var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
-                                        aria-label="Pause"
-                                    >
-                                        <Pause className="w-4 h-4" />
-                                    </button>
-                                ) : kokoroTts.isPaused ? (
-                                    <button
-                                        onClick={() => kokoroTts.resume()}
-                                        className="p-1.5 rounded-md text-[color:var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
-                                        aria-label="Resume"
-                                    >
-                                        <Play className="w-4 h-4" />
-                                    </button>
-                                ) : null}
-                            </div>
-                        )}
-
-                        {/* Status text */}
-                        <span className={cn(
-                            "text-xs min-w-0 truncate",
-                            kokoroTts.state.status === "playing" && "text-[color:var(--color-accent)] animate-pulse",
-                            kokoroTts.state.status === "paused" && "text-[color:var(--color-text-muted)]",
-                            kokoroTts.state.status === "loading" && "text-[color:var(--color-accent)] animate-pulse",
-                            kokoroTts.state.status === "error" && "text-[color:var(--color-error)]",
-                            kokoroTts.state.status === "ready" && "text-[color:var(--color-text-muted)]",
-                        )}>
-                            {kokoroTts.state.status === "playing" && "Speaking…"}
-                            {kokoroTts.state.status === "paused" && "Paused"}
-                            {kokoroTts.state.status === "loading" && "Loading speech engine…"}
-                            {kokoroTts.state.status === "error" && kokoroTts.state.message}
-                            {kokoroTts.state.status === "ready" && "Ready"}
-                        </span>
-
-                        {/* Voice selector */}
-                        {kokoroTts.voices.length > 0 && (
-                            <select
-                                value={kokoroTts.selectedVoice}
-                                onChange={(e) => kokoroTts.setVoice(e.target.value)}
-                                className="ml-auto text-xs px-2 py-1 max-w-[140px] truncate border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-primary)] rounded"
-                            >
-                                {kokoroTts.voices.map((group) => (
-                                    <optgroup key={group.label} label={group.label}>
-                                        {group.voices.map((v) => (
-                                            <option key={v.id} value={v.id}>{v.name} ({v.gender})</option>
-                                        ))}
-                                    </optgroup>
-                                ))}
-                            </select>
-                        )}
-
-                        {/* Close */}
-                        <button
-                            onClick={handleToggleTts}
-                            className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors shrink-0"
-                            aria-label="Stop TTS"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-                )}
+                {/* TTS Panel — overlay like ReaderSettings */}
+                <TtsPanel
+                    visible={ttsEnabled && (kokoroTts.isSpeaking || kokoroTts.isPaused || kokoroTts.isReady || kokoroTts.state.status === "loading" || kokoroTts.state.status === "error")}
+                    onClose={handleToggleTts}
+                    state={kokoroTts.state}
+                    voices={kokoroTts.voices}
+                    selectedVoice={kokoroTts.selectedVoice}
+                    isSpeaking={kokoroTts.isSpeaking}
+                    isPaused={kokoroTts.isPaused}
+                    isReady={kokoroTts.isReady}
+                    onPlayPause={() => {
+                        if (kokoroTts.isSpeaking) kokoroTts.pause();
+                        else if (kokoroTts.isPaused) kokoroTts.resume();
+                    }}
+                    onStop={handleToggleTts}
+                    onVoiceChange={kokoroTts.setVoice}
+                />
 
                 <TableOfContents
                     toc={articleToc}
@@ -1657,7 +1596,7 @@ export function ArticleViewer({
 
                 <div
                     className="flex flex-1 min-h-0 overflow-hidden"
-                    style={{ paddingTop: shouldShowReaderChrome ? toolbarHeight + (kokoroTts.isSpeaking || kokoroTts.isPaused || kokoroTts.state.status === "loading" || kokoroTts.state.status === "ready" || kokoroTts.state.status === "error" ? 40 : 0) : 0 }}
+                    style={{ paddingTop: shouldShowReaderChrome ? toolbarHeight : 0 }}
                 >
                     <ArticleReaderContent
                         article={article}
