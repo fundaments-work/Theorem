@@ -2064,7 +2064,7 @@ function BookReaderPage() {
                 )}
                 style={{
                     paddingTop: shouldShowReaderChrome
-                        ? `${toolbarHeight}px`
+                        ? `${toolbarHeight + (isTtsActive ? 40 : 0)}px`
                         : "max(env(safe-area-inset-top, 0px), var(--spacing-md, 16px))",
                     paddingBottom: shouldShowReaderChrome
                         ? undefined
@@ -2116,17 +2116,19 @@ function BookReaderPage() {
                 )}
             </div>
 
-            {/* TTS floating control panel */}
+            {/* TTS control bar — positioned below toolbar, same style as toolbar */}
             {isTtsActive && !isPdfFormat && (
                 <div
                     className={cn(
-                        "absolute bottom-0 left-0 right-0 z-[var(--z-tooltip)]",
-                        "flex items-center gap-2 px-4 py-2.5",
-                        "bg-[var(--color-surface)]/95 backdrop-blur-xl border-t border-[var(--color-border-subtle)]",
-                        "shadow-[0_-4px_24px_rgba(0,0,0,0.12)]",
+                        "absolute left-0 right-0 z-[139]",
+                        "flex items-center gap-2 px-4 py-2",
+                        "bg-[var(--color-surface)]/95 backdrop-blur-xl border-b border-[var(--color-border-subtle)]",
+                        "transition-transform duration-300",
+                        shouldShowReaderChrome ? "translate-y-0" : "-translate-y-full",
                     )}
+                    style={{ top: shouldShowReaderChrome ? toolbarHeight : 0 }}
                 >
-                    {/* Play / Pause / Stop */}
+                    {/* Play / Pause / Resume */}
                     {kokoroTts.isReady && (
                         <div className="flex items-center gap-0.5">
                             {kokoroTts.isSpeaking ? (
@@ -2165,7 +2167,7 @@ function BookReaderPage() {
                         {kokoroTts.state.status === "ready" && "Ready"}
                     </span>
 
-                    {/* Voice selector — shown after model is loaded */}
+                    {/* Voice selector */}
                     {kokoroTts.voices.length > 0 && (
                         <select
                             value={kokoroTts.selectedVoice}
@@ -2182,7 +2184,7 @@ function BookReaderPage() {
                         </select>
                     )}
 
-                    {/* Close button */}
+                    {/* Close */}
                     <button
                         onClick={toggleTts}
                         className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors shrink-0"

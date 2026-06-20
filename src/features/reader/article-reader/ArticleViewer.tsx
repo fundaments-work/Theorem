@@ -1538,15 +1538,17 @@ export function ArticleViewer({
 
                 <Backdrop visible={activePanel !== null && !usesSharedPanelBackdrop} onClick={closePanel} blur />
 
-                {/* TTS floating control panel */}
+                {/* TTS control bar — positioned below toolbar */}
                 {ttsEnabled && (kokoroTts.isSpeaking || kokoroTts.isPaused || kokoroTts.isReady || kokoroTts.state.status === "loading" || kokoroTts.state.status === "error") && (
                     <div
                         className={cn(
-                            "absolute bottom-0 left-0 right-0 z-40",
-                            "flex items-center gap-2 px-4 py-2.5",
-                            "bg-[var(--color-surface)]/95 backdrop-blur-xl border-t border-[var(--color-border-subtle)]",
-                            "shadow-[0_-4px_24px_rgba(0,0,0,0.12)]",
+                            "absolute left-0 right-0 z-40",
+                            "flex items-center gap-2 px-4 py-2",
+                            "bg-[var(--color-surface)]/95 backdrop-blur-xl border-b border-[var(--color-border-subtle)]",
+                            "transition-transform duration-300",
+                            shouldShowReaderChrome ? "translate-y-0" : "-translate-y-full",
                         )}
+                        style={{ top: shouldShowReaderChrome ? toolbarHeight : 0 }}
                     >
                         {/* Play / Pause / Resume */}
                         {kokoroTts.isReady && (
@@ -1604,7 +1606,7 @@ export function ArticleViewer({
                             </select>
                         )}
 
-                        {/* Close button */}
+                        {/* Close */}
                         <button
                             onClick={handleToggleTts}
                             className="p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors shrink-0"
@@ -1655,7 +1657,7 @@ export function ArticleViewer({
 
                 <div
                     className="flex flex-1 min-h-0 overflow-hidden"
-                    style={{ paddingTop: shouldShowReaderChrome ? toolbarHeight : 0 }}
+                    style={{ paddingTop: shouldShowReaderChrome ? toolbarHeight + (kokoroTts.isSpeaking || kokoroTts.isPaused || kokoroTts.state.status === "loading" || kokoroTts.state.status === "ready" || kokoroTts.state.status === "error" ? 40 : 0) : 0 }}
                 >
                     <ArticleReaderContent
                         article={article}

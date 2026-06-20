@@ -325,7 +325,7 @@ pub async fn tts_load(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn tts_play(
+pub fn tts_play(
     app: AppHandle,
     text: String,
     voice: String,
@@ -344,7 +344,10 @@ pub async fn tts_play(
     let app_clone = app.clone();
     let voice_clone = voice.clone();
 
-    tokio::task::spawn_blocking(move || {
+    // Spawn speech in a dedicated OS thread — returns immediately.
+    // The thread runs independently; stop/pause/resume commands work
+    // by checking GENERATION or mutating the Player through PLAYBACK.
+    std::thread::spawn(move || {
         let _ = app_clone.emit(
             "tts-state",
             TtsStateEvent {
@@ -354,7 +357,6 @@ pub async fn tts_play(
             },
         );
 
-        // Get the mixer from the long-lived sink
         let mixer = {
             let guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
             guard
@@ -376,7 +378,6 @@ pub async fn tts_play(
         };
 
         let player = rodio::Player::connect_new(&mixer);
-        // Start paused until first audio is appended
         player.pause();
 
         {
@@ -400,7 +401,6 @@ pub async fn tts_play(
         let total_chunks = chunks.len();
 
         for (i, chunk) in chunks.iter().enumerate() {
-            // Check if this generation is still active
             if GENERATION.load(Ordering::SeqCst) != generation {
                 return;
             }
@@ -441,12 +441,10 @@ pub async fn tts_play(
                 }
             };
 
-            // Check again before appending
             if GENERATION.load(Ordering::SeqCst) != generation {
                 return;
             }
 
-            // Append to player
             {
                 let pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(pb) = pb.as_ref() {
@@ -458,7 +456,6 @@ pub async fn tts_play(
                         );
                         pb.player.append(buf);
 
-                        // Start playback on first chunk
                         if i == 0 {
                             pb.player.play();
                         }
@@ -466,7 +463,6 @@ pub async fn tts_play(
                 }
             }
 
-            // Emit progress
             let _ = app_clone.emit(
                 "tts-progress",
                 serde_json::json!({
@@ -494,7 +490,6 @@ pub async fn tts_play(
                 thread::sleep(Duration::from_millis(50));
             }
 
-            // Clean up
             let mut pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
             if pb.as_ref().map_or(false, |p| p.generation == generation) {
                 *pb = None;
@@ -509,9 +504,7 @@ pub async fn tts_play(
                 message: None,
             },
         );
-    })
-    .await
-    .map_err(|e| format!("Spawn error: {e}"))?;
+    });
 
     Ok(())
 }
