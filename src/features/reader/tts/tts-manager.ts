@@ -85,7 +85,8 @@ function chunkSentences(sentences: string[], maxChars: number): string[] {
     const chunks: string[] = [];
     let current = "";
     for (const sentence of sentences) {
-        if (current.length + sentence.length > maxChars && current) {
+        const limit = chunks.length === 0 ? FIRST_CHUNK_CHARS : maxChars;
+        if (current.length + sentence.length > limit && current) {
             chunks.push(current);
             current = "";
         }
@@ -113,13 +114,14 @@ class TtsManager {
     private _nextChunkTime = 0;
 
     // Sentence tracking for skip/progress
+    private _fullText = "";
     private _sentences: string[] = [];
     private _currentSentence = 0;
     private _chunks: string[] = [];
     private _progress: TtsProgress = { chunk: 0, total: 0 };
 
     // Cancellation flag
-    private _cancelled = false;
+    private _playbackId = 0;
 
     get state(): TtsState {
         return this._state;
@@ -329,13 +331,17 @@ class TtsManager {
             return;
         }
 
+        // Increment playback ID
+        this._playbackId++;
+        const currentPlaybackId = this._playbackId;
+
+        this._fullText = trimmed;
         // Split text into sentences for skip tracking, then into chunks for synthesis
         this._sentences = splitSentences(trimmed);
         this._currentSentence = Math.min(startSentence, this._sentences.length - 1);
         const remainingText = this._sentences.slice(this._currentSentence).join(" ");
         this._chunks = chunkSentences(splitSentences(remainingText), CHUNK_CHARS);
         this._progress = { chunk: 0, total: this._chunks.length };
-        this._cancelled = false;
 
         if (this._chunks.length === 0) {
             console.warn("[TTS] No chunks to synthesize");
@@ -355,32 +361,33 @@ class TtsManager {
         console.log(`[TTS] Starting playback: ${this._chunks.length} chunks, ${trimmed.length} chars`);
 
         // Start the streaming synthesis + playback loop
-        this._streamPlayback().catch((err) => {
+        this._streamPlayback(currentPlaybackId).catch((err) => {
             console.error("[TTS] Streaming playback error:", err);
             this.emit({ status: "error", message: String(err) });
         });
     }
 
     /** Streaming synthesis + playback loop. */
-    private async _streamPlayback(): Promise<void> {
+    private async _streamPlayback(playbackId: number): Promise<void> {
         const ctx = this._audioCtx!;
         this._nextChunkTime = ctx.currentTime + 0.05; // small buffer before first audio
         let chunkIdx = 0;
 
-        // Synthesize first chunk with shorter size for faster first response
-        const firstChunk = this._chunks[0].slice(0, FIRST_CHUNK_CHARS);
+        // Synthesize first chunk
+        const firstChunk = this._chunks[0];
         console.log(`[TTS] Synthesizing chunk 1/${this._chunks.length} (${firstChunk.length} chars)...`);
 
         let samples: number[];
         try {
             samples = await this._synthesizeChunk(firstChunk);
         } catch (err) {
+            if (this._playbackId !== playbackId) return;
             console.error("[TTS] First chunk synthesis failed:", err);
             this.emit({ status: "error", message: String(err) });
             return;
         }
 
-        if (this._cancelled) return;
+        if (this._playbackId !== playbackId) return;
 
         const buffer = this._createAudioBuffer(samples);
         this._scheduleBuffer(buffer, this._nextChunkTime);
@@ -393,7 +400,7 @@ class TtsManager {
 
         // Synthesize remaining chunks while previous ones play
         while (chunkIdx < this._chunks.length) {
-            if (this._cancelled) return;
+            if (this._playbackId !== playbackId) return;
 
             const chunk = this._chunks[chunkIdx];
             console.log(`[TTS] Synthesizing chunk ${chunkIdx + 1}/${this._chunks.length} (${chunk.length} chars)...`);
@@ -401,13 +408,14 @@ class TtsManager {
             try {
                 samples = await this._synthesizeChunk(chunk);
             } catch (err) {
+                if (this._playbackId !== playbackId) return;
                 console.error(`[TTS] Chunk ${chunkIdx + 1} synthesis failed:`, err);
                 // Don't stop on single chunk failure — skip and continue
                 chunkIdx++;
                 continue;
             }
 
-            if (this._cancelled) return;
+            if (this._playbackId !== playbackId) return;
 
             if (samples.length === 0) {
                 console.warn(`[TTS] Chunk ${chunkIdx + 1} produced empty samples, skipping`);
@@ -436,7 +444,7 @@ class TtsManager {
 
         await new Promise<void>((resolve) => {
             const check = () => {
-                if (this._cancelled) {
+                if (this._playbackId !== playbackId) {
                     resolve();
                     return;
                 }
@@ -449,7 +457,7 @@ class TtsManager {
             check();
         });
 
-        if (this._cancelled) return;
+        if (this._playbackId !== playbackId) return;
 
         // Playback finished
         this._progress = { chunk: 0, total: 0 };
@@ -460,17 +468,13 @@ class TtsManager {
     /** Skip to the next sentence. */
     skipForward(): void {
         if (this._currentSentence + 1 >= this._sentences.length) return;
-        this._currentSentence++;
-        const remaining = this._sentences.slice(this._currentSentence).join(" ");
-        this.speak(remaining, 0);
+        this.speak(this._fullText, this._currentSentence + 1);
     }
 
     /** Skip to the previous sentence. */
     skipBack(): void {
         if (this._currentSentence === 0) return;
-        this._currentSentence--;
-        const remaining = this._sentences.slice(this._currentSentence).join(" ");
-        this.speak(remaining, 0);
+        this.speak(this._fullText, this._currentSentence - 1);
     }
 
     pause(): void {
@@ -490,7 +494,7 @@ class TtsManager {
     }
 
     stop(): void {
-        this._cancelled = true;
+        this._playbackId++;
         this._sentences = [];
         this._currentSentence = 0;
         this._chunks = [];
