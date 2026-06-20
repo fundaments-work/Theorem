@@ -277,10 +277,32 @@ pub async fn kokoro_generate(
         return Err(format!("Voice file {voice} too small"));
     }
 
-    let style: Vec<f32> = voice_bytes
+    let all_floats: Vec<f32> = voice_bytes
         .chunks_exact(4)
         .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
         .collect();
+
+    // Voice files contain 510 frames of 256-dim style vectors.
+    // The ONNX model expects a single 256-dim style — average across all frames.
+    let n_frames = all_floats.len() / 256;
+    if n_frames == 0 || all_floats.len() % 256 != 0 {
+        return Err(format!(
+            "Voice file {voice} has {} floats (not a multiple of 256)",
+            all_floats.len()
+        ));
+    }
+
+    let mut style = vec![0.0f32; 256];
+    for frame in 0..n_frames {
+        let off = frame * 256;
+        for d in 0..256 {
+            style[d] += all_floats[off + d];
+        }
+    }
+    let inv_n = 1.0 / n_frames as f32;
+    for s in &mut style {
+        *s *= inv_n;
+    }
 
     tokio::task::spawn_blocking(move || run_inference(&padded, &style, speed))
         .await
