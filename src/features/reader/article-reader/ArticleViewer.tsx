@@ -1567,7 +1567,7 @@ export function ArticleViewer({
                         )}
                         {kokoroTts.state.status === "downloading" && (
                             <span className="text-xs text-[color:var(--color-accent)] animate-pulse">
-                                Downloading Kokoro TTS model (~92 MB)…
+                                Downloading Kokoro TTS model (~115 MB)…
                             </span>
                         )}
                         {kokoroTts.state.status === "loading" && (

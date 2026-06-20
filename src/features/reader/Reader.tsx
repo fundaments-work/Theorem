@@ -2143,7 +2143,7 @@ function BookReaderPage() {
                     )}
                     {kokoroTts.state.status === "downloading" && (
                         <span className="text-xs text-[color:var(--color-accent)] animate-pulse">
-                            Downloading Kokoro TTS model (~92 MB)…
+                            Downloading Kokoro TTS model (~115 MB)…
                         </span>
                     )}
                     {kokoroTts.state.status === "loading" && (
@@ -2157,8 +2157,8 @@ function BookReaderPage() {
                 </div>
             )}
 
-            {/* Read Aloud Bar — only for non-PDF */}
-            {isTtsActive && !isPdfFormat && (
+            {/* Read Aloud (Foliate speechSynthesis) — hidden when Kokoro is handling TTS */}
+            {isTtsActive && !isPdfFormat && !kokoroTts.isReady && typeof speechSynthesis !== "undefined" && (
                 <ReadAloudBar
                     controller={ttsController}
                     onClose={toggleTts}
