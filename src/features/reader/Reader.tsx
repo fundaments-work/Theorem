@@ -1595,12 +1595,9 @@ function BookReaderPage() {
             const result = await lookupTerm(term, "en");
             setDictionaryLookupResult(result);
             if (!result) {
-                if (
-                    settings.vocabulary.dictionaryMode === "offline"
-                    && installedDictionaryCount === 0
-                ) {
+                if (installedDictionaryCount === 0) {
                     setDictionaryLookupError(
-                        "Offline mode is enabled but no dictionaries are installed. Import a StarDict dictionary in Settings > Dictionary.",
+                        "No dictionaries installed. Download one from Settings > Dictionary to look up words offline.",
                     );
                 } else {
                     setDictionaryLookupError("No dictionary result found for this selection.");
@@ -1608,7 +1605,7 @@ function BookReaderPage() {
             }
         } catch (error) {
             console.error("[Reader] Dictionary lookup failed:", error);
-            setDictionaryLookupError("Dictionary lookup failed. Try again when online or install offline dictionaries.");
+            setDictionaryLookupError("Dictionary lookup failed. Install a dictionary in Settings > Dictionary.");
         } finally {
             setDictionaryLookupLoading(false);
         }
@@ -1616,7 +1613,6 @@ function BookReaderPage() {
         installedDictionaryCount,
         lookupTerm,
         selectedText,
-        settings.vocabulary.dictionaryMode,
     ]);
 
     const handleSaveDictionaryResult = useCallback(() => {

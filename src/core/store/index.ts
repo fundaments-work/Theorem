@@ -64,8 +64,6 @@ const defaultReaderSettings: ReaderSettings = {
 // Default app settings
 const defaultVocabularySettings: VocabularySettings = {
     vocabularyEnabled: true,
-    dictionaryMode: "auto",
-    preferredProviders: ["free_dictionary_api", "wiktionary", "stardict"],
     showPronunciation: true,
     playPronunciationAudio: false,
 };
@@ -1890,13 +1888,11 @@ export const useVocabularyStore = create<VocabularyStore>()(
                     return cached;
                 }
 
-                const settings = useSettingsStore.getState().settings.vocabulary;
                 const installedIds = get().installedDictionaries.map((dictionary) => dictionary.id);
 
                 const result = await lookupDictionaryTerm({
                     term,
                     language,
-                    mode: settings.dictionaryMode,
                     installedDictionaryIds: installedIds,
                 });
 

@@ -778,18 +778,12 @@ export function SettingsPage() {
                         icon={<Globe className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="Dictionary Mode"
-                            description="How to fetch word definitions"
+                            label="Dictionary Source"
+                            description="Uses installed StarDict dictionaries for offline lookup"
                         >
-                            <ButtonSelect
-                                options={[
-                                    { value: "online", label: "Online" },
-                                    { value: "offline", label: "Offline" },
-                                    { value: "auto", label: "Auto" },
-                                ]}
-                                value={settings.vocabulary.dictionaryMode}
-                                onChange={(value) => updateVocabularySettings({ dictionaryMode: value })}
-                            />
+                            <span className="text-sm text-[color:var(--color-text-muted)] px-3 py-1.5 bg-[var(--color-surface-muted)]">
+                                StarDict (offline)
+                            </span>
                         </SettingRow>
 
                         <SettingRow

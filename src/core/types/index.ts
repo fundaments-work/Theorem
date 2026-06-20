@@ -258,14 +258,10 @@ export interface PairingQrData {
 
 export type DeviceSyncStatus = "idle" | "hosting" | "pairing" | "connecting" | "syncing" | "synced" | "error";
 
-export type DictionaryMode = "online" | "offline" | "auto";
-
-export type DictionaryProvider = "free_dictionary_api" | "wiktionary" | "stardict";
+export type DictionaryProvider = "stardict";
 
 export interface VocabularySettings {
     vocabularyEnabled: boolean;
-    dictionaryMode: DictionaryMode;
-    preferredProviders: DictionaryProvider[];
     showPronunciation: boolean;
     playPronunciationAudio: boolean;
 }
