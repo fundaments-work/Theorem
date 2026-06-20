@@ -511,6 +511,8 @@ export function ArticleViewer({
 
     const [activePanel, setActivePanel] = useState<ArticleReaderPanel>(null);
     const [showTtsSettings, setShowTtsSettings] = useState(false);
+    const [isTtsActive, setIsTtsActive] = useState(false);
+    const prevTtsStatusRef = useRef<string>("idle");
     const [showChrome, setShowChrome] = useState(false);
     const [readingProgress, setReadingProgress] = useState(0);
     const [headings, setHeadings] = useState<ArticleHeading[]>([]);
@@ -621,6 +623,21 @@ export function ArticleViewer({
         };
     }, [article?.id, isOpen]);
 
+    // Preload TTS model in background when article viewer opens
+    useEffect(() => {
+        if (!ttsEnabled || !isOpen) return;
+        kokoroTts.prepare().catch(() => {});
+    }, [ttsEnabled, isOpen]);
+
+    // Stop TTS when switching to a different article
+    useEffect(() => {
+        if (!article?.id) return;
+        if (kokoroTts.isSpeaking || kokoroTts.isPaused) {
+            kokoroTts.stop();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [article?.id]);
+
     useEffect(() => {
         if (!isOpen) {
             return;
@@ -682,17 +699,42 @@ export function ArticleViewer({
     }, [isFullscreen, updateReaderSetting]);
 
     const handleToggleTts = useCallback(() => {
-        if (kokoroTts.isSpeaking || kokoroTts.isPaused) {
+        if (isTtsActive) {
             kokoroTts.stop();
+            setIsTtsActive(false);
             setShowTtsSettings(false);
             return;
         }
         const text = contentRef.current?.textContent?.trim();
         if (!text) return;
-        kokoroTts.prepare().then(() => {
-            if (text) kokoroTts.speak(text);
-        }).catch(() => {});
-    }, [kokoroTts]);
+        setIsTtsActive(true);
+    }, [isTtsActive, kokoroTts]);
+
+    // Start speaking when TTS is toggled on
+    useEffect(() => {
+        if (!isTtsActive || !ttsEnabled) return;
+        const text = contentRef.current?.textContent?.trim();
+        if (!text) {
+            setIsTtsActive(false);
+            return;
+        }
+        if (!kokoroTts.isSpeaking && !kokoroTts.isPaused) {
+            kokoroTts.speak(text).catch(() => {});
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isTtsActive, ttsEnabled]);
+
+    // Auto-hide TTS bar when playback finishes naturally
+    useEffect(() => {
+        if (!isTtsActive) return;
+        const prev = prevTtsStatusRef.current;
+        const curr = kokoroTts.state.status;
+        prevTtsStatusRef.current = curr;
+        if ((prev === "playing" || prev === "paused") && (curr === "ready" || curr === "error")) {
+            setIsTtsActive(false);
+            setShowTtsSettings(false);
+        }
+    }, [kokoroTts.state.status]);
 
     const handleArticleExitFullscreen = useCallback(() => {
         updateReaderSetting({ fullscreen: false });
@@ -1535,7 +1577,7 @@ export function ArticleViewer({
                         activePanel={activePanel}
                         fullscreen={isFullscreen}
                         onToggleFullscreen={handleToggleFullscreen}
-                        isTtsActive={ttsEnabled ? kokoroTts.isSpeaking : undefined}
+                        isTtsActive={ttsEnabled ? isTtsActive : undefined}
                         onToggleTts={ttsEnabled ? handleToggleTts : undefined}
                     />
                 </div>
@@ -1543,7 +1585,7 @@ export function ArticleViewer({
                 <Backdrop visible={activePanel !== null && !usesSharedPanelBackdrop} onClick={closePanel} blur />
 
                 {/* TTS — audiobook-style bottom player bar */}
-                {ttsEnabled && kokoroTts.state.status !== "idle" && (
+                {ttsEnabled && isTtsActive && (
                     <div
                         className={cn(
                             "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",

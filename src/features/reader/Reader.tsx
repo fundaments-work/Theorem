@@ -162,6 +162,7 @@ function BookReaderPage() {
     const pdfReaderRef = useRef<PDFJsEngineRef>(null);
     const loadedBookIdRef = useRef<string | null>(null);
     const toolbarContainerRef = useRef<HTMLDivElement>(null);
+    const prevTtsStatusRef = useRef<string>("idle");
     const toolbarHeight = useToolbarHeight(toolbarContainerRef, {
         defaultHeight: 56,
         minHeight: 44,
@@ -255,6 +256,25 @@ function BookReaderPage() {
         setIsTtsActive(true);
     }, [settings.readerSettings.ttsEnabled, kokoroTts.isSpeaking, kokoroTts.isPaused, kokoroTts.stop]);
 
+    // Preload TTS model in background when reader opens (if TTS is enabled)
+    useEffect(() => {
+        if (!settings.readerSettings.ttsEnabled) return;
+        // Fire-and-forget: start loading so it's ready when user clicks
+        kokoroTts.prepare().catch(() => {});
+    }, [settings.readerSettings.ttsEnabled]);
+
+    // Stop TTS when user navigates to a different section/page
+    // — the text being read no longer matches visible content
+    useEffect(() => {
+        if (!isTtsActive) return;
+        if (kokoroTts.isSpeaking || kokoroTts.isPaused) {
+            kokoroTts.stop();
+            setIsTtsActive(false);
+            setShowTtsSettings(false);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location?.cfi, location?.percentage, pdfCurrentPage]);
+
     // When TTS is toggled, start/stop Kokoro with current section text
     useEffect(() => {
         if (!settings.readerSettings.ttsEnabled) return;
@@ -262,14 +282,26 @@ function BookReaderPage() {
         if (isTtsActive) {
             const text = getCurrentSectionText();
             if (text && !kokoroTts.isSpeaking && !kokoroTts.isPaused) {
-                kokoroTts.prepare().then(() => {
-                    kokoroTts.speak(text);
-                }).catch(() => {});
+                // Model is preloaded in background; speak immediately if ready
+                kokoroTts.speak(text).catch(() => {});
             }
         } else {
             kokoroTts.stop();
         }
     }, [isTtsActive, settings.readerSettings.ttsEnabled]);
+
+    // Auto-hide TTS bar when playback finishes naturally
+    useEffect(() => {
+        if (!isTtsActive) return;
+        const prev = prevTtsStatusRef.current;
+        const curr = kokoroTts.state.status;
+        prevTtsStatusRef.current = curr;
+        // Detect transition from playing/paused -> ready (finished) or error
+        if ((prev === "playing" || prev === "paused") && (curr === "ready" || curr === "error")) {
+            setIsTtsActive(false);
+            setShowTtsSettings(false);
+        }
+    }, [kokoroTts.state.status]);
 
     // Get current book format
     const currentBook = currentBookId ? getBook(currentBookId) : null;
