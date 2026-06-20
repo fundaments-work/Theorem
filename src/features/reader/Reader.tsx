@@ -32,7 +32,7 @@ import {
     type ReaderSettings as ReaderSettingsState,
     type TocItem,
 } from "../../core";
-import { List } from "lucide-react";
+import { List, Loader2, X } from "lucide-react";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import { TableOfContents } from "./components/TableOfContents";
 import { ReaderSettings } from "./components/ReaderSettings";
@@ -52,6 +52,7 @@ import type { ReaderViewportHandle } from "./components/ReaderViewport";
 import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
 import { ReadAloudBar } from "./components/ReadAloudBar";
 import { TtsPanel } from "./components/TtsPanel";
+import { TtsPlayerBar } from "./components/TtsPlayerBar";
 import { useTtsController } from "./hooks/useTtsController";
 import { useKokoroTts } from "./tts/useKokoroTts";
 
@@ -206,6 +207,7 @@ function BookReaderPage() {
     ));
     const [showToolbar, setShowToolbar] = useState(true);
     const [isTtsActive, setIsTtsActive] = useState(false);
+    const [showTtsSettings, setShowTtsSettings] = useState(false);
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | 'menu' | null;
     const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -247,6 +249,7 @@ function BookReaderPage() {
         if (kokoroTts.isSpeaking || kokoroTts.isPaused) {
             kokoroTts.stop();
             setIsTtsActive(false);
+            setShowTtsSettings(false);
             return;
         }
         setIsTtsActive(true);
@@ -2117,22 +2120,77 @@ function BookReaderPage() {
                 )}
             </div>
 
-            {/* TTS Panel — overlay like ReaderSettings */}
+            {/* TTS — audiobook-style bottom player bar + voice settings overlay */}
+            {isTtsActive && !isPdfFormat && kokoroTts.isReady && (
+                <div
+                    className={cn(
+                        "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",
+                        shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
+                    )}
+                >
+                    <TtsPlayerBar
+                        state={kokoroTts.state}
+                        progress={kokoroTts.progress}
+                        isSpeaking={kokoroTts.isSpeaking}
+                        isReady={kokoroTts.isReady}
+                        isLoading={kokoroTts.isLoading}
+                        speed={kokoroTts.speed}
+                        onPlayPause={() => {
+                            if (kokoroTts.isSpeaking) kokoroTts.pause();
+                            else if (kokoroTts.isPaused) kokoroTts.resume();
+                        }}
+                        onStop={toggleTts}
+                        onSkipForward={kokoroTts.skipForward}
+                        onSkipBack={kokoroTts.skipBack}
+                        onSpeedCycle={() => {
+                            const speeds = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+                            const idx = speeds.indexOf(kokoroTts.speed);
+                            kokoroTts.setSpeed(speeds[(idx + 1) % speeds.length]);
+                        }}
+                        onOpenSettings={() => setShowTtsSettings(true)}
+                    />
+                </div>
+            )}
+
+            {/* TTS loading state — minimal bar while engine loads */}
+            {isTtsActive && !isPdfFormat && !kokoroTts.isReady && (
+                <div
+                    className={cn(
+                        "fixed bottom-0 left-0 right-0 z-40 flex items-center justify-center gap-2 py-2.5 px-4",
+                        "bg-[var(--color-surface)] border-t border-[var(--color-border)]",
+                        "transition-transform duration-300",
+                        shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
+                    )}
+                >
+                    {kokoroTts.state.status === "error" ? (
+                        <span className="text-xs text-[color:var(--color-error)] truncate">
+                            {(kokoroTts.state as { status: "error"; message: string }).message}
+                        </span>
+                    ) : (
+                        <>
+                            <Loader2 className="w-4 h-4 text-[color:var(--color-accent)] animate-spin" />
+                            <span className="text-xs text-[color:var(--color-text-muted)] animate-pulse">
+                                Loading speech engine…
+                            </span>
+                        </>
+                    )}
+                    <button
+                        onClick={toggleTts}
+                        className="ml-auto p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors"
+                        aria-label="Cancel"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+
+            {/* TTS voice settings overlay — opened from gear icon */}
             <TtsPanel
-                visible={isTtsActive && !isPdfFormat}
-                onClose={toggleTts}
-                state={kokoroTts.state}
+                visible={showTtsSettings}
+                onClose={() => setShowTtsSettings(false)}
                 voices={kokoroTts.voices}
                 selectedVoice={kokoroTts.selectedVoice}
                 speed={kokoroTts.speed}
-                isSpeaking={kokoroTts.isSpeaking}
-                isPaused={kokoroTts.isPaused}
-                isReady={kokoroTts.isReady}
-                onPlayPause={() => {
-                    if (kokoroTts.isSpeaking) kokoroTts.pause();
-                    else if (kokoroTts.isPaused) kokoroTts.resume();
-                }}
-                onStop={toggleTts}
                 onVoiceChange={kokoroTts.setVoice}
                 onSpeedChange={kokoroTts.setSpeed}
             />

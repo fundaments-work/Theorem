@@ -499,7 +499,7 @@ pub fn tts_play(
         let _ = app_clone.emit(
             "tts-state",
             TtsStateEvent {
-                status: "ready".into(),
+                status: "finished".into(),
                 voices: Some(list_voice_groups()),
                 message: None,
             },

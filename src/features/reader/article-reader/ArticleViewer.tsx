@@ -41,6 +41,8 @@ import {
 import { buildArticleDescription, formatArticleDate, sanitizeArticleHtml } from "./utils";
 import { useKokoroTts } from "../tts/useKokoroTts";
 import { TtsPanel } from "../components/TtsPanel";
+import { TtsPlayerBar } from "../components/TtsPlayerBar";
+import { Loader2, X } from "lucide-react";
 
 interface ArticleViewerProps {
     article: RssArticle | null;
@@ -508,6 +510,7 @@ export function ArticleViewer({
     const ttsEnabled = globalReaderSettings.ttsEnabled;
 
     const [activePanel, setActivePanel] = useState<ArticleReaderPanel>(null);
+    const [showTtsSettings, setShowTtsSettings] = useState(false);
     const [showChrome, setShowChrome] = useState(false);
     const [readingProgress, setReadingProgress] = useState(0);
     const [headings, setHeadings] = useState<ArticleHeading[]>([]);
@@ -681,6 +684,7 @@ export function ArticleViewer({
     const handleToggleTts = useCallback(() => {
         if (kokoroTts.isSpeaking || kokoroTts.isPaused) {
             kokoroTts.stop();
+            setShowTtsSettings(false);
             return;
         }
         const text = contentRef.current?.textContent?.trim();
@@ -1538,22 +1542,77 @@ export function ArticleViewer({
 
                 <Backdrop visible={activePanel !== null && !usesSharedPanelBackdrop} onClick={closePanel} blur />
 
-                {/* TTS Panel — overlay like ReaderSettings */}
+                {/* TTS — audiobook-style bottom player bar */}
+                {ttsEnabled && kokoroTts.state.status !== "idle" && kokoroTts.isReady && (
+                    <div
+                        className={cn(
+                            "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",
+                            showChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
+                        )}
+                    >
+                        <TtsPlayerBar
+                            state={kokoroTts.state}
+                            progress={kokoroTts.progress}
+                            isSpeaking={kokoroTts.isSpeaking}
+                            isReady={kokoroTts.isReady}
+                            isLoading={kokoroTts.isLoading}
+                            speed={kokoroTts.speed}
+                            onPlayPause={() => {
+                                if (kokoroTts.isSpeaking) kokoroTts.pause();
+                                else if (kokoroTts.isPaused) kokoroTts.resume();
+                            }}
+                            onStop={handleToggleTts}
+                            onSkipForward={kokoroTts.skipForward}
+                            onSkipBack={kokoroTts.skipBack}
+                            onSpeedCycle={() => {
+                                const speeds = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+                                const idx = speeds.indexOf(kokoroTts.speed);
+                                kokoroTts.setSpeed(speeds[(idx + 1) % speeds.length]);
+                            }}
+                            onOpenSettings={() => setShowTtsSettings(true)}
+                        />
+                    </div>
+                )}
+
+                {/* TTS loading state */}
+                {ttsEnabled && kokoroTts.state.status !== "idle" && !kokoroTts.isReady && (
+                    <div
+                        className={cn(
+                            "fixed bottom-0 left-0 right-0 z-40 flex items-center justify-center gap-2 py-2.5 px-4",
+                            "bg-[var(--color-surface)] border-t border-[var(--color-border)]",
+                            "transition-transform duration-300",
+                            showChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
+                        )}
+                    >
+                        {kokoroTts.state.status === "error" ? (
+                            <span className="text-xs text-[color:var(--color-error)] truncate">
+                                {(kokoroTts.state as { status: "error"; message: string }).message}
+                            </span>
+                        ) : (
+                            <>
+                                <Loader2 className="w-4 h-4 text-[color:var(--color-accent)] animate-spin" />
+                                <span className="text-xs text-[color:var(--color-text-muted)] animate-pulse">
+                                    Loading speech engine…
+                                </span>
+                            </>
+                        )}
+                        <button
+                            onClick={handleToggleTts}
+                            className="ml-auto p-1.5 rounded-md text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors"
+                            aria-label="Cancel"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
+
+                {/* TTS voice settings overlay */}
                 <TtsPanel
-                    visible={ttsEnabled && kokoroTts.state.status !== "idle"}
-                    onClose={handleToggleTts}
-                    state={kokoroTts.state}
+                    visible={showTtsSettings}
+                    onClose={() => setShowTtsSettings(false)}
                     voices={kokoroTts.voices}
                     selectedVoice={kokoroTts.selectedVoice}
                     speed={kokoroTts.speed}
-                    isSpeaking={kokoroTts.isSpeaking}
-                    isPaused={kokoroTts.isPaused}
-                    isReady={kokoroTts.isReady}
-                    onPlayPause={() => {
-                        if (kokoroTts.isSpeaking) kokoroTts.pause();
-                        else if (kokoroTts.isPaused) kokoroTts.resume();
-                    }}
-                    onStop={handleToggleTts}
                     onVoiceChange={kokoroTts.setVoice}
                     onSpeedChange={kokoroTts.setSpeed}
                 />

@@ -1,24 +1,26 @@
 /**
- * React hook for Kokoro TTS integration in the reader.
- *
- * Provides speak/stop/pause/resume controls and reactive state for UI components.
+ * React hook for Kokoro TTS — audiobook-style controls.
  */
 import { useCallback, useEffect, useState } from "react";
-import { ttsManager, type TtsState, type TtsVoiceGroup } from "./tts-manager";
+import { ttsManager, type TtsState, type TtsVoiceGroup, type TtsProgress } from "./tts-manager";
 
 interface UseKokoroTtsReturn {
     state: TtsState;
     voices: TtsVoiceGroup[];
     selectedVoice: string;
     speed: number;
+    progress: TtsProgress;
     isSpeaking: boolean;
     isPaused: boolean;
     isReady: boolean;
+    isLoading: boolean;
     prepare: () => Promise<void>;
-    speak: (text: string) => Promise<void>;
+    speak: (text: string, startIndex?: number) => Promise<void>;
     stop: () => void;
     pause: () => void;
     resume: () => void;
+    skipForward: () => void;
+    skipBack: () => void;
     setVoice: (voiceId: string) => void;
     setSpeed: (speed: number) => void;
 }
@@ -28,10 +30,12 @@ export function useKokoroTts(): UseKokoroTtsReturn {
     const [voices, setVoices] = useState<TtsVoiceGroup[]>([]);
     const [selectedVoice, setSelectedVoice] = useState(ttsManager.selectedVoice);
     const [speed, setSpeedState] = useState(1.0);
+    const [progress, setProgress] = useState<TtsProgress>({ current: 0, total: 0 });
 
     useEffect(() => {
-        const unsub = ttsManager.subscribe((s) => {
+        const unsub = ttsManager.subscribe((s, p) => {
             setState(s);
+            setProgress(p);
             if (s.status === "ready") {
                 setVoices(s.voices);
             }
@@ -43,8 +47,8 @@ export function useKokoroTts(): UseKokoroTtsReturn {
         await ttsManager.prepare();
     }, []);
 
-    const speak = useCallback(async (text: string) => {
-        await ttsManager.speak(text);
+    const speak = useCallback(async (text: string, startIndex?: number) => {
+        await ttsManager.speak(text, startIndex);
     }, []);
 
     const stop = useCallback(() => {
@@ -57,6 +61,14 @@ export function useKokoroTts(): UseKokoroTtsReturn {
 
     const resume = useCallback(() => {
         ttsManager.resume();
+    }, []);
+
+    const skipForward = useCallback(() => {
+        ttsManager.skipForward();
+    }, []);
+
+    const skipBack = useCallback(() => {
+        ttsManager.skipBack();
     }, []);
 
     const setVoice = useCallback((voiceId: string) => {
@@ -80,14 +92,18 @@ export function useKokoroTts(): UseKokoroTtsReturn {
         voices,
         selectedVoice,
         speed,
+        progress,
         isSpeaking: state.status === "playing",
         isPaused: state.status === "paused",
         isReady: state.status === "ready",
+        isLoading: state.status === "loading",
         prepare,
         speak,
         stop,
         pause,
         resume,
+        skipForward,
+        skipBack,
         setVoice,
         setSpeed,
     };
