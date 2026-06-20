@@ -405,39 +405,53 @@ pub fn tts_play(
                 return;
             }
 
-            let samples = {
+            // Take the engine OUT of the mutex so we don't hold the lock
+            // during the blocking synthesize() call.  This keeps tts_is_ready
+            // and other commands from blocking for seconds.
+            let engine = {
                 let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
-                let Some(inner) = guard.as_mut() else {
-                    return;
-                };
-                let Some(engine) = inner.engine.as_mut() else {
-                    return;
-                };
+                guard.as_mut().and_then(|inner| inner.engine.take())
+            };
 
-                let params = KokoroInferenceParams {
-                    voice: voice_clone.clone(),
-                    speed,
-                    style_index: Some(0),
-                };
+            let Some(mut engine) = engine else {
+                return;
+            };
 
-                match engine.synthesize(chunk, Some(params)) {
-                    Ok(result) => {
-                        if result.samples.is_empty() {
-                            continue;
+            let params = KokoroInferenceParams {
+                voice: voice_clone.clone(),
+                speed,
+                style_index: Some(0),
+            };
+
+            let samples = match engine.synthesize(chunk, Some(params)) {
+                Ok(result) => {
+                    // Put engine back immediately after synthesis
+                    if let Ok(mut guard) = INNER.lock() {
+                        if let Some(inner) = guard.as_mut() {
+                            inner.engine = Some(engine);
                         }
-                        result.samples
                     }
-                    Err(e) => {
-                        let _ = app_clone.emit(
-                            "tts-state",
-                            TtsStateEvent {
-                                status: "error".into(),
-                                voices: None,
-                                message: Some(format!("Synthesis failed: {e}")),
-                            },
-                        );
-                        return;
+                    if result.samples.is_empty() {
+                        continue;
                     }
+                    result.samples
+                }
+                Err(e) => {
+                    // Put engine back before returning
+                    if let Ok(mut guard) = INNER.lock() {
+                        if let Some(inner) = guard.as_mut() {
+                            inner.engine = Some(engine);
+                        }
+                    }
+                    let _ = app_clone.emit(
+                        "tts-state",
+                        TtsStateEvent {
+                            status: "error".into(),
+                            voices: None,
+                            message: Some(format!("Synthesis failed: {e}")),
+                        },
+                    );
+                    return;
                 }
             };
 

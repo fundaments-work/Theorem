@@ -145,6 +145,16 @@ class TtsManager {
     /** Ensure the ONNX model and voices are downloaded and loaded. */
     async prepare(): Promise<void> {
         await this._ensureEventListeners();
+
+        // If voices are cached, engine was loaded successfully — skip all
+        // Rust commands to avoid blocking on INNER.lock() during synthesis.
+        if (this._voiceCache.length > 0) {
+            if (this._state.status !== "ready") {
+                this.emit({ status: "ready", voices: this._voiceCache });
+            }
+            return;
+        }
+
         try {
             const ready = await invoke<boolean>("tts_is_ready");
             if (ready) {
