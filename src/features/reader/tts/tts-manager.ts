@@ -62,7 +62,7 @@ interface TtsStatePayload {
 }
 
 /// Max chars per synthesis chunk — keeps first-chunk latency low.
-const CHUNK_CHARS = 800;
+const CHUNK_CHARS = 400;
 /// First chunk is shorter for faster time-to-first-audio.
 const FIRST_CHUNK_CHARS = 300;
 /// Crossfade duration in seconds (10ms — eliminates clicks at boundaries).
@@ -329,34 +329,26 @@ class TtsManager {
         }
     }
 
-    /** Create an AudioBuffer from raw f32 samples and normalize the volume. */
+    /** Create an AudioBuffer from raw f32 samples with a fixed gain to prevent whispering. */
     private _createAudioBuffer(samples: number[]): AudioBuffer {
         const ctx = this._audioCtx!;
         const buffer = ctx.createBuffer(1, samples.length, SAMPLE_RATE);
         const channelData = buffer.getChannelData(0);
         
-        // 1. Find the maximum absolute amplitude to calculate the normalization scale
         let maxAbs = 0;
         for (let i = 0; i < samples.length; i++) {
-            const v = samples[i];
-            if (!Number.isNaN(v)) {
-                const abs = Math.abs(v);
-                if (abs > maxAbs) maxAbs = abs;
-            }
-        }
-        
-        // 2. Scale samples to 90% of max volume to prevent clipping while maintaining loudness.
-        // If the audio is completely silent (maxAbs === 0), don't scale it.
-        const scale = maxAbs > 0 ? (1.0 / maxAbs) * 0.9 : 1.0;
-        
-        for (let i = 0; i < samples.length; i++) {
             let v = samples[i];
-            // Filter out NaN values which could break the Web Audio API playback entirely
+            // Filter out NaN values which break playback
             if (Number.isNaN(v)) v = 0;
-            channelData[i] = Math.max(-1.0, Math.min(1.0, v * scale));
+            
+            if (Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
+            
+            // Apply a safe, fixed gain instead of dynamic normalization.
+            // Dynamic normalization causes "whispering" if the AI generates a single loud pop artifact.
+            channelData[i] = Math.max(-1.0, Math.min(1.0, v * 1.5));
         }
         
-        console.log(`[TTS] AudioBuffer created: ${samples.length} samples, ${(buffer.duration).toFixed(2)}s, original_peak=${maxAbs.toFixed(4)}, scale_applied=${scale.toFixed(4)}`);
+        console.log(`[TTS] AudioBuffer created: ${samples.length} samples, ${(buffer.duration).toFixed(2)}s, original_peak=${maxAbs.toFixed(4)}`);
         return buffer;
     }
 
