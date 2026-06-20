@@ -40,6 +40,7 @@ import {
     Rss,
     Download,
     Globe,
+    RefreshCw,
     WifiOff,
     Sun,
     BookOpenCheck,
@@ -729,6 +730,29 @@ export function SettingsPage() {
                         </SettingRow>
                     </Section>
 
+                    <Section
+                        title="Sync"
+                        description="Background device synchronization"
+                        icon={<RefreshCw className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Auto-sync"
+                            description="Periodically sync with paired devices in the background"
+                        >
+                            <Toggle
+                                checked={settings.deviceSync.autoSyncEnabled}
+                                onChange={(checked) =>
+                                    updateSettings({
+                                        deviceSync: {
+                                            ...settings.deviceSync,
+                                            autoSyncEnabled: checked,
+                                        },
+                                    })
+                                }
+                            />
+                        </SettingRow>
+                    </Section>
+
                     <div className="flex items-center justify-end">
                         <button
                             onClick={() => {
@@ -1144,7 +1168,6 @@ export function SettingsPage() {
         <DictionaryDownloadModal
             isOpen={showDictDownloadModal}
             onClose={() => setShowDictDownloadModal(false)}
-            onImported={() => {}}
         />
         </>
     );

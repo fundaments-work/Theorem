@@ -855,7 +855,7 @@ export async function initSyncEventListener(): Promise<() => void> {
 const AUTO_SYNC_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
 /** Delay before the first sync after app startup. */
-const STARTUP_SYNC_DELAY_MS = 3000;
+const STARTUP_SYNC_DELAY_MS = 15000;
 
 /** Debounce window for mutation-triggered sync. */
 const MUTATION_SYNC_DEBOUNCE_MS = 5000;

@@ -337,6 +337,8 @@ function App() {
     // Keep responder sync infrastructure ready globally so incoming peer sync
     // can merge without requiring users to open the Settings screen.
     // Also start auto-sync (startup, periodic, visibility-change, tray).
+    // Deferred by several seconds to avoid competing with the initial render
+    // and UI shell setup, which causes noticeable startup lag.
     useEffect(() => {
         if (!isTauriRuntime || !hasCompletedOnboarding) {
             return;
@@ -349,6 +351,7 @@ function App() {
 
         let cancelled = false;
         const bootstrap = async () => {
+            if (cancelled) return;
             try {
                 await ensureResponderSyncReady();
             } catch (error) {
@@ -361,9 +364,13 @@ function App() {
             }
         };
 
-        void bootstrap();
+        const timer = setTimeout(() => {
+            void bootstrap();
+        }, 8000);
+
         return () => {
             cancelled = true;
+            clearTimeout(timer);
         };
     }, [hasCompletedOnboarding, isTauriRuntime]);
 
