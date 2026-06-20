@@ -95,6 +95,15 @@ class TtsManager {
             this.stop();
         }
 
+        // Ensure engine is loaded before generating
+        if (this._state.status !== "ready") {
+            await this.prepare();
+        }
+        if (this._state.status !== "ready") {
+            this.emit({ status: "error", message: "TTS engine failed to load" });
+            return;
+        }
+
         const sentences = splitIntoSentences(text.trim());
         if (sentences.length === 0) return;
 

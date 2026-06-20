@@ -2,6 +2,11 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Play, Pause, SkipBack, SkipForward, X, Volume2 } from "lucide-react";
 import { cn } from "../../../core";
 
+/** Check if browser Speech Synthesis is available. */
+function hasSpeechSynthesis(): boolean {
+    return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
 export interface ReadAloudController {
     /** Get the next chunk of text to speak. Returns null when done. */
     getNextChunk: () => string | null;
@@ -23,7 +28,7 @@ export function ReadAloudBar({ controller, onClose, className }: ReadAloudBarPro
     const isActiveRef = useRef(false);
 
     const speakNext = useCallback(() => {
-        if (!controller) return;
+        if (!controller || !hasSpeechSynthesis()) return;
         const text = controller.getNextChunk();
         if (!text) {
             isActiveRef.current = false;
@@ -50,7 +55,7 @@ export function ReadAloudBar({ controller, onClose, className }: ReadAloudBarPro
     }, [controller]);
 
     const play = useCallback(() => {
-        if (!controller) return;
+        if (!controller || !hasSpeechSynthesis()) return;
         speechSynthesis.cancel();
         isActiveRef.current = true;
         setIsPlaying(true);
@@ -58,18 +63,20 @@ export function ReadAloudBar({ controller, onClose, className }: ReadAloudBarPro
     }, [controller, speakNext]);
 
     const pause = useCallback(() => {
+        if (!hasSpeechSynthesis()) return;
         speechSynthesis.pause();
         setIsPlaying(false);
     }, []);
 
     const resume = useCallback(() => {
+        if (!hasSpeechSynthesis()) return;
         speechSynthesis.resume();
         isActiveRef.current = true;
         setIsPlaying(true);
     }, []);
 
     const skipBack = useCallback(() => {
-        if (!controller) return;
+        if (!controller || !hasSpeechSynthesis()) return;
         speechSynthesis.cancel();
         const text = controller.getPrevChunk();
         if (text) {
@@ -89,6 +96,7 @@ export function ReadAloudBar({ controller, onClose, className }: ReadAloudBarPro
     }, [controller, play, speakNext]);
 
     const skipForward = useCallback(() => {
+        if (!hasSpeechSynthesis()) return;
         speechSynthesis.cancel();
         if (!isActiveRef.current) return;
         speakNext();
@@ -96,12 +104,14 @@ export function ReadAloudBar({ controller, onClose, className }: ReadAloudBarPro
 
     useEffect(() => {
         return () => {
-            speechSynthesis.cancel();
+            if (hasSpeechSynthesis()) {
+                speechSynthesis.cancel();
+            }
             isActiveRef.current = false;
         };
     }, []);
 
-    if (!controller) return null;
+    if (!controller || !hasSpeechSynthesis()) return null;
 
     return (
         <div
