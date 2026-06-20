@@ -24,6 +24,11 @@ const VOICES_FILENAME: &str = "voices-v1.0.bin";
 /// Max chars per synthesis chunk — keeps first-chunk latency low.
 const CHUNK_CHARS: usize = 1200;
 
+/// Number of samples to crossfade between chunks (10 ms @ 24 kHz).
+/// Eliminates audible clicks/pops at chunk boundaries.
+/// Matches the crossfade length used by Parrot and tts-rs internally.
+const CROSSFADE_SAMPLES: usize = 240;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KokoroVoice {
     pub id: String,
@@ -302,6 +307,25 @@ fn split_text(text: &str) -> Vec<String> {
     chunks
 }
 
+// ── Audio smoothing ──
+
+/// Linear crossfade between two consecutive chunks.
+/// Blends the tail of `prev` into the beginning of `samples` so there
+/// is no audible click at the boundary.  10 ms of overlap eliminates
+/// transients while preserving intelligibility.
+fn apply_crossfade(prev_tail: &[f32], samples: &mut Vec<f32>) {
+    let overlap = prev_tail.len().min(samples.len());
+    for i in 0..overlap {
+        let t = (i + 1) as f32 / (overlap + 1) as f32;
+        samples[i] = prev_tail[prev_tail.len() - overlap + i] * (1.0 - t) + samples[i] * t;
+    }
+    // If the tail is longer than the new chunk (unlikely), prepend the excess.
+    if prev_tail.len() > overlap {
+        let prefix = &prev_tail[..prev_tail.len() - overlap];
+        samples.splice(0..0, prefix.iter().copied());
+    }
+}
+
 // ── Tauri Commands ──
 
 #[tauri::command]
@@ -422,13 +446,11 @@ pub fn tts_play(
         eprintln!("[TTS] Mixer acquired, creating player...");
 
         let player = rodio::Player::connect_new(&mixer);
-        // Unpause immediately — the mixer will output silence until the first
-        // chunk is appended.  We MUST call play() here rather than inside the
-        // i==0 branch below, because if the first chunk produces empty samples
-        // (continue), the player would stay paused forever and no audio would
-        // ever be heard.
-        player.play();
-        eprintln!("[TTS] Player created and playing");
+        // Start paused — we'll unpause after the first real chunk is appended.
+        // This ensures audio starts exactly when samples are ready, avoiding
+        // any gap between the first chunk and playback start.
+        player.pause();
+        eprintln!("[TTS] Player created (paused)");
 
         {
             let mut pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
@@ -451,30 +473,43 @@ pub fn tts_play(
         let total_chunks = chunks.len();
         eprintln!("[TTS] Synthesizing {} chunks...", total_chunks);
 
+        // Shorten the first chunk to get audio playing sooner.
+        let first_chunk_max = 400usize;
+
+        // Track the tail of the previous chunk for crossfading.
+        let mut crossfade_tail: Option<Vec<f32>> = None;
+        // Track whether playback has started yet.
+        let mut started = false;
+
         for (i, chunk) in chunks.iter().enumerate() {
             if GENERATION.load(Ordering::SeqCst) != generation {
                 eprintln!("[TTS] Generation changed, aborting");
                 return;
             }
 
+            let effective_chunk = if i == 0 && chunk.len() > first_chunk_max {
+                &chunk[..first_chunk_max]
+            } else {
+                chunk.as_str()
+            };
+
             eprintln!(
                 "[TTS] Chunk {}/{} — {} chars: {:?}...",
                 i + 1,
                 total_chunks,
-                chunk.len(),
-                &chunk[..chunk.len().min(80)]
+                effective_chunk.len(),
+                &effective_chunk[..effective_chunk.len().min(80)]
             );
 
             // Take the engine OUT of the mutex so we don't hold the lock
-            // during the blocking synthesize() call.  This keeps tts_is_ready
-            // and other commands from blocking for seconds.
+            // during the blocking synthesize() call.
             let engine = {
                 let mut guard = INNER.lock().unwrap_or_else(|e| e.into_inner());
                 guard.as_mut().and_then(|inner| inner.engine.take())
             };
 
             let Some(mut engine) = engine else {
-                eprintln!("[TTS] Engine not available (taken?), aborting");
+                eprintln!("[TTS] Engine not available, aborting");
                 return;
             };
 
@@ -484,7 +519,7 @@ pub fn tts_play(
                 style_index: Some(0),
             };
 
-            let samples = match engine.synthesize(chunk, Some(params)) {
+            let mut samples = match engine.synthesize(effective_chunk, Some(params)) {
                 Ok(result) => {
                     // Put engine back immediately after synthesis
                     if let Ok(mut guard) = INNER.lock() {
@@ -506,7 +541,6 @@ pub fn tts_play(
                 }
                 Err(e) => {
                     eprintln!("[TTS] Synthesis FAILED: {}", e);
-                    // Put engine back before returning
                     if let Ok(mut guard) = INNER.lock() {
                         if let Some(inner) = guard.as_mut() {
                             inner.engine = Some(engine);
@@ -529,6 +563,20 @@ pub fn tts_play(
                 return;
             }
 
+            // ── Crossfade with previous chunk's tail ──
+            // This eliminates clicks/pops at chunk boundaries, making
+            // audio sound like one continuous stream.
+            if let Some(prev_tail) = crossfade_tail.take() {
+                apply_crossfade(&prev_tail, &mut samples);
+            }
+            // Hold back the last CROSSFADE_SAMPLES for the next chunk.
+            if samples.len() > CROSSFADE_SAMPLES {
+                let split = samples.len() - CROSSFADE_SAMPLES;
+                crossfade_tail = Some(samples[split..].to_vec());
+                samples.truncate(split);
+            }
+
+            // Apply gain and append to player.
             {
                 let pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(pb) = pb.as_ref() {
@@ -536,14 +584,17 @@ pub fn tts_play(
                         let buf = rodio::buffer::SamplesBuffer::new(
                             NonZero::new(1u16).unwrap(),
                             NonZero::new(24000u32).unwrap(),
-                            // Apply gain — Kokoro quantized model can be quiet.
-                            // Soft-clip to [-1.0, 1.0] to avoid distortion.
                             samples
                                 .into_iter()
                                 .map(|s| (s * 1.8).clamp(-1.0, 1.0))
                                 .collect::<Vec<f32>>(),
                         );
                         pb.player.append(buf);
+                        if !started {
+                            started = true;
+                            pb.player.play();
+                            eprintln!("[TTS] Playback started (first chunk appended)");
+                        }
                         eprintln!("[TTS] Chunk {} appended to player", i + 1);
                     }
                 }
@@ -556,6 +607,24 @@ pub fn tts_play(
                     "total": total_chunks,
                 }),
             );
+        }
+
+        // Flush any held-back crossfade tail from the final chunk.
+        if let Some(tail) = crossfade_tail.take() {
+            let pb = PLAYBACK.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(pb) = pb.as_ref() {
+                if pb.generation == generation {
+                    let buf = rodio::buffer::SamplesBuffer::new(
+                        NonZero::new(1u16).unwrap(),
+                        NonZero::new(24000u32).unwrap(),
+                        tail.into_iter()
+                            .map(|s| (s * 1.8).clamp(-1.0, 1.0))
+                            .collect::<Vec<f32>>(),
+                    );
+                    pb.player.append(buf);
+                    eprintln!("[TTS] Crossfade tail flushed");
+                }
+            }
         }
 
         // Wait for playback to finish
