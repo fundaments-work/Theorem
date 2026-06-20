@@ -126,7 +126,7 @@ const CLOCK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" f
 const FLAME_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`;
 const BOOK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
 const HIGHLIGHT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h3l6-6"/><path d="m22 2-9 9 4 4 9-9z"/><path d="m14 4 6 6"/></svg>`;
-const TROPHY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"/><path d="M12 2a6 6 0 0 1 6 6v3.5c0 3.3-2.7 6-6 6s-6-2.7-6-6V8a6 6 0 0 1 6-6z"/></svg>`;
+const TRENDING_UP_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`;
 
 
 export interface ShareImageOptions {
@@ -349,16 +349,23 @@ export async function generateShareCardImage(
     }
 
     // Draw "Shared via Theorem"
+    const footerFontPx = 22;
     ctx.fillStyle = textPrimary;
     ctx.globalAlpha = options.theme === "tinted" ? 0.75 : 0.45;
-    ctx.font = `500 26px ${fontSans}`;
+    ctx.font = `500 ${footerFontPx}px ${fontSans}`;
     const sharedText = "Shared via Theorem";
     const textWidth = ctx.measureText(sharedText).width;
     const rightX = canvas.width - paddingX;
-    
+
+    // textBaseline is "bottom" here — text bottom edge is at bottomY
+    // logo top = bottomY - fontSize aligns logo bottom with text bottom
+    const logoSz = footerFontPx;
+    const logoTopY = bottomY - logoSz;
+    const logoLeftX = rightX - textWidth - logoSz - 10;
+
     ctx.fillText(sharedText, rightX - textWidth, bottomY);
     ctx.globalAlpha = options.theme === "tinted" ? 0.95 : 0.85;
-    ctx.drawImage(theoremImg, rightX - textWidth - 34 - 12, bottomY - 31, 34, 34);
+    ctx.drawImage(theoremImg, logoLeftX, logoTopY, logoSz, logoSz);
     ctx.globalAlpha = 1.0;
 
     return new Promise((resolve, reject) => {
@@ -378,6 +385,11 @@ export interface ShareStatsData {
     booksReadThisYear: number;
     yearlyBookGoal: number;
     totalHighlights: number;
+    recentlyReading?: {
+        title: string;
+        author: string;
+        progress: number; // 0–1
+    };
 }
 
 function drawStatBox(
@@ -423,7 +435,7 @@ function drawStatBox(
     ctx.font = `bold 36px ${fontSerif}`;
     ctx.fillText(value, x + pad, y + pad + iconSize + 16);
 
-    // Label (sans, small, muted) — below value
+    // Label (sans, small, muted) — below value with generous gap
     ctx.fillStyle = textPrimary;
     ctx.globalAlpha = 0.55;
     ctx.font = `500 14px ${fontSans}`;
@@ -433,8 +445,8 @@ function drawStatBox(
     while (ctx.measureText(displayLabel).width > maxLabelWidth && displayLabel.length > 4) {
         displayLabel = displayLabel.slice(0, -1);
     }
-    if (displayLabel !== label) displayLabel = displayLabel.slice(0, -1) + "…";
-    ctx.fillText(displayLabel, x + pad, y + pad + iconSize + 16 + 42);
+    if (displayLabel !== label) displayLabel = displayLabel.slice(0, -1) + "\u2026";
+    ctx.fillText(displayLabel, x + pad, y + pad + iconSize + 16 + 58);
     ctx.globalAlpha = 1.0;
 }
 
@@ -481,7 +493,7 @@ function drawHorizontalStatCard(
     const textX = iconX + iconSize + 28;
     const valueFontSize = 40;
     const labelFontSize = 17;
-    const gap = 12; // gap between value and label text
+    const gap = 20; // generous gap between value and label text
     const totalTextH = valueFontSize + gap + labelFontSize;
     const textStartY = y + (h - totalTextH) / 2;
 
@@ -632,12 +644,12 @@ export async function generateShareStatsImage(
     const iconColor = options.theme === "tinted" ? textPrimary : accentColor;
     const ghostColor = options.theme === "tinted" ? textPrimary : accentColor;
 
-    const [clockImg, flameImg, bookImg, highlightImg, trophyImg, theoremImg] = await Promise.all([
+    const [clockImg, flameImg, bookImg, highlightImg, ghostImg, theoremImg] = await Promise.all([
         createSvgImage(CLOCK_SVG, iconColor, 1.0),
         createSvgImage(FLAME_SVG, iconColor, 1.0),
         createSvgImage(BOOK_SVG, iconColor, 1.0),
         createSvgImage(HIGHLIGHT_SVG, iconColor, 1.0),
-        createSvgImage(TROPHY_SVG, ghostColor, 1.0),
+        createSvgImage(TRENDING_UP_SVG, ghostColor, 1.0),
         createSvgImage(THEOREM_SVG, textPrimary)
     ]);
 
@@ -645,7 +657,7 @@ export async function generateShareStatsImage(
     const ghostSize = options.format === "story" ? 1000 : 700;
     ctx.globalAlpha = options.theme === "tinted" ? 0.08 : 0.05;
     ctx.drawImage(
-        trophyImg, 
+        ghostImg, 
         canvas.width - ghostSize * 0.6, 
         canvas.height - ghostSize * 0.8, 
         ghostSize, 
@@ -705,6 +717,90 @@ export async function generateShareStatsImage(
         const progressY = gridY + (boxH * 2) + (boxSpacing * 2) + 28;
         drawCanvasProgressBar(ctx, drawX, progressY, maxWidth, 10, statsData.booksReadThisYear, statsData.yearlyBookGoal, "Yearly Reading Goal", accentColor, borderColor, textPrimary, fontSans);
 
+        // Currently Reading strip
+        if (statsData.recentlyReading) {
+            const crY = progressY + 10 + 15 + 14 + 36; // label + bar + % label + gap
+            const crPad = 20;
+            const crH = 72;
+
+            // Card background
+            ctx.fillStyle = options.theme === "dark" ? "#111111" : options.theme === "sepia" ? "#EAE0CF" : "rgba(0,0,0,0.03)";
+            if (options.theme === "tinted") ctx.fillStyle = textPrimary === "#FFFFFF" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)";
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            if (typeof (ctx as any).roundRect === 'function') (ctx as any).roundRect(drawX, crY, maxWidth, crH, 10);
+            else ctx.rect(drawX, crY, maxWidth, crH);
+            ctx.fill();
+            ctx.stroke();
+
+            // Left accent stripe
+            ctx.fillStyle = accentColor;
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath();
+            if (typeof (ctx as any).roundRect === 'function') (ctx as any).roundRect(drawX, crY, 4, crH, [10, 0, 0, 10]);
+            else ctx.rect(drawX, crY, 4, crH);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+
+            // Eyebrow
+            ctx.fillStyle = textPrimary;
+            ctx.globalAlpha = 0.4;
+            ctx.font = `600 11px ${fontSans}`;
+            if ('letterSpacing' in ctx) (ctx as any).letterSpacing = "1.5px";
+            ctx.fillText("CURRENTLY READING", drawX + crPad + 4, crY + crPad - 2);
+            if ('letterSpacing' in ctx) (ctx as any).letterSpacing = "0px";
+            ctx.globalAlpha = 1.0;
+
+            // Title
+            ctx.fillStyle = textPrimary;
+            ctx.font = `500 17px ${fontSans}`;
+            const crMaxTitleW = maxWidth - crPad * 2 - 4 - 120;
+            let crTitle = statsData.recentlyReading.title;
+            while (ctx.measureText(crTitle).width > crMaxTitleW && crTitle.length > 4) crTitle = crTitle.slice(0, -1);
+            if (crTitle !== statsData.recentlyReading.title) crTitle = crTitle.slice(0, -1) + "\u2026";
+            ctx.fillText(crTitle, drawX + crPad + 4, crY + crPad + 16);
+
+            // Author
+            ctx.fillStyle = textPrimary;
+            ctx.globalAlpha = 0.5;
+            ctx.font = `400 13px ${fontSans}`;
+            let crAuthor = statsData.recentlyReading.author;
+            while (ctx.measureText(crAuthor).width > crMaxTitleW && crAuthor.length > 4) crAuthor = crAuthor.slice(0, -1);
+            if (crAuthor !== statsData.recentlyReading.author) crAuthor = crAuthor.slice(0, -1) + "\u2026";
+            ctx.fillText(crAuthor, drawX + crPad + 4, crY + crPad + 38);
+            ctx.globalAlpha = 1.0;
+
+            // Mini progress bar (right side)
+            const pct = Math.min(1, statsData.recentlyReading.progress);
+            const barW = 110;
+            const barH = 6;
+            const barX = drawX + maxWidth - crPad - barW;
+            const barY = crY + (crH - barH) / 2 - 6;
+            ctx.fillStyle = "rgba(128,128,128,0.2)";
+            ctx.beginPath();
+            if (typeof (ctx as any).roundRect === 'function') (ctx as any).roundRect(barX, barY, barW, barH, barH / 2);
+            else ctx.rect(barX, barY, barW, barH);
+            ctx.fill();
+            if (pct > 0) {
+                ctx.fillStyle = accentColor;
+                ctx.globalAlpha = 0.85;
+                ctx.beginPath();
+                if (typeof (ctx as any).roundRect === 'function') (ctx as any).roundRect(barX, barY, barW * pct, barH, barH / 2);
+                else ctx.rect(barX, barY, barW * pct, barH);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+            // % label
+            ctx.fillStyle = textPrimary;
+            ctx.globalAlpha = 0.45;
+            ctx.font = `400 12px ${fontSans}`;
+            const pctLabel = `${Math.round(pct * 100)}%`;
+            const pctLabelW = ctx.measureText(pctLabel).width;
+            ctx.fillText(pctLabel, barX + (barW - pctLabelW) / 2, barY + barH + 10);
+            ctx.globalAlpha = 1.0;
+        }
+
     } else {
         // Story format
         // Eyebrow label
@@ -734,22 +830,105 @@ export async function generateShareStatsImage(
         // Progress bar
         const progressY = cardStartY + (cardH * 4) + (cardSpacing * 4) + 36;
         drawCanvasProgressBar(ctx, drawX, progressY, maxWidth, 12, statsData.booksReadThisYear, statsData.yearlyBookGoal, "Yearly Reading Goal", accentColor, borderColor, textPrimary, fontSans);
+
+        // Currently Reading strip (story layout)
+        if (statsData.recentlyReading) {
+            const crY = progressY + 15 + 12 + 10 + 14 + 40;
+            const crPad = 20;
+            const crH = 90;
+
+            ctx.fillStyle = options.theme === "dark" ? "#111111" : options.theme === "sepia" ? "#EAE0CF" : "rgba(0,0,0,0.03)";
+            if (options.theme === "tinted") ctx.fillStyle = textPrimary === "#FFFFFF" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)";
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            if (typeof (ctx as any).roundRect === 'function') (ctx as any).roundRect(drawX, crY, maxWidth, crH, 12);
+            else ctx.rect(drawX, crY, maxWidth, crH);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = accentColor;
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath();
+            if (typeof (ctx as any).roundRect === 'function') (ctx as any).roundRect(drawX, crY, 5, crH, [12, 0, 0, 12]);
+            else ctx.rect(drawX, crY, 5, crH);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+
+            ctx.fillStyle = textPrimary;
+            ctx.globalAlpha = 0.4;
+            ctx.font = `600 13px ${fontSans}`;
+            if ('letterSpacing' in ctx) (ctx as any).letterSpacing = "1.5px";
+            ctx.fillText("CURRENTLY READING", drawX + crPad + 5, crY + crPad);
+            if ('letterSpacing' in ctx) (ctx as any).letterSpacing = "0px";
+            ctx.globalAlpha = 1.0;
+
+            ctx.fillStyle = textPrimary;
+            ctx.font = `500 22px ${fontSans}`;
+            const crMaxW = maxWidth - crPad * 2 - 5 - 150;
+            let crTitle = statsData.recentlyReading.title;
+            while (ctx.measureText(crTitle).width > crMaxW && crTitle.length > 4) crTitle = crTitle.slice(0, -1);
+            if (crTitle !== statsData.recentlyReading.title) crTitle = crTitle.slice(0, -1) + "\u2026";
+            ctx.fillText(crTitle, drawX + crPad + 5, crY + crPad + 24);
+
+            ctx.fillStyle = textPrimary;
+            ctx.globalAlpha = 0.5;
+            ctx.font = `400 16px ${fontSans}`;
+            let crAuthor = statsData.recentlyReading.author;
+            while (ctx.measureText(crAuthor).width > crMaxW && crAuthor.length > 4) crAuthor = crAuthor.slice(0, -1);
+            if (crAuthor !== statsData.recentlyReading.author) crAuthor = crAuthor.slice(0, -1) + "\u2026";
+            ctx.fillText(crAuthor, drawX + crPad + 5, crY + crPad + 52);
+            ctx.globalAlpha = 1.0;
+
+            const pct = Math.min(1, statsData.recentlyReading.progress);
+            const barW = 140;
+            const barH = 8;
+            const barX = drawX + maxWidth - crPad - barW;
+            const barY = crY + (crH - barH) / 2 - 8;
+            ctx.fillStyle = "rgba(128,128,128,0.2)";
+            ctx.beginPath();
+            if (typeof (ctx as any).roundRect === 'function') (ctx as any).roundRect(barX, barY, barW, barH, barH / 2);
+            else ctx.rect(barX, barY, barW, barH);
+            ctx.fill();
+            if (pct > 0) {
+                ctx.fillStyle = accentColor;
+                ctx.globalAlpha = 0.85;
+                ctx.beginPath();
+                if (typeof (ctx as any).roundRect === 'function') (ctx as any).roundRect(barX, barY, barW * pct, barH, barH / 2);
+                else ctx.rect(barX, barY, barW * pct, barH);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+            ctx.fillStyle = textPrimary;
+            ctx.globalAlpha = 0.45;
+            ctx.font = `400 14px ${fontSans}`;
+            const pctLabel = `${Math.round(pct * 100)}% complete`;
+            ctx.fillText(pctLabel, barX, barY + barH + 16);
+            ctx.globalAlpha = 1.0;
+        }
     }
 
     // Draw Footer (Source and Branding)
-    const bottomY = canvas.height - (options.format === "story" ? 160 : 96);
+    const footerFontSize = 22;
+    const bottomY = canvas.height - (options.format === "story" ? 120 : 80);
     const rightX = canvas.width - paddingX;
 
     // Draw "Shared via Theorem"
     ctx.fillStyle = textPrimary;
     ctx.globalAlpha = options.theme === "tinted" ? 0.75 : 0.45;
-    ctx.font = `500 26px ${fontSans}`;
+    ctx.font = `500 ${footerFontSize}px ${fontSans}`;
     const sharedText = "Shared via Theorem";
     const textWidth = ctx.measureText(sharedText).width;
-    
+
+    // textBaseline is "top" here — text top edge is at bottomY
+    // Logo is drawn from (logoX, bottomY) to (logoX+size, bottomY+size),
+    // so its top exactly matches the text top → both on the same line
+    const logoSize = footerFontSize;
+    const logoX = rightX - textWidth - logoSize - 10;
+
     ctx.fillText(sharedText, rightX - textWidth, bottomY);
     ctx.globalAlpha = options.theme === "tinted" ? 0.95 : 0.85;
-    ctx.drawImage(theoremImg, rightX - textWidth - 34 - 12, bottomY - 31, 34, 34);
+    ctx.drawImage(theoremImg, logoX, bottomY, logoSize, logoSize);
     ctx.globalAlpha = 1.0;
 
     return new Promise((resolve, reject) => {
