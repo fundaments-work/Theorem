@@ -39,6 +39,7 @@ import {
     type ArticleReaderPanel,
 } from "./index";
 import { buildArticleDescription, formatArticleDate, sanitizeArticleHtml } from "./utils";
+import { useKokoroTts } from "../tts/useKokoroTts";
 
 interface ArticleViewerProps {
     article: RssArticle | null;
@@ -500,6 +501,7 @@ export function ArticleViewer({
     const addAnnotation = useLibraryStore((state) => state.addAnnotation);
     const updateAnnotation = useLibraryStore((state) => state.updateAnnotation);
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
+    const kokoroTts = useKokoroTts();
 
     const [activePanel, setActivePanel] = useState<ArticleReaderPanel>(null);
     const [showChrome, setShowChrome] = useState(false);
@@ -671,6 +673,19 @@ export function ArticleViewer({
     const handleToggleFullscreen = useCallback(() => {
         updateReaderSetting({ fullscreen: !isFullscreen });
     }, [isFullscreen, updateReaderSetting]);
+
+    const handleToggleTts = useCallback(() => {
+        if (kokoroTts.isSpeaking) {
+            kokoroTts.stop();
+            return;
+        }
+        // Get visible text from the article content
+        const text = contentRef.current?.textContent?.trim();
+        if (!text) return;
+        kokoroTts.prepare().then(() => {
+            if (text) kokoroTts.speak(text);
+        });
+    }, [kokoroTts]);
 
     const handleArticleExitFullscreen = useCallback(() => {
         updateReaderSetting({ fullscreen: false });
@@ -1513,6 +1528,8 @@ export function ArticleViewer({
                         activePanel={activePanel}
                         fullscreen={isFullscreen}
                         onToggleFullscreen={handleToggleFullscreen}
+                        isTtsActive={kokoroTts.isSpeaking}
+                        onToggleTts={handleToggleTts}
                     />
                 </div>
 
