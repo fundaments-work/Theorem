@@ -52,6 +52,7 @@ import type { ReaderViewportHandle } from "./components/ReaderViewport";
 import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
 import { ReadAloudBar } from "./components/ReadAloudBar";
 import { useTtsController } from "./hooks/useTtsController";
+import { useKokoroTts } from "./tts/useKokoroTts";
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -235,7 +236,10 @@ function BookReaderPage() {
 
     const toggleTts = useCallback(() => {
         if (!settings.readerSettings.ttsEnabled) return;
-        setIsTtsActive(prev => !prev);
+        setIsTtsActive(prev => {
+            if (prev) return false;
+            return true;
+        });
     }, [settings.readerSettings.ttsEnabled]);
 
     const getCurrentSectionText = useCallback((): string => {
@@ -243,6 +247,23 @@ function BookReaderPage() {
     }, []);
 
     const ttsController = useTtsController(getCurrentSectionText);
+    const kokoroTts = useKokoroTts();
+
+    // When TTS is toggled, start/stop Kokoro with current section text
+    useEffect(() => {
+        if (!settings.readerSettings.ttsEnabled) return;
+
+        if (isTtsActive) {
+            const text = getCurrentSectionText();
+            if (text) {
+                kokoroTts.prepare().then(() => {
+                    kokoroTts.speak(text);
+                });
+            }
+        } else {
+            kokoroTts.stop();
+        }
+    }, [isTtsActive, settings.readerSettings.ttsEnabled]);
 
     // Get current book format
     const currentBook = currentBookId ? getBook(currentBookId) : null;
@@ -2092,6 +2113,38 @@ function BookReaderPage() {
                     />
                 )}
             </div>
+
+            {/* TTS voice selector + progress bar */}
+            {isTtsActive && !isPdfFormat && kokoroTts.isReady && (
+                <div className="absolute left-0 right-0 z-[var(--z-tooltip)] flex items-center justify-center gap-3 py-2 px-4 bg-[var(--color-surface)] border-b border-[var(--color-border-subtle)]"
+                    style={{ top: shouldShowReaderChrome ? toolbarHeight : 0 }}>
+                    <span className="text-[11px] uppercase tracking-wider text-[color:var(--color-text-muted)]">Voice</span>
+                    <select
+                        value={kokoroTts.selectedVoice}
+                        onChange={(e) => kokoroTts.setVoice(e.target.value)}
+                        className="text-xs px-2 py-1 border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-primary)]"
+                    >
+                        {kokoroTts.voices.map((group) => (
+                            <optgroup key={group.label} label={group.label}>
+                                {group.voices.map((v) => (
+                                    <option key={v.id} value={v.id}>{v.name} ({v.gender})</option>
+                                ))}
+                            </optgroup>
+                        ))}
+                    </select>
+                    {kokoroTts.state.status === "playing" && (
+                        <span className="text-xs text-[color:var(--color-text-muted)]">
+                            {kokoroTts.state.currentChunk}/{kokoroTts.state.totalChunks}
+                        </span>
+                    )}
+                    {kokoroTts.state.status === "downloading" && (
+                        <span className="text-xs text-[color:var(--color-accent)] animate-pulse">Downloading model…</span>
+                    )}
+                    {kokoroTts.state.status === "error" && (
+                        <span className="text-xs text-[color:var(--color-error)]">{kokoroTts.state.message}</span>
+                    )}
+                </div>
+            )}
 
             {/* Read Aloud Bar — only for non-PDF */}
             {isTtsActive && !isPdfFormat && (
