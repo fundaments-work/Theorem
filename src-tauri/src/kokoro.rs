@@ -87,6 +87,7 @@ fn ensure_model_files(app: &AppHandle) -> Result<PathBuf, String> {
     let old_onnx_dir = cache_dir.join("onnx");
     let old_config = cache_dir.join("config.json");
     let old_voices_dir = cache_dir.join("voices");
+    let stale_optimized = cache_dir.join("kokoro-optimized.onnx");
 
     if old_onnx_dir.exists() {
         let _ = std::fs::remove_dir_all(&old_onnx_dir);
@@ -96,6 +97,11 @@ fn ensure_model_files(app: &AppHandle) -> Result<PathBuf, String> {
     }
     if old_voices_dir.exists() {
         let _ = std::fs::remove_dir_all(&old_voices_dir);
+    }
+    // Always delete stale optimized cache — it may contain baked-in tensor
+    // shapes from a previous ort/model version that cause dimension errors.
+    if stale_optimized.exists() {
+        let _ = std::fs::remove_file(&stale_optimized);
     }
 
     let client = crate::shared_http_client();
@@ -183,7 +189,7 @@ pub async fn kokoro_generate(
         let params = KokoroInferenceParams {
             voice,
             speed,
-            style_index: None, // auto
+            style_index: Some(0), // default style — None (auto) can produce incorrect tensor dims
         };
 
         let result = engine

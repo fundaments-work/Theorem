@@ -3,7 +3,7 @@
  *
  * Provides speak/stop controls and reactive state for UI components.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ttsManager, type TtsState, type TtsVoiceGroup } from "./tts-manager";
 
 interface UseKokoroTtsReturn {
@@ -21,7 +21,7 @@ interface UseKokoroTtsReturn {
 export function useKokoroTts(): UseKokoroTtsReturn {
     const [state, setState] = useState<TtsState>(ttsManager.state);
     const [voices, setVoices] = useState<TtsVoiceGroup[]>([]);
-    const selectedVoiceRef = useRef(ttsManager.selectedVoice);
+    const [selectedVoice, setSelectedVoice] = useState(ttsManager.selectedVoice);
 
     useEffect(() => {
         const unsub = ttsManager.subscribe((s) => {
@@ -46,7 +46,7 @@ export function useKokoroTts(): UseKokoroTtsReturn {
     }, []);
 
     const setVoice = useCallback((voiceId: string) => {
-        selectedVoiceRef.current = voiceId;
+        setSelectedVoice(voiceId);
         ttsManager.setVoice(voiceId);
     }, []);
 
@@ -59,7 +59,7 @@ export function useKokoroTts(): UseKokoroTtsReturn {
     return {
         state,
         voices,
-        selectedVoice: selectedVoiceRef.current,
+        selectedVoice,
         isSpeaking: state.status === "playing",
         isReady: state.status === "ready",
         prepare,

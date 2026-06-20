@@ -2118,7 +2118,7 @@ function BookReaderPage() {
             {isTtsActive && !isPdfFormat && (
                 <div className="absolute left-0 right-0 z-[var(--z-tooltip)] flex items-center justify-center gap-3 py-2 px-4 bg-[var(--color-surface)] border-b border-[var(--color-border-subtle)]"
                     style={{ top: shouldShowReaderChrome ? toolbarHeight : 0 }}>
-                    {kokoroTts.isReady && (
+                    {kokoroTts.voices.length > 0 && (
                         <>
                             <span className="text-[11px] uppercase tracking-wider text-[color:var(--color-text-muted)]">Voice</span>
                             <select
