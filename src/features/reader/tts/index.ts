@@ -1,3 +1,2 @@
-export { textToTokens, splitIntoSentences } from "./kokoro-phonemizer";
 export { ttsManager, type TtsState, type TtsVoice, type TtsVoiceGroup } from "./tts-manager";
 export { useKokoroTts } from "./useKokoroTts";

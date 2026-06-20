@@ -1561,8 +1561,8 @@ export function ArticleViewer({
                             </>
                         )}
                         {kokoroTts.state.status === "playing" && (
-                            <span className="text-xs text-[color:var(--color-text-muted)]">
-                                {kokoroTts.state.currentChunk}/{kokoroTts.state.totalChunks}
+                            <span className="text-xs text-[color:var(--color-accent)] animate-pulse">
+                                Speaking…
                             </span>
                         )}
                         {kokoroTts.state.status === "downloading" && (

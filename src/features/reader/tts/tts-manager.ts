@@ -1,11 +1,10 @@
 /**
  * TTS Manager — orchestrates Kokoro TTS lifecycle.
  *
- * Handles model download, voice selection, text-to-speech generation
- * with streaming playback, and UI state.
+ * Handles model download, voice selection, full-text speech synthesis
+ * and audio playback via Web Audio API.
  */
 import { invoke } from "@tauri-apps/api/core";
-import { textToTokens, splitIntoSentences } from "./kokoro-phonemizer";
 
 export interface TtsVoice {
     id: string;
@@ -24,7 +23,7 @@ export type TtsState =
     | { status: "downloading" }
     | { status: "loading" }
     | { status: "ready"; voices: TtsVoiceGroup[] }
-    | { status: "playing"; currentText: string; totalChunks: number; currentChunk: number }
+    | { status: "playing" }
     | { status: "error"; message: string };
 
 type TtsListener = (state: TtsState) => void;
@@ -61,7 +60,6 @@ class TtsManager {
     /** Ensure the ONNX model and voices are downloaded and loaded. */
     async prepare(): Promise<void> {
         try {
-            // Check if already ready
             const ready = await invoke<boolean>("kokoro_is_ready");
             if (ready) {
                 this._voiceCache = await invoke<TtsVoiceGroup[]>("kokoro_list_voices");
@@ -90,18 +88,16 @@ class TtsManager {
         this._speed = Math.max(0.5, Math.min(2.0, speed));
     }
 
-    /** Start speaking the given text, streaming audio chunks. */
+    /** Synthesize and play the full text via Kokoro. */
     async speak(text: string): Promise<void> {
         if (this._state.status === "playing") {
             this.stop();
         }
 
-        // If prepare already failed, don't retry — the error message is already shown
         if (this._state.status === "error") {
             return;
         }
 
-        // Ensure engine is loaded before generating
         if (this._state.status !== "ready") {
             await this.prepare();
         }
@@ -109,42 +105,25 @@ class TtsManager {
             return;
         }
 
-        const sentences = splitIntoSentences(text.trim());
-        if (sentences.length === 0) return;
+        const trimmed = text.trim();
+        if (!trimmed) return;
 
         this._abortController = new AbortController();
         const signal = this._abortController.signal;
 
-        this.emit({
-            status: "playing",
-            currentText: text,
-            totalChunks: sentences.length,
-            currentChunk: 0,
-        });
+        this.emit({ status: "playing" });
 
         try {
-            for (let i = 0; i < sentences.length; i++) {
-                if (signal.aborted) break;
+            const audio = await invoke<number[]>("kokoro_generate", {
+                text: trimmed,
+                voice: this._selectedVoice,
+                speed: this._speed,
+            });
 
-                const tokens = await textToTokens(sentences[i]);
-                if (tokens.length === 0) continue;
+            if (signal.aborted) return;
 
-                const audio = await invoke<number[]>("kokoro_generate", {
-                    tokens,
-                    voice: this._selectedVoice,
-                    speed: this._speed,
-                });
-
-                if (signal.aborted) break;
-
+            if (audio.length > 0) {
                 await this._playAudio(audio);
-
-                this.emit({
-                    status: "playing",
-                    currentText: text,
-                    totalChunks: sentences.length,
-                    currentChunk: i + 1,
-                });
             }
         } catch (err) {
             if (!signal.aborted) {
@@ -170,7 +149,6 @@ class TtsManager {
             await ctx.resume();
         }
 
-        // Convert f32 samples to f32 AudioBuffer
         const buffer = ctx.createBuffer(1, samples.length, 24000);
         const channel = buffer.getChannelData(0);
         for (let i = 0; i < samples.length; i++) {
