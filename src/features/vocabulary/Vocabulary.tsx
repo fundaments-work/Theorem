@@ -2,7 +2,6 @@ import { useMemo, useState, useCallback } from "react";
 import {
     ArrowLeft,
     BookOpenText,
-    Search,
     Trash2,
     X,
     ChevronLeft,
@@ -27,7 +26,6 @@ function isHtml(text: string): boolean {
 
 export function VocabularyPage() {
     const searchQuery = useUIStore((state) => state.searchQuery);
-    const setSearchQuery = useUIStore((state) => state.setSearchQuery);
     const vocabularyTerms = useVocabularyStore((state) => state.vocabularyTerms);
     const deleteVocabularyTerm = useVocabularyStore((state) => state.deleteVocabularyTerm);
 
@@ -101,35 +99,12 @@ export function VocabularyPage() {
                 showMobileList ? "flex w-full" : "hidden",
                 "md:flex md:w-64 md:border-r md:border-[var(--color-border-subtle)]",
             )}>
-                <header className="shrink-0 px-6 pt-8 pb-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-xl font-semibold text-[color:var(--color-text-primary)]">Vocabulary</h1>
-                            <p className="text-xs text-[color:var(--color-text-muted)] mt-0.5">{vocabularyTerms.length} terms</p>
-                        </div>
-                    </div>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)] pointer-events-none" />
-                        <input
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search terms..."
-                            className={cn(
-                                "w-full pl-10 pr-10 py-2 text-sm",
-                                "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                                "text-[color:var(--color-text-primary)]",
-                                "placeholder:text-[color:var(--color-text-muted)]",
-                                "focus:outline-none focus:border-[var(--color-accent)]",
-                            )}
-                        />
-                        {searchQuery && (
-                            <button
-                                onClick={() => setSearchQuery("")}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        )}
+                <header className="shrink-0 px-6 pt-8 pb-4">
+                    <div>
+                        <h1 className="text-xl font-semibold text-[color:var(--color-text-primary)]">Vocabulary</h1>
+                        <p className="text-xs text-[color:var(--color-text-muted)] mt-0.5">{vocabularyTerms.length} terms{
+                            searchQuery ? ` — "${searchQuery}"` : ""
+                        }</p>
                     </div>
                 </header>
 
