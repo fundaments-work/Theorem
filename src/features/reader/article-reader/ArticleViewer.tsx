@@ -503,6 +503,9 @@ export function ArticleViewer({
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
     const kokoroTts = useKokoroTts();
 
+    // Show TTS only if the reader-level TTS setting is enabled
+    const ttsEnabled = globalReaderSettings.ttsEnabled;
+
     const [activePanel, setActivePanel] = useState<ArticleReaderPanel>(null);
     const [showChrome, setShowChrome] = useState(false);
     const [readingProgress, setReadingProgress] = useState(0);
@@ -1528,12 +1531,47 @@ export function ArticleViewer({
                         activePanel={activePanel}
                         fullscreen={isFullscreen}
                         onToggleFullscreen={handleToggleFullscreen}
-                        isTtsActive={kokoroTts.isSpeaking}
-                        onToggleTts={handleToggleTts}
+                        isTtsActive={ttsEnabled ? kokoroTts.isSpeaking : undefined}
+                        onToggleTts={ttsEnabled ? handleToggleTts : undefined}
                     />
                 </div>
 
                 <Backdrop visible={activePanel !== null && !usesSharedPanelBackdrop} onClick={closePanel} blur />
+
+                {/* Kokoro TTS control bar */}
+                {ttsEnabled && kokoroTts.isReady && (
+                    <div className="absolute left-0 right-0 z-40 flex items-center justify-center gap-3 py-2 px-4 bg-[var(--color-surface)] border-b border-[var(--color-border-subtle)]"
+                        style={{ top: shouldShowReaderChrome ? toolbarHeight : 0 }}>
+                        <span className="text-[11px] uppercase tracking-wider text-[color:var(--color-text-muted)]">Voice</span>
+                        <select
+                            value={kokoroTts.selectedVoice}
+                            onChange={(e) => kokoroTts.setVoice(e.target.value)}
+                            className="text-xs px-2 py-1 border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-primary)]"
+                        >
+                            {kokoroTts.voices.map((group) => (
+                                <optgroup key={group.label} label={group.label}>
+                                    {group.voices.map((v) => (
+                                        <option key={v.id} value={v.id}>{v.name} ({v.gender})</option>
+                                    ))}
+                                </optgroup>
+                            ))}
+                        </select>
+                        {kokoroTts.state.status === "playing" && (
+                            <span className="text-xs text-[color:var(--color-text-muted)]">
+                                {kokoroTts.state.currentChunk}/{kokoroTts.state.totalChunks}
+                            </span>
+                        )}
+                        {kokoroTts.state.status === "downloading" && (
+                            <span className="text-xs text-[color:var(--color-accent)] animate-pulse">Downloading model…</span>
+                        )}
+                        {kokoroTts.state.status === "loading" && (
+                            <span className="text-xs text-[color:var(--color-accent)] animate-pulse">Loading…</span>
+                        )}
+                        {kokoroTts.state.status === "error" && (
+                            <span className="text-xs text-[color:var(--color-error)]">{kokoroTts.state.message}</span>
+                        )}
+                    </div>
+                )}
 
                 <TableOfContents
                     toc={articleToc}
