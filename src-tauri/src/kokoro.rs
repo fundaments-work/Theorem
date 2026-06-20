@@ -190,6 +190,10 @@ pub async fn kokoro_generate(
             .synthesize(&text, Some(params))
             .map_err(|e| format!("Synthesis failed: {e}"))?;
 
+        if result.samples.is_empty() {
+            return Err("Synthesis produced no audio".to_string());
+        }
+
         Ok(result.samples)
     })
     .await

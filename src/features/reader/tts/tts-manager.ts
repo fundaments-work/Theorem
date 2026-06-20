@@ -108,6 +108,21 @@ class TtsManager {
         const trimmed = text.trim();
         if (!trimmed) return;
 
+        // Pre-create and resume AudioContext while we still have user gesture.
+        // If created lazily after an async invoke(), autoplay policy may block it.
+        try {
+            if (!this._audioContext) {
+                this._audioContext = new AudioContext({ sampleRate: 24000 });
+            }
+            if (this._audioContext.state === "suspended") {
+                await this._audioContext.resume();
+            }
+        } catch (err) {
+            console.error("[TTS] Failed to create/resume AudioContext:", err);
+            this.emit({ status: "error", message: "Audio context blocked — click again to enable audio" });
+            return;
+        }
+
         this._abortController = new AbortController();
         const signal = this._abortController.signal;
 
@@ -123,11 +138,14 @@ class TtsManager {
             if (signal.aborted) return;
 
             if (audio.length > 0) {
-                await this._playAudio(audio);
+                await this._playAudio(audio, this._audioContext);
+            } else {
+                console.warn("[TTS] kokoro_generate returned 0 samples");
             }
         } catch (err) {
             if (!signal.aborted) {
                 const message = err instanceof Error ? err.message : String(err);
+                console.error("[TTS] Generation failed:", message);
                 this.emit({ status: "error", message });
                 return;
             }
@@ -139,17 +157,9 @@ class TtsManager {
     }
 
     /** Play raw f32 PCM audio at 24kHz via Web Audio API. */
-    private async _playAudio(samples: number[]): Promise<void> {
-        if (!this._audioContext) {
-            this._audioContext = new AudioContext({ sampleRate: 24000 });
-        }
-
-        const ctx = this._audioContext;
-        if (ctx.state === "suspended") {
-            await ctx.resume();
-        }
-
-        const buffer = ctx.createBuffer(1, samples.length, 24000);
+    private async _playAudio(samples: number[], ctx: AudioContext): Promise<void> {
+        const sampleRate = 24000; // Kokoro native output rate
+        const buffer = ctx.createBuffer(1, samples.length, sampleRate);
         const channel = buffer.getChannelData(0);
         for (let i = 0; i < samples.length; i++) {
             channel[i] = samples[i];
