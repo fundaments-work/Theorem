@@ -78,6 +78,26 @@ fn download_if_missing(
 
 fn ensure_model_files(app: &AppHandle) -> Result<PathBuf, String> {
     let cache_dir = tts_cache_dir(app)?;
+
+    // Clean up stale files from the old HuggingFace-based download scheme.
+    // The old model was at onnx/model_quantized.onnx; tts-rs expects files
+    // directly in the cache dir with different names. Also delete the old
+    // config.json which lacks the 'vocab' field tts-rs needs — it falls
+    // back to a hardcoded vocab when no config.json is present.
+    let old_onnx_dir = cache_dir.join("onnx");
+    let old_config = cache_dir.join("config.json");
+    let old_voices_dir = cache_dir.join("voices");
+
+    if old_onnx_dir.exists() {
+        let _ = std::fs::remove_dir_all(&old_onnx_dir);
+    }
+    if old_config.exists() {
+        let _ = std::fs::remove_file(&old_config);
+    }
+    if old_voices_dir.exists() {
+        let _ = std::fs::remove_dir_all(&old_voices_dir);
+    }
+
     let client = crate::shared_http_client();
 
     download_if_missing(
