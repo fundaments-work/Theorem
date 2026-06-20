@@ -2169,7 +2169,7 @@ function BookReaderPage() {
                 <div
                     className={cn(
                         "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",
-                        shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
+                        "translate-y-0",
                     )}
                 >
                     <TtsPlayerBar
@@ -2250,8 +2250,8 @@ function BookReaderPage() {
                 </>
             )}
 
-            {/* Bottom Progress Navbar - only for non-PDF formats */}
-            {isBookReady && !isPdfFormat && (
+            {/* Bottom Progress Navbar - hidden when TTS is active */}
+            {isBookReady && !isPdfFormat && !isTtsActive && (
                 <ReaderNavbar
                     location={location}
                     toc={toc}

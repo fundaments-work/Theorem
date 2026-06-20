@@ -1592,7 +1592,7 @@ export function ArticleViewer({
                     <div
                         className={cn(
                             "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",
-                            showChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
+                            "translate-y-0",
                         )}
                     >
                         <TtsPlayerBar
