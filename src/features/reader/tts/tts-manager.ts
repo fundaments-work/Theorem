@@ -76,23 +76,78 @@ const AUDIO_GAIN = 1.0;
 function splitSentences(text: string): string[] {
     const trimmed = text.trim();
     if (!trimmed) return [];
-    const parts = trimmed.split(/(?<=[.!?])\s+|\n+/);
-    return parts.map((s) => s.trim()).filter((s) => s.length > 0);
+    
+    // Avoid positive lookbehind `(?<=...)` because older WebKitGTK throws SyntaxError.
+    // Split by punctuation followed by whitespace/newline, OR just newlines.
+    // We capture the separator so we can keep the punctuation.
+    const parts = trimmed.split(/([.!?]+(?:[\s\n]+|$))|\n+/);
+    
+    const sentences: string[] = [];
+    let current = "";
+    
+    for (const part of parts) {
+        if (!part) continue;
+        if (/^[.!?]+(?:[\s\n]+|$)/.test(part) || part === "\n") {
+            current += part;
+            sentences.push(current.trim());
+            current = "";
+        } else {
+            current += part;
+        }
+    }
+    if (current.trim()) {
+        sentences.push(current.trim());
+    }
+    
+    return sentences.filter((s) => s.length > 0);
 }
 
 /** Group sentences into chunks of at most maxChars characters. */
 function chunkSentences(sentences: string[], maxChars: number): string[] {
     const chunks: string[] = [];
     let current = "";
+    
     for (const sentence of sentences) {
         const limit = chunks.length === 0 ? FIRST_CHUNK_CHARS : maxChars;
-        if (current.length + sentence.length > limit && current) {
-            chunks.push(current);
+        
+        // If adding this sentence exceeds the limit, push the current chunk.
+        if (current.length + sentence.length > limit && current.length > 0) {
+            chunks.push(current.trim());
             current = "";
         }
-        current = current ? `${current} ${sentence}` : sentence;
+        
+        // If the sentence ITSELF is longer than the limit, we MUST split it 
+        // forcefully by commas or words, otherwise Kokoro will hang for 20s.
+        if (sentence.length > limit) {
+            // Push whatever we have so far
+            if (current) {
+                chunks.push(current.trim());
+                current = "";
+            }
+            
+            // Force-split the massive sentence by commas or just maxChars
+            const subParts = sentence.split(/([,;:]\s+)/);
+            let subCurrent = "";
+            for (const sub of subParts) {
+                if (subCurrent.length + sub.length > limit && subCurrent.length > 0) {
+                    chunks.push(subCurrent.trim());
+                    subCurrent = "";
+                }
+                subCurrent += sub;
+                // If a single word/part is STILL larger than limit, forcefully slice it
+                while (subCurrent.length > limit) {
+                    chunks.push(subCurrent.slice(0, limit).trim());
+                    subCurrent = subCurrent.slice(limit);
+                }
+            }
+            if (subCurrent.trim()) {
+                current = subCurrent;
+            }
+        } else {
+            current = current ? `${current} ${sentence}` : sentence;
+        }
     }
-    if (current) chunks.push(current);
+    if (current.trim()) chunks.push(current.trim());
     return chunks;
 }
 
