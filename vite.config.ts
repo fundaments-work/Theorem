@@ -50,14 +50,6 @@ export default defineConfig(async () => ({
                     pdfjs: ["pdfjs-dist"],
                 },
             },
-            // TTS has been removed — prevent Rollup from bundling
-            // vendored foliate-js dynamic imports of deleted tts.js
-            external: (id) => {
-                if (id.endsWith("/foliate-js/tts.js") || id.endsWith("/foliate-js-runtime/tts.js")) {
-                    return true;
-                }
-                return false;
-            },
         },
     },
 

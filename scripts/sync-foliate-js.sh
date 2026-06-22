@@ -32,6 +32,7 @@ CORE_FILES=(
     "text-walker.js"
     "search.js"
     "tts.js"
+    "pdf.js"
     "types.d.ts"
     "LICENSE"
 )
@@ -67,6 +68,16 @@ sed -i "s|await import('./vendor/pdfjs/pdf.mjs')|import('pdfjs-dist')|g" "$VIEW_
 if grep -q "vendor/pdfjs" "$RUNTIME_DIR/fixed-layout.js" 2>/dev/null; then
     echo "Patching fixed-layout.js PDF.js imports..."
     sed -i "s|await import('./vendor/pdfjs/pdf.mjs')|import('pdfjs-dist')|g" "$RUNTIME_DIR/fixed-layout.js"
+fi
+
+# Patch pdf.js: replace vendored PDF.js with pdfjs-dist
+if grep -q "vendor/pdfjs" "$RUNTIME_DIR/pdf.js" 2>/dev/null; then
+    echo "Patching pdf.js PDF.js imports..."
+    # Replace static import of vendored pdf.mjs
+    sed -i "s|import './vendor/pdfjs/pdf.mjs'|import 'pdfjs-dist'|g" "$RUNTIME_DIR/pdf.js"
+    # Replace pdfjsPath function. Use string concat (not template literal)
+    # to avoid Vite's import-glob misinterpreting the path as a glob pattern.
+    sed -i 's|const pdfjsPath = path => new URL(`vendor/pdfjs/${path}`, import.meta.url).toString()|const pdfjsPath = path => new URL("pdfjs-dist/build/" + path, import.meta.url).toString()|' "$RUNTIME_DIR/pdf.js"
 fi
 
 # Verify no remaining references to vendor/pdfjs
