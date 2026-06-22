@@ -744,7 +744,7 @@ class TauriPdfRangeTransport extends pdfjsLib.PDFDataRangeTransport {
     constructor(path: string, length: number) {
         super(length, null, false);
         this.path = path;
-        this.transportReady();
+        this.transportReady(() => {});
     }
 
     override requestDataRange(begin: number, end: number): void {
@@ -763,7 +763,6 @@ class TauriPdfRangeTransport extends pdfjsLib.PDFDataRangeTransport {
                 const normalizedChunk = toSerializablePdfData(chunk);
                 this.loadedBytes = Math.min(this.length, Math.max(this.loadedBytes, safeBegin + normalizedChunk.byteLength));
                 this.onDataRange(safeBegin, normalizedChunk);
-                this.onDataProgress(this.loadedBytes, this.length);
             })
             .catch((error) => {
                 if (this.aborted) return;
@@ -960,7 +959,7 @@ const PageCanvas = memo(function PageCanvas({
                     tempCanvas.height = sizing.canvasHeight;
                     const ctx = tempCanvas.getContext("2d", { alpha: false });
                     if (!ctx || cancelled) { releaseRenderSlot(); releaseRenderSlot = null; return; }
-                    const renderTask = page.render({ canvasContext: ctx, viewport, transform: [sizing.renderScaleX, 0, 0, sizing.renderScaleY, 0, 0] });
+                    const renderTask = page.render({ canvas: tempCanvas, viewport, transform: [sizing.renderScaleX, 0, 0, sizing.renderScaleY, 0, 0] });
                     renderTaskRef.current = renderTask;
                     await renderTask.promise;
                     if (cancelled) return;
@@ -1510,7 +1509,6 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                 activeRangeTransport = new TauriPdfRangeTransport(pdfPath, fileSize);
                                 pdf = await pdfjsLib.getDocument({
                                     ...commonPdfOptions,
-                                    length: fileSize,
                                     range: activeRangeTransport,
                                     rangeChunkSize: preferredRangeChunkSize,
                                     disableStream: true,
@@ -1528,7 +1526,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     }
 
                     loadedPdf = pdf;
-                    if (cancelled) { pdf.destroy(); return; }
+                    if (cancelled) { pdf.cleanup(); return; }
 
                     setPdfDocument(pdf);
                     const totalPageCount = Math.max(1, pdf.numPages);
@@ -1562,7 +1560,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         void loadSpecificPages(warmupTargets);
                     } else {
                         initialPages.forEach((p) => p.cleanup());
-                        pdf.destroy();
+                        pdf.cleanup();
                     }
 
                     if (!cancelled && !getCachedPdfDocumentInfo(infoCacheKey, totalPageCount)) {
@@ -1612,7 +1610,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 pageLayoutRef.current = [];
                 prefetchedOperatorPagesRef.current.clear();
                 activeRangeTransport?.abort();
-                loadedPdf?.destroy();
+                loadedPdf?.cleanup();
                 setPdfDocument(null);
                 clearPageTextContentCache();
                 searchSessionRef.current += 1;

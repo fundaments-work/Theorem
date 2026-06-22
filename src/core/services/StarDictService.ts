@@ -336,10 +336,10 @@ export async function importStarDictFromBytes(
     dictBytes: Uint8Array,
     synBytes?: Uint8Array,
 ): Promise<InstalledDictionary> {
-    const ifoBuffer = ifoBytes.buffer.slice(ifoBytes.byteOffset, ifoBytes.byteOffset + ifoBytes.byteLength);
-    const idxBuffer = idxBytes.buffer.slice(idxBytes.byteOffset, idxBytes.byteOffset + idxBytes.byteLength);
-    const dictBuffer = dictBytes.buffer.slice(dictBytes.byteOffset, dictBytes.byteOffset + dictBytes.byteLength);
-    const synBuffer = synBytes ? synBytes.buffer.slice(synBytes.byteOffset, synBytes.byteOffset + synBytes.byteLength) : undefined;
+    const ifoBuffer = ifoBytes.buffer.slice(ifoBytes.byteOffset, ifoBytes.byteOffset + ifoBytes.byteLength) as ArrayBuffer;
+    const idxBuffer = idxBytes.buffer.slice(idxBytes.byteOffset, idxBytes.byteOffset + idxBytes.byteLength) as ArrayBuffer;
+    const dictBuffer = dictBytes.buffer.slice(dictBytes.byteOffset, dictBytes.byteOffset + dictBytes.byteLength) as ArrayBuffer;
+    const synBuffer = synBytes ? synBytes.buffer.slice(synBytes.byteOffset, synBytes.byteOffset + synBytes.byteLength) as ArrayBuffer | undefined : undefined;
 
     const parsed = parseIfoContent(textDecoder.decode(ifoBuffer));
     const id = crypto.randomUUID();

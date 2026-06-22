@@ -43,11 +43,12 @@ export default defineConfig(async () => ({
     build: {
         target: "esnext",
         assetsInlineLimit: 0,
-        rollupOptions: {
+        // Vite 8 uses rolldown — manualChunks must be a function
+        rolldownOptions: {
             output: {
-                manualChunks: {
+                manualChunks(id: string) {
                     // Separate PDF.js into its own chunk for better caching
-                    pdfjs: ["pdfjs-dist"],
+                    if (id.includes("pdfjs-dist")) return "pdfjs";
                 },
             },
         },
@@ -76,9 +77,4 @@ export default defineConfig(async () => ({
 
     // Prevent Vite from obscuring rust errors
     clearScreen: false,
-
-    // Optimize handling of .mjs files
-    esbuild: {
-        target: "es2022",
-    },
 }));

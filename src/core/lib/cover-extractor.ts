@@ -165,7 +165,7 @@ async function normalizeCoverBlob(rawCover: unknown, fallbackMimeType: string): 
     }
 
     if (ArrayBuffer.isView(rawCover)) {
-        return rawCover.byteLength > 0 ? new Blob([rawCover], { type: fallbackMimeType }) : null;
+        return rawCover.byteLength > 0 ? new Blob([rawCover as BlobPart], { type: fallbackMimeType }) : null;
     }
 
     if (typeof rawCover === 'string' && rawCover.startsWith('data:')) {
@@ -315,7 +315,6 @@ export async function extractMetadata(
 
             const loadingTask = pdfjsLib.getDocument({
                 data: serializableData,
-                isEvalSupported: false,
             });
 
             const pdf = await withTimeout(loadingTask.promise, metadataTimeoutMs, 'loading PDF metadata');
@@ -346,7 +345,7 @@ export async function extractMetadata(
 
                     await withTimeout(
                         page.render({
-                            canvasContext: ctx,
+                            canvas,
                             viewport: adjustedViewport,
                         }).promise,
                         coverTimeoutMs,
@@ -369,7 +368,7 @@ export async function extractMetadata(
                 console.warn('[CoverExtractor] PDF cover extraction failed:', coverError);
             }
 
-            pdf.destroy();
+            pdf.cleanup();
             if (allowFallbackCover) {
                 await ensureCoverFallback(result, filename, bookId);
             }

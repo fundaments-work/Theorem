@@ -158,7 +158,7 @@ async function readExternalFile(path: string): Promise<ArrayBuffer | null> {
                 contents.byteOffset + contents.byteLength,
             );
         }
-        if (contents instanceof ArrayBuffer) {
+        if ((contents as unknown) instanceof ArrayBuffer) {
             return contents;
         }
         if (Array.isArray(contents)) {

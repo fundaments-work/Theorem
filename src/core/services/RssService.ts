@@ -190,7 +190,7 @@ function createFeedParser(): XMLParser {
         parseTagValue: false,
         parseAttributeValue: false,
         // Treat certain tags that can repeat as arrays even if only one exists.
-        isArray: (_name: string, _jpath: string) => {
+        isArray: (_name: string, _jpath: any, _isLeafNode?: boolean, _isAttribute?: boolean) => {
             // Items / entries are always arrays.
             if (_name === 'item' || _name === 'entry') return true;
             // Atom links can repeat.
