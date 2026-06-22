@@ -783,7 +783,7 @@ async fn handle_file_availability(
     let mut available_ids = Vec::new();
     let mut file_sizes: HashMap<String, u64> = HashMap::new();
 
-    let mut stream = stream::iter(requested_book_ids.into_iter())
+    let mut stream = stream::iter(requested_book_ids)
         .map(|book_id| {
             let app_data_dir_clone = app_data_dir.clone();
             tokio::task::spawn_blocking(move || {

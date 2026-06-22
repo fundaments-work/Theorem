@@ -1217,7 +1217,7 @@ pub async fn pull_book_covers(
     let app_data_dir = sync_state.server_state.app_data_dir.clone();
 
     // Pull covers in parallel (up to 6 concurrent — covers are small).
-    let results: Vec<(String, Result<(), String>)> = stream::iter(book_ids.into_iter())
+    let results: Vec<(String, Result<(), String>)> = stream::iter(book_ids)
         .map(|book_id| {
             let client = client.clone();
             let base_url = base_url.clone();
