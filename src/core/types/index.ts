@@ -295,6 +295,9 @@ export interface VocabularyTerm {
     providerHistory: DictionaryProvider[];
     createdAt: Date;
     updatedAt?: Date;
+    lookupCount?: number;
+    tags?: string[];
+    contexts?: string[];
 }
 
 export interface InstalledDictionary {

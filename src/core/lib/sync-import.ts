@@ -372,6 +372,19 @@ export function mergeVocabulary(
                     ...(inc.providerHistory ?? []),
                 ]),
             ],
+            lookupCount: Math.max(match.lookupCount ?? 1, inc.lookupCount ?? 1),
+            tags: [
+                ...new Set([
+                    ...(match.tags ?? []),
+                    ...(inc.tags ?? []),
+                ]),
+            ],
+            contexts: [
+                ...new Set([
+                    ...(match.contexts ?? []),
+                    ...(inc.contexts ?? []),
+                ]),
+            ],
             updatedAt:
                 toEpoch(inc.updatedAt) > toEpoch(match.updatedAt)
                     ? inc.updatedAt
