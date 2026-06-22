@@ -959,8 +959,6 @@ pub async fn pull_book_files(
                 let app = app.clone();
                 let completed_files = completed_files.clone();
                 let completed_bytes = completed_bytes.clone();
-                let total_files = total_files;
-                let total_bytes = total_bytes;
                 let file_size = availability.file_sizes.get(&book_id).copied().unwrap_or(0);
 
                 async move {

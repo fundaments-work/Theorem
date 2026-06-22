@@ -939,7 +939,7 @@ fn uuid_v4() -> String {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    let random_part: u128 = now.as_nanos() as u128;
+    let random_part: u128 = now.as_nanos();
     format!(
         "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
         (random_part >> 96) as u32,
@@ -950,9 +950,9 @@ fn uuid_v4() -> String {
     )
 }
 
-fn extract_stardict_parts_from_zip(
-    data: &[u8],
-) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>, Option<Vec<u8>>), String> {
+type StardictParts = (Vec<u8>, Vec<u8>, Vec<u8>, Option<Vec<u8>>);
+
+fn extract_stardict_parts_from_zip(data: &[u8]) -> Result<StardictParts, String> {
     let reader = std::io::Cursor::new(data);
     let mut archive =
         zip::ZipArchive::new(reader).map_err(|e| format!("ZIP parsing failed: {e}"))?;
@@ -989,9 +989,7 @@ fn extract_stardict_parts_from_zip(
     Ok((ifo, idx, dict, syn_bytes))
 }
 
-fn extract_stardict_parts_from_tar_bz2(
-    data: &[u8],
-) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>, Option<Vec<u8>>), String> {
+fn extract_stardict_parts_from_tar_bz2(data: &[u8]) -> Result<StardictParts, String> {
     let decompressed = {
         let mut decoder = bzip2::read::BzDecoder::new(data);
         let mut buf = Vec::new();
