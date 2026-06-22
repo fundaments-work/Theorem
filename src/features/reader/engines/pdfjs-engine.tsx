@@ -851,6 +851,7 @@ const PageCanvas = memo(function PageCanvas({
         container.style.width = `${cssWidth}px`;
         container.style.height = `${cssHeight}px`;
         container.style.setProperty("--scale-factor", `${viewport.scale}`);
+        container.style.setProperty("--total-scale-factor", `${viewport.scale}`);
         canvas.style.width = `${cssWidth}px`;
         canvas.style.height = `${cssHeight}px`;
     }, [page, scale, rotation, enableTextLayer, snapCssToPixels]);
@@ -937,6 +938,7 @@ const PageCanvas = memo(function PageCanvas({
                 const shouldRenderCanvas = !hasRenderedCanvasRef.current || lastCanvasRenderKeyRef.current !== canvasRenderKey;
 
                 containerRef.current?.style.setProperty("--scale-factor", `${viewport.scale}`);
+                containerRef.current?.style.setProperty("--total-scale-factor", `${viewport.scale}`);
                 containerRef.current?.style.setProperty("--scale-round-x", `${sizing.scaleRoundX}px`);
                 containerRef.current?.style.setProperty("--scale-round-y", `${sizing.scaleRoundY}px`);
 
