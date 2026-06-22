@@ -32,9 +32,11 @@ fn shared_http_client() -> &'static Client {
     })
 }
 
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
-use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::WindowEvent;
+#[cfg(desktop)]
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+#[cfg(desktop)]
+use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 
 #[derive(Default)]
 struct PendingOpenFiles(Mutex<Vec<String>>);
