@@ -959,7 +959,7 @@ const PageCanvas = memo(function PageCanvas({
                     tempCanvas.height = sizing.canvasHeight;
                     const ctx = tempCanvas.getContext("2d", { alpha: false });
                     if (!ctx || cancelled) { releaseRenderSlot(); releaseRenderSlot = null; return; }
-                    const renderTask = page.render({ canvas: tempCanvas, viewport, transform: [sizing.renderScaleX, 0, 0, sizing.renderScaleY, 0, 0] });
+                    const renderTask = page.render({ canvas: null, canvasContext: ctx, viewport, transform: [sizing.renderScaleX, 0, 0, sizing.renderScaleY, 0, 0] });
                     renderTaskRef.current = renderTask;
                     await renderTask.promise;
                     if (cancelled) return;
