@@ -63,7 +63,6 @@
 
 .textLayer span.markedContent {
     top: 0;
-    height: 0;
 }
 
 .textLayer span[role="img"] {

@@ -578,6 +578,7 @@ export function PDFAnnotationLayer({
                 mode === "erase" && "cursor-not-allowed touch-none",
                 (mode === "none" || mode === "highlight") && "pointer-events-none",
             )}
+            style={{ width: `${canvasSize.width}px`, height: `${canvasSize.height}px` }}
             onPointerDown={handleLayerPointerDown}
             onPointerMove={handleLayerPointerMove}
             onPointerUp={handleLayerPointerUp}
