@@ -39,9 +39,6 @@ import {
     type ArticleReaderPanel,
 } from "./index";
 import { buildArticleDescription, formatArticleDate, sanitizeArticleHtml } from "./utils";
-import { useKokoroTts } from "../tts/useKokoroTts";
-import { TtsPanel } from "../components/TtsPanel";
-import { TtsPlayerBar } from "../components/TtsPlayerBar";
 
 
 interface ArticleViewerProps {
@@ -504,15 +501,8 @@ export function ArticleViewer({
     const addAnnotation = useLibraryStore((state) => state.addAnnotation);
     const updateAnnotation = useLibraryStore((state) => state.updateAnnotation);
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
-    const kokoroTts = useKokoroTts();
-
-    // Show TTS only if the reader-level TTS setting is enabled
-    const ttsEnabled = globalReaderSettings.ttsEnabled;
 
     const [activePanel, setActivePanel] = useState<ArticleReaderPanel>(null);
-    const [showTtsSettings, setShowTtsSettings] = useState(false);
-    const [isTtsActive, setIsTtsActive] = useState(false);
-    const prevTtsStatusRef = useRef<string>("idle");
     const [showChrome, setShowChrome] = useState(false);
     const [readingProgress, setReadingProgress] = useState(0);
     const [headings, setHeadings] = useState<ArticleHeading[]>([]);
@@ -623,21 +613,6 @@ export function ArticleViewer({
         };
     }, [article?.id, isOpen]);
 
-    // Preload TTS model in background when article viewer opens
-    useEffect(() => {
-        if (!ttsEnabled || !isOpen) return;
-        kokoroTts.prepare().catch(() => {});
-    }, [ttsEnabled, isOpen]);
-
-    // Stop TTS when switching to a different article
-    useEffect(() => {
-        if (!article?.id) return;
-        if (kokoroTts.isSpeaking || kokoroTts.isPaused) {
-            kokoroTts.stop();
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [article?.id]);
-
     useEffect(() => {
         if (!isOpen) {
             return;
@@ -697,49 +672,6 @@ export function ArticleViewer({
     const handleToggleFullscreen = useCallback(() => {
         updateReaderSetting({ fullscreen: !isFullscreen });
     }, [isFullscreen, updateReaderSetting]);
-
-    const handleToggleTts = useCallback(() => {
-        if (isTtsActive) {
-            kokoroTts.stop();
-            setIsTtsActive(false);
-            setShowTtsSettings(false);
-            return;
-        }
-        const text = contentRef.current?.textContent?.trim();
-        if (!text) return;
-        // Resume AudioContext within the user gesture — critical for audio
-        kokoroTts.prepareAudio();
-        setIsTtsActive(true);
-    }, [isTtsActive, kokoroTts]);
-
-    // Start speaking when TTS is toggled on
-    useEffect(() => {
-        if (!isTtsActive || !ttsEnabled) return;
-        const text = contentRef.current?.textContent?.trim();
-        if (!text) {
-            setIsTtsActive(false);
-            return;
-        }
-        if (!kokoroTts.isSpeaking && !kokoroTts.isPaused) {
-            kokoroTts.speak(text).catch((err) => {
-                console.error("[ArticleViewer] TTS speak failed:", err);
-                setIsTtsActive(false);
-            });
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isTtsActive, ttsEnabled]);
-
-    // Auto-hide TTS bar when playback finishes naturally
-    useEffect(() => {
-        if (!isTtsActive) return;
-        const prev = prevTtsStatusRef.current;
-        const curr = kokoroTts.state.status;
-        prevTtsStatusRef.current = curr;
-        if ((prev === "playing" || prev === "paused") && (curr === "ready" || curr === "error")) {
-            setIsTtsActive(false);
-            setShowTtsSettings(false);
-        }
-    }, [kokoroTts.state.status]);
 
     const handleArticleExitFullscreen = useCallback(() => {
         updateReaderSetting({ fullscreen: false });
@@ -1582,54 +1514,10 @@ export function ArticleViewer({
                         activePanel={activePanel}
                         fullscreen={isFullscreen}
                         onToggleFullscreen={handleToggleFullscreen}
-                        isTtsActive={ttsEnabled ? isTtsActive : undefined}
-                        onToggleTts={ttsEnabled ? handleToggleTts : undefined}
                     />
                 </div>
 
                 <Backdrop visible={activePanel !== null && !usesSharedPanelBackdrop} onClick={closePanel} blur />
-
-                {/* TTS — audiobook-style bottom player bar */}
-                {ttsEnabled && isTtsActive && (
-                    <div
-                        className={cn(
-                            "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",
-                            "translate-y-0",
-                        )}
-                    >
-                        <TtsPlayerBar
-                            state={kokoroTts.state}
-                            progress={kokoroTts.progress}
-                            isSpeaking={kokoroTts.isSpeaking}
-                            isLoading={kokoroTts.isLoading}
-                            speed={kokoroTts.speed}
-                            onPlayPause={() => {
-                                if (kokoroTts.isSpeaking) kokoroTts.pause();
-                                else if (kokoroTts.isPaused) kokoroTts.resume();
-                            }}
-                            onStop={handleToggleTts}
-                            onSkipForward={kokoroTts.skipForward}
-                            onSkipBack={kokoroTts.skipBack}
-                            onSpeedCycle={() => {
-                                const speeds = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-                                const idx = speeds.indexOf(kokoroTts.speed);
-                                kokoroTts.setSpeed(speeds[(idx + 1) % speeds.length]);
-                            }}
-                            onOpenSettings={() => setShowTtsSettings(true)}
-                        />
-                    </div>
-                )}
-
-                {/* TTS voice settings overlay */}
-                <TtsPanel
-                    visible={showTtsSettings}
-                    onClose={() => setShowTtsSettings(false)}
-                    voices={kokoroTts.voices}
-                    selectedVoice={kokoroTts.selectedVoice}
-                    speed={kokoroTts.speed}
-                    onVoiceChange={kokoroTts.setVoice}
-                    onSpeedChange={kokoroTts.setSpeed}
-                />
 
                 <TableOfContents
                     toc={articleToc}

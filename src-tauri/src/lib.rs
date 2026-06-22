@@ -1,5 +1,4 @@
 mod database;
-mod kokoro;
 mod sync_commands;
 mod sync_crypto;
 mod sync_protocol;
@@ -828,11 +827,6 @@ pub fn run() {
             sync_commands::pull_book_covers,
             hide_to_tray,
             download_and_extract_stardict,
-            kokoro::tts_load,
-            kokoro::tts_synthesize,
-            kokoro::tts_stop,
-            kokoro::tts_get_voices,
-            kokoro::tts_is_ready,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

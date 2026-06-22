@@ -64,7 +64,6 @@ export interface UseDocumentReaderReturn {
     // Text selection
     getSelection: () => { text: string; cfi: string } | null;
     clearSelection: () => void;
-    getCurrentSectionText: () => string;
 
     // Search
     search: (query: string) => AsyncGenerator<SearchResult | { progress: number } | 'done'>;
@@ -376,10 +375,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         engineRef.current?.clearSelection();
     }, []);
 
-    const getCurrentSectionText = useCallback((): string => {
-        return engineRef.current?.getCurrentSectionText() ?? "";
-    }, []);
-
     // Search
     const search = useCallback(async function* (query: string) {
         const engine = engineRef.current;
@@ -482,7 +477,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         goToAnnotation,
         getSelection,
         clearSelection,
-        getCurrentSectionText,
         search,
         clearSearch,
         close,
@@ -521,7 +515,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         goToAnnotation,
         getSelection,
         clearSelection,
-        getCurrentSectionText,
         search,
         clearSearch,
         close,

@@ -16,7 +16,6 @@ import {
     EllipsisVertical,
     Type,
     Info,
-    Volume2,
 } from "lucide-react";
 import { cn } from "../../../core";
 import { isMobile, isTauri } from "../../../core";
@@ -40,8 +39,6 @@ interface WindowTitlebarProps {
     activePanel: string | null;
     fullscreen?: boolean;
     onToggleFullscreen?: () => void;
-    isTtsActive?: boolean;
-    onToggleTts?: () => void;
     className?: string;
     // Legacy props kept for compatibility until verified
     hideReaderControls?: boolean;
@@ -185,8 +182,6 @@ export function WindowTitlebar({
     activePanel,
     fullscreen,
     onToggleFullscreen,
-    isTtsActive,
-    onToggleTts,
     className,
 }: WindowTitlebarProps) {
     const [isMaximized, setIsMaximized] = useState(false);
@@ -320,17 +315,6 @@ export function WindowTitlebar({
                             title={isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark"}
                         >
                             <BookmarkIcon className={cn("w-5 h-5 lg:w-4 lg:h-4", isCurrentPageBookmarked ? "fill-current" : "")} />
-                        </ToolbarButton>
-                    )}
-
-                    {onToggleTts && (
-                        <ToolbarButton
-                            onClick={onToggleTts}
-                            active={isTtsActive}
-                            title={isTtsActive ? "Stop Read Aloud" : "Read Aloud"}
-                            className={isTtsActive ? "text-[color:var(--color-accent)]!" : ""}
-                        >
-                            <Volume2 className="w-5 h-5 lg:w-4 lg:h-4" />
                         </ToolbarButton>
                     )}
 

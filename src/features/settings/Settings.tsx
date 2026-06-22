@@ -184,7 +184,6 @@ export function SettingsPage() {
     const {
         settings,
         updateSettings,
-        updateReaderSettings,
         updateVocabularySettings,
         resetSettings,
         stats,
@@ -686,16 +685,6 @@ export function SettingsPage() {
                             <Toggle
                                 checked={settings.sidebarCollapsed}
                                 onChange={(checked) => updateSettings({ sidebarCollapsed: checked })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Read Aloud (TTS)"
-                            description="Enable text-to-speech in the reader"
-                        >
-                            <Toggle
-                                checked={settings.readerSettings.ttsEnabled}
-                                onChange={(checked) => updateReaderSettings({ ttsEnabled: checked })}
                             />
                         </SettingRow>
 

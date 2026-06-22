@@ -54,7 +54,6 @@ const defaultReaderSettings: ReaderSettings = {
     zoom: 100,
     wordSpacing: 0,
     forcePublisherStyles: false,
-    ttsEnabled: true,
     // Performance settings
     prefetchDistance: 1,
     enableAnimations: false,

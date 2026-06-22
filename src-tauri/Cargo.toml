@@ -56,8 +56,3 @@ hex = "0.4"
 bzip2 = "0.4"
 tar = "0.4"
 zip = "0.6"
-
-# ── Kokoro TTS (via tts-rs + espeak-ng) ──
-tts-rs = { version = "2026.2.3", features = ["kokoro"] }
-# Pin ort to rc.10 — tts-rs 2026.2.3 expects pre-SessionBuilder error types
-ort = { version = "=2.0.0-rc.11", default-features = true }

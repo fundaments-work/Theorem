@@ -187,7 +187,6 @@ export interface ReaderSettings {
     zoom: number; // 50-200, percentage
     wordSpacing: number; // 0-0.5em
     forcePublisherStyles: boolean; // Override book's CSS
-    ttsEnabled: boolean; // Text-to-speech read aloud
     // Performance settings
     prefetchDistance: number; // Number of sections to prefetch (1-3)
     enableAnimations: boolean;

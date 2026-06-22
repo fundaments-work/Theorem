@@ -50,11 +50,6 @@ import { useReaderFullscreen, useToolbarHeight } from "./hooks";
 import type { PDFJsEngineRef } from "./engines/pdfjs-engine";
 import type { ReaderViewportHandle } from "./components/ReaderViewport";
 import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
-import { ReadAloudBar } from "./components/ReadAloudBar";
-import { TtsPanel } from "./components/TtsPanel";
-import { TtsPlayerBar } from "./components/TtsPlayerBar";
-import { useTtsController } from "./hooks/useTtsController";
-import { useKokoroTts } from "./tts/useKokoroTts";
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -162,7 +157,6 @@ function BookReaderPage() {
     const pdfReaderRef = useRef<PDFJsEngineRef>(null);
     const loadedBookIdRef = useRef<string | null>(null);
     const toolbarContainerRef = useRef<HTMLDivElement>(null);
-    const prevTtsStatusRef = useRef<string>("idle");
     const toolbarHeight = useToolbarHeight(toolbarContainerRef, {
         defaultHeight: 56,
         minHeight: 44,
@@ -207,8 +201,6 @@ function BookReaderPage() {
             : false
     ));
     const [showToolbar, setShowToolbar] = useState(true);
-    const [isTtsActive, setIsTtsActive] = useState(false);
-    const [showTtsSettings, setShowTtsSettings] = useState(false);
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | 'menu' | null;
     const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -237,75 +229,6 @@ function BookReaderPage() {
     const togglePanel = useCallback((panel: ReaderPanel) => {
         setActivePanel(current => current === panel ? null : panel);
     }, []);
-
-    const getCurrentSectionText = useCallback((): string => {
-        return readerRef.current?.getCurrentSectionText?.() ?? "";
-    }, []);
-
-    const ttsController = useTtsController(getCurrentSectionText);
-    const kokoroTts = useKokoroTts();
-
-    const toggleTts = useCallback(() => {
-        console.log("[Reader] TTS toggle clicked, enabled:", settings.readerSettings.ttsEnabled, "speaking:", kokoroTts.isSpeaking, "paused:", kokoroTts.isPaused);
-        if (!settings.readerSettings.ttsEnabled) return;
-        if (kokoroTts.isSpeaking || kokoroTts.isPaused) {
-            kokoroTts.stop();
-            setIsTtsActive(false);
-            setShowTtsSettings(false);
-            return;
-        }
-        // Resume AudioContext IMMEDIATELY within the user gesture.
-        // If we wait until after the useEffect/await, the browser will
-        // refuse to start audio (user gesture expired → silence).
-        kokoroTts.prepareAudio();
-        setIsTtsActive(true);
-    }, [settings.readerSettings.ttsEnabled, kokoroTts.isSpeaking, kokoroTts.isPaused, kokoroTts.stop]);
-
-    // Preload TTS model in background when reader opens (if TTS is enabled)
-    useEffect(() => {
-        if (!settings.readerSettings.ttsEnabled) return;
-        // Fire-and-forget: start loading so it's ready when user clicks
-        kokoroTts.prepare().catch((err) => {
-            console.error("[Reader] TTS background preload failed:", err);
-        });
-    }, [settings.readerSettings.ttsEnabled]);
-
-    // When TTS is toggled, start/stop Kokoro with current section text
-    useEffect(() => {
-        if (!settings.readerSettings.ttsEnabled) return;
-
-        if (isTtsActive) {
-            const text = getCurrentSectionText();
-            console.log("[Reader] TTS effect fired, text length:", text?.length ?? 0);
-            if (!text) {
-                console.warn("[Reader] No text available for TTS");
-                setIsTtsActive(false);
-                return;
-            }
-            if (!kokoroTts.isSpeaking && !kokoroTts.isPaused) {
-                console.log("[Reader] Calling kokoroTts.speak()...");
-                kokoroTts.speak(text).catch((err) => {
-                    console.error("[Reader] TTS speak failed:", err);
-                    setIsTtsActive(false);
-                });
-            }
-        } else {
-            kokoroTts.stop();
-        }
-    }, [isTtsActive, settings.readerSettings.ttsEnabled]);
-
-    // Auto-hide TTS bar when playback finishes naturally
-    useEffect(() => {
-        if (!isTtsActive) return;
-        const prev = prevTtsStatusRef.current;
-        const curr = kokoroTts.state.status;
-        prevTtsStatusRef.current = curr;
-        // Detect transition from playing/paused -> ready (finished) or error
-        if ((prev === "playing" || prev === "paused") && (curr === "ready" || curr === "error")) {
-            setIsTtsActive(false);
-            setShowTtsSettings(false);
-        }
-    }, [kokoroTts.state.status]);
 
     // Get current book format
     const currentBook = currentBookId ? getBook(currentBookId) : null;
@@ -2088,8 +2011,6 @@ function BookReaderPage() {
                     activePanel={activePanel}
                     fullscreen={settings.readerSettings.fullscreen}
                     onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
-                    isTtsActive={settings.readerSettings.ttsEnabled ? isTtsActive : undefined}
-                    onToggleTts={settings.readerSettings.ttsEnabled ? toggleTts : undefined}
 
                 />
             </div>
@@ -2156,56 +2077,6 @@ function BookReaderPage() {
                 )}
             </div>
 
-            {/* TTS — audiobook-style bottom player bar + voice settings overlay */}
-            {isTtsActive && !isPdfFormat && (
-                <div
-                    className={cn(
-                        "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",
-                        "translate-y-0",
-                    )}
-                >
-                    <TtsPlayerBar
-                        state={kokoroTts.state}
-                        progress={kokoroTts.progress}
-                        isSpeaking={kokoroTts.isSpeaking}
-                        isLoading={kokoroTts.isLoading}
-                        speed={kokoroTts.speed}
-                        onPlayPause={() => {
-                            if (kokoroTts.isSpeaking) kokoroTts.pause();
-                            else if (kokoroTts.isPaused) kokoroTts.resume();
-                        }}
-                        onStop={toggleTts}
-                        onSkipForward={kokoroTts.skipForward}
-                        onSkipBack={kokoroTts.skipBack}
-                        onSpeedCycle={() => {
-                            const speeds = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-                            const idx = speeds.indexOf(kokoroTts.speed);
-                            kokoroTts.setSpeed(speeds[(idx + 1) % speeds.length]);
-                        }}
-                        onOpenSettings={() => setShowTtsSettings(true)}
-                    />
-                </div>
-            )}
-
-            {/* TTS voice settings overlay — opened from gear icon */}
-            <TtsPanel
-                visible={showTtsSettings}
-                onClose={() => setShowTtsSettings(false)}
-                voices={kokoroTts.voices}
-                selectedVoice={kokoroTts.selectedVoice}
-                speed={kokoroTts.speed}
-                onVoiceChange={kokoroTts.setVoice}
-                onSpeedChange={kokoroTts.setSpeed}
-            />
-
-            {/* Read Aloud (browser speechSynthesis fallback) */}
-            {isTtsActive && !isPdfFormat && !kokoroTts.isReady && typeof speechSynthesis !== "undefined" && (
-                <ReadAloudBar
-                    controller={ttsController}
-                    onClose={toggleTts}
-                />
-            )}
-
             {/* PDF Floating Toolbar & TOC Button */}
             {isBookReady && isPdfFormat && (
                 <>
@@ -2241,8 +2112,8 @@ function BookReaderPage() {
                 </>
             )}
 
-            {/* Bottom Progress Navbar - hidden when TTS is active */}
-            {isBookReady && !isPdfFormat && !isTtsActive && (
+            {/* Bottom Progress Navbar */}
+            {isBookReady && !isPdfFormat && (
                 <ReaderNavbar
                     location={location}
                     toc={toc}
