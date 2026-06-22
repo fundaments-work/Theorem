@@ -74,26 +74,26 @@ jobs:
           body: |
             ## Theorem v${{ steps.get_version.outputs.VERSION }}
 
-            Local-first reader for PDFs, EPUBs, MOBI, FB2, CBZ, and RSS. Highlight, annotate, and sync to
-            Markdown for Obsidian/Logseq workflows. No cloud account. No subscription.
+            Local-first reader for PDFs, EPUBs, MOBI, FB2, CBZ, and RSS feeds. Read, highlight, annotate, and sync your notes to Markdown for Obsidian or Logseq. No cloud account. No subscription.
 
-            ### What's new in this release
+            ### Features
 
-            See the [changelog](https://github.com/fundaments-work/Theorem/commits/main) for a full list of changes since the previous release.
+            - **PDF reader** — PDF.js-based engine with text selection, highlights, freehand drawing, and text notes. Supports light, sepia, and dark themes. Pinch-to-zoom and Ctrl+wheel zoom anchored to cursor.
+            - **Ebook reader** — Reflowable EPUB/MOBI/AZW/AZW3/FB2/CBZ via Foliate engine with customizable typography, brightness, and themes.
+            - **RSS reader** — Subscribe to feeds, read articles in a focused view with full-text extraction via Readability.
+            - **Annotations** — Highlight text in multiple colors, add text notes, draw freehand. All annotations sync to your Markdown vault (Obsidian/Logseq).
+            - **Vocabulary builder** — Look up words via StarDict dictionaries, save terms with definitions for later review.
+            - **Text-to-speech** — Audiobook-style playback with speed controls, crossfade streaming, background preload. Works on EPUB and article content.
+            - **Share studio** — Generate shareable cards from highlights and reading stats. Export as PNG.
+            - **Sync** — LAN device sync with end-to-end encryption (X25519 + ChaCha20-Poly1305). Sync reading progress, annotations, and bookmarks across devices on your local network.
+            - **Library management** — Organize books into collections, track reading progress, filter by format and status. Import from local files, Obsidian vaults, or download folders.
+            - **Statistics** — Track reading time, pages turned, vocabulary growth over time.
 
-            ### Downloads
+            ### Platforms
 
-            | Platform | Format |
-            |----------|--------|
-            | Linux | `.deb`, `.AppImage` |
-            | Windows | `.msi`, `.exe` |
-            | macOS (Intel) | `.dmg` |
-            | macOS (Apple Silicon) | `.dmg` |
-            | Android | `.apk`, `.aab` |
+            Available for Linux (.deb, .AppImage), Windows (.msi, .exe), macOS (Intel and Apple Silicon .dmg), and Android (.apk, .aab).
 
-            ### About
-
-            Theorem is open source under the MIT license. Report issues at https://github.com/fundaments-work/Theorem/issues.
+            Released under the MIT license. Report issues at https://github.com/fundaments-work/Theorem/issues.
           draft: true
           prerelease: ${{ contains(steps.get_version.outputs.VERSION, '-') }}
           generate_release_notes: false
