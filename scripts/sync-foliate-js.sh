@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Sync foliate-js submodule to runtime directory
-# Copies only required files and patches PDF.js imports
+# Copies only required files and patches PDF.js imports.
+# NOTE: vendor/pdfjs/ was intentionally removed from the repo (13MB dead code).
+# The app uses pdfjs-dist from npm — see pdfjs-runtime.ts.
 
 set -euo pipefail
 
