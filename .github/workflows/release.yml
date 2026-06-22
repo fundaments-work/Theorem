@@ -72,20 +72,63 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           name: Theorem ${{ steps.get_version.outputs.VERSION }}
           body: |
-            ## What is Theorem?
+            ## Theorem v${{ steps.get_version.outputs.VERSION }} — Beta 5
 
             Local-first reader for PDFs, EPUBs, MOBI, FB2, CBZ, and RSS. Highlight, annotate, and sync to
             Markdown for Obsidian/Logseq workflows. No cloud account. No subscription.
 
+            ### 📖 PDF Reader
+
+            - Upgraded to **pdfjs-dist v6** — faster rendering, improved text layer accuracy
+            - **Fixed annotation layer sizing** — highlights now correctly cover selected text (CSS `--font-height`/`--scale-x`/`--rotate` integration for pdfjs v6)
+            - **Offscreen canvas swap** — no more blank frames during zoom; atomic pixel-buffer swap
+            - **Zoom-to-pointer** — Ctrl+wheel and pinch zoom anchor to cursor position
+            - **Scroll loading** — intelligent page prefetching ahead of scroll direction
+            - **Reduced memory** — operator prefetch bounded, text content cache capped, stale pages released
+            - **WebKit text layer calibration** — median-based font width correction with configurable sample limits
+
+            ### 🔊 Text-to-Speech
+
+            - **Replaced rodio with Web Audio API** — smooth streaming playback with crossfade
+            - Fixed critical deadlock — `INNER` lock released before synthesis
+            - Fixed app freeze on second play — race condition in engine-ready check
+            - Audiobook-style **bottom player bar** with speed controls, auto-hide on finish
+            - Background preload — current-section only; no unnecessary downloads
+            - Dynamic audio normalization — no more whispers or clipping
+            - Removed Kokoro TTS; using lightweight ONNX-based engine (~115MB)
+
+            ### 🖼️ Share Studio
+
+            - **Highlight share** — generate polished canvas-based share cards from any highlight
+            - **Reading stats** — share your reading progress with clean infographic cards
+            - Multiple export targets (PNG download, clipboard copy)
+
+            ### 🎨 UI & Library
+
+            - Swiss minimalist theme — refined typography, accessible monochrome palette
+            - Semantic design tokens — consistent theming across light, sepia, and dark modes
+            - Library sidebar filters — organize books by collection, status, format
+            - Reorderable toolbar — customize your reader controls
+            - Stats dashboard — reading time, pages turned, vocabulary growth
+
+            ### 🛠️ Infrastructure
+
+            - **Tauri 2.11** — latest stable with tray icon support
+            - **Android builds** — APK + AAB with code signing
+            - Cross-platform CI — Linux (deb/AppImage), Windows (msi/exe), macOS (Intel + Apple Silicon dmg), Android
+            - Rustls TLS — native-tls replaced for Android cross-compile compatibility
+            - GitHub Actions updated — all runners on Node 24 (actions/checkout@v5, setup-node@v6, cache@v5, pnpm/action-setup@v6)
+            - SQLite-backed persistence on desktop; IndexedDB fallback on web
+
             ## Downloads
 
-            | Platform | Download |
-            |----------|----------|
-            | Linux | `.deb` or `.AppImage` |
-            | Windows | `.msi` or `.exe` |
-            | macOS (Intel) | `.dmg` |
-            | macOS (Apple Silicon) | `.dmg` |
-            | Android | `.apk` |
+            | Platform | Architecture | Format |
+            |----------|-------------|--------|
+            | Linux | x86_64 | `.deb`, `.AppImage` |
+            | Windows | x86_64 | `.msi`, `.exe` |
+            | macOS | Intel | `.dmg` |
+            | macOS | Apple Silicon | `.dmg` |
+            | Android | aarch64 | `.apk`, `.aab` |
           draft: true
           prerelease: ${{ contains(steps.get_version.outputs.VERSION, '-') }}
           generate_release_notes: false
