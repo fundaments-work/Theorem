@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-5] - 2026-06-22
+
+### Removed
+
+- **Kokoro TTS system** — completely removed after being broken at the audio pipeline level (whisper-silent output, multi-second playback gaps, engine loss on concurrent calls). 2,561 lines removed across 22 files including the Rust ONNX backend, Web Audio pipeline, and all TTS UI components.
+
+### Changed
+
+- Stripped all TTS integration from Reader, ArticleViewer, and WindowTitlebar.
+- Removed `ttsEnabled` from ReaderSettings type and Zustand store defaults.
+- Removed `tts-rs` and `ort` Cargo dependencies.
+- Replaced vendored foliate-js `tts.js` with build-excluded stubs.
+- Removed dead `getCurrentSectionText` code from foliate-engine, useDocumentReader, and ReaderViewport.
+- Cleaned Playwright e2e tests and related devDependencies.
+- Updated README for first stable release.
+
 ## [1.0.0-beta.5] - 2026-03-27
 
 ### Changed

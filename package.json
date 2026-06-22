@@ -1,17 +1,19 @@
 {
     "name": "theorem",
+    "version": "1.0.0-5",
     "description": "Local-first reader for PDFs, EPUBs, and RSS with highlights and Markdown export.",
     "private": true,
     "author": "Fundamentals",
     "license": "MIT",
-    "homepage": "https://github.com/sapienskid/theorem",
+    "homepage": "https://github.com/fundaments-work/theorem",
     "repository": {
         "type": "git",
-        "url": "https://github.com/sapienskid/theorem.git"
+        "url": "https://github.com/fundaments-work/theorem.git"
     },
     "bugs": {
-        "url": "https://github.com/sapienskid/theorem/issues"
+        "url": "https://github.com/fundaments-work/theorem/issues"
     },
+    "keywords": ["reader", "epub", "pdf", "rss", "tauri", "ebook", "highlights", "annotations"],
     "packageManager": "pnpm@10.18.1",
     "scripts": {
         "dev": "vite",
@@ -24,13 +26,10 @@
         "package:linux:appimage": "bash ./scripts/makepackage-linux.sh --bundle appimage",
         "install:linux": "bash ./scripts/install-linux.sh",
         "uninstall:linux": "bash ./scripts/uninstall-linux.sh",
-        "audit:design-tokens": "node scripts/analyze-design-token-usage.mjs",
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "preview": "vite preview",
-        "e2e": "playwright test",
-        "e2e:ui": "playwright test --ui",
         "tauri": "tauri",
         "clean:tauri": "cargo clean --manifest-path src-tauri/Cargo.toml"
     },
@@ -69,7 +68,6 @@
         "zustand": "^5.0.10"
     },
     "devDependencies": {
-        "@playwright/test": "^1.61.0",
         "@tailwindcss/vite": "^4.0.0",
         "@tauri-apps/cli": "^2.0.0",
         "@types/node": "^22.0.0",

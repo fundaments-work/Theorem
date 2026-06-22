@@ -73,29 +73,19 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           name: Theorem ${{ steps.get_version.outputs.VERSION }}
           body: |
-            ## Features
+            ## What is Theorem?
 
-            - Reflowable reader support for EPUB, MOBI, AZW/AZW3, FB2, and CBZ.
-            - PDF reading via PDF.js with annotation tooling.
-            - RSS feed reading mode with article extraction.
-            - Library management with import, shelves, bookmarks, and progress tracking.
-            - Local-first Markdown export, Obsidian/Logseq vault sync, and encrypted LAN device sync.
-
-            ## Included In This Beta Update
-
-            - Added encrypted LAN device sync with pairing, merge logic, and sync controls.
-            - Added mobile QR pairing flow and improved paired-device UX.
-            - Hardened sync conflict resolution, deletion tombstones, and cover extraction.
-            - Added Linux packaging/install scripts for local distro-aware installs.
+            Local-first reader for PDFs, EPUBs, MOBI, FB2, CBZ, and RSS. Highlight, annotate, and sync to
+            Markdown for Obsidian/Logseq workflows. No cloud account. No subscription.
 
             ## Downloads
 
             | Platform | Download |
             |----------|----------|
-            | Windows | `.msi` or `.exe` installer |
-            | macOS (Intel) | `.dmg` installer |
-            | macOS (Apple Silicon) | `.dmg` installer |
-            | Linux | `.AppImage` or `.deb` package |
+            | Linux | `.deb` or `.AppImage` |
+            | Windows | `.msi` or `.exe` |
+            | macOS (Intel) | `.dmg` |
+            | macOS (Apple Silicon) | `.dmg` |
             | Android | `.apk` |
           draft: true
           prerelease: ${{ contains(steps.get_version.outputs.VERSION, '-') }}

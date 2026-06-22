@@ -10,16 +10,12 @@ No cloud account. No subscription wall. No vendor lock-in.
 
 ## Download Theorem
 
-[![Latest Release](https://img.shields.io/github/v/release/sapienskid/theorem?label=latest&style=flat-square)](https://github.com/sapienskid/theorem/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/fundaments-work/theorem?label=latest&style=flat-square)](https://github.com/fundaments-work/theorem/releases/latest)
 
-- [Download for Windows](https://github.com/sapienskid/theorem/releases/latest) (`.msi` or `.exe`)
-- [Download for macOS (Intel)](https://github.com/sapienskid/theorem/releases/latest) (`.dmg`)
-- [Download for macOS (Apple Silicon)](https://github.com/sapienskid/theorem/releases/latest) (`.dmg`)
-- [Download for Linux](https://github.com/sapienskid/theorem/releases/latest) (`.AppImage` or `.deb`)
-- [Download for Mobile (Android)](https://github.com/sapienskid/theorem/releases/latest) (`.apk`)
-- [Star on GitHub](https://github.com/sapienskid/theorem/stargazers)
-- [View Source Code](https://github.com/sapienskid/theorem)
-- [Join Community Discussions](https://github.com/sapienskid/theorem/discussions)
+- [Download for Linux](https://github.com/fundaments-work/theorem/releases/latest) (`.deb` or `.AppImage`)
+- [Star on GitHub](https://github.com/fundaments-work/theorem/stargazers)
+- [View Source Code](https://github.com/fundaments-work/theorem)
+- [Join Community Discussions](https://github.com/fundaments-work/theorem/discussions)
 
 ## Why People Switch
 
@@ -48,16 +44,6 @@ No cloud account. No subscription wall. No vendor lock-in.
 Theorem is designed for knowledge workers using PKM systems, Zettelkasten methods, and second-brain workflows.
 
 If your stack is "read -> highlight -> connect ideas in Markdown," Theorem removes the export friction.
-
-## Current Status
-
-Theorem is in **beta**. It is functional for daily reading and note capture, with a clear local-first architecture and transparent open-source code.
-
-**Current limitations:**
-- Device Sync is currently LAN-first and still beta.
-- You are responsible for backups (your data is local).
-- CBR is recognized for compatibility but intentionally unsupported for import/render.
-- Android build requires manual setup (see [Android Build Guide](./docs/android-build.md)).
 
 ## FAQ
 
@@ -88,82 +74,39 @@ Yes. Device Sync is available in beta for encrypted LAN pairing and sync between
 - Node.js 22+
 - pnpm 10+
 - Rust stable
-- For Android: Android SDK with NDK 29
+- Linux: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, and other [Tauri dependencies](https://tauri.app/start/prerequisites/)
 
-### Project Layout
+### Setup
 
-- `src`: React frontend entry and UI
-- `src/core`: shared domain models, stores, and services
-- `src/shell`: app shell components (titlebar, sidebar, branding, error boundary)
-- `src/ui`: reusable UI primitives
-- `src/features/*`: reader, library, settings, statistics, vocabulary, and feeds modules
-- `src-tauri`: Rust backend and desktop packaging config
+```bash
+pnpm install
+```
 
 ### Commands
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Start web app (Vite)
-pnpm dev
-
-# Start desktop app (Tauri + Vite)
-pnpm dev:tauri
-# or
-pnpm tauri dev
-
-# Typecheck app + imported modules
-pnpm typecheck
-
-# Production build
-pnpm build
-
-# Preview web build
-pnpm preview
-
-# Run tests
-pnpm test
+pnpm dev          # Web dev server (port 1420)
+pnpm dev:tauri    # Desktop dev (Tauri + Vite)
+pnpm typecheck    # TypeScript type checking
+pnpm build        # Production build (typecheck + vite)
+pnpm preview      # Preview production build
+pnpm test         # Run Vitest unit tests
+pnpm tauri        # Raw Tauri CLI access
 ```
 
 ### Building for Release
 
 ```bash
-# Desktop (all platforms)
-pnpm tauri build
+# Linux (.deb auto-detected)
+pnpm package:linux
 
-# Android (requires setup - see docs/android-build.md)
-pnpm tauri android build
+# Specific formats
+pnpm package:linux:deb
+pnpm package:linux:rpm
+pnpm package:linux:appimage
 ```
 
-### Build Linux Packages
-
-```bash
-./scripts/makepackage-linux.sh
-```
-
-This builds the Linux bundle that best matches the current machine by default:
-
-- `.rpm` on Fedora/RHEL/openSUSE systems
-- `.deb` everywhere else
-
-```bash
-./scripts/makepackage-linux.sh --bundle deb
-./scripts/makepackage-linux.sh --bundle appimage
-./scripts/makepackage-linux.sh --bundle all
-```
-
-Generated artifacts are copied to `dist/packages/linux/`.
-
-### Install on Linux
-
-```bash
-./scripts/install-linux.sh
-```
-
-This builds the right Linux bundle and installs it. On distros without native `.deb` or `.rpm` flows, it extracts the generated `.deb` into `~/.local/` and adds a launcher.
-
-See [Android Build Guide](./docs/android-build.md) for Android-specific instructions.
+Generated packages are copied to `dist/packages/linux/`.
 
 ## Contributing
 
