@@ -83,7 +83,6 @@ jobs:
             - **RSS reader** — Subscribe to feeds, read articles in a focused view with full-text extraction via Readability.
             - **Annotations** — Highlight text in multiple colors, add text notes, draw freehand. All annotations sync to your Markdown vault (Obsidian/Logseq).
             - **Vocabulary builder** — Look up words via StarDict dictionaries, save terms with definitions for later review.
-            - **Text-to-speech** — Audiobook-style playback with speed controls, crossfade streaming, background preload. Works on EPUB and article content.
             - **Share studio** — Generate shareable cards from highlights and reading stats. Export as PNG.
             - **Sync** — LAN device sync with end-to-end encryption (X25519 + ChaCha20-Poly1305). Sync reading progress, annotations, and bookmarks across devices on your local network.
             - **Library management** — Organize books into collections, track reading progress, filter by format and status. Import from local files, Obsidian vaults, or download folders.
