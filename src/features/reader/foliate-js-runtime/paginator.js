@@ -583,7 +583,11 @@ export class Paginator extends HTMLElement {
                 else setSelectionTo(this.#anchor, -1)
             }
         })
-        const checkPointerSelection = debounce((range, sel) => {
+        const checkPointerSelection = debounce((range, sel, isTouchSelection) => {
+            // Never auto-navigate for touch-based selection (mobile) —
+            // dragging to the page edge to extend a highlight should not
+            // flip the page.  Pointer (mouse) selection keeps this behaviour.
+            if (isTouchSelection) return
             if (!sel.rangeCount) return
             const selRange = sel.getRangeAt(0)
             const backward = selectionIsBackward(sel)
@@ -596,6 +600,9 @@ export class Paginator extends HTMLElement {
             let isPointerSelecting = false
             doc.addEventListener('pointerdown', () => isPointerSelecting = true)
             doc.addEventListener('pointerup', () => isPointerSelecting = false)
+            let isTouchActive = false
+            doc.addEventListener('touchstart', () => isTouchActive = true, { passive: true })
+            doc.addEventListener('touchend', () => isTouchActive = false, { passive: true })
             let isKeyboardSelecting = false
             doc.addEventListener('keydown', () => isKeyboardSelecting = true)
             doc.addEventListener('keyup', () => isKeyboardSelecting = false)
@@ -606,7 +613,7 @@ export class Paginator extends HTMLElement {
                 const sel = doc.getSelection()
                 if (!sel.rangeCount) return
                 if (isPointerSelecting && sel.type === 'Range')
-                    checkPointerSelection(range, sel)
+                    checkPointerSelection(range, sel, isTouchActive)
                 else if (isKeyboardSelecting) {
                     const selRange = sel.getRangeAt(0).cloneRange()
                     const backward = selectionIsBackward(sel)
@@ -837,6 +844,10 @@ export class Paginator extends HTMLElement {
             if (this.#touchScrolled) e.preventDefault()
             return
         }
+        // Don't scroll the page while the user is actively selecting text
+        // (e.g. dragging selection handles on mobile).
+        const sel = this.#view?.document?.getSelection?.()
+        if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) return
         e.preventDefault()
         const touch = e.changedTouches[0]
         const x = touch.screenX, y = touch.screenY
@@ -853,6 +864,10 @@ export class Paginator extends HTMLElement {
     #onTouchEnd() {
         this.#touchScrolled = false
         if (this.scrolled) return
+
+        // Don't snap to nearest page while the user is actively selecting text.
+        const sel = this.#view?.document?.getSelection?.()
+        if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) return
 
         // XXX: Firefox seems to report scale as 1... sometimes...?
         // at this point I'm basically throwing `requestAnimationFrame` at
