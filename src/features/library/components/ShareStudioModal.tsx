@@ -68,11 +68,18 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
     }, []);
 
     const handleDownload = useCallback(() => {
-        if (imageBlob) {
-            const filename = buildImageFilename(book?.title || "Highlight");
-            downloadImage(imageBlob, filename);
-            onClose();
+        if (!imageBlob) return;
+        // On mobile, try native share first (download via a.click() may be
+        // blocked in Android WebView). Fall back to programmatic download.
+        if (typeof navigator.share === 'function') {
+            const file = new File([imageBlob], `${book?.title || 'Highlight'}.png`, { type: 'image/png' });
+            navigator.share({ title: book?.title || 'Highlight', files: [file] }).catch(() => {
+                downloadImage(imageBlob, buildImageFilename(book?.title || 'Highlight'));
+            });
+        } else {
+            downloadImage(imageBlob, buildImageFilename(book?.title || 'Highlight'));
         }
+        onClose();
     }, [imageBlob, book, onClose]);
 
     const handleNativeShare = useCallback(async () => {
@@ -119,13 +126,13 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
                                 onClick={() => setFormat('square')} 
                                 className={`ui-btn w-full justify-start ${format === 'square' ? 'ui-btn-primary' : ''}`}
                             >
-                                ⬛ Square (Feed)
+                                Square (Feed)
                             </button>
                             <button 
                                 onClick={() => setFormat('story')} 
                                 className={`ui-btn w-full justify-start ${format === 'story' ? 'ui-btn-primary' : ''}`}
                             >
-                                📱 Story (9:16)
+                                Story (9:16)
                             </button>
                         </div>
                     </div>
@@ -139,25 +146,25 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
                                 onClick={() => setTheme('match')} 
                                 className={`ui-btn w-full justify-start ${theme === 'match' ? 'ui-btn-primary' : ''}`}
                             >
-                                🎨 Match App Theme
+                                Match App Theme
                             </button>
                             <button 
                                 onClick={() => setTheme('dark')} 
                                 className={`ui-btn w-full justify-start ${theme === 'dark' ? 'ui-btn-primary' : ''}`}
                             >
-                                🌙 Dark Mode
+                                Dark Mode
                             </button>
                             <button 
                                 onClick={() => setTheme('tinted')} 
                                 className={`ui-btn w-full justify-start ${theme === 'tinted' ? 'ui-btn-primary' : ''}`}
                             >
-                                ✨ Tinted Vibrant
+                                Tinted Vibrant
                             </button>
                             <button 
                                 onClick={() => setTheme('sepia')} 
                                 className={`ui-btn w-full justify-start ${theme === 'sepia' ? 'ui-btn-primary' : ''}`}
                             >
-                                📜 Classic Sepia
+                                Classic Sepia
                             </button>
                         </div>
                     </div>

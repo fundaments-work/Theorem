@@ -47,8 +47,13 @@ export function downloadImage(blob: Blob, filename: string): void {
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    // Delay revoking so the browser can start the download
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 200);
 }
 
 export async function copyImageToClipboard(blob: Blob): Promise<void> {

@@ -584,10 +584,6 @@ export class Paginator extends HTMLElement {
             }
         })
         const checkPointerSelection = debounce((range, sel, isTouchSelection) => {
-            // Never auto-navigate for touch-based selection (mobile) —
-            // dragging to the page edge to extend a highlight should not
-            // flip the page.  Pointer (mouse) selection keeps this behaviour.
-            if (isTouchSelection) return
             if (!sel.rangeCount) return
             const selRange = sel.getRangeAt(0)
             const backward = selectionIsBackward(sel)
@@ -596,6 +592,18 @@ export class Paginator extends HTMLElement {
             else if (!backward && selRange.compareBoundaryPoints(Range.END_TO_END, range) > 0)
                 this.next()
         }, 700)
+        // Touch-based selection uses a much longer debounce (2s) so the
+        // user must deliberately hold the selection at the page edge to
+        // cross pages — accidental drags near the edge won't trigger it.
+        const checkTouchSelection = debounce((range, sel) => {
+            if (!sel.rangeCount) return
+            const selRange = sel.getRangeAt(0)
+            const backward = selectionIsBackward(sel)
+            if (backward && selRange.compareBoundaryPoints(Range.START_TO_START, range) < 0)
+                this.prev()
+            else if (!backward && selRange.compareBoundaryPoints(Range.END_TO_END, range) > 0)
+                this.next()
+        }, 2000)
         this.addEventListener('load', ({ detail: { doc } }) => {
             let isPointerSelecting = false
             doc.addEventListener('pointerdown', () => isPointerSelecting = true)
@@ -614,6 +622,8 @@ export class Paginator extends HTMLElement {
                 if (!sel.rangeCount) return
                 if (isPointerSelecting && sel.type === 'Range')
                     checkPointerSelection(range, sel, isTouchActive)
+                else if (isTouchActive && sel.type === 'Range')
+                    checkTouchSelection(range, sel)
                 else if (isKeyboardSelecting) {
                     const selRange = sel.getRangeAt(0).cloneRange()
                     const backward = selectionIsBackward(sel)

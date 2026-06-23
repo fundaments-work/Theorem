@@ -1576,7 +1576,7 @@ export function LibraryPage() {
 
                 {/* Desktop: Sticky Swiss Sidebar */}
                 {showFilterDropdown && (
-                    <aside className="hidden md:block w-72 shrink-0 sticky top-24 border-2 border-[var(--color-border)] bg-[var(--color-surface-muted)] animate-in slide-in-from-right-4 duration-300">
+                    <aside className="hidden md:block w-72 shrink-0 sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto border-2 border-[var(--color-border)] bg-[var(--color-surface-muted)] animate-in slide-in-from-right-4 duration-300">
                         <div className="divide-y-2 divide-[var(--color-border)]">
                             {/* Sort */}
                             <div className="p-5">
