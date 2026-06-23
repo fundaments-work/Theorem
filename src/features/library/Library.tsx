@@ -26,7 +26,7 @@ import {
 import {
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
-    ChevronDown, Star, Check, CloudOff
+    ChevronDown, Star, Check, CloudOff, Pencil
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "../../core";
 import { FORMAT_DISPLAY_NAMES } from "../../core";
@@ -158,6 +158,7 @@ function BookCard({
     const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const clickCountRef = useRef(0);
     const isCompleted = isBookMarkedRead(book);
+    const updateBook = useLibraryStore((state) => state.updateBook);
 
     const handleCardClick = () => {
         clickCountRef.current += 1;
@@ -224,6 +225,17 @@ function BookCard({
             label: "Book Info",
             icon: <Info className="w-4 h-4" />,
             onClick: () => onShowInfo(book),
+        },
+        {
+            id: "rename",
+            label: "Rename",
+            icon: <Pencil className="w-4 h-4" />,
+            onClick: () => {
+                const newTitle = prompt("Enter new title:", book.title);
+                if (newTitle && newTitle.trim() !== "" && newTitle !== book.title) {
+                    updateBook(book.id, { title: newTitle.trim() });
+                }
+            },
         },
         {
             id: "separator2",
