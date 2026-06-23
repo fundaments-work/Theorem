@@ -77,6 +77,20 @@ function isPlaceholderMetadataTitle(title: string): boolean {
     return normalized === 'unknown title' || normalized === 'untitled' || normalized === 'untitled book';
 }
 
+/** Known book file extensions (lowercase, with dot). */
+const BOOK_EXTENSIONS = ['.epub', '.pdf', '.mobi', '.azw', '.azw3', '.fb2', '.cbz', '.cbr'];
+
+/** Strip a known book extension from the end of a title, if present. */
+function stripBookExtension(title: string): string {
+    const lower = title.toLowerCase();
+    for (const ext of BOOK_EXTENSIONS) {
+        if (lower.endsWith(ext)) {
+            return title.slice(0, -ext.length).trim();
+        }
+    }
+    return title;
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     return new Promise((resolve, reject) => {
         const timeoutId = setTimeout(() => {
@@ -323,6 +337,7 @@ export async function extractMetadata(
             const metaInfo = metadata.info as Record<string, unknown>;
 
             result.title = (metaInfo?.Title as string) || filename.replace(/\.[^/.]+$/, '');
+            result.title = stripBookExtension(result.title);
             result.author = (metaInfo?.Author as string) || '';
 
             try {
@@ -420,7 +435,7 @@ export async function extractMetadata(
             const fallbackTitle = filename.replace(/\.[^/.]+$/, '');
             const normalizedTitle = normalizeMetadataTitle(book.metadata.title);
             result.title = normalizedTitle && !isPlaceholderMetadataTitle(normalizedTitle)
-                ? normalizedTitle
+                ? stripBookExtension(normalizedTitle)
                 : fallbackTitle;
             result.author = normalizeAuthor(book.metadata.author);
             result.description = normalizeMetadataString(book.metadata.description);
