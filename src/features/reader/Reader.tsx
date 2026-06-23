@@ -339,9 +339,6 @@ function BookReaderPage() {
         const book = getBook(bookId);
         if (!book) return;
 
-        // Only skip if the book already has a real cover (not a generated SVG fallback)
-        if (book.coverPath && !book.coverPath.startsWith('data:image/svg+xml')) return;
-
         try {
             const storagePath = book.storagePath || book.filePath;
             const data = await getBookData(book.id, storagePath);
@@ -351,8 +348,18 @@ function BookReaderPage() {
                 extractFilenameFromPath(book.filePath),
                 book.format,
             );
+
+            // Only skip cover extraction if the book already has a real cover
+            // (not a generated SVG fallback). Always extract title/author metadata.
+            const hasRealCover = book.coverPath && !book.coverPath.startsWith('data:image/svg+xml');
+            if (hasRealCover && book.coverExtractionDone) {
+                // Need to check if title/author still look like filenames
+                if (!/^[\w-]+$/.test(book.title)) return;
+                // Title is still filename-based — proceed with metadata-only extraction
+            }
+
             const metadata = await extractMetadata(data, book.format, filename, book.id, {
-                allowFallbackCover: true,
+                allowFallbackCover: !hasRealCover,
                 metadataTimeoutMs: 8000,
                 coverTimeoutMs: 5000,
             });
