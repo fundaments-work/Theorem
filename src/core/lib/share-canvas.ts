@@ -326,25 +326,35 @@ export async function generateShareCardImage(
 
     ctx.fillStyle = textPrimary;
     ctx.font = `600 24px ${fontSans}`;
-    
+
     let titleY = bottomY;
     if (author) {
         titleY -= 32; // Make room for author
     }
-    
-    // Draw Title
-    ctx.fillText(title, drawX, titleY);
+
+    // Draw Title with truncation if too wide
+    let displayTitle = title;
+    while (ctx.measureText(displayTitle).width > maxWidth && displayTitle.length > 4) {
+        displayTitle = displayTitle.slice(0, -1);
+    }
+    if (displayTitle !== title) displayTitle += "\u2026";
+    ctx.fillText(displayTitle, drawX, titleY);
 
     if ('letterSpacing' in ctx) {
         (ctx as any).letterSpacing = "0px";
     }
 
-    // Draw Author
+    // Draw Author with truncation
     if (author) {
         ctx.fillStyle = textPrimary;
         ctx.globalAlpha = options.theme === "tinted" ? 0.90 : 0.75;
         ctx.font = `400 20px ${fontSans}`;
-        ctx.fillText(author, drawX, bottomY);
+        let displayAuthor = author;
+        while (ctx.measureText(displayAuthor).width > maxWidth && displayAuthor.length > 4) {
+            displayAuthor = displayAuthor.slice(0, -1);
+        }
+        if (displayAuthor !== author) displayAuthor += "\u2026";
+        ctx.fillText(displayAuthor, drawX, bottomY);
         ctx.globalAlpha = 1.0;
     }
 
