@@ -12,7 +12,7 @@ import {
     exportUnifiedSyncBundle,
     estimateSyncBundleSizeBytes,
     isMobile,
-    isTauri,
+    isTauriDesktop,
     normalizeFilePath,
     pickLibraryFolderMobile,
     useVocabularyStore,
@@ -417,20 +417,30 @@ export function SettingsPage() {
             const payload = JSON.stringify(bundle, null, 2);
             const defaultFileName = `theorem-sync-${new Date().toISOString().slice(0, 10)}.json`;
 
-            if (isTauri()) {
+            const saveViaTauri = async () => {
                 const outputPath = await showSaveFileDialog({
                     title: "Save Theorem Backup",
                     defaultPath: defaultFileName,
                     filters: [{ name: "JSON", extensions: ["json"] }],
                 });
 
-                if (!outputPath) {
-                    return;
-                }
+                if (!outputPath) return false;
 
                 const { writeTextFile } = await import("@tauri-apps/plugin-fs");
                 await writeTextFile(outputPath, payload);
-            } else {
+                return true;
+            };
+
+            let saved = false;
+            if (isTauriDesktop()) {
+                try {
+                    saved = await saveViaTauri();
+                } catch {
+                    // Save dialog may fail on some platforms — fall through to browser download.
+                }
+            }
+
+            if (!saved) {
                 const blob = new Blob([payload], { type: "application/json" });
                 const objectUrl = URL.createObjectURL(blob);
                 const link = document.createElement("a");

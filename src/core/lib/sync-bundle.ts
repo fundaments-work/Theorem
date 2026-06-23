@@ -82,10 +82,15 @@ export interface UnifiedSyncExportResult {
 }
 
 /**
- * Exports all app content into one payload for future cloud/device sync.
- * Includes both metadata/state and raw binary content for books+dictionaries.
+ * Exports all app content into one payload for backup / cloud sync.
+ * By default, only metadata is included (binary book files are stored
+ * separately on disk/SQLite and would cause OOM if base64-encoded).
+ * Pass { includeBinaries: true } for full binary export (use with caution).
  */
-export async function exportUnifiedSyncBundle(): Promise<UnifiedSyncExportResult> {
+export async function exportUnifiedSyncBundle(
+    opts?: { includeBinaries?: boolean },
+): Promise<UnifiedSyncExportResult> {
+    const includeBinaries = opts?.includeBinaries === true;
     const warnings: string[] = [];
 
     const libraryState = useLibraryStore.getState();
@@ -94,43 +99,44 @@ export async function exportUnifiedSyncBundle(): Promise<UnifiedSyncExportResult
     const rssState = useRssStore.getState();
 
     const bookPayloads: SyncBookBinaryPayload[] = [];
-    for (const book of libraryState.books) {
-        const storagePath = book.storagePath || book.filePath;
-        const binary = await getBookData(book.id, storagePath);
-        if (!binary || binary.byteLength === 0) {
-            warnings.push(`BOOK_BINARY_MISSING:${book.id}`);
-            continue;
-        }
-
-        const coverDataUrl = await getCoverImage(book.id);
-        bookPayloads.push({
-            id: book.id,
-            format: book.format,
-            contentHash: book.contentHash,
-            fileSize: book.fileSize,
-            dataBase64: arrayBufferToBase64(binary),
-            ...(coverDataUrl ? { coverDataUrl } : {}),
-        });
-    }
-
     const dictionaryPayloads: SyncDictionaryBinaryPayload[] = [];
-    for (const dictionary of vocabularyState.installedDictionaries) {
-        const exported = await exportStarDictDictionary(dictionary.id);
-        if (!exported) {
-            warnings.push(`DICTIONARY_BINARY_MISSING:${dictionary.id}`);
-            continue;
+
+    if (includeBinaries) {
+        for (const book of libraryState.books) {
+            const storagePath = book.storagePath || book.filePath;
+            const binary = await getBookData(book.id, storagePath);
+            if (!binary || binary.byteLength === 0) {
+                warnings.push(`BOOK_BINARY_MISSING:${book.id}`);
+                continue;
+            }
+            const coverDataUrl = await getCoverImage(book.id);
+            bookPayloads.push({
+                id: book.id,
+                format: book.format,
+                contentHash: book.contentHash,
+                fileSize: book.fileSize,
+                dataBase64: arrayBufferToBase64(binary),
+                ...(coverDataUrl ? { coverDataUrl } : {}),
+            });
         }
 
-        dictionaryPayloads.push({
-            id: dictionary.id,
-            manifest: exported.manifest,
-            ifoBase64: arrayBufferToBase64(exported.files.ifo),
-            idxBase64: arrayBufferToBase64(exported.files.idx),
-            dictBase64: arrayBufferToBase64(exported.files.dict),
-            ...(exported.files.syn
-                ? { synBase64: arrayBufferToBase64(exported.files.syn) }
-                : {}),
-        });
+        for (const dictionary of vocabularyState.installedDictionaries) {
+            const exported = await exportStarDictDictionary(dictionary.id);
+            if (!exported) {
+                warnings.push(`DICTIONARY_BINARY_MISSING:${dictionary.id}`);
+                continue;
+            }
+            dictionaryPayloads.push({
+                id: dictionary.id,
+                manifest: exported.manifest,
+                ifoBase64: arrayBufferToBase64(exported.files.ifo),
+                idxBase64: arrayBufferToBase64(exported.files.idx),
+                dictBase64: arrayBufferToBase64(exported.files.dict),
+                ...(exported.files.syn
+                    ? { synBase64: arrayBufferToBase64(exported.files.syn) }
+                    : {}),
+            });
+        }
     }
 
     const bundle: UnifiedSyncBundle = {

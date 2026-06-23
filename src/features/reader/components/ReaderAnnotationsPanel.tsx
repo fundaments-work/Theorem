@@ -4,12 +4,13 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Bookmark, X, Trash2, ExternalLink, Highlighter } from 'lucide-react';
+import { Bookmark, X, Trash2, ExternalLink, Highlighter, MoreVertical, Pencil, Share2 } from 'lucide-react';
 import { HIGHLIGHT_PICKER_COLORS } from "../../../core";
 import { cn, useLibraryStore, useUIStore } from "../../../core";
 import { format } from 'date-fns';
 import { useShallow } from 'zustand/react/shallow';
 import { Backdrop, FloatingPanel } from "../../../ui";
+import { ShareMenu } from "../../library/components/ShareMenu";
 import type { Annotation, HighlightColor } from "../../../core";
 
 interface ReaderAnnotationsPanelProps {
@@ -35,11 +36,17 @@ export function ReaderAnnotationsPanel({
     className,
 }: ReaderAnnotationsPanelProps) {
     const [activeTab, setActiveTab] = useState<TabType>('bookmarks');
+    const [menuId, setMenuId] = useState<string | null>(null);
+    const [sharingId, setSharingId] = useState<string | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editContent, setEditContent] = useState('');
     const annotations = useLibraryStore(useShallow(
         (state) => state.getBookAnnotations(bookId),
     ));
-    const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
+    const removeAnnotationAction = useLibraryStore((state) => state.removeAnnotation);
+    const updateAnnotation = useLibraryStore((state) => state.updateAnnotation);
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
+    const books = useLibraryStore((state) => state.books);
 
     const bookmarks = useMemo(
         () => annotations.filter((annotation) => annotation.type === 'bookmark'),
@@ -61,6 +68,59 @@ export function ReaderAnnotationsPanel({
         onClose();
     };
 
+    const handleEdit = (id: string) => {
+        const annotation = annotations.find((a) => a.id === id);
+        if (annotation) {
+            setEditingId(id);
+            setEditContent(annotation.noteContent || '');
+        }
+    };
+
+    const saveEdit = () => {
+        if (editingId) {
+            updateAnnotation(editingId, { noteContent: editContent });
+            setEditingId(null);
+            setEditContent('');
+        }
+    };
+
+    const handleShare = (id: string) => {
+        setSharingId(id);
+        setMenuId(null);
+    };
+
+    const closeMenu = () => setMenuId(null);
+
+    const getBook = (bookId: string) => books.find((b) => b.id === bookId);
+
+    const renderContextMenu = (annotation: Annotation) => (
+        <div className="absolute right-0 top-full z-20 mt-1 w-40 border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-lg">
+            <button
+                onClick={(e) => { e.stopPropagation(); handleEdit(annotation.id); closeMenu(); }}
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left font-sans text-[11px] font-medium text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] touch-manipulation"
+            >
+                <Pencil className="w-3.5 h-3.5" /> Edit note
+            </button>
+            <button
+                onClick={(e) => { e.stopPropagation(); handleShare(annotation.id); }}
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left font-sans text-[11px] font-medium text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] touch-manipulation"
+            >
+                <Share2 className="w-3.5 h-3.5" /> Share
+            </button>
+            <button
+                onClick={(e) => {
+                    e.stopPropagation();
+                    removeAnnotationAction(annotation.id);
+                    onDelete?.(annotation.id);
+                    closeMenu();
+                }}
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left font-sans text-[11px] font-medium text-[color:var(--color-error)] hover:bg-[var(--color-surface-muted)] touch-manipulation"
+            >
+                <Trash2 className="w-3.5 h-3.5" /> Delete
+            </button>
+        </div>
+    );
+
     const renderBookmarkItem = (bookmark: Annotation) => (
         <div
             key={bookmark.id}
@@ -74,16 +134,29 @@ export function ReaderAnnotationsPanel({
                         {bookmark.selectedText || 'Bookmark'}
                     </span>
                 </div>
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        removeAnnotation(bookmark.id);
-                        onDelete?.(bookmark.id);
-                    }}
-                    className="reader-danger-action border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
-                >
-                    <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="relative flex-shrink-0">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuId(menuId === bookmark.id ? null : bookmark.id);
+                        }}
+                        className="border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity touch-manipulation"
+                    >
+                        <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {menuId === bookmark.id && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); closeMenu(); }} />
+                            {renderContextMenu(bookmark)}
+                        </>
+                    )}
+                    {sharingId === bookmark.id && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setSharingId(null); }} />
+                            <ShareMenu annotation={bookmark} book={getBook(bookmark.bookId)} onClose={() => setSharingId(null)} />
+                        </>
+                    )}
+                </div>
             </div>
             <div className="flex items-center justify-between pl-6 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
                 <span>{format(new Date(bookmark.createdAt), 'MMM d, yyyy')}</span>
@@ -115,23 +188,51 @@ export function ReaderAnnotationsPanel({
                         <p className="font-serif text-sm leading-relaxed text-[color:var(--color-text-primary)] line-clamp-3">
                             {highlight.selectedText || 'Highlight'}
                         </p>
-                        {highlight.noteContent && (
+                        {highlight.noteContent && editingId !== highlight.id && (
                             <div className="mt-1 border-l border-[var(--color-border)] pl-2 font-serif text-[13px] text-[color:var(--color-text-secondary)]">
                                 <span className="line-clamp-2">{highlight.noteContent}</span>
                             </div>
                         )}
+                        {editingId === highlight.id && (
+                            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                                <textarea
+                                    value={editContent}
+                                    onChange={(e) => setEditContent(e.target.value)}
+                                    className="w-full min-h-[60px] p-2 text-[13px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-primary)] resize-y font-serif"
+                                    placeholder="Add a note..."
+                                    autoFocus
+                                />
+                                <div className="flex gap-2 mt-1">
+                                    <button onClick={saveEdit} className="text-[11px] px-2 py-1 bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] touch-manipulation">Save</button>
+                                    <button onClick={() => { setEditingId(null); setEditContent(''); }} className="text-[11px] px-2 py-1 border border-[var(--color-border)] text-[color:var(--color-text-muted)] touch-manipulation">Cancel</button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        removeAnnotation(highlight.id);
-                        onDelete?.(highlight.id);
-                    }}
-                    className="reader-danger-action border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
-                >
-                    <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="relative flex-shrink-0">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuId(menuId === highlight.id ? null : highlight.id);
+                        }}
+                        className="border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity touch-manipulation"
+                    >
+                        <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {menuId === highlight.id && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); closeMenu(); }} />
+                            {renderContextMenu(highlight)}
+                        </>
+                    )}
+                    {sharingId === highlight.id && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setSharingId(null); }} />
+                            <ShareMenu annotation={highlight} book={getBook(highlight.bookId)} onClose={() => setSharingId(null)} />
+                        </>
+                    )}
+                </div>
             </div>
             <div className="flex items-center justify-between pl-6 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
                 <span>{format(new Date(highlight.createdAt), 'MMM d, yyyy')}</span>

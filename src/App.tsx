@@ -74,8 +74,6 @@ function ReaderFallback() {
 function App() {
     const currentRoute = useUIStore((state) => state.currentRoute);
     const setRoute = useUIStore((state) => state.setRoute);
-    const isDesktopTauriRuntime = isTauriDesktop();
-    const isTauriRuntime = isTauri();
     const mainScrollRef = useRef<HTMLElement>(null);
     const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
     const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
@@ -178,7 +176,7 @@ function App() {
 
     // Handle desktop file associations ("Open With Theorem") via Tauri.
     useEffect(() => {
-        if (!isTauriRuntime || typeof window === "undefined") {
+        if (!isTauri() || typeof window === "undefined") {
             return;
         }
 
@@ -279,7 +277,7 @@ function App() {
                 void unlistenPromise.then((unlisten) => unlisten());
             }
         };
-    }, [isTauriRuntime]);
+    }, []);
 
     // Initialize reader styles on app load
     useEffect(() => {
@@ -340,7 +338,7 @@ function App() {
     // Deferred by several seconds to avoid competing with the initial render
     // and UI shell setup, which causes noticeable startup lag.
     useEffect(() => {
-        if (!isTauriRuntime || !hasCompletedOnboarding) {
+        if (!isTauri() || !hasCompletedOnboarding) {
             return;
         }
 
@@ -366,17 +364,17 @@ function App() {
 
         const timer = setTimeout(() => {
             void bootstrap();
-        }, 8000);
+        }, 5000);
 
         return () => {
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [hasCompletedOnboarding, isTauriRuntime]);
+    }, [hasCompletedOnboarding]);
 
     // Ensure the desktop window doesn't start in a mobile-like size.
     useEffect(() => {
-        if (!isDesktopTauriRuntime) {
+        if (!isTauriDesktop()) {
             return;
         }
 
@@ -404,7 +402,7 @@ function App() {
         return () => {
             cancelled = true;
         };
-    }, [isDesktopTauriRuntime]);
+    }, []);
 
     // Check if we're in reader mode (full screen, no sidebar)
     const isReaderMode = currentRoute === "reader";

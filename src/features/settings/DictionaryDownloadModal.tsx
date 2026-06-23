@@ -39,16 +39,13 @@ export function DictionaryDownloadModal({ isOpen, onClose }: DictionaryDownloadM
 
     const handleDownload = async (dict: DictEntry) => {
         if (!isTauri()) {
-            setError("Dictionary download requires the desktop app. Use Import Files for local StarDict files.");
+            setError("Dictionary download requires the desktop or mobile app. Use Import Files for local StarDict files.");
             return;
         }
 
         setDownloading(dict.name);
         setError(null);
 
-        // Yield to the browser so React can paint the spinner and
-        // size indicator before the blocking Rust download starts.
-        // Without this the app appears frozen for the entire download.
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         try {
@@ -124,10 +121,10 @@ export function DictionaryDownloadModal({ isOpen, onClose }: DictionaryDownloadM
                                     onClick={() => handleDownload(dict)}
                                     disabled={downloading !== null || isInstalled}
                                     className={cn(
-                                        "px-3 py-1.5 text-[11px] font-medium shrink-0 border transition-colors",
+                                        "px-3 py-1.5 min-h-[40px] text-[11px] font-medium shrink-0 border transition-colors touch-manipulation",
                                         isInstalled
                                             ? "bg-[color:var(--color-success,#22c55e)] text-white border-transparent"
-                                            : "border-[var(--color-border)] text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)]",
+                                            : "border-[var(--color-border)] text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] active:bg-[var(--color-surface-muted)]",
                                         downloading !== null && "opacity-50 cursor-not-allowed",
                                     )}
                                 >
