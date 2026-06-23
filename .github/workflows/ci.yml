@@ -172,7 +172,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Fetch dependencies
-        run: cargo fetch --manifest-path src-tauri/Cargo.toml --locked
+        run: cargo fetch --manifest-path src-tauri/Cargo.toml
 
       - name: Check Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
