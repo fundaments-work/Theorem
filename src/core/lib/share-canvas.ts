@@ -332,29 +332,32 @@ export async function generateShareCardImage(
         titleY -= 32; // Make room for author
     }
 
-    // Draw Title with truncation if too wide
-    let displayTitle = title;
-    while (ctx.measureText(displayTitle).width > maxWidth && displayTitle.length > 4) {
-        displayTitle = displayTitle.slice(0, -1);
+    // Wrap title in the space between timestamp and title position
+    const titleAvailableHeight = Math.max(40, titleY - currentY - 40);
+    const titleWrapped = calculateWrappedText(
+        ctx, title, maxWidth, fontSans, "600", 12, 24, titleAvailableHeight
+    );
+    const titleDrawY = titleY - 4;
+    for (let i = 0; i < titleWrapped.lines.length; i++) {
+        ctx.fillText(titleWrapped.lines[i], drawX, titleDrawY - (titleWrapped.lines.length - 1 - i) * titleWrapped.lineHeight);
     }
-    if (displayTitle !== title) displayTitle += "\u2026";
-    ctx.fillText(displayTitle, drawX, titleY);
 
     if ('letterSpacing' in ctx) {
         (ctx as any).letterSpacing = "0px";
     }
 
-    // Draw Author with truncation
+    // Draw Author
     if (author) {
         ctx.fillStyle = textPrimary;
         ctx.globalAlpha = options.theme === "tinted" ? 0.90 : 0.75;
         ctx.font = `400 20px ${fontSans}`;
-        let displayAuthor = author;
-        while (ctx.measureText(displayAuthor).width > maxWidth && displayAuthor.length > 4) {
-            displayAuthor = displayAuthor.slice(0, -1);
+        const authorAvailableHeight = 28;
+        const authorWrapped = calculateWrappedText(
+            ctx, author, maxWidth, fontSans, "400", 12, 20, authorAvailableHeight
+        );
+        for (let i = 0; i < authorWrapped.lines.length; i++) {
+            ctx.fillText(authorWrapped.lines[i], drawX, bottomY - (authorWrapped.lines.length - 1 - i) * authorWrapped.lineHeight);
         }
-        if (displayAuthor !== author) displayAuthor += "\u2026";
-        ctx.fillText(displayAuthor, drawX, bottomY);
         ctx.globalAlpha = 1.0;
     }
 
