@@ -78,24 +78,10 @@ pub struct SyncServerHandle {
     pub shutdown_notify: Arc<Notify>,
 }
 
-// ─── Port Persistence ───
-
-const PREFERRED_PORT_FILE: &str = "sync-preferred-port";
-
-/// Load the preferred port from disk.
-fn load_preferred_port(app_data_dir: &Path) -> Option<u16> {
-    let path = app_data_dir.join(PREFERRED_PORT_FILE);
-    std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| s.trim().parse::<u16>().ok())
-        .filter(|&p| p > 0)
-}
-
-/// Save the preferred port to disk.
-fn save_preferred_port(app_data_dir: &Path, port: u16) {
-    let path = app_data_dir.join(PREFERRED_PORT_FILE);
-    let _ = std::fs::write(&path, port.to_string());
-}
+/// Fixed port for the sync server.
+/// Using a consistent port means QR codes remain valid across app restarts.
+/// If 43935 is unavailable, falls back to a random OS-assigned port.
+pub const SYNC_PORT: u16 = 43935;
 
 // ─── Server Lifecycle ───
 
@@ -165,30 +151,29 @@ pub async fn start_server(state: Arc<SyncServerState>) -> Result<SyncServerHandl
         .layer(middleware::from_fn(request_logger))
         .with_state(state.clone());
 
-    // Try to reuse the previously bound port. Fall back to a random port.
-    let preferred_port = load_preferred_port(&state.app_data_dir);
-    let listener = if let Some(port) = preferred_port {
-        match TcpListener::bind(format!("0.0.0.0:{port}")).await {
-            Ok(l) => l,
-            Err(_) => {
-                // Port unavailable (another process took it) — fall back to random.
-                TcpListener::bind("0.0.0.0:0")
-                    .await
-                    .map_err(|e| format!("Failed to bind sync server: {e}"))?
-            }
+    // Bind to the fixed sync port. If unavailable, fall back to random.
+    let listener = match TcpListener::bind(format!("0.0.0.0:{}", SYNC_PORT)).await {
+        Ok(l) => l,
+        Err(_) => {
+            eprintln!(
+                "[sync-server] Port {} unavailable, falling back to random port",
+                SYNC_PORT
+            );
+            TcpListener::bind("0.0.0.0:0")
+                .await
+                .map_err(|e| format!("Failed to bind sync server: {e}"))?
         }
-    } else {
-        TcpListener::bind("0.0.0.0:0")
-            .await
-            .map_err(|e| format!("Failed to bind sync server: {e}"))?
     };
 
     let addr = listener
         .local_addr()
         .map_err(|e| format!("Failed to get server address: {e}"))?;
 
-    // Persist the port so next restart tries the same one.
-    save_preferred_port(&state.app_data_dir, addr.port());
+    eprintln!(
+        "[sync-server] Listening on {}:{}",
+        get_local_ip().unwrap_or_else(|_| "?".to_string()),
+        addr.port()
+    );
 
     let shutdown_notify = Arc::new(Notify::new());
     let shutdown_clone = shutdown_notify.clone();

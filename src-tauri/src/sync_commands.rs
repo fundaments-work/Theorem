@@ -409,26 +409,21 @@ pub async fn discover_peer(
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))?;
 
-    // Build candidate list: last-known port first, then a sweep.
-    let mut candidates: Vec<u16> = Vec::new();
-    if peer.last_port > 0 {
+    // With the fixed port, always try 43935 first.
+    // Also probe the stored port in case the fixed port was taken at startup.
+    let mut candidates: Vec<u16> = vec![sync_server::SYNC_PORT];
+    if peer.last_port > 0 && peer.last_port != sync_server::SYNC_PORT {
         candidates.push(peer.last_port);
     }
-
-    // Probe a range of ephemeral ports around the last known one,
-    // plus the first ~20 ports in the common high-ephemeral range.
-    // This is heuristic: the persistent port feature (Fix 1) means
-    // the first candidate almost always succeeds.
-    if peer.last_port > 2 {
-        for offset in 1..=3u16 {
-            let below = peer.last_port.saturating_sub(offset);
-            let above = peer.last_port.saturating_add(offset);
-            if below > 0 && !candidates.contains(&below) {
-                candidates.push(below);
-            }
-            if above > 0 && !candidates.contains(&above) {
-                candidates.push(above);
-            }
+    // Probe adjacent ports as fallback.
+    for &offset in &[1u16, 2] {
+        let below = sync_server::SYNC_PORT.saturating_sub(offset);
+        let above = sync_server::SYNC_PORT.saturating_add(offset);
+        if !candidates.contains(&below) {
+            candidates.push(below);
+        }
+        if !candidates.contains(&above) {
+            candidates.push(above);
         }
     }
 
@@ -502,20 +497,18 @@ async fn discover_peer_port(
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))?;
 
-    let mut candidates: Vec<u16> = Vec::new();
-    if last_known_port > 0 {
+    let mut candidates: Vec<u16> = vec![sync_server::SYNC_PORT];
+    if last_known_port > 0 && last_known_port != sync_server::SYNC_PORT {
         candidates.push(last_known_port);
     }
-    if last_known_port > 2 {
-        for offset in 1..=3u16 {
-            let below = last_known_port.saturating_sub(offset);
-            let above = last_known_port.saturating_add(offset);
-            if below > 0 && !candidates.contains(&below) {
-                candidates.push(below);
-            }
-            if above > 0 && !candidates.contains(&above) {
-                candidates.push(above);
-            }
+    for &offset in &[1u16, 2] {
+        let below = sync_server::SYNC_PORT.saturating_sub(offset);
+        let above = sync_server::SYNC_PORT.saturating_add(offset);
+        if !candidates.contains(&below) {
+            candidates.push(below);
+        }
+        if !candidates.contains(&above) {
+            candidates.push(above);
         }
     }
 
