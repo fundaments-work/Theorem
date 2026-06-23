@@ -63,6 +63,9 @@ install_deb_locally() {
 
     ln -sf "$install_root/usr/bin/theorem" "$bin_dir/theorem"
     cp -f "$install_root/usr/share/applications/Theorem.desktop" "$applications_dir/theorem.desktop"
+    # Desktop-entry Exec must use an absolute path — GUI launchers (GNOME, KDE, etc.)
+    # do not include ~/.local/bin/ in their PATH.
+    sed -i "s|^Exec=theorem|Exec=$bin_dir/theorem|" "$applications_dir/theorem.desktop"
     while IFS= read -r icon; do
         relative_path="${icon#"$install_root/usr/share/icons/hicolor/"}"
         install -Dm644 "$icon" "$icons_root/$relative_path"
