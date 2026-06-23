@@ -300,10 +300,10 @@ function BookCard({
 
                     {/* Book Info */}
                     <div className="px-0.5">
-                        <h3 className="font-bold text-[11px] uppercase tracking-wide text-[color:var(--color-text-primary)] line-clamp-1 mb-0.5 transition-colors group-hover:text-[color:var(--color-accent)]">
+                        <h3 className="font-bold text-[11px] uppercase tracking-wide text-[color:var(--color-text-primary)] line-clamp-3 mb-0.5 transition-colors group-hover:text-[color:var(--color-accent)] break-words">
                             {book.title}
                         </h3>
-                        <p className="text-[10px] font-medium text-[color:var(--color-text-secondary)] line-clamp-1 opacity-60 uppercase tracking-tight">
+                        <p className="text-[10px] font-medium text-[color:var(--color-text-secondary)] line-clamp-2 opacity-60 uppercase tracking-tight">
                             {normalizeAuthor(book.author) || "Unknown Author"}
                         </p>
                     </div>
@@ -341,10 +341,10 @@ function BookCard({
 
                     {/* Book Info */}
                     <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] truncate">
+                        <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] line-clamp-2 break-words">
                             {book.title}
                         </h3>
-                        <p className="text-xs text-[color:var(--color-text-secondary)] truncate">
+                        <p className="text-xs text-[color:var(--color-text-secondary)] line-clamp-1">
                             {normalizeAuthor(book.author) || "Unknown Author"}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
