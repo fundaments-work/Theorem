@@ -488,6 +488,157 @@ async fn decrypt_response<T: serde::de::DeserializeOwned>(
     Ok(obj)
 }
 
+/// Discover the peer's current port by probing health endpoints.
+/// Returns the (ip, port) on success, or the original error on failure.
+async fn discover_peer_port(
+    app: &tauri::AppHandle,
+    peer_device_id: &str,
+    ip: &str,
+    last_known_port: u16,
+) -> Result<(String, u16), String> {
+    let sync_state = app.state::<SyncAppState>();
+    let discovery_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(1500))
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
+
+    let mut candidates: Vec<u16> = Vec::new();
+    if last_known_port > 0 {
+        candidates.push(last_known_port);
+    }
+    if last_known_port > 2 {
+        for offset in 1..=3u16 {
+            let below = last_known_port.saturating_sub(offset);
+            let above = last_known_port.saturating_add(offset);
+            if below > 0 && !candidates.contains(&below) {
+                candidates.push(below);
+            }
+            if above > 0 && !candidates.contains(&above) {
+                candidates.push(above);
+            }
+        }
+    }
+
+    for candidate_port in &candidates {
+        let health_url = format!("http://{ip}:{candidate_port}/health");
+        if let Ok(res) = discovery_client.get(&health_url).send().await {
+            if res.status().is_success() {
+                if let Ok(health) = res.json::<HealthResponse>().await {
+                    if health.device_id == peer_device_id {
+                        let mut devices = sync_state.server_state.paired_devices.lock().await;
+                        if let Some(peer) = devices.get_mut(peer_device_id) {
+                            peer.last_port = *candidate_port;
+                        }
+                        let _ = crate::sync_server::save_paired_devices(
+                            &sync_state.server_state.app_data_dir,
+                            &devices,
+                        );
+                        eprintln!(
+                            "[sync] Peer {} discovered at {}:{}",
+                            peer_device_id, ip, candidate_port
+                        );
+                        return Ok((ip.to_string(), *candidate_port));
+                    }
+                }
+            }
+        }
+    }
+
+    Err(format!(
+        "Peer {} not reachable at {} (last port {})",
+        peer_device_id, ip, last_known_port
+    ))
+}
+
+/// Check if a peer is reachable and return its current (ip, port).
+async fn ensure_peer_reachable(
+    app: &tauri::AppHandle,
+    peer_device_id: &str,
+    ip: &str,
+    port: u16,
+) -> Result<(String, u16), String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
+
+    let health_url = format!("http://{ip}:{port}/health");
+    match client.get(&health_url).send().await {
+        Ok(res) if res.status().is_success() => {
+            // Verify device identity
+            if let Ok(health) = res.json::<HealthResponse>().await {
+                if health.device_id == peer_device_id {
+                    eprintln!(
+                        "[sync] Pre-flight health check OK for {} at {}:{}",
+                        peer_device_id, ip, port
+                    );
+                    return Ok((ip.to_string(), port));
+                }
+            }
+            // Wrong device at this address — try discovery
+            eprintln!(
+                "[sync] Health check returned wrong device_id at {}:{}, discovering...",
+                ip, port
+            );
+        }
+        Ok(res) => {
+            eprintln!(
+                "[sync] Health check returned {} for {} at {}:{}, discovering...",
+                res.status(),
+                peer_device_id,
+                ip,
+                port
+            );
+        }
+        Err(e) => {
+            eprintln!(
+                "[sync] Health check failed for {} at {}:{} ({}), discovering...",
+                peer_device_id, ip, port, e
+            );
+        }
+    }
+
+    discover_peer_port(app, peer_device_id, ip, port).await
+}
+
+/// Try an async sync operation; if it fails with a connection error,
+/// attempt peer discovery once and retry.
+async fn try_with_discovery<F, Fut, T>(
+    app: &tauri::AppHandle,
+    peer_device_id: &str,
+    op_name: &str,
+    ip: &str,
+    port: u16,
+    mut f: F,
+) -> Result<T, String>
+where
+    F: FnMut(String) -> Fut,
+    Fut: std::future::Future<Output = Result<T, String>>,
+{
+    let base_url = format!("http://{ip}:{port}/sync");
+    match f(base_url.clone()).await {
+        Ok(result) => Ok(result),
+        Err(e) => {
+            let is_connection_error = e.contains("Connection refused")
+                || e.contains("connect error")
+                || e.contains("timeout")
+                || e.contains("Connection reset")
+                || e.contains("No route to host");
+            if is_connection_error {
+                eprintln!(
+                    "[sync] {} failed at {}:{} ({}), attempting discovery...",
+                    op_name, ip, port, e
+                );
+                let (new_ip, new_port) = discover_peer_port(app, peer_device_id, ip, port).await?;
+                let new_base_url = format!("http://{new_ip}:{new_port}/sync");
+                f(new_base_url).await
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
 /// Orchestrates a sync session with a paired peer, retrieving necessary domain updates.
 /// Returns a JSON string of a map `Domain Name -> JSON Domain Data` which the frontend will merge.
 #[tauri::command]
@@ -504,17 +655,14 @@ pub async fn initiate_sync(
         .ok_or("Peer not paired")?;
     drop(devices);
 
-    let ip = &peer.last_ip;
-    let port = peer.last_port;
-    if ip.is_empty() {
+    let stored_ip = peer.last_ip.clone();
+    let stored_port = peer.last_port;
+    if stored_ip.is_empty() {
         return Err("Peer IP unknown. Scan their QR code to pair first.".to_string());
     }
-    // If port is stale or zero, try discovery before giving up.
-    let port = if port == 0 {
+    if stored_port == 0 {
         return Err("Peer port unknown. Run discover_peer first or re-scan QR.".to_string());
-    } else {
-        port
-    };
+    }
 
     let sym_key_vec = BASE64
         .decode(&peer.symmetric_key_b64)
@@ -522,9 +670,13 @@ pub async fn initiate_sync(
     let sym_key: [u8; 32] = sym_key_vec
         .try_into()
         .map_err(|_| "Key length invalid".to_string())?;
-    let my_device_id = &sync_state.server_state.identity.device_id;
+    let my_device_id = sync_state.server_state.identity.device_id.clone();
 
-    // 2. Get local manifest
+    // 0. Pre-flight: verify peer is reachable before any sync operations.
+    let (peer_ip, peer_port) =
+        ensure_peer_reachable(&app, &peer_device_id, &stored_ip, stored_port).await?;
+
+    // 1. Get local manifest
     let sync_data_guard = sync_state.server_state.sync_data.lock().await;
     let local_manifest = match sync_data_guard.as_ref() {
         Some(data) => SyncManifest {
@@ -538,148 +690,46 @@ pub async fn initiate_sync(
 
     let client = reqwest::Client::new();
 
-    // Helper to perform manifest exchange and return (plan, base_url, peer_ip, peer_port)
-    async fn do_manifest_exchange(
-        client: &reqwest::Client,
-        peer_ip: &str,
-        peer_port: u16,
-        my_device_id: &str,
-        sym_key: &[u8; 32],
-        local_manifest: &SyncManifest,
-    ) -> Result<(SyncPlan, String), String> {
-        let base_url = format!("http://{peer_ip}:{peer_port}/sync");
-        let req_manifest = encrypt_request(my_device_id, sym_key, local_manifest)?;
-        let res = client
-            .post(format!("{base_url}/manifest"))
-            .json(&req_manifest)
-            .timeout(std::time::Duration::from_secs(10))
-            .send()
-            .await
-            .map_err(|e| format!("Manifest request failed: {e}"))?;
+    // 2. Manifest exchange with retry on connection errors.
+    let plan: SyncPlan = try_with_discovery(
+        &app,
+        &peer_device_id,
+        "manifest",
+        &peer_ip,
+        peer_port,
+        |base_url| {
+            let my_id = my_device_id.clone();
+            let key = sym_key;
+            let manifest = local_manifest.clone();
+            let c = client.clone();
+            async move {
+                let req_manifest = encrypt_request(&my_id, &key, &manifest)?;
+                let res = c
+                    .post(format!("{base_url}/manifest"))
+                    .json(&req_manifest)
+                    .timeout(std::time::Duration::from_secs(10))
+                    .send()
+                    .await
+                    .map_err(|e| format!("Manifest request to {base_url} failed: {e}"))?;
 
-        if !res.status().is_success() {
-            return Err(format!("Manifest rejected: {}", res.status()));
-        }
-
-        let enc_res: crate::sync_crypto::EncryptedPayload = res
-            .json()
-            .await
-            .map_err(|e| format!("Manifest response parse fail: {e}"))?;
-
-        let plan = decrypt_response(sym_key, &enc_res).await?;
-        Ok((plan, base_url))
-    }
-
-    // Try stored address first
-    let (plan, base_url) = match do_manifest_exchange(
-        &client,
-        ip,
-        port,
-        my_device_id,
-        &sym_key,
-        &local_manifest,
-    )
-    .await
-    {
-        Ok(result) => (result.0, result.1),
-        Err(e) => {
-            // If connection refused or timeout, try discovering peer's current port
-            let is_connection_error = e.contains("Connection refused")
-                || e.contains("connect error")
-                || e.contains("timeout")
-                || e.contains("Connection reset")
-                || e.contains("No route to host");
-            if is_connection_error {
-                eprintln!(
-                    "[sync] Stored address failed ({}), attempting discovery...",
-                    e
-                );
-                let sync_state = app.state::<SyncAppState>();
-                let mut devices = sync_state.server_state.paired_devices.lock().await;
-                let (peer_ip, peer_port) = {
-                    if let Some(peer) = devices.get_mut(&peer_device_id) {
-                        (peer.last_ip.clone(), peer.last_port)
-                    } else {
-                        return Err(e);
-                    }
-                };
-                if peer_ip.is_empty() {
-                    return Err(e);
+                if !res.status().is_success() {
+                    return Err(format!("Manifest rejected by peer: {}", res.status()));
                 }
 
-                // Try to discover peer at its last-known IP
-                let discovery_client = reqwest::Client::builder()
-                    .timeout(std::time::Duration::from_millis(1500))
-                    .build()
-                    .map_err(|e| format!("HTTP client error: {e}"))?;
+                let enc_res: crate::sync_crypto::EncryptedPayload = res
+                    .json()
+                    .await
+                    .map_err(|e| format!("Manifest response parse fail: {e}"))?;
 
-                let mut candidates: Vec<u16> = Vec::new();
-                if peer_port > 0 {
-                    candidates.push(peer_port);
-                }
-                if peer_port > 2 {
-                    for offset in 1..=3u16 {
-                        let below = peer_port.saturating_sub(offset);
-                        let above = peer_port.saturating_add(offset);
-                        if below > 0 && !candidates.contains(&below) {
-                            candidates.push(below);
-                        }
-                        if above > 0 && !candidates.contains(&above) {
-                            candidates.push(above);
-                        }
-                    }
-                }
-
-                let mut discovered_port: Option<u16> = None;
-                for candidate_port in &candidates {
-                    let health_url = format!("http://{}:{}/health", peer_ip, candidate_port);
-                    if let Ok(res) = discovery_client.get(&health_url).send().await {
-                        if res.status().is_success() {
-                            if let Ok(health) =
-                                res.json::<crate::sync_protocol::HealthResponse>().await
-                            {
-                                if health.device_id == peer_device_id {
-                                    discovered_port = Some(*candidate_port);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if let Some(new_port) = discovered_port {
-                    // Update stored port
-                    if let Some(peer) = devices.get_mut(&peer_device_id) {
-                        peer.last_port = new_port;
-                    }
-                    let _ = crate::sync_server::save_paired_devices(
-                        &sync_state.server_state.app_data_dir,
-                        &devices,
-                    );
-                    drop(devices);
-                    eprintln!("[sync] Peer discovered at {}:{}", peer_ip, new_port);
-                    do_manifest_exchange(
-                        &client,
-                        &peer_ip,
-                        new_port,
-                        my_device_id,
-                        &sym_key,
-                        &local_manifest,
-                    )
-                    .await?
-                } else {
-                    drop(devices);
-                    return Err(e);
-                }
-            } else {
-                return Err(e);
+                decrypt_response(&key, &enc_res).await
             }
-        }
-    };
+        },
+    )
+    .await?;
 
     let mut incoming_domains: HashMap<String, String> = HashMap::new();
 
-    // 4. Process Plan — collect domains to push and pull, then do batched transfers.
+    // 3. Process Plan — collect domains to push and pull, then do batched transfers.
     let mut push_domains: HashMap<String, String> = HashMap::new();
     let mut pull_domain_names: Vec<String> = Vec::new();
 
@@ -687,7 +737,6 @@ pub async fn initiate_sync(
         match action.direction {
             SyncDirection::Skip => {}
             SyncDirection::Push => {
-                // Only push, no pull needed
                 let data_guard = sync_state.server_state.sync_data.lock().await;
                 let data_json = data_guard
                     .as_ref()
@@ -697,7 +746,6 @@ pub async fn initiate_sync(
                 push_domains.insert(action.domain.clone(), data_json);
             }
             SyncDirection::Merge => {
-                // Push our data and also pull theirs
                 let data_guard = sync_state.server_state.sync_data.lock().await;
                 let data_json = data_guard
                     .as_ref()
@@ -713,62 +761,100 @@ pub async fn initiate_sync(
         }
     }
 
-    // 4a. Batched push (single request for all push domains)
+    // 3a. Batched push with retry on connection errors.
     if !push_domains.is_empty() {
+        let push_count = push_domains.len();
         let batch_payload = crate::sync_protocol::BatchedDomainPayload {
             sender_device_id: my_device_id.clone(),
             domains: push_domains,
         };
-        let req_payload = encrypt_request(my_device_id, &sym_key, &batch_payload)?;
+        try_with_discovery(
+            &app,
+            &peer_device_id,
+            "push-batch",
+            &peer_ip,
+            peer_port,
+            |base_url| {
+                let my_id = my_device_id.clone();
+                let key = sym_key;
+                let payload = batch_payload.clone();
+                let c = client.clone();
+                async move {
+                    let req_payload = encrypt_request(&my_id, &key, &payload)?;
+                    let res = c
+                        .post(format!("{base_url}/push-batch"))
+                        .json(&req_payload)
+                        .timeout(std::time::Duration::from_secs(60))
+                        .send()
+                        .await
+                        .map_err(|e| format!("Batched push to {base_url} failed: {e}"))?;
 
-        let res = client
-            .post(format!("{base_url}/push-batch"))
-            .json(&req_payload)
-            .timeout(std::time::Duration::from_secs(60))
-            .send()
-            .await
-            .map_err(|e| format!("Batched push failed: {e}"))?;
-
-        if !res.status().is_success() {
-            return Err(format!("Batched push rejected: {}", res.status()));
-        }
+                    if !res.status().is_success() {
+                        return Err(format!("Batched push rejected by peer: {}", res.status()));
+                    }
+                    Ok(())
+                }
+            },
+        )
+        .await?;
+        eprintln!(
+            "[sync] Pushed {} domain(s) to peer {}",
+            push_count, peer_device_id
+        );
     }
 
-    // 4b. Batched pull (single request for all pull domains)
+    // 3b. Batched pull with retry on connection errors.
     if !pull_domain_names.is_empty() {
+        let pull_count = pull_domain_names.len();
         let pull_req = crate::sync_protocol::BatchedPullRequest {
             domains: pull_domain_names,
         };
-        let req_payload = encrypt_request(my_device_id, &sym_key, &pull_req)?;
+        let pulled: BatchedPullResponse = try_with_discovery(
+            &app,
+            &peer_device_id,
+            "pull-batch",
+            &peer_ip,
+            peer_port,
+            |base_url| {
+                let my_id = my_device_id.clone();
+                let key = sym_key;
+                let req = pull_req.clone();
+                let c = client.clone();
+                async move {
+                    let req_payload = encrypt_request(&my_id, &key, &req)?;
+                    let res = c
+                        .post(format!("{base_url}/pull-batch"))
+                        .json(&req_payload)
+                        .timeout(std::time::Duration::from_secs(60))
+                        .send()
+                        .await
+                        .map_err(|e| format!("Batched pull from {base_url} failed: {e}"))?;
 
-        let res = client
-            .post(format!("{base_url}/pull-batch"))
-            .json(&req_payload)
-            .timeout(std::time::Duration::from_secs(60))
-            .send()
-            .await
-            .map_err(|e| format!("Batched pull failed: {e}"))?;
+                    if !res.status().is_success() {
+                        return Err(format!("Batched pull rejected by peer: {}", res.status()));
+                    }
 
-        if !res.status().is_success() {
-            return Err(format!("Batched pull rejected: {}", res.status()));
-        }
+                    let enc_res: crate::sync_crypto::EncryptedPayload = res
+                        .json()
+                        .await
+                        .map_err(|e| format!("Pull response parse fail: {e}"))?;
 
-        let enc_res: crate::sync_crypto::EncryptedPayload = res
-            .json()
-            .await
-            .map_err(|e| format!("Batched pull response parse fail: {e}"))?;
-
-        let pulled: crate::sync_protocol::BatchedPullResponse =
-            decrypt_response(&sym_key, &enc_res).await?;
+                    decrypt_response(&key, &enc_res).await
+                }
+            },
+        )
+        .await?;
 
         for (domain, data_json) in pulled.domains {
             incoming_domains.insert(domain, data_json);
         }
+        eprintln!(
+            "[sync] Pulled {} domain(s) from peer {}",
+            pull_count, peer_device_id
+        );
     }
 
-    // 5. Complete sync and update timestamp.
-    // Include our own server address so the responder can connect back
-    // (e.g. to pull book files) even if our port changed since pairing.
+    // 4. Complete sync and update timestamp.
     let now = sync_crypto::now_iso8601();
     let own_ip = sync_server::get_local_ip().unwrap_or_default();
     let own_port = {
@@ -782,20 +868,37 @@ pub async fn initiate_sync(
         server_port: own_port,
     };
 
-    let complete_req = encrypt_request(my_device_id, &sym_key, &complete_msg)?;
-    let complete_response = client
-        .post(format!("{base_url}/complete"))
-        .json(&complete_req)
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await
-        .map_err(|e| format!("Sync completion notify failed: {e}"))?;
-    if !complete_response.status().is_success() {
-        return Err(format!(
-            "Sync completion rejected by peer: {}",
-            complete_response.status()
-        ));
-    }
+    try_with_discovery(
+        &app,
+        &peer_device_id,
+        "complete",
+        &peer_ip,
+        peer_port,
+        |base_url| {
+            let my_id = my_device_id.clone();
+            let key = sym_key;
+            let msg = complete_msg.clone();
+            let c = client.clone();
+            async move {
+                let complete_req = encrypt_request(&my_id, &key, &msg)?;
+                let res = c
+                    .post(format!("{base_url}/complete"))
+                    .json(&complete_req)
+                    .timeout(std::time::Duration::from_secs(10))
+                    .send()
+                    .await
+                    .map_err(|e| format!("Sync completion notify at {base_url} failed: {e}"))?;
+                if !res.status().is_success() {
+                    return Err(format!(
+                        "Sync completion rejected by peer: {}",
+                        res.status()
+                    ));
+                }
+                Ok(())
+            }
+        },
+    )
+    .await?;
 
     peer.last_sync_at = Some(now);
 

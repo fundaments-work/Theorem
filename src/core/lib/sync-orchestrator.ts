@@ -111,9 +111,10 @@ async function buildDomainsAndManifest() {
     const domains: Record<string, string> = {
         books: JSON.stringify(library.books.map(({ filePath: _f, storagePath: _s, coverPath, ...book }) => ({
             ...book,
-            // Include cover data URLs so the peer gets covers immediately
-            // without needing to re-extract from the book file.
-            ...(coverPath && coverPath.startsWith("data:") ? { coverPath } : {}),
+            // Strip data URL covers — they are base64-encoded images that can
+            // be 100+ KB each, blowing up the JSON payload to hundreds of MB.
+            // The peer pulls covers on-demand via the dedicated cover pull endpoint.
+            ...(coverPath && !coverPath.startsWith("data:") ? { coverPath } : {}),
         }))),
         annotations: JSON.stringify(library.annotations),
         collections: JSON.stringify(library.collections),

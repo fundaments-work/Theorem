@@ -99,10 +99,55 @@ fn save_preferred_port(app_data_dir: &Path, port: u16) {
 
 // ─── Server Lifecycle ───
 
+/// Maximum HTTP body size for sync endpoints: 256 MiB.
+/// Default axum limit is 2 MiB — large library snapshots can easily exceed that
+/// (book covers as base64 data URLs, RSS article content, etc.).
+const SYNC_BODY_LIMIT: usize = 256 * 1024 * 1024;
+
+/// Log every incoming HTTP request before it reaches the handler.
+/// This catches requests that fail before the handler runs (body too large,
+/// connection reset during upload, etc.).
+async fn request_logger(
+    req: axum::http::Request<axum::body::Body>,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let method = req.method().clone();
+    let uri = req.uri().clone();
+    let content_length = req
+        .headers()
+        .get("content-length")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("?");
+    let device_id = req
+        .headers()
+        .get("x-device-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("-");
+
+    eprintln!(
+        "[sync-server] <- {} {}  content-length={}  device={}",
+        method, uri, content_length, device_id
+    );
+
+    let response = next.run(req).await;
+
+    eprintln!(
+        "[sync-server] -> {} {}  status={}",
+        method,
+        uri,
+        response.status().as_u16()
+    );
+    response
+}
+
 /// Start the sync server, reusing the previously bound port if possible.
 ///
 /// Returns a handle that can be used to shut down the server.
 pub async fn start_server(state: Arc<SyncServerState>) -> Result<SyncServerHandle, String> {
+    use axum::extract::DefaultBodyLimit;
+    use axum::middleware;
+    use tower_http::compression::CompressionLayer;
+
     let app = Router::new()
         .route("/health", get(handle_health))
         .route("/pair", post(handle_pair))
@@ -115,6 +160,9 @@ pub async fn start_server(state: Arc<SyncServerState>) -> Result<SyncServerHandl
         .route("/sync/file/availability", post(handle_file_availability))
         .route("/sync/file/pull", post(handle_file_pull))
         .route("/sync/file/cover", post(handle_cover_pull))
+        .layer(DefaultBodyLimit::max(SYNC_BODY_LIMIT))
+        .layer(CompressionLayer::new())
+        .layer(middleware::from_fn(request_logger))
         .with_state(state.clone());
 
     // Try to reuse the previously bound port. Fall back to a random port.
@@ -253,6 +301,7 @@ fn encrypt_response<T: serde::Serialize>(
 
 /// GET /health — Server health check.
 async fn handle_health(State(state): State<Arc<SyncServerState>>) -> impl IntoResponse {
+    eprintln!("[sync-server] GET /health");
     Json(HealthResponse {
         status: "ok".to_string(),
         device_id: state.identity.device_id.clone(),
@@ -266,6 +315,7 @@ async fn handle_pair(
     State(state): State<Arc<SyncServerState>>,
     Json(request): Json<PairingRequest>,
 ) -> Result<Json<PairingResponse>, (StatusCode, String)> {
+    eprintln!("[sync-server] POST /pair from device={}", request.device_id);
     let pending_guard = state.pending_pairing.lock().await;
     let pending = pending_guard
         .as_ref()
@@ -377,7 +427,10 @@ async fn handle_sync_manifest(
     State(state): State<Arc<SyncServerState>>,
     Json(req): Json<AuthenticatedRequest>,
 ) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
-    // Decrypt the manifest from the peer
+    eprintln!(
+        "[sync-server] POST /sync/manifest from device={}",
+        req.device_id
+    );
     let (remote_manifest, sym_key): (SyncManifest, [u8; 32]) =
         decrypt_request(&state, &req).await?;
 
@@ -433,6 +486,14 @@ async fn handle_sync_manifest(
     }
 
     let plan = SyncPlan { actions };
+    eprintln!(
+        "[sync-server] manifest: plan={:?}",
+        plan.actions
+            .iter()
+            .filter(|a| !matches!(a.direction, SyncDirection::Skip))
+            .map(|a| format!("{}:{:?}", a.domain, a.direction))
+            .collect::<Vec<_>>()
+    );
     encrypt_response(&sym_key, &plan)
 }
 
@@ -454,8 +515,10 @@ async fn handle_sync_push(
     Json(req): Json<AuthenticatedRequest>,
 ) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
     validate_domain(&domain)?;
-
-    // Decrypt the domain payload from the peer
+    eprintln!(
+        "[sync-server] POST /sync/push/{} from device={}",
+        domain, req.device_id
+    );
     let (payload, sym_key): (SyncDomainPayload, [u8; 32]) = decrypt_request(&state, &req).await?;
 
     // Store the incoming data in the sync snapshot for the frontend to process.
@@ -488,8 +551,10 @@ async fn handle_sync_pull(
     Json(req): Json<AuthenticatedRequest>,
 ) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
     validate_domain(&domain)?;
-
-    // Decrypt the request empty trigger
+    eprintln!(
+        "[sync-server] POST /sync/pull/{} from device={}",
+        domain, req.device_id
+    );
     let (_request, sym_key): (Value, [u8; 32]) = decrypt_request(&state, &req).await?;
 
     // Get the requested domain data.
@@ -517,8 +582,19 @@ async fn handle_sync_pull(
 /// POST /sync/push-batch — Receive multiple domains from a peer in one request.
 async fn handle_sync_push_batch(
     State(state): State<Arc<SyncServerState>>,
-    Json(req): Json<AuthenticatedRequest>,
+    body: axum::body::Bytes,
 ) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
+    eprintln!(
+        "[sync-server] POST /sync/push-batch  body_len={}",
+        body.len()
+    );
+    let req: AuthenticatedRequest = serde_json::from_slice(&body).map_err(|e| {
+        eprintln!("[sync-server] push-batch JSON parse error: {}", e);
+        (
+            StatusCode::BAD_REQUEST,
+            format!("Failed to parse request body: {}", e),
+        )
+    })?;
     let (payload, sym_key): (BatchedDomainPayload, [u8; 32]) =
         decrypt_request(&state, &req).await?;
 
@@ -528,6 +604,11 @@ async fn handle_sync_push_batch(
     }
 
     let domain_count = payload.domains.len();
+    eprintln!(
+        "[sync-server] push-batch: storing {} domain(s): {:?}",
+        domain_count,
+        payload.domains.keys().collect::<Vec<_>>()
+    );
 
     {
         let mut sync_data = state.sync_data.lock().await;
@@ -570,6 +651,10 @@ async fn handle_sync_pull_batch(
     State(state): State<Arc<SyncServerState>>,
     Json(req): Json<AuthenticatedRequest>,
 ) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
+    eprintln!(
+        "[sync-server] POST /sync/pull-batch from device={}",
+        req.device_id
+    );
     let (pull_req, sym_key): (BatchedPullRequest, [u8; 32]) = decrypt_request(&state, &req).await?;
 
     // Validate all requested domain names.
@@ -600,6 +685,10 @@ async fn handle_sync_complete(
     State(state): State<Arc<SyncServerState>>,
     Json(req): Json<AuthenticatedRequest>,
 ) -> Result<Json<EncryptedPayload>, (StatusCode, String)> {
+    eprintln!(
+        "[sync-server] POST /sync/complete from device={}",
+        req.device_id
+    );
     let (message, sym_key): (SyncCompleteMessage, [u8; 32]) = decrypt_request(&state, &req).await?;
 
     let mut devices = state.paired_devices.lock().await;
