@@ -371,8 +371,9 @@ function BookReaderPage() {
                 const dataUrl = await saveCoverImage(book.id, blob);
                 updates.coverPath = dataUrl;
             }
-            // Only update title if extracted one looks more meaningful than a filename
-            if (metadata.title && !/^\s*[\w-]+\s*$/.test(book.title) && book.title === extractFilenameFromPath(book.filePath).replace(/\.[^.]+$/, '')) {
+            // Update title from book metadata if the current title is still
+            // the original filename (no spaces, hyphens/underscores only).
+            if (metadata.title && /^[\w-]+$/.test(book.title) && book.title === extractFilenameFromPath(book.filePath).replace(/\.[^.]+$/, '')) {
                 updates.title = metadata.title;
             }
             if (metadata.author && !book.author) {
