@@ -8,7 +8,7 @@ import {
 } from "../../../core";
 import type { ShareImageOptions } from "../../../core/lib/share-canvas";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "../../../ui";
-import { Download, Share2 } from "lucide-react";
+import { Download, Share2, CheckCircle, AlertCircle } from "lucide-react";
 
 interface ShareStudioModalProps {
     annotation: Annotation;
@@ -23,6 +23,7 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
     const [imageBlob, setImageBlob] = useState<Blob | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
     useEffect(() => {
         let isMounted = true;
@@ -67,20 +68,23 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
         };
     }, []);
 
-    const handleDownload = useCallback(() => {
-        if (!imageBlob) return;
-        // On mobile, try native share first (download via a.click() may be
-        // blocked in Android WebView). Fall back to programmatic download.
-        if (typeof navigator.share === 'function') {
-            const file = new File([imageBlob], `${book?.title || 'Highlight'}.png`, { type: 'image/png' });
-            navigator.share({ title: book?.title || 'Highlight', files: [file] }).catch(() => {
-                downloadImage(imageBlob, buildImageFilename(book?.title || 'Highlight'));
-            });
-        } else {
-            downloadImage(imageBlob, buildImageFilename(book?.title || 'Highlight'));
+    useEffect(() => {
+        if (toast) {
+            const t = setTimeout(() => setToast(null), 3000);
+            return () => clearTimeout(t);
         }
-        onClose();
-    }, [imageBlob, book, onClose]);
+    }, [toast]);
+
+    const handleDownload = useCallback(async () => {
+        if (!imageBlob) return;
+        const filename = buildImageFilename(book?.title || "Highlight");
+        const result = await downloadImage(imageBlob, filename);
+        if (result.ok) {
+            setToast({ type: "success", message: "Image saved" });
+        } else if (result.reason !== "Cancelled") {
+            setToast({ type: "error", message: result.reason });
+        }
+    }, [imageBlob, book]);
 
     const handleNativeShare = useCallback(async () => {
         if (imageBlob) {
@@ -89,6 +93,7 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
                 onClose();
             } catch (e) {
                 console.error("Share failed", e);
+                setToast({ type: "error", message: "Share failed" });
             }
         }
     }, [imageBlob, book, onClose]);
@@ -188,7 +193,14 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
                 </div>
             </ModalBody>
             <ModalFooter>
-                <button className="ui-btn-ghost" onClick={onClose}>
+                {toast && (
+                    <div className={`absolute bottom-full left-0 right-0 mb-2 flex items-center justify-center gap-1.5 text-xs py-2 rounded bg-[var(--color-surface)] border border-[var(--color-border)] shadow-lg ${toast.type === "success" ? "text-[var(--color-success,#22c55e)]" : "text-[var(--color-error)]"}`}>
+                        {toast.type === "success" ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                        {toast.message}
+                    </div>
+                )}
+                <div className="flex-1" />
+                <button className="ui-btn-ghost shrink-0" onClick={onClose}>
                     Cancel
                 </button>
                 <button 

@@ -645,6 +645,23 @@ fn scan_library_folder_mobile(
     }
 }
 
+#[tauri::command]
+async fn save_share_image_mobile(
+    app: tauri::AppHandle,
+    filename: String,
+    base64_data: String,
+) -> Result<String, String> {
+    #[cfg(target_os = "android")]
+    {
+        tauri_plugin_mobile_folder_scan::save_image(&app, &filename, &base64_data)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, filename, base64_data);
+        Err("Mobile image saving is only available on Android.".to_string())
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn apply_linux_webkit_workarounds() {
     // Allow advanced users to disable these workarounds for troubleshooting:
@@ -792,6 +809,7 @@ pub fn run() {
             fetch_binary_content,
             pick_library_folder_mobile,
             scan_library_folder_mobile,
+            save_share_image_mobile,
             database::sqlite_save_book_data,
             database::sqlite_get_book_data,
             database::sqlite_delete_book_data,

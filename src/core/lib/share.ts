@@ -42,18 +42,57 @@ export async function captureCardAsImage(element: HTMLElement): Promise<Blob> {
     return res.blob();
 }
 
-export function downloadImage(blob: Blob, filename: string): void {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    // Delay revoking so the browser can start the download
-    setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, 200);
+function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const result = reader.result as string;
+            const base64 = result.split(",")[1];
+            resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+export async function downloadImage(blob: Blob, filename: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+    try {
+        const { isTauri, isTauriMobile } = await import("./env");
+
+        if (isTauri()) {
+            // On Android, use MediaStore via native plugin to properly save to gallery
+            if (isTauriMobile()) {
+                const { invoke } = await import("@tauri-apps/api/core");
+                const base64Data = await blobToBase64(blob);
+                await invoke("save_share_image_mobile", { filename, base64Data });
+                return { ok: true };
+            }
+
+            const { writeFile, BaseDirectory, mkdir } = await import("@tauri-apps/plugin-fs");
+            try { await mkdir("Theorem", { baseDir: BaseDirectory.Download, recursive: true }); } catch { /* exists */ }
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            await writeFile(`Theorem/${filename}`, bytes, { baseDir: BaseDirectory.Download });
+            return { ok: true };
+        }
+    } catch (e) {
+        return { ok: false, reason: String(e) };
+    }
+
+    try {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 1000);
+        return { ok: true };
+    } catch {
+        return { ok: false, reason: "Download failed" };
+    }
 }
 
 export async function copyImageToClipboard(blob: Blob): Promise<void> {

@@ -8,7 +8,7 @@ import {
 import type { ShareStatsData } from "../../core/lib/share-canvas";
 import type { ShareImageOptions } from "../../core/lib/share-canvas";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "../../ui";
-import { Download, Share2 } from "lucide-react";
+import { Download, Share2, CheckCircle, AlertCircle } from "lucide-react";
 
 interface ShareStatsStudioModalProps {
     statsData: ShareStatsData;
@@ -21,6 +21,7 @@ export function ShareStatsStudioModal({ statsData, onClose }: ShareStatsStudioMo
     const [imageBlob, setImageBlob] = useState<Blob | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
     useEffect(() => {
         let isMounted = true;
@@ -65,13 +66,23 @@ export function ShareStatsStudioModal({ statsData, onClose }: ShareStatsStudioMo
         };
     }, []);
 
-    const handleDownload = useCallback(() => {
-        if (imageBlob) {
-            const filename = buildImageFilename("ReadingStats");
-            downloadImage(imageBlob, filename);
-            onClose();
+    useEffect(() => {
+        if (toast) {
+            const t = setTimeout(() => setToast(null), 3000);
+            return () => clearTimeout(t);
         }
-    }, [imageBlob, onClose]);
+    }, [toast]);
+
+    const handleDownload = useCallback(async () => {
+        if (!imageBlob) return;
+        const filename = buildImageFilename("ReadingStats");
+        const result = await downloadImage(imageBlob, filename);
+        if (result.ok) {
+            setToast({ type: "success", message: "Image saved" });
+        } else if (result.reason !== "Cancelled") {
+            setToast({ type: "error", message: result.reason });
+        }
+    }, [imageBlob]);
 
     const handleNativeShare = useCallback(async () => {
         if (imageBlob) {
@@ -162,7 +173,14 @@ export function ShareStatsStudioModal({ statsData, onClose }: ShareStatsStudioMo
                 </div>
             </ModalBody>
             <ModalFooter>
-                <button className="ui-btn-ghost" onClick={onClose}>
+                {toast && (
+                    <div className={`absolute bottom-full left-0 right-0 mb-2 flex items-center justify-center gap-1.5 text-xs py-2 rounded bg-[var(--color-surface)] border border-[var(--color-border)] shadow-lg ${toast.type === "success" ? "text-[var(--color-success,#22c55e)]" : "text-[var(--color-error)]"}`}>
+                        {toast.type === "success" ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                        {toast.message}
+                    </div>
+                )}
+                <div className="flex-1" />
+                <button className="ui-btn-ghost shrink-0" onClick={onClose}>
                     Cancel
                 </button>
                 <button 

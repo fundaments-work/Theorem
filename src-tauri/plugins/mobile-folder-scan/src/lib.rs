@@ -36,6 +36,20 @@ struct ScanFolderResponse {
     files: Vec<String>,
 }
 
+#[cfg(target_os = "android")]
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveImagePayload<'a> {
+    filename: &'a str,
+    base64_data: &'a str,
+}
+
+#[cfg(target_os = "android")]
+#[derive(Deserialize)]
+struct SaveImageResponse {
+    uri: String,
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("mobile-folder-scan")
         .setup(|app, api| {
@@ -86,4 +100,21 @@ pub fn scan_folder<R: Runtime>(app: &AppHandle<R>, tree_uri: &str) -> Result<Vec
         .map_err(|error| error.to_string())?;
 
     Ok(response.files)
+}
+
+#[cfg(target_os = "android")]
+pub fn save_image<R: Runtime>(app: &AppHandle<R>, filename: &str, base64_data: &str) -> Result<String, String> {
+    let state = app.state::<MobileFolderScan<R>>();
+    let response = state
+        .handle
+        .run_mobile_plugin::<SaveImageResponse>(
+            "saveImage",
+            SaveImagePayload {
+                filename,
+                base64_data,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(response.uri)
 }

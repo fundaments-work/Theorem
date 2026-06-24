@@ -1,8 +1,11 @@
 package work.fundamentals.theorem.libraryscan
 
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import androidx.activity.result.ActivityResult
 import androidx.documentfile.provider.DocumentFile
 import app.tauri.Logger
@@ -22,6 +25,12 @@ import java.util.concurrent.Executors
 class ScanFolderArgs {
   lateinit var treeUri: String
   var recursive: Boolean? = true
+}
+
+@InvokeArg
+class SaveImageArgs {
+  lateinit var filename: String
+  lateinit var base64Data: String
 }
 
 @TauriPlugin
@@ -165,5 +174,57 @@ class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
       mimeType == "application/x-fictionbook+xml" ||
       mimeType == "application/vnd.comicbook+zip" ||
       mimeType == "application/pdf"
+  }
+
+  @Command
+  fun saveImage(invoke: Invoke) {
+    scanExecutor.execute {
+      try {
+        val args = invoke.parseArgs(SaveImageArgs::class.java)
+        val filename = args.filename
+        val base64Data = args.base64Data
+
+        if (filename.isEmpty() || base64Data.isEmpty()) {
+          invoke.reject("Filename and image data are required.")
+          return@execute
+        }
+
+        val bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+
+        val contentValues = ContentValues().apply {
+          put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+          put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Theorem")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+          }
+        }
+
+        val uri = activity.contentResolver.insert(
+          MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+          contentValues
+        )
+
+        if (uri != null) {
+          activity.contentResolver.openOutputStream(uri)?.use { os ->
+            os.write(bytes)
+          }
+
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            contentValues.clear()
+            contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+            activity.contentResolver.update(uri, contentValues, null, null)
+          }
+
+          val response = JSObject()
+          response.put("uri", uri.toString())
+          invoke.resolve(response)
+        } else {
+          invoke.reject("Failed to create MediaStore entry")
+        }
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Failed to save image")
+      }
+    }
   }
 }
