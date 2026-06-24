@@ -1,5 +1,5 @@
 import { del, get, set } from "idb-keyval";
-import { Inflate } from "fflate";
+import { Gunzip } from "fflate";
 import type {
     DictionaryProvider,
     InstalledDictionary,
@@ -191,18 +191,16 @@ async function createRuntimeDictionary(buffers: {
 
     await dictionary.loadIfo(new Blob([buffers.ifo]));
 
-    // DictZip stores compressed chunks as contiguous deflate blocks in a
-    // single gzip stream. Only the *last* block carries the BFINAL marker;
-    // intermediate chunks are non-final so inflateSync fails with
-    // "unexpected EOF".  We use fflate's streaming Inflate class which
-    // decompresses partial deflate blocks without requiring BFINAL.
+    // DictZip stores each chunk as an independent gzip member.
+    // We must use Gunzip (not Inflate) because the chunks carry gzip
+    // headers, and we must signal final=true so fflate flushes all output.
     const inflateChunk = (data: Uint8Array): Uint8Array => {
         const outputs: Uint8Array[] = [];
-        const inflater = new Inflate({});
-        inflater.ondata = (data) => {
-            outputs.push(data);
+        const gunzipper = new Gunzip({});
+        gunzipper.ondata = (chunk) => {
+            outputs.push(chunk);
         };
-        inflater.push(data, false);
+        gunzipper.push(data, true);
         const total = outputs.reduce((s, o) => s + o.length, 0);
         const result = new Uint8Array(total);
         let offset = 0;
@@ -240,6 +238,7 @@ async function ensureLoadedDictionary(id: string): Promise<LoadedStarDict | null
 
     const manifest = await readManifest(id);
     if (!manifest) {
+        console.warn(`[StarDictService] No manifest found for dictionary ${id}`);
         return null;
     }
 
@@ -249,18 +248,25 @@ async function ensureLoadedDictionary(id: string): Promise<LoadedStarDict | null
     const syn = await readDictionaryPart(id, "syn");
 
     if (!ifo || !idx || !dict) {
+        console.warn(
+            `[StarDictService] Missing dictionary parts for ${id}: ifo=${!!ifo} idx=${!!idx} dict=${!!dict}`,
+        );
         return null;
     }
 
-    const runtime = await createRuntimeDictionary({
-        ifo,
-        idx,
-        dict,
-        syn: syn || undefined,
-    });
-
-    loadedDictionaries.set(id, runtime);
-    return runtime;
+    try {
+        const runtime = await createRuntimeDictionary({
+            ifo,
+            idx,
+            dict,
+            syn: syn || undefined,
+        });
+        loadedDictionaries.set(id, runtime);
+        return runtime;
+    } catch (error) {
+        console.error(`[StarDictService] Failed to create runtime dictionary ${id}:`, error);
+        return null;
+    }
 }
 
 /**
@@ -446,16 +452,21 @@ export async function lookupInStarDictDictionary(
 ): Promise<VocabularyMeaning[]> {
     const dictionary = await ensureLoadedDictionary(id);
     if (!dictionary) {
+        console.warn(`[StarDictService] Dictionary ${id} not loaded for lookup "${term}"`);
         return [];
     }
 
-    const entries = await dictionary.lookup(term);
-    if (!entries || entries.length === 0) {
+    try {
+        const entries = await dictionary.lookup(term);
+        if (!entries || entries.length === 0) {
+            return [];
+        }
+        const definitions = extractDefinitions(entries);
+        return toVocabularyMeaning(definitions, "stardict");
+    } catch (error) {
+        console.error(`[StarDictService] Lookup failed for "${term}" in ${id}:`, error);
         return [];
     }
-
-    const definitions = extractDefinitions(entries);
-    return toVocabularyMeaning(definitions, "stardict");
 }
 
 /**

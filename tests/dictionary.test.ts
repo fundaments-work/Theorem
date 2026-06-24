@@ -6,7 +6,7 @@
  * and lookup throughput without requiring a running Tauri backend.
  */
 import { describe, it, expect } from "vitest";
-import { inflateSync, deflateSync, Inflate } from "fflate";
+import { inflateSync, deflateSync, Inflate, Gunzip } from "fflate";
 
 // ---- Test helpers ----
 
@@ -197,7 +197,90 @@ describe("Dictionary lookup performance", () => {
         }
     });
 
-    it("performs 1000 warm lookups per second", () => {
+describe("Dictionary integration with real download", () => {
+    const DICT_URL = "https://github.com/sapienskid/wiktionary-stardict/releases/download/en-latest/dict-en-en.zip";
+
+    it("downloads, extracts and lookups return definitions for common words", async () => {
+        const response = await fetch(DICT_URL);
+        expect(response.ok).toBe(true);
+
+        const buffer = await response.arrayBuffer();
+        expect(buffer.byteLength).toBeGreaterThan(1_000_000); // ~31 MB
+
+        // Extract ZIP using JSZip-like parsing (we'll use the zip.js lib)
+        const { ZipReader, Uint8ArrayReader, Uint8ArrayWriter } = await import("@zip.js/zip.js");
+        const reader = new ZipReader(new Uint8ArrayReader(new Uint8Array(buffer)));
+        const entries = await reader.getEntries();
+
+        const files: Record<string, Uint8Array> = {};
+        for (const entry of entries) {
+            if (entry.directory) continue;
+            const name = entry.filename.split("/").pop() || entry.filename;
+            const data = await (entry as any).getData(new Uint8ArrayWriter());
+            files[name] = data;
+        }
+        await reader.close();
+
+        const ifoName = Object.keys(files).find((k) => k.endsWith(".ifo"));
+        const idxName = Object.keys(files).find((k) => k.endsWith(".idx"));
+        const dictName = Object.keys(files).find((k) => k.endsWith(".dict.dz") || k.endsWith(".dict"));
+
+        expect(ifoName).toBeTruthy();
+        expect(idxName).toBeTruthy();
+        expect(dictName).toBeTruthy();
+
+        // Load the dictionary using the same runtime as the app
+        const { StarDict } = await import("../src/features/reader/foliate-js-runtime/dict.js");
+        const dictionary = new StarDict();
+
+        await dictionary.loadIfo(new Blob([files[ifoName!]]));
+        expect(dictionary.ifo.sametypesequence).toBeTruthy();
+
+        const inflateChunk = (data: Uint8Array): Uint8Array => {
+            const outputs: Uint8Array[] = [];
+            const gunzipper = new Gunzip({});
+            gunzipper.ondata = (chunk: Uint8Array) => outputs.push(chunk);
+            gunzipper.push(data, true);
+            const total = outputs.reduce((s, o) => s + o.length, 0);
+            const result = new Uint8Array(total);
+            let offset = 0;
+            for (const o of outputs) {
+                result.set(o, offset);
+                offset += o.length;
+            }
+            return result;
+        };
+
+        await dictionary.loadDict(
+            new Blob([files[dictName!]]),
+            async (data: Uint8Array) => inflateChunk(data),
+        );
+        await dictionary.loadIdx(new Blob([files[idxName!]]));
+
+        // Test lookups for common English words
+        const testWords = ["hello", "world", "the", "dictionary", "love", "time"];
+        let foundCount = 0;
+
+        for (const word of testWords) {
+            const entries = await dictionary.lookup(word);
+            if (entries && entries.length > 0) {
+                foundCount++;
+                // Verify we got actual text data back
+                const firstEntry = entries[0];
+                expect(firstEntry.word.toLowerCase()).toBe(word);
+                expect(firstEntry.data.length).toBeGreaterThan(0);
+                const payload = firstEntry.data[0][1];
+                const text = new TextDecoder().decode(payload);
+                expect(text.length).toBeGreaterThan(0);
+            }
+        }
+
+        console.log(`Dictionary lookup results: ${foundCount}/${testWords.length} words found`);
+        expect(foundCount).toBeGreaterThanOrEqual(3); // At least 3 of 6 should match
+    }, 120_000); // 2 minute timeout for download
+});
+
+describe("Dictionary lookup performance", () => {
         const wordCount = 10_000;
         const idxData = buildSyntheticIdx(wordCount);
 

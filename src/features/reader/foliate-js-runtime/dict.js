@@ -1,3 +1,5 @@
+import { gunzipSync } from 'fflate'
+
 const decoder = new TextDecoder()
 const decode = decoder.decode.bind(decoder)
 
@@ -209,7 +211,40 @@ export class StarDict {
             return [line.slice(0, sep), line.slice(sep + 1)]
         }).filter(x => x))
     }
-    loadDict(file, inflate) {
+    async loadDict(file, inflate) {
+        const header = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+        // Not gzip at all — uncompressed .dict
+        if (header[0] !== 31 || header[1] !== 139) {
+            const buf = await file.arrayBuffer()
+            const arr = new Uint8Array(buf)
+            this.#dict = {
+                async read(offset, size) {
+                    return arr.subarray(offset, offset + size)
+                }
+            }
+            return
+        }
+        // Check whether this is a DictZip (FEXTRA + RA subfield) or plain gzip
+        const flg = header[3]
+        let isDictZip = false
+        if (flg & 0b100) {
+            const xlen = new DataView(header.buffer).getUint16(10, true)
+            if (xlen >= 2) {
+                const extra = new Uint8Array(await file.slice(12, 14).arrayBuffer())
+                if (extra[0] === 82 && extra[1] === 65) isDictZip = true
+            }
+        }
+        if (!isDictZip) {
+            // Plain gzip .dict — decompress entire file and use a simple reader
+            const compressed = new Uint8Array(await file.arrayBuffer())
+            const decompressed = await inflate(compressed)
+            this.#dict = {
+                async read(offset, size) {
+                    return decompressed.subarray(offset, offset + size)
+                }
+            }
+            return
+        }
         this.#dict.inflate = inflate
         return this.#dict.load(file)
     }
