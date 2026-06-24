@@ -840,17 +840,33 @@ export async function pickAndImportBooksIncremental(
 }
 
 /**
- * Scan a folder for books (Tauri only)
+ * Scan a folder for books using native filesystem walk (desktop)
+ * or JS fs.readDir fallback (web / mobile content URIs).
  */
 export async function scanFolderForBooks(folderPath: string): Promise<string[]> {
-    const plugins = await initTauriPlugins();
-    if (!plugins?.fs) throw new Error('FS plugin not available - folder scanning requires Tauri');
-    const fs = plugins.fs;
-
     const rootFolderPath = normalizeImportPath(folderPath);
     if (!rootFolderPath) {
         return [];
     }
+
+    // Desktop Tauri: use Rust walkdir for near-native performance
+    if (isTauri() && !isMobile()) {
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const result = await invoke<string[]>('scan_library_folder_desktop', {
+                folderPath: rootFolderPath,
+            });
+            return Array.isArray(result) ? result : [];
+        } catch (error) {
+            console.warn('[scanFolderForBooks] Rust scan failed, falling back to JS:', error);
+            // Fall through to JS implementation
+        }
+    }
+
+    // JS fallback (web, mobile content URIs, or Rust failure)
+    const plugins = await initTauriPlugins();
+    if (!plugins?.fs) throw new Error('FS plugin not available - folder scanning requires Tauri');
+    const fs = plugins.fs;
 
     const bookFiles: string[] = [];
     const visitedDirectories = new Set<string>();
