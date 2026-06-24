@@ -141,7 +141,7 @@ interface ModalFooterProps {
 
 export function ModalFooter({ children, className }: ModalFooterProps) {
     return (
-        <div className={cn("flex shrink-0 items-center justify-end gap-2 border-t border-[var(--color-border)] px-5 py-4", className)}>
+        <div className={cn("relative flex shrink-0 items-center justify-end gap-2 border-t border-[var(--color-border)] px-5 py-4", className)}>
             {children}
         </div>
     );
