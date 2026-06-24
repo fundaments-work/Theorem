@@ -1281,18 +1281,24 @@ export function LibraryPage() {
             if (isMobile()) {
                 setIsScanning(true);
 
-                let selectedFolder = settings.scanFolders[0] || "";
-                if (!selectedFolder) {
-                    const pickedFolder = await pickLibraryFolderMobile();
-                    if (!pickedFolder) {
-                        return;
-                    }
-                    selectedFolder = pickedFolder;
-                    updateSettings({ scanFolders: [selectedFolder] });
+                // Always show picker on mobile so user can confirm or change folder.
+                // SAF remembers the last location, so re-picking the same folder is quick.
+                const pickedFolder = await pickLibraryFolderMobile();
+                if (!pickedFolder) {
+                    setIsScanning(false);
+                    return;
                 }
 
-                const bookUris = await scanLibraryFolderMobile(selectedFolder);
-                await importDiscoveredBooks(bookUris);
+                updateSettings({ scanFolders: [pickedFolder] });
+
+                try {
+                    const bookUris = await scanLibraryFolderMobile(pickedFolder);
+                    await importDiscoveredBooks(bookUris);
+                } catch (err) {
+                    // Clear saved folder on failure so picker shows again next time
+                    updateSettings({ scanFolders: [] });
+                    throw err;
+                }
                 return;
             }
 
