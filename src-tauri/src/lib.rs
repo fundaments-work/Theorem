@@ -857,83 +857,113 @@ async fn download_and_extract_stardict(
     app: AppHandle,
     url: String,
 ) -> Result<serde_json::Value, String> {
-    tokio::task::spawn_blocking(move || {
-        let response = shared_http_client()
-            .get(&url)
-            .timeout(std::time::Duration::from_secs(300))
-            .send()
-            .map_err(|e| format!("Download failed: {e}"))?;
+    use futures::StreamExt;
 
-        let status = response.status();
-        if !status.is_success() {
-            return Err(format!("Server returned HTTP {}", status.as_u16()));
+    let client = reqwest::Client::builder()
+        .cookie_store(true)
+        .timeout(std::time::Duration::from_secs(300))
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36")
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Download failed: {e}"))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("Server returned HTTP {}", status.as_u16()));
+    }
+
+    let total_size = response.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+    let mut body = Vec::new();
+
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Stream error: {e}"))?;
+        downloaded += chunk.len() as u64;
+        body.extend_from_slice(&chunk);
+
+        if total_size > 0 {
+            let percent = (downloaded as f64 / total_size as f64 * 100.0) as u32;
+            let _ = app.emit(
+                "dictionary-download-progress",
+                serde_json::json!({
+                    "percent": percent,
+                    "downloaded": downloaded,
+                    "total": total_size,
+                }),
+            );
         }
+    }
 
-        let body = response
-            .bytes()
-            .map_err(|e| format!("Failed to read response body: {e}"))?;
+    let is_zip = url.ends_with(".zip");
 
-        let is_zip = url.ends_with(".zip");
-
-        let (ifo, idx, dict, syn) = if is_zip {
-            extract_stardict_parts_from_zip(&body)?
+    let (ifo, idx, dict, syn) = tokio::task::spawn_blocking(move || {
+        if is_zip {
+            extract_stardict_parts_from_zip(&body)
         } else {
-            extract_stardict_parts_from_tar_bz2(&body)?
-        };
-
-        // Parse .ifo to get dictionary metadata
-        let ifo_text = String::from_utf8_lossy(&ifo);
-        let mut name = String::from("Unknown Dictionary");
-        let mut lang = String::from("en");
-        for line in ifo_text.lines() {
-            let trimmed = line.trim();
-            if let Some(value) = trimmed.strip_prefix("bookname=") {
-                name = value.trim().to_string();
-            } else if trimmed.starts_with("sametypesequence=") {
-                // Dictionary format indicator — captured for info, not needed elsewhere
-            }
+            extract_stardict_parts_from_tar_bz2(&body)
         }
-        // Derive language from URL (e.g., .../file/en/dict-en-en.zip)
-        if let Some(segments) = url.split('/').nth(4) {
-            if segments.len() == 2 {
-                lang = segments.to_string();
-            }
-        }
-
-        let id = uuid_v4();
-        let size_bytes =
-            (ifo.len() + idx.len() + dict.len() + syn.as_ref().map_or(0, |s| s.len())) as u64;
-
-        let manifest_key = format!("theorem-stardict:{id}:manifest");
-        let manifest = serde_json::json!({
-            "id": id,
-            "name": name,
-            "language": lang,
-            "sizeBytes": size_bytes,
-            "hasSyn": syn.is_some(),
-        });
-        database::sqlite_set_kv(
-            app.clone(),
-            manifest_key,
-            serde_json::to_string(&manifest).map_err(|e| e.to_string())?,
-        )?;
-
-        database::sqlite_set_blob(app.clone(), format!("theorem-stardict:{id}:ifo"), ifo)?;
-        database::sqlite_set_blob(app.clone(), format!("theorem-stardict:{id}:idx"), idx)?;
-        database::sqlite_set_blob(app.clone(), format!("theorem-stardict:{id}:dict"), dict)?;
-        if let Some(syn_data) = syn {
-            database::sqlite_set_blob(app, format!("theorem-stardict:{id}:syn"), syn_data)?;
-        }
-
-        Ok(serde_json::json!({
-            "id": id,
-            "name": name,
-            "language": lang,
-            "sizeBytes": size_bytes,
-        }))
     })
     .await
-    .map_err(|e| format!("Download task failed: {e}"))?
+    .map_err(|e| format!("Extraction task failed: {e}"))?
+    .map_err(|e| format!("Extraction failed: {e}"))?;
+
+    // Parse .ifo to get dictionary metadata
+    let ifo_text = String::from_utf8_lossy(&ifo);
+    let mut name = String::from("Unknown Dictionary");
+    let mut lang = String::from("en");
+    for line in ifo_text.lines() {
+        let trimmed = line.trim();
+        if let Some(value) = trimmed.strip_prefix("bookname=") {
+            name = value.trim().to_string();
+        } else if trimmed.starts_with("sametypesequence=") {
+            // Dictionary format indicator — captured for info, not needed elsewhere
+        }
+    }
+    // Derive language from URL (e.g., .../file/en/dict-en-en.zip)
+    if let Some(segments) = url.split('/').nth(4) {
+        if segments.len() == 2 {
+            lang = segments.to_string();
+        }
+    }
+
+    let id = uuid_v4();
+    let size_bytes =
+        (ifo.len() + idx.len() + dict.len() + syn.as_ref().map_or(0, |s| s.len())) as u64;
+
+    let manifest_key = format!("theorem-stardict:{id}:manifest");
+    let manifest = serde_json::json!({
+        "id": id,
+        "name": name,
+        "language": lang,
+        "sizeBytes": size_bytes,
+        "hasSyn": syn.is_some(),
+    });
+    database::sqlite_set_kv(
+        app.clone(),
+        manifest_key,
+        serde_json::to_string(&manifest).map_err(|e| e.to_string())?,
+    )?;
+
+    database::sqlite_set_blob(app.clone(), format!("theorem-stardict:{id}:ifo"), ifo)?;
+    database::sqlite_set_blob(app.clone(), format!("theorem-stardict:{id}:idx"), idx)?;
+    database::sqlite_set_blob(app.clone(), format!("theorem-stardict:{id}:dict"), dict)?;
+    if let Some(syn_data) = syn {
+        database::sqlite_set_blob(app, format!("theorem-stardict:{id}:syn"), syn_data)?;
+    }
+
+    Ok(serde_json::json!({
+        "id": id,
+        "name": name,
+        "language": lang,
+        "sizeBytes": size_bytes,
+    }))
 }
 
 fn uuid_v4() -> String {

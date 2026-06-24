@@ -33,6 +33,7 @@ import {
     type TocItem,
 } from "../../core";
 import { List } from "lucide-react";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import { TableOfContents } from "./components/TableOfContents";
 import { ReaderSettings } from "./components/ReaderSettings";
@@ -396,6 +397,15 @@ function BookReaderPage() {
         }
     }, [getBook, updateBook]);
 
+    // Sync book title from store to metadata when renamed while reader is open
+    const storeTitle = useLibraryStore(
+        (s) => currentBookId ? (s.books.find((b) => b.id === currentBookId)?.title ?? null) : null,
+    );
+    useEffect(() => {
+        if (!storeTitle || !metadata || storeTitle === metadata.title) return;
+        setMetadata((prev) => prev ? { ...prev, title: storeTitle } : prev);
+    }, [storeTitle]);
+
     const handlePdfError = useCallback((err: Error) => {
         setLoadError(err.message);
     }, []);
@@ -589,13 +599,12 @@ function BookReaderPage() {
         // Start tracking when book is loaded
         readingStartTimeRef.current = Date.now();
 
-        // Update every minute
-        readingIntervalRef.current = setInterval(() => {
+        const flushReadingTime = () => {
             if (currentBookId && readingStartTimeRef.current) {
                 const elapsedMinutes = Math.floor((Date.now() - readingStartTimeRef.current) / 60000);
                 if (elapsedMinutes > 0) {
                     // Add reading time to book
-                    addReadingTime(currentBookId, 1);
+                    addReadingTime(currentBookId, elapsedMinutes);
 
                     // Update global stats - use ref to access latest stats without dependency issues
                     const currentStats = statsRef.current;
@@ -606,13 +615,13 @@ function BookReaderPage() {
                     if (existingActivity) {
                         newDailyActivity = currentStats.dailyActivity.map(a =>
                             a.date === today
-                                ? { ...a, minutes: a.minutes + 1, booksRead: [...new Set([...a.booksRead, currentBookId])] }
+                                ? { ...a, minutes: a.minutes + elapsedMinutes, booksRead: [...new Set([...a.booksRead, currentBookId])] }
                                 : a
                         );
                     } else {
                         newDailyActivity = [...currentStats.dailyActivity, {
                             date: today,
-                            minutes: 1,
+                            minutes: elapsedMinutes,
                             booksRead: [currentBookId]
                         }];
                     }
@@ -648,7 +657,7 @@ function BookReaderPage() {
                     }
 
                     updateStats({
-                        totalReadingTime: currentStats.totalReadingTime + 1,
+                        totalReadingTime: currentStats.totalReadingTime + elapsedMinutes,
                         dailyActivity: newDailyActivity,
                         currentStreak,
                         longestStreak: Math.max(currentStats.longestStreak, currentStreak),
@@ -659,12 +668,61 @@ function BookReaderPage() {
                     readingStartTimeRef.current = Date.now();
                 }
             }
-        }, 60000); // Every minute
+        };
+
+        // Update every minute
+        readingIntervalRef.current = setInterval(flushReadingTime, 60000);
+
+        // Pause tracking when page is hidden (tab switch / app background)
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                // Flush accumulated time when hiding
+                flushReadingTime();
+                // Clear interval while hidden
+                if (readingIntervalRef.current) {
+                    clearInterval(readingIntervalRef.current);
+                    readingIntervalRef.current = null;
+                }
+            } else {
+                // Reset start time when coming back
+                readingStartTimeRef.current = Date.now();
+                // Restart interval
+                if (!readingIntervalRef.current) {
+                    readingIntervalRef.current = setInterval(flushReadingTime, 60000);
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Native lifecycle events for Tauri mobile (fires immediately on app background/foreground)
+        let tauriUnlisten: UnlistenFn[] = [];
+        if (isTauri()) {
+            (async () => {
+                const { listen } = await import('@tauri-apps/api/event');
+                const unlistenPause = await listen('tauri://on-pause', () => {
+                    flushReadingTime();
+                    if (readingIntervalRef.current) {
+                        clearInterval(readingIntervalRef.current);
+                        readingIntervalRef.current = null;
+                    }
+                });
+                const unlistenResume = await listen('tauri://on-resume', () => {
+                    readingStartTimeRef.current = Date.now();
+                    if (!readingIntervalRef.current) {
+                        readingIntervalRef.current = setInterval(flushReadingTime, 60000);
+                    }
+                });
+                tauriUnlisten = [unlistenPause, unlistenResume];
+            })();
+        }
 
         return () => {
             if (readingIntervalRef.current) {
                 clearInterval(readingIntervalRef.current);
             }
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            tauriUnlisten.forEach((fn) => fn());
 
             // Save any remaining partial minute on unmount
             if (currentBookId && readingStartTimeRef.current) {
@@ -695,42 +753,7 @@ function BookReaderPage() {
         lastPersistedPdfStateRef.current = null;
     }, [currentBookId]);
 
-    // Auto-hide toolbar
-    useEffect(() => {
-        if (isMobileViewport) return;
-        let timeout: ReturnType<typeof setTimeout>;
-        let lastActivity = Date.now();
-
-        const hideToolbar = () => {
-            if (!activePanel && Date.now() - lastActivity > settings.readerSettings.autoHideDelay * 1000) {
-                setShowToolbar(false);
-            }
-        };
-
-        const showToolbarAndReset = () => {
-            lastActivity = Date.now();
-            setShowToolbar(true);
-            clearTimeout(timeout);
-            timeout = setTimeout(hideToolbar, settings.readerSettings.autoHideDelay * 1000);
-        };
-
-        if (isPdfFormat) {
-            showToolbarAndReset();
-        } else {
-            timeout = setTimeout(hideToolbar, settings.readerSettings.autoHideDelay * 1000);
-        }
-
-        window.addEventListener('mousemove', showToolbarAndReset, { passive: true });
-        window.addEventListener('touchstart', showToolbarAndReset, { passive: true });
-        window.addEventListener('keydown', showToolbarAndReset);
-
-        return () => {
-            clearTimeout(timeout);
-            window.removeEventListener('mousemove', showToolbarAndReset);
-            window.removeEventListener('touchstart', showToolbarAndReset);
-            window.removeEventListener('keydown', showToolbarAndReset);
-        };
-    }, [activePanel, isMobileViewport, isPdfFormat, settings.readerSettings.autoHideDelay]);
+    // No auto-hide — toolbar manually toggled via viewport tap
 
     const handleReaderExitFullscreen = useCallback(() => {
         updateReaderSettings({ fullscreen: false });
@@ -1052,10 +1075,10 @@ function BookReaderPage() {
         }
 
         const topInset = shouldShowReaderChrome
-            ? Math.max(defaultInset, toolbarHeight + 8)
+            ? Math.max(defaultInset, toolbarHeight + 4)
             : 16;
         const bottomInset = (!isPdfFormat && shouldShowReaderChrome)
-            ? 84
+            ? 48
             : 16;
 
         return {
@@ -1162,24 +1185,6 @@ function BookReaderPage() {
         }
     }, [activePanel, showColorPicker, showNoteEditor, setRoute, flushPendingProgressUpdate]);
 
-    useEffect(() => {
-        if (!isPdfFormat || !isMobileViewport || !showToolbar || activePanel !== null) {
-            return;
-        }
-
-        const timeout = setTimeout(() => {
-            setShowToolbar(false);
-        }, settings.readerSettings.autoHideDelay * 1000);
-
-        return () => clearTimeout(timeout);
-    }, [
-        activePanel,
-        isMobileViewport,
-        isPdfFormat,
-        settings.readerSettings.autoHideDelay,
-        showToolbar,
-    ]);
-
     const handleViewportTap = useCallback(() => {
         if (showColorPicker || showNoteEditor) {
             setShowColorPicker(false);
@@ -1204,11 +1209,8 @@ function BookReaderPage() {
             return;
         }
 
-        if (!isMobileViewport) {
-            return;
-        }
         setShowToolbar((previous) => !previous);
-    }, [activePanel, isMobileViewport, showColorPicker, showNoteEditor]);
+    }, [activePanel, showColorPicker, showNoteEditor]);
 
     const shouldForceViewportTap = useCallback(() => {
         return showColorPicker || showNoteEditor;
@@ -1983,7 +1985,7 @@ function BookReaderPage() {
     return (
         <div
             className={cn(
-                "fixed inset-0 flex flex-col overflow-hidden",
+                "fixed inset-0 overflow-hidden",
                 `theme-${settings.readerSettings.theme}`
             )}
             style={{
@@ -1994,7 +1996,7 @@ function BookReaderPage() {
             }}
             data-reading-mode={settings.readerSettings.flow}
         >
-            {/* Toolbar */}
+            {/* Toolbar (overlays content) */}
             <div
                 ref={toolbarContainerRef}
                 className={cn(
@@ -2023,23 +2025,8 @@ function BookReaderPage() {
                 />
             </div>
 
-            {/* Reader Viewport - Use PDFReader for PDF, ReaderViewport for others */}
-            <div
-                className={cn(
-                    "flex-1 min-h-0 overflow-hidden relative",
-                    !isPdfFormat && (
-                        shouldShowReaderChrome ? "pb-14 sm:pb-12" : "pb-[env(safe-area-inset-bottom,var(--spacing-md))]"
-                    ),
-                )}
-                style={{
-                    paddingTop: shouldShowReaderChrome
-                        ? `${toolbarHeight}px`
-                        : "max(env(safe-area-inset-top, 0px), var(--spacing-md, 16px))",
-                    paddingBottom: shouldShowReaderChrome
-                        ? undefined
-                        : "max(env(safe-area-inset-bottom, 0px), var(--spacing-lg, 32px))"
-                }}
-            >
+            {/* Reader Viewport - fills entire area, bars overlay on top */}
+            <div className="absolute inset-0 overflow-hidden">
                 {isPdfFormat ? (
                     <PDFReader
                         ref={pdfReaderRef}
@@ -2130,7 +2117,7 @@ function BookReaderPage() {
                     totalPages={location?.pageInfo?.totalPages}
                     onToggleToc={() => togglePanel('toc')}
                     className={cn(
-                        "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300",
+                        "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 backdrop-blur-xl",
                         shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
                     )}
                 />

@@ -11,8 +11,8 @@ export function useToolbarHeight(
     options: UseToolbarHeightOptions = {},
 ): number {
     const {
-        defaultHeight = 56,
-        minHeight = 44,
+        defaultHeight = 40,
+        minHeight = 36,
         enabled = true,
     } = options;
     const [height, setHeight] = useState(defaultHeight);

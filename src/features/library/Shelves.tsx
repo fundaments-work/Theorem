@@ -277,6 +277,7 @@ interface ShelfCardProps {
 
 function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }: ShelfCardProps) {
     const [showMenu, setShowMenu] = useState(false);
+    const [menuUpward, setMenuUpward] = useState(false);
     const displayBooks = books.slice(0, 4);
 
     return (
@@ -355,6 +356,9 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
+                                const btnRect = e.currentTarget.getBoundingClientRect();
+                                const spaceBelow = window.innerHeight - btnRect.bottom;
+                                setMenuUpward(spaceBelow < 130);
                                 setShowMenu(!showMenu);
                             }}
                             className="p-1.5 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
@@ -365,9 +369,14 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                             <>
                                 <div
                                     className="fixed inset-0 z-10"
-                                    onClick={() => setShowMenu(false)}
+                                    onClick={() => { setShowMenu(false); setMenuUpward(false); }}
                                 />
-                                <div className="absolute right-0 top-full mt-1 w-36 border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg z-20 py-1">
+                                <div
+                                    className={cn(
+                                        "absolute right-0 w-36 border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg z-20 py-1",
+                                        menuUpward ? "bottom-full mb-1" : "top-full mt-1",
+                                    )}
+                                >
                                     <button
                                         onClick={() => {
                                             onEdit();

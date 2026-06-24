@@ -12,6 +12,7 @@ import {
     exportUnifiedSyncBundle,
     estimateSyncBundleSizeBytes,
     isMobile,
+    isTauri,
     isTauriDesktop,
     normalizeFilePath,
     pickLibraryFolderMobile,
@@ -22,7 +23,7 @@ import {
     useUIStore,
 } from "../../core";
 import { formatFileSize } from "../../core";
-import { confirmClearAllData } from "../../core";
+import { confirmClearAllData, confirmRemoveDictionary } from "../../core";
 import { clearAllApplicationStorage, getRssStorageStats } from "../../core/lib/storage-manager";
 import { DeviceSyncSection } from "./DeviceSync";
 import { DictionaryDownloadModal } from "./DictionaryDownloadModal";
@@ -217,6 +218,14 @@ export function SettingsPage() {
 
     const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
     const [showDictDownloadModal, setShowDictDownloadModal] = useState(false);
+    const [dictionaryRemovedName, setDictionaryRemovedName] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!dictionaryRemovedName) return;
+        const timer = setTimeout(() => setDictionaryRemovedName(null), 3000);
+        return () => clearTimeout(timer);
+    }, [dictionaryRemovedName]);
+
     const deviceSyncSectionRef = useRef<HTMLDivElement | null>(null);
     const markdownExportSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -238,6 +247,26 @@ export function SettingsPage() {
         }
         window.sessionStorage.setItem(SETTINGS_TAB_SESSION_KEY, activeTab);
     }, [activeTab]);
+
+    // Persistent download progress listener (survives modal close)
+    useEffect(() => {
+        if (!isTauri()) return;
+        let unlisten: (() => void) | undefined;
+
+        (async () => {
+            const { listen } = await import("@tauri-apps/api/event");
+            unlisten = await listen<{ percent: number; downloaded: number; total: number }>(
+                "dictionary-download-progress",
+                (event) => {
+                    useVocabularyStore.getState().setDownloadProgress(event.payload);
+                },
+            );
+        })();
+
+        return () => {
+            unlisten?.();
+        };
+    }, []);
 
     useEffect(() => {
         if (typeof window === "undefined" || activeTab !== "integrations") {
@@ -796,24 +825,24 @@ export function SettingsPage() {
                             label="Import StarDict"
                             description="Select .ifo, .idx, and .dict.dz files"
                         >
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <input
                                     ref={dictionaryFileInputRef}
                                     type="file"
                                     multiple
                                     onChange={handleDictionaryImport}
                                     className="hidden"
-                                    accept=".ifo,.idx,.dict,.dict.dz,.dz,.syn"
+                                    accept=".ifo,.idx,.index,.dict,.dict.dz,.dz,.syn"
                                 />
                                 <button
                                     onClick={() => dictionaryFileInputRef.current?.click()}
-                                    className="ui-btn-primary text-[11px]"
+                                    className="ui-btn-primary text-[11px] whitespace-nowrap"
                                 >
                                     <Download className="w-4 h-4" /> Import Files
                                 </button>
                                 <button
                                     onClick={() => setShowDictDownloadModal(true)}
-                                    className="ui-btn text-[11px]"
+                                    className="ui-btn text-[11px] whitespace-nowrap"
                                 >
                                     <Download className="w-4 h-4" /> Browse Dictionaries
                                 </button>
@@ -829,6 +858,11 @@ export function SettingsPage() {
                             </p>
                         )}
 
+                        {dictionaryRemovedName && (
+                            <div className="px-3 py-2 mb-3 text-sm text-[color:var(--color-success,#22c55e)] bg-[color:color-mix(in_srgb,var(--color-success,#22c55e)_8%,transparent)] border border-[color:color-mix(in_srgb,var(--color-success,#22c55e)_24%,transparent)]">
+                                Removed "{dictionaryRemovedName}"
+                            </div>
+                        )}
                         {installedDictionaries.map((dictionary) => (
                             <SettingRow
                                 key={dictionary.id}
@@ -836,8 +870,11 @@ export function SettingsPage() {
                                 description={`${dictionary.language} • StarDict • ${formatFileSize(dictionary.sizeBytes)}`}
                             >
                                 <button
-                                    onClick={() => {
-                                        void removeDictionary(dictionary.id);
+                                    onClick={async () => {
+                                        const confirmed = await confirmRemoveDictionary(dictionary.name);
+                                        if (!confirmed) return;
+                                        await removeDictionary(dictionary.id);
+                                        setDictionaryRemovedName(dictionary.name);
                                     }}
                                     className="ui-btn-danger"
                                 >

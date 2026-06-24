@@ -551,6 +551,7 @@ export class FoliateEngine {
                     console.debug('[FoliateEngine] Drawing', rects.length, 'rects');
                     const g = doc.createElementNS('http://www.w3.org/2000/svg', 'g');
                     g.setAttribute('fill', color);
+                    g.setAttribute('data-highlight', 'true');
                     g.style.opacity = '0.4';
                     g.style.mixBlendMode = 'multiply';
                     // Enable pointer events so the highlight is clickable
@@ -2147,6 +2148,13 @@ export class FoliateEngine {
                         return;
                     }
 
+                    // Don't turn page when interacting with highlight overlays
+                    const touchTarget = event.target;
+                    if (touchTarget instanceof Element && touchTarget.closest('g[data-highlight]')) {
+                        touchStartAt = 0;
+                        return;
+                    }
+
                     const touch = event.changedTouches[0];
                     const deltaX = touch.clientX - touchStartX;
                     const deltaY = touch.clientY - touchStartY;
@@ -2224,6 +2232,12 @@ export class FoliateEngine {
                     pointerDownAt = 0;
                     pointerMoved = false;
                     scheduleSelectionCapture(event);
+
+                    // Don't trigger viewport tap when interacting with highlight overlays
+                    const pointerTarget = event.target;
+                    if (pointerTarget instanceof Element && pointerTarget.closest('g[data-highlight]')) {
+                        return;
+                    }
 
                     if (!isTap) {
                         return;

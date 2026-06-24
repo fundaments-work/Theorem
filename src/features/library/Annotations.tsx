@@ -119,7 +119,7 @@ function AnnotationCard({
                 <div className="relative">
                     <button
                         onClick={() => setShowMenu(!showMenu)}
-                        className="border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] opacity-0 transition-opacity hover:text-[color:var(--color-text-primary)] group-hover:opacity-100"
+                        className="border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] transition-opacity hover:text-[color:var(--color-text-primary)]"
                     >
                         <MoreVertical className="w-4 h-4" />
                     </button>

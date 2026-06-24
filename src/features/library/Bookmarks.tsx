@@ -176,7 +176,7 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
                     <span className="text-xs text-[color:var(--color-text-muted)]">
                         {new Date(bookmark.createdAt).toLocaleDateString()}
                     </span>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 transition-opacity">
                         <button
                             onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
                             className="p-1.5 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"

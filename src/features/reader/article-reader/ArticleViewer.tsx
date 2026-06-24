@@ -31,7 +31,7 @@ import { TableOfContents } from "../components/TableOfContents";
 import { WindowTitlebar } from "../components/WindowTitlebar";
 import { HighlightColorPicker } from "../components/highlights/HighlightColorPicker";
 import { NoteEditor } from "../components/highlights/NoteEditor";
-import { useReaderFullscreen, useToolbarHeight } from "../hooks";
+import { useReaderFullscreen } from "../hooks";
 import {
     ArticleReaderContent,
     ArticleReaderInfoPanel,
@@ -538,11 +538,6 @@ export function ArticleViewer({
     // Tracks which annotation IDs have already been backfilled with offset
     // data so the backfill effect doesn't re-trigger itself via store updates.
     const backfilledIdsRef = useRef<Set<string>>(new Set());
-    const toolbarHeight = useToolbarHeight(toolbarContainerRef, {
-        defaultHeight: 56,
-        minHeight: 44,
-        enabled: isOpen,
-    });
     const articleAnnotationBookId = article ? `rss:${article.id}` : "";
     const annotations = useMemo(
         () => articleAnnotations.filter((entry) => entry.bookId === articleAnnotationBookId),
@@ -613,47 +608,7 @@ export function ArticleViewer({
         };
     }, [article?.id, isOpen]);
 
-    useEffect(() => {
-        if (!isOpen) {
-            return;
-        }
-
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
-        let lastActivity = Date.now();
-        const delay = Math.max(2, globalReaderSettings.autoHideDelay || 5) * 1000;
-
-        const hideChrome = () => {
-            if (activePanel !== null) {
-                return;
-            }
-            if (Date.now() - lastActivity >= delay) {
-                setShowChrome(false);
-            }
-        };
-
-        const revealChrome = () => {
-            lastActivity = Date.now();
-            setShowChrome(true);
-
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-            }
-            timeoutId = setTimeout(hideChrome, delay);
-        };
-
-        window.addEventListener("mousemove", revealChrome, { passive: true });
-        window.addEventListener("touchstart", revealChrome, { passive: true });
-
-        timeoutId = setTimeout(hideChrome, delay);
-
-        return () => {
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-            }
-            window.removeEventListener("mousemove", revealChrome);
-            window.removeEventListener("touchstart", revealChrome);
-        };
-    }, [activePanel, globalReaderSettings.autoHideDelay, isOpen]);
+    // No auto-hide — chrome manually toggled via content tap
 
     const updateReaderSetting = useCallback((updates: Partial<ReaderSettingsState>) => {
         updateReaderSettings(updates);
@@ -1480,7 +1435,7 @@ export function ArticleViewer({
         >
             <div
                 className={cn(
-                    "absolute inset-0 flex flex-col overflow-hidden",
+                    "absolute inset-0 overflow-hidden",
                     `theme-${theme}`,
                 )}
                 style={{
@@ -1529,8 +1484,8 @@ export function ArticleViewer({
                 <ReaderSearch
                     visible={activePanel === "search"}
                     onClose={closePanel}
-                    onNavigate={handleArticleSearchNavigate}
                     onSearch={handleArticleSearch}
+                    onNavigate={handleArticleSearchNavigate}
                     onClearSearch={clearArticleSearchHighlights}
                 />
 
@@ -1557,10 +1512,7 @@ export function ArticleViewer({
                     onClose={closePanel}
                 />
 
-                <div
-                    className="flex flex-1 min-h-0 overflow-hidden"
-                    style={{ paddingTop: shouldShowReaderChrome ? toolbarHeight : 0 }}
-                >
+                <div className="absolute inset-0 overflow-hidden">
                     <ArticleReaderContent
                         article={article}
                         feedTitle={feedTitle}

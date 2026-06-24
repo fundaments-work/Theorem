@@ -1735,6 +1735,7 @@ interface VocabularyStore {
     vocabularyTerms: VocabularyTerm[];
     installedDictionaries: InstalledDictionary[];
     lookupCache: Record<string, DictionaryLookupResult>;
+    activeDownload: { dictName: string; progress: { percent: number; downloaded: number; total: number } } | null;
 
     saveVocabularyTerm: (term: VocabularyTerm) => VocabularyTerm;
     deleteVocabularyTerm: (termId: string) => void;
@@ -1744,6 +1745,8 @@ interface VocabularyStore {
     importStarDict: (files: FileList | File[]) => Promise<InstalledDictionary>;
     removeDictionary: (dictionaryId: string) => Promise<void>;
     addInstalledDictionary: (dict: InstalledDictionary) => void;
+    setActiveDownload: (download: { dictName: string; progress: { percent: number; downloaded: number; total: number } } | null) => void;
+    setDownloadProgress: (progress: { percent: number; downloaded: number; total: number }) => void;
 }
 
 function toValidDate(value: Date | string | number | undefined, fallback: Date): Date {
@@ -1801,6 +1804,7 @@ export const useVocabularyStore = create<VocabularyStore>()(
             vocabularyTerms: [],
             installedDictionaries: [],
             lookupCache: {},
+            activeDownload: null,
 
             saveVocabularyTerm: (incomingTerm) => {
                 const now = new Date();
@@ -1946,10 +1950,21 @@ export const useVocabularyStore = create<VocabularyStore>()(
                     installedDictionaries: [...state.installedDictionaries, dict],
                 }));
             },
+
+            setActiveDownload: (download) => {
+                set({ activeDownload: download });
+            },
+
+            setDownloadProgress: (progress) => {
+                const current = get().activeDownload;
+                if (current) {
+                    set({ activeDownload: { ...current, progress } });
+                }
+            },
         }),
         {
             name: "theorem-vocabulary",
-            version: 4,
+            version: 5,
             storage: createJSONStorage(() => theoremPersistStorage),
             migrate: (persistedState, _version) => {
                 const persisted = isRecord(persistedState) ? persistedState : {};
@@ -1985,10 +2000,11 @@ export const useVocabularyStore = create<VocabularyStore>()(
                     vocabularyTerms,
                     installedDictionaries,
                     lookupCache,
+                    activeDownload: null,
                 } as VocabularyStore;
             },
             partialize: (state) => ({
-                // Exclude lookupCache from persistence to reduce storage size
+                // Exclude lookupCache and activeDownload from persistence
                 vocabularyTerms: state.vocabularyTerms,
                 installedDictionaries: state.installedDictionaries,
             }),
@@ -2008,6 +2024,7 @@ export const useVocabularyStore = create<VocabularyStore>()(
 
                 // Initialize empty lookup cache on rehydrate
                 state.lookupCache = {};
+                state.activeDownload = null;
             },
         },
     ),

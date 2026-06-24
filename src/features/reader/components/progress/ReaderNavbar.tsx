@@ -274,24 +274,29 @@ export const ReaderNavbar = memo(function ReaderNavbar({
     return (
         <div
             className={cn(
-                "flex flex-col gap-1.5 px-3 py-2 sm:px-4",
-                "bg-[var(--color-surface)] border-t border-[var(--color-border)]",
+                "flex flex-col gap-1 px-3 py-1.5 sm:px-4",
                 "font-mono",
                 className
             )}
-            style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+            style={{
+                paddingBottom: "max(0.375rem, env(safe-area-inset-bottom))",
+                backgroundColor: 'color-mix(in srgb, var(--reader-bg, var(--color-surface)) 85%, transparent)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                borderTop: '1px solid color-mix(in srgb, var(--reader-fg, var(--color-text)) 10%, transparent)',
+            }}
         >
             {/* Top Row: TOC Button + Info */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
                 <button
                     onClick={onToggleToc}
                     className="p-1 px-[0.14rem] -mx-0.5 mt-[-0.20rem] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors"
                 >
-                    <List size={20} />
+                    <List size={16} />
                 </button>
 
                 {/* Info: section label + time remaining */}
-                <div className="flex-1 flex items-center justify-between gap-1 text-[var(--font-size-2xs)] sm:text-xs text-[color:var(--color-text-muted)] min-w-0">
+                <div className="flex-1 flex items-center justify-between gap-1 text-[10px] sm:text-xs text-[color:var(--color-text-muted)] min-w-0">
                     <span
                         className="truncate max-w-[50%]"
                         title={currentSectionLabel}
@@ -313,7 +318,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
             <div
                 ref={trackRef}
                 className={cn(
-                    "relative h-7 sm:h-6 cursor-pointer select-none",
+                    "relative h-5 cursor-pointer select-none",
                     "flex items-center",
                     isDragging && "cursor-grabbing"
                 )}

@@ -194,15 +194,15 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivit
                 <span className="text-sm font-medium text-[color:var(--color-text-primary)]">Reading Activity</span>
                 <span className="text-xs text-[color:var(--color-text-muted)]">Last 12 weeks</span>
             </div>
-            {/* Scroll container: heatmap scrolls internally, page never overflows */}
+            {/* Scroll container: heatmap uses full width with larger cells */}
             <div className="overflow-x-auto -mx-1 px-1 pb-1">
-                <div className="flex gap-1" style={{ minWidth: "max-content" }}>
+                <div className="flex gap-[3px] w-full justify-between" style={{ minWidth: "max-content" }}>
                     {weeks.map((week, weekIndex) => (
-                        <div key={weekIndex} className="flex flex-col gap-1">
+                        <div key={weekIndex} className="flex flex-col gap-[3px] flex-1">
                             {week.map((day, dayIndex) => (
                                 <div
                                     key={dayIndex}
-                                    className={cn("w-3 h-3", getColor(day.level))}
+                                    className={cn("w-4 h-4 sm:w-[18px] sm:h-[18px]", getColor(day.level))}
                                     title={`${day.dateStr} — level ${day.level}`}
                                 />
                             ))}
@@ -213,7 +213,7 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivit
             <div className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
                 <span>Less</span>
                 {[0, 1, 2, 3, 4].map((level) => (
-                    <div key={level} className={cn("w-3 h-3", getColor(level))} />
+                    <div key={level} className={cn("w-4 h-4 sm:w-[18px] sm:h-[18px]", getColor(level))} />
                 ))}
                 <span>More</span>
             </div>
@@ -295,7 +295,7 @@ export function StatisticsPage() {
     return (
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in overflow-x-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8 sm:mb-10">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8 sm:mb-10">
                 <div>
                     <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         Statistics
@@ -306,7 +306,7 @@ export function StatisticsPage() {
                 </div>
                 <button
                     onClick={() => setShowShareModal(true)}
-                    className="ui-btn flex items-center gap-2 text-xs font-semibold px-3.5 py-2 hover:bg-[color:var(--color-surface-muted)] active:scale-95 transition-all"
+                    className="ui-btn flex items-center justify-center gap-2 text-xs font-semibold px-3.5 py-2 w-full sm:w-auto hover:bg-[color:var(--color-surface-muted)] active:scale-95 transition-all"
                 >
                     <Share2 className="w-3.5 h-3.5 text-[color:var(--color-text-secondary)]" />
                     <span>Share Stats</span>

@@ -45,7 +45,7 @@ interface WindowTitlebarProps {
     pdfControls?: any;
 }
 
-const ICON_BUTTON_CLASS = "inline-flex h-9 w-9 shrink-0 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
+const ICON_BUTTON_CLASS = "inline-flex h-8 w-8 shrink-0 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
 const ICON_BUTTON_ACTIVE_CLASS = "border-[var(--color-text-primary)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]";
 const ICON_BUTTON_INACTIVE_CLASS = "border-transparent text-[color:var(--color-text-secondary)]";
 
@@ -264,17 +264,18 @@ export function WindowTitlebar({
     return (
         <div
             className={cn(
-                "w-full z-[150] select-none border-b-2 reader-toolbar relative",
-                "pt-[max(env(safe-area-inset-top,0px),4px)] lg:pt-0",
-                "bg-[var(--color-surface)] border-[var(--color-border)]",
+                "w-full z-[150] select-none reader-toolbar relative",
+                "pt-[max(env(safe-area-inset-top,0px),2px)] lg:pt-0",
                 className
             )}
             style={{
-                backgroundColor: 'var(--reader-bg, var(--color-surface))',
-                borderBottomColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)',
+                backgroundColor: 'color-mix(in srgb, var(--reader-bg, var(--color-surface)) 85%, transparent)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                borderBottom: '1px solid color-mix(in srgb, var(--reader-fg, var(--color-text)) 10%, transparent)',
             }}
         >
-            <div className="h-14 lg:h-11 flex items-center gap-1 pl-3 pr-2">
+            <div className="h-10 lg:h-9 flex items-center gap-1 pl-3 pr-2">
                 {/* Left: Back + Title */}
                 <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none lg:max-w-[400px]">
                     <button
@@ -283,7 +284,7 @@ export function WindowTitlebar({
                         style={{ color: 'var(--reader-fg, var(--color-text))' }}
                         title="Back"
                     >
-                        <ArrowLeft className="w-5 h-5 lg:w-4 lg:h-4" />
+                        <ArrowLeft className="w-4 h-4" />
                     </button>
 
                     <div className="flex-1 min-w-0 text-left overflow-hidden pr-2">
@@ -305,7 +306,7 @@ export function WindowTitlebar({
                 {/* Content: Standard Tools - Always Visible */}
                 <div className="flex items-center gap-0.5 mr-0.5">
                     <ToolbarButton onClick={onToggleSearch} active={activePanel === "search"} title="Search">
-                        <Search className="w-5 h-5 lg:w-4 lg:h-4" />
+                        <Search className="w-4 h-4" />
                     </ToolbarButton>
 
                     {onAddBookmark && (
@@ -314,12 +315,12 @@ export function WindowTitlebar({
                             active={isCurrentPageBookmarked}
                             title={isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark"}
                         >
-                            <BookmarkIcon className={cn("w-5 h-5 lg:w-4 lg:h-4", isCurrentPageBookmarked ? "fill-current" : "")} />
+                            <BookmarkIcon className={cn("w-4 h-4", isCurrentPageBookmarked ? "fill-current" : "")} />
                         </ToolbarButton>
                     )}
 
                     <ToolbarButton onClick={onToggleSettings} active={activePanel === "settings"} title="Reading Settings">
-                        <Type className="w-5 h-5 lg:w-4 lg:h-4" />
+                        <Type className="w-4 h-4" />
                     </ToolbarButton>
                 </div>
 
@@ -330,7 +331,7 @@ export function WindowTitlebar({
                     className={cn(ICON_BUTTON_CLASS, isMenuOpen && ICON_BUTTON_ACTIVE_CLASS)}
                     style={{ color: 'var(--reader-fg)' }}
                 >
-                    <EllipsisVertical className="w-5 h-5 lg:w-4 lg:h-4" />
+                    <EllipsisVertical className="w-4 h-4" />
                 </button>
 
                 {/* Mobile/Desktop Menu */}

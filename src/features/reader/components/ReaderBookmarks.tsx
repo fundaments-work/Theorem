@@ -81,14 +81,14 @@ export function ReaderBookmarks({
                                                 e.stopPropagation();
                                                 removeAnnotation(bookmark.id);
                                             }}
-                                            className="reader-danger-action p-1.5 text-[color:var(--color-text-muted)] transition-colors opacity-0 group-hover:opacity-100"
+                                            className="reader-danger-action p-1.5 text-[color:var(--color-text-muted)] transition-colors"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                     <div className="flex items-center justify-between text-[var(--font-size-3xs)] text-[color:var(--color-text-muted)] font-medium">
                                         <span>{format(new Date(bookmark.createdAt), 'MMM d, yyyy')}</span>
-                                        <div className="flex items-center gap-1 text-[color:var(--color-accent)] opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center gap-1 text-[color:var(--color-accent)] transition-opacity">
                                             <span>Jump to</span>
                                             <ExternalLink className="w-2.5 h-2.5" />
                                         </div>

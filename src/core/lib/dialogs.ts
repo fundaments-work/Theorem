@@ -272,3 +272,16 @@ export async function confirmDeleteBookmark(): Promise<boolean> {
         kind: "warning",
     });
 }
+
+/**
+ * Confirmation for removing a dictionary
+ */
+export async function confirmRemoveDictionary(dictionaryName: string): Promise<boolean> {
+    return showConfirm({
+        title: "Remove Dictionary",
+        message: `Remove "${dictionaryName}"? Offline word lookups from this dictionary will stop working.`,
+        okLabel: "Remove",
+        cancelLabel: "Keep",
+        kind: "warning",
+    });
+}

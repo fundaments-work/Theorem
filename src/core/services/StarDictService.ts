@@ -273,14 +273,17 @@ export async function importStarDictDictionary(
     const find = (extension: string) => list.find((file) => file.name.toLowerCase().endsWith(extension));
 
     const ifoFile = find(".ifo");
-    const idxFile = find(".idx");
+    const idxFile = find(".idx") || find(".index");
     const dictFile = list.find(
         (file) => file.name.toLowerCase().endsWith(".dict.dz") || file.name.toLowerCase().endsWith(".dz"),
     );
     const synFile = find(".syn");
 
-    if (!ifoFile || !idxFile || !dictFile) {
-        throw new Error("StarDict import requires .ifo, .idx, and .dict.dz files.");
+    if (!ifoFile) {
+        throw new Error("Dictionary import requires a .ifo (StarDict) file. For Dictd format, rename your .index file to .idx.");
+    }
+    if (!idxFile || !dictFile) {
+        throw new Error("Dictionary import requires .idx (or .index) and .dict.dz files.");
     }
 
     const ifoBuffer = await ifoFile.arrayBuffer();

@@ -696,6 +696,15 @@ function AddToShelfModal({
         }
     };
 
+    const [shelfSearch, setShelfSearch] = useState("");
+
+    const filteredShelves = useMemo(
+        () => shelfSearch.trim()
+            ? collections.filter((s) => s.name.toLowerCase().includes(shelfSearch.toLowerCase()))
+            : collections,
+        [collections, shelfSearch],
+    );
+
     const renderShelfItem = (shelf: Collection) => (
         <button
             key={shelf.id}
@@ -705,14 +714,14 @@ function AddToShelfModal({
                     onClose();
                 }
             }}
-            className="w-full flex items-center gap-3 p-3 hover:bg-[var(--color-surface-muted)] transition-colors text-left"
+            className="w-full flex items-center gap-2 p-2 hover:bg-[var(--color-surface-muted)] transition-colors text-left"
         >
-            <FolderOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
-            <div className="flex-1">
-                <p className="text-sm font-medium text-[color:var(--color-text-primary)]">
+            <FolderOpen className="w-4 h-4 shrink-0 text-[color:var(--color-text-muted)]" />
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[color:var(--color-text-primary)] truncate">
                     {shelf.name}
                 </p>
-                <p className="text-xs text-[color:var(--color-text-muted)]">
+                <p className="text-[11px] text-[color:var(--color-text-muted)]">
                     {shelf.bookIds.length} {shelf.bookIds.length === 1 ? "book" : "books"}
                 </p>
             </div>
@@ -722,23 +731,38 @@ function AddToShelfModal({
     return (
         <Modal isOpen={isOpen} onClose={onClose} size="sm" showCloseButton={true}>
             <ModalBody className="p-0">
-                <div className="p-6">
-                    <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">
+                <div className="p-4 sm:p-6">
+                    <h2 className="text-base sm:text-lg font-semibold text-[color:var(--color-text-primary)] mb-3">
                         Add to Shelf
                     </h2>
 
+                    {collections.length > 0 && (
+                        <input
+                            type="text"
+                            value={shelfSearch}
+                            onChange={(e) => setShelfSearch(e.target.value)}
+                            placeholder="Search shelves..."
+                            className="w-full mb-2 px-2.5 py-1.5 bg-[var(--color-background)] border border-[var(--color-border)] text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+                        />
+                    )}
+
                     {collections.length > 0 ? (
-                        <div className="space-y-1">
-                            {collections.map((shelf) => renderShelfItem(shelf))}
+                        <div className="max-h-48 sm:max-h-60 overflow-y-auto space-y-0.5 -mx-1 px-1">
+                            {filteredShelves.map((shelf) => renderShelfItem(shelf))}
+                            {filteredShelves.length === 0 && (
+                                <p className="text-sm text-[color:var(--color-text-muted)] text-center py-3">
+                                    No shelves match "{shelfSearch}"
+                                </p>
+                            )}
                         </div>
                     ) : (
-                        <p className="text-sm text-[color:var(--color-text-muted)] text-center py-4">
+                        <p className="text-sm text-[color:var(--color-text-muted)] text-center py-3">
                             No shelves yet. Create one below.
                         </p>
                     )}
 
-                    <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
-                        <p className="text-xs text-[color:var(--color-text-muted)] uppercase mb-2">Create New General Shelf</p>
+                    <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
+                        <p className="text-[11px] text-[color:var(--color-text-muted)] uppercase mb-2">Create New Shelf</p>
                         <div className="flex gap-2">
                             <input
                                 type="text"
@@ -746,7 +770,7 @@ function AddToShelfModal({
                                 onChange={(e) => setNewShelfName(e.target.value)}
                                 placeholder="Shelf name..."
                                 className={cn(
-                                    "flex-1 px-3 py-2",
+                                    "flex-1 px-2.5 py-1.5",
                                     "bg-[var(--color-background)] border border-[var(--color-border)]",
                                     "text-sm text-[color:var(--color-text-primary)]",
                                     "focus:outline-none focus:border-[var(--color-accent)]"
@@ -758,7 +782,7 @@ function AddToShelfModal({
                             <button
                                 onClick={handleCreateShelf}
                                 disabled={!newShelfName.trim()}
-                                className="ui-btn-primary"
+                                className="ui-btn-primary text-xs px-3"
                             >
                                 Create
                             </button>

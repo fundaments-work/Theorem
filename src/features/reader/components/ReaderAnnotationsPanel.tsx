@@ -140,7 +140,7 @@ export function ReaderAnnotationsPanel({
                             e.stopPropagation();
                             setMenuId(menuId === bookmark.id ? null : bookmark.id);
                         }}
-                        className="border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] transition-opacity touch-manipulation md:opacity-0 md:group-hover:opacity-100"
+                        className="border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] transition-opacity touch-manipulation"
                     >
                         <MoreVertical className="w-4 h-4" />
                     </button>
@@ -160,7 +160,7 @@ export function ReaderAnnotationsPanel({
             </div>
             <div className="flex items-center justify-between pl-6 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
                 <span>{format(new Date(bookmark.createdAt), 'MMM d, yyyy')}</span>
-                <div className="flex items-center gap-1 text-[color:var(--color-accent)] md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 text-[color:var(--color-accent)] transition-opacity">
                     <span>Jump to</span>
                     <ExternalLink className="w-2.5 h-2.5" />
                 </div>
@@ -216,7 +216,7 @@ export function ReaderAnnotationsPanel({
                             e.stopPropagation();
                             setMenuId(menuId === highlight.id ? null : highlight.id);
                         }}
-                        className="border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] transition-opacity touch-manipulation md:opacity-0 md:group-hover:opacity-100"
+                        className="border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] transition-opacity touch-manipulation"
                     >
                         <MoreVertical className="w-4 h-4" />
                     </button>
@@ -236,7 +236,7 @@ export function ReaderAnnotationsPanel({
             </div>
             <div className="flex items-center justify-between pl-6 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
                 <span>{format(new Date(highlight.createdAt), 'MMM d, yyyy')}</span>
-                <div className="flex items-center gap-1 text-[color:var(--color-accent)] md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 text-[color:var(--color-accent)] transition-opacity">
                     <span>Jump to</span>
                     <ExternalLink className="w-2.5 h-2.5" />
                 </div>
