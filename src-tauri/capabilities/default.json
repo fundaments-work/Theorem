@@ -51,6 +51,9 @@
           "path": "$HOME/**"
         },
         {
+          "path": "$DOWNLOAD/**"
+        },
+        {
           "path": "$DATA/**"
         },
         {
@@ -206,8 +209,17 @@
     "fs:allow-remove",
     "dialog:default",
     "dialog:allow-open",
+    "dialog:allow-save",
     "dialog:allow-ask",
     "dialog:allow-confirm",
-    "dialog:allow-message"
+    "dialog:allow-message",
+    "http:default",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [
+        { "url": "https://www.reader-dict.com/**" },
+        { "url": "https://github.com/**" }
+      ]
+    }
   ]
 }

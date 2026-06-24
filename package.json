@@ -30,9 +30,7 @@
         "build": "pnpm run typecheck && vite build",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "package:linux": "bash ./scripts/makepackage-linux.sh",
-        "package:linux:deb": "bash ./scripts/makepackage-linux.sh --bundle deb",
-        "package:linux:rpm": "bash ./scripts/makepackage-linux.sh --bundle rpm",
-        "package:linux:appimage": "bash ./scripts/makepackage-linux.sh --bundle appimage",
+        "package:linux:all": "bash ./scripts/makepackage-linux.sh --bundle all",
         "install:linux": "bash ./scripts/install-linux.sh",
         "uninstall:linux": "bash ./scripts/uninstall-linux.sh",
         "test": "vitest run",
@@ -40,7 +38,9 @@
         "test:coverage": "vitest run --coverage",
         "preview": "vite preview",
         "tauri": "tauri",
-        "clean:tauri": "cargo clean --manifest-path src-tauri/Cargo.toml"
+        "clean:tauri": "cargo clean --manifest-path src-tauri/Cargo.toml",
+        "dev:android": "JAVA_HOME=/opt/android-studio/jbr ANDROID_HOME=$HOME/Android/Sdk pnpm tauri android dev",
+        "build:android": "JAVA_HOME=/opt/android-studio/jbr ANDROID_HOME=$HOME/Android/Sdk pnpm tauri android build --debug"
     },
     "dependencies": {
         "@mozilla/readability": "^0.6.0",
@@ -51,6 +51,7 @@
         "@tauri-apps/plugin-barcode-scanner": "^2.4.5",
         "@tauri-apps/plugin-dialog": "^2.7.1",
         "@tauri-apps/plugin-fs": "^2.5.1",
+        "@tauri-apps/plugin-http": "^2.5.9",
         "@tauri-apps/plugin-opener": "^2.5.4",
         "@tauri-apps/plugin-os": "^2.3.2",
         "@tauri-apps/plugin-window": "2.0.0-alpha.1",

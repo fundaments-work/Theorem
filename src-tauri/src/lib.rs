@@ -712,6 +712,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_app::init())
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_mobile_folder_scan::init());
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
