@@ -18,6 +18,8 @@ import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import kotlinx.coroutines.*
+import java.io.File
+import java.io.FileOutputStream
 import java.util.Collections
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -261,7 +263,7 @@ class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
         val outFile = File(importDir, safeName)
 
         inputStream.use { input ->
-          java.io.FileOutputStream(outFile).use { output ->
+          FileOutputStream(outFile).use { output ->
             input.copyTo(output)
           }
         }
