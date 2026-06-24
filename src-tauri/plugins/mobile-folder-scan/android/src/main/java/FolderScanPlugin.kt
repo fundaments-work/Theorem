@@ -17,7 +17,8 @@ import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
-import java.util.ArrayDeque
+import kotlinx.coroutines.*
+import java.util.Collections
 import java.util.Locale
 import java.util.concurrent.Executors
 
@@ -125,30 +126,21 @@ class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   private fun collectBookUris(root: DocumentFile, recursive: Boolean): List<String> {
-    val queue = ArrayDeque<DocumentFile>()
-    val results = LinkedHashSet<String>()
-    queue.add(root)
+    val results = Collections.synchronizedList(ArrayList<String>())
 
-    while (queue.isNotEmpty()) {
-      val directory = queue.removeFirst()
-      if (!directory.canRead()) {
-        continue
-      }
-
+    fun scanDirectory(dir: DocumentFile) {
       val entries = try {
-        directory.listFiles()
+        dir.listFiles()
       } catch (_: Exception) {
-        continue
+        return
       }
+
+      val subdirs = ArrayList<DocumentFile>()
 
       for (entry in entries) {
-        if (!entry.canRead()) {
-          continue
-        }
-
         if (entry.isDirectory) {
           if (recursive) {
-            queue.addLast(entry)
+            subdirs.add(entry)
           }
           continue
         }
@@ -157,9 +149,18 @@ class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
           results.add(entry.uri.toString())
         }
       }
+
+      if (subdirs.isNotEmpty() && recursive) {
+        runBlocking {
+          subdirs.map { subdir ->
+            async(Dispatchers.IO) { scanDirectory(subdir) }
+          }.awaitAll()
+        }
+      }
     }
 
-    return results.toList()
+    scanDirectory(root)
+    return results
   }
 
   private fun isSupportedBookFile(entry: DocumentFile): Boolean {
@@ -171,6 +172,8 @@ class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
     val mimeType = entry.type?.lowercase(Locale.ROOT) ?: return false
     return mimeType == "application/epub+zip" ||
       mimeType == "application/x-mobipocket-ebook" ||
+      mimeType == "application/vnd.amazon.ebook" ||
+      mimeType == "application/vnd.amazon.mobi8-ebook" ||
       mimeType == "application/x-fictionbook+xml" ||
       mimeType == "application/vnd.comicbook+zip" ||
       mimeType == "application/pdf"
