@@ -1,9 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Check, AlertCircle, X } from "lucide-react";
 import { Modal, ModalHeader, ModalBody } from "../../ui";
 import { cn, isTauri } from "../../core";
 import { useVocabularyStore } from "../../core";
-import { importStarDictFromBytes } from "../../core/services/StarDictService";
 
 interface DictEntry {
     name: string;
@@ -16,58 +15,6 @@ const AVAILABLE_DICTS: DictEntry[] = [
     { name: "English", language: "en", url: "https://github.com/sapienskid/wiktionary-stardict/releases/download/en-latest/dict-en-en.zip", sizeApprox: "~50 MB" },
 ];
 
-async function downloadWithProgress(
-    url: string,
-    onProgress: (percent: number) => void,
-    signal: AbortSignal,
-): Promise<Uint8Array> {
-    const { fetch } = await import("@tauri-apps/plugin-http");
-    const response = await fetch(url, { signal });
-    if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status}`);
-    }
-    const total = Number(response.headers.get("Content-Length") ?? 0);
-    const reader = response.body!.getReader();
-    const chunks: Uint8Array<ArrayBuffer>[] = [];
-    let received = 0;
-    let lastEmitted = -1;
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        if (total > 0) {
-            const pct = Math.round((received / total) * 100);
-            if (pct !== lastEmitted) {
-                lastEmitted = pct;
-                onProgress(pct);
-            }
-        }
-    }
-
-    const blob = new Blob(chunks as BlobPart[]);
-    const buffer = await blob.arrayBuffer();
-    return new Uint8Array(buffer);
-}
-
-async function extractZip(buffer: Uint8Array): Promise<Record<string, Uint8Array>> {
-    const { ZipReader, Uint8ArrayReader, Uint8ArrayWriter } = await import("@zip.js/zip.js");
-    const reader = new ZipReader(new Uint8ArrayReader(buffer));
-    const entries = await reader.getEntries();
-    const result: Record<string, Uint8Array> = {};
-
-    for (const entry of entries) {
-        if (entry.directory) continue;
-        const name = entry.filename.split("/").pop() || entry.filename;
-        const data = await (entry as any).getData(new Uint8ArrayWriter());
-        result[name] = data;
-    }
-
-    await reader.close();
-    return result;
-}
-
 interface DictionaryDownloadModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -76,16 +23,33 @@ interface DictionaryDownloadModalProps {
 export function DictionaryDownloadModal({ isOpen, onClose }: DictionaryDownloadModalProps) {
     const [error, setError] = useState<string | null>(null);
     const [justInstalled, setJustInstalled] = useState<Set<string>>(new Set());
-    const abortRef = useRef<AbortController | null>(null);
     const [stage, setStage] = useState<string | null>(null);
     const installedDicts = useVocabularyStore((s) => s.installedDictionaries);
     const activeDownload = useVocabularyStore((s) => s.activeDownload);
     const setActiveDownload = useVocabularyStore((s) => s.setActiveDownload);
     const addInstalledDictionary = useVocabularyStore((s) => s.addInstalledDictionary);
+    const abortRef = useRef<(() => void) | null>(null);
+    const unlistenRef = useRef<(() => void) | null>(null);
+
+    // Clean up download state and listeners when modal closes
+    useEffect(() => {
+        if (!isOpen) {
+            abortRef.current?.();
+            abortRef.current = null;
+            unlistenRef.current?.();
+            unlistenRef.current = null;
+            setStage(null);
+            setActiveDownload(null);
+        }
+    }, [isOpen, setActiveDownload]);
 
     const handleCancel = () => {
-        abortRef.current?.abort();
+        abortRef.current?.();
         abortRef.current = null;
+        unlistenRef.current?.();
+        unlistenRef.current = null;
+        setStage(null);
+        setActiveDownload(null);
     };
 
     const handleDownload = async (dict: DictEntry) => {
@@ -94,47 +58,73 @@ export function DictionaryDownloadModal({ isOpen, onClose }: DictionaryDownloadM
             return;
         }
 
-        const abort = new AbortController();
-        abortRef.current = abort;
         setStage("Downloading");
         setActiveDownload({ dictName: dict.name, progress: { percent: 0, downloaded: 0, total: 0 } });
         setError(null);
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         try {
-            const buffer = await downloadWithProgress(dict.url, (percent) => {
-                setActiveDownload({
-                    dictName: dict.name,
-                    progress: { percent, downloaded: 0, total: 0 },
-                });
-            }, abort.signal);
+            const { invoke } = await import("@tauri-apps/api/core");
+            const { listen } = await import("@tauri-apps/api/event");
 
-            setStage("Extracting");
-            const files = await extractZip(buffer);
-            const ifoKey = Object.keys(files).find((k) => k.endsWith(".ifo"));
-            const idxKey = Object.keys(files).find((k) => k.endsWith(".idx"));
-            const dictKey = Object.keys(files).find((k) => k.endsWith(".dict.dz") || k.endsWith(".dict"));
-            const synKey = Object.keys(files).find((k) => k.endsWith(".syn"));
+            // Listen for download progress from Rust
+            const unlisten = await listen<{ percent: number; downloaded: number; total: number }>(
+                "dictionary-download-progress",
+                (event) => {
+                    setActiveDownload({
+                        dictName: dict.name,
+                        progress: {
+                            percent: event.payload.percent,
+                            downloaded: event.payload.downloaded,
+                            total: event.payload.total,
+                        },
+                    });
+                },
+            );
+            unlistenRef.current = unlisten;
 
-            if (!ifoKey || !idxKey || !dictKey) {
-                throw new Error("Archive missing required dictionary files");
+            // Use a promise + flag so we can abort from the cancel button
+            let aborted = false;
+            abortRef.current = () => {
+                aborted = true;
+            };
+
+            const result = await invoke<{
+                id: string;
+                name: string;
+                language: string;
+                sizeBytes: number;
+            }>("download_and_extract_stardict", { url: dict.url });
+
+            unlistenRef.current?.();
+            unlistenRef.current = null;
+            abortRef.current = null;
+
+            if (aborted) {
+                setActiveDownload(null);
+                return;
             }
 
             setStage("Installing");
-            const installed = await importStarDictFromBytes(files[ifoKey], files[idxKey], files[dictKey], synKey ? files[synKey] : undefined);
-            addInstalledDictionary(installed);
+            addInstalledDictionary({
+                id: result.id,
+                name: result.name,
+                language: result.language,
+                format: "stardict",
+                sizeBytes: result.sizeBytes,
+                importedAt: new Date(),
+            });
             setJustInstalled((prev) => new Set([...prev, dict.name]));
+            setActiveDownload(null);
         } catch (err) {
-            if ((err as any)?.name === "AbortError") return;
+            unlistenRef.current?.();
+            unlistenRef.current = null;
+            abortRef.current = null;
             const message = err instanceof Error ? err.message : (typeof err === "string" ? err : JSON.stringify(err));
             console.error("[DictionaryDownload]", message, err);
             setError(message || "Download failed");
+            setActiveDownload(null);
         } finally {
             setStage(null);
-            if (abortRef.current === abort) {
-                abortRef.current = null;
-            }
-            setActiveDownload(null);
         }
     };
 
