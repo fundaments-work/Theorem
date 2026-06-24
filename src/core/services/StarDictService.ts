@@ -144,11 +144,60 @@ function parseIfoContent(content: string): { name: string; language: string } {
     };
 }
 
-function splitDefinitions(value: string): string[] {
-    return value
-        .split(/\r?\n+/)
-        .map((line) => line.replace(/^[-*\d.)\s]+/, "").trim())
-        .filter((line) => Boolean(line));
+/**
+ * Wiktionary-derived StarDict (Pango "m" format) looks like:
+ *     (Noun) * meaning text (Verb) *: another meaning
+ *
+ * This strips Pango/HTML artifacts, splits on POS labels,
+ * removes empty/cross-reference-only fragments, and dedupes.
+ */
+function cleanupWiktionaryText(raw: string): string[] {
+    const results: string[] = [];
+    const seen = new Set<string>();
+
+    // 1. Strip XML/Pango tags (if any survive in the data)
+    let text = raw.replace(/<[^>]*>/g, " ");
+
+    // 2. Remove cross-reference noise: "word#type|display" → "display"
+    //    and bare fragment anchors: "#something"
+    text = text.replace(/\w+#\w+\|/g, "");
+    text = text.replace(/#\w+/g, "");
+
+    // 3. Clean up Pango formatting artifacts
+    text = text.replace(/\|/g, " "); // stray pipes from markup
+    text = text.replace(/\\"/g, '"'); // escaped quotes
+    text = text.replace(/\s*["""]\s*/g, " "); // empty/stray quote marks
+    text = text.replace(/\s*[―–—]\s*/g, " — "); // normalize dashes into spaced em-dash
+    text = text.replace(/[\[\]{}]/g, " "); // strip brackets
+
+    // 4. Normalize whitespace
+    text = text.replace(/\s+/g, " ").trim();
+
+    // 5. Split on parenthesised POS labels like (Noun), (Verb) etc.
+    //    Also handle the stray open/close balance.
+    const segments = text.split(/(?=\([A-Za-z]+\))/);
+
+    for (let segment of segments) {
+        // 5. Strip the leading POS label itself so we keep the explanation
+        segment = segment.replace(/^\([A-Za-z]+\)\s*/, "").trim();
+
+        // 6. Strip leading bullets, colons, dashes, stars (Pango artifacts)
+        segment = segment.replace(/^[*:.-]+/, "").trim();
+
+        // 7. If the segment is just a cross-reference remainder or empty → skip
+        if (!segment || segment.length < 5) continue;
+        // Skip pure formatting remnants (single word / bare url)
+        if (/^[\w/:#@.-]+$/.test(segment)) continue;
+
+        // 8. Dedupe
+        const key = segment.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        results.push(segment);
+    }
+
+    return results;
 }
 
 function extractDefinitions(entries: Array<{ word: string; data: Array<[string, Uint8Array]> }>): string[] {
@@ -157,10 +206,10 @@ function extractDefinitions(entries: Array<{ word: string; data: Array<[string, 
     for (const entry of entries) {
         for (const [, payload] of entry.data || []) {
             const decoded = textDecoder.decode(payload);
-            const lines = splitDefinitions(decoded);
-            for (const line of lines) {
-                if (!definitions.includes(line)) {
-                    definitions.push(line);
+            const cleaned = cleanupWiktionaryText(decoded);
+            for (const def of cleaned) {
+                if (!definitions.includes(def)) {
+                    definitions.push(def);
                 }
             }
         }

@@ -275,7 +275,6 @@ describe("Dictionary integration with real download", () => {
             }
         }
 
-        console.log(`Dictionary lookup results: ${foundCount}/${testWords.length} words found`);
         expect(foundCount).toBeGreaterThanOrEqual(3); // At least 3 of 6 should match
     }, 120_000); // 2 minute timeout for download
 });
