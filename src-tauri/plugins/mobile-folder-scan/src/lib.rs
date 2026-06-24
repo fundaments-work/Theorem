@@ -118,3 +118,34 @@ pub fn save_image<R: Runtime>(app: &AppHandle<R>, filename: &str, base64_data: &
 
     Ok(response.uri)
 }
+
+#[cfg(target_os = "android")]
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MaterializeContentUriPayload<'a> {
+    uri: &'a str,
+    file_name: &'a str,
+}
+
+#[cfg(target_os = "android")]
+#[derive(Deserialize)]
+struct MaterializeContentUriResponse {
+    path: String,
+}
+
+#[cfg(target_os = "android")]
+pub fn materialize_content_uri<R: Runtime>(app: &AppHandle<R>, uri: &str, file_name: &str) -> Result<String, String> {
+    let state = app.state::<MobileFolderScan<R>>();
+    let response = state
+        .handle
+        .run_mobile_plugin::<MaterializeContentUriResponse>(
+            "materializeContentUri",
+            MaterializeContentUriPayload {
+                uri,
+                file_name,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(response.path)
+}

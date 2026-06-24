@@ -710,6 +710,23 @@ async fn save_share_image_mobile(
     }
 }
 
+#[tauri::command]
+async fn materialize_android_content_uri(
+    app: tauri::AppHandle,
+    uri: String,
+    file_name: String,
+) -> Result<String, String> {
+    #[cfg(target_os = "android")]
+    {
+        tauri_plugin_mobile_folder_scan::materialize_content_uri(&app, &uri, &file_name)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, uri, file_name);
+        Err("Content URI materialization is only available on Android.".to_string())
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn apply_linux_webkit_workarounds() {
     // Allow advanced users to disable these workarounds for troubleshooting:
@@ -860,6 +877,7 @@ pub fn run() {
             scan_library_folder_mobile,
             scan_library_folder_desktop,
             save_share_image_mobile,
+            materialize_android_content_uri,
             database::sqlite_save_book_data,
             database::sqlite_get_book_data,
             database::sqlite_delete_book_data,

@@ -34,6 +34,12 @@ class SaveImageArgs {
   lateinit var base64Data: String
 }
 
+@InvokeArg
+class MaterializeContentUriArgs {
+  lateinit var uri: String
+  lateinit var fileName: String
+}
+
 @TauriPlugin
 class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
   private val supportedSuffixes = arrayOf(
@@ -227,6 +233,44 @@ class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
         }
       } catch (error: Exception) {
         invoke.reject(error.message ?: "Failed to save image")
+      }
+    }
+  }
+
+  @Command
+  fun materializeContentUri(invoke: Invoke) {
+    scanExecutor.execute {
+      try {
+        val args = invoke.parseArgs(MaterializeContentUriArgs::class.java)
+        val uri = Uri.parse(args.uri)
+        val fileName = args.fileName
+
+        val inputStream = activity.contentResolver.openInputStream(uri)
+        if (inputStream == null) {
+          invoke.reject("Cannot open content URI for reading")
+          return@execute
+        }
+
+        val importDir = File(activity.filesDir, "theorem_import")
+        if (!importDir.exists()) {
+          importDir.mkdirs()
+        }
+
+        // Sanitize filename to avoid path traversal
+        val safeName = fileName.replace("[^a-zA-Z0-9._-]".toRegex(), "_")
+        val outFile = File(importDir, safeName)
+
+        inputStream.use { input ->
+          java.io.FileOutputStream(outFile).use { output ->
+            input.copyTo(output)
+          }
+        }
+
+        val response = JSObject()
+        response.put("path", outFile.absolutePath)
+        invoke.resolve(response)
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Failed to materialize content URI")
       }
     }
   }

@@ -686,15 +686,31 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     if (!plugins?.fs) throw new Error('FS plugin not available - this function requires Tauri');
     const fs = plugins.fs;
 
+    // Materialize Android content URIs to a regular file path the FS plugin can read
+    let readPath = normalizedFilePath;
+    if (isContentUri) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const resolvedFilename = ensureFilenameForFormat(
+            extractFilenameFromPath(normalizedFilePath),
+            format || 'epub',
+        );
+        readPath = await withTimeout(
+            invoke<string>('materialize_android_content_uri', {
+                uri: normalizedFilePath,
+                fileName: resolvedFilename,
+            }),
+            CONTENT_URI_READ_TIMEOUT_MS,
+            `materializing Android content URI: ${normalizedFilePath}`,
+        );
+    }
+
     // Get file stats
     let fileSize = 0;
-    if (!isContentUri) {
-        try {
-            const stats = await fs.stat(normalizedFilePath);
-            fileSize = Number(stats.size);
-        } catch {
-            // Stats not available, continue without size
-        }
+    try {
+        const stats = await fs.stat(readPath);
+        fileSize = Number(stats.size);
+    } catch {
+        // Stats not available, continue without size
     }
 
     // Check file size - warn if very large (> 100MB)
@@ -703,13 +719,7 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     }
 
     // Read file content for storage
-    const buffer = isContentUri
-        ? await withTimeout(
-            readBookFile(normalizedFilePath),
-            CONTENT_URI_READ_TIMEOUT_MS,
-            `reading Android document URI: ${normalizedFilePath}`,
-        )
-        : await readBookFile(normalizedFilePath);
+    const buffer = await readBookFile(readPath);
     if (!buffer || buffer.byteLength === 0) {
         console.error('Empty file or failed to read:', normalizedFilePath);
         return null;
