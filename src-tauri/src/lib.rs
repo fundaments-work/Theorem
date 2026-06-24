@@ -646,6 +646,54 @@ fn scan_library_folder_mobile(
 }
 
 #[tauri::command]
+fn scan_library_folder_desktop(folder_path: String) -> Result<Vec<String>, String> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let _ = folder_path;
+        Err("Desktop folder scanning is only available on desktop.".to_string())
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let path = Path::new(&folder_path);
+        if !path.is_dir() {
+            return Err(format!("Not a directory: {}", folder_path));
+        }
+
+        const SUPPORTED_EXTENSIONS: &[&str] = &[
+            ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".fbz", ".fb2.zip", ".cbz", ".pdf",
+        ];
+
+        let mut book_files: Vec<String> = Vec::new();
+
+        for entry in walkdir::WalkDir::new(path)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                let entry_path = entry.path();
+                let name_lower = entry_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_lowercase())
+                    .unwrap_or_default();
+
+                if SUPPORTED_EXTENSIONS
+                    .iter()
+                    .any(|ext| name_lower.ends_with(ext))
+                {
+                    book_files.push(entry_path.to_string_lossy().to_string());
+                }
+            }
+        }
+
+        // Sort for deterministic order
+        book_files.sort();
+        Ok(book_files)
+    }
+}
+
+#[tauri::command]
 async fn save_share_image_mobile(
     app: tauri::AppHandle,
     filename: String,
@@ -810,6 +858,7 @@ pub fn run() {
             fetch_binary_content,
             pick_library_folder_mobile,
             scan_library_folder_mobile,
+            scan_library_folder_desktop,
             save_share_image_mobile,
             database::sqlite_save_book_data,
             database::sqlite_get_book_data,
