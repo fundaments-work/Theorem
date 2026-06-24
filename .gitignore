@@ -24,6 +24,9 @@ coverage
 target
 src-tauri/target
 
+# Local Tauri CLI symlink (user convenience, points to node_modules)
+src-tauri/tauri
+
 # Tauri generated schema files
 src-tauri/gen/schemas
 
