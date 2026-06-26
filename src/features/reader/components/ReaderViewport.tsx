@@ -13,6 +13,8 @@ import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, Boo
 import type { ReaderSettings } from '../../../core';
 import { cn } from '../../../core';
 import { getSettingsChanges } from '../../../core';
+import { immersionPlayer } from '../audio/ImmersionPlayer';
+import { invoke } from '@tauri-apps/api/core';
 
 const FORMAT_EXTENSION_MAP: Record<BookFormat, string> = {
     epub: 'epub',
@@ -138,6 +140,10 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         onLocationsSaved,
         onViewportTap,
         shouldForceViewportTap,
+        onTtsWordClick: (wordId: string, textToRead: string) => {
+            immersionPlayer.stopAllPlayback();
+            invoke('generate_speech', { text: textToRead, startFromId: wordId });
+        },
     });
 
     // Expose methods via ref
@@ -362,8 +368,14 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         };
 
         window.addEventListener('keydown', handleKeyDown, { passive: false });
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
     }, [next, prev, goToFraction, showNavFeedback]);
+
+    useEffect(() => {
+        immersionPlayer.init();
+    }, []);
 
     // Scroll wheel navigation - DISABLED in paged mode per user request
     // User wants to use keyboard/touch only for navigation in paged mode

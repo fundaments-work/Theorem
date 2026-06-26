@@ -24,6 +24,7 @@ export interface UseDocumentReaderOptions {
     onLocationsGenerated?: () => void;
     onError?: (error: Error) => void;
     onTextSelected?: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void;
+    onTtsWordClick?: (wordId: string, textToRead: string) => void;
     onLocationsSaved?: (locations: string) => void;
     onViewportTap?: () => void;
     shouldForceViewportTap?: () => boolean;
@@ -195,6 +196,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
                 callbacksRef.current.onError?.(err);
             },
             onTextSelected: callbacksRef.current.onTextSelected,
+            onTtsWordClick: callbacksRef.current.onTtsWordClick,
             onViewportTap: () => {
                 callbacksRef.current.onViewportTap?.();
             },
