@@ -6,59 +6,6 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::RwLock;
 
-/// Known English abbreviations whose trailing period should NOT be treated as
-/// a sentence boundary.  Lowercase, without the period.
-const ABBREVIATIONS: &[&str] = &[
-    "dr", "mr", "mrs", "ms", "mx", "prof", "sr", "jr", "st", "sgt", "capt", "maj", "col", "gen",
-    "lt", "gov", "pres", "dept", "est", "vol", "vs", "etc", "inc", "ltd", "co", "corp", "jan",
-    "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "e.g", "i.e", "viz",
-    "al", "ch", "pp", "no", "ex", "appx", "fig", "eq", "approx", "eds", "anon", "c", "cf", "chap",
-    "diss", "ed", "trans", "rev", "n.p", "n.d", "l", "ll", "vols", "p", "pp", "par", "pars",
-];
-
-/// Returns `true` when `c` at byte position `char_pos` inside `text` is a
-/// genuine sentence-ending boundary (not an abbreviation, initial, or decimal).
-fn is_sentence_end(text: &str, char_pos: usize, c: char) -> bool {
-    debug_assert!(char_pos < text.len());
-
-    match c {
-        '!' | '?' | ';' => true,
-        '\n' => {
-            // Only treat newline as boundary if preceded by actual sentence end
-            let before = &text[..char_pos];
-            before
-                .trim()
-                .ends_with(|ch: char| matches!(ch, '.' | '!' | '?' | ';' | '\n'))
-        }
-        '.' => {
-            let before = &text[..char_pos];
-            let preceding_word = before.split_whitespace().last().unwrap_or("");
-
-            // Decimal number: "3.14", "1.5" – never boundary
-            if preceding_word.chars().all(|ch| ch.is_ascii_digit()) {
-                return false;
-            }
-
-            // Initial: "J. K. Rowling" – never boundary
-            let stem = preceding_word.trim_end_matches('.');
-            if stem.len() == 1 && stem.chars().all(|ch| ch.is_ascii_uppercase()) {
-                return false;
-            }
-
-            // Known abbreviation – never boundary
-            if !stem.is_empty()
-                && stem.len() <= 8
-                && stem.chars().all(|ch| ch.is_ascii_alphabetic())
-                && ABBREVIATIONS.contains(&stem.to_ascii_lowercase().as_str())
-            {
-                return false;
-            }
-
-            true
-        }
-        _ => false,
-    }
-}
 
 /// Lightweight text normalisation performed *before* sentence-splitting and
 /// synthesis.  Helps the phonemizer handle edge cases.
@@ -173,127 +120,6 @@ fn apply_fade_out(audio: &mut [f32], sample_rate: u32) {
         let idx = len - fade_samples + i;
         let factor = (fade_samples - i) as f32 / fade_samples as f32;
         audio[idx] *= factor;
-    }
-}
-
-/// Split text into ≤500-char chunks on sentence boundaries.
-/// Kokoro handles up to ~500 chars well; longer text gets split.
-///
-/// Improves on naïve sentence-splitting by:
-///   - Not splitting on known abbreviations, initials, or decimal numbers.
-///   - Including context overlap when hard-splitting a long sentence.
-pub fn split_text(text: &str) -> Vec<String> {
-    // ── First pass: split into sentences ──
-    let mut sentences: Vec<String> = Vec::new();
-    let mut current = String::new();
-
-    for (pos, c) in text.char_indices() {
-        current.push(c);
-        if is_sentence_end(text, pos, c) && !current.trim().is_empty() {
-            // Trailing space forces the ONNX model to generate a silent
-            // audio tail, preventing truncation of the last phoneme
-            // (e.g. "time" → "tim", "ninety-one" → "nine").
-            sentences.push(current.trim().to_string() + " ");
-            current.clear();
-        }
-    }
-    if !current.trim().is_empty() {
-        sentences.push(current.trim().to_string() + " ");
-    }
-
-    // ── Second pass: merge short, split long ──
-    const MAX_CHUNK_LEN: usize = 200;
-    /// Number of trailing characters from the previous chunk to include as
-    /// leading context for the next chunk when hard-splitting a long sentence.
-    /// The phonemizer uses this surrounding context for disambiguation.
-    const CONTEXT_OVERLAP: usize = 60;
-
-    let mut result: Vec<String> = Vec::new();
-    let mut buf = String::new();
-
-    for s in &sentences {
-        if buf.len() + s.len() + 1 <= MAX_CHUNK_LEN {
-            if !buf.is_empty() {
-                buf.push(' ');
-            }
-            buf.push_str(s);
-        } else {
-            if !buf.is_empty() {
-                result.push(buf.clone());
-                buf.clear();
-            }
-            if s.len() > MAX_CHUNK_LEN {
-                split_long_sentence(s, MAX_CHUNK_LEN, CONTEXT_OVERLAP, &mut result, &mut buf);
-            } else {
-                buf = s.clone();
-            }
-        }
-    }
-    if !buf.is_empty() {
-        result.push(buf);
-    }
-
-    result.retain(|s| !s.trim().is_empty());
-    result
-}
-
-/// Hard-split a single long sentence that exceeds `max_len`.
-///
-/// Each split point adds `overlap` characters of trailing-context from the
-/// previous piece so the phonemizer has enough context to pronounce the
-/// start of the next piece correctly.  The first piece never repeats, but
-/// subsequent pieces have a repeated tail-to-head overlap zone.
-fn split_long_sentence(
-    sentence: &str,
-    max_len: usize,
-    overlap: usize,
-    result: &mut Vec<String>,
-    remainder: &mut String,
-) {
-    let mut start = 0_usize;
-    let bytes = sentence.as_bytes();
-    let len = sentence.len();
-
-    loop {
-        if start >= len {
-            break;
-        }
-
-        let remaining = len - start;
-        if remaining <= max_len {
-            // Last piece — keep as remainder for merging
-            *remainder = format!("{} ", sentence[start..].trim());
-            break;
-        }
-
-        let target = start + max_len;
-        if target >= len {
-            *remainder = format!("{} ", sentence[start..].trim());
-            break;
-        }
-
-        let cut = (start + (max_len / 4)..target)
-            .rev()
-            .find(|&i| bytes[i].is_ascii_whitespace())
-            .unwrap_or(target);
-
-        let piece = format!("{} ", sentence[start..cut].trim());
-        if !piece.trim().is_empty() {
-            result.push(piece);
-        }
-
-        start = cut;
-        if overlap > 0 && start >= overlap {
-            let overlap_start = start.saturating_sub(overlap);
-            if !sentence.is_char_boundary(overlap_start) {
-                let adjusted = overlap_start.saturating_sub(4);
-                start = (adjusted..start)
-                    .find(|&i| sentence.is_char_boundary(i) && i >= adjusted)
-                    .unwrap_or(start);
-            } else {
-                start = overlap_start;
-            }
-        }
     }
 }
 
@@ -419,29 +245,32 @@ pub async fn generate_speech(
     let dom_id = start_from_id.unwrap_or_else(|| "tts-w-0".to_string());
     let normalized = normalize_for_tts(&text);
 
-    // Use kokoro-en's sentence splitter, then merge short sentences into
-    // ~150-char chunks. Individual sentences (~50 chars) produce only ~2s
-    // of audio — too short, causing gaps between chunks. Merging to 150
-    // chars gives ~6-8s of audio per chunk, plenty of time for the next
-    // chunk to synthesize via buffered(4). First chunk still synthesizes
-    // in ~2-3s because it's shorter than the old 200-char chunks.
-    const TARGET_CHUNK_LEN: usize = 150;
+    // Merge short sentences into chunks. The first chunk is extra-large
+    // (~420 chars, ~15-18s of audio) so that by the time it finishes
+    // playing, chunks 1-3 have finished synthesizing via buffered(4).
+    // Subsequent chunks use 280 chars (~10-12s) — enough to sustain the
+    // pipeline once it's flowing.
+    const FIRST_CHUNK_LEN: usize = 420;
+    const TARGET_CHUNK_LEN: usize = 280;
     let raw_sentences = split_sentences(&normalized);
     let chunks: Vec<String> = {
         let mut result: Vec<String> = Vec::new();
         let mut buf = String::new();
+        let mut is_first = true;
         for s in raw_sentences {
             let s = s.trim();
             if s.is_empty() {
                 continue;
             }
             let s_with_space = format!("{} ", s);
-            if buf.len() + s_with_space.len() <= TARGET_CHUNK_LEN {
+            let limit = if is_first { FIRST_CHUNK_LEN } else { TARGET_CHUNK_LEN };
+            if buf.len() + s_with_space.len() <= limit {
                 buf.push_str(&s_with_space);
             } else {
                 if !buf.is_empty() {
                     result.push(buf.clone());
                     buf.clear();
+                    is_first = false;
                 }
                 buf.push_str(&s_with_space);
             }
@@ -587,199 +416,27 @@ pub async fn stop_speech(app: AppHandle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn test_split_text_basic() {
-        let result = split_text("Hello world. This is a test. Goodbye!");
-        assert!(!result.is_empty());
-        for chunk in &result {
-            assert!(!chunk.trim().is_empty());
-        }
-    }
-
-    #[test]
-    fn test_split_text_merges_short() {
-        let result = split_text("Hi. Ok. Yes. No. Fine.");
-        assert!(result.len() <= 2);
-    }
-
-    #[test]
-    fn test_split_text_splits_long() {
-        let long = "A ".repeat(300);
-        let result = split_text(&long);
-        assert!(result.len() >= 2);
-        for chunk in &result {
-            assert!(chunk.len() <= 510);
-        }
-    }
-
-    #[test]
-    fn test_does_not_split_on_abbreviations() {
-        let text = "Dr. Smith went to Washington. He met with Mr. Jones.";
-        let result = split_text(text);
-        // "Dr. Smith went to Washington." should be one sentence
-        assert!(
-            result
-                .iter()
-                .any(|s| s.contains("Dr. Smith") && s.contains("Washington")),
-            "Dr. and Mr. should not trigger splits: {:?}",
-            result
-        );
-    }
-
-    #[test]
-    fn test_does_not_split_on_initials() {
-        let text = "J. K. Rowling wrote Harry Potter. It was a success.";
-        let result = split_text(text);
-        assert!(
-            result
-                .iter()
-                .any(|s| s.contains("J. K. Rowling") && s.contains("Harry Potter")),
-            "Initials should not trigger splits: {:?}",
-            result
-        );
-    }
-
-    #[test]
-    fn test_does_not_split_on_decimals() {
-        let text = "The value is 3.14 and it's constant. Really.";
-        let result = split_text(text);
-        assert!(
-            result
-                .iter()
-                .any(|s| s.contains("3.14") && s.contains("constant")),
-            "Decimals should not trigger splits: {:?}",
-            result
-        );
-    }
-
     #[test]
     fn test_normalize_ampersand() {
-        let normalized = normalize_for_tts("Apples & Oranges");
-        // misaki workaround appends _ at word boundaries
+        let normalized = super::normalize_for_tts("Apples & Oranges");
         assert_eq!(normalized, "Apples_ and_ Oranges_ ");
     }
 
     #[test]
     fn test_normalize_whitespace() {
-        let normalized = normalize_for_tts("Hello    world.  Spaced. ");
-        // anti-bite detaches . from words, misaki appends _, then trailing space
+        let normalized = super::normalize_for_tts("Hello    world.  Spaced. ");
         assert_eq!(normalized, "Hello_ world_ . Spaced_ .  ");
     }
 
     #[test]
     fn test_normalize_possessive_apostrophe() {
-        // apostrophe is removed entirely — misaki splits on ' regardless
-        // "friends's" → apostrophe removed → "friendss" → misaki → "friendss_"
-        let normalized = normalize_for_tts("friends's");
+        let normalized = super::normalize_for_tts("friends's");
         assert_eq!(normalized, "friendss_ ");
     }
 
     #[test]
     fn test_normalize_contraction_apostrophe() {
-        // apostrophe is removed entirely — misaki splits on ' regardless
-        let normalized = normalize_for_tts("don't");
+        let normalized = super::normalize_for_tts("don't");
         assert_eq!(normalized, "dont_ ");
-    }
-
-    #[test]
-    fn test_context_overlap_in_long_sentence() {
-        // Build a sentence long enough to force hard-split (>500 chars)
-        let long = "The quick brown fox jumps over the lazy dog near the bank. ".repeat(15);
-        let text = long.trim();
-        assert!(
-            text.len() > 500,
-            "test text must exceed 500 chars (was {})",
-            text.len()
-        );
-        let result = split_text(text);
-        assert!(
-            result.len() >= 2,
-            "long text should produce multiple chunks: {:?}",
-            result
-        );
-        // Verify no chunk exceeds the hard limit + slack (trailing space adds 1)
-        for chunk in &result {
-            assert!(
-                chunk.len() <= 570,
-                "chunk too long ({} chars): {:?}",
-                chunk.len(),
-                chunk
-            );
-        }
-    }
-
-    #[test]
-    fn test_abbreviation_at_true_sentence_end() {
-        // An abbreviation followed by end-of-text IS still a sentence end.
-        let text = "Bring pens, paper, and other supplies etc.";
-        let result = split_text(text);
-        assert_eq!(result.len(), 1, "single sentence: {:?}", result);
-        assert!(result[0].trim().ends_with("etc."));
-    }
-
-    #[test]
-    fn test_abbreviation_does_not_prevent_actual_sentence_break() {
-        // '!' is always a sentence boundary and is not affected by abbreviation
-        // checks.  Short fragments get merged back but the punctuation survives.
-        let text = "Call Dr. Smith! He is expecting you.";
-        let result = split_text(text);
-        assert!(result[0].contains("Smith!"));
-    }
-
-    #[test]
-    fn test_split_text_with_quotes() {
-        // Quotes preserve sentence-internal periods correctly.
-        let text = "He said \"Hello world.\" Then she replied \"Goodbye.\"";
-        let result = split_text(text);
-        let concatenated: String = result.concat();
-        assert!(concatenated.contains("Hello world"));
-        assert!(concatenated.contains("Goodbye"));
-    }
-
-    #[test]
-    fn test_trailing_space_added_to_sentences() {
-        // Every sentence must end with a space so the ONNX model generates
-        // a silent audio tail (prevents "time"→"tim" truncation).
-        let result = split_text("Hello world. Goodbye.");
-        for s in &result {
-            assert!(s.ends_with(' '), "missing trailing space: {s:?}");
-        }
-    }
-
-    #[test]
-    fn test_trailing_space_on_single_sentence() {
-        let result = split_text("Just one sentence.");
-        assert_eq!(result.len(), 1);
-        assert!(
-            result[0].ends_with(' '),
-            "missing trailing space: {:?}",
-            result[0]
-        );
-    }
-
-    #[test]
-    fn test_trailing_space_in_long_chunks() {
-        let long = "The quick brown fox jumps over the lazy dog. ".repeat(20);
-        let text = long.trim();
-        let result = split_text(text);
-        assert!(result.len() >= 2);
-        for chunk in &result {
-            assert!(
-                chunk.ends_with(' '),
-                "chunk missing trailing space: {chunk:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn test_punctuation_preserved_in_words() {
-        let text = "The time is 2:30. Call 911. The value is 91.5.";
-        let result = split_text(text);
-        let all: String = result.concat();
-        assert!(all.contains("time"));
-        assert!(all.contains("911"));
-        assert!(all.contains("91.5"));
     }
 }

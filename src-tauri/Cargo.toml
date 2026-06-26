@@ -64,12 +64,23 @@ ndarray = "0.17.2"
 kokoro-en = { version = "0.1.4", default-features = false, features = ["misaki-lean"] }
 regex = "1.10.0"
 
-# Optimize dependencies even in dev mode to make Kokoro / misaki-lean usable.
+# Optimize only the packages that need it in dev mode.
 # debug-assertions = false removes the verbose #[cfg(debug_assertions)] eprintln!
 # in kokoro-en's synthesizer.rs that prints every G2P phoneme string (2500+ chars
 # per chunk) — without this, TTS in dev mode spends 90% of its time doing stderr I/O.
 [profile.dev]
 debug-assertions = false
 
-[profile.dev.package."*"]
+# Only optimize the TTS pipeline packages — every other crate compiles at
+# opt-level=0 which is 5-10× faster for incremental dev builds.
+[profile.dev.package.kokoro-en]
+opt-level = 3
+
+[profile.dev.package.ort]
+opt-level = 3
+
+[profile.dev.package.ndarray]
+opt-level = 3
+
+[profile.dev.package.regex]
 opt-level = 3
