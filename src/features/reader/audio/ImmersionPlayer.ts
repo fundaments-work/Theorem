@@ -1,5 +1,4 @@
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
 
 export class ImmersionPlayer {
     audioCtx: AudioContext;
@@ -72,8 +71,6 @@ export class ImmersionPlayer {
             const activeWord = wordMap.find(w => elapsed >= w.start_time && elapsed <= w.end_time);
 
             if (activeWord) {
-                // Clear old highlights safely
-                const doc = document; // The iframe document logic needs to be handled, or we querySelector across active docs.
                 // Assuming words have IDs we can look up globally or within the foliate container
                 const container = document.getElementById('foliate-view-container');
                 if (container) {

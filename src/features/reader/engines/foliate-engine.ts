@@ -66,6 +66,55 @@ export interface FoliateEngineOptions {
     shouldForceViewportTap?: () => boolean;
 }
 
+function wrapEpubTextNodes(containerElement: HTMLElement, doc: Document) {
+    if (!doc.getElementById('tts-styles')) {
+        const style = doc.createElement('style');
+        style.id = 'tts-styles';
+        style.textContent = `
+            .tts-word {
+                transition: background-color 0.1s linear, color 0.1s linear;
+                border-radius: 2px;
+            }
+            .tts-word.active {
+                background-color: rgba(255, 212, 0, 0.4) !important;
+                color: inherit;
+            }
+        `;
+        doc.head.appendChild(style);
+    }
+
+    let wordCounter = 0;
+    const walker = doc.createTreeWalker(
+        containerElement,
+        NodeFilter.SHOW_TEXT,
+        null,
+    );
+
+    let textNodes: Node[] = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+    textNodes.forEach(node => {
+        const text = node.nodeValue || '';
+        // Split text by words while retaining space/punctuation formatting
+        const words = text.split(/(\s+)/); 
+        
+        const fragment = doc.createDocumentFragment();
+        words.forEach(part => {
+            if (part.trim().length > 0) {
+                const span = doc.createElement('span');
+                span.className = 'tts-word transition-colors duration-100 linear';
+                span.id = `w_${wordCounter++}`;
+                span.textContent = part;
+                fragment.appendChild(span);
+            } else {
+                fragment.appendChild(doc.createTextNode(part));
+            }
+        });
+        
+        node.parentNode?.replaceChild(fragment, node);
+    });
+}
+
 export class FoliateEngine {
     private container: HTMLElement | null = null;
     private view: any = null;
@@ -512,7 +561,7 @@ export class FoliateEngine {
             if (detail?.doc) {
                 this.iframeListenersAttached.delete(detail.doc);
                 try {
-                    wrapEpubTextNodes(detail.doc.body);
+                    wrapEpubTextNodes(detail.doc.body, detail.doc);
                 } catch (e) {
                     console.error('[FoliateEngine] Error wrapping epub text nodes:', e);
                 }

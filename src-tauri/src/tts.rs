@@ -2,7 +2,6 @@ use tauri::{AppHandle, Emitter};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use kokoro_en::Kokoro;
 
 #[derive(Serialize, Clone)]
 pub struct TtsChunk {

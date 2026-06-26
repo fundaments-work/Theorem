@@ -3,6 +3,7 @@ mod sync_commands;
 mod sync_crypto;
 mod sync_protocol;
 mod sync_server;
+mod tts;
 
 use reqwest::blocking::Client;
 use serde::Serialize;
@@ -864,6 +865,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            tts::generate_speech,
             read_file,
             read_pdf_file,
             read_pdf_file_size,
