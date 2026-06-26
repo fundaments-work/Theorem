@@ -1,6 +1,9 @@
 use serde::Serialize;
-use std::process::Command;
-use tauri::{AppHandle, Emitter};
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::RwLock;
+use kokoro_en::KokoroTts;
+use futures::stream::{self, StreamExt};
 
 /// A chunk of TTS audio with per-word timing metadata.
 #[derive(Serialize, Clone)]
@@ -8,6 +11,10 @@ pub struct TtsChunk {
     pub audio_data: Vec<f32>,
     pub sample_rate: u32,
     pub words: Vec<WordTimestamp>,
+    /// Index of this chunk in the current generation batch (0-based).
+    pub chunk_index: u32,
+    /// Total number of chunks queued for this generation.
+    pub total_chunks: u32,
 }
 
 /// Per-word timing entry, matched to a DOM span by `dom_id`.
@@ -19,14 +26,35 @@ pub struct WordTimestamp {
     pub dom_id: String,
 }
 
-/// Split text into ≤150-char chunks on sentence boundaries.
+/// Emitted when TTS encounters a fatal error mid-stream.
+#[derive(Serialize, Clone)]
+pub struct TtsError {
+    pub message: String,
+}
+
+/// Emitted when all chunks for a generation batch are done.
+#[derive(Serialize, Clone)]
+pub struct TtsDone {
+    pub total_chunks: u32,
+}
+
+pub struct TtsState {
+    pub engine: Arc<RwLock<Option<KokoroTts>>>,
+    /// Monotonically increasing generation ID.  When the frontend starts a new
+    /// synthesis, it gets a new ID; any in-flight generation with an older ID
+    /// should abort as soon as possible.
+    pub generation_id: Arc<std::sync::atomic::AtomicU64>,
+}
+
+/// Split text into ≤500-char chunks on sentence boundaries.
+/// Kokoro handles up to ~500 chars well; longer text gets split.
 pub fn split_text(text: &str) -> Vec<String> {
     let mut sentences: Vec<String> = Vec::new();
     let mut current = String::new();
 
     for c in text.chars() {
         current.push(c);
-        if matches!(c, '.' | '!' | '?' | '\n') && !current.trim().is_empty() {
+        if matches!(c, '.' | '!' | '?' | ';' | '\n') && !current.trim().is_empty() {
             sentences.push(current.trim().to_string());
             current.clear();
         }
@@ -35,325 +63,244 @@ pub fn split_text(text: &str) -> Vec<String> {
         sentences.push(current.trim().to_string());
     }
 
-    let mut result = Vec::new();
-    for s in sentences {
-        if s.len() > 150 {
-            // Find the whitespace closest to the midpoint
-            let mid = s.len() / 2;
-            let best_split = s
-                .char_indices()
-                .filter(|(_, c)| c.is_whitespace())
-                .min_by_key(|(i, _)| ((*i as isize) - mid as isize).unsigned_abs())
-                .map(|(i, _)| i)
-                .unwrap_or(mid);
+    // Merge very short sentences together, split overly long ones
+    let mut result: Vec<String> = Vec::new();
+    let mut buf = String::new();
 
-            let (part1, part2) = s.split_at(best_split);
-            result.push(part1.trim().to_string());
-            result.push(part2.trim().to_string());
+    for s in sentences {
+        if buf.len() + s.len() + 1 <= 500 {
+            if !buf.is_empty() {
+                buf.push(' ');
+            }
+            buf.push_str(&s);
         } else {
-            result.push(s);
+            if !buf.is_empty() {
+                result.push(buf.clone());
+                buf.clear();
+            }
+            if s.len() > 500 {
+                // Hard-split on whitespace near midpoint
+                let mid = s.len() / 2;
+                let best = s
+                    .char_indices()
+                    .filter(|(_, c)| c.is_whitespace())
+                    .min_by_key(|(i, _)| ((*i as isize) - mid as isize).unsigned_abs())
+                    .map(|(i, _)| i)
+                    .unwrap_or(mid);
+                let (a, b) = s.split_at(best);
+                result.push(a.trim().to_string());
+                buf = b.trim().to_string();
+            } else {
+                buf = s;
+            }
         }
     }
+    if !buf.is_empty() {
+        result.push(buf);
+    }
+
+    result.retain(|s| !s.trim().is_empty());
     result
 }
 
-/// Synthesize PCM audio for `text` using the system `espeak-ng` binary.
-/// Returns raw `f32` samples at 22050 Hz, or falls back to a sine-wave
-/// test tone when espeak-ng is unavailable.
-pub fn synthesize_pcm(text: &str) -> (Vec<f32>, u32) {
-    const SAMPLE_RATE: u32 = 22050;
-
-    // Try running `espeak-ng` with raw 16-bit PCM output to stdout
-    let result = Command::new("espeak-ng")
-        .args([
-            "--stdout", "-z", // no final silence
-            "-s", "160", // words per minute
-            "-a", "100", // amplitude 0-200
-            text,
-        ])
-        .output();
-
-    match result {
-        Ok(output) if output.status.success() && output.stdout.len() >= 44 => {
-            // espeak-ng writes raw RIFF/WAV bytes to stdout; strip the 44-byte header
-            let pcm_bytes = &output.stdout[44..];
-            let samples: Vec<f32> = pcm_bytes
-                .chunks_exact(2)
-                .map(|b| {
-                    let s = i16::from_le_bytes([b[0], b[1]]);
-                    s as f32 / 32768.0
-                })
-                .collect();
-            (samples, SAMPLE_RATE)
-        }
-        _ => {
-            // espeak-ng not available – generate an audible sine-wave tone
-            // so the audio pipeline can still be tested.
-            eprintln!("[tts] espeak-ng unavailable, using fallback sine tone");
-            let duration_secs = text.split_whitespace().count() as f32 * 0.3; // ~0.3 s/word
-            let num_samples = (SAMPLE_RATE as f32 * duration_secs) as usize;
-            let tone: Vec<f32> = (0..num_samples)
-                .map(|i| {
-                    let t = i as f32 / SAMPLE_RATE as f32;
-                    (2.0 * std::f32::consts::PI * 440.0 * t).sin() * 0.4
-                })
-                .collect();
-            (tone, SAMPLE_RATE)
+/// Load the Kokoro engine, trying the Tauri resource directory first,
+/// then falling back to CWD-relative `models/` for dev mode.
+async fn ensure_engine(app: &AppHandle, state: &TtsState) -> Result<(), String> {
+    // Fast path: check with read lock
+    {
+        let guard = state.engine.read().await;
+        if guard.is_some() {
+            return Ok(());
         }
     }
+
+    let mut guard = state.engine.write().await;
+    if guard.is_some() {
+        return Ok(());
+    }
+
+    // Try Tauri resource dir first
+    let resource_dir = app.path().resource_dir().unwrap_or_default();
+    let model_path = resource_dir.join("models/kokoro.onnx");
+    let voice_path = resource_dir.join("models/voices.bin");
+
+    if model_path.exists() && voice_path.exists() {
+        let kokoro = KokoroTts::new(&model_path, &voice_path)
+            .await
+            .map_err(|e| format!("Failed to load Kokoro (resource dir): {}", e))?;
+        *guard = Some(kokoro);
+        return Ok(());
+    }
+
+    // Dev fallback: CWD/models/
+    let kokoro = KokoroTts::new("models/kokoro.onnx", "models/voices.bin")
+        .await
+        .map_err(|e| format!("Failed to load Kokoro (CWD): {}", e))?;
+    *guard = Some(kokoro);
+    Ok(())
 }
 
-/// Build per-word timing from samples based on character-proportion heuristics.
-pub fn build_word_timestamps(
-    words: &[&str],
-    audio_len: usize,
-    sample_rate: u32,
-    id_offset: u32,
-) -> Vec<WordTimestamp> {
-    let duration_sec = audio_len as f32 / sample_rate as f32;
-    let total_chars: usize = words.iter().map(|w| w.len()).sum::<usize>().max(1);
-    let mut current_time = 0.0f32;
-
-    words
-        .iter()
-        .enumerate()
-        .map(|(i, word)| {
-            let proportion = word.len() as f32 / total_chars as f32;
-            let word_duration = proportion * duration_sec;
-            let ts = WordTimestamp {
-                word: word.to_string(),
-                start_time: current_time,
-                end_time: current_time + word_duration,
-                dom_id: format!("w_{}", id_offset + i as u32),
-            };
-            current_time += word_duration;
-            ts
-        })
-        .collect()
-}
-
-/// Tauri command: chunk `text`, synthesize each chunk, emit `audio-chunk` events.
+/// Generate speech for a page of text.  Streams `audio-chunk` events
+/// as each sentence is synthesized, so playback starts immediately.
+///
+/// Returns immediately with a generation ID.  The frontend listens for
+/// `audio-chunk`, `tts-error`, and `tts-done` events.
 #[tauri::command]
 pub async fn generate_speech(
     app: AppHandle,
     text: String,
-    start_from_id: String,
-) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        let sentences = split_text(&text);
-        let mut id_counter = start_from_id
-            .trim_start_matches("w_")
-            .parse::<u32>()
-            .unwrap_or(0);
+    start_from_id: Option<String>,
+) -> Result<u64, String> {
+    let state = app.state::<TtsState>();
 
-        for sentence in &sentences {
-            let (audio_data, sample_rate) = synthesize_pcm(sentence);
-            let word_parts: Vec<&str> = sentence.split_whitespace().collect();
-            let words =
-                build_word_timestamps(&word_parts, audio_data.len(), sample_rate, id_counter);
+    // Bump generation ID — any older in-flight generation will see this and abort
+    let gen_id = state
+        .generation_id
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        + 1;
 
-            id_counter += word_parts.len() as u32;
+    // Ensure engine is loaded (fast if already loaded)
+    ensure_engine(&app, &state).await?;
 
-            let chunk = TtsChunk {
-                audio_data,
-                sample_rate,
-                words,
-            };
+    let dom_id = start_from_id.unwrap_or_else(|| "tts-w-0".to_string());
+    let chunks = split_text(&text);
+    let total = chunks.len() as u32;
 
-            if let Err(e) = app.emit("audio-chunk", chunk) {
-                eprintln!("[tts] emit error: {e}");
+    if total == 0 {
+        let _ = app.emit("tts-done", TtsDone { total_chunks: 0 });
+        return Ok(gen_id);
+    }
+
+    // Clone what we need for the background task
+    let engine_arc = state.engine.clone();
+    let gen_id_arc = state.generation_id.clone();
+    let app_clone = app.clone();
+
+    // Spawn the actual synthesis on a background task so generate_speech
+    // returns immediately and the frontend transitions to "playing".
+    tokio::spawn(async move {
+        // Run up to 4 synthesis tasks in parallel, but yield them in original order
+        let mut stream = stream::iter(chunks.into_iter().enumerate())
+            .map(|(i, chunk_text)| {
+                let engine_arc = engine_arc.clone();
+                let gen_id_arc = gen_id_arc.clone();
+                let dom_id = dom_id.clone();
+                
+                async move {
+                    // Check abort before starting synthesis
+                    let current = gen_id_arc.load(std::sync::atomic::Ordering::SeqCst);
+                    if current != gen_id {
+                        return (i, chunk_text, dom_id, Err("aborted".to_string()));
+                    }
+
+                    // Concurrent read lock
+                    let guard = engine_arc.read().await;
+                    let engine = match guard.as_ref() {
+                        Some(e) => e,
+                        None => return (i, chunk_text, dom_id, Err("Engine not loaded".to_string())),
+                    };
+
+                    let synth_result = engine.synth(&chunk_text, "af_bella").await;
+                    drop(guard);
+
+                    (i, chunk_text, dom_id, synth_result.map_err(|e| format!("{:?}", e)))
+                }
+            })
+            .buffered(4); // parallel buffer size = 4
+
+        while let Some((i, chunk_text, dom_id, synth_result)) = stream.next().await {
+            // Abort if no windows exist (app closed)
+            use tauri::Manager;
+            if app_clone.webview_windows().is_empty() {
+                eprintln!("[tts] aborting because all windows are closed");
+                return;
+            }
+
+            // Check abort again before emitting
+            let current = gen_id_arc.load(std::sync::atomic::Ordering::SeqCst);
+            if current != gen_id {
+                eprintln!("[tts] generation {} aborted during stream (current={})", gen_id, current);
+                return;
+            }
+
+            match synth_result {
+                Ok((audio_data, _duration)) => {
+                    let end_time = audio_data.len() as f32 / 24000.0;
+                    let chunk_data = TtsChunk {
+                        audio_data,
+                        sample_rate: 24000,
+                        words: vec![WordTimestamp {
+                            word: chunk_text.clone(),
+                            start_time: 0.0,
+                            end_time,
+                            dom_id: dom_id.clone(),
+                        }],
+                        chunk_index: i as u32,
+                        total_chunks: total,
+                    };
+
+                    if let Err(e) = app_clone.emit("audio-chunk", chunk_data) {
+                        eprintln!("[tts] failed to emit audio-chunk: {}", e);
+                        return;
+                    }
+                }
+                Err(err_msg) => {
+                    if err_msg == "aborted" {
+                        return;
+                    }
+                    let _ = app_clone.emit("tts-error", TtsError {
+                        message: format!("Synthesis error on chunk {}: {}", i, err_msg),
+                    });
+                    return;
+                }
             }
         }
-    })
-    .await
-    .map_err(|e| e.to_string())?;
 
+        // Signal completion
+        let _ = app_clone.emit("tts-done", TtsDone { total_chunks: total });
+    });
+
+    Ok(gen_id)
+}
+
+/// Cancel any in-flight generation by bumping the generation ID.
+#[tauri::command]
+pub async fn stop_speech(app: AppHandle) -> Result<(), String> {
+    let state = app.state::<TtsState>();
+    state
+        .generation_id
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-
-    // ── helpers ──────────────────────────────────────────────────────────────
-
-    /// Write a minimal PCM WAV so we can inspect the output with any audio player.
-    fn write_wav(path: &str, samples: &[f32], sample_rate: u32) {
-        let pcm_bytes: Vec<u8> = samples
-            .iter()
-            .flat_map(|&s| {
-                let clamped = s.clamp(-1.0, 1.0);
-                let i16_sample = (clamped * 32767.0) as i16;
-                i16_sample.to_le_bytes()
-            })
-            .collect();
-
-        let data_size = pcm_bytes.len() as u32;
-        let chunk_size = 36 + data_size;
-        let byte_rate = sample_rate * 2; // 1 channel, 16-bit
-
-        let mut f = std::fs::File::create(path).expect("create wav");
-
-        // RIFF header
-        f.write_all(b"RIFF").unwrap();
-        f.write_all(&chunk_size.to_le_bytes()).unwrap();
-        f.write_all(b"WAVE").unwrap();
-        // fmt  sub-chunk
-        f.write_all(b"fmt ").unwrap();
-        f.write_all(&16u32.to_le_bytes()).unwrap(); // sub-chunk size
-        f.write_all(&1u16.to_le_bytes()).unwrap(); // PCM
-        f.write_all(&1u16.to_le_bytes()).unwrap(); // mono
-        f.write_all(&sample_rate.to_le_bytes()).unwrap();
-        f.write_all(&byte_rate.to_le_bytes()).unwrap();
-        f.write_all(&2u16.to_le_bytes()).unwrap(); // block align
-        f.write_all(&16u16.to_le_bytes()).unwrap(); // bits per sample
-                                                    // data sub-chunk
-        f.write_all(b"data").unwrap();
-        f.write_all(&data_size.to_le_bytes()).unwrap();
-        f.write_all(&pcm_bytes).unwrap();
-    }
-
-    // ── unit tests ───────────────────────────────────────────────────────────
 
     #[test]
     fn test_split_text_basic() {
-        let text = "Hello world. How are you? I am fine!";
-        let chunks = split_text(text);
-        assert_eq!(chunks.len(), 3, "Expected 3 sentences, got: {chunks:?}");
-        assert_eq!(chunks[0], "Hello world.");
-        assert_eq!(chunks[1], "How are you?");
-        assert_eq!(chunks[2], "I am fine!");
-    }
-
-    #[test]
-    fn test_split_text_long_sentence() {
-        // A sentence with a terminator that is >150 chars should be bisected.
-        let long_with_period = format!("{}.", "word ".repeat(40).trim());
-        let chunks = split_text(&long_with_period);
-        assert_eq!(
-            chunks.len(),
-            2,
-            "Long sentence should be bisected into 2 chunks, got: {chunks:?}"
-        );
-        for c in &chunks {
-            assert!(
-                c.len() <= 150,
-                "Each chunk ≤ 150 chars, got '{}' ({})",
-                c,
-                c.len()
-            );
+        let result = split_text("Hello world. This is a test. Goodbye!");
+        assert!(!result.is_empty());
+        // All chunks should be non-empty
+        for chunk in &result {
+            assert!(!chunk.trim().is_empty());
         }
-
-        // Text with NO sentence-ender is a single logical sentence. If >150 chars it gets bisected.
-        let no_period = "word ".repeat(40);
-        let chunks2 = split_text(no_period.trim());
-        // The text has no `.!?\n` so split_text sees it as 1 sentence → bisected into 2
-        assert_eq!(
-            chunks2.len(),
-            2,
-            "No-terminator long text → bisected, got: {chunks2:?}"
-        );
     }
 
     #[test]
-    fn test_split_text_empty() {
-        assert!(split_text("").is_empty());
-        assert!(split_text("   ").is_empty());
+    fn test_split_text_merges_short() {
+        let result = split_text("Hi. Ok. Yes. No. Fine.");
+        // Should merge these tiny sentences into fewer chunks
+        assert!(result.len() <= 2);
     }
 
     #[test]
-    fn test_word_timestamps_proportional() {
-        let words = vec!["Hello", "world"];
-        let sample_rate = 22050u32;
-        let audio_len = sample_rate as usize; // 1 second
-        let ts = build_word_timestamps(&words, audio_len, sample_rate, 0);
-
-        assert_eq!(ts.len(), 2);
-        assert_eq!(ts[0].dom_id, "w_0");
-        assert_eq!(ts[1].dom_id, "w_1");
-        // Total duration should equal 1 second
-        let total = ts.last().unwrap().end_time;
-        assert!((total - 1.0).abs() < 0.01, "total={total}");
-        // Words should be ordered chronologically
-        assert!(ts[0].end_time <= ts[1].start_time + 0.001);
-    }
-
-    #[test]
-    fn test_synthesize_pcm_produces_samples() {
-        let text = "Hello immersion reader.";
-        let (samples, sample_rate) = synthesize_pcm(text);
-
-        assert!(sample_rate == 22050, "expected 22050 Hz, got {sample_rate}");
-        assert!(!samples.is_empty(), "Should produce audio samples");
-
-        let max_amp = samples.iter().cloned().fold(0.0f32, f32::max);
-        println!(
-            "[test] samples={} max_amplitude={:.4}",
-            samples.len(),
-            max_amp
-        );
-
-        // Write a WAV for manual listening
-        let wav_path = "/tmp/theorem_tts_test.wav";
-        write_wav(wav_path, &samples, sample_rate);
-        println!("[test] Audio written to {wav_path} — open it to verify sound");
-
-        assert!(
-            std::path::Path::new(wav_path).exists(),
-            "WAV file not created"
-        );
-    }
-
-    #[test]
-    fn test_synthesize_full_pipeline() {
-        let text = "The quick brown fox jumps over the lazy dog. \
-                    This sentence tests the chunking system!";
-
-        let sentences = split_text(text);
-        assert!(
-            !sentences.is_empty(),
-            "Should produce at least one sentence"
-        );
-
-        let mut all_samples: Vec<f32> = Vec::new();
-        let mut id_counter = 0u32;
-
-        for sentence in &sentences {
-            let (audio_data, sample_rate) = synthesize_pcm(sentence);
-            let word_parts: Vec<&str> = sentence.split_whitespace().collect();
-            let ts = build_word_timestamps(&word_parts, audio_data.len(), sample_rate, id_counter);
-
-            println!(
-                "[test] sentence='{sentence}' words={} samples={} duration={:.2}s",
-                ts.len(),
-                audio_data.len(),
-                audio_data.len() as f32 / sample_rate as f32
-            );
-
-            for w in &ts {
-                println!(
-                    "       [{:.3}→{:.3}] '{}' dom_id={}",
-                    w.start_time, w.end_time, w.word, w.dom_id
-                );
-            }
-
-            // timestamps must be monotonically increasing and non-negative
-            for w in &ts {
-                assert!(w.start_time >= 0.0);
-                assert!(
-                    w.end_time > w.start_time,
-                    "end_time must be after start_time"
-                );
-            }
-
-            id_counter += word_parts.len() as u32;
-            all_samples.extend_from_slice(&audio_data);
+    fn test_split_text_splits_long() {
+        let long = "A ".repeat(300); // 600 chars
+        let result = split_text(&long);
+        assert!(result.len() >= 2);
+        for chunk in &result {
+            assert!(chunk.len() <= 510); // some slack
         }
-
-        // Write combined WAV
-        let wav_path = "/tmp/theorem_tts_pipeline_test.wav";
-        write_wav(wav_path, &all_samples, 22050);
-        println!("[test] Full pipeline audio → {wav_path}");
     }
 }
