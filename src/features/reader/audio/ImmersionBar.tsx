@@ -51,6 +51,7 @@ export function ImmersionBar({
     }, [onComplete]);
 
     const [isContinuousMode, setIsContinuousMode] = useState(false);
+    const transitioningRef = useRef(false);
 
     // Initialize the player once
     useEffect(() => {
@@ -60,12 +61,17 @@ export function ImmersionBar({
         immersionPlayer.init({
             onStateChange: (state) => {
                 setPlaybackState(state);
+                if (state === 'playing') {
+                    transitioningRef.current = false;
+                }
             },
             onError: (msg) => {
                 setError(msg);
                 setIsContinuousMode(false);
+                transitioningRef.current = false;
             },
             onComplete: () => {
+                transitioningRef.current = true;
                 // We finished reading the page. Turn the page if continuous mode is on.
                 onCompleteRef.current?.();
             }
@@ -176,7 +182,10 @@ export function ImmersionBar({
     ];
 
     // Auto-play when page changes in continuous mode
+    // Skip during transition window (onComplete → preloaded audio start) to
+    // avoid racing with preloaded chunks about to arrive (#14).
     useEffect(() => {
+        if (transitioningRef.current) return;
         const text = sectionText.trim();
         if (isContinuousMode && playbackState === 'idle' && text && pageCfi && lastPlayedCfiRef.current !== pageCfi) {
             handlePlay();
