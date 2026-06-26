@@ -793,6 +793,11 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            app.manage(tts::TtsState {
+                engine: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+                generation_id: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            });
+
             // Initialize LAN sync subsystem.
             let app_data_dir = app
                 .path()
@@ -866,6 +871,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             tts::generate_speech,
+            tts::stop_speech,
             read_file,
             read_pdf_file,
             read_pdf_file_size,
