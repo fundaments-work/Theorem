@@ -1,5 +1,6 @@
 use futures::stream::{self, StreamExt};
 use kokoro_en::KokoroTts;
+use regex::Regex;
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
@@ -63,10 +64,7 @@ fn is_sentence_end(text: &str, char_pos: usize, c: char) -> bool {
 /// synthesis.  Helps the phonemizer handle edge cases.
 fn normalize_for_tts(text: &str) -> String {
     // "&" → "and"  (common in titles, author strings, etc.)
-    let s = text.replace(" & ", " and ");
-
-    // Handle leading/trailing "&" variants
-    let mut s = s;
+    let mut s = text.replace(" & ", " and ");
     if s.starts_with("& ") {
         s.replace_range(..2, "and ");
     }
@@ -75,21 +73,39 @@ fn normalize_for_tts(text: &str) -> String {
         s.replace_range(len - 2.., " and");
     }
 
-    // Replace consecutive whitespace with a single space
-    let mut compact = String::with_capacity(s.len());
-    let mut prev_was_space = false;
-    for ch in s.chars() {
-        if ch.is_whitespace() {
-            if !prev_was_space {
-                compact.push(' ');
-                prev_was_space = true;
-            }
-        } else {
-            compact.push(ch);
-            prev_was_space = false;
-        }
-    }
-    compact
+    // 1. Sanitize Quotes & Typography
+    // Replace smart quotes and em-dashes with standard ASCII equivalents
+    s = s.replace(['‘', '’', '`'], "'");
+    s = s.replace(['“', '”'], "\"");
+    s = s.replace('—', "-");
+
+    // 2. Fix missing spaces after punctuation (e.g., "him!'.The" -> "him!'. The")
+    // This looks for punctuation followed immediately by a letter and inserts a space.
+    let re_missing_space = Regex::new(r"([.!?,'\x22])([a-zA-Z])").unwrap();
+    s = re_missing_space.replace_all(&s, "$1 $2").to_string();
+
+    // 3. The "Anti-Bite" Detachment
+    // Add a space BEFORE punctuation so espeak-ng doesn't swallow the final consonant.
+    // "good," becomes "good ," -> guarantees the 'd' is fully pronounced.
+    let re_detach_punct = Regex::new(r"([a-zA-Z])([.,!?])").unwrap();
+    s = re_detach_punct.replace_all(&s, "$1 $2").to_string();
+
+    // 4. Clean up any double spaces we might have created
+    let re_double_spaces = Regex::new(r"\s+").unwrap();
+    s = re_double_spaces.replace_all(&s, " ").to_string();
+
+    // 5. The "misaki-lean" bug workaround
+    // The pure-Rust `misaki-lean` dictionary phonemizer has a catastrophic bug where it
+    // drops the last character of every word it tokenizes (e.g., "time." -> "tim", "91" -> "9").
+    // We append a dummy `_` to the end of every alphanumeric sequence so the phonemizer
+    // drops the `_` instead of the actual last letter/number, perfectly restoring pronunciation.
+    let re_misaki_bug = Regex::new(r"([a-zA-Z0-9])\b").unwrap();
+    s = re_misaki_bug.replace_all(&s, "${1}_").to_string();
+
+    // Force a final trailing space for the audio buffer
+    s.push(' ');
+
+    s
 }
 
 /// A chunk of TTS audio with per-word timing metadata.

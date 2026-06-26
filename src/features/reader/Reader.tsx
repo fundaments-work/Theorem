@@ -940,16 +940,18 @@ function BookReaderPage() {
             lastClickFractionRef.current = null;
         }
 
-        // Update TTS extract after layout settles
-        if (!isPdfFormat) {
-            setTimeout(() => {
-                const data = readerRef.current?.getVisibleTextForTts?.();
-                setTtsData(data || null);
-            }, 400); // Give DOM a moment to paint and wrap text nodes
-        }
-
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentBookId, scheduleProgressUpdate, updateProgress]);
+
+    // Update TTS extract after layout settles (always, even during suppression)
+    useEffect(() => {
+        if (isPdfFormat || !location?.cfi) return;
+        const timer = setTimeout(() => {
+            const data = readerRef.current?.getVisibleTextForTts?.();
+            setTtsData(data || null);
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [location?.cfi, isPdfFormat]);
 
     useEffect(() => {
         if (!isPdfFormat || !currentBookId || pdfTotalPages <= 0) {
