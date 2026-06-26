@@ -81,7 +81,9 @@ fn normalize_for_tts(text: &str) -> String {
 
     // 2. Fix missing spaces after punctuation (e.g., "him!'.The" -> "him!'. The")
     // This looks for punctuation followed immediately by a letter and inserts a space.
-    let re_missing_space = Regex::new(r"([.!?,'\x22])([a-zA-Z])").unwrap();
+    // NOTE: apostrophe (' ) is deliberately excluded — possessive "friends's" and
+    // contractions "don't" must NOT be split.
+    let re_missing_space = Regex::new(r"([.!?,\x22])([a-zA-Z])").unwrap();
     s = re_missing_space.replace_all(&s, "$1 $2").to_string();
 
     // 3. The "Anti-Bite" Detachment
@@ -573,13 +575,29 @@ mod tests {
     #[test]
     fn test_normalize_ampersand() {
         let normalized = normalize_for_tts("Apples & Oranges");
-        assert_eq!(normalized, "Apples and Oranges");
+        // misaki workaround appends _ at word boundaries
+        assert_eq!(normalized, "Apples_ and_ Oranges_ ");
     }
 
     #[test]
     fn test_normalize_whitespace() {
         let normalized = normalize_for_tts("Hello    world.  Spaced. ");
-        assert_eq!(normalized, "Hello world. Spaced. ");
+        // anti-bite detaches . from words, misaki appends _, then trailing space
+        assert_eq!(normalized, "Hello_ world_ . Spaced_ .  ");
+    }
+
+    #[test]
+    fn test_normalize_possessive_apostrophe() {
+        // possessive 's must NOT be detached — regression test for #13
+        let normalized = normalize_for_tts("friends's");
+        assert_eq!(normalized, "friends_'s_ ");
+    }
+
+    #[test]
+    fn test_normalize_contraction_apostrophe() {
+        // contractions must NOT be split — regression test for #13
+        let normalized = normalize_for_tts("don't");
+        assert_eq!(normalized, "don_'t_ ");
     }
 
     #[test]
