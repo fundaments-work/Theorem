@@ -72,6 +72,9 @@ export function ImmersionBar({
             },
             onComplete: () => {
                 transitioningRef.current = true;
+                // Safety timeout — if preloaded audio doesn't start within 2s
+                // (e.g. no next page text), let auto-play fall through.
+                setTimeout(() => { transitioningRef.current = false; }, 2000);
                 // We finished reading the page. Turn the page if continuous mode is on.
                 onCompleteRef.current?.();
             }

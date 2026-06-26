@@ -272,30 +272,49 @@ export class FoliateEngine {
         if (!contents || contents.length === 0) return null;
 
         const visibleRange = (this.view as any)?.lastLocation?.range;
-        if (!visibleRange) return null;
 
         let fullText = "";
         let firstWordId = "";
-        type Phase = 'before' | 'during' | 'after';
-        let phase: Phase = 'before';
 
-        for (const content of contents) {
-            const doc = content.document || content.doc;
-            if (!doc) continue;
+        if (visibleRange) {
+            // Extract text after the visible range
+            type Phase = 'before' | 'during' | 'after';
+            let phase: Phase = 'before';
 
-            const ttsWords = Array.from(doc.querySelectorAll('.tts-word')) as HTMLElement[];
-            for (const node of ttsWords) {
-                const inRange = visibleRange.intersectsNode(node);
+            for (const content of contents) {
+                const doc = content.document || content.doc;
+                if (!doc) continue;
 
-                if (phase === 'before') {
-                    if (inRange) phase = 'during';
-                } else if (phase === 'during') {
-                    if (!inRange) {
-                        phase = 'after';
-                        if (!firstWordId) firstWordId = node.id;
+                const ttsWords = Array.from(doc.querySelectorAll('.tts-word')) as HTMLElement[];
+                for (const node of ttsWords) {
+                    const inRange = visibleRange.intersectsNode(node);
+
+                    if (phase === 'before') {
+                        if (inRange) phase = 'during';
+                    } else if (phase === 'during') {
+                        if (!inRange) {
+                            phase = 'after';
+                            if (!firstWordId) firstWordId = node.id;
+                            fullText += (node.textContent || '') + " ";
+                        }
+                    } else if (phase === 'after') {
                         fullText += (node.textContent || '') + " ";
                     }
-                } else if (phase === 'after') {
+                }
+            }
+        } else {
+            // No visible range — extract from the second section onward
+            // (first section is the current one being read)
+            let sectionIndex = 0;
+            for (const content of contents) {
+                const doc = content.document || content.doc;
+                if (!doc) continue;
+                sectionIndex++;
+                if (sectionIndex <= 1) continue; // skip current section
+
+                const ttsWords = Array.from(doc.querySelectorAll('.tts-word')) as HTMLElement[];
+                for (const node of ttsWords) {
+                    if (!firstWordId) firstWordId = node.id;
                     fullText += (node.textContent || '') + " ";
                 }
             }

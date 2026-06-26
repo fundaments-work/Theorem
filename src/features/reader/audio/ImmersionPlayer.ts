@@ -120,8 +120,17 @@ export class ImmersionPlayer {
     /**
      * Switch from current playback to the preloaded audio.
      * Drains all buffered chunks into the Web Audio timeline.
+     * Safe to call when no preload is available — becomes a no-op and
+     * the normal auto-play fallback will start fresh.
      */
     playPreloaded() {
+        if (this.preloadGenId === 0 && this.preloadChunks.length === 0) {
+            this.preloadChunks = [];
+            this.preloadChunksReceived = 0;
+            this.preloadTotalChunks = 0;
+            return;
+        }
+
         // Stop current playback
         this.clearHighlights();
         this.skipOnComplete = false;
@@ -138,7 +147,7 @@ export class ImmersionPlayer {
         this.preloadGenId = 0;
         this.isPlayingPreload = false;
 
-        // Replay all buffered chunks in order
+        // Replay all buffered chunks in order so playback starts immediately
         for (const chunk of this.preloadChunks) {
             this.handleChunk(chunk);
         }
