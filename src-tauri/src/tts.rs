@@ -124,6 +124,9 @@ pub struct TtsChunk {
     pub chunk_index: u32,
     /// Total number of chunks queued for this generation.
     pub total_chunks: u32,
+    /// Generation ID from generate_speech — lets the frontend distinguish
+    /// preloaded audio from the currently-playing generation.
+    pub generation_id: u64,
 }
 
 /// Per-word timing entry, matched to a DOM span by `dom_id`.
@@ -463,6 +466,7 @@ pub async fn generate_speech(
                         }],
                         chunk_index: i as u32,
                         total_chunks: total,
+                        generation_id: gen_id,
                     };
 
                     if let Err(e) = app_clone.emit("audio-chunk", chunk_data) {

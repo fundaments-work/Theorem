@@ -44,6 +44,7 @@ export interface ReaderViewportHandle {
     getSectionFractions: () => number[];
     // TTS
     getVisibleTextForTts: () => { text: string; startWordId: string } | null;
+    getNextPageTextForTts: () => { text: string; startWordId: string } | null;
 }
 
 interface ReaderViewportProps {
@@ -134,6 +135,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         clearSelection,
         getSelection,
         getVisibleTextForTts,
+        getNextPageTextForTts,
     } = useDocumentReader({
         onReady,
         onLocationsGenerated: () => {},
@@ -165,8 +167,9 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         loadAnnotations: (annotations: Annotation[]) => loadAnnotations(annotations),
         clearSelection: () => clearSelection(),
         getVisibleTextForTts: () => getVisibleTextForTts(),
+        getNextPageTextForTts: () => getNextPageTextForTts(),
         getSectionFractions: () => getEngine()?.getSectionFractions() ?? [],
-    }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getVisibleTextForTts, getEngine]);
+    }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getVisibleTextForTts, getNextPageTextForTts, getEngine]);
 
     // Cleanup on unmount
     useEffect(() => {

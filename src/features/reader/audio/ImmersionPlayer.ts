@@ -28,6 +28,7 @@ interface TtsChunkPayload {
     }>;
     chunk_index: number;
     total_chunks: number;
+    generation_id: number;
 }
 
 export class ImmersionPlayer {
@@ -41,6 +42,18 @@ export class ImmersionPlayer {
     private highlightRafId: number | null = null;
     /** When true, onComplete callback is suppressed (used for voice testing). */
     skipOnComplete = false;
+
+    // ── Generation tracking for preloading ──
+    /** gen_id of the currently-playing generation. */
+    private currentGenId = 0;
+    /** gen_id of the preloaded (next page) generation. */
+    private preloadGenId = 0;
+    /** Buffered audio chunks from the preloaded generation. */
+    private preloadChunks: TtsChunkPayload[] = [];
+    private preloadChunksReceived = 0;
+    private preloadTotalChunks = 0;
+    /** Whether we switched to playing the preloaded audio. */
+    private isPlayingPreload = false;
 
     get state(): PlaybackState {
         return this._state;
@@ -61,7 +74,14 @@ export class ImmersionPlayer {
         this.unlisteners = [];
 
         const u1 = await listen<TtsChunkPayload>('audio-chunk', (event) => {
-            this.handleChunk(event.payload);
+            const p = event.payload;
+            // Route chunks by generation ID
+            if (p.generation_id === this.preloadGenId && !this.isPlayingPreload) {
+                this.bufferChunk(p);
+            } else if (p.generation_id === this.currentGenId) {
+                this.handleChunk(p);
+            }
+            // chunks from stale generations are ignored
         });
         const u2 = await listen<{ message: string }>('tts-error', (event) => {
             console.error('[ImmersionPlayer] TTS error:', event.payload.message);
@@ -74,6 +94,55 @@ export class ImmersionPlayer {
         });
 
         this.unlisteners = [u1, u2, u3];
+    }
+
+    /** Set the gen_id for the currently-playing generation. */
+    setCurrentGenId(id: number) {
+        this.currentGenId = id;
+        this.isPlayingPreload = false;
+    }
+
+    /** Set the gen_id for a preloaded generation (next page). */
+    setPreloadGenId(id: number) {
+        this.preloadGenId = id;
+        this.preloadChunks = [];
+        this.preloadChunksReceived = 0;
+        this.preloadTotalChunks = 0;
+    }
+
+    /** Buffer a chunk from the preloaded generation for later playback. */
+    private bufferChunk(payload: TtsChunkPayload) {
+        this.preloadChunks.push(payload);
+        this.preloadChunksReceived = payload.chunk_index + 1;
+        this.preloadTotalChunks = payload.total_chunks;
+    }
+
+    /**
+     * Switch from current playback to the preloaded audio.
+     * Drains all buffered chunks into the Web Audio timeline.
+     */
+    playPreloaded() {
+        // Stop current playback
+        this.clearHighlights();
+        this.skipOnComplete = false;
+
+        if (this.audioCtx) {
+            this.audioCtx.close().catch(() => {});
+            this.audioCtx = null;
+        }
+        this.scheduledEnd = 0;
+        this.chunksReceived = this.preloadChunksReceived;
+        this.totalChunks = this.preloadTotalChunks;
+
+        this.currentGenId = this.preloadGenId;
+        this.preloadGenId = 0;
+        this.isPlayingPreload = false;
+
+        // Replay all buffered chunks in order
+        for (const chunk of this.preloadChunks) {
+            this.handleChunk(chunk);
+        }
+        this.preloadChunks = [];
     }
 
     /** Get or lazily create an AudioContext (requires user gesture on first call). */
@@ -251,6 +320,12 @@ export class ImmersionPlayer {
         this.scheduledEnd = 0;
         this.chunksReceived = 0;
         this.totalChunks = 0;
+        this.currentGenId = 0;
+        this.preloadGenId = 0;
+        this.preloadChunks = [];
+        this.preloadChunksReceived = 0;
+        this.preloadTotalChunks = 0;
+        this.isPlayingPreload = false;
         this.setState('idle');
     }
 

@@ -66,6 +66,7 @@ export interface UseDocumentReaderReturn {
     getSelection: () => { text: string; cfi: string } | null;
     clearSelection: () => void;
     getVisibleTextForTts: () => { text: string; startWordId: string } | null;
+    getNextPageTextForTts: () => { text: string; startWordId: string } | null;
 
     // Search
     search: (query: string) => AsyncGenerator<SearchResult | { progress: number } | 'done'>;
@@ -382,6 +383,10 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         return engineRef.current?.getVisibleTextForTts() || null;
     }, []);
 
+    const getNextPageTextForTts = useCallback(() => {
+        return engineRef.current?.getNextPageTextForTts() || null;
+    }, []);
+
     // Search
     const search = useCallback(async function* (query: string) {
         const engine = engineRef.current;
@@ -485,6 +490,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         getSelection,
         clearSelection,
         getVisibleTextForTts,
+        getNextPageTextForTts,
         search,
         clearSearch,
         close,
@@ -524,6 +530,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         getSelection,
         clearSelection,
         getVisibleTextForTts,
+        getNextPageTextForTts,
         search,
         clearSearch,
         close,

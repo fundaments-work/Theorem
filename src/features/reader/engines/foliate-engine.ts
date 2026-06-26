@@ -264,6 +264,47 @@ export class FoliateEngine {
         return { text: fullText.trim(), startWordId: firstWordId };
     }
 
+    /** Like getVisibleTextForTts but returns text AFTER the visible range (for preloading next page). */
+    public getNextPageTextForTts(): { text: string; startWordId: string } | null {
+        if (!this.view?.renderer?.getContents) return null;
+
+        const contents = this.view.renderer.getContents();
+        if (!contents || contents.length === 0) return null;
+
+        const visibleRange = (this.view as any)?.lastLocation?.range;
+        if (!visibleRange) return null;
+
+        let fullText = "";
+        let firstWordId = "";
+        type Phase = 'before' | 'during' | 'after';
+        let phase: Phase = 'before';
+
+        for (const content of contents) {
+            const doc = content.document || content.doc;
+            if (!doc) continue;
+
+            const ttsWords = Array.from(doc.querySelectorAll('.tts-word')) as HTMLElement[];
+            for (const node of ttsWords) {
+                const inRange = visibleRange.intersectsNode(node);
+
+                if (phase === 'before') {
+                    if (inRange) phase = 'during';
+                } else if (phase === 'during') {
+                    if (!inRange) {
+                        phase = 'after';
+                        if (!firstWordId) firstWordId = node.id;
+                        fullText += (node.textContent || '') + " ";
+                    }
+                } else if (phase === 'after') {
+                    fullText += (node.textContent || '') + " ";
+                }
+            }
+        }
+
+        if (!fullText.trim()) return null;
+        return { text: fullText.trim(), startWordId: firstWordId };
+    }
+
     async open(
         source: File | Blob | ArrayBuffer | string,
         _filename: string = 'document.epub',

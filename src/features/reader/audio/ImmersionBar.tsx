@@ -104,11 +104,12 @@ export function ImmersionBar({
         lastPlayedCfiRef.current = pageCfi || '';
 
         try {
-            await invoke<number>('generate_speech', {
+            const genId = await invoke<number>('generate_speech', {
                 text,
                 startFromId: startWordId,
                 voice: ttsVoice,
             });
+            immersionPlayer.setCurrentGenId(genId);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             setError(msg);

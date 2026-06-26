@@ -32,6 +32,7 @@ import {
     type ReaderSettings as ReaderSettingsState,
     type TocItem,
 } from "../../core";
+import { invoke } from "@tauri-apps/api/core";
 import { List } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { WindowTitlebar } from "./components/WindowTitlebar";
@@ -52,6 +53,7 @@ import type { PDFJsEngineRef } from "./engines/pdfjs-engine";
 import type { ReaderViewportHandle } from "./components/ReaderViewport";
 import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
 import { ImmersionBar } from "./audio/ImmersionBar";
+import { immersionPlayer } from "./audio/ImmersionPlayer";
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -978,6 +980,28 @@ function BookReaderPage() {
             clearTimeout(timer);
         };
     }, [location?.cfi, isPdfFormat]);
+
+    // Preload next page text & start synthesis while current page plays
+    useEffect(() => {
+        if (!ttsData?.text || isPdfFormat) return;
+
+        const nextData = readerRef.current?.getNextPageTextForTts?.();
+        if (!nextData?.text) return;
+
+        const ttsVoice = settings.tts.voice;
+        (async () => {
+            try {
+                const genId = await invoke<number>('generate_speech', {
+                    text: nextData.text,
+                    startFromId: nextData.startWordId,
+                    voice: ttsVoice,
+                });
+                immersionPlayer.setPreloadGenId(genId);
+            } catch {
+                // preload failure is non-critical
+            }
+        })();
+    }, [ttsData, isPdfFormat, settings.tts.voice]);
 
     useEffect(() => {
         if (!isPdfFormat || !currentBookId || pdfTotalPages <= 0) {
@@ -2160,6 +2184,7 @@ function BookReaderPage() {
                                 pageCfi={location?.cfi}
                                 visible={shouldShowReaderChrome || (ttsData?.text.length || 0) > 0}
                                 onComplete={() => {
+                                    immersionPlayer.playPreloaded();
                                     readerRef.current?.next();
                                 }}
                             />
