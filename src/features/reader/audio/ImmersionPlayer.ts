@@ -39,6 +39,8 @@ export class ImmersionPlayer {
     private chunksReceived = 0;
     private totalChunks = 0;
     private highlightRafId: number | null = null;
+    /** When true, onComplete callback is suppressed (used for voice testing). */
+    skipOnComplete = false;
 
     get state(): PlaybackState {
         return this._state;
@@ -129,7 +131,9 @@ export class ImmersionPlayer {
                 
                 // If we've received all chunks, we naturally finished the section
                 if (this.totalChunks > 0 && this.chunksReceived === this.totalChunks) {
-                    this.callbacks.onComplete?.();
+                    if (!this.skipOnComplete) {
+                        this.callbacks.onComplete?.();
+                    }
                 }
             }
         };
@@ -237,6 +241,7 @@ export class ImmersionPlayer {
     /** Hard stop — discards all queued audio. */
     stop() {
         this.clearHighlights();
+        this.skipOnComplete = false;
 
         if (this.audioCtx) {
             this.audioCtx.close().catch(() => {});

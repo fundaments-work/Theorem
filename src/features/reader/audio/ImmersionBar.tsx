@@ -21,6 +21,8 @@ interface ImmersionBarProps {
     sectionText: string;
     /** DOM id of the first word in the visible section. */
     startWordId?: string;
+    /** Canonical CFI of the current page location (used for page-change detection). */
+    pageCfi?: string;
     /** Additional classes (e.g. positioning). */
     className?: string;
     /** Whether the bar should be visible. */
@@ -32,6 +34,7 @@ interface ImmersionBarProps {
 export function ImmersionBar({
     sectionText,
     startWordId = 'tts-w-0',
+    pageCfi,
     className,
     visible = true,
     onComplete,
@@ -77,7 +80,7 @@ export function ImmersionBar({
 
     // ── Actions ────────────────────────────────────────────────────────────
 
-    const lastPlayedTextRef = useRef('');
+    const lastPlayedCfiRef = useRef('');
 
     const handlePlay = useCallback(async () => {
         const text = sectionText.trim();
@@ -98,7 +101,7 @@ export function ImmersionBar({
 
         setPlaybackState('loading');
         setIsContinuousMode(true);
-        lastPlayedTextRef.current = text;
+        lastPlayedCfiRef.current = pageCfi || '';
 
         try {
             await invoke<number>('generate_speech', {
@@ -127,6 +130,7 @@ export function ImmersionBar({
 
     const handleTestVoice = useCallback(async (voice: string) => {
         immersionPlayer.stop();
+        immersionPlayer.skipOnComplete = true;
         setIsContinuousMode(false);
         try { await invoke<void>('stop_speech'); } catch { /* ok */ }
         const sample = "Hello, this is " + voice.replace(/^[a-z]+_/, '') + " speaking.";
@@ -170,13 +174,13 @@ export function ImmersionBar({
         { value: "bm_lewis", label: "Lewis (UK M)" },
     ];
 
-    // Auto-play when section text changes in continuous mode
+    // Auto-play when page changes in continuous mode
     useEffect(() => {
         const text = sectionText.trim();
-        if (isContinuousMode && playbackState === 'idle' && text && lastPlayedTextRef.current !== text) {
+        if (isContinuousMode && playbackState === 'idle' && text && pageCfi && lastPlayedCfiRef.current !== pageCfi) {
             handlePlay();
         }
-    }, [isContinuousMode, playbackState, sectionText, handlePlay]);
+    }, [isContinuousMode, playbackState, sectionText, pageCfi, handlePlay]);
 
     // ── Render ─────────────────────────────────────────────────────────────
 

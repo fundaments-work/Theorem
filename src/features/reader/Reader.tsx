@@ -440,6 +440,7 @@ function BookReaderPage() {
         // Set immediately to prevent duplicate loads during async operations
         loadedBookIdRef.current = currentBookId;
         setShowToolbar(true);
+        setTtsData(null);
 
         let isCancelled = false;
 
@@ -2131,6 +2132,7 @@ function BookReaderPage() {
                             <ImmersionBar 
                                 sectionText={ttsData?.text || ""}
                                 startWordId={ttsData?.startWordId}
+                                pageCfi={location?.cfi}
                                 visible={shouldShowReaderChrome || (ttsData?.text.length || 0) > 0}
                                 onComplete={() => {
                                     readerRef.current?.next();
