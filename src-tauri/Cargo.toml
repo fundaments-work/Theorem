@@ -61,3 +61,8 @@ zip = "0.6"
 walkdir = "2"
 ort = "2.0.0-rc.12"
 ndarray = "0.17.2"
+kokoro-en = { version = "0.1.4", default-features = false, features = ["misaki-lean"] }
+
+# Optimize dependencies even in dev mode to make Kokoro / misaki-lean usable
+[profile.dev.package."*"]
+opt-level = 3
