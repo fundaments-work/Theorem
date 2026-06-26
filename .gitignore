@@ -60,3 +60,8 @@ PDFIUM_INTEGRATION_GUIDE.md
 QUICK_FIX.md
 setup-pdfium.sh
 src/features/reader/foliate-js/vendor/pdfjs/
+
+# TTS model files (large binaries, not tracked in git)
+src-tauri/models/
+*.wav
+*.onnx
