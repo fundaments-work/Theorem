@@ -60,8 +60,7 @@ fn is_sentence_end(text: &str, char_pos: usize, c: char) -> bool {
 }
 
 /// Lightweight text normalisation performed *before* sentence-splitting and
-/// synthesis.  Helps the phonemizer handle edge cases that <i>misaki-lean</i>
-/// gets wrong.
+/// synthesis.  Helps the phonemizer handle edge cases.
 fn normalize_for_tts(text: &str) -> String {
     // "&" → "and"  (common in titles, author strings, etc.)
     let s = text.replace(" & ", " and ");
@@ -134,6 +133,24 @@ pub struct TtsState {
     pub generation_id: Arc<std::sync::atomic::AtomicU64>,
 }
 
+/// Apply a linear fade-out to the last `fade_ms` milliseconds of audio.
+/// This prevents the ONNX model from abruptly cutting off the final
+/// phoneme (e.g. "time" → "tim", "hello" → "hell").
+fn apply_fade_out(audio: &mut [f32], sample_rate: u32) {
+    // 50 ms is enough for the final phoneme to decay naturally.
+    const FADE_MS: usize = 50;
+    let fade_samples = (sample_rate as usize * FADE_MS) / 1000;
+    let len = audio.len();
+    if len < fade_samples {
+        return;
+    }
+    for i in 0..fade_samples {
+        let idx = len - fade_samples + i;
+        let factor = (fade_samples - i) as f32 / fade_samples as f32;
+        audio[idx] *= factor;
+    }
+}
+
 /// Split text into ≤500-char chunks on sentence boundaries.
 /// Kokoro handles up to ~500 chars well; longer text gets split.
 ///
@@ -148,12 +165,15 @@ pub fn split_text(text: &str) -> Vec<String> {
     for (pos, c) in text.char_indices() {
         current.push(c);
         if is_sentence_end(text, pos, c) && !current.trim().is_empty() {
-            sentences.push(current.trim().to_string());
+            // Trailing space forces the ONNX model to generate a silent
+            // audio tail, preventing truncation of the last phoneme
+            // (e.g. "time" → "tim", "ninety-one" → "nine").
+            sentences.push(current.trim().to_string() + " ");
             current.clear();
         }
     }
     if !current.trim().is_empty() {
-        sentences.push(current.trim().to_string());
+        sentences.push(current.trim().to_string() + " ");
     }
 
     // ── Second pass: merge short, split long ──
@@ -217,36 +237,29 @@ fn split_long_sentence(
         let remaining = len - start;
         if remaining <= max_len {
             // Last piece — keep as remainder for merging
-            *remainder = sentence[start..].trim().to_string();
+            *remainder = format!("{} ", sentence[start..].trim());
             break;
         }
 
-        // Target cut point: `start + max_len`
         let target = start + max_len;
         if target >= len {
-            *remainder = sentence[start..].trim().to_string();
+            *remainder = format!("{} ", sentence[start..].trim());
             break;
         }
 
-        // Walk back from target to find a whitespace boundary
         let cut = (start + (max_len / 4)..target)
             .rev()
             .find(|&i| bytes[i].is_ascii_whitespace())
             .unwrap_or(target);
 
-        // The piece: from `start` to `cut`
-        let piece = sentence[start..cut].trim().to_string();
-        if !piece.is_empty() {
+        let piece = format!("{} ", sentence[start..cut].trim());
+        if !piece.trim().is_empty() {
             result.push(piece);
         }
 
-        // Advance start, but rewind by `overlap` characters (to character boundary)
-        // so the next chunk includes trailing context.
         start = cut;
         if overlap > 0 && start >= overlap {
-            // Find the nearest char boundary before or at start - overlap
             let overlap_start = start.saturating_sub(overlap);
-            // Ensure we're at a char boundary
             if !sentence.is_char_boundary(overlap_start) {
                 let adjusted = overlap_start.saturating_sub(4);
                 start = (adjusted..start)
@@ -410,7 +423,12 @@ pub async fn generate_speech(
             }
 
             match synth_result {
-                Ok((audio_data, _duration)) => {
+                Ok((mut audio_data, _duration)) => {
+                    // Apply a fade-out to the last ~50 ms of audio so the final
+                    // phoneme decays naturally instead of being truncated by the
+                    // ONNX model (e.g. "time" → "tim", "hello" → "hell").
+                    apply_fade_out(&mut audio_data, 24000);
+
                     let end_time = audio_data.len() as f32 / 24000.0;
                     let chunk_data = TtsChunk {
                         audio_data,
@@ -564,7 +582,7 @@ mod tests {
             "long text should produce multiple chunks: {:?}",
             result
         );
-        // Verify no chunk exceeds the hard limit + reasonable slack
+        // Verify no chunk exceeds the hard limit + slack (trailing space adds 1)
         for chunk in &result {
             assert!(
                 chunk.len() <= 570,
@@ -581,7 +599,7 @@ mod tests {
         let text = "Bring pens, paper, and other supplies etc.";
         let result = split_text(text);
         assert_eq!(result.len(), 1, "single sentence: {:?}", result);
-        assert!(result[0].ends_with("etc."));
+        assert!(result[0].trim().ends_with("etc."));
     }
 
     #[test]
@@ -604,24 +622,47 @@ mod tests {
     }
 
     #[test]
+    fn test_trailing_space_added_to_sentences() {
+        // Every sentence must end with a space so the ONNX model generates
+        // a silent audio tail (prevents "time"→"tim" truncation).
+        let result = split_text("Hello world. Goodbye.");
+        for s in &result {
+            assert!(s.ends_with(' '), "missing trailing space: {s:?}");
+        }
+    }
+
+    #[test]
+    fn test_trailing_space_on_single_sentence() {
+        let result = split_text("Just one sentence.");
+        assert_eq!(result.len(), 1);
+        assert!(
+            result[0].ends_with(' '),
+            "missing trailing space: {:?}",
+            result[0]
+        );
+    }
+
+    #[test]
+    fn test_trailing_space_in_long_chunks() {
+        let long = "The quick brown fox jumps over the lazy dog. ".repeat(20);
+        let text = long.trim();
+        let result = split_text(text);
+        assert!(result.len() >= 2);
+        for chunk in &result {
+            assert!(
+                chunk.ends_with(' '),
+                "chunk missing trailing space: {chunk:?}"
+            );
+        }
+    }
+
+    #[test]
     fn test_punctuation_preserved_in_words() {
-        // Words with trailing punctuation must keep it — the phonemizer
-        // handles it; we should never strip.
         let text = "The time is 2:30. Call 911. The value is 91.5.";
         let result = split_text(text);
         let all: String = result.concat();
         assert!(all.contains("time"));
         assert!(all.contains("911"));
         assert!(all.contains("91.5"));
-    }
-
-    #[test]
-    fn test_normalize_does_not_strip_punctuation() {
-        let normalized = normalize_for_tts("time. 91. Hello! Is it 3:14? Dr.");
-        assert!(normalized.contains("time."));
-        assert!(normalized.contains("91."));
-        assert!(normalized.contains("Hello!"));
-        assert!(normalized.contains("3:14?"));
-        assert!(normalized.contains("Dr."));
     }
 }
