@@ -209,7 +209,6 @@ function BookReaderPage() {
     const [initialLocation, setInitialLocation] = useState<string | undefined>(undefined);
     const [initialFraction, setInitialFraction] = useState<number | undefined>(undefined);
     const [ttsData, setTtsData] = useState<{ text: string; startWordId: string } | null>(null);
-    const lastTtsTextRef = useRef('');
     const suppressProgressRef = useRef(false);
     const resumeTargetRef = useRef<string | null>(null);
     const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -442,7 +441,6 @@ function BookReaderPage() {
         loadedBookIdRef.current = currentBookId;
         setShowToolbar(true);
         setTtsData(null);
-        lastTtsTextRef.current = '';
 
         let isCancelled = false;
 
@@ -947,30 +945,30 @@ function BookReaderPage() {
     }, [currentBookId, scheduleProgressUpdate, updateProgress]);
 
     // Update TTS extract after layout settles (always, even during suppression).
-    // Polls with retries until text differs from the previous page, preventing
-    // stale-content playback after page turns (#14).
+    // Uses a single extraction per page turn + retries only if text is empty
+    // (DOM not yet rendered). Avoids mid-page restarts from progressive DOM
+    // updates (#14).
     useEffect(() => {
         if (isPdfFormat || !location?.cfi) return;
 
         let cancelled = false;
         let retries = 0;
-        const MAX_RETRIES = 15;
-        const INITIAL_DELAY = 200;
-        const RETRY_INTERVAL = 200;
+        const MAX_RETRIES = 5;
+        const INITIAL_DELAY = 500;
+        const RETRY_INTERVAL = 300;
 
         const extract = () => {
             if (cancelled) return;
             const data = readerRef.current?.getVisibleTextForTts?.();
             const text = data?.text || '';
 
-            if (text && text !== lastTtsTextRef.current) {
-                lastTtsTextRef.current = text;
+            if (text) {
                 setTtsData(data || null);
             } else if (retries < MAX_RETRIES) {
                 retries++;
                 setTimeout(extract, RETRY_INTERVAL);
             } else {
-                setTtsData(data || null);
+                setTtsData(null);
             }
         };
 

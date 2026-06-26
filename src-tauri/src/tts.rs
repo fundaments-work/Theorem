@@ -79,24 +79,28 @@ fn normalize_for_tts(text: &str) -> String {
     s = s.replace(['“', '”'], "\"");
     s = s.replace('—', "-");
 
-    // 2. Fix missing spaces after punctuation (e.g., "him!'.The" -> "him!'. The")
+    // 2. Remove apostrophes — the misaki-lean phonemizer treats ' as a word
+    //    boundary and splits on it, causing "friends's" → "friends" + "s"
+    //    and "don't" → "don" + "t". Dropping them entirely preserves correct
+    //    pronunciation (the apostrophe carries no phonetic value).
+    s = s.replace('\'', "");
+
+    // 3. Fix missing spaces after punctuation (e.g., "him!'.The" -> "him!'. The")
     // This looks for punctuation followed immediately by a letter and inserts a space.
-    // NOTE: apostrophe (' ) is deliberately excluded — possessive "friends's" and
-    // contractions "don't" must NOT be split.
     let re_missing_space = Regex::new(r"([.!?,\x22])([a-zA-Z])").unwrap();
     s = re_missing_space.replace_all(&s, "$1 $2").to_string();
 
-    // 3. The "Anti-Bite" Detachment
+    // 4. The "Anti-Bite" Detachment
     // Add a space BEFORE punctuation so espeak-ng doesn't swallow the final consonant.
     // "good," becomes "good ," -> guarantees the 'd' is fully pronounced.
     let re_detach_punct = Regex::new(r"([a-zA-Z])([.,!?])").unwrap();
     s = re_detach_punct.replace_all(&s, "$1 $2").to_string();
 
-    // 4. Clean up any double spaces we might have created
+    // 5. Clean up any double spaces we might have created
     let re_double_spaces = Regex::new(r"\s+").unwrap();
     s = re_double_spaces.replace_all(&s, " ").to_string();
 
-    // 5. The "misaki-lean" bug workaround
+    // 6. The "misaki-lean" bug workaround
     // The pure-Rust `misaki-lean` dictionary phonemizer has a catastrophic bug where it
     // drops the last character of every word it tokenizes (e.g., "time." -> "tim", "91" -> "9").
     // We append a dummy `_` to the end of every alphanumeric sequence so the phonemizer
@@ -588,16 +592,17 @@ mod tests {
 
     #[test]
     fn test_normalize_possessive_apostrophe() {
-        // possessive 's must NOT be detached — regression test for #13
+        // apostrophe is removed entirely — misaki splits on ' regardless
+        // "friends's" → apostrophe removed → "friendss" → misaki → "friendss_"
         let normalized = normalize_for_tts("friends's");
-        assert_eq!(normalized, "friends_'s_ ");
+        assert_eq!(normalized, "friendss_ ");
     }
 
     #[test]
     fn test_normalize_contraction_apostrophe() {
-        // contractions must NOT be split — regression test for #13
+        // apostrophe is removed entirely — misaki splits on ' regardless
         let normalized = normalize_for_tts("don't");
-        assert_eq!(normalized, "don_'t_ ");
+        assert_eq!(normalized, "dont_ ");
     }
 
     #[test]
