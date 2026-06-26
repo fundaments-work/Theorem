@@ -51,6 +51,7 @@ import { useReaderFullscreen, useToolbarHeight } from "./hooks";
 import type { PDFJsEngineRef } from "./engines/pdfjs-engine";
 import type { ReaderViewportHandle } from "./components/ReaderViewport";
 import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
+import { ImmersionBar } from "./audio/ImmersionBar";
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -207,6 +208,7 @@ function BookReaderPage() {
     const [loadError, setLoadError] = useState<string | null>(null);
     const [initialLocation, setInitialLocation] = useState<string | undefined>(undefined);
     const [initialFraction, setInitialFraction] = useState<number | undefined>(undefined);
+    const [ttsData, setTtsData] = useState<{ text: string; startWordId: string } | null>(null);
     const suppressProgressRef = useRef(false);
     const resumeTargetRef = useRef<string | null>(null);
     const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -937,6 +939,15 @@ function BookReaderPage() {
             });
             lastClickFractionRef.current = null;
         }
+
+        // Update TTS extract after layout settles
+        if (!isPdfFormat) {
+            setTimeout(() => {
+                const data = readerRef.current?.getVisibleTextForTts?.();
+                setTtsData(data || null);
+            }, 400); // Give DOM a moment to paint and wrap text nodes
+        }
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentBookId, scheduleProgressUpdate, updateProgress]);
 
@@ -2109,18 +2120,36 @@ function BookReaderPage() {
 
             {/* Bottom Progress Navbar */}
             {isBookReady && !isPdfFormat && (
-                <ReaderNavbar
-                    location={location}
-                    toc={toc}
-                    sectionFractions={sectionFractions}
-                    onSeek={handleSeek}
-                    totalPages={location?.pageInfo?.totalPages}
-                    onToggleToc={() => togglePanel('toc')}
-                    className={cn(
-                        "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 backdrop-blur-xl",
-                        shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
-                    )}
-                />
+                <>
+                    <div className={cn(
+                        "fixed left-0 right-0 z-50 flex justify-center pointer-events-none transition-all duration-300",
+                        shouldShowReaderChrome ? "bottom-20" : "bottom-6"
+                    )}>
+                        <div className="pointer-events-auto">
+                            <ImmersionBar 
+                                sectionText={ttsData?.text || ""}
+                                startWordId={ttsData?.startWordId}
+                                visible={shouldShowReaderChrome || (ttsData?.text.length || 0) > 0}
+                                onComplete={() => {
+                                    readerRef.current?.next();
+                                }}
+                            />
+                        </div>
+                    </div>
+                    
+                    <ReaderNavbar
+                        location={location}
+                        toc={toc}
+                        sectionFractions={sectionFractions}
+                        onSeek={handleSeek}
+                        totalPages={location?.pageInfo?.totalPages}
+                        onToggleToc={() => togglePanel('toc')}
+                        className={cn(
+                            "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 backdrop-blur-xl",
+                            shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
+                        )}
+                    />
+                </>
             )}
 
             {/* Panels - TOC + annotations available for all formats */}
