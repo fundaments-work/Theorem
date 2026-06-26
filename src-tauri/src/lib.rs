@@ -764,6 +764,16 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     apply_linux_webkit_workarounds();
 
+    // Disable espeak-ng subprocess calls in the G2P phonemizer.
+    // kokoro-en spawns an espeak-ng process for EVERY text segment (10-30x
+    // per page). Each fork+exec takes 50-200ms, totalling 2-6s of pure
+    // subprocess overhead. The pure-Rust misaki-lean path is instant by
+    // comparison and produces near-identical quality for English prose.
+    // Users who need espeak-ng can set KOKORO_ESPEAK_NG=1 explicitly.
+    if std::env::var("KOKORO_ESPEAK_NG").is_err() {
+        std::env::set_var("KOKORO_ESPEAK_NG", "0");
+    }
+
     let builder = tauri::Builder::default()
         .manage(PendingOpenFiles::default())
         .on_window_event(|window, event| {
@@ -796,6 +806,15 @@ pub fn run() {
             app.manage(tts::TtsState {
                 engine: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
                 generation_id: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            });
+
+            // Pre-warm the Kokoro TTS engine in the background so the first
+            // user-requested synthesis is fast (model + phonemizer init can
+            // take 20–40 s, which is unacceptable at play time).
+            let tts_app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let tts_state = tts_app.state::<tts::TtsState>();
+                tts::prewarm_engine(&tts_app, tts_state.inner()).await;
             });
 
             // Initialize LAN sync subsystem.

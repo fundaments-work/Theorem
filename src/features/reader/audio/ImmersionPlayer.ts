@@ -15,6 +15,10 @@ export interface PlaybackCallbacks {
     onError?: (message: string) => void;
     onChunkPlayed?: (chunkIndex: number, totalChunks: number) => void;
     onComplete?: () => void;
+    /** Fired when the backend finishes synthesizing ALL chunks (tts-done).
+     *  Audio is still playing on the Web Audio timeline — this is the ideal
+     *  moment to start preloading the next page's audio. */
+    onSynthesisComplete?: () => void;
 }
 
 interface TtsChunkPayload {
@@ -91,6 +95,9 @@ export class ImmersionPlayer {
         const u3 = await listen<{ total_chunks: number }>('tts-done', (event) => {
             console.log('[ImmersionPlayer] TTS done, total chunks:', event.payload.total_chunks);
             this.totalChunks = event.payload.total_chunks;
+            // Fire onSynthesisComplete — all chunks synthesized, audio still playing.
+            // This is the ideal moment to preload the next page.
+            this.callbacks.onSynthesisComplete?.();
         });
 
         this.unlisteners = [u1, u2, u3];
@@ -166,8 +173,12 @@ export class ImmersionPlayer {
     private handleChunk(payload: TtsChunkPayload) {
         const ctx = this.getAudioCtx();
 
-        // If we're suspended (paused), resume — the chunk will play once resumed
-        if (ctx.state === 'suspended') {
+        // Do NOT auto-resume if suspended (paused). The chunk will be
+        // scheduled on the timeline and will play when the user manually
+        // resumes. Auto-resuming here overrides the user's pause.
+        // Only resume if the context was auto-suspended by the browser
+        // (not by an explicit user pause).
+        if (ctx.state === 'suspended' && this._state !== 'paused') {
             ctx.resume();
         }
 
@@ -200,20 +211,24 @@ export class ImmersionPlayer {
         // Notify progress
         this.callbacks.onChunkPlayed?.(payload.chunk_index, payload.total_chunks);
 
-        // When the last scheduled source ends, go idle
+        // When the last scheduled source ends, check if we're truly done
         source.onended = () => {
-            // Check if this was the last chunk and nothing else is scheduled
-            if (ctx.currentTime >= this.scheduledEnd - 0.05) {
+            // Only act if nothing else is scheduled on the timeline
+            if (ctx.currentTime < this.scheduledEnd - 0.05) return;
+
+            // Have we received ALL chunks from the backend?
+            if (this.totalChunks > 0 && this.chunksReceived >= this.totalChunks) {
+                // Yes — all chunks received and played, section is complete
                 this.clearHighlights();
                 this.setState('idle');
-                
-                // If we've received all chunks, we naturally finished the section
-                if (this.totalChunks > 0 && this.chunksReceived === this.totalChunks) {
-                    if (!this.skipOnComplete) {
-                        this.callbacks.onComplete?.();
-                    }
+                if (!this.skipOnComplete) {
+                    this.callbacks.onComplete?.();
                 }
             }
+            // else: still waiting for more chunks to arrive from the backend.
+            // Stay in 'playing' state so the UI doesn't flicker and the
+            // auto-play effect doesn't re-trigger handlePlay() (which would
+            // restart synthesis from scratch and repeat the text).
         };
     }
 

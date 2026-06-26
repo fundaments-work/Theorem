@@ -981,10 +981,15 @@ function BookReaderPage() {
         };
     }, [location?.cfi, isPdfFormat]);
 
-    // Preload next page text & start synthesis while current page plays
-    useEffect(() => {
-        if (!ttsData?.text || isPdfFormat) return;
-
+    // Preload next page audio when the current page's SYNTHESIS completes
+    // (tts-done event). At this point all chunks have been emitted but audio
+    // is still playing on the Web Audio timeline — the ideal moment to start
+    // synthesizing the next page so it's ready when the current page finishes.
+    //
+    // This replaces the old useEffect that fired on page load (which raced
+    // with the user's first play and wasted synthesis work).
+    const handleTtsSynthesisComplete = useCallback(() => {
+        if (isPdfFormat) return;
         const nextData = readerRef.current?.getNextPageTextForTts?.();
         if (!nextData?.text) return;
 
@@ -1001,7 +1006,7 @@ function BookReaderPage() {
                 // preload failure is non-critical
             }
         })();
-    }, [ttsData, isPdfFormat, settings.tts.voice]);
+    }, [isPdfFormat, settings.tts.voice]);
 
     useEffect(() => {
         if (!isPdfFormat || !currentBookId || pdfTotalPages <= 0) {
@@ -2187,6 +2192,7 @@ function BookReaderPage() {
                                     immersionPlayer.playPreloaded();
                                     readerRef.current?.next();
                                 }}
+                                onSynthesisComplete={handleTtsSynthesisComplete}
                             />
                         </div>
                     </div>

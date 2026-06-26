@@ -29,6 +29,9 @@ interface ImmersionBarProps {
     visible?: boolean;
     /** Fired when playback of the current section completes naturally. */
     onComplete?: () => void;
+    /** Fired when the backend finishes synthesizing ALL chunks (tts-done).
+     *  Audio is still playing — ideal moment to preload the next page. */
+    onSynthesisComplete?: () => void;
 }
 
 export function ImmersionBar({
@@ -38,6 +41,7 @@ export function ImmersionBar({
     className,
     visible = true,
     onComplete,
+    onSynthesisComplete,
 }: ImmersionBarProps) {
     const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
     const [error, setError] = useState<string | null>(null);
@@ -49,6 +53,11 @@ export function ImmersionBar({
     useEffect(() => {
         onCompleteRef.current = onComplete;
     }, [onComplete]);
+
+    const onSynthesisCompleteRef = useRef(onSynthesisComplete);
+    useEffect(() => {
+        onSynthesisCompleteRef.current = onSynthesisComplete;
+    }, [onSynthesisComplete]);
 
     const [isContinuousMode, setIsContinuousMode] = useState(false);
     const transitioningRef = useRef(false);
@@ -77,6 +86,9 @@ export function ImmersionBar({
                 setTimeout(() => { transitioningRef.current = false; }, 2000);
                 // We finished reading the page. Turn the page if continuous mode is on.
                 onCompleteRef.current?.();
+            },
+            onSynthesisComplete: () => {
+                onSynthesisCompleteRef.current?.();
             }
         });
 
@@ -145,11 +157,13 @@ export function ImmersionBar({
         try { await invoke<void>('stop_speech'); } catch { /* ok */ }
         const sample = "Hello, this is " + voice.replace(/^[a-z]+_/, '') + " speaking.";
         try {
-            await invoke<number>('generate_speech', {
+            const genId = await invoke<number>('generate_speech', {
                 text: sample,
                 startFromId: 'tts-w-0',
                 voice,
             });
+            immersionPlayer.setCurrentGenId(genId);
+            setPlaybackState('loading');
         } catch { /* sample playback is best-effort */ }
     }, []);
 
@@ -194,6 +208,20 @@ export function ImmersionBar({
             handlePlay();
         }
     }, [isContinuousMode, playbackState, sectionText, pageCfi, handlePlay]);
+
+    // Restart playback when voice changes during active playback.
+    // Without this, changing the voice dropdown only affects the NEXT play —
+    // the current audio keeps using the old voice.
+    const prevVoiceRef = useRef(ttsVoice);
+    useEffect(() => {
+        if (prevVoiceRef.current === ttsVoice) return;
+        prevVoiceRef.current = ttsVoice;
+
+        // Only restart if actively playing or loading (not idle/paused)
+        if (playbackState === 'playing' || playbackState === 'loading') {
+            handlePlay();
+        }
+    }, [ttsVoice, playbackState, handlePlay]);
 
     // ── Render ─────────────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 use futures::stream::{self, StreamExt};
-use kokoro_en::KokoroTts;
+use kokoro_en::{split_sentences, KokoroTts};
 use regex::Regex;
 use serde::Serialize;
 use std::sync::Arc;
@@ -202,7 +202,7 @@ pub fn split_text(text: &str) -> Vec<String> {
     }
 
     // ── Second pass: merge short, split long ──
-    const MAX_CHUNK_LEN: usize = 500;
+    const MAX_CHUNK_LEN: usize = 200;
     /// Number of trailing characters from the previous chunk to include as
     /// leading context for the next chunk when hard-splitting a long sentence.
     /// The phonemizer uses this surrounding context for disambiguation.
@@ -298,14 +298,18 @@ fn split_long_sentence(
 }
 
 /// Resolve the `models/` directory at runtime:
-///   1. Tauri resource dir (production / bundled)
-///   2. `CARGO_MANIFEST_DIR/models/` (dev — compile-time absolute path,
-///      works regardless of CWD).
+///   1. Tauri resource dir (production / bundled) — only if the model AND
+///      the `voices/` directory (with individual voice .bin files) exist.
+///   2. `CARGO_MANIFEST_DIR/models/` (dev — has the full voices/ directory).
+///
+/// We require the `voices/` directory, not `voices.bin`, because `voices.bin`
+/// is a single-voice pack — using it makes ALL voices sound identical (the
+/// `get_pack` fallback returns the same pack regardless of requested voice).
 fn resolve_models_dir(app: &AppHandle) -> std::path::PathBuf {
     let resource_dir = app.path().resource_dir().ok();
     if let Some(ref d) = resource_dir {
         let candidate = d.join("models");
-        if candidate.join("kokoro.onnx").exists() {
+        if candidate.join("kokoro.onnx").exists() && candidate.join("voices").is_dir() {
             return candidate;
         }
     }
@@ -350,6 +354,45 @@ async fn ensure_engine(app: &AppHandle, state: &TtsState) -> Result<(), String> 
     Ok(())
 }
 
+/// Pre-warm the Kokoro TTS engine at app startup so the first user-requested
+/// synthesis is fast.  Loads the ONNX model, voices, and runs a short dummy
+/// synthesis to initialize the phonemizer and warm the ONNX graph.
+///
+/// Should be called once from `setup()` via `tauri::async_runtime::spawn`.
+pub async fn prewarm_engine(app: &AppHandle, state: &TtsState) {
+    eprintln!("[tts] prewarm: starting engine warm-up...");
+
+    if let Err(e) = ensure_engine(app, state).await {
+        eprintln!("[tts] prewarm: engine load failed: {}", e);
+        return;
+    }
+
+    // Run a dummy synthesis to warm the phonemizer (misaki-lean LazyLock)
+    // and the first real ONNX inference path. Using a multi-word sentence
+    // ensures the per-word misaki G2P path is exercised, not just the
+    // single-word lexicon fast path.
+    let guard = state.engine.read().await;
+    if let Some(engine) = guard.as_ref() {
+        match engine
+            .synth("The quick brown fox jumps over the lazy dog.", "af_bella")
+            .await
+        {
+            Ok((_, duration)) => {
+                eprintln!(
+                    "[tts] prewarm: phonemizer + inference warm-up completed in {:?}",
+                    duration
+                );
+            }
+            Err(e) => {
+                eprintln!("[tts] prewarm: dummy synthesis failed: {:?}", e);
+            }
+        }
+    }
+    drop(guard);
+
+    eprintln!("[tts] prewarm: engine is ready");
+}
+
 /// Generate speech for a page of text.  Streams `audio-chunk` events
 /// as each sentence is synthesized, so playback starts immediately.
 ///
@@ -375,7 +418,39 @@ pub async fn generate_speech(
 
     let dom_id = start_from_id.unwrap_or_else(|| "tts-w-0".to_string());
     let normalized = normalize_for_tts(&text);
-    let chunks = split_text(&normalized);
+
+    // Use kokoro-en's sentence splitter, then merge short sentences into
+    // ~150-char chunks. Individual sentences (~50 chars) produce only ~2s
+    // of audio — too short, causing gaps between chunks. Merging to 150
+    // chars gives ~6-8s of audio per chunk, plenty of time for the next
+    // chunk to synthesize via buffered(4). First chunk still synthesizes
+    // in ~2-3s because it's shorter than the old 200-char chunks.
+    const TARGET_CHUNK_LEN: usize = 150;
+    let raw_sentences = split_sentences(&normalized);
+    let chunks: Vec<String> = {
+        let mut result: Vec<String> = Vec::new();
+        let mut buf = String::new();
+        for s in raw_sentences {
+            let s = s.trim();
+            if s.is_empty() {
+                continue;
+            }
+            let s_with_space = format!("{} ", s);
+            if buf.len() + s_with_space.len() <= TARGET_CHUNK_LEN {
+                buf.push_str(&s_with_space);
+            } else {
+                if !buf.is_empty() {
+                    result.push(buf.clone());
+                    buf.clear();
+                }
+                buf.push_str(&s_with_space);
+            }
+        }
+        if !buf.is_empty() {
+            result.push(buf);
+        }
+        result
+    };
     let total = chunks.len() as u32;
 
     if total == 0 {
@@ -391,22 +466,29 @@ pub async fn generate_speech(
     // Spawn the actual synthesis on a background task so generate_speech
     // returns immediately and the frontend transitions to "playing".
     tokio::spawn(async move {
-        // Run up to 4 synthesis tasks in parallel, but yield them in original order
+        use tauri::Manager;
+
+        let voice_name = voice.as_deref().unwrap_or("af_bella").to_string();
+
+        // buffered(4): starts up to 4 chunk syntheses concurrently.
+        // G2P (phonemizer) runs in parallel across chunks; ONNX inference
+        // serializes naturally on the session Mutex. Chunk 0 is polled first
+        // so it typically gets the Mutex first → fastest first audio.
+        // By the time chunk 0 finishes playing, chunks 1-3 are already
+        // synthesized → gapless playback.
         let mut stream = stream::iter(chunks.into_iter().enumerate())
             .map(|(i, chunk_text)| {
                 let engine_arc = engine_arc.clone();
                 let gen_id_arc = gen_id_arc.clone();
                 let dom_id = dom_id.clone();
-                let voice = voice.clone();
+                let voice_name = voice_name.clone();
 
                 async move {
-                    // Check abort before starting synthesis
                     let current = gen_id_arc.load(std::sync::atomic::Ordering::SeqCst);
                     if current != gen_id {
                         return (i, chunk_text, dom_id, Err("aborted".to_string()));
                     }
 
-                    // Concurrent read lock
                     let guard = engine_arc.read().await;
                     let engine = match guard.as_ref() {
                         Some(e) => e,
@@ -415,8 +497,7 @@ pub async fn generate_speech(
                         }
                     };
 
-                    let voice_name = voice.as_deref().unwrap_or("af_bella");
-                    let synth_result = engine.synth(&chunk_text, voice_name).await;
+                    let synth_result = engine.synth(&chunk_text, &voice_name).await;
                     drop(guard);
 
                     (
@@ -427,17 +508,14 @@ pub async fn generate_speech(
                     )
                 }
             })
-            .buffered(4); // parallel buffer size = 4
+            .buffered(4);
 
         while let Some((i, chunk_text, dom_id, synth_result)) = stream.next().await {
-            // Abort if no windows exist (app closed)
-            use tauri::Manager;
             if app_clone.webview_windows().is_empty() {
                 eprintln!("[tts] aborting because all windows are closed");
                 return;
             }
 
-            // Check abort again before emitting
             let current = gen_id_arc.load(std::sync::atomic::Ordering::SeqCst);
             if current != gen_id {
                 eprintln!(
@@ -449,11 +527,7 @@ pub async fn generate_speech(
 
             match synth_result {
                 Ok((mut audio_data, _duration)) => {
-                    // Apply a fade-out to the last ~50 ms of audio so the final
-                    // phoneme decays naturally instead of being truncated by the
-                    // ONNX model (e.g. "time" → "tim", "hello" → "hell").
                     apply_fade_out(&mut audio_data, 24000);
-
                     let end_time = audio_data.len() as f32 / 24000.0;
                     let chunk_data = TtsChunk {
                         audio_data,
