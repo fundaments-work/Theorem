@@ -42,6 +42,8 @@ export interface ReaderViewportHandle {
     clearSelection: () => void;
     // Progress data
     getSectionFractions: () => number[];
+    // TTS
+    getVisibleTextForTts: () => { text: string; startWordId: string } | null;
 }
 
 interface ReaderViewportProps {
@@ -129,6 +131,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         loadAnnotations,
         clearSelection,
         getSelection,
+        getVisibleTextForTts,
     } = useDocumentReader({
         onReady,
         onLocationsGenerated: () => {},
@@ -141,7 +144,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         onViewportTap,
         shouldForceViewportTap,
         onTtsWordClick: (wordId: string, textToRead: string) => {
-            immersionPlayer.stopAllPlayback();
+            immersionPlayer.stop();
             invoke('generate_speech', { text: textToRead, startFromId: wordId });
         },
     });
@@ -159,8 +162,9 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         removeHighlight: (id: string) => removeHighlight(id),
         loadAnnotations: (annotations: Annotation[]) => loadAnnotations(annotations),
         clearSelection: () => clearSelection(),
+        getVisibleTextForTts: () => getVisibleTextForTts(),
         getSectionFractions: () => getEngine()?.getSectionFractions() ?? [],
-    }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getEngine]);
+    }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getVisibleTextForTts, getEngine]);
 
     // Cleanup on unmount
     useEffect(() => {
