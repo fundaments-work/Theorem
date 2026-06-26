@@ -62,9 +62,10 @@ export interface UseDocumentReaderReturn {
     loadAnnotations: (annotations: Annotation[]) => Promise<void>;
     goToAnnotation: (annotation: Annotation) => Promise<void>;
     
-    // Text selection
+    // Text selection & TTS
     getSelection: () => { text: string; cfi: string } | null;
     clearSelection: () => void;
+    getVisibleTextForTts: () => { text: string; startWordId: string } | null;
 
     // Search
     search: (query: string) => AsyncGenerator<SearchResult | { progress: number } | 'done'>;
@@ -377,6 +378,10 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         engineRef.current?.clearSelection();
     }, []);
 
+    const getVisibleTextForTts = useCallback(() => {
+        return engineRef.current?.getVisibleTextForTts() || null;
+    }, []);
+
     // Search
     const search = useCallback(async function* (query: string) {
         const engine = engineRef.current;
@@ -479,6 +484,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         goToAnnotation,
         getSelection,
         clearSelection,
+        getVisibleTextForTts,
         search,
         clearSearch,
         close,
@@ -517,6 +523,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         goToAnnotation,
         getSelection,
         clearSelection,
+        getVisibleTextForTts,
         search,
         clearSearch,
         close,

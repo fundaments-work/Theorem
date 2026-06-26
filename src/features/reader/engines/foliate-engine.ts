@@ -231,6 +231,39 @@ export class FoliateEngine {
         });
     }
 
+    public getVisibleTextForTts(): { text: string; startWordId: string } | null {
+        if (!this.view?.renderer?.getContents) return null;
+        
+        const contents = this.view.renderer.getContents();
+        if (!contents || contents.length === 0) return null;
+
+        let fullText = "";
+        let firstWordId = "";
+
+        const visibleRange = (this.view as any)?.lastLocation?.range;
+
+        for (const content of contents) {
+            const doc = content.document || content.doc;
+            if (!doc) continue;
+
+            const ttsWords = Array.from(doc.querySelectorAll('.tts-word')) as HTMLElement[];
+            for (const node of ttsWords) {
+                // If we have a visible range, only include words that intersect it
+                if (visibleRange && !visibleRange.intersectsNode(node)) {
+                    continue;
+                }
+
+                if (!firstWordId) {
+                    firstWordId = node.id;
+                }
+                fullText += (node.textContent || '') + " ";
+            }
+        }
+
+        if (!fullText.trim()) return null;
+        return { text: fullText.trim(), startWordId: firstWordId };
+    }
+
     async open(
         source: File | Blob | ArrayBuffer | string,
         _filename: string = 'document.epub',
