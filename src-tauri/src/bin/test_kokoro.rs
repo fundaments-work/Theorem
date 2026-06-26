@@ -45,7 +45,7 @@ fn write_wav(path: &str, samples: &[f32], sample_rate: u32) -> std::io::Result<(
 #[tokio::main]
 async fn main() {
     let model_path = Path::new("models/kokoro.onnx");
-    let voice_path = Path::new("models/voices.bin");
+    let voice_dir = Path::new("models/voices");
 
     if !model_path.exists() {
         eprintln!("ERROR: {} not found!", model_path.display());
@@ -53,14 +53,21 @@ async fn main() {
         eprintln!("  python -c \"from huggingface_hub import hf_hub_download; import shutil; shutil.copy(hf_hub_download('onnx-community/Kokoro-82M-ONNX', 'onnx/model_quantized.onnx'), 'models/kokoro.onnx')\"");
         std::process::exit(1);
     }
-    if !voice_path.exists() {
-        eprintln!("ERROR: {} not found!", voice_path.display());
-        std::process::exit(1);
-    }
+    let voice_path: &Path = if voice_dir.is_dir() {
+        println!("Using voices directory: {}", voice_dir.display());
+        voice_dir
+    } else {
+        let fallback = Path::new("models/voices.bin");
+        eprintln!(
+            "WARN: voices dir not found, using fallback: {}",
+            fallback.display()
+        );
+        fallback
+    };
 
     println!("=== Kokoro TTS Test ===");
     println!("Model: {}", model_path.display());
-    println!("Voice: {}", voice_path.display());
+    println!("Voice source: {}", voice_path.display());
 
     // 1. Load model
     let t0 = Instant::now();
@@ -71,46 +78,54 @@ async fn main() {
     let load_time = t0.elapsed();
     println!("  Model loaded in {:.2}s", load_time.as_secs_f64());
 
-    // 2. Synthesize a short sentence
+    // 2. Synthesize with two different voices and compare
     let text = "Hello! This is a test of the Kokoro text to speech engine running inside Theorem.";
-    println!("\n[2/3] Synthesizing: \"{}\"", text);
+
+    println!("\n[2/4] Synthesizing with af_bella...");
     let t1 = Instant::now();
-    let (audio, duration) = tts
-        .synth(text, "af_bella")
-        .await
-        .expect("Synthesis failed");
-    let synth_time = t1.elapsed();
+    let (audio_bella, _) = tts.synth(text, "af_bella").await.expect("af_bella failed");
+    println!(
+        "  af_bella: {} samples in {:.2}s",
+        audio_bella.len(),
+        t1.elapsed().as_secs_f64()
+    );
 
-    println!("  Synth completed in {:.2}s", synth_time.as_secs_f64());
-    println!("  Audio duration: {:.2}s", duration.as_secs_f64());
-    println!("  Samples: {} ({:.1} kHz)", audio.len(), audio.len() as f64 / duration.as_secs_f64() / 1000.0);
-    println!("  Real-time factor: {:.2}x", duration.as_secs_f64() / synth_time.as_secs_f64());
-
-    // 3. Write to WAV
-    let wav_path = "models/test_output.wav";
-    println!("\n[3/3] Writing WAV to {}", wav_path);
-    write_wav(wav_path, &audio, 24000).expect("Failed to write WAV");
-
-    let wav_size = std::fs::metadata(wav_path).map(|m| m.len()).unwrap_or(0);
-    println!("  WAV file size: {} bytes ({:.1} KB)", wav_size, wav_size as f64 / 1024.0);
-
-    println!("\n✅ SUCCESS! Play the output:");
-    println!("  aplay {} OR mpv {}", wav_path, wav_path);
-
-    // 4. Test a second sentence to measure warm inference
-    let text2 = "The quick brown fox jumps over the lazy dog.";
-    println!("\n[BONUS] Warm inference test: \"{}\"", text2);
+    println!("\n[3/4] Synthesizing with am_adam...");
     let t2 = Instant::now();
-    let (audio2, dur2) = tts
-        .synth(text2, "af_bella")
-        .await
-        .expect("Second synthesis failed");
-    let synth2_time = t2.elapsed();
-    println!("  Synth time: {:.2}s | Audio: {:.2}s | RTF: {:.2}x",
-        synth2_time.as_secs_f64(), dur2.as_secs_f64(),
-        dur2.as_secs_f64() / synth2_time.as_secs_f64());
+    let (audio_adam, _) = tts.synth(text, "am_adam").await.expect("am_adam failed");
+    println!(
+        "  am_adam: {} samples in {:.2}s",
+        audio_adam.len(),
+        t2.elapsed().as_secs_f64()
+    );
 
-    let wav2_path = "models/test_output_2.wav";
-    write_wav(wav2_path, &audio2, 24000).expect("Failed to write WAV 2");
-    println!("  Written to {}", wav2_path);
+    // Compare
+    let min_len = audio_bella.len().min(audio_adam.len());
+    let diff_sum: f32 = audio_bella[..min_len]
+        .iter()
+        .zip(audio_adam[..min_len].iter())
+        .map(|(a, b)| (a - b).abs())
+        .sum();
+    let diff_avg = diff_sum / min_len as f32;
+    println!("\n[4/4] Voice comparison:");
+    println!("  Bella samples: {}", audio_bella.len());
+    println!("  Adam samples: {}", audio_adam.len());
+    println!("  Average sample diff: {:.6}", diff_avg);
+    if diff_avg < 0.0001 {
+        println!("  ⚠️  WARNING: Voices appear IDENTICAL (diff < 0.0001)");
+        println!("  The directory loading may not be working correctly.");
+    } else {
+        println!("  ✅ Voices are DIFFERENT (diff = {:.6})", diff_avg);
+    }
+
+    // Write both to WAV for listening
+    write_wav("models/test_output_bella.wav", &audio_bella, 24000)
+        .expect("Failed to write bella WAV");
+    write_wav("models/test_output_adam.wav", &audio_adam, 24000).expect("Failed to write adam WAV");
+    println!("\n✅ WAV files written:");
+    println!("  models/test_output_bella.wav  (af_bella)");
+    println!("  models/test_output_adam.wav   (am_adam)");
+    println!("\nPlay to compare:");
+    println!("  aplay models/test_output_bella.wav");
+    println!("  aplay models/test_output_adam.wav");
 }

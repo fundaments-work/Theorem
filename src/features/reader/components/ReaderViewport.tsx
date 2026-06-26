@@ -12,7 +12,7 @@ import { useDocumentReader } from '../hooks/useDocumentReader';
 import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, BookFormat } from '../../../core';
 import type { ReaderSettings } from '../../../core';
 import { cn } from '../../../core';
-import { getSettingsChanges } from '../../../core';
+import { getSettingsChanges, useSettingsStore } from '../../../core';
 import { immersionPlayer } from '../audio/ImmersionPlayer';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -79,6 +79,8 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     initialLocation,
     savedLocations,
 }, ref) => {
+    const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
+
     // Navigation feedback state
     const [navDirection, setNavDirection] = useState<'next' | 'prev' | null>(null);
     const navTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,7 +147,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         shouldForceViewportTap,
         onTtsWordClick: (wordId: string, textToRead: string) => {
             immersionPlayer.stop();
-            invoke('generate_speech', { text: textToRead, startFromId: wordId });
+            invoke('generate_speech', { text: textToRead, startFromId: wordId, voice: ttsVoice });
         },
     });
 

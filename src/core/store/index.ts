@@ -25,6 +25,7 @@ import type {
     DeletionTombstone,
     HighlightColor,
     InstalledDictionary,
+    TtsSettings,
     VocabularySettings,
     PdfViewState,
     ReaderSettings,
@@ -83,6 +84,10 @@ const defaultDeviceSyncSettings: AppSettings["deviceSync"] = {
     autoSyncEnabled: true,
 };
 
+const defaultTtsSettings: TtsSettings = {
+    voice: "af_bella",
+};
+
 // Default app settings
 const defaultAppSettings: AppSettings = {
     sidebarCollapsed: false,
@@ -94,6 +99,7 @@ const defaultAppSettings: AppSettings = {
     theme: "system",
     readerSettings: defaultReaderSettings,
     vocabulary: defaultVocabularySettings,
+    tts: defaultTtsSettings,
     vault: defaultVaultSettings,
     deviceSync: defaultDeviceSyncSettings,
     hasCompletedOnboarding: false,
@@ -1548,6 +1554,7 @@ interface SettingsStore {
     updateSettings: (updates: Partial<AppSettings>) => void;
     updateReaderSettings: (updates: Partial<ReaderSettings>) => void;
     updateVocabularySettings: (updates: Partial<VocabularySettings>) => void;
+    updateTtsSettings: (updates: Partial<TtsSettings>) => void;
     updateStats: (updates: Partial<ReadingStats>) => void;
     resetSettings: () => void;
     resetReaderSettings: () => void;
@@ -1594,6 +1601,18 @@ export const useSettingsStore = create<SettingsStore>()(
                     settingsLastModifiedAt: new Date().toISOString(),
                 })),
 
+            updateTtsSettings: (updates) =>
+                set((state) => ({
+                    settings: {
+                        ...state.settings,
+                        tts: {
+                            ...state.settings.tts,
+                            ...updates,
+                        },
+                    },
+                    settingsLastModifiedAt: new Date().toISOString(),
+                })),
+
             updateStats: (updates) =>
                 set((state) => ({
                     stats: { ...state.stats, ...updates },
@@ -1620,7 +1639,7 @@ export const useSettingsStore = create<SettingsStore>()(
         }),
         {
             name: "theorem-settings",
-            version: 3,
+            version: 4,
             storage: createJSONStorage(() => theoremPersistStorage),
             migrate: (persistedState, version) => {
                 const state = (
@@ -1642,11 +1661,19 @@ export const useSettingsStore = create<SettingsStore>()(
                     }
                 }
 
+                // Migration v3→v4: add tts settings
+                if (!version || version < 4) {
+                    if (state.settings && !state.settings.tts) {
+                        state.settings.tts = defaultTtsSettings;
+                    }
+                }
+
                 if (!state.settings) {
                     state.settings = {
                         ...defaultAppSettings,
                         readerSettings: { ...defaultReaderSettings },
                         vocabulary: { ...defaultVocabularySettings },
+                        tts: { ...defaultTtsSettings },
                         vault: { ...defaultVaultSettings },
                     };
                 } else {
@@ -1660,6 +1687,10 @@ export const useSettingsStore = create<SettingsStore>()(
                         vocabulary: {
                             ...defaultVocabularySettings,
                             ...(state.settings.vocabulary || {}),
+                        },
+                        tts: {
+                            ...defaultTtsSettings,
+                            ...(state.settings.tts || {}),
                         },
                         vault: {
                             ...defaultVaultSettings,
@@ -1701,6 +1732,15 @@ export const useSettingsStore = create<SettingsStore>()(
                     state.settings.vocabulary = {
                         ...defaultVocabularySettings,
                         ...state.settings.vocabulary,
+                    };
+                }
+
+                if (state && !state.settings.tts) {
+                    state.settings.tts = defaultTtsSettings;
+                } else if (state?.settings.tts) {
+                    state.settings.tts = {
+                        ...defaultTtsSettings,
+                        ...state.settings.tts,
                     };
                 }
 

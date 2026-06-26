@@ -45,6 +45,7 @@ import {
     WifiOff,
     Sun,
     BookOpenCheck,
+    Headphones,
     Target,
 } from "lucide-react";
 
@@ -186,6 +187,7 @@ export function SettingsPage() {
         settings,
         updateSettings,
         updateVocabularySettings,
+        updateTtsSettings,
         resetSettings,
         stats,
         updateStats,
@@ -738,6 +740,54 @@ export function SettingsPage() {
                                 ]}
                                 value={settings.theme === "system" ? "light" : settings.theme}
                                 onChange={(v) => updateSettings({ theme: v })}
+                            />
+                        </SettingRow>
+                    </Section>
+
+                    <Section
+                        title="Text-to-Speech"
+                        description="Voice selection for immersion reading"
+                        icon={<Headphones className="w-5 h-5" />}
+                    >
+                        <SettingRow
+                            label="Voice"
+                            description="Kokoro TTS voice for audio playback"
+                        >
+                            <Dropdown
+                                value={settings.tts.voice}
+                                onChange={(v) => updateTtsSettings({ voice: v })}
+                                options={[
+                                    { value: "af_bella", label: "Bella (US Female)" },
+                                    { value: "af_heart", label: "Heart (US Female)" },
+                                    { value: "af_jessica", label: "Jessica (US Female)" },
+                                    { value: "af_kore", label: "Kore (US Female)" },
+                                    { value: "af_nicole", label: "Nicole (US Female)" },
+                                    { value: "af_nova", label: "Nova (US Female)" },
+                                    { value: "af_river", label: "River (US Female)" },
+                                    { value: "af_sarah", label: "Sarah (US Female)" },
+                                    { value: "af_sky", label: "Sky (US Female)" },
+                                    { value: "af_alloy", label: "Alloy (US Female)" },
+                                    { value: "af_aoede", label: "Aoede (US Female)" },
+                                    { value: "am_adam", label: "Adam (US Male)" },
+                                    { value: "am_echo", label: "Echo (US Male)" },
+                                    { value: "am_eric", label: "Eric (US Male)" },
+                                    { value: "am_fenrir", label: "Fenrir (US Male)" },
+                                    { value: "am_liam", label: "Liam (US Male)" },
+                                    { value: "am_michael", label: "Michael (US Male)" },
+                                    { value: "am_onyx", label: "Onyx (US Male)" },
+                                    { value: "am_puck", label: "Puck (US Male)" },
+                                    { value: "am_santa", label: "Santa (US Male)" },
+                                    { value: "bf_alice", label: "Alice (UK Female)" },
+                                    { value: "bf_emma", label: "Emma (UK Female)" },
+                                    { value: "bf_isabella", label: "Isabella (UK Female)" },
+                                    { value: "bf_lily", label: "Lily (UK Female)" },
+                                    { value: "bm_daniel", label: "Daniel (UK Male)" },
+                                    { value: "bm_fable", label: "Fable (UK Male)" },
+                                    { value: "bm_george", label: "George (UK Male)" },
+                                    { value: "bm_lewis", label: "Lewis (UK Male)" },
+                                ]}
+                                variant="filled"
+                                size="sm"
                             />
                         </SettingRow>
                     </Section>

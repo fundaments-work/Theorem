@@ -10,10 +10,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Play, Pause, Square, Headphones, X } from 'lucide-react';
+import { Play, Pause, Square, Headphones, X, Volume2 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { cn } from '../../../core';
+import { cn, useSettingsStore } from '../../../core';
 import { immersionPlayer, type PlaybackState } from '../audio/ImmersionPlayer';
+import { Dropdown } from '../../../ui';
 
 interface ImmersionBarProps {
     /** Text content of the current visible page, extracted by the caller. */
@@ -38,6 +39,8 @@ export function ImmersionBar({
     const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
     const [error, setError] = useState<string | null>(null);
     const initializedRef = useRef(false);
+    const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
+    const updateTtsSettings = useSettingsStore((s) => s.updateTtsSettings);
 
     const onCompleteRef = useRef(onComplete);
     useEffect(() => {
@@ -101,6 +104,7 @@ export function ImmersionBar({
             await invoke<number>('generate_speech', {
                 text,
                 startFromId: startWordId,
+                voice: ttsVoice,
             });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -108,7 +112,7 @@ export function ImmersionBar({
             setPlaybackState('idle');
             setIsContinuousMode(false);
         }
-    }, [sectionText, startWordId, playbackState]);
+    }, [sectionText, startWordId, playbackState, ttsVoice]);
 
     const handlePause = useCallback(async () => {
         await immersionPlayer.pause();
@@ -120,6 +124,51 @@ export function ImmersionBar({
         setIsContinuousMode(false);
         try { await invoke<void>('stop_speech'); } catch { /* ok */ }
     }, []);
+
+    const handleTestVoice = useCallback(async (voice: string) => {
+        immersionPlayer.stop();
+        setIsContinuousMode(false);
+        try { await invoke<void>('stop_speech'); } catch { /* ok */ }
+        const sample = "Hello, this is " + voice.replace(/^[a-z]+_/, '') + " speaking.";
+        try {
+            await invoke<number>('generate_speech', {
+                text: sample,
+                startFromId: 'tts-w-0',
+                voice,
+            });
+        } catch { /* sample playback is best-effort */ }
+    }, []);
+
+    const SAMPLE_VOICES: { value: string; label: string }[] = [
+        { value: "af_bella", label: "Bella (US F)" },
+        { value: "af_heart", label: "Heart (US F)" },
+        { value: "af_jessica", label: "Jessica (US F)" },
+        { value: "af_kore", label: "Kore (US F)" },
+        { value: "af_nicole", label: "Nicole (US F)" },
+        { value: "af_nova", label: "Nova (US F)" },
+        { value: "af_river", label: "River (US F)" },
+        { value: "af_sarah", label: "Sarah (US F)" },
+        { value: "af_sky", label: "Sky (US F)" },
+        { value: "af_alloy", label: "Alloy (US F)" },
+        { value: "af_aoede", label: "Aoede (US F)" },
+        { value: "am_adam", label: "Adam (US M)" },
+        { value: "am_echo", label: "Echo (US M)" },
+        { value: "am_eric", label: "Eric (US M)" },
+        { value: "am_fenrir", label: "Fenrir (US M)" },
+        { value: "am_liam", label: "Liam (US M)" },
+        { value: "am_michael", label: "Michael (US M)" },
+        { value: "am_onyx", label: "Onyx (US M)" },
+        { value: "am_puck", label: "Puck (US M)" },
+        { value: "am_santa", label: "Santa (US M)" },
+        { value: "bf_alice", label: "Alice (UK F)" },
+        { value: "bf_emma", label: "Emma (UK F)" },
+        { value: "bf_isabella", label: "Isabella (UK F)" },
+        { value: "bf_lily", label: "Lily (UK F)" },
+        { value: "bm_daniel", label: "Daniel (UK M)" },
+        { value: "bm_fable", label: "Fable (UK M)" },
+        { value: "bm_george", label: "George (UK M)" },
+        { value: "bm_lewis", label: "Lewis (UK M)" },
+    ];
 
     // Auto-play when section text changes in continuous mode
     useEffect(() => {
@@ -193,6 +242,26 @@ export function ImmersionBar({
             {playbackState === 'loading' && (
                 <span className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
             )}
+
+            {/* Voice selector + test */}
+            <Dropdown
+                value={ttsVoice}
+                onChange={(v) => updateTtsSettings({ voice: v })}
+                options={SAMPLE_VOICES}
+                size="sm"
+                variant="filled"
+                className="hidden sm:inline-block min-w-0 w-auto"
+                dropdownClassName="bottom-full mb-1 mt-0 w-48"
+            />
+
+            <button
+                onClick={() => handleTestVoice(ttsVoice)}
+                className="flex items-center justify-center w-5 h-5 rounded text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-overlay-subtle)] shrink-0"
+                title="Test this voice"
+                aria-label="Test voice"
+            >
+                <Volume2 className="w-3 h-3" />
+            </button>
 
             {/* Divider */}
             <div className="w-px h-4 bg-[var(--color-border)] mx-1 shrink-0" />

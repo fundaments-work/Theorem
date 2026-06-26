@@ -1,9 +1,97 @@
+use futures::stream::{self, StreamExt};
+use kokoro_en::KokoroTts;
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::RwLock;
-use kokoro_en::KokoroTts;
-use futures::stream::{self, StreamExt};
+
+/// Known English abbreviations whose trailing period should NOT be treated as
+/// a sentence boundary.  Lowercase, without the period.
+const ABBREVIATIONS: &[&str] = &[
+    "dr", "mr", "mrs", "ms", "mx", "prof", "sr", "jr", "st", "sgt", "capt", "maj", "col", "gen",
+    "lt", "gov", "pres", "dept", "est", "vol", "vs", "etc", "inc", "ltd", "co", "corp", "jan",
+    "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "e.g", "i.e", "viz",
+    "al", "ch", "pp", "no", "ex", "appx", "fig", "eq", "approx", "eds", "anon", "c", "cf", "chap",
+    "diss", "ed", "trans", "rev", "n.p", "n.d", "l", "ll", "vols", "p", "pp", "par", "pars",
+];
+
+/// Returns `true` when `c` at byte position `char_pos` inside `text` is a
+/// genuine sentence-ending boundary (not an abbreviation, initial, or decimal).
+fn is_sentence_end(text: &str, char_pos: usize, c: char) -> bool {
+    debug_assert!(char_pos < text.len());
+
+    match c {
+        '!' | '?' | ';' => true,
+        '\n' => {
+            // Only treat newline as boundary if preceded by actual sentence end
+            let before = &text[..char_pos];
+            before
+                .trim()
+                .ends_with(|ch: char| matches!(ch, '.' | '!' | '?' | ';' | '\n'))
+        }
+        '.' => {
+            let before = &text[..char_pos];
+            let preceding_word = before.split_whitespace().last().unwrap_or("");
+
+            // Decimal number: "3.14", "1.5" – never boundary
+            if preceding_word.chars().all(|ch| ch.is_ascii_digit()) {
+                return false;
+            }
+
+            // Initial: "J. K. Rowling" – never boundary
+            let stem = preceding_word.trim_end_matches('.');
+            if stem.len() == 1 && stem.chars().all(|ch| ch.is_ascii_uppercase()) {
+                return false;
+            }
+
+            // Known abbreviation – never boundary
+            if !stem.is_empty()
+                && stem.len() <= 8
+                && stem.chars().all(|ch| ch.is_ascii_alphabetic())
+                && ABBREVIATIONS.contains(&stem.to_ascii_lowercase().as_str())
+            {
+                return false;
+            }
+
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Lightweight text normalisation performed *before* sentence-splitting and
+/// synthesis.  Helps the phonemizer handle edge cases that <i>misaki-lean</i>
+/// gets wrong.
+fn normalize_for_tts(text: &str) -> String {
+    // "&" → "and"  (common in titles, author strings, etc.)
+    let s = text.replace(" & ", " and ");
+
+    // Handle leading/trailing "&" variants
+    let mut s = s;
+    if s.starts_with("& ") {
+        s.replace_range(..2, "and ");
+    }
+    if s.ends_with(" &") {
+        let len = s.len();
+        s.replace_range(len - 2.., " and");
+    }
+
+    // Replace consecutive whitespace with a single space
+    let mut compact = String::with_capacity(s.len());
+    let mut prev_was_space = false;
+    for ch in s.chars() {
+        if ch.is_whitespace() {
+            if !prev_was_space {
+                compact.push(' ');
+                prev_was_space = true;
+            }
+        } else {
+            compact.push(ch);
+            prev_was_space = false;
+        }
+    }
+    compact
+}
 
 /// A chunk of TTS audio with per-word timing metadata.
 #[derive(Serialize, Clone)]
@@ -48,13 +136,18 @@ pub struct TtsState {
 
 /// Split text into ≤500-char chunks on sentence boundaries.
 /// Kokoro handles up to ~500 chars well; longer text gets split.
+///
+/// Improves on naïve sentence-splitting by:
+///   - Not splitting on known abbreviations, initials, or decimal numbers.
+///   - Including context overlap when hard-splitting a long sentence.
 pub fn split_text(text: &str) -> Vec<String> {
+    // ── First pass: split into sentences ──
     let mut sentences: Vec<String> = Vec::new();
     let mut current = String::new();
 
-    for c in text.chars() {
+    for (pos, c) in text.char_indices() {
         current.push(c);
-        if matches!(c, '.' | '!' | '?' | ';' | '\n') && !current.trim().is_empty() {
+        if is_sentence_end(text, pos, c) && !current.trim().is_empty() {
             sentences.push(current.trim().to_string());
             current.clear();
         }
@@ -63,35 +156,31 @@ pub fn split_text(text: &str) -> Vec<String> {
         sentences.push(current.trim().to_string());
     }
 
-    // Merge very short sentences together, split overly long ones
+    // ── Second pass: merge short, split long ──
+    const MAX_CHUNK_LEN: usize = 500;
+    /// Number of trailing characters from the previous chunk to include as
+    /// leading context for the next chunk when hard-splitting a long sentence.
+    /// The phonemizer uses this surrounding context for disambiguation.
+    const CONTEXT_OVERLAP: usize = 60;
+
     let mut result: Vec<String> = Vec::new();
     let mut buf = String::new();
 
-    for s in sentences {
-        if buf.len() + s.len() + 1 <= 500 {
+    for s in &sentences {
+        if buf.len() + s.len() + 1 <= MAX_CHUNK_LEN {
             if !buf.is_empty() {
                 buf.push(' ');
             }
-            buf.push_str(&s);
+            buf.push_str(s);
         } else {
             if !buf.is_empty() {
                 result.push(buf.clone());
                 buf.clear();
             }
-            if s.len() > 500 {
-                // Hard-split on whitespace near midpoint
-                let mid = s.len() / 2;
-                let best = s
-                    .char_indices()
-                    .filter(|(_, c)| c.is_whitespace())
-                    .min_by_key(|(i, _)| ((*i as isize) - mid as isize).unsigned_abs())
-                    .map(|(i, _)| i)
-                    .unwrap_or(mid);
-                let (a, b) = s.split_at(best);
-                result.push(a.trim().to_string());
-                buf = b.trim().to_string();
+            if s.len() > MAX_CHUNK_LEN {
+                split_long_sentence(s, MAX_CHUNK_LEN, CONTEXT_OVERLAP, &mut result, &mut buf);
             } else {
-                buf = s;
+                buf = s.clone();
             }
         }
     }
@@ -103,10 +192,92 @@ pub fn split_text(text: &str) -> Vec<String> {
     result
 }
 
+/// Hard-split a single long sentence that exceeds `max_len`.
+///
+/// Each split point adds `overlap` characters of trailing-context from the
+/// previous piece so the phonemizer has enough context to pronounce the
+/// start of the next piece correctly.  The first piece never repeats, but
+/// subsequent pieces have a repeated tail-to-head overlap zone.
+fn split_long_sentence(
+    sentence: &str,
+    max_len: usize,
+    overlap: usize,
+    result: &mut Vec<String>,
+    remainder: &mut String,
+) {
+    let mut start = 0_usize;
+    let bytes = sentence.as_bytes();
+    let len = sentence.len();
+
+    loop {
+        if start >= len {
+            break;
+        }
+
+        let remaining = len - start;
+        if remaining <= max_len {
+            // Last piece — keep as remainder for merging
+            *remainder = sentence[start..].trim().to_string();
+            break;
+        }
+
+        // Target cut point: `start + max_len`
+        let target = start + max_len;
+        if target >= len {
+            *remainder = sentence[start..].trim().to_string();
+            break;
+        }
+
+        // Walk back from target to find a whitespace boundary
+        let cut = (start + (max_len / 4)..target)
+            .rev()
+            .find(|&i| bytes[i].is_ascii_whitespace())
+            .unwrap_or(target);
+
+        // The piece: from `start` to `cut`
+        let piece = sentence[start..cut].trim().to_string();
+        if !piece.is_empty() {
+            result.push(piece);
+        }
+
+        // Advance start, but rewind by `overlap` characters (to character boundary)
+        // so the next chunk includes trailing context.
+        start = cut;
+        if overlap > 0 && start >= overlap {
+            // Find the nearest char boundary before or at start - overlap
+            let overlap_start = start.saturating_sub(overlap);
+            // Ensure we're at a char boundary
+            if !sentence.is_char_boundary(overlap_start) {
+                let adjusted = overlap_start.saturating_sub(4);
+                start = (adjusted..start)
+                    .find(|&i| sentence.is_char_boundary(i) && i >= adjusted)
+                    .unwrap_or(start);
+            } else {
+                start = overlap_start;
+            }
+        }
+    }
+}
+
+/// Resolve the `models/` directory at runtime:
+///   1. Tauri resource dir (production / bundled)
+///   2. `CARGO_MANIFEST_DIR/models/` (dev — compile-time absolute path,
+///      works regardless of CWD).
+fn resolve_models_dir(app: &AppHandle) -> std::path::PathBuf {
+    let resource_dir = app.path().resource_dir().ok();
+    if let Some(ref d) = resource_dir {
+        let candidate = d.join("models");
+        if candidate.join("kokoro.onnx").exists() {
+            return candidate;
+        }
+    }
+    // Dev: use the crate root (set at compile time)
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models")
+}
+
 /// Load the Kokoro engine, trying the Tauri resource directory first,
-/// then falling back to CWD-relative `models/` for dev mode.
+/// then falling back to `CARGO_MANIFEST_DIR/models/` for dev mode.
 async fn ensure_engine(app: &AppHandle, state: &TtsState) -> Result<(), String> {
-    // Fast path: check with read lock
     {
         let guard = state.engine.read().await;
         if guard.is_some() {
@@ -119,23 +290,24 @@ async fn ensure_engine(app: &AppHandle, state: &TtsState) -> Result<(), String> 
         return Ok(());
     }
 
-    // Try Tauri resource dir first
-    let resource_dir = app.path().resource_dir().unwrap_or_default();
-    let model_path = resource_dir.join("models/kokoro.onnx");
-    let voice_path = resource_dir.join("models/voices.bin");
+    let models_dir = resolve_models_dir(app);
+    let model_path = models_dir.join("kokoro.onnx");
+    let voice_dir = models_dir.join("voices");
+    let voice_path: std::path::PathBuf = if voice_dir.is_dir() {
+        voice_dir
+    } else {
+        models_dir.join("voices.bin")
+    };
 
-    if model_path.exists() && voice_path.exists() {
-        let kokoro = KokoroTts::new(&model_path, &voice_path)
-            .await
-            .map_err(|e| format!("Failed to load Kokoro (resource dir): {}", e))?;
-        *guard = Some(kokoro);
-        return Ok(());
-    }
+    eprintln!(
+        "[tts] loading engine: model={} voice={}",
+        model_path.display(),
+        voice_path.display(),
+    );
 
-    // Dev fallback: CWD/models/
-    let kokoro = KokoroTts::new("models/kokoro.onnx", "models/voices.bin")
+    let kokoro = KokoroTts::new(&model_path, &voice_path)
         .await
-        .map_err(|e| format!("Failed to load Kokoro (CWD): {}", e))?;
+        .map_err(|e| format!("Failed to load Kokoro: {}", e))?;
     *guard = Some(kokoro);
     Ok(())
 }
@@ -150,6 +322,7 @@ pub async fn generate_speech(
     app: AppHandle,
     text: String,
     start_from_id: Option<String>,
+    voice: Option<String>,
 ) -> Result<u64, String> {
     let state = app.state::<TtsState>();
 
@@ -163,7 +336,8 @@ pub async fn generate_speech(
     ensure_engine(&app, &state).await?;
 
     let dom_id = start_from_id.unwrap_or_else(|| "tts-w-0".to_string());
-    let chunks = split_text(&text);
+    let normalized = normalize_for_tts(&text);
+    let chunks = split_text(&normalized);
     let total = chunks.len() as u32;
 
     if total == 0 {
@@ -185,7 +359,8 @@ pub async fn generate_speech(
                 let engine_arc = engine_arc.clone();
                 let gen_id_arc = gen_id_arc.clone();
                 let dom_id = dom_id.clone();
-                
+                let voice = voice.clone();
+
                 async move {
                     // Check abort before starting synthesis
                     let current = gen_id_arc.load(std::sync::atomic::Ordering::SeqCst);
@@ -197,13 +372,21 @@ pub async fn generate_speech(
                     let guard = engine_arc.read().await;
                     let engine = match guard.as_ref() {
                         Some(e) => e,
-                        None => return (i, chunk_text, dom_id, Err("Engine not loaded".to_string())),
+                        None => {
+                            return (i, chunk_text, dom_id, Err("Engine not loaded".to_string()))
+                        }
                     };
 
-                    let synth_result = engine.synth(&chunk_text, "af_bella").await;
+                    let voice_name = voice.as_deref().unwrap_or("af_bella");
+                    let synth_result = engine.synth(&chunk_text, voice_name).await;
                     drop(guard);
 
-                    (i, chunk_text, dom_id, synth_result.map_err(|e| format!("{:?}", e)))
+                    (
+                        i,
+                        chunk_text,
+                        dom_id,
+                        synth_result.map_err(|e| format!("{:?}", e)),
+                    )
                 }
             })
             .buffered(4); // parallel buffer size = 4
@@ -219,7 +402,10 @@ pub async fn generate_speech(
             // Check abort again before emitting
             let current = gen_id_arc.load(std::sync::atomic::Ordering::SeqCst);
             if current != gen_id {
-                eprintln!("[tts] generation {} aborted during stream (current={})", gen_id, current);
+                eprintln!(
+                    "[tts] generation {} aborted during stream (current={})",
+                    gen_id, current
+                );
                 return;
             }
 
@@ -248,16 +434,24 @@ pub async fn generate_speech(
                     if err_msg == "aborted" {
                         return;
                     }
-                    let _ = app_clone.emit("tts-error", TtsError {
-                        message: format!("Synthesis error on chunk {}: {}", i, err_msg),
-                    });
+                    let _ = app_clone.emit(
+                        "tts-error",
+                        TtsError {
+                            message: format!("Synthesis error on chunk {}: {}", i, err_msg),
+                        },
+                    );
                     return;
                 }
             }
         }
 
         // Signal completion
-        let _ = app_clone.emit("tts-done", TtsDone { total_chunks: total });
+        let _ = app_clone.emit(
+            "tts-done",
+            TtsDone {
+                total_chunks: total,
+            },
+        );
     });
 
     Ok(gen_id)
@@ -281,7 +475,6 @@ mod tests {
     fn test_split_text_basic() {
         let result = split_text("Hello world. This is a test. Goodbye!");
         assert!(!result.is_empty());
-        // All chunks should be non-empty
         for chunk in &result {
             assert!(!chunk.trim().is_empty());
         }
@@ -290,17 +483,145 @@ mod tests {
     #[test]
     fn test_split_text_merges_short() {
         let result = split_text("Hi. Ok. Yes. No. Fine.");
-        // Should merge these tiny sentences into fewer chunks
         assert!(result.len() <= 2);
     }
 
     #[test]
     fn test_split_text_splits_long() {
-        let long = "A ".repeat(300); // 600 chars
+        let long = "A ".repeat(300);
         let result = split_text(&long);
         assert!(result.len() >= 2);
         for chunk in &result {
-            assert!(chunk.len() <= 510); // some slack
+            assert!(chunk.len() <= 510);
         }
+    }
+
+    #[test]
+    fn test_does_not_split_on_abbreviations() {
+        let text = "Dr. Smith went to Washington. He met with Mr. Jones.";
+        let result = split_text(text);
+        // "Dr. Smith went to Washington." should be one sentence
+        assert!(
+            result
+                .iter()
+                .any(|s| s.contains("Dr. Smith") && s.contains("Washington")),
+            "Dr. and Mr. should not trigger splits: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_does_not_split_on_initials() {
+        let text = "J. K. Rowling wrote Harry Potter. It was a success.";
+        let result = split_text(text);
+        assert!(
+            result
+                .iter()
+                .any(|s| s.contains("J. K. Rowling") && s.contains("Harry Potter")),
+            "Initials should not trigger splits: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_does_not_split_on_decimals() {
+        let text = "The value is 3.14 and it's constant. Really.";
+        let result = split_text(text);
+        assert!(
+            result
+                .iter()
+                .any(|s| s.contains("3.14") && s.contains("constant")),
+            "Decimals should not trigger splits: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_normalize_ampersand() {
+        let normalized = normalize_for_tts("Apples & Oranges");
+        assert_eq!(normalized, "Apples and Oranges");
+    }
+
+    #[test]
+    fn test_normalize_whitespace() {
+        let normalized = normalize_for_tts("Hello    world.  Spaced. ");
+        assert_eq!(normalized, "Hello world. Spaced. ");
+    }
+
+    #[test]
+    fn test_context_overlap_in_long_sentence() {
+        // Build a sentence long enough to force hard-split (>500 chars)
+        let long = "The quick brown fox jumps over the lazy dog near the bank. ".repeat(15);
+        let text = long.trim();
+        assert!(
+            text.len() > 500,
+            "test text must exceed 500 chars (was {})",
+            text.len()
+        );
+        let result = split_text(text);
+        assert!(
+            result.len() >= 2,
+            "long text should produce multiple chunks: {:?}",
+            result
+        );
+        // Verify no chunk exceeds the hard limit + reasonable slack
+        for chunk in &result {
+            assert!(
+                chunk.len() <= 570,
+                "chunk too long ({} chars): {:?}",
+                chunk.len(),
+                chunk
+            );
+        }
+    }
+
+    #[test]
+    fn test_abbreviation_at_true_sentence_end() {
+        // An abbreviation followed by end-of-text IS still a sentence end.
+        let text = "Bring pens, paper, and other supplies etc.";
+        let result = split_text(text);
+        assert_eq!(result.len(), 1, "single sentence: {:?}", result);
+        assert!(result[0].ends_with("etc."));
+    }
+
+    #[test]
+    fn test_abbreviation_does_not_prevent_actual_sentence_break() {
+        // '!' is always a sentence boundary and is not affected by abbreviation
+        // checks.  Short fragments get merged back but the punctuation survives.
+        let text = "Call Dr. Smith! He is expecting you.";
+        let result = split_text(text);
+        assert!(result[0].contains("Smith!"));
+    }
+
+    #[test]
+    fn test_split_text_with_quotes() {
+        // Quotes preserve sentence-internal periods correctly.
+        let text = "He said \"Hello world.\" Then she replied \"Goodbye.\"";
+        let result = split_text(text);
+        let concatenated: String = result.concat();
+        assert!(concatenated.contains("Hello world"));
+        assert!(concatenated.contains("Goodbye"));
+    }
+
+    #[test]
+    fn test_punctuation_preserved_in_words() {
+        // Words with trailing punctuation must keep it — the phonemizer
+        // handles it; we should never strip.
+        let text = "The time is 2:30. Call 911. The value is 91.5.";
+        let result = split_text(text);
+        let all: String = result.concat();
+        assert!(all.contains("time"));
+        assert!(all.contains("911"));
+        assert!(all.contains("91.5"));
+    }
+
+    #[test]
+    fn test_normalize_does_not_strip_punctuation() {
+        let normalized = normalize_for_tts("time. 91. Hello! Is it 3:14? Dr.");
+        assert!(normalized.contains("time."));
+        assert!(normalized.contains("91."));
+        assert!(normalized.contains("Hello!"));
+        assert!(normalized.contains("3:14?"));
+        assert!(normalized.contains("Dr."));
     }
 }

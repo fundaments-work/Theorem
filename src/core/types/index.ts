@@ -209,6 +209,7 @@ export interface AppSettings {
     theme: "light" | "dark" | "system";
     readerSettings: ReaderSettings;
     vocabulary: VocabularySettings;
+    tts: TtsSettings;
     vault: VaultIntegrationSettings;
     deviceSync: DeviceSyncSettings;
     hasCompletedOnboarding: boolean;
@@ -263,6 +264,10 @@ export interface VocabularySettings {
     vocabularyEnabled: boolean;
     showPronunciation: boolean;
     playPronunciationAudio: boolean;
+}
+
+export interface TtsSettings {
+    voice: string;
 }
 
 export interface VaultIntegrationSettings {
