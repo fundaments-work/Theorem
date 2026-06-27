@@ -229,15 +229,13 @@ export function ImmersionBar({
     return (
         <div
             className={cn(
-                // Mobile: full-width bar — Desktop: pill centered
-                'flex items-center gap-1.5 sm:gap-2',
+                'flex items-center gap-1.5 sm:gap-2 flex-wrap',
                 'w-full sm:w-auto sm:px-4 py-2 px-2 sm:py-2.5',
                 'sm:rounded-full rounded-xl',
                 'bg-[var(--color-surface)]/95 backdrop-blur-xl',
                 'border border-[var(--color-border)]',
                 'shadow-[0_8px_32px_rgba(0,0,0,0.18)]',
                 'transition-all duration-300',
-                'overflow-x-auto scrollbar-none',
                 !visible && 'opacity-0 pointer-events-none translate-y-4',
                 className,
             )}
