@@ -13,6 +13,8 @@ import {
     extractMetadata,
     extractFilenameFromPath,
     ensureFilenameForFormat,
+    shouldUseExtractedTitle,
+    shouldUseExtractedAuthor,
     isTauri,
     isTauriMobile,
     useVocabularyStore,
@@ -359,9 +361,7 @@ function BookReaderPage() {
             // (not a generated SVG fallback). Always extract title/author metadata.
             const hasRealCover = book.coverPath && !book.coverPath.startsWith('data:image/svg+xml');
             if (hasRealCover && book.coverExtractionDone) {
-                // Need to check if title/author still look like filenames
-                if (!/^[\w-]+$/.test(book.title)) return;
-                // Title is still filename-based — proceed with metadata-only extraction
+                return;
             }
 
             const metadata = await extractMetadata(data, book.format, filename, book.id, {
@@ -374,7 +374,6 @@ function BookReaderPage() {
             if (metadata.coverDataUrl) {
                 updates.coverPath = metadata.coverDataUrl;
             } else if (!book.coverPath) {
-                // No cover extracted and no existing cover — generate fallback
                 const { buildFallbackCoverSvg } = await import('../../core');
                 const fallbackSvg = buildFallbackCoverSvg(
                     metadata.title || book.title,
@@ -384,12 +383,11 @@ function BookReaderPage() {
                 const dataUrl = await saveCoverImage(book.id, blob);
                 updates.coverPath = dataUrl;
             }
-            // Update title from book metadata if the current title is still
-            // the original filename (no spaces, hyphens/underscores only).
-            if (metadata.title && /^[\w-]+$/.test(book.title) && book.title === extractFilenameFromPath(book.filePath).replace(/\.[^.]+$/, '')) {
+
+            if (shouldUseExtractedTitle(book.title, metadata.title, book.filePath)) {
                 updates.title = metadata.title;
             }
-            if (metadata.author && !book.author) {
+            if (shouldUseExtractedAuthor(book.author, metadata.author)) {
                 updates.author = metadata.author;
             }
             updates.coverExtractionDone = true;

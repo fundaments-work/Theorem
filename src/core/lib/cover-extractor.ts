@@ -91,6 +91,68 @@ function stripBookExtension(title: string): string {
     return title;
 }
 
+/** Extract filename-based metadata for comparison with book metadata. */
+function filenameFallbackData(filePath: string): { title: string; author: string } {
+    const filename = filePath.split('/').pop()?.split('\\').pop() || filePath;
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+    const parts = nameWithoutExt.split(/\s*[-–—]\s*/);
+    if (parts.length >= 2) {
+        return { title: parts.slice(1).join(' - ').trim(), author: parts[0].trim() };
+    }
+    return { title: nameWithoutExt, author: '' };
+}
+
+/**
+ * Whether an extracted title from book metadata should replace the current
+ * (filename-derived) title on the Book object.  Rejects empty, placeholder,
+ * and obviously-bogus metadata values.
+ */
+export function shouldUseExtractedTitle(currentTitle: string, extractedTitle: string | undefined, filePath: string): boolean {
+    const nextTitle = normalizeMetadataTitle(extractedTitle);
+    if (!nextTitle) {
+        return false;
+    }
+
+    const loweredNext = nextTitle.toLowerCase();
+    if (loweredNext === "unknown title" || loweredNext === "untitled" || loweredNext === "untitled book") {
+        return false;
+    }
+
+    if (nextTitle.length < 2 || /^[^a-zA-Z0-9]+$/.test(nextTitle)) {
+        return false;
+    }
+    if (/^[)\]}>"'`]/.test(nextTitle) || /[\[({<"'`]$/.test(nextTitle)) {
+        return false;
+    }
+
+    const filenameInfo = filenameFallbackData(filePath);
+    const currentNormalized = normalizeMetadataTitle(currentTitle);
+    if (!currentNormalized) return true;
+
+    if (currentNormalized === nextTitle) return false;
+
+    const currentIsFilenameFallback = (
+        filenameInfo.title.length > 0
+        && currentNormalized.toLowerCase() === filenameInfo.title.toLowerCase()
+    );
+
+    return currentNormalized === "Unknown" || currentNormalized.includes(".") || currentIsFilenameFallback;
+}
+
+/**
+ * Whether an extracted author from book metadata should replace the current
+ * (filename-derived) author on the Book object.
+ */
+export function shouldUseExtractedAuthor(currentAuthor: string, extractedAuthor: string | undefined): boolean {
+    const nextAuthor = normalizeMetadataString(extractedAuthor);
+    if (!nextAuthor || nextAuthor.toLowerCase() === "unknown author") {
+        return false;
+    }
+    const currentNormalized = normalizeMetadataString(currentAuthor);
+    if (!currentNormalized) return true;
+    return currentNormalized.toLowerCase() !== nextAuthor.toLowerCase();
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     return new Promise((resolve, reject) => {
         const timeoutId = setTimeout(() => {

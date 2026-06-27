@@ -10,12 +10,13 @@ import {
     normalizeAuthor,
     saveCoverImage,
     buildFallbackCoverSvg,
+    shouldUseExtractedTitle,
+    shouldUseExtractedAuthor,
 } from "../../core";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core";
 import { formatProgress, formatFileSize, formatRelativeDate } from "../../core";
 import {
     ensureFilenameForFormat,
-    extractFilenameMetadata,
     extractFilenameFromPath,
     pickLibraryFolderMobile,
     importBooksIncremental,
@@ -72,73 +73,8 @@ function normalizeMetadataText(value: string | undefined): string {
     return (value || "").replace(/\s+/g, " ").trim();
 }
 
-function shouldUseExtractedTitle(book: Book, extractedTitle: string | undefined): boolean {
-    const nextTitle = normalizeMetadataText(extractedTitle);
-    if (!nextTitle) {
-        return false;
-    }
-
-    const loweredNext = nextTitle.toLowerCase();
-    if (loweredNext === "unknown title" || loweredNext === "untitled" || loweredNext === "untitled book") {
-        return false;
-    }
-
-    // Reject garbage metadata: too short, only special chars, dangling brackets
-    if (nextTitle.length < 2 || /^[^a-zA-Z0-9]+$/.test(nextTitle)) {
-        return false;
-    }
-    if (/^[)\]}>"'`]/.test(nextTitle) || /[\[({<"'`]$/.test(nextTitle)) {
-        return false;
-    }
-
-    const currentTitle = normalizeMetadataText(book.title);
-    if (!currentTitle) {
-        return true;
-    }
-    if (currentTitle === nextTitle) {
-        return false;
-    }
-
-    const filenameFallbackTitle = normalizeMetadataText(extractFilenameMetadata(book.filePath).title);
-    const currentIsFilenameFallback = (
-        filenameFallbackTitle.length > 0
-        && currentTitle.toLowerCase() === filenameFallbackTitle.toLowerCase()
-    );
-
-    return currentTitle === "Unknown" || currentTitle.includes(".") || currentIsFilenameFallback;
-}
-
-function shouldUseExtractedAuthor(book: Book, extractedAuthor: string | undefined): boolean {
-    const nextAuthor = normalizeMetadataText(extractedAuthor);
-    if (!nextAuthor || nextAuthor.toLowerCase() === "unknown author") {
-        return false;
-    }
-
-    const currentAuthor = normalizeMetadataText(normalizeAuthor(book.author));
-    if (!currentAuthor) {
-        return true;
-    }
-    if (currentAuthor === nextAuthor) {
-        return false;
-    }
-
-    const filenameFallbackAuthor = normalizeMetadataText(extractFilenameMetadata(book.filePath).author);
-    const currentIsFilenameFallback = (
-        filenameFallbackAuthor.length > 0
-        && currentAuthor.toLowerCase() === filenameFallbackAuthor.toLowerCase()
-    );
-
-    return currentAuthor === "Unknown Author" || currentIsFilenameFallback;
-}
-
 function isBookMarkedRead(book: Book): boolean {
-    if (book.manualCompletionState === "read") {
-        return true;
-    }
-    if (book.manualCompletionState === "unread") {
-        return false;
-    }
-    return !!book.completedAt || book.progress >= 0.999;
+    return !!book.completedAt;
 }
 
 // Book Card Component with Context Menu
@@ -919,12 +855,12 @@ export function LibraryPage() {
                 updates.coverPath = metadata.coverDataUrl;
             }
 
-            const shouldUpdateTitle = shouldUseExtractedTitle(latestBook, metadata.title);
+            const shouldUpdateTitle = shouldUseExtractedTitle(latestBook.title, metadata.title, latestBook.filePath);
             if (shouldUpdateTitle) {
                 updates.title = normalizeMetadataText(metadata.title);
             }
 
-            const shouldUpdateAuthor = shouldUseExtractedAuthor(latestBook, metadata.author);
+            const shouldUpdateAuthor = shouldUseExtractedAuthor(latestBook.author, metadata.author);
             if (shouldUpdateAuthor) {
                 updates.author = normalizeMetadataText(metadata.author);
             }
@@ -1137,7 +1073,7 @@ export function LibraryPage() {
                                 updates.coverPath = metadata.coverDataUrl;
                             }
                             // Use the same title-upgrade heuristic as Path A
-                            if (shouldUseExtractedTitle(book, metadata.title)) {
+                            if (shouldUseExtractedTitle(book.title, metadata.title, book.filePath)) {
                                 updates.title = normalizeMetadataText(metadata.title);
                             }
                             if (metadata.author && !book.author) {
