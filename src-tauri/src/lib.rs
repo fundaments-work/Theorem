@@ -4,6 +4,7 @@ mod sync_crypto;
 mod sync_protocol;
 mod sync_server;
 mod tts;
+mod tts_model;
 
 use reqwest::blocking::Client;
 use serde::Serialize;
@@ -807,10 +808,21 @@ pub fn run() {
                 engine: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
                 generation_id: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
             });
+            app.manage(tts::ModelState::new());
 
-            // Pre-warm the Kokoro TTS engine in the background so the first
-            // user-requested synthesis is fast (model + phonemizer init can
-            // take 20–40 s, which is unacceptable at play time).
+            // Download models in background if missing (first launch).
+            // Runs concurrently with pre-warm so the app isn't blocked.
+            let downloads_app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let model_state = downloads_app.state::<tts::ModelState>();
+                if let Err(e) = tts_model::ensure_models(&downloads_app, model_state.inner()).await
+                {
+                    eprintln!("[tts] background model download failed: {}", e);
+                }
+            });
+
+            // Pre-warm the engine immediately — if models are already cached
+            // (app_data_dir or dev directory), this completes in ~5 s.
             let tts_app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let tts_state = tts_app.state::<tts::TtsState>();
@@ -891,6 +903,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             tts::generate_speech,
             tts::stop_speech,
+            tts::ensure_tts_model,
+            tts::cancel_tts_model_download,
+            tts::get_tts_model_status,
+            tts::delete_tts_model,
             read_file,
             read_pdf_file,
             read_pdf_file_size,

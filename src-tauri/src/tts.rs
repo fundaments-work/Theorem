@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::RwLock;
 
+pub use crate::tts_model::{ModelState, TtsModelStatus};
 
 /// Lightweight text normalisation performed *before* sentence-splitting and
 /// synthesis.  Helps the phonemizer handle edge cases.
@@ -123,28 +124,10 @@ fn apply_fade_out(audio: &mut [f32], sample_rate: u32) {
     }
 }
 
-/// Resolve the `models/` directory at runtime:
-///   1. Tauri resource dir (production / bundled) — only if the model AND
-///      the `voices/` directory (with individual voice .bin files) exist.
-///   2. `CARGO_MANIFEST_DIR/models/` (dev — has the full voices/ directory).
-///
-/// We require the `voices/` directory, not `voices.bin`, because `voices.bin`
-/// is a single-voice pack — using it makes ALL voices sound identical (the
-/// `get_pack` fallback returns the same pack regardless of requested voice).
-fn resolve_models_dir(app: &AppHandle) -> std::path::PathBuf {
-    let resource_dir = app.path().resource_dir().ok();
-    if let Some(ref d) = resource_dir {
-        let candidate = d.join("models");
-        if candidate.join("kokoro.onnx").exists() && candidate.join("voices").is_dir() {
-            return candidate;
-        }
-    }
-    // Dev: use the crate root (set at compile time)
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models")
-}
-
-/// Load the Kokoro engine, trying the Tauri resource directory first,
-/// then falling back to `CARGO_MANIFEST_DIR/models/` for dev mode.
+/// Load the Kokoro engine. Uses the tts_model resolver which checks:
+///   1. app_data_dir/models/ (runtime downloaded)
+///   2. Tauri resource dir (bundled)
+///   3. CARGO_MANIFEST_DIR/models/ (dev)
 async fn ensure_engine(app: &AppHandle, state: &TtsState) -> Result<(), String> {
     {
         let guard = state.engine.read().await;
@@ -158,7 +141,7 @@ async fn ensure_engine(app: &AppHandle, state: &TtsState) -> Result<(), String> 
         return Ok(());
     }
 
-    let models_dir = resolve_models_dir(app);
+    let models_dir = crate::tts_model::resolve_models_dir(app);
     let model_path = models_dir.join("kokoro.onnx");
     let voice_dir = models_dir.join("voices");
     let voice_path: std::path::PathBuf = if voice_dir.is_dir() {
@@ -168,14 +151,16 @@ async fn ensure_engine(app: &AppHandle, state: &TtsState) -> Result<(), String> 
     };
 
     eprintln!(
-        "[tts] loading engine: model={} voice={}",
+        "[tts] ensure_engine: model={} voice={}",
         model_path.display(),
         voice_path.display(),
     );
 
+    let t = std::time::Instant::now();
     let kokoro = KokoroTts::new(&model_path, &voice_path)
         .await
         .map_err(|e| format!("Failed to load Kokoro: {}", e))?;
+    eprintln!("[tts] ensure_engine: KokoroTts::new in {:?}", t.elapsed());
     *guard = Some(kokoro);
     Ok(())
 }
@@ -184,19 +169,48 @@ async fn ensure_engine(app: &AppHandle, state: &TtsState) -> Result<(), String> 
 /// synthesis is fast.  Loads the ONNX model, voices, and runs a short dummy
 /// synthesis to initialize the phonemizer and warm the ONNX graph.
 ///
-/// Should be called once from `setup()` via `tauri::async_runtime::spawn`.
+/// Polls for model availability (in case a background download is in progress)
+/// then loads.  On subsequent launches with cached models, this completes in
+/// ~5 s — the time it takes `KokoroTts::new` + dummy synth.
 pub async fn prewarm_engine(app: &AppHandle, state: &TtsState) {
-    eprintln!("[tts] prewarm: starting engine warm-up...");
+    let t0 = std::time::Instant::now();
+    eprintln!("[tts] prewarm: start, waiting for models…");
 
+    // Poll for model availability — download may be in progress (first launch).
+    let mut waited_ms = 0u64;
+    loop {
+        let status = crate::tts_model::get_model_status(app);
+        if status.ok {
+            break;
+        }
+        if waited_ms >= 180_000 {
+            eprintln!(
+                "[tts] prewarm: TIMED OUT waiting for models after {:?}",
+                t0.elapsed()
+            );
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        waited_ms += 500;
+    }
+    eprintln!(
+        "[tts] prewarm: models available after {:?} (waited {} ms)",
+        t0.elapsed(),
+        waited_ms
+    );
+
+    let t1 = std::time::Instant::now();
     if let Err(e) = ensure_engine(app, state).await {
-        eprintln!("[tts] prewarm: engine load failed: {}", e);
+        eprintln!(
+            "[tts] prewarm: engine load FAILED after {:?}: {}",
+            t1.elapsed(),
+            e
+        );
         return;
     }
+    eprintln!("[tts] prewarm: engine loaded in {:?}", t1.elapsed());
 
-    // Run a dummy synthesis to warm the phonemizer (misaki-lean LazyLock)
-    // and the first real ONNX inference path. Using a multi-word sentence
-    // ensures the per-word misaki G2P path is exercised, not just the
-    // single-word lexicon fast path.
+    let t2 = std::time::Instant::now();
     let guard = state.engine.read().await;
     if let Some(engine) = guard.as_ref() {
         match engine
@@ -205,7 +219,8 @@ pub async fn prewarm_engine(app: &AppHandle, state: &TtsState) {
         {
             Ok((_, duration)) => {
                 eprintln!(
-                    "[tts] prewarm: phonemizer + inference warm-up completed in {:?}",
+                    "[tts] prewarm: dummy synth in {:?} (audio {:?})",
+                    t2.elapsed(),
                     duration
                 );
             }
@@ -216,7 +231,7 @@ pub async fn prewarm_engine(app: &AppHandle, state: &TtsState) {
     }
     drop(guard);
 
-    eprintln!("[tts] prewarm: engine is ready");
+    eprintln!("[tts] prewarm: READY, total {:?}", t0.elapsed());
 }
 
 /// Generate speech for a page of text.  Streams `audio-chunk` events
@@ -231,6 +246,9 @@ pub async fn generate_speech(
     start_from_id: Option<String>,
     voice: Option<String>,
 ) -> Result<u64, String> {
+    let t0 = std::time::Instant::now();
+    eprintln!("[tts] generate_speech: called ({} chars)", text.len());
+
     let state = app.state::<TtsState>();
 
     // Bump generation ID — any older in-flight generation will see this and abort
@@ -240,18 +258,29 @@ pub async fn generate_speech(
         + 1;
 
     // Ensure engine is loaded (fast if already loaded)
+    let t_eng = std::time::Instant::now();
     ensure_engine(&app, &state).await?;
+    eprintln!(
+        "[tts] generate_speech: ensure_engine in {:?}",
+        t_eng.elapsed()
+    );
 
     let dom_id = start_from_id.unwrap_or_else(|| "tts-w-0".to_string());
     let normalized = normalize_for_tts(&text);
 
-    // Merge short sentences into chunks. The first chunk is extra-large
-    // (~420 chars, ~15-18s of audio) so that by the time it finishes
-    // playing, chunks 1-3 have finished synthesizing via buffered(4).
-    // Subsequent chunks use 280 chars (~10-12s) — enough to sustain the
-    // pipeline once it's flowing.
-    const FIRST_CHUNK_LEN: usize = 420;
-    const TARGET_CHUNK_LEN: usize = 280;
+    // Merge short sentences into chunks. The first chunk is kept small so
+    // audio starts playing in ~5s on slower hardware (CPU inference of
+    // ~21 chars/s). With FIRST_CHUNK_LEN=100, chunk 0 takes ~5s synth →
+    // audio starts immediately while buffered(4) begins G2P for chunks 1-3
+    // in parallel so they're ready by the time chunk 0 finishes playing.
+    //
+    // Empirical tuning (post-warmup):
+    //   engine.synth rate ≈ 21 chars/s on a single-thread CPU
+    //   audio playback rate ≈ 60 chars/s
+    //   With small chunks: first audio in ~5s, gapless on short pages,
+    //   brief loading gaps may appear on very long pages with this hardware.
+    const FIRST_CHUNK_LEN: usize = 100;
+    const TARGET_CHUNK_LEN: usize = 150;
     let raw_sentences = split_sentences(&normalized);
     let chunks: Vec<String> = {
         let mut result: Vec<String> = Vec::new();
@@ -263,7 +292,11 @@ pub async fn generate_speech(
                 continue;
             }
             let s_with_space = format!("{} ", s);
-            let limit = if is_first { FIRST_CHUNK_LEN } else { TARGET_CHUNK_LEN };
+            let limit = if is_first {
+                FIRST_CHUNK_LEN
+            } else {
+                TARGET_CHUNK_LEN
+            };
             if buf.len() + s_with_space.len() <= limit {
                 buf.push_str(&s_with_space);
             } else {
@@ -294,6 +327,12 @@ pub async fn generate_speech(
 
     // Spawn the actual synthesis on a background task so generate_speech
     // returns immediately and the frontend transitions to "playing".
+    eprintln!(
+        "[tts] generate_speech: returning gen_id={} after {:?} ({} chunks queued)",
+        gen_id,
+        t0.elapsed(),
+        total
+    );
     tokio::spawn(async move {
         use tauri::Manager;
 
@@ -305,6 +344,11 @@ pub async fn generate_speech(
         // so it typically gets the Mutex first → fastest first audio.
         // By the time chunk 0 finishes playing, chunks 1-3 are already
         // synthesized → gapless playback.
+        let synth_t0 = std::time::Instant::now();
+        eprintln!(
+            "[tts] synthesis: starting stream ({} chunks, buffered 4)",
+            total
+        );
         let mut stream = stream::iter(chunks.into_iter().enumerate())
             .map(|(i, chunk_text)| {
                 let engine_arc = engine_arc.clone();
@@ -356,6 +400,12 @@ pub async fn generate_speech(
 
             match synth_result {
                 Ok((mut audio_data, _duration)) => {
+                    if i == 0 {
+                        eprintln!(
+                            "[tts] synthesis: first chunk done after {:?}",
+                            synth_t0.elapsed()
+                        );
+                    }
                     apply_fade_out(&mut audio_data, 24000);
                     let end_time = audio_data.len() as f32 / 24000.0;
                     let chunk_data = TtsChunk {
@@ -408,10 +458,39 @@ pub async fn generate_speech(
 #[tauri::command]
 pub async fn stop_speech(app: AppHandle) -> Result<(), String> {
     let state = app.state::<TtsState>();
-    state
+    let prev = state
         .generation_id
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    eprintln!("[tts] stop_speech called (gen_id {} → {})", prev, prev + 1);
     Ok(())
+}
+
+/// Ensure the Kokoro ONNX model and voice files are downloaded.
+/// Called by the frontend on first launch / onboarding.
+#[tauri::command]
+pub async fn ensure_tts_model(app: AppHandle) -> Result<TtsModelStatus, String> {
+    let state = app.state::<ModelState>();
+    crate::tts_model::ensure_models(&app, state.inner()).await
+}
+
+/// Cancel an in-progress model download.
+#[tauri::command]
+pub async fn cancel_tts_model_download(app: AppHandle) -> Result<(), String> {
+    let state = app.state::<ModelState>();
+    crate::tts_model::cancel_download(state.inner());
+    Ok(())
+}
+
+/// Get the current model status without triggering a download.
+#[tauri::command]
+pub async fn get_tts_model_status(app: AppHandle) -> Result<TtsModelStatus, String> {
+    Ok(crate::tts_model::get_model_status(&app))
+}
+
+/// Delete all downloaded model files so the user can force a clean re-download.
+#[tauri::command]
+pub async fn delete_tts_model(app: AppHandle) -> Result<(), String> {
+    crate::tts_model::delete_models(&app)
 }
 
 #[cfg(test)]

@@ -119,7 +119,6 @@
       }
     ],
     "resources": {
-      "models/*": "models/",
       "../node_modules/pdfjs-dist/build/pdf.worker.mjs": "pdfjs/build/pdf.worker.mjs",
       "../node_modules/pdfjs-dist/build/pdf.worker.min.mjs": "pdfjs/build/pdf.worker.min.mjs",
       "../node_modules/pdfjs-dist/cmaps/": "pdfjs/cmaps/",
