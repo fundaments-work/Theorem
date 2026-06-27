@@ -144,89 +144,146 @@ function parseIfoContent(content: string): { name: string; language: string } {
     };
 }
 
+interface WiktionaryParseGroup {
+    pos: string;
+    definitions: string[];
+}
+
+const KNOWN_POS = new Set([
+    "Noun", "Verb", "Adjective", "Adverb", "Interjection", "Proper noun",
+    "Preposition", "Conjunction", "Pronoun", "Determiner", "Article",
+    "Numeral", "Particle", "Prefix", "Suffix", "Contraction",
+    "Abbreviation", "Symbol", "Phrase", "Idiom", "Affix",
+    "Circumposition", "Classifier", "Clitic", "Counter", "Infix",
+    "Interfix", "Measure word", "Particle", "Preverb", "Postposition",
+    "Root", "Stem", "Combining form",
+]);
+
 /**
- * Wiktionary-derived StarDict (Pango "m" format) looks like:
- *     (Noun) * meaning text (Verb) *: another meaning
+ * Parses Wiktionary-derived StarDict Pango "m" format:
+ *     (Noun) * definition text (Verb) *: another definition
+ *     (Noun) definition without bullet
  *
- * This strips Pango/HTML artifacts, splits on POS labels,
- * removes empty/cross-reference-only fragments, and dedupes.
+ * Returns definitions grouped by part-of-speech label, with
+ * cross-references, citation stubs, and formatting artifacts removed.
  */
-function cleanupWiktionaryText(raw: string): string[] {
-    const results: string[] = [];
-    const seen = new Set<string>();
+function parseWiktionaryDefinitions(raw: string): WiktionaryParseGroup[] {
+    // 1. Strip HTML comments and XML/Pango tags
+    let text = raw.replace(/<!--.*?-->/gs, " ");
+    text = text.replace(/<[^>]*>/g, " ");
 
-    // 1. Strip XML/Pango tags (if any survive in the data)
-    let text = raw.replace(/<[^>]*>/g, " ");
-
-    // 2. Remove cross-reference noise: "word#type|display" → "display"
-    //    and bare fragment anchors: "#something"
+    // 2. Clean cross-references: "hello#Interjection|Hello!" → "Hello!"
     text = text.replace(/\w+#\w+\|/g, "");
     text = text.replace(/#\w+/g, "");
 
-    // 3. Clean up Pango formatting artifacts
-    text = text.replace(/\|/g, " "); // stray pipes from markup
-    text = text.replace(/\\"/g, '"'); // escaped quotes
-    text = text.replace(/\s*["""]\s*/g, " "); // empty/stray quote marks
-    text = text.replace(/\s*[―–—]\s*/g, " — "); // normalize dashes into spaced em-dash
-    text = text.replace(/[\[\]{}]/g, " "); // strip brackets
+    // 3. Clean Pango formatting artifacts
+    text = text.replace(/\|/g, " ");
+    text = text.replace(/\\"/g, '"');
+    text = text.replace(/\s*["""]\s*/g, " ");
+    text = text.replace(/\s*[―–—]\s*/g, " — ");
+    text = text.replace(/[\[\]{}]/g, " ");
 
-    // 4. Normalize whitespace
+    // 4. Strip leading/trailing parenthetical junk from segments later
     text = text.replace(/\s+/g, " ").trim();
 
-    // 5. Split on parenthesised POS labels like (Noun), (Verb) etc.
-    //    Also handle the stray open/close balance.
-    const segments = text.split(/(?=\([A-Za-z]+\))/);
+    // 5. Split on parenthetical labels that start with uppercase (potential POS markers)
+    //    Skip "public domain", "publication" etc. since they start with lowercase.
+    const rawSegments = text.split(/(?=\([A-Z][A-Za-z ]*\))/).filter(Boolean);
 
-    for (let segment of segments) {
-        // 5. Strip the leading POS label itself so we keep the explanation
-        segment = segment.replace(/^\([A-Za-z]+\)\s*/, "").trim();
+    // 6. Group definitions by POS
+    const groups = new Map<string, string[]>();
 
-        // 6. Strip leading bullets, colons, dashes, stars (Pango artifacts)
-        segment = segment.replace(/^[*:.-]+/, "").trim();
+    for (const segment of rawSegments) {
+        // Extract POS label — handle "Label) * def", "Label) *: def", and "Label) def"
+        const posMatch = segment.match(/^\(([A-Za-z ]+)\)\s*(?:\*:?)?\s*/);
+        if (!posMatch) continue;
 
-        // 7. If the segment is just a cross-reference remainder or empty → skip
-        if (!segment || segment.length < 5) continue;
-        // Skip pure formatting remnants (single word / bare url)
-        if (/^[\w/:#@.-]+$/.test(segment)) continue;
+        const pos = posMatch[1].trim();
+        if (!KNOWN_POS.has(pos)) continue;
 
-        // 8. Dedupe
-        const key = segment.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
+        let def = segment.slice(posMatch[0].length);
 
-        results.push(segment);
+        // Clean up remaining artifacts
+        def = def.replace(/\|/g, " ");
+        def = def.replace(/\s*["""]\s*/g, " ");
+        def = def.replace(/\s+/g, " ").trim();
+
+        // Quality filters
+        if (!def || def.length < 4) continue;
+        if (/^[\w/:#@.%\-'·\s]+$/.test(def)) continue;
+        if (/^\d{4},?\s/.test(def)) continue;
+        if (/^[:.…·]+$/.test(def)) continue;
+
+        // Skip sub-label markers and citations
+        if (/^\([A-Za-z]/.test(def)) continue;
+
+        // Append to POS group (handles repeated POS labels across entries)
+        const existing = groups.get(pos);
+        if (existing) {
+            existing.push(def);
+        } else {
+            groups.set(pos, [def]);
+        }
     }
 
-    return results;
+    // 7. Convert to array, deduplicate within each group
+    const result: WiktionaryParseGroup[] = [];
+    for (const [pos, defs] of groups) {
+        const seen = new Set<string>();
+        const unique: string[] = [];
+        for (const d of defs) {
+            const key = d.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            unique.push(d);
+        }
+        if (unique.length > 0) {
+            result.push({ pos, definitions: unique });
+        }
+    }
+
+    return result;
 }
 
-function extractDefinitions(entries: Array<{ word: string; data: Array<[string, Uint8Array]> }>): string[] {
-    const definitions: string[] = [];
+function parseDictionaryEntries(
+    entries: Array<{ word: string; data: Array<[string, Uint8Array]> }>,
+    provider: DictionaryProvider,
+): VocabularyMeaning[] {
+    const posGroups = new Map<string, string[]>();
 
     for (const entry of entries) {
         for (const [, payload] of entry.data || []) {
             const decoded = textDecoder.decode(payload);
-            const cleaned = cleanupWiktionaryText(decoded);
-            for (const def of cleaned) {
-                if (!definitions.includes(def)) {
-                    definitions.push(def);
+            const parsed = parseWiktionaryDefinitions(decoded);
+            for (const group of parsed) {
+                const existing = posGroups.get(group.pos);
+                if (existing) {
+                    existing.push(...group.definitions);
+                } else {
+                    posGroups.set(group.pos, [...group.definitions]);
                 }
             }
         }
     }
 
-    return definitions;
-}
+    if (posGroups.size === 0) return [];
 
-function toVocabularyMeaning(definitions: string[], provider: DictionaryProvider): VocabularyMeaning[] {
-    if (definitions.length === 0) {
-        return [];
+    const result: VocabularyMeaning[] = [];
+    for (const [pos, defs] of posGroups) {
+        const seen = new Set<string>();
+        const unique: string[] = [];
+        for (const d of defs) {
+            const key = d.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            unique.push(d);
+        }
+        if (unique.length > 0) {
+            result.push({ provider, partOfSpeech: pos, definitions: unique });
+        }
     }
 
-    return [{
-        provider,
-        definitions,
-    }];
+    return result;
 }
 
 async function createRuntimeDictionary(buffers: {
@@ -510,8 +567,7 @@ export async function lookupInStarDictDictionary(
         if (!entries || entries.length === 0) {
             return [];
         }
-        const definitions = extractDefinitions(entries);
-        return toVocabularyMeaning(definitions, "stardict");
+        return parseDictionaryEntries(entries, "stardict");
     } catch (error) {
         console.error(`[StarDictService] Lookup failed for "${term}" in ${id}:`, error);
         return [];

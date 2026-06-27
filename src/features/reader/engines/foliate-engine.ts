@@ -132,6 +132,10 @@ export class FoliateEngine {
     private layout: PageLayout = 'single';
     private flow: ReadingFlow = 'paged';
     private zoom_level = 1;
+    // When non-zero, all page navigation (next/prev/scroll) is blocked.
+    // Set to Date.now()+timeout whenever a non-collapsed text selection is
+    // observed in any iframe document; expires automatically.
+    private selectionNavLockUntil = 0;
     private theme: ReaderTheme = 'light';
     
     // Batch update mechanism
@@ -1182,6 +1186,7 @@ export class FoliateEngine {
 
     async next(distance?: number): Promise<void> {
         if (!this.view?.renderer) return;
+        if (Date.now() < this.selectionNavLockUntil) return;
         try {
             await this.view.next(distance);
         } catch (e) {
@@ -1191,6 +1196,7 @@ export class FoliateEngine {
 
     async prev(distance?: number): Promise<void> {
         if (!this.view?.renderer) return;
+        if (Date.now() < this.selectionNavLockUntil) return;
         try {
             await this.view.prev(distance);
         } catch (e) {
@@ -1203,6 +1209,7 @@ export class FoliateEngine {
      * Falls back to prev() in paginated mode
      */
     async scrollUp(distance?: number): Promise<void> {
+        if (Date.now() < this.selectionNavLockUntil) return;
         if (this.flow === 'scroll') {
             // In scroll mode, use foliate-js's scroll methods if available
             const scrollDistance = distance ?? this.getScrollDistance();
@@ -1218,6 +1225,7 @@ export class FoliateEngine {
      * Falls back to next() in paginated mode
      */
     async scrollDown(distance?: number): Promise<void> {
+        if (Date.now() < this.selectionNavLockUntil) return;
         if (this.flow === 'scroll') {
             // In scroll mode, use foliate-js's scroll methods if available
             const scrollDistance = distance ?? this.getScrollDistance();
@@ -1243,11 +1251,13 @@ export class FoliateEngine {
 
     async goLeft(): Promise<void> {
         if (!this.view?.renderer) return;
+        if (Date.now() < this.selectionNavLockUntil) return;
         await this.view.goLeft();
     }
 
     async goRight(): Promise<void> {
         if (!this.view?.renderer) return;
+        if (Date.now() < this.selectionNavLockUntil) return;
         await this.view.goRight();
     }
 
@@ -2097,7 +2107,7 @@ export class FoliateEngine {
             let pointerDownY = 0;
             let pointerDownAt = 0;
             let pointerMoved = false;
-            const SELECTION_CAPTURE_DELAY = 24;
+            const SELECTION_CAPTURE_DELAY = 12;
             const SELECTION_INTERACTION_SUPPRESS_MS = 420;
             const TAP_MAX_DISTANCE = 12;
             const TAP_MAX_DURATION = 350;
@@ -2155,6 +2165,10 @@ export class FoliateEngine {
                         lastSelectionKey = selectionKey;
 
                         lastSelectionCapturedAt = Date.now();
+                        // Lock navigation while the user has an active text
+                        // selection — without this, touch swipe gestures
+                        // fired during selection turn pages unexpectedly.
+                        this.selectionNavLockUntil = Date.now() + 2000;
                         try {
                             callback(cfi, text, range.cloneRange());
                         } catch {
@@ -2276,33 +2290,6 @@ export class FoliateEngine {
                         touchStartAt = 0;
                         return;
                     }
-                    scheduleSelectionCapture(event);
-
-                    if (this.flow === 'scroll') {
-                        touchStartAt = 0;
-                        return;
-                    }
-
-                    if (this.isInteractiveTapTarget(event.target)) {
-                        touchStartAt = 0;
-                        return;
-                    }
-
-                    const selection = doc.getSelection();
-                    if (selection && !selection.isCollapsed && selection.toString().trim().length > 0) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        touchStartAt = 0;
-                        return;
-                    }
-
-                    // Don't turn page when interacting with highlight overlays
-                    const touchTarget = event.target;
-                    if (touchTarget instanceof Element && touchTarget.closest('g[data-highlight]')) {
-                        touchStartAt = 0;
-                        return;
-                    }
-
                     const touch = event.changedTouches[0];
                     const deltaX = touch.clientX - touchStartX;
                     const deltaY = touch.clientY - touchStartY;
@@ -2311,6 +2298,15 @@ export class FoliateEngine {
                     const absY = Math.abs(deltaY);
 
                     touchStartAt = 0;
+
+                    scheduleSelectionCapture(event);
+
+                    if (this.flow === 'scroll') return;
+
+                    if (this.isInteractiveTapTarget(event.target)) return;
+
+                    // Don't turn page when interacting with highlight overlays
+                    if (event.target instanceof Element && event.target.closest('g[data-highlight]')) return;
 
                     if (
                         elapsed > SWIPE_MAX_DURATION
@@ -2322,6 +2318,9 @@ export class FoliateEngine {
                     }
 
                     event.preventDefault();
+                    // Wait for selection capture to complete before deciding
+                    // whether to turn page — avoids race on mobile where the
+                    // selection may not yet be established at touchend time.
                     window.setTimeout(() => {
                         const shouldSuppressInteraction =
                             Date.now() - lastSelectionCapturedAt < SELECTION_INTERACTION_SUPPRESS_MS;
@@ -2343,12 +2342,19 @@ export class FoliateEngine {
                         } else {
                             void this.next();
                         }
-                    }, SELECTION_CAPTURE_DELAY);
+                    }, SELECTION_CAPTURE_DELAY + 50);
                 },
                 { capture: true, passive: false },
             );
 
             doc.addEventListener('selectionchange', () => {
+                // Lock navigation immediately when a non-collapsed selection
+                // is present — this fires before scheduleSelectionCapture's
+                // debounce, so the lock is active by the time touchend fires.
+                const sel = doc.getSelection();
+                if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
+                    this.selectionNavLockUntil = Date.now() + 2000;
+                }
                 scheduleSelectionCapture();
             }, true);
 

@@ -449,6 +449,11 @@ export class Paginator extends HTMLElement {
     #touchState
     #touchScrolled
     #lastVisibleRange
+    // Timestamp until which text selection is considered active.
+    // Set on every non-collapsed selectionchange so drag-select keeps
+    // the flag alive; expires 1.5s after the last selection change.
+    // Used to suppress touch swipe page-turns while the user is selecting.
+    #selectionActiveUntil = 0
     constructor() {
         super()
         this.#root.innerHTML = `<style>
@@ -583,48 +588,47 @@ export class Paginator extends HTMLElement {
                 else setSelectionTo(this.#anchor, -1)
             }
         })
-        const checkPointerSelection = debounce((range, sel, isTouchSelection) => {
-            if (!sel.rangeCount) return
-            const selRange = sel.getRangeAt(0)
-            const backward = selectionIsBackward(sel)
-            if (backward && selRange.compareBoundaryPoints(Range.START_TO_START, range) < 0)
-                this.prev()
-            else if (!backward && selRange.compareBoundaryPoints(Range.END_TO_END, range) > 0)
-                this.next()
-        }, 700)
-        // Touch-based selection uses a much longer debounce (2s) so the
-        // user must deliberately hold the selection at the page edge to
-        // cross pages — accidental drags near the edge won't trigger it.
-        const checkTouchSelection = debounce((range, sel) => {
-            if (!sel.rangeCount) return
-            const selRange = sel.getRangeAt(0)
-            const backward = selectionIsBackward(sel)
-            if (backward && selRange.compareBoundaryPoints(Range.START_TO_START, range) < 0)
-                this.prev()
-            else if (!backward && selRange.compareBoundaryPoints(Range.END_TO_END, range) > 0)
-                this.next()
-        }, 2000)
         this.addEventListener('load', ({ detail: { doc } }) => {
             let isPointerSelecting = false
             doc.addEventListener('pointerdown', () => isPointerSelecting = true)
             doc.addEventListener('pointerup', () => isPointerSelecting = false)
-            let isTouchActive = false
-            doc.addEventListener('touchstart', () => isTouchActive = true, { passive: true })
-            doc.addEventListener('touchend', () => isTouchActive = false, { passive: true })
             let isKeyboardSelecting = false
             doc.addEventListener('keydown', () => isKeyboardSelecting = true)
             doc.addEventListener('keyup', () => isKeyboardSelecting = false)
+            // When a pointer drag extends the selection beyond the visible
+            // column, turn the page cleanly (full-page prev/next) instead of
+            // letting Android's native selection-handle auto-scroll creep the
+            // column container and reveal an adjacent column ("two-page
+            // bridge"). This is foliate's upstream behaviour that the
+            // runtime fork had removed, restored here.
+            const checkPointerSelection = debounce((range, sel) => {
+                if (!sel.rangeCount) return
+                const selRange = sel.getRangeAt(0)
+                const backward = selectionIsBackward(sel)
+                if (backward && selRange.compareBoundaryPoints(Range.START_TO_START, range) < 0)
+                    this.prev()
+                else if (!backward && selRange.compareBoundaryPoints(Range.END_TO_END, range) > 0)
+                    this.next()
+            }, 700)
             doc.addEventListener('selectionchange', () => {
                 if (this.scrolled) return
-                const range = this.#lastVisibleRange
-                if (!range) return
                 const sel = doc.getSelection()
-                if (!sel.rangeCount) return
-                if (isPointerSelecting && sel.type === 'Range')
-                    checkPointerSelection(range, sel, isTouchActive)
-                else if (isTouchActive && sel.type === 'Range')
-                    checkTouchSelection(range, sel)
+                if (!sel?.rangeCount) return
+                // Keep the touch-swipe page-turn suppression flag alive while
+                // the user is actively selecting text. Without it, the
+                // touchend after a drag-to-select would flip the page. The
+                // flag expires 1.5s after the last selection change so taps
+                // and swipes work again afterwards.
+                if (!sel.isCollapsed && sel.toString().trim().length > 0) {
+                    this.#selectionActiveUntil = Date.now() + 1500
+                }
+                if (isPointerSelecting && sel.type === 'Range') {
+                    const range = this.#lastVisibleRange
+                    if (range) checkPointerSelection(range, sel)
+                }
                 else if (isKeyboardSelecting) {
+                    const range = this.#lastVisibleRange
+                    if (!range) return
                     const selRange = sel.getRangeAt(0).cloneRange()
                     const backward = selectionIsBackward(sel)
                     if (!backward) selRange.collapse()
@@ -855,9 +859,15 @@ export class Paginator extends HTMLElement {
             return
         }
         // Don't scroll the page while the user is actively selecting text
-        // (e.g. dragging selection handles on mobile).
+        // (e.g. dragging selection handles on mobile). The flag is kept alive
+        // by selectionchange events during the drag; it expires 1.5s after
+        // the last selection change so taps/swipes work again afterwards.
+        if (Date.now() < this.#selectionActiveUntil) return
         const sel = this.#view?.document?.getSelection?.()
-        if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) return
+        if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
+            this.#selectionActiveUntil = Date.now() + 1500
+            return
+        }
         e.preventDefault()
         const touch = e.changedTouches[0]
         const x = touch.screenX, y = touch.screenY
@@ -868,16 +878,23 @@ export class Paginator extends HTMLElement {
         state.t = e.timeStamp
         state.vx = dx / dt
         state.vy = dy / dt
+        // Track velocity but DO NOT scrollBy() — pages must not move
+        // while the user is touching the screen. Jumping the page during
+        // a long-press text selection is the primary bug this fixes.
+        // The snap() on touchend handles the page turn.
         this.#touchScrolled = true
-        this.scrollBy(dx, dy)
     }
     #onTouchEnd() {
         this.#touchScrolled = false
         if (this.scrolled) return
 
         // Don't snap to nearest page while the user is actively selecting text.
+        if (Date.now() < this.#selectionActiveUntil) return
         const sel = this.#view?.document?.getSelection?.()
-        if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) return
+        if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
+            this.#selectionActiveUntil = Date.now() + 1500
+            return
+        }
 
         // XXX: Firefox seems to report scale as 1... sometimes...?
         // at this point I'm basically throwing `requestAnimationFrame` at

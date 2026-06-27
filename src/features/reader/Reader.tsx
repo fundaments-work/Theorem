@@ -121,6 +121,11 @@ function getMimeTypeForBookFormat(format: BookFormat): string {
     }
 }
 
+function extractSectionIndex(cfi: string): number | null {
+    const match = cfi.match(/\/6\/(\d+)/);
+    return match ? parseInt(match[1], 10) : null;
+}
+
 function isSyntheticSectionLocation(location: string): boolean {
     return /^section-\d+$/i.test(location.trim());
 }
@@ -228,6 +233,14 @@ function BookReaderPage() {
     const progressSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingProgressUpdateRef = useRef<PendingProgressUpdate | null>(null);
     const hasAppliedInitialLocationRef = useRef(false);
+    const lastCreatedHighlightRef = useRef<{
+        annotationId: string;
+        text: string;
+        cfi: string;
+        sectionIndex: number;
+        timestamp: number;
+    } | null>(null);
+
     const debug = useCallback((...args: unknown[]) => {
         if (import.meta.env.DEV) {
             console.debug(...args);
@@ -1760,28 +1773,64 @@ function BookReaderPage() {
             } catch (err) {
                 console.warn('[Reader] Failed to update highlight in viewport:', err);
             }
-        } else {
-            // Create new highlight - get annotation from engine with its ID
-            try {
-                const annotation = await readerRef.current?.addHighlight?.(selectedCfi, selectedText, color);
-                if (annotation) {
-                    // Ensure the annotation has the correct bookId
-                    const annotationWithBookId = {
-                        ...annotation,
-                        bookId: currentBookId,
-                        referenceId: annotation.referenceId || currentBookId,
-                    };
-                    // Use the annotation from the engine (which has the correct ID)
-                    addAnnotation(annotationWithBookId);
-                    setAnnotations(prev => [...prev, annotationWithBookId]);
-                    debug('[Reader] Created new highlight:', annotationWithBookId.id);
-                } else {
-                    console.warn('[Reader] addHighlight returned null/undefined');
+            } else {
+                // Create new highlight - get annotation from engine with its ID
+                try {
+                    const annotation = await readerRef.current?.addHighlight?.(selectedCfi, selectedText, color);
+                    if (annotation) {
+                        // Ensure the annotation has the correct bookId
+                        const annotationWithBookId = {
+                            ...annotation,
+                            bookId: currentBookId,
+                            referenceId: annotation.referenceId || currentBookId,
+                        };
+                        // Use the annotation from the engine (which has the correct ID)
+                        addAnnotation(annotationWithBookId);
+                        setAnnotations(prev => [...prev, annotationWithBookId]);
+                        debug('[Reader] Created new highlight:', annotationWithBookId.id);
+
+                        // Cross-page highlight merge detection
+                        const currentSection = extractSectionIndex(selectedCfi);
+                        const lastHL = lastCreatedHighlightRef.current;
+                        if (lastHL && currentSection !== null && lastHL.sectionIndex >= 0) {
+                            const timeSinceLast = Date.now() - lastHL.timestamp;
+                            const isAdjacentSection = Math.abs(currentSection - lastHL.sectionIndex) === 1;
+                            if (timeSinceLast < 30000 && isAdjacentSection) {
+                                debug('[Reader] Merging cross-page highlights:', {
+                                    prev: lastHL.text.substring(0, 30),
+                                    next: selectedText.substring(0, 30),
+                                });
+                                const mergedText = lastHL.text + " " + selectedText;
+                                // Delete old highlight from store and viewport
+                                removeAnnotation(lastHL.annotationId);
+                                readerRef.current?.removeHighlight?.(lastHL.annotationId);
+                                setAnnotations(prev => prev.filter(a => a.id !== lastHL.annotationId));
+                                // Update current annotation with merged text
+                                updateAnnotation(annotationWithBookId.id, { selectedText: mergedText });
+                                setAnnotations(prev => prev.map(a =>
+                                    a.id === annotationWithBookId.id
+                                        ? { ...a, selectedText: mergedText }
+                                        : a
+                                ));
+                                debug('[Reader] Merged cross-page highlight');
+                            }
+                        }
+
+                        // Track for future cross-page merge detection
+                        lastCreatedHighlightRef.current = {
+                            annotationId: annotationWithBookId.id,
+                            text: selectedText,
+                            cfi: selectedCfi,
+                            sectionIndex: extractSectionIndex(selectedCfi) ?? -1,
+                            timestamp: Date.now(),
+                        };
+                    } else {
+                        console.warn('[Reader] addHighlight returned null/undefined');
+                    }
+                } catch (err) {
+                    console.warn('[Reader] Failed to add highlight to viewport:', err);
                 }
-            } catch (err) {
-                console.warn('[Reader] Failed to add highlight to viewport:', err);
             }
-        }
 
         setShowColorPicker(false);
         setColorPickerMode("actions");
@@ -1792,7 +1841,7 @@ function BookReaderPage() {
 
         // Clear selection
         readerRef.current?.clearSelection?.();
-    }, [selectedCfi, selectedText, currentBookId, addAnnotation, editingHighlightId, annotations, updateAnnotation]);
+    }, [selectedCfi, selectedText, currentBookId, addAnnotation, editingHighlightId, annotations, updateAnnotation, removeAnnotation]);
 
     const handleAddNote = useCallback(() => {
         if (!selectedCfi || !currentBookId) return;

@@ -1,6 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
 import {
-    ArrowLeft,
     BookOpenText,
     Trash2,
     X,
@@ -162,23 +161,13 @@ export function VocabularyPage() {
                 !showMobileList ? "flex" : "hidden",
                 "md:flex",
             )}>
-                {/* Mobile header */}
-                <header className="shrink-0 px-6 pt-8 pb-4 md:hidden">
-                    <button
-                        onClick={handleBackToSources}
-                        className="-ml-2 p-1.5 text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
-                    >
-                        <ArrowLeft className="w-5 h-5" />
-                    </button>
-                </header>
-
                 <div className="flex-1 flex min-h-0 overflow-hidden">
                     {selectedTerm ? (
-                        <div className="flex-1 flex flex-col min-w-0">
+                        <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
                             <div className="flex flex-col h-full overflow-y-auto animate-fade-in">
-                                <div className="p-6 md:p-8 lg:p-10">
+                                <div className="p-6 md:p-8 lg:p-10 max-w-full">
                                     <button
-                                        onClick={() => setSelectedTermId(null)}
+                                        onClick={handleBackToSources}
                                         className="md:hidden mb-4 flex items-center gap-1 text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
                                     >
                                         <ChevronLeft className="w-4 h-4" />
@@ -187,7 +176,7 @@ export function VocabularyPage() {
 
                                     <div className="mb-8 flex items-start justify-between gap-4">
                                         <div className="min-w-0">
-                                            <h2 className="text-3xl font-bold text-[color:var(--color-text-primary)] tracking-tight">
+                                            <h2 className="text-3xl font-bold text-[color:var(--color-text-primary)] tracking-tight break-words">
                                                 {selectedTerm.term}
                                             </h2>
                                             {selectedTerm.phonetic && (
@@ -205,30 +194,30 @@ export function VocabularyPage() {
                                         </button>
                                     </div>
 
-                                    <div className="space-y-6 mb-10">
+                                    <div className="space-y-8 mb-10">
                                         {selectedTerm.meanings.map((meaning, idx) => (
                                             <div key={`${meaning.provider}-${idx}`}>
-                                                <div className="flex items-center gap-2 mb-3">
+                                                <div className="flex items-center gap-3 mb-4">
                                                     {meaning.partOfSpeech && (
-                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--color-accent)] bg-[var(--color-accent)]/10 px-2 py-0.5">
+                                                        <span className="text-[11px] font-bold uppercase tracking-wider text-[color:var(--color-accent)] bg-[var(--color-accent)]/10 px-2.5 py-1">
                                                             {meaning.partOfSpeech}
                                                         </span>
                                                     )}
-                                                    <span className="text-[10px] uppercase text-[color:var(--color-text-muted)] tracking-wider">
+                                                    <span className="text-[10px] uppercase text-[color:var(--color-text-muted)] tracking-wider font-medium">
                                                         {meaning.provider}
                                                     </span>
                                                 </div>
-                                                <ul className="space-y-3">
-                                                    {meaning.definitions.slice(0, 5).map((def) => (
-                                                        <li key={def} className="flex gap-3 text-base text-[color:var(--color-text-primary)] leading-relaxed">
-                                                            <span className="shrink-0 mt-2.5 h-1.5 w-1.5 bg-[var(--color-accent)] opacity-30" />
+                                                <ul className="space-y-2.5">
+                                                    {meaning.definitions.slice(0, 5).map((def, i) => (
+                                                        <li key={`${i}-${def.slice(0, 40)}`} className="flex gap-3 text-[15px] text-[color:var(--color-text-primary)] leading-relaxed">
+                                                            <span className="shrink-0 mt-2.5 h-2 w-2 rounded-full bg-[var(--color-accent)] opacity-40" />
                                                             {isHtml(def) ? (
                                                                 <div
-                                                                    className="dict-definition flex-1 min-w-0"
+                                                                    className="dict-definition min-w-0 break-words"
                                                                     dangerouslySetInnerHTML={{ __html: def }}
                                                                 />
                                                             ) : (
-                                                                <span>{def}</span>
+                                                                <span className="min-w-0 break-words">{def}</span>
                                                             )}
                                                         </li>
                                                     ))}
