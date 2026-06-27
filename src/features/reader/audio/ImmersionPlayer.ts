@@ -12,6 +12,16 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { SoundTouch, SimpleFilter, WebAudioBufferSource } from 'soundtouchjs';
 
+/// Whether to use SoundTouch offline stretching (desktop) or simple
+/// playbackRate (mobile). SoundTouch gives pitch-preserved speed but
+/// blocks the main thread per chunk — too slow on mobile CPUs.
+const USE_SOUNDTOUCH = typeof window !== 'undefined'
+    && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+/// Output gain boost — Kokoro audio peaks around 0.5, so 3× brings it
+/// to a comfortable listening level without clipping.
+const OUTPUT_GAIN = 3.0;
+
 export type PlaybackState = 'idle' | 'loading' | 'playing' | 'paused';
 
 export interface PlaybackCallbacks {
@@ -41,19 +51,23 @@ interface TtsChunkPayload {
 
 /// Stretch raw audio samples via SoundTouch to the target speed (tempo).
 /// Returns a new AudioBuffer with the stretched audio, or the original if speed ≈ 1.
+/// On mobile, SoundTouch is skipped — playbackRate is used instead (with
+/// pitch shift) to avoid blocking the main thread.
 function stretchChunk(
     audioData: number[],
     sampleRate: number,
     speed: number,
     ctx: AudioContext,
-): AudioBuffer {
-    if (Math.abs(speed - 1.0) < 0.01) {
+): { buffer: AudioBuffer; rate: number } {
+    // At 1× speed, or on mobile, just create the buffer directly.
+    if (Math.abs(speed - 1.0) < 0.01 || !USE_SOUNDTOUCH) {
         const buffer = ctx.createBuffer(1, audioData.length, sampleRate);
         buffer.getChannelData(0).set(audioData);
-        return buffer;
+        // On mobile, return the rate so handleChunk can set playbackRate.
+        return { buffer, rate: USE_SOUNDTOUCH ? 1.0 : speed };
     }
 
-    // Create a temporary source buffer for SoundTouch to read from
+    // Desktop with SoundTouch: stretch offline, return at 1× rate.
     const sourceBuffer = ctx.createBuffer(1, audioData.length, sampleRate);
     sourceBuffer.getChannelData(0).set(audioData);
 
@@ -62,33 +76,31 @@ function stretchChunk(
     soundtouch.tempo = speed;
     const filter = new SimpleFilter(source, soundtouch);
 
-    // Extract all stretched frames
     const CHUNK = 4096;
     const interleaved = new Float32Array(CHUNK * 2);
     const samplesOut: number[] = [];
 
     let frames: number;
     while ((frames = filter.extract(interleaved, CHUNK)) > 0) {
-        // Mono → take left channel from interleaved output
         for (let i = 0; i < frames; i++) {
             samplesOut.push(interleaved[i * 2]);
         }
     }
 
     if (samplesOut.length === 0) {
-        // Fallback: return original buffer
         const buffer = ctx.createBuffer(1, audioData.length, sampleRate);
         buffer.getChannelData(0).set(audioData);
-        return buffer;
+        return { buffer, rate: speed }; // fallback to playbackRate
     }
 
     const outBuffer = ctx.createBuffer(1, samplesOut.length, sampleRate);
     outBuffer.getChannelData(0).set(new Float32Array(samplesOut));
-    return outBuffer;
+    return { buffer: outBuffer, rate: 1.0 };
 }
 
 export class ImmersionPlayer {
     private audioCtx: AudioContext | null = null;
+    private gainNode: GainNode | null = null;
     private scheduledEnd = 0;
     private callbacks: PlaybackCallbacks = {};
     private unlisteners: UnlistenFn[] = [];
@@ -184,6 +196,7 @@ export class ImmersionPlayer {
         if (this.audioCtx) {
             this.audioCtx.close().catch(() => {});
             this.audioCtx = null;
+            this.gainNode = null;
         }
         this.scheduledEnd = 0;
         this.chunksReceived = this.preloadChunksReceived;
@@ -201,7 +214,13 @@ export class ImmersionPlayer {
 
     private getAudioCtx(): AudioContext {
         if (!this.audioCtx || this.audioCtx.state === 'closed') {
-            this.audioCtx = new AudioContext({ sampleRate: 24000 });
+            // Don't force sampleRate — let the platform choose its native
+            // rate to avoid resampling artifacts (especially on Android
+            // WebView where 24000 Hz may not be supported).
+            this.audioCtx = new AudioContext();
+            this.gainNode = this.audioCtx.createGain();
+            this.gainNode.gain.value = OUTPUT_GAIN;
+            this.gainNode.connect(this.audioCtx.destination);
         }
         return this.audioCtx;
     }
@@ -214,8 +233,11 @@ export class ImmersionPlayer {
             ctx.resume();
         }
 
-        // Time-stretch the raw audio at the current speed
-        const stretched = stretchChunk(
+        // Time-stretch the raw audio at the current speed.
+        // On mobile, this returns the original buffer + a playbackRate
+        // (pitch shifts but no main-thread blocking).
+        // On desktop, SoundTouch stretches offline (pitch preserved).
+        const { buffer: stretched, rate } = stretchChunk(
             payload.audio_data,
             payload.sample_rate,
             this._speed,
@@ -224,9 +246,11 @@ export class ImmersionPlayer {
 
         const source = ctx.createBufferSource();
         source.buffer = stretched;
-        source.connect(ctx.destination);
+        source.playbackRate.value = rate;
+        // Route through the gain node for volume boost.
+        source.connect(this.gainNode ?? ctx.destination);
 
-        const effectiveDuration = stretched.duration;
+        const effectiveDuration = stretched.duration / rate;
         const startAt = Math.max(ctx.currentTime, this.scheduledEnd);
         source.start(startAt);
         this.scheduledEnd = startAt + effectiveDuration;
@@ -235,7 +259,7 @@ export class ImmersionPlayer {
 
         // Scale word timestamps to match stretched duration ratio
         const stretchRatio = payload.audio_data.length > 0
-            ? stretched.length / payload.audio_data.length
+            ? (stretched.length / rate) / payload.audio_data.length
             : 1.0;
         const scaledWords = payload.words.map((w) => ({
             ...w,
@@ -360,6 +384,7 @@ export class ImmersionPlayer {
         if (this.audioCtx) {
             this.audioCtx.close().catch(() => {});
             this.audioCtx = null;
+            this.gainNode = null;
         }
 
         this.scheduledEnd = 0;

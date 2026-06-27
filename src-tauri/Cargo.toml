@@ -59,10 +59,19 @@ bzip2 = "0.4"
 tar = "0.4"
 zip = "0.6"
 walkdir = "2"
+regex = "1.10.0"
+
+# TTS engine (ONNX Runtime + Kokoro)
+[target.'cfg(not(target_os = "android"))'.dependencies]
 ort = "2.0.0-rc.12"
 ndarray = "0.17.2"
 kokoro-en = { version = "0.1.4", default-features = false, features = ["misaki-lean"] }
-regex = "1.10.0"
+
+# Android: load ONNX Runtime dynamically from the bundled .so in jniLibs/
+[target.'cfg(target_os = "android")'.dependencies]
+ort = { version = "2.0.0-rc.12", default-features = false, features = ["load-dynamic", "ndarray"] }
+ndarray = "0.17.2"
+kokoro-en = { version = "0.1.4", default-features = false, features = ["misaki-lean"] }
 
 # Optimize only the packages that need it in dev mode.
 # debug-assertions = false removes the verbose #[cfg(debug_assertions)] eprintln!

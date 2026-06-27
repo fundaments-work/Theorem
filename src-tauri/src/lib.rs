@@ -804,25 +804,27 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // TTS engine (ONNX + Kokoro). On Android uses pure-Rust tract backend
+            // for ONNX inference (slower but no native binaries needed).
             app.manage(tts::TtsState {
                 engine: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
                 generation_id: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
             });
             app.manage(tts::ModelState::new());
 
-            // Download models in background if missing (first launch).
-            // Runs concurrently with pre-warm so the app isn't blocked.
             let downloads_app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let model_state = downloads_app.state::<tts::ModelState>();
-                if let Err(e) = tts_model::ensure_models(&downloads_app, model_state.inner()).await
+                if let Err(e) = tts_model::ensure_models(
+                    &downloads_app,
+                    model_state.inner(),
+                )
+                .await
                 {
                     eprintln!("[tts] background model download failed: {}", e);
                 }
             });
 
-            // Pre-warm the engine immediately — if models are already cached
-            // (app_data_dir or dev directory), this completes in ~5 s.
             let tts_app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let tts_state = tts_app.state::<tts::TtsState>();
