@@ -944,7 +944,7 @@ export function LibraryPage() {
                 || Boolean(metadata.publishedDate && !latestBook.publishedDate)
             );
 
-            if (Boolean(metadata.coverDataUrl) || (hasUsefulMetadataUpdate && Boolean(latestBook.coverPath))) {
+            if (hasUsefulMetadataUpdate) {
                 updates.coverExtractionDone = true;
             }
 
@@ -1128,18 +1128,38 @@ export function LibraryPage() {
                             if (metadata.coverDataUrl) {
                                 updates.coverPath = metadata.coverDataUrl;
                             }
-                            // Update title/author from book metadata if current
-                            // title is still the filename (no spaces, simple chars).
-                            if (metadata.title && /^[\w-]+$/.test(book.title) && book.title === filename.replace(/\.[^/.]+$/, '')) {
-                                updates.title = metadata.title;
+                            // Use the same title-upgrade heuristic as Path A
+                            if (shouldUseExtractedTitle(book, metadata.title)) {
+                                updates.title = normalizeMetadataText(metadata.title);
                             }
                             if (metadata.author && !book.author) {
                                 updates.author = metadata.author;
                             }
-                            if (updates.coverPath) {
+                            if (metadata.description && !book.description) {
+                                updates.description = metadata.description;
+                            }
+                            if (metadata.publisher && !book.publisher) {
+                                updates.publisher = metadata.publisher;
+                            }
+                            if (metadata.language && !book.language) {
+                                updates.language = metadata.language;
+                            }
+                            if (metadata.publishedDate && !book.publishedDate) {
+                                updates.publishedDate = metadata.publishedDate;
+                            }
+
+                            const hasAnyUpdate = (
+                                Boolean(metadata.coverDataUrl)
+                                || updates.title !== undefined
+                                || updates.author !== undefined
+                                || updates.description !== undefined
+                                || updates.publisher !== undefined
+                                || updates.language !== undefined
+                                || updates.publishedDate !== undefined
+                            );
+
+                            if (hasAnyUpdate) {
                                 updates.coverExtractionDone = true;
-                                if (!isCancelled) updateBook(book.id, updates);
-                            } else if (updates.title || updates.author) {
                                 if (!isCancelled) updateBook(book.id, updates);
                             }
                         } else {
