@@ -211,6 +211,7 @@ function BookReaderPage() {
     const [initialLocation, setInitialLocation] = useState<string | undefined>(undefined);
     const [initialFraction, setInitialFraction] = useState<number | undefined>(undefined);
     const [ttsData, setTtsData] = useState<{ text: string; startWordId: string } | null>(null);
+    const [immersionMode, setImmersionMode] = useState(false);
     const suppressProgressRef = useRef(false);
     const resumeTargetRef = useRef<string | null>(null);
     const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2089,7 +2090,8 @@ function BookReaderPage() {
                     activePanel={activePanel}
                     fullscreen={settings.readerSettings.fullscreen}
                     onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
-
+                    immersionMode={immersionMode}
+                    onToggleImmersion={() => setImmersionMode(v => !v)}
                 />
             </div>
 
@@ -2178,16 +2180,17 @@ function BookReaderPage() {
             {/* Bottom Progress Navbar */}
             {isBookReady && !isPdfFormat && (
                 <>
+                    {/* Immersion Bar — only appears when headphone icon in titlebar is clicked */}
                     <div className={cn(
                         "fixed left-0 right-0 z-50 flex justify-center pointer-events-none transition-all duration-300",
-                        shouldShowReaderChrome ? "bottom-20" : "bottom-6"
+                        immersionMode ? "bottom-6" : "bottom-6"
                     )}>
                         <div className="pointer-events-auto">
                             <ImmersionBar 
                                 sectionText={ttsData?.text || ""}
                                 startWordId={ttsData?.startWordId}
                                 pageCfi={location?.cfi}
-                                visible={shouldShowReaderChrome || (ttsData?.text.length || 0) > 0}
+                                visible={immersionMode}
                                 onComplete={() => {
                                     immersionPlayer.playPreloaded();
                                     readerRef.current?.next();
@@ -2206,7 +2209,9 @@ function BookReaderPage() {
                         onToggleToc={() => togglePanel('toc')}
                         className={cn(
                             "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 backdrop-blur-xl",
-                            shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
+                            immersionMode
+                                ? "translate-y-full pointer-events-none"
+                                : shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
                         )}
                     />
                 </>

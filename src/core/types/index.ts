@@ -268,6 +268,7 @@ export interface VocabularySettings {
 
 export interface TtsSettings {
     voice: string;
+    speed: number;
 }
 
 export interface VaultIntegrationSettings {

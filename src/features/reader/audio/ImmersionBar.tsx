@@ -3,6 +3,8 @@
  *
  * Renders a pill-shaped toolbar at the bottom of the reader with:
  *   - Play / Pause / Stop controls
+ *   - Speed control (0.5× - 2.0×, pitch-preserved)
+ *   - Voice selector (6 English voices: 3 female + 3 male)
  *   - Status indicator with animated bars
  *   - Error display
  *
@@ -34,6 +36,24 @@ interface ImmersionBarProps {
     onSynthesisComplete?: () => void;
 }
 
+const SPEED_OPTIONS = [
+    { value: "0.5", label: "0.5×" },
+    { value: "0.75", label: "0.75×" },
+    { value: "1", label: "1×" },
+    { value: "1.25", label: "1.25×" },
+    { value: "1.5", label: "1.5×" },
+    { value: "2", label: "2×" },
+];
+
+const SAMPLE_VOICES: { value: string; label: string }[] = [
+    { value: "af_bella", label: "Bella (US F)" },
+    { value: "af_nicole", label: "Nicole (US F)" },
+    { value: "af_sarah", label: "Sarah (US F)" },
+    { value: "am_adam", label: "Adam (US M)" },
+    { value: "am_michael", label: "Michael (US M)" },
+    { value: "bm_george", label: "George (UK M)" },
+];
+
 export function ImmersionBar({
     sectionText,
     startWordId = 'tts-w-0',
@@ -47,6 +67,7 @@ export function ImmersionBar({
     const [error, setError] = useState<string | null>(null);
     const initializedRef = useRef(false);
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
+    const ttsSpeed = useSettingsStore((s) => s.settings.tts.speed);
     const updateTtsSettings = useSettingsStore((s) => s.updateTtsSettings);
 
     const onCompleteRef = useRef(onComplete);
@@ -62,10 +83,17 @@ export function ImmersionBar({
     const [isContinuousMode, setIsContinuousMode] = useState(false);
     const transitioningRef = useRef(false);
 
+    // Sync speed to ImmersionPlayer whenever it changes
+    useEffect(() => {
+        immersionPlayer.speed = ttsSpeed;
+    }, [ttsSpeed]);
+
     // Initialize the player once
     useEffect(() => {
         if (initializedRef.current) return;
         initializedRef.current = true;
+
+        immersionPlayer.speed = ttsSpeed;
 
         immersionPlayer.init({
             onStateChange: (state) => {
@@ -107,6 +135,7 @@ export function ImmersionBar({
         const text = sectionText.trim();
         if (!text) return;
         setError(null);
+        console.time('[ImmersionBar] play→genId');
 
         if (playbackState === 'paused') {
             await immersionPlayer.resume();
@@ -130,6 +159,8 @@ export function ImmersionBar({
                 startFromId: startWordId,
                 voice: ttsVoice,
             });
+            console.timeEnd('[ImmersionBar] play→genId');
+            console.log('[ImmersionBar] got genId:', genId);
             immersionPlayer.setCurrentGenId(genId);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -167,40 +198,7 @@ export function ImmersionBar({
         } catch { /* sample playback is best-effort */ }
     }, []);
 
-    const SAMPLE_VOICES: { value: string; label: string }[] = [
-        { value: "af_bella", label: "Bella (US F)" },
-        { value: "af_heart", label: "Heart (US F)" },
-        { value: "af_jessica", label: "Jessica (US F)" },
-        { value: "af_kore", label: "Kore (US F)" },
-        { value: "af_nicole", label: "Nicole (US F)" },
-        { value: "af_nova", label: "Nova (US F)" },
-        { value: "af_river", label: "River (US F)" },
-        { value: "af_sarah", label: "Sarah (US F)" },
-        { value: "af_sky", label: "Sky (US F)" },
-        { value: "af_alloy", label: "Alloy (US F)" },
-        { value: "af_aoede", label: "Aoede (US F)" },
-        { value: "am_adam", label: "Adam (US M)" },
-        { value: "am_echo", label: "Echo (US M)" },
-        { value: "am_eric", label: "Eric (US M)" },
-        { value: "am_fenrir", label: "Fenrir (US M)" },
-        { value: "am_liam", label: "Liam (US M)" },
-        { value: "am_michael", label: "Michael (US M)" },
-        { value: "am_onyx", label: "Onyx (US M)" },
-        { value: "am_puck", label: "Puck (US M)" },
-        { value: "am_santa", label: "Santa (US M)" },
-        { value: "bf_alice", label: "Alice (UK F)" },
-        { value: "bf_emma", label: "Emma (UK F)" },
-        { value: "bf_isabella", label: "Isabella (UK F)" },
-        { value: "bf_lily", label: "Lily (UK F)" },
-        { value: "bm_daniel", label: "Daniel (UK M)" },
-        { value: "bm_fable", label: "Fable (UK M)" },
-        { value: "bm_george", label: "George (UK M)" },
-        { value: "bm_lewis", label: "Lewis (UK M)" },
-    ];
-
     // Auto-play when page changes in continuous mode
-    // Skip during transition window (onComplete → preloaded audio start) to
-    // avoid racing with preloaded chunks about to arrive (#14).
     useEffect(() => {
         if (transitioningRef.current) return;
         const text = sectionText.trim();
@@ -210,8 +208,6 @@ export function ImmersionBar({
     }, [isContinuousMode, playbackState, sectionText, pageCfi, handlePlay]);
 
     // Restart playback when voice changes during active playback.
-    // Without this, changing the voice dropdown only affects the NEXT play —
-    // the current audio keeps using the old voice.
     const prevVoiceRef = useRef(ttsVoice);
     useEffect(() => {
         if (prevVoiceRef.current === ttsVoice) return;
@@ -288,7 +284,21 @@ export function ImmersionBar({
                 <span className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
             )}
 
-            {/* Voice selector + test */}
+            {/* Speed control */}
+            <Dropdown
+                value={String(ttsSpeed)}
+                onChange={(v) => {
+                    const s = parseFloat(v);
+                    if (!isNaN(s)) updateTtsSettings({ speed: s });
+                }}
+                options={SPEED_OPTIONS}
+                size="sm"
+                variant="filled"
+                className="hidden sm:inline-block min-w-0 w-auto"
+                dropdownClassName="bottom-full mb-1 mt-0 w-24"
+            />
+
+            {/* Voice selector */}
             <Dropdown
                 value={ttsVoice}
                 onChange={(v) => updateTtsSettings({ voice: v })}

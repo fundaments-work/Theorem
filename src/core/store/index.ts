@@ -86,6 +86,7 @@ const defaultDeviceSyncSettings: AppSettings["deviceSync"] = {
 
 const defaultTtsSettings: TtsSettings = {
     voice: "af_bella",
+    speed: 1.0,
 };
 
 // Default app settings
@@ -1639,7 +1640,7 @@ export const useSettingsStore = create<SettingsStore>()(
         }),
         {
             name: "theorem-settings",
-            version: 4,
+            version: 5,
             storage: createJSONStorage(() => theoremPersistStorage),
             migrate: (persistedState, version) => {
                 const state = (
@@ -1665,6 +1666,13 @@ export const useSettingsStore = create<SettingsStore>()(
                 if (!version || version < 4) {
                     if (state.settings && !state.settings.tts) {
                         state.settings.tts = defaultTtsSettings;
+                    }
+                }
+
+                // Migration v4→v5: add tts speed field
+                if (version < 5) {
+                    if (state.settings?.tts && state.settings.tts.speed === undefined) {
+                        state.settings.tts.speed = defaultTtsSettings.speed;
                     }
                 }
 

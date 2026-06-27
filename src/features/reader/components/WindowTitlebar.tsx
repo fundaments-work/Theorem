@@ -16,6 +16,7 @@ import {
     EllipsisVertical,
     Type,
     Info,
+    Headphones,
 } from "lucide-react";
 import { cn } from "../../../core";
 import { isMobile, isTauri } from "../../../core";
@@ -39,6 +40,8 @@ interface WindowTitlebarProps {
     activePanel: string | null;
     fullscreen?: boolean;
     onToggleFullscreen?: () => void;
+    immersionMode?: boolean;
+    onToggleImmersion?: () => void;
     className?: string;
     // Legacy props kept for compatibility until verified
     hideReaderControls?: boolean;
@@ -182,6 +185,8 @@ export function WindowTitlebar({
     activePanel,
     fullscreen,
     onToggleFullscreen,
+    immersionMode,
+    onToggleImmersion,
     className,
 }: WindowTitlebarProps) {
     const [isMaximized, setIsMaximized] = useState(false);
@@ -316,6 +321,16 @@ export function WindowTitlebar({
                             title={isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark"}
                         >
                             <BookmarkIcon className={cn("w-4 h-4", isCurrentPageBookmarked ? "fill-current" : "")} />
+                        </ToolbarButton>
+                    )}
+
+                    {onToggleImmersion && (
+                        <ToolbarButton
+                            onClick={onToggleImmersion}
+                            active={immersionMode}
+                            title={immersionMode ? "Exit Immersion Reading" : "Immersion Reading"}
+                        >
+                            <Headphones className={cn("w-4 h-4", immersionMode && "fill-current")} />
                         </ToolbarButton>
                     )}
 
