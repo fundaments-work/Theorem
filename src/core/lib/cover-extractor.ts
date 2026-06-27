@@ -121,7 +121,8 @@ export function shouldUseExtractedTitle(currentTitle: string, extractedTitle: st
     if (nextTitle.length < 2 || /^[^a-zA-Z0-9]+$/.test(nextTitle)) {
         return false;
     }
-    if (/^[)\]}>"'`]/.test(nextTitle) || /[\[({<"'`]$/.test(nextTitle)) {
+    // Dangling brackets in any position are signs of garbage metadata.
+    if (/^[\[({<"'`]/.test(nextTitle) || /[)\]}>"'`]$/.test(nextTitle)) {
         return false;
     }
 

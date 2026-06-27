@@ -347,10 +347,15 @@ function BookReaderPage() {
         const book = getBook(bookId);
         if (!book) return;
 
+        console.log(`[Reader] extractBookCover: checking book ${book.id} (${book.format}, title="${book.title}", hasCover=${!!book.coverPath})`);
+
         try {
             const storagePath = book.storagePath || book.filePath;
             const data = await getBookData(book.id, storagePath);
-            if (!data) return;
+            if (!data) {
+                console.warn(`[Reader] extractBookCover: no data for book ${book.id}`);
+                return;
+            }
 
             const filename = ensureFilenameForFormat(
                 extractFilenameFromPath(book.filePath),
@@ -358,17 +363,20 @@ function BookReaderPage() {
             );
 
             // Only skip cover extraction if the book already has a real cover
-            // (not a generated SVG fallback). Always extract title/author metadata.
+            // (not a generated SVG fallback).
             const hasRealCover = book.coverPath && !book.coverPath.startsWith('data:image/svg+xml');
             if (hasRealCover && book.coverExtractionDone) {
+                console.log(`[Reader] extractBookCover: skipping, already has real cover`);
                 return;
             }
 
             const metadata = await extractMetadata(data, book.format, filename, book.id, {
                 allowFallbackCover: !hasRealCover,
-                metadataTimeoutMs: 8000,
-                coverTimeoutMs: 5000,
+                metadataTimeoutMs: 12000,
+                coverTimeoutMs: 8000,
             });
+
+            console.log(`[Reader] extractBookCover: got metadata title="${metadata.title}" author="${metadata.author}" hasCover=${!!metadata.coverDataUrl}`);
 
             const updates: Partial<Book> = {};
             if (metadata.coverDataUrl) {
@@ -382,21 +390,24 @@ function BookReaderPage() {
                 const blob = new Blob([fallbackSvg], { type: 'image/svg+xml' });
                 const dataUrl = await saveCoverImage(book.id, blob);
                 updates.coverPath = dataUrl;
+                console.log(`[Reader] extractBookCover: generated fallback SVG cover`);
             }
 
             if (shouldUseExtractedTitle(book.title, metadata.title, book.filePath)) {
                 updates.title = metadata.title;
+                console.log(`[Reader] extractBookCover: title updated "${book.title}" → "${metadata.title}"`);
             }
             if (shouldUseExtractedAuthor(book.author, metadata.author)) {
                 updates.author = metadata.author;
+                console.log(`[Reader] extractBookCover: author updated "${book.author}" → "${metadata.author}"`);
             }
             updates.coverExtractionDone = true;
 
             if (Object.keys(updates).length > 0) {
                 updateBook(book.id, updates);
             }
-        } catch {
-            // Silent — cover extraction is best-effort
+        } catch (error) {
+            console.error(`[Reader] extractBookCover failed for book ${bookId}:`, error);
         }
     }, [getBook, updateBook]);
 
