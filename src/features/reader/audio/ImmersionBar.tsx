@@ -1,14 +1,17 @@
 /**
  * ImmersionBar - Floating TTS control bar for immersion reading.
  *
- * Renders a pill-shaped toolbar at the bottom of the reader with:
- *   - Play / Pause / Stop controls
- *   - Speed control (0.5× - 2.0×, pitch-preserved)
+ * Mobile-first responsive design:
+ *   Small screens (< 640px) → full-width bottom bar, horizontal scroll
+ *   Desktop (≥ 640px)      → pill-shaped centered toolbar
+ *
+ * Controls:
+ *   - Play / Pause / Stop
+ *   - Speed selector (0.5× – 2×, pitch-preserved)
  *   - Voice selector (6 English voices: 3 female + 3 male)
  *   - Status indicator with animated bars
+ *   - Test voice
  *   - Error display
- *
- * Only synthesizes the current visible page text — not the whole book.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -226,63 +229,70 @@ export function ImmersionBar({
     return (
         <div
             className={cn(
-                'flex items-center gap-2 px-4 py-2.5 rounded-full',
+                // Mobile: full-width bar — Desktop: pill centered
+                'flex items-center gap-1.5 sm:gap-2',
+                'w-full sm:w-auto sm:px-4 py-2 px-2 sm:py-2.5',
+                'sm:rounded-full rounded-xl',
                 'bg-[var(--color-surface)]/95 backdrop-blur-xl',
                 'border border-[var(--color-border)]',
                 'shadow-[0_8px_32px_rgba(0,0,0,0.18)]',
                 'transition-all duration-300',
+                'overflow-x-auto scrollbar-none',
                 !visible && 'opacity-0 pointer-events-none translate-y-4',
                 className,
             )}
         >
-            {/* Icon badge */}
-            <Headphones
-                className={cn(
-                    'w-4 h-4 shrink-0 transition-colors duration-200',
-                    isActive
-                        ? 'text-[color:var(--color-accent)]'
-                        : 'text-[color:var(--color-text-muted)]',
+            {/* Icon badge + Label */}
+            <div className="flex items-center gap-1 shrink-0">
+                <Headphones
+                    className={cn(
+                        'w-4 h-4 shrink-0 transition-colors duration-200',
+                        isActive
+                            ? 'text-[color:var(--color-accent)]'
+                            : 'text-[color:var(--color-text-muted)]',
+                    )}
+                />
+                <span
+                    className={cn(
+                        'text-xs font-medium select-none transition-colors duration-200',
+                        isActive
+                            ? 'text-[color:var(--color-text-primary)]'
+                            : 'text-[color:var(--color-text-muted)]',
+                    )}
+                >
+                    {playbackState === 'loading'
+                        ? '…'
+                        : playbackState === 'playing'
+                            ? ''
+                            : playbackState === 'paused'
+                                ? 'Paused'
+                                : ''}
+                </span>
+
+                {/* Animated playing dots — inline with icon */}
+                {playbackState === 'playing' && (
+                    <div className="flex items-end gap-[3px] h-4 shrink-0">
+                        {[0, 1, 2].map((i) => (
+                            <div
+                                key={i}
+                                className="w-[3px] rounded-full bg-[var(--color-accent)]"
+                                style={{
+                                    animation: `tts-bar-bounce 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
+                                    height: '60%',
+                                }}
+                            />
+                        ))}
+                    </div>
                 )}
-            />
 
-            {/* Label */}
-            <span
-                className={cn(
-                    'text-xs font-medium select-none hidden sm:block transition-colors duration-200',
-                    isActive
-                        ? 'text-[color:var(--color-text-primary)]'
-                        : 'text-[color:var(--color-text-muted)]',
+                {/* Loading spinner */}
+                {playbackState === 'loading' && (
+                    <span className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
                 )}
-            >
-                {playbackState === 'loading'
-                    ? 'Loading…'
-                    : playbackState === 'playing'
-                        ? 'Listening'
-                        : playbackState === 'paused'
-                            ? 'Paused'
-                            : 'Listen'}
-            </span>
+            </div>
 
-            {/* Animated playing dots */}
-            {playbackState === 'playing' && (
-                <div className="flex items-end gap-[3px] h-4 shrink-0">
-                    {[0, 1, 2].map((i) => (
-                        <div
-                            key={i}
-                            className="w-[3px] rounded-full bg-[var(--color-accent)]"
-                            style={{
-                                animation: `tts-bar-bounce 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
-                                height: '60%',
-                            }}
-                        />
-                    ))}
-                </div>
-            )}
-
-            {/* Loading spinner */}
-            {playbackState === 'loading' && (
-                <span className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
-            )}
+            {/* Spacer */}
+            <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
 
             {/* Speed control */}
             <Dropdown
@@ -294,9 +304,12 @@ export function ImmersionBar({
                 options={SPEED_OPTIONS}
                 size="sm"
                 variant="filled"
-                className="hidden sm:inline-block min-w-0 w-auto"
+                className="min-w-0 w-auto shrink-0"
                 dropdownClassName="bottom-full mb-1 mt-0 w-24"
             />
+
+            {/* Spacer */}
+            <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
 
             {/* Voice selector */}
             <Dropdown
@@ -305,39 +318,39 @@ export function ImmersionBar({
                 options={SAMPLE_VOICES}
                 size="sm"
                 variant="filled"
-                className="hidden sm:inline-block min-w-0 w-auto"
+                className="min-w-0 w-auto shrink-0"
                 dropdownClassName="bottom-full mb-1 mt-0 w-48"
             />
 
             <button
                 onClick={() => handleTestVoice(ttsVoice)}
-                className="flex items-center justify-center w-5 h-5 rounded text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-overlay-subtle)] shrink-0"
+                className="flex items-center justify-center w-6 h-6 sm:w-5 sm:h-5 rounded text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-overlay-subtle)] shrink-0"
                 title="Test this voice"
                 aria-label="Test voice"
             >
-                <Volume2 className="w-3 h-3" />
+                <Volume2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
             </button>
 
-            {/* Divider */}
-            <div className="w-px h-4 bg-[var(--color-border)] mx-1 shrink-0" />
+            {/* Spacer */}
+            <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
 
             {/* Controls */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0">
                 {playbackState === 'idle' || playbackState === 'loading' ? (
                     <button
                         id="tts-play-btn"
                         onClick={handlePlay}
                         disabled={playbackState === 'loading' || !sectionText.trim()}
                         className={cn(
-                            'flex items-center justify-center w-8 h-8 rounded-full transition-all duration-150',
+                            'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
                             'bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]',
                             'hover:bg-[var(--color-accent-hover)] active:scale-90',
                             'disabled:opacity-40 disabled:cursor-not-allowed',
                         )}
-                        title="Start immersion reading (reads current page aloud)"
+                        title="Start immersion reading"
                         aria-label="Play"
                     >
-                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <Play className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
                     </button>
                 ) : (
                     <>
@@ -346,7 +359,7 @@ export function ImmersionBar({
                             id="tts-pause-btn"
                             onClick={playbackState === 'playing' ? handlePause : handlePlay}
                             className={cn(
-                                'flex items-center justify-center w-8 h-8 rounded-full transition-all duration-150',
+                                'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
                                 'bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]',
                                 'hover:bg-[var(--color-overlay-subtle)] active:scale-90',
                             )}
@@ -354,9 +367,9 @@ export function ImmersionBar({
                             aria-label={playbackState === 'playing' ? 'Pause' : 'Resume'}
                         >
                             {playbackState === 'playing' ? (
-                                <Pause className="w-3.5 h-3.5 fill-current" />
+                                <Pause className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
                             ) : (
-                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <Play className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
                             )}
                         </button>
 
@@ -365,14 +378,14 @@ export function ImmersionBar({
                             id="tts-stop-btn"
                             onClick={handleStop}
                             className={cn(
-                                'flex items-center justify-center w-8 h-8 rounded-full transition-all duration-150',
+                                'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
                                 'bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]',
                                 'hover:bg-[var(--color-overlay-subtle)] hover:text-[color:var(--color-error)] active:scale-90',
                             )}
                             title="Stop"
                             aria-label="Stop"
                         >
-                            <Square className="w-3 h-3 fill-current" />
+                            <Square className="w-4 h-4 sm:w-3 sm:h-3 fill-current" />
                         </button>
                     </>
                 )}
@@ -380,9 +393,9 @@ export function ImmersionBar({
 
             {/* Error badge */}
             {error && (
-                <div className="flex items-center gap-1 ml-1">
+                <div className="flex items-center gap-1 shrink-0 ml-0.5">
                     <div className="w-2 h-2 rounded-full bg-[var(--color-error)] shrink-0" />
-                    <span className="text-[10px] text-[color:var(--color-error)] max-w-[120px] truncate">
+                    <span className="text-[10px] text-[color:var(--color-error)] max-w-[100px] sm:max-w-[120px] truncate">
                         {error}
                     </span>
                     <button
