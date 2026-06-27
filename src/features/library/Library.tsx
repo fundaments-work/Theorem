@@ -83,6 +83,14 @@ function shouldUseExtractedTitle(book: Book, extractedTitle: string | undefined)
         return false;
     }
 
+    // Reject garbage metadata: too short, only special chars, dangling brackets
+    if (nextTitle.length < 2 || /^[^a-zA-Z0-9]+$/.test(nextTitle)) {
+        return false;
+    }
+    if (/^[)\]}>"'`]/.test(nextTitle) || /[\[({<"'`]$/.test(nextTitle)) {
+        return false;
+    }
+
     const currentTitle = normalizeMetadataText(book.title);
     if (!currentTitle) {
         return true;
