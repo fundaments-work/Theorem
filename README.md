@@ -20,20 +20,20 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, and RSS feeds — all in one workspace. Highli
 
 ## Features
 
-### 📖 Multi-Format Reader
+### Multi-Format Reader
 - EPUB, MOBI, AZW, AZW3, FB2, CBZ, PDF, and RSS articles
 - Foliate-based reflowable book rendering with pagination and scroll modes
 - PDF.js-based PDF rendering with zoom, fit modes, and outlines
 - Full table of contents navigation
 - Reading progress saved per-book across sessions
 
-### 🖍️ Highlights & Annotations
+### Highlights & Annotations
 - Color-coded highlights (yellow, green, blue, pink, orange)
 - Add notes to any highlight
 - Annotation panel for quick navigation
 - Works across all formats including PDF
 
-### 🎧 Neural Text-to-Speech (Immersion Reading)
+### Neural Text-to-Speech (Immersion Reading)
 - Kokoro ONNX neural TTS engine — no cloud API needed
 - 6 distinct voices (Bella, Nicole, Sarah, Adam, Michael, George)
 - Pitch-preserved playback speed control (0.5×–2×)
@@ -41,40 +41,40 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, and RSS feeds — all in one workspace. Highli
 - Preloads next page for seamless page turns
 - Auto-downloads model on first use, cancel/resume/delete supported
 
-### 📚 Vocabulary Builder
+### Vocabulary Builder
 - Look up words while reading with built-in dictionary
 - Offline StarDict dictionary support
 - Pronunciation display with optional audio
 - Vocabulary review workspace
 
-### 📡 RSS Reader
+### RSS Reader
 - Subscribe to feeds and read articles with full annotation tools
 - Article extraction via Mozilla Readability
 - Offline article storage
 
-### 🔗 Markdown Export (Obsidian / Logseq)
+### Markdown Export (Obsidian / Logseq)
 - Export highlights and annotations to local Markdown files
 - Designed for vault-based PKM workflows (Obsidian, Logseq, Zettelkasten)
 - Customizable export templates and naming
 
-### 🔐 LAN Device Sync
+### LAN Device Sync
 - Encrypted peer-to-peer sync between Theorem installs on local network
 - Syncs books, reading progress, annotations, and settings
 - QR-based device pairing
 - No cloud relay — fully local
 
-### 📊 Reading Statistics
+### Reading Statistics
 - Track reading time, pages completed, and streaks
 - Daily activity log
 
-### 🎨 Customizable Reading Experience
+### Customizable Reading Experience
 - Font, size, line-height, and margin controls
 - Light, dark, and system theme modes
 - Paged and scroll layout modes
 - Full-screen reading
 - Search within books
 
-### 📱 Cross-Platform
+### Cross-Platform
 - Desktop: Linux (.deb, .AppImage), macOS (.dmg), Windows (.msi, .exe)
 - Mobile: Android (.apk)
 - Web: Browser fallback for development
