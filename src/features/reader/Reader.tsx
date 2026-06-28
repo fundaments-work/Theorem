@@ -312,7 +312,6 @@ function BookReaderPage() {
         const mediaQuery = window.matchMedia(MOBILE_READER_MEDIA_QUERY);
         const updateViewportState = (matches: boolean) => {
             setIsMobileViewport(matches);
-            setShowToolbar(activePanel !== null);
         };
 
         updateViewportState(mediaQuery.matches);
@@ -325,7 +324,7 @@ function BookReaderPage() {
         return () => {
             mediaQuery.removeEventListener('change', handleChange);
         };
-    }, [activePanel]);
+    }, []);
 
     // PDF callbacks - memoized to prevent infinite re-renders
     const handlePdfLoad = useCallback((info: import('./engines/pdfjs-engine').PDFDocumentInfo) => {
