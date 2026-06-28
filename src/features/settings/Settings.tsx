@@ -55,7 +55,7 @@ import {
     Loader2,
 } from "lucide-react";
 
-type SettingsTab = "general" | "dictionary" | "integrations" | "storage";
+type SettingsTab = "general" | "dictionary" | "integrations" | "storage" | "about";
 const SETTINGS_TAB_SESSION_KEY = "theorem-settings:active-tab";
 const SETTINGS_FOCUS_SECTION_SESSION_KEY = "theorem-settings:focus-section";
 
@@ -217,7 +217,8 @@ export function SettingsPage() {
             persisted === "general" ||
             persisted === "dictionary" ||
             persisted === "integrations" ||
-            persisted === "storage"
+            persisted === "storage" ||
+            persisted === "about"
         ) {
             return persisted;
         }
@@ -621,6 +622,7 @@ export function SettingsPage() {
         { id: "dictionary" as const, label: "Dictionary" },
         { id: "integrations" as const, label: "Devices & Export" },
         { id: "storage" as const, label: "Data & Storage" },
+        { id: "about" as const, label: "About" },
     ];
 
     return (
@@ -1406,6 +1408,73 @@ export function SettingsPage() {
                                 </div>
                                 <ChevronRight className="w-4 h-4" />
                             </button>
+                        </div>
+                    </Section>
+                </div>
+            )}
+
+            {activeTab === "about" && (
+                <div className="space-y-8">
+                    <Section
+                        title="Theorem"
+                        description="Local-first reader for PDFs, EPUBs, and RSS"
+                        icon={<BookOpen className="w-5 h-5" />}
+                    >
+                        <div className="space-y-4">
+                            <div className="grid gap-2">
+                                <div className="flex items-center justify-between py-1.5 border-b border-[var(--color-border-subtle)]">
+                                    <span className="text-[12px] text-[color:var(--color-text-secondary)]">Version</span>
+                                    <span className="text-[12px] font-medium text-[color:var(--color-text-primary)]">1.0.0</span>
+                                </div>
+                                <div className="flex items-center justify-between py-1.5 border-b border-[var(--color-border-subtle)]">
+                                    <span className="text-[12px] text-[color:var(--color-text-secondary)]">License</span>
+                                    <span className="text-[12px] font-medium text-[color:var(--color-text-primary)]">MIT</span>
+                                </div>
+                                <div className="flex items-center justify-between py-1.5 border-b border-[var(--color-border-subtle)]">
+                                    <span className="text-[12px] text-[color:var(--color-text-secondary)]">Author</span>
+                                    <span className="text-[12px] font-medium text-[color:var(--color-text-primary)]">Fundamentals</span>
+                                </div>
+                                <div className="flex items-center justify-between py-1.5">
+                                    <span className="text-[12px] text-[color:var(--color-text-secondary)]">Stack</span>
+                                    <span className="text-[12px] font-medium text-[color:var(--color-text-primary)]">React 19 + Tauri 2 + Rust</span>
+                                </div>
+                            </div>
+                        </div>
+                    </Section>
+
+                    <Section
+                        title="Links"
+                        description="Project resources"
+                        icon={<Globe className="w-5 h-5" />}
+                    >
+                        <div className="space-y-2">
+                            <a
+                                href="https://github.com/fundaments-work/theorem"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                            >
+                                <BookOpen className="w-4 h-4" />
+                                <span>GitHub Repository</span>
+                            </a>
+                            <a
+                                href="https://github.com/fundaments-work/theorem/releases/latest"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                            >
+                                <Download className="w-4 h-4" />
+                                <span>Download Latest Release</span>
+                            </a>
+                            <a
+                                href="https://github.com/fundaments-work/theorem/issues"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                            >
+                                <AlertCircle className="w-4 h-4" />
+                                <span>Report an Issue</span>
+                            </a>
                         </div>
                     </Section>
                 </div>
