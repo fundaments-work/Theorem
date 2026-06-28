@@ -9,6 +9,9 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-~6.0-3178C6?style=flat-square)](https://www.typescriptlang.org)
 [![Rust](https://img.shields.io/badge/Rust-1.85+-DEA584?style=flat-square)](https://www.rust-lang.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/fundaments-work/theorem/pulls)
+[![Website](https://img.shields.io/badge/web-theorem.fundaments.work-8A2BE2?style=flat-square)](https://theorem.fundaments.work)
+
+[theorem.fundaments.work](https://theorem.fundaments.work) — website, docs, and release downloads.
 
 Theorem is a **free, open-source, local-first** reading app built with [Tauri](https://tauri.app). It runs on **Linux, macOS, Windows, and Android** from a shared codebase.
 
@@ -92,7 +95,7 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, and RSS feeds — all in one workspace. Highli
 | Windows | `.msi` or `.exe` |
 | Android | `.apk` |
 
-All builds are available on the [Releases page](https://github.com/fundaments-work/theorem/releases/latest).
+All builds are available on the [Releases page](https://github.com/fundaments-work/theorem/releases/latest). See [theorem.fundaments.work](https://theorem.fundaments.work) for documentation and downloads.
 
 ---
 
