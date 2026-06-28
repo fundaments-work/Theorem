@@ -215,7 +215,7 @@ export function ImmersionBar({
                     'flex items-center gap-1 sm:gap-1.5 overflow-x-auto',
                     'w-full sm:w-auto sm:px-4 pt-2 px-2 sm:py-2.5',
                     'sm:rounded-full rounded-t-xl rounded-b-none',
-                    'bg-[var(--color-surface)] backdrop-blur-xl',
+                    'bg-[var(--color-surface)]/95 backdrop-blur-xl',
                     'border border-[var(--color-border)]',
                     'shadow-[0_8px_32px_rgba(0,0,0,0.18)]',
                     'transition-all duration-300',
@@ -346,7 +346,7 @@ export function ImmersionBar({
             {/* Error toast - floats above the bar */}
             {hasError && (
                 <div className="fixed left-1/2 -translate-x-1/2 bottom-[3.5rem] z-50 pointer-events-none">
-                    <div className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 shadow-lg">
+                    <div className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-error)]/50 shadow-lg">
                         <AlertCircle className="w-3.5 h-3.5 text-[color:var(--color-error)] shrink-0" />
                         <span className="text-[12px] font-medium text-[color:var(--color-error)] whitespace-nowrap">Something went wrong</span>
                     </div>
