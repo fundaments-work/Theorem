@@ -1,54 +1,22 @@
-/**
- * ImmersionBar - Floating TTS control bar for immersion reading.
- *
- * Mobile-first responsive design:
- *   Small screens (< 640px) → full-width bottom bar, horizontal scroll
- *   Desktop (≥ 640px)      → pill-shaped centered toolbar
- *
- * Controls:
- *   - Play / Pause / Stop
- *   - Speed selector (0.5× – 2×, pitch-preserved)
- *   - Voice selector (6 English voices: 3 female + 3 male)
- *   - Status indicator with animated bars
- *   - Test voice
- *   - Error display
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Play, Pause, Square, Headphones, X, Volume2 } from 'lucide-react';
+import { Play, Pause, Square, Headphones, Volume2 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { cn, useSettingsStore } from '../../../core';
 import { immersionPlayer, type PlaybackState } from '../audio/ImmersionPlayer';
-import { Dropdown } from '../../../ui';
 
 interface ImmersionBarProps {
-    /** Text content of the current visible page, extracted by the caller. */
     sectionText: string;
-    /** DOM id of the first word in the visible section. */
     startWordId?: string;
-    /** Canonical CFI of the current page location (used for page-change detection). */
     pageCfi?: string;
-    /** Additional classes (e.g. positioning). */
     className?: string;
-    /** Whether the bar should be visible. */
     visible?: boolean;
-    /** Fired when playback of the current section completes naturally. */
     onComplete?: () => void;
-    /** Fired when the backend finishes synthesizing ALL chunks (tts-done).
-     *  Audio is still playing — ideal moment to preload the next page. */
     onSynthesisComplete?: () => void;
 }
 
-const SPEED_OPTIONS = [
-    { value: "0.5", label: "0.5×" },
-    { value: "0.75", label: "0.75×" },
-    { value: "1", label: "1×" },
-    { value: "1.25", label: "1.25×" },
-    { value: "1.5", label: "1.5×" },
-    { value: "2", label: "2×" },
-];
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-const SAMPLE_VOICES: { value: string; label: string }[] = [
+const VOICES = [
     { value: "af_bella", label: "Bella (US F)" },
     { value: "af_nicole", label: "Nicole (US F)" },
     { value: "af_sarah", label: "Sarah (US F)" },
@@ -67,7 +35,6 @@ export function ImmersionBar({
     onSynthesisComplete,
 }: ImmersionBarProps) {
     const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
-    const [error, setError] = useState<string | null>(null);
     const initializedRef = useRef(false);
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
     const ttsSpeed = useSettingsStore((s) => s.settings.tts.speed);
@@ -86,12 +53,10 @@ export function ImmersionBar({
     const [isContinuousMode, setIsContinuousMode] = useState(false);
     const transitioningRef = useRef(false);
 
-    // Sync speed to ImmersionPlayer whenever it changes
     useEffect(() => {
         immersionPlayer.speed = ttsSpeed;
     }, [ttsSpeed]);
 
-    // Initialize the player once
     useEffect(() => {
         if (initializedRef.current) return;
         initializedRef.current = true;
@@ -106,16 +71,13 @@ export function ImmersionBar({
                 }
             },
             onError: (msg) => {
-                setError(msg);
+                console.error('[ImmersionBar]', msg);
                 setIsContinuousMode(false);
                 transitioningRef.current = false;
             },
             onComplete: () => {
                 transitioningRef.current = true;
-                // Safety timeout — if preloaded audio doesn't start within 2s
-                // (e.g. no next page text), let auto-play fall through.
                 setTimeout(() => { transitioningRef.current = false; }, 2000);
-                // We finished reading the page. Turn the page if continuous mode is on.
                 onCompleteRef.current?.();
             },
             onSynthesisComplete: () => {
@@ -130,14 +92,11 @@ export function ImmersionBar({
         };
     }, []);
 
-    // ── Actions ────────────────────────────────────────────────────────────
-
     const lastPlayedCfiRef = useRef('');
 
     const handlePlay = useCallback(async () => {
         const text = sectionText.trim();
         if (!text) return;
-        setError(null);
         console.time('[ImmersionBar] play→genId');
 
         if (playbackState === 'paused') {
@@ -146,7 +105,6 @@ export function ImmersionBar({
             return;
         }
 
-        // Stop any existing playback first
         if (playbackState === 'playing') {
             immersionPlayer.stop();
             try { await invoke<void>('stop_speech'); } catch { /* ok */ }
@@ -156,7 +114,6 @@ export function ImmersionBar({
         setIsContinuousMode(true);
         lastPlayedCfiRef.current = pageCfi || '';
 
-        // Pre-create AudioContext within user gesture (critical for Android).
         immersionPlayer.prepare();
 
         try {
@@ -168,8 +125,7 @@ export function ImmersionBar({
             console.timeEnd('[ImmersionBar] play→genId');
             immersionPlayer.setCurrentGenId(genId);
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            setError(msg);
+            console.error('[ImmersionBar]', err instanceof Error ? err.message : String(err));
             setPlaybackState('idle');
             setIsContinuousMode(false);
         }
@@ -203,7 +159,18 @@ export function ImmersionBar({
         } catch { /* sample playback is best-effort */ }
     }, []);
 
-    // Auto-play when page changes in continuous mode
+    const cycleSpeed = useCallback(() => {
+        const idx = SPEEDS.indexOf(ttsSpeed);
+        const next = SPEEDS[(idx + 1) % SPEEDS.length];
+        updateTtsSettings({ speed: next });
+    }, [ttsSpeed, updateTtsSettings]);
+
+    const cycleVoice = useCallback(() => {
+        const idx = VOICES.findIndex(v => v.value === ttsVoice);
+        const next = VOICES[(idx + 1) % VOICES.length];
+        updateTtsSettings({ voice: next.value });
+    }, [ttsVoice, updateTtsSettings]);
+
     useEffect(() => {
         if (transitioningRef.current) return;
         const text = sectionText.trim();
@@ -212,26 +179,23 @@ export function ImmersionBar({
         }
     }, [isContinuousMode, playbackState, sectionText, pageCfi, handlePlay]);
 
-    // Restart playback when voice changes during active playback.
     const prevVoiceRef = useRef(ttsVoice);
     useEffect(() => {
         if (prevVoiceRef.current === ttsVoice) return;
         prevVoiceRef.current = ttsVoice;
 
-        // Only restart if actively playing or loading (not idle/paused)
         if (playbackState === 'playing' || playbackState === 'loading') {
             handlePlay();
         }
     }, [ttsVoice, playbackState, handlePlay]);
 
-    // ── Render ─────────────────────────────────────────────────────────────
-
     const isActive = playbackState !== 'idle';
+    const currentVoiceLabel = VOICES.find(v => v.value === ttsVoice)?.label.split(' ')[0] || 'Voice';
 
     return (
         <div
             className={cn(
-                'flex flex-col',
+                'flex items-center gap-1 sm:gap-1.5 overflow-x-auto',
                 'w-full sm:w-auto sm:px-4 py-2 px-2 sm:py-2.5',
                 'sm:rounded-full rounded-xl',
                 'bg-[var(--color-surface)]/95 backdrop-blur-xl',
@@ -242,174 +206,123 @@ export function ImmersionBar({
                 className,
             )}
         >
-            {/* Main controls row */}
-            <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
-                {/* Icon badge + Label */}
-                <div className="flex items-center gap-1 shrink-0">
-                    <Headphones
-                        className={cn(
-                            'w-4 h-4 shrink-0 transition-colors duration-200',
-                            isActive
-                                ? 'text-[color:var(--color-accent)]'
-                                : 'text-[color:var(--color-text-muted)]',
-                        )}
-                    />
-                    <span
-                        className={cn(
-                            'text-xs font-medium select-none transition-colors duration-200',
-                            isActive
-                                ? 'text-[color:var(--color-text-primary)]'
-                                : 'text-[color:var(--color-text-muted)]',
-                        )}
-                    >
-                        {playbackState === 'loading'
-                            ? '…'
-                            : playbackState === 'playing'
-                                ? ''
-                                : playbackState === 'paused'
-                                    ? 'Paused'
-                                    : ''}
-                    </span>
-
-                    {/* Animated playing dots — inline with icon */}
-                    {playbackState === 'playing' && (
-                        <div className="flex items-end gap-[3px] h-4 shrink-0">
-                            {[0, 1, 2].map((i) => (
-                                <div
-                                    key={i}
-                                    className="w-[3px] rounded-full bg-[var(--color-accent)]"
-                                    style={{
-                                        animation: `tts-bar-bounce 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
-                                        height: '60%',
-                                    }}
-                                />
-                            ))}
-                        </div>
+            {/* Icon + status */}
+            <div className="flex items-center gap-1 shrink-0">
+                <Headphones
+                    className={cn(
+                        'w-3.5 h-3.5 shrink-0 transition-colors duration-200',
+                        isActive ? 'text-[color:var(--color-accent)]' : 'text-[color:var(--color-text-muted)]',
                     )}
-
-                    {/* Loading spinner */}
-                    {playbackState === 'loading' && (
-                        <span className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
-                    )}
-                </div>
-
-                {/* Spacer */}
-                <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
-
-                {/* Speed control */}
-                <Dropdown
-                    value={String(ttsSpeed)}
-                    onChange={(v) => {
-                        const s = parseFloat(v);
-                        if (!isNaN(s)) updateTtsSettings({ speed: s });
-                    }}
-                    options={SPEED_OPTIONS}
-                    size="sm"
-                    variant="filled"
-                    className="min-w-0 w-auto shrink-0"
-                    dropdownClassName="bottom-full mb-1 mt-0 w-24"
                 />
-
-                {/* Spacer */}
-                <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
-
-                {/* Voice selector */}
-                <Dropdown
-                    value={ttsVoice}
-                    onChange={(v) => updateTtsSettings({ voice: v })}
-                    options={SAMPLE_VOICES}
-                    size="sm"
-                    variant="filled"
-                    className="min-w-0 w-auto shrink-0"
-                    dropdownClassName="bottom-full mb-1 mt-0 w-48"
-                />
-
-                <button
-                    onClick={() => handleTestVoice(ttsVoice)}
-                    className="flex items-center justify-center w-6 h-6 sm:w-5 sm:h-5 rounded text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-overlay-subtle)] shrink-0"
-                    title="Test this voice"
-                    aria-label="Test voice"
-                >
-                    <Volume2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
-                </button>
-
-                {/* Spacer */}
-                <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
-
-                {/* Controls */}
-                <div className="flex items-center gap-1 shrink-0">
-                    {playbackState === 'idle' || playbackState === 'loading' ? (
-                        <button
-                            id="tts-play-btn"
-                            onClick={handlePlay}
-                            disabled={playbackState === 'loading' || !sectionText.trim()}
-                            className={cn(
-                                'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
-                                'bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]',
-                                'hover:bg-[var(--color-accent-hover)] active:scale-90',
-                                'disabled:opacity-40 disabled:cursor-not-allowed',
-                            )}
-                            title="Start immersion reading"
-                            aria-label="Play"
-                        >
-                            <Play className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
-                        </button>
-                    ) : (
-                        <>
-                            {/* Pause / Resume */}
-                            <button
-                                id="tts-pause-btn"
-                                onClick={playbackState === 'playing' ? handlePause : handlePlay}
-                                className={cn(
-                                    'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
-                                    'bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]',
-                                    'hover:bg-[var(--color-overlay-subtle)] active:scale-90',
-                                )}
-                                title={playbackState === 'playing' ? 'Pause' : 'Resume'}
-                                aria-label={playbackState === 'playing' ? 'Pause' : 'Resume'}
-                            >
-                                {playbackState === 'playing' ? (
-                                    <Pause className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
-                                ) : (
-                                    <Play className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
-                                )}
-                            </button>
-
-                            {/* Stop */}
-                            <button
-                                id="tts-stop-btn"
-                                onClick={handleStop}
-                                className={cn(
-                                    'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
-                                    'bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]',
-                                    'hover:bg-[var(--color-overlay-subtle)] hover:text-[color:var(--color-error)] active:scale-90',
-                                )}
-                                title="Stop"
-                                aria-label="Stop"
-                            >
-                                <Square className="w-4 h-4 sm:w-3 sm:h-3 fill-current" />
-                            </button>
-                        </>
-                    )}
-                </div>
+                {playbackState === 'loading' && (
+                    <span className="w-3 h-3 border-[2px] border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
+                )}
+                {playbackState === 'paused' && (
+                    <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] select-none shrink-0">Paused</span>
+                )}
+                {playbackState === 'playing' && (
+                    <div className="flex items-end gap-[2px] h-3 shrink-0">
+                        {[0, 1, 2].map((i) => (
+                            <div
+                                key={i}
+                                className="w-[2.5px] rounded-full bg-[var(--color-accent)]"
+                                style={{
+                                    animation: `tts-bar-bounce 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
+                                    height: '60%',
+                                }}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
 
-            {/* Error badge - separate row below controls */}
-            {error && (
-                <div className="flex items-center gap-1 mt-2 px-0.5">
-                    <div className="w-2 h-2 rounded-full bg-[var(--color-error)] shrink-0" />
-                    <span className="text-[11px] text-[color:var(--color-error)] truncate">
-                        {error}
-                    </span>
+            <div className="w-px h-4 bg-[var(--color-border)] shrink-0" />
+
+            {/* Speed — cycle on click */}
+            <button
+                onClick={cycleSpeed}
+                className="flex items-center justify-center h-7 px-1.5 rounded text-[11px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors shrink-0 min-w-[2.5rem]"
+                title="Reading speed"
+            >
+                {ttsSpeed}×
+            </button>
+
+            <div className="w-px h-4 bg-[var(--color-border)] shrink-0" />
+
+            {/* Voice — cycle on click */}
+            <button
+                onClick={cycleVoice}
+                className="flex items-center justify-center h-7 px-1.5 rounded text-[11px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors shrink-0"
+                title="Voice"
+            >
+                {currentVoiceLabel}
+            </button>
+
+            {/* Test voice */}
+            <button
+                onClick={() => handleTestVoice(ttsVoice)}
+                className="flex items-center justify-center w-6 h-6 rounded text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-overlay-subtle)] shrink-0"
+                title="Test this voice"
+                aria-label="Test voice"
+            >
+                <Volume2 className="w-3 h-3" />
+            </button>
+
+            <div className="w-px h-4 bg-[var(--color-border)] shrink-0" />
+
+            {/* Controls */}
+            <div className="flex items-center gap-1 shrink-0">
+                {playbackState === 'idle' || playbackState === 'loading' ? (
                     <button
-                        onClick={() => setError(null)}
-                        className="text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] shrink-0"
-                        aria-label="Dismiss error"
+                        id="tts-play-btn"
+                        onClick={handlePlay}
+                        disabled={playbackState === 'loading' || !sectionText.trim()}
+                        className={cn(
+                            'flex items-center justify-center w-8 h-8 rounded-full transition-all duration-150',
+                            'bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]',
+                            'hover:bg-[var(--color-accent-hover)] active:scale-90',
+                            'disabled:opacity-40 disabled:cursor-not-allowed',
+                        )}
+                        title="Start immersion reading"
+                        aria-label="Play"
                     >
-                        <X className="w-3.5 h-3.5" />
+                        <Play className="w-3.5 h-3.5 fill-current" />
                     </button>
-                </div>
-            )}
+                ) : (
+                    <>
+                        <button
+                            id="tts-pause-btn"
+                            onClick={playbackState === 'playing' ? handlePause : handlePlay}
+                            className={cn(
+                                'flex items-center justify-center w-8 h-8 rounded-full transition-all duration-150',
+                                'bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]',
+                                'hover:bg-[var(--color-overlay-subtle)] active:scale-90',
+                            )}
+                            title={playbackState === 'playing' ? 'Pause' : 'Resume'}
+                            aria-label={playbackState === 'playing' ? 'Pause' : 'Resume'}
+                        >
+                            {playbackState === 'playing' ? (
+                                <Pause className="w-3.5 h-3.5 fill-current" />
+                            ) : (
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                            )}
+                        </button>
+                        <button
+                            id="tts-stop-btn"
+                            onClick={handleStop}
+                            className={cn(
+                                'flex items-center justify-center w-8 h-8 rounded-full transition-all duration-150',
+                                'bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]',
+                                'hover:bg-[var(--color-overlay-subtle)] hover:text-[color:var(--color-error)] active:scale-90',
+                            )}
+                            title="Stop"
+                            aria-label="Stop"
+                        >
+                            <Square className="w-3 h-3 fill-current" />
+                        </button>
+                    </>
+                )}
+            </div>
         </div>
     );
 }
