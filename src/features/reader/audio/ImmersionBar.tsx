@@ -215,7 +215,7 @@ export function ImmersionBar({
                     'flex items-center gap-1 sm:gap-1.5 overflow-x-auto',
                     'w-full sm:w-auto sm:px-4 pt-2 px-2 sm:py-2.5',
                     'sm:rounded-full rounded-t-xl rounded-b-none',
-                    'bg-[var(--color-surface)]/95 backdrop-blur-xl',
+                    'bg-[var(--color-surface)] backdrop-blur-xl',
                     'border border-[var(--color-border)]',
                     'shadow-[0_8px_32px_rgba(0,0,0,0.18)]',
                     'transition-all duration-300',
