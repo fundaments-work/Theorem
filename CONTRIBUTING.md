@@ -27,7 +27,7 @@ pnpm dev:tauri    # Desktop mode (Tauri window)
 
 ## Project Architecture
 
-See [AGENTS.md](./AGENTS.md) for the full repository map, import conventions, and placement rules.
+See [AGENTS.md](./AGENTS.md) for the full repository map, import conventions, placement rules, and anti-patterns.
 
 Key concepts:
 - **Navigation is store-driven** — `useUIStore.currentRoute`, not React Router
@@ -53,6 +53,16 @@ Use conventional commit prefixes:
 - `docs:` — documentation
 - `style:` — formatting, design tokens
 - `refactor:` — code restructuring without behavioral changes
+
+## TTS / Immersion Reading Development
+
+The text-to-speech system uses a Kokoro ONNX engine running in Rust via Tauri:
+
+- **Rust backend** (`src-tauri/src/tts.rs`, `tts_model.rs`) — sentence splitting, streaming PCM synthesis, model download/cache
+- **Frontend player** (`src/features/reader/audio/ImmersionPlayer.ts`) — Web Audio API scheduling, SoundTouch pitch-preserved speed, per-word highlighting
+- **UI** (`src/features/reader/audio/ImmersionBar.tsx`) — floating playback controls
+
+**Important**: On first run, the app downloads the Kokoro model (~170MB) and 6 voice files from HuggingFace. Model files are cached locally.
 
 ## Testing
 

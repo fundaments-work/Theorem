@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-06-28
+
+### Added
+
+- **Neural Text-to-Speech (Immersion Reading)** — Kokoro ONNX-based neural TTS engine with:
+  - 6 distinct voices (Bella, Nicole, Sarah, Adam, Michael, George)
+  - Pitch-preserved playback speed control (0.5×–2×)
+  - Gapless audio streaming with per-word highlighting
+  - Preload next-page audio for seamless page turns
+  - Auto-download model from HuggingFace on first use
+  - Voice test button, cancel/delete model management
+- **TTS enable/disable toggle** in Settings so users can opt out
+- **Encrypted LAN device sync** — peer-to-peer sync of books, reading progress, and annotations across Theorem installs with QR pairing
+- **Android support** — native mobile app with folder scanning plugin
+- **"Open With" / file association support** — import files directly from the OS
+- **Reading statistics** — track reading time, pages, and streaks
+- **Immersion reading preloading** — preload next page audio during current page playback
+
+### Changed
+
+- TTS is now optional (Settings → Text-to-Speech → Enable)
+- Upgraded from removed TTS stub to full Kokoro neural TTS engine
+- Settings store version 5→6 for TTS enabled field
+- Enhanced library view with sort/filter capabilities
+- Improved reader progress persistence and recovery
+
+### Fixed
+
+- TTS audio pipeline: volume boost, mobile audio quality, Android ONNX Runtime support
+- TTS word boundary detection: possessive apostrophe splitting, punctuation detachment
+- Cross-page highlight drag selection restored
+- Metadata extraction on book open with unified title/author heuristics
+- Garbage book title rejection from filenames
+- Viewport padding removed for correct pagination reflow
+- Reader initial load timeouts and regression fixes
+
 ## [1.0.0-5] - 2026-06-22
 
 ### Removed

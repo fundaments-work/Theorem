@@ -1,7 +1,7 @@
 {
     "name": "theorem",
-    "version": "1.0.0-8",
-    "description": "Local-first reader for PDFs, EPUBs, and RSS with highlights and Markdown export.",
+    "version": "1.0.0",
+    "description": "Local-first desktop reader for PDFs, EPUBs, MOBI, and RSS with neural TTS, highlights, vocabulary building, and Markdown export.",
     "private": true,
     "author": "Fundamentals",
     "license": "MIT",
@@ -21,7 +21,18 @@
         "tauri",
         "ebook",
         "highlights",
-        "annotations"
+        "annotations",
+        "text-to-speech",
+        "tts",
+        "vocabulary",
+        "obsidian",
+        "logseq",
+        "markdown",
+        "offline-first",
+        "local-first",
+        "cross-platform",
+        "react",
+        "rust"
     ],
     "packageManager": "pnpm@10.18.1",
     "scripts": {
