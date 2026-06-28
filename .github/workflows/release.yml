@@ -140,6 +140,9 @@ jobs:
       - name: Sync foliate-js submodule
         run: bash scripts/sync-foliate-js.sh
 
+      - name: Regenerate platform icons from source
+        run: pnpm tauri icon public/favicon.svg
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -188,6 +191,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Regenerate platform icons from source
+        run: pnpm tauri icon public/favicon.svg
 
       - name: Resolve macOS signing mode
         id: macos-signing
@@ -274,6 +280,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Regenerate platform icons from source
+        run: pnpm tauri icon public/favicon.svg
+
       - name: Resolve macOS signing mode
         id: macos-signing
         shell: bash
@@ -356,9 +365,6 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Sync foliate-js submodule
-        run: bash scripts/sync-foliate-js.sh
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
