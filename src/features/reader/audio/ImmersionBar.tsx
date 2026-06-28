@@ -231,7 +231,7 @@ export function ImmersionBar({
     return (
         <div
             className={cn(
-                'flex items-center gap-1.5 sm:gap-2 flex-nowrap overflow-x-auto overflow-y-hidden',
+                'flex flex-col',
                 'w-full sm:w-auto sm:px-4 py-2 px-2 sm:py-2.5',
                 'sm:rounded-full rounded-xl',
                 'bg-[var(--color-surface)]/95 backdrop-blur-xl',
@@ -242,168 +242,171 @@ export function ImmersionBar({
                 className,
             )}
         >
-            {/* Icon badge + Label */}
-            <div className="flex items-center gap-1 shrink-0">
-                <Headphones
-                    className={cn(
-                        'w-4 h-4 shrink-0 transition-colors duration-200',
-                        isActive
-                            ? 'text-[color:var(--color-accent)]'
-                            : 'text-[color:var(--color-text-muted)]',
-                    )}
-                />
-                <span
-                    className={cn(
-                        'text-xs font-medium select-none transition-colors duration-200',
-                        isActive
-                            ? 'text-[color:var(--color-text-primary)]'
-                            : 'text-[color:var(--color-text-muted)]',
-                    )}
-                >
-                    {playbackState === 'loading'
-                        ? '…'
-                        : playbackState === 'playing'
-                            ? ''
-                            : playbackState === 'paused'
-                                ? 'Paused'
-                                : ''}
-                </span>
-
-                {/* Animated playing dots — inline with icon */}
-                {playbackState === 'playing' && (
-                    <div className="flex items-end gap-[3px] h-4 shrink-0">
-                        {[0, 1, 2].map((i) => (
-                            <div
-                                key={i}
-                                className="w-[3px] rounded-full bg-[var(--color-accent)]"
-                                style={{
-                                    animation: `tts-bar-bounce 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
-                                    height: '60%',
-                                }}
-                            />
-                        ))}
-                    </div>
-                )}
-
-                {/* Loading spinner */}
-                {playbackState === 'loading' && (
-                    <span className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
-                )}
-            </div>
-
-            {/* Spacer */}
-            <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
-
-            {/* Speed control */}
-            <Dropdown
-                value={String(ttsSpeed)}
-                onChange={(v) => {
-                    const s = parseFloat(v);
-                    if (!isNaN(s)) updateTtsSettings({ speed: s });
-                }}
-                options={SPEED_OPTIONS}
-                size="sm"
-                variant="filled"
-                className="min-w-0 w-auto shrink-0"
-                dropdownClassName="bottom-full mb-1 mt-0 w-24"
-            />
-
-            {/* Spacer */}
-            <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
-
-            {/* Voice selector */}
-            <Dropdown
-                value={ttsVoice}
-                onChange={(v) => updateTtsSettings({ voice: v })}
-                options={SAMPLE_VOICES}
-                size="sm"
-                variant="filled"
-                className="min-w-0 w-auto shrink-0"
-                dropdownClassName="bottom-full mb-1 mt-0 w-48"
-            />
-
-            <button
-                onClick={() => handleTestVoice(ttsVoice)}
-                className="flex items-center justify-center w-6 h-6 sm:w-5 sm:h-5 rounded text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-overlay-subtle)] shrink-0"
-                title="Test this voice"
-                aria-label="Test voice"
-            >
-                <Volume2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
-            </button>
-
-            {/* Spacer */}
-            <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
-
-            {/* Controls */}
-            <div className="flex items-center gap-1 shrink-0">
-                {playbackState === 'idle' || playbackState === 'loading' ? (
-                    <button
-                        id="tts-play-btn"
-                        onClick={handlePlay}
-                        disabled={playbackState === 'loading' || !sectionText.trim()}
+            {/* Main controls row */}
+            <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
+                {/* Icon badge + Label */}
+                <div className="flex items-center gap-1 shrink-0">
+                    <Headphones
                         className={cn(
-                            'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
-                            'bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]',
-                            'hover:bg-[var(--color-accent-hover)] active:scale-90',
-                            'disabled:opacity-40 disabled:cursor-not-allowed',
+                            'w-4 h-4 shrink-0 transition-colors duration-200',
+                            isActive
+                                ? 'text-[color:var(--color-accent)]'
+                                : 'text-[color:var(--color-text-muted)]',
                         )}
-                        title="Start immersion reading"
-                        aria-label="Play"
+                    />
+                    <span
+                        className={cn(
+                            'text-xs font-medium select-none transition-colors duration-200',
+                            isActive
+                                ? 'text-[color:var(--color-text-primary)]'
+                                : 'text-[color:var(--color-text-muted)]',
+                        )}
                     >
-                        <Play className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
-                    </button>
-                ) : (
-                    <>
-                        {/* Pause / Resume */}
-                        <button
-                            id="tts-pause-btn"
-                            onClick={playbackState === 'playing' ? handlePause : handlePlay}
-                            className={cn(
-                                'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
-                                'bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]',
-                                'hover:bg-[var(--color-overlay-subtle)] active:scale-90',
-                            )}
-                            title={playbackState === 'playing' ? 'Pause' : 'Resume'}
-                            aria-label={playbackState === 'playing' ? 'Pause' : 'Resume'}
-                        >
-                            {playbackState === 'playing' ? (
-                                <Pause className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
-                            ) : (
-                                <Play className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
-                            )}
-                        </button>
+                        {playbackState === 'loading'
+                            ? '…'
+                            : playbackState === 'playing'
+                                ? ''
+                                : playbackState === 'paused'
+                                    ? 'Paused'
+                                    : ''}
+                    </span>
 
-                        {/* Stop */}
+                    {/* Animated playing dots — inline with icon */}
+                    {playbackState === 'playing' && (
+                        <div className="flex items-end gap-[3px] h-4 shrink-0">
+                            {[0, 1, 2].map((i) => (
+                                <div
+                                    key={i}
+                                    className="w-[3px] rounded-full bg-[var(--color-accent)]"
+                                    style={{
+                                        animation: `tts-bar-bounce 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
+                                        height: '60%',
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Loading spinner */}
+                    {playbackState === 'loading' && (
+                        <span className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
+                    )}
+                </div>
+
+                {/* Spacer */}
+                <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
+
+                {/* Speed control */}
+                <Dropdown
+                    value={String(ttsSpeed)}
+                    onChange={(v) => {
+                        const s = parseFloat(v);
+                        if (!isNaN(s)) updateTtsSettings({ speed: s });
+                    }}
+                    options={SPEED_OPTIONS}
+                    size="sm"
+                    variant="filled"
+                    className="min-w-0 w-auto shrink-0"
+                    dropdownClassName="bottom-full mb-1 mt-0 w-24"
+                />
+
+                {/* Spacer */}
+                <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
+
+                {/* Voice selector */}
+                <Dropdown
+                    value={ttsVoice}
+                    onChange={(v) => updateTtsSettings({ voice: v })}
+                    options={SAMPLE_VOICES}
+                    size="sm"
+                    variant="filled"
+                    className="min-w-0 w-auto shrink-0"
+                    dropdownClassName="bottom-full mb-1 mt-0 w-48"
+                />
+
+                <button
+                    onClick={() => handleTestVoice(ttsVoice)}
+                    className="flex items-center justify-center w-6 h-6 sm:w-5 sm:h-5 rounded text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-overlay-subtle)] shrink-0"
+                    title="Test this voice"
+                    aria-label="Test voice"
+                >
+                    <Volume2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
+                </button>
+
+                {/* Spacer */}
+                <div className="w-px h-5 bg-[var(--color-border)] shrink-0 mx-0.5" />
+
+                {/* Controls */}
+                <div className="flex items-center gap-1 shrink-0">
+                    {playbackState === 'idle' || playbackState === 'loading' ? (
                         <button
-                            id="tts-stop-btn"
-                            onClick={handleStop}
+                            id="tts-play-btn"
+                            onClick={handlePlay}
+                            disabled={playbackState === 'loading' || !sectionText.trim()}
                             className={cn(
                                 'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
-                                'bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]',
-                                'hover:bg-[var(--color-overlay-subtle)] hover:text-[color:var(--color-error)] active:scale-90',
+                                'bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]',
+                                'hover:bg-[var(--color-accent-hover)] active:scale-90',
+                                'disabled:opacity-40 disabled:cursor-not-allowed',
                             )}
-                            title="Stop"
-                            aria-label="Stop"
+                            title="Start immersion reading"
+                            aria-label="Play"
                         >
-                            <Square className="w-4 h-4 sm:w-3 sm:h-3 fill-current" />
+                            <Play className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
                         </button>
-                    </>
-                )}
+                    ) : (
+                        <>
+                            {/* Pause / Resume */}
+                            <button
+                                id="tts-pause-btn"
+                                onClick={playbackState === 'playing' ? handlePause : handlePlay}
+                                className={cn(
+                                    'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
+                                    'bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]',
+                                    'hover:bg-[var(--color-overlay-subtle)] active:scale-90',
+                                )}
+                                title={playbackState === 'playing' ? 'Pause' : 'Resume'}
+                                aria-label={playbackState === 'playing' ? 'Pause' : 'Resume'}
+                            >
+                                {playbackState === 'playing' ? (
+                                    <Pause className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
+                                ) : (
+                                    <Play className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-current" />
+                                )}
+                            </button>
+
+                            {/* Stop */}
+                            <button
+                                id="tts-stop-btn"
+                                onClick={handleStop}
+                                className={cn(
+                                    'flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full transition-all duration-150',
+                                    'bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]',
+                                    'hover:bg-[var(--color-overlay-subtle)] hover:text-[color:var(--color-error)] active:scale-90',
+                                )}
+                                title="Stop"
+                                aria-label="Stop"
+                            >
+                                <Square className="w-4 h-4 sm:w-3 sm:h-3 fill-current" />
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
-            {/* Error badge */}
+            {/* Error badge - separate row below controls */}
             {error && (
-                <div className="flex items-center gap-1 shrink-0 ml-0.5">
+                <div className="flex items-center gap-1 mt-2 px-0.5">
                     <div className="w-2 h-2 rounded-full bg-[var(--color-error)] shrink-0" />
-                    <span className="text-[10px] text-[color:var(--color-error)] max-w-[100px] sm:max-w-[120px] truncate">
+                    <span className="text-[11px] text-[color:var(--color-error)] truncate">
                         {error}
                     </span>
                     <button
                         onClick={() => setError(null)}
-                        className="text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
+                        className="text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] shrink-0"
                         aria-label="Dismiss error"
                     >
-                        <X className="w-3 h-3" />
+                        <X className="w-3.5 h-3.5" />
                     </button>
                 </div>
             )}
