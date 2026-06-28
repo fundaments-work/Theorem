@@ -65,3 +65,6 @@ src/features/reader/foliate-js/vendor/pdfjs/
 src-tauri/models/
 *.wav
 *.onnx
+
+# Build artifacts
+*.AppImage
