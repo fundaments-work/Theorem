@@ -624,7 +624,7 @@ export class FoliateEngine {
 
         // Handle annotation drawing
         this.view.addEventListener('draw-annotation', (e: any) => {
-            const { draw, annotation, doc, range } = e.detail;
+            const { draw, annotation, doc } = e.detail;
             
             if (!draw || !annotation) {
                 return;
@@ -708,7 +708,7 @@ export class FoliateEngine {
 
         // Handle annotation click
         this.view.addEventListener('show-annotation', (e: any) => {
-            const { value, index, range } = e.detail;
+            const { value, range } = e.detail;
             
             // Find the annotation by CFI
             let annotation = Array.from(this.annotations.values())
@@ -1403,7 +1403,7 @@ export class FoliateEngine {
      * Re-render all annotations for a specific section
      * Called when a section reloads (e.g., when navigating back to a previous page)
      */
-    async renderAnnotationsForSection(sectionIndex: number): Promise<void> {
+    async renderAnnotationsForSection(_sectionIndex: number): Promise<void> {
         if (!this.view || !this.book) {
             return;
         }
@@ -1464,7 +1464,7 @@ export class FoliateEngine {
                 this.view?.addAnnotation?.({
                     value: annotation.location,
                     color: annotation.color,
-                })?.catch((e: unknown) => {
+                })?.catch(() => {
                 }) ?? Promise.resolve(),
             ));
             // Yield to the renderer between batches

@@ -46,7 +46,7 @@ export function useReaderFullscreen({
         return () => {
             document.removeEventListener("fullscreenchange", handleFullscreenChange);
             if (fullscreen && document.fullscreenElement) {
-                void document.exitFullscreen().catch((error) => {
+                void document.exitFullscreen().catch(() => {
                 });
             }
         };

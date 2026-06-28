@@ -496,7 +496,7 @@ function cleanupDiscardedImportedBook(book: Book): void {
         return;
     }
 
-    deleteBookStorage(book.id).catch((error) => {
+    deleteBookStorage(book.id).catch(() => {
     });
 }
 
@@ -869,7 +869,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 // Clean up storage first (don't await to keep UI responsive).
                 // Skip for synced-without-file books — they have no local storage to delete.
                 if (book && !book.syncedWithoutFile) {
-                    deleteBookStorage(bookId).catch((error) => {
+                    deleteBookStorage(bookId).catch(() => {
                     });
                 }
 

@@ -8,7 +8,7 @@ import type { Book, BookFormat } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { isTauri, isMobile } from './env';
 import { saveBookData, getBookData } from './storage';
-import { formatFileSize, normalizeFilePath, safeDecodeURIComponent } from './utils';
+import { normalizeFilePath, safeDecodeURIComponent } from './utils';
 
 // Dynamically import Tauri plugins
 let tauriDialog: typeof import('@tauri-apps/plugin-dialog') | null = null;

@@ -249,7 +249,7 @@ function BookReaderPage() {
         timestamp: number;
     } | null>(null);
 
-    const debug = useCallback((...args: unknown[]) => {
+    const debug = useCallback((..._args: unknown[]) => {
         if (import.meta.env.DEV) {
         }
     }, []);
@@ -611,7 +611,7 @@ function BookReaderPage() {
             }
 
             const storagePath = book.storagePath || book.filePath;
-            void getBookBlob(book.id, storagePath).catch((error) => {
+            void getBookBlob(book.id, storagePath).catch(() => {
             });
         }
     }, [currentBookId]);
@@ -1488,7 +1488,7 @@ function BookReaderPage() {
             }
             // Load annotations into viewport (with delay to ensure foliate is ready)
             const timer = setTimeout(() => {
-                readerRef.current?.loadAnnotations?.(bookAnnotations).catch((err: Error) => {
+                readerRef.current?.loadAnnotations?.(bookAnnotations).catch(() => {
                 });
             }, 500);
             return () => clearTimeout(timer);

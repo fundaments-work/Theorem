@@ -478,7 +478,7 @@ async function pullMissingBookFilesAndCovers(
             if (result.unavailable.length > 0) parts.push(`${result.unavailable.length} files unavailable`);
             if (result.failed.length > 0) {
                 parts.push(`${result.failed.length} files failed`);
-                for (const f of result.failed) 
+                for (const _f of result.failed) { /* logged elsewhere */ }
             }
             log(`File transfer: ${parts.join(", ")}`);
         } catch (error: unknown) {
@@ -704,7 +704,7 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
 
         if (domainCount === 0) {
             if (peerDeviceId) {
-                const responderLog = (msg: string) => 
+                const responderLog = (_msg: string) => {};
                 try {
                     await discoverPeer(peerDeviceId);
                 } catch {
@@ -750,7 +750,7 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
                 }
             } catch (_err) {}
             
-            const responderLog = (msg: string) => 
+            const responderLog = (_msg: string) => {};
             try {
                 await discoverPeer(peerDeviceId);
             } catch {

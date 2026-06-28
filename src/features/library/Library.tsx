@@ -918,7 +918,7 @@ export function LibraryPage() {
             extractedBookIdsRef.current.add(nextBook.id);
 
             void performImportedBookMetadataExtraction(nextBook)
-                .catch((error) => {
+                .catch(() => {
                 })
                 .finally(() => {
                     activeImportMetadataTasksRef.current = Math.max(0, activeImportMetadataTasksRef.current - 1);

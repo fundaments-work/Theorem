@@ -763,7 +763,7 @@ class TauriPdfRangeTransport extends pdfjsLib.PDFDataRangeTransport {
                 this.loadedBytes = Math.min(this.length, Math.max(this.loadedBytes, safeBegin + normalizedChunk.byteLength));
                 this.onDataRange(safeBegin, normalizedChunk);
             })
-            .catch((error) => {
+            .catch(() => {
                 if (this.aborted) return;
                 this.abort();
             });
@@ -1026,14 +1026,14 @@ const PageCanvas = memo(function PageCanvas({
                         registerTextLayer(textLayerDiv, endOfContent);
                     } catch (textError) {
                         const isAbortError = textError instanceof Error && (textError.name === "AbortException" || textError.message.toLowerCase().includes("abort") || textError.message.toLowerCase().includes("cancel"));
-                        if (!isAbortError) 
+                        if (!isAbortError) { /* non-fatal text layer error */ }
                     }
                 }
 
                 if (!cancelled) { renderTaskRef.current = null; }
             } catch (error: unknown) {
                 const isCancelled = error instanceof Error && (error.message.includes("cancelled") || error.message.includes("Rendering cancelled"));
-                if (!isCancelled) 
+                if (!isCancelled) { /* rendering was cancelled */ }
             } finally {
                 cancelQueuedRenderSlot?.(); cancelQueuedRenderSlot = null;
                 releaseRenderSlot?.(); releaseRenderSlot = null;
