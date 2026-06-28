@@ -267,6 +267,7 @@ export interface VocabularySettings {
 }
 
 export interface TtsSettings {
+    enabled: boolean;
     voice: string;
     speed: number;
 }

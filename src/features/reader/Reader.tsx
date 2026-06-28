@@ -218,7 +218,15 @@ function BookReaderPage() {
     const [initialLocation, setInitialLocation] = useState<string | undefined>(undefined);
     const [initialFraction, setInitialFraction] = useState<number | undefined>(undefined);
     const [ttsData, setTtsData] = useState<{ text: string; startWordId: string } | null>(null);
+    const ttsEnabled = settings.tts.enabled;
     const [immersionMode, setImmersionMode] = useState(false);
+    // Exit immersion mode if TTS is disabled while active
+    useEffect(() => {
+        if (!ttsEnabled && immersionMode) {
+            setImmersionMode(false);
+            immersionPlayer.stop();
+        }
+    }, [ttsEnabled, immersionMode]);
     const suppressProgressRef = useRef(false);
     const resumeTargetRef = useRef<string | null>(null);
     const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2149,7 +2157,7 @@ function BookReaderPage() {
                     fullscreen={settings.readerSettings.fullscreen}
                     onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
                     immersionMode={immersionMode}
-                    onToggleImmersion={() => setImmersionMode(v => !v)}
+                    onToggleImmersion={ttsEnabled ? () => setImmersionMode(v => !v) : undefined}
                 />
             </div>
 

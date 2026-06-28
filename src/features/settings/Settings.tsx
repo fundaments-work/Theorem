@@ -873,6 +873,16 @@ export function SettingsPage() {
                         icon={<Headphones className="w-5 h-5" />}
                     >
                         <SettingRow
+                            label="Enable Text-to-Speech"
+                            description="Enable immersion reading with neural TTS"
+                        >
+                            <Toggle
+                                checked={settings.tts.enabled}
+                                onChange={(checked) => updateTtsSettings({ enabled: checked })}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
                             label="Voice"
                             description="Kokoro TTS voice for audio playback"
                         >
