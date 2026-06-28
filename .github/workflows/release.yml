@@ -192,6 +192,12 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Download ONNX Runtime for Intel Mac
+        run: |
+          curl -LO https://github.com/microsoft/onnxruntime/releases/download/v1.19.2/onnxruntime-osx-x86_64-1.19.2.tgz
+          tar -xzf onnxruntime-osx-x86_64-1.19.2.tgz
+          echo "ORT_DYLIB_PATH=$PWD/onnxruntime-osx-x86_64-1.19.2/lib/libonnxruntime.1.19.2.dylib" >> $GITHUB_ENV
+
       - name: Regenerate platform icons from source
         run: pnpm tauri icon public/favicon.svg
 
