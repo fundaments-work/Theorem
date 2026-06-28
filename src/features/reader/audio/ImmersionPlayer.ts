@@ -163,6 +163,13 @@ export class ImmersionPlayer {
         this.unlisteners = [u1, u2, u3];
     }
 
+    /** Pre-create the AudioContext within a user-gesture context.
+     *  On Android, new AudioContext() must be called synchronously
+     *  during a user interaction (click/tap), not in an async callback. */
+    prepare(): void {
+        this.getAudioCtx();
+    }
+
     setCurrentGenId(id: number) {
         this.currentGenId = id;
         this.isPlayingPreload = false;

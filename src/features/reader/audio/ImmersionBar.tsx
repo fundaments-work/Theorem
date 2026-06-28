@@ -156,6 +156,9 @@ export function ImmersionBar({
         setIsContinuousMode(true);
         lastPlayedCfiRef.current = pageCfi || '';
 
+        // Pre-create AudioContext within user gesture (critical for Android).
+        immersionPlayer.prepare();
+
         try {
             const genId = await invoke<number>('generate_speech', {
                 text,
@@ -228,7 +231,7 @@ export function ImmersionBar({
     return (
         <div
             className={cn(
-                'flex items-center gap-1.5 sm:gap-2 flex-wrap',
+                'flex items-center gap-1.5 sm:gap-2 flex-nowrap overflow-x-auto overflow-y-hidden',
                 'w-full sm:w-auto sm:px-4 py-2 px-2 sm:py-2.5',
                 'sm:rounded-full rounded-xl',
                 'bg-[var(--color-surface)]/95 backdrop-blur-xl',

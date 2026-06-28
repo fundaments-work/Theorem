@@ -39,6 +39,8 @@ interface PDFReaderProps {
     initialZoomMode?: PdfZoomMode;
     /** Theme mode for the reader */
     theme?: ReaderTheme;
+    /** Brightness level (0-200) */
+    brightness?: number;
     /** Callback when page changes - provides page state for external controls */
     onPageChange?: (page: number, totalPages: number, scale: number) => void;
     /** Callback when PDF is loaded */
@@ -170,6 +172,7 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             initialZoom,
             initialZoomMode,
             theme = "light",
+            brightness = 100,
             onPageChange,
             onLoad,
             onError,
@@ -302,6 +305,7 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                     themeClass,
                     "transition-colors duration-200"
                 )}
+                style={{ filter: `brightness(${brightness}%)` }}
                 data-reading-mode="pdf"
             >
                 {/* PDF Viewer Area - Full height, no toolbar */}

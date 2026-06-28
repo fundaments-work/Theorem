@@ -2103,8 +2103,6 @@ function BookReaderPage() {
             style={{
                 backgroundColor: 'var(--reader-bg)',
                 overscrollBehavior: 'none',
-                // Brightness applied to ENTIRE screen including all UI
-                filter: `brightness(${settings.readerSettings.brightness}%)`,
             }}
             data-reading-mode={settings.readerSettings.flow}
         >
@@ -2150,6 +2148,7 @@ function BookReaderPage() {
                         initialZoom={pdfInitialZoom}
                         initialZoomMode={pdfInitialZoomMode}
                         theme={settings.readerSettings.theme}
+                        brightness={settings.readerSettings.brightness}
                         onPageChange={handlePdfPageChange}
                         onZoomModeChange={handlePdfZoomModeChange}
                         onLoad={handlePdfLoad}
