@@ -794,14 +794,9 @@ pub fn run() {
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
-        // Called when a secondary instance is invoked (e.g. "Open With" or relaunch).
+        // Called when a secondary instance is invoked (e.g. "Open With").
         let paths = collect_open_paths(argv, Some(&cwd));
         enqueue_open_paths(app, paths, true);
-        // Show and focus the existing window (it may be hidden to tray).
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
     }));
 
     #[cfg(mobile)]
