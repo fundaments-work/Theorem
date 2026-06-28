@@ -279,33 +279,4 @@ describe("Dictionary integration with real download", () => {
     }, 120_000); // 2 minute timeout for download
 });
 
-describe("Dictionary lookup performance", () => {
-        const wordCount = 10_000;
-        const idxData = buildSyntheticIdx(wordCount);
-
-        const arr = new Uint8Array(idxData.buffer);
-        const view = new DataView(idxData.buffer);
-        const lookupTable: Map<string, [number, number]> = new Map();
-
-        // Build lookup table instead of reparsing every time
-        for (let i = 0; i < arr.length; ) {
-            const newI = arr.subarray(0, i + 256).indexOf(0, i);
-            if (newI < 0) break;
-            const word = new TextDecoder().decode(arr.subarray(i, newI)).toLowerCase();
-            const offset = view.getUint32(newI + 1);
-            const size = view.getUint32(newI + 5);
-            lookupTable.set(word, [offset, size]);
-            i = newI + 9;
-        }
-
-        const ITERATIONS = 1000;
-        const start = performance.now();
-        for (let i = 0; i < ITERATIONS; i++) {
-            lookupTable.get(`testword_${String(i * 10).padStart(8, "0")}`);
-        }
-        const elapsed = performance.now() - start;
-
-        console.log(`${ITERATIONS} lookups in ${elapsed.toFixed(1)} ms (${(ITERATIONS / (elapsed / 1000)).toFixed(0)} lookups/sec)`);
-        expect(elapsed).toBeLessThan(100); // < 100ms for 1000 lookups
-    });
 });

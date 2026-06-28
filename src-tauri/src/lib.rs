@@ -815,11 +815,7 @@ pub fn run() {
             let downloads_app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let model_state = downloads_app.state::<tts::ModelState>();
-                if let Err(e) = tts_model::ensure_models(
-                    &downloads_app,
-                    model_state.inner(),
-                )
-                .await
+                if let Err(e) = tts_model::ensure_models(&downloads_app, model_state.inner()).await
                 {
                     eprintln!("[tts] background model download failed: {}", e);
                 }

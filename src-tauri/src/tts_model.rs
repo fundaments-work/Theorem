@@ -141,6 +141,7 @@ fn target_models_dir(app: &AppHandle) -> PathBuf {
 }
 
 /// Download a single file with progress reporting.
+#[allow(clippy::too_many_arguments)]
 async fn download_file(
     client: &reqwest::Client,
     url: &str,

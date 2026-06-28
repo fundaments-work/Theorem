@@ -34,7 +34,7 @@ fn write_wav(path: &str, samples: &[f32], sample_rate: u32) -> std::io::Result<(
     f.write_all(&data_size.to_le_bytes())?;
 
     for &s in samples {
-        let clamped = s.max(-1.0).min(1.0);
+        let clamped = s.clamp(-1.0, 1.0);
         let i16_val = (clamped * 32767.0) as i16;
         f.write_all(&i16_val.to_le_bytes())?;
     }
