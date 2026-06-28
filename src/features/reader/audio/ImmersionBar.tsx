@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Play, Pause, Square, Headphones, Volume2 } from 'lucide-react';
+import { Play, Pause, Square, Headphones, Volume2, AlertCircle, X } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { cn, useSettingsStore } from '../../../core';
 import { immersionPlayer, type PlaybackState } from '../audio/ImmersionPlayer';
@@ -35,10 +35,23 @@ export function ImmersionBar({
     onSynthesisComplete,
 }: ImmersionBarProps) {
     const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
+    const [hasError, setHasError] = useState(false);
+    const errorTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const initializedRef = useRef(false);
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
     const ttsSpeed = useSettingsStore((s) => s.settings.tts.speed);
     const updateTtsSettings = useSettingsStore((s) => s.updateTtsSettings);
+
+    const showError = useCallback(() => {
+        setHasError(true);
+        clearTimeout(errorTimerRef.current);
+        errorTimerRef.current = setTimeout(() => setHasError(false), 4000);
+    }, []);
+
+    const clearError = useCallback(() => {
+        setHasError(false);
+        clearTimeout(errorTimerRef.current);
+    }, []);
 
     const onCompleteRef = useRef(onComplete);
     useEffect(() => {
@@ -72,6 +85,7 @@ export function ImmersionBar({
             },
             onError: (msg) => {
                 console.error('[ImmersionBar]', msg);
+                showError();
                 setIsContinuousMode(false);
                 transitioningRef.current = false;
             },
@@ -97,6 +111,7 @@ export function ImmersionBar({
     const handlePlay = useCallback(async () => {
         const text = sectionText.trim();
         if (!text) return;
+        clearError();
         console.time('[ImmersionBar] play→genId');
 
         if (playbackState === 'paused') {
@@ -126,6 +141,7 @@ export function ImmersionBar({
             immersionPlayer.setCurrentGenId(genId);
         } catch (err: unknown) {
             console.error('[ImmersionBar]', err instanceof Error ? err.message : String(err));
+            showError();
             setPlaybackState('idle');
             setIsContinuousMode(false);
         }
@@ -324,6 +340,21 @@ export function ImmersionBar({
                     </>
                 )}
             </div>
+
+            {/* Error indicator */}
+            {hasError && (
+                <div className="flex items-center gap-1 shrink-0 ml-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-[color:var(--color-error)] shrink-0" />
+                    <span className="text-[11px] text-[color:var(--color-error)] whitespace-nowrap">Something went wrong</span>
+                    <button
+                        onClick={clearError}
+                        className="flex items-center justify-center w-4 h-4 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] shrink-0"
+                        aria-label="Dismiss"
+                    >
+                        <X className="w-3 h-3" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
