@@ -461,7 +461,7 @@ function App() {
             </div>
 
             {/* Main Content */}
-            <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div className="relative flex-1 flex flex-col min-w-0">
                 <AppTitlebar title="Theorem" />
 
                 {/* Page Content */}
@@ -472,10 +472,10 @@ function App() {
                         </Suspense>
                     </RouteErrorBoundary>
                 </main>
-
-                {/* Mobile Navigation */}
-                <BottomNav />
             </div>
+
+            {/* Mobile Navigation - outside overflow container for reliable fixed positioning on all mobile browsers */}
+            <BottomNav />
 
             <KeyboardShortcutsHelp
                 isOpen={showShortcutsHelp}

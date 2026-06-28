@@ -2097,7 +2097,7 @@ function BookReaderPage() {
     return (
         <div
             className={cn(
-                "fixed inset-0 overflow-hidden",
+                "fixed inset-0 overflow-clip",
                 `theme-${settings.readerSettings.theme}`
             )}
             style={{
