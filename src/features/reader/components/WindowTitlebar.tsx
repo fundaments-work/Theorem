@@ -136,12 +136,22 @@ function MobileMenu({ isOpen, onClose, items, triggerRef: _triggerRef }: MenuPro
                 }}
             />
             <div
-                className="absolute right-2 top-full mt-1 z-[161] min-w-[12rem] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-lg backdrop-blur-md"
+                className="absolute right-2 top-full mt-1 z-[161] min-w-[12rem] max-w-[calc(100vw-1rem)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg backdrop-blur-md"
                 style={{
                     backgroundColor: 'var(--reader-bg, var(--color-surface))',
                     borderColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)',
                 }}
             >
+                <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] px-3 py-1.5">
+                    <span className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider">Menu</span>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onClose(); }}
+                        className="flex h-7 w-7 items-center justify-center text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[color:color-mix(in_srgb,var(--reader-fg,var(--color-text))_8%,transparent)] rounded transition-colors"
+                        aria-label="Close menu"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
                 {items.map((item, index) => (
                     <button
                         key={index}
