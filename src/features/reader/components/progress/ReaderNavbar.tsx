@@ -290,9 +290,10 @@ export const ReaderNavbar = memo(function ReaderNavbar({
             <div className="flex items-center gap-2">
                 <button
                     onClick={onToggleToc}
-                    className="p-1 px-[0.14rem] -mx-0.5 mt-[-0.20rem] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                    className="flex items-center justify-center p-2 -ml-1 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors min-h-[44px] min-w-[44px]"
+                    aria-label="Table of Contents"
                 >
-                    <List size={16} />
+                    <List size={18} />
                 </button>
 
                 {/* Info: section label + time remaining */}
