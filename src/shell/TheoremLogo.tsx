@@ -1,6 +1,8 @@
 /**
  * TheoremLogo Component
- * Square mark used across Theorem branding.
+ * Turnstile mark (⊢) — the logical notation for "derives."
+ * Built from two rectangles per design.md spec so it renders
+ * identically across every platform, weight, and rasterizer.
  */
 
 interface TheoremLogoProps {
@@ -21,25 +23,18 @@ export function TheoremLogo({ className, size = 32 }: TheoremLogoProps) {
             focusable="false"
         >
             <rect
-                x="1"
-                y="1"
-                width="22"
-                height="22"
-                fill="var(--color-text-primary)"
+                x="0"
+                y="0"
+                width="3"
+                height="24"
+                fill="currentColor"
             />
             <rect
-                x="5"
-                y="5"
-                width="14"
-                height="14"
-                fill="var(--color-surface)"
-            />
-            <rect
-                x="8"
-                y="8"
-                width="8"
-                height="8"
-                fill="var(--color-text-primary)"
+                x="0"
+                y="10.5"
+                width="15"
+                height="3"
+                fill="currentColor"
             />
         </svg>
     );
