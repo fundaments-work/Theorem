@@ -53,6 +53,7 @@ const segmenterSearch = function* (strs, query, options = {}) {
         segmenter = new Intl.Segmenter(locales, { usage: 'search', granularity })
         collator = new Intl.Collator(locales, { sensitivity })
     } catch (e) {
+        console.warn(e)
         segmenter = new Intl.Segmenter('en', { usage: 'search', granularity })
         collator = new Intl.Collator('en', { sensitivity })
     }

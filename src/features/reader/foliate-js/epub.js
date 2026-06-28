@@ -101,6 +101,7 @@ const resolveURL = (url, relativeTo) => {
         obj.search = ''
         return decodeURI(obj.href.replace(root, ''))
     } catch(e) {
+        console.warn(e)
         return url
     }
 }
@@ -434,6 +435,7 @@ class MediaOverlay extends EventTarget {
         return this.#activeAudio?.items?.[this.#itemIndex]
     }
     #error(e) {
+        console.error(e)
         this.dispatchEvent(new CustomEvent('error', { detail: e }))
     }
     #highlight() {
@@ -614,6 +616,7 @@ class Encryption {
             if (!this.#decoders.has(algorithm)) {
                 const algo = this.#algorithms[algorithm]
                 if (!algo) {
+                    console.warn('Unknown encryption algorithm')
                     continue
                 }
                 const key = await algo.key(opf)
@@ -735,7 +738,7 @@ class Loader {
         const childList = this.#children.get(parent)
         if (!childList?.includes(href)) {
             this.#refCount.set(href, this.#refCount.get(href) + 1)
-            //}`)
+            //console.log(`referencing ${href}, now ${this.#refCount.get(href)}`)
             if (childList) childList.push(href)
             else this.#children.set(parent, [href])
         }
@@ -744,9 +747,9 @@ class Loader {
     unref(href) {
         if (!this.#refCount.has(href)) return
         const count = this.#refCount.get(href) - 1
-        //
+        //console.log(`unreferencing ${href}, now ${count}`)
         if (count < 1) {
-            //
+            //console.log(`unloading ${href}`)
             URL.revokeObjectURL(this.#cache.get(href))
             this.#cache.delete(href)
             this.#refCount.delete(href)
@@ -813,6 +816,7 @@ class Loader {
             // change to HTML if it's not valid XHTML
             if (mediaType === MIME.XHTML && (doc.querySelector('parsererror')
             || !doc.documentElement?.namespaceURI)) {
+                console.warn(doc.querySelector('parsererror')?.innerText ?? 'Invalid XHTML')
                 item.mediaType = MIME.HTML
                 doc = new DOMParser().parseFromString(str, item.mediaType)
             }
@@ -976,6 +980,7 @@ ${doc.querySelector('parsererror').innerText}`)
             const { idref, linear, properties = [] } = spineItem
             const item = this.resources.getItemByID(idref)
             if (!item) {
+                console.warn(`Could not find item with ID "${idref}" in manifest`)
                 return null
             }
             return {
@@ -1001,6 +1006,7 @@ ${doc.querySelector('parsererror').innerText}`)
             this.pageList = nav.pageList
             this.landmarks = nav.landmarks
         } catch(e) {
+            console.warn(e)
         }
         if (!this.toc && ncxPath) try {
             const resolve = url => resolveURL(url, ncxPath)
@@ -1008,6 +1014,7 @@ ${doc.querySelector('parsererror').innerText}`)
             this.toc = ncx.toc
             this.pageList = ncx.pageList
         } catch(e) {
+            console.warn(e)
         }
         this.landmarks ??= this.resources.guide
 
