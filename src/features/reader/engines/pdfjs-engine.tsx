@@ -640,7 +640,7 @@ function calibrateWebKitTextLayerWidth(
     }
 
     if (allRatios.length < 24) {
-        if (import.meta.env.DEV && DEBUG_WEBKIT_TEXT_LAYER) console.debug("[PDF][TextLayer] WebKit font corrections skipped: insufficient samples", { sampledPairs });
+        if (import.meta.env.DEV && DEBUG_WEBKIT_TEXT_LAYER) 
         return 0;
     }
 
@@ -661,7 +661,6 @@ function calibrateWebKitTextLayerWidth(
     if (correctionsByFont.size === 0 && !globalCorrection) return 0;
 
     if (import.meta.env.DEV && DEBUG_WEBKIT_TEXT_LAYER) {
-        console.debug("[PDF][TextLayer] WebKit font corrections:", { sampledPairs, globalMedian, globalCorrection, fonts: Array.from(correctionsByFont.entries()) });
     }
 
     let maxAppliedDeviation = 0;

@@ -388,10 +388,6 @@ export class FoliateEngine {
             
             this.sectionFractions = this.view.getSectionFractions() || [];
             
-            console.debug('[FoliateEngine] Section fractions:', {
-                count: this.sectionFractions.length,
-                fractions: this.sectionFractions.slice(0, 3), // Show first 3 fractions
-            });
             
             if (this.sectionFractions.length === 0) {
                 console.warn('[FoliateEngine] No section fractions found, using fallback');
@@ -403,12 +399,6 @@ export class FoliateEngine {
             this.layout = layout;
             this.flow = flow;
             this.zoom_level = this.clampZoomLevel(zoom / 100, this.flow);
-            console.debug('[FoliateEngine] Initial settings applied', {
-                layout: this.layout,
-                flow: this.flow,
-                zoom_level: this.zoom_level,
-                zoom_input: zoom,
-            });
 
             // Apply settings synchronously where possible
             this.applySettingsSync();
@@ -419,37 +409,23 @@ export class FoliateEngine {
             // Ensure a final synchronized render now that async CSS is applied
             // This guarantees columns and font sizes are correct at startup.
             this.applyZoomSync();
-            console.debug('[FoliateEngine] Initial applyZoomSync completed before navigation');
 
             // Extract metadata and TOC
             const metadata = this.extractMetadata();
             const toc = this.extractToc();
 
             // Navigate to initial location or beginning
-            console.debug('[FoliateEngine] Initial navigation:', {
-                hasInitialLocation: !!initialLocation,
-                initialLocation: initialLocation?.substring(0, 50),
-            });
             
             // Set flag BEFORE navigation - relocate fires synchronously during goTo()
             this._awaitingInitialRelocate = true;
-            console.debug('[FoliateEngine] Set _awaitingInitialRelocate=true before navigation', {
-                zoom_level: this.zoom_level,
-                flow: this.flow,
-                layout: this.layout,
-                isFixedLayoutFormat: this.isFixedLayoutFormat,
-                initialLocation: initialLocation?.substring(0, 50) || 'none',
-            });
             
             if (initialLocation) {
-                console.debug('[FoliateEngine] Navigating to initial CFI location:', initialLocation.substring(0, 50));
                 try {
                     const result = await this.withTimeout(
                         this.view.goTo(initialLocation),
                         READER_NAVIGATION_TIMEOUT_MS,
                         'restoring saved location',
                     );
-                    console.debug('[FoliateEngine] goTo result:', result ? 'success' : 'undefined/null');
                     if (!result) {
                         console.warn('[FoliateEngine] Initial CFI navigation returned undefined, CFI may be invalid');
                         // Fall back to beginning if CFI is invalid
@@ -459,7 +435,6 @@ export class FoliateEngine {
                             'navigating to the start',
                         );
                     } else {
-                        console.debug('[FoliateEngine] Successfully navigated to initial location');
                     }
             } catch (err) {
                 console.warn('<FoliateEngine> Initial CFI navigation failed:', err);
@@ -475,7 +450,6 @@ export class FoliateEngine {
                 }
             }
             } else {
-                console.debug('[FoliateEngine] No initial location, starting at beginning');
                 await this.withTimeout(
                     this.view.goTo({ index: 0, fraction: 0 }),
                     READER_NAVIGATION_TIMEOUT_MS,
@@ -483,7 +457,6 @@ export class FoliateEngine {
                 );
             }
 
-            console.debug('[FoliateEngine] Signaling book ready');
             // Signal that book is ready
             this.options.onReady?.(metadata, toc);
 
@@ -537,7 +510,6 @@ export class FoliateEngine {
         // See foliate-js view.js #onRelocate: this.lastLocation = { ...progress, tocItem, pageItem, cfi, range }
         this.view.addEventListener('relocate', (e: any) => {
             const detail = e.detail;
-            console.debug('[FoliateEngine] relocate handler START', { _awaitingInitialRelocate: this._awaitingInitialRelocate });
             
             // Use CFI directly from event detail (already calculated by view.js)
             // The view.js getCFI is called in #onRelocate and included in lastLocation
@@ -549,11 +521,9 @@ export class FoliateEngine {
                 try {
                     cfi = this.view.getCFI(detail.section.current, detail.range) || '';
                     if (!cfi) {
-                        console.debug('[FoliateEngine] getCFI returned empty, using section fallback');
                         cfi = `section-${detail.section.current}`;
                     }
                 } catch (err) {
-                    console.debug('[FoliateEngine] getCFI fallback failed:', err);
                     cfi = `section-${detail.section.current}`;
                 }
             }
@@ -597,12 +567,6 @@ export class FoliateEngine {
                 fraction = this.currentLocation?.percentage ?? 0;
             }
             
-            console.debug('[FoliateEngine] Relocate event:', {
-                section: detail.section?.current,
-                rawFraction,
-                fraction,
-                cfi: cfi?.substring(0, 50),
-            });
             
             const location: DocLocation = {
                 cfi,
@@ -617,21 +581,8 @@ export class FoliateEngine {
             // After initial navigation, wait for first relocate then apply full settings update
             if (this._awaitingInitialRelocate) {
                 this._awaitingInitialRelocate = false;
-                console.debug('[FoliateEngine] Initial relocate received, scheduling full settings update', {
-                    zoom_level: this.zoom_level,
-                    flow: this.flow,
-                    layout: this.layout,
-                    isFixedLayoutFormat: this.isFixedLayoutFormat,
-                    hasRenderer: !!this.view?.renderer,
-                    contentsCount: this.view?.renderer?.getContents?.()?.length ?? 0,
-                });
                 this.scheduleSettingsUpdate();
             } else {
-                console.debug('[FoliateEngine] Relocate (not initial)', {
-                    zoom_level: this.zoom_level,
-                    flow: this.flow,
-                    layout: this.layout,
-                });
             }
 
             this.options.onLocationChange?.(location);
@@ -652,7 +603,6 @@ export class FoliateEngine {
         // Handle section load - re-attach selection listeners for new sections
         this.view.addEventListener('load', (e: any) => {
             const detail = e.detail;
-            console.debug('[FoliateEngine] Section loaded:', detail?.index);
             
             // Clear the attached listeners set for new sections
             if (detail?.doc) {
@@ -666,16 +616,13 @@ export class FoliateEngine {
             
             // Re-setup selection listeners and re-render highlights after a short delay
             setTimeout(() => {
-                console.debug('[FoliateEngine] Section load timeout fired, onTextSelected:', !!this.options.onTextSelected);
                 if (this.options.onTextSelected) {
-                    console.debug('[FoliateEngine] Re-attaching selection listeners after section load for section', detail?.index);
                     this.setupIframeSelectionListener(this.options.onTextSelected);
                 } else {
                     console.warn('[FoliateEngine] onTextSelected callback not set!');
                 }
                 
                 // Re-render all annotations for this section
-                console.debug('[FoliateEngine] Re-rendering annotations for section', detail?.index, 'total annotations:', this.annotations.size);
                 this.renderAnnotationsForSection(detail?.index);
             }, 500);
         });
@@ -683,7 +630,6 @@ export class FoliateEngine {
         // Handle annotation drawing
         this.view.addEventListener('draw-annotation', (e: any) => {
             const { draw, annotation, doc, range } = e.detail;
-            console.debug('[FoliateEngine] draw-annotation event:', { color: annotation?.color, hasDraw: !!draw, hasDoc: !!doc, hasRange: !!range });
             
             if (!draw || !annotation) {
                 console.warn('[FoliateEngine] draw-annotation missing draw or annotation');
@@ -692,7 +638,6 @@ export class FoliateEngine {
 
             // Get the color for the highlight
             const color = this.getHighlightColor(annotation.color || 'yellow');
-            console.debug('[FoliateEngine] Drawing highlight with color:', color);
             
             // Draw the highlight using the overlayer
             try {
@@ -700,7 +645,6 @@ export class FoliateEngine {
                 const annotationValue = annotation.value;
                 
                 draw((rects: DOMRectList) => {
-                    console.debug('[FoliateEngine] Drawing', rects.length, 'rects');
                     const g = doc.createElementNS('http://www.w3.org/2000/svg', 'g');
                     g.setAttribute('fill', color);
                     g.setAttribute('data-highlight', 'true');
@@ -723,7 +667,6 @@ export class FoliateEngine {
                     
                     const activateHighlight = (e: Event) => {
                         const sourceEvent = e as MouseEvent;
-                        console.debug('[FoliateEngine] Highlight clicked:', annotationValue);
                         e.stopPropagation();
                         e.preventDefault();
                         
@@ -750,7 +693,6 @@ export class FoliateEngine {
                                 bubbles: true
                             });
                             
-                            console.debug('[FoliateEngine] Triggering onTextSelected for clicked highlight:', clickedAnnotation.id);
                             this.options.onTextSelected(clickedAnnotation.location, clickedAnnotation.selectedText || '', syntheticEvent);
                         }
                     };
@@ -764,10 +706,8 @@ export class FoliateEngine {
                         }
                     });
                     
-                    console.debug('[FoliateEngine] Created SVG group with', g.childElementCount, 'rects');
                     return g;
                 }, annotation);
-                console.debug('[FoliateEngine] draw() completed successfully');
             } catch (err) {
                 console.error('[FoliateEngine] Error in draw-annotation:', err);
             }
@@ -776,7 +716,6 @@ export class FoliateEngine {
         // Handle annotation click
         this.view.addEventListener('show-annotation', (e: any) => {
             const { value, index, range } = e.detail;
-            console.debug('[FoliateEngine] show-annotation event:', { value: value?.substring(0, 50), index, hasRange: !!range });
             
             // Find the annotation by CFI
             let annotation = Array.from(this.annotations.values())
@@ -789,7 +728,6 @@ export class FoliateEngine {
             }
             
             if (annotation) {
-                console.debug('[FoliateEngine] Found annotation for click:', annotation.id, annotation.type);
                 // Call the callback with annotation data
                 if (this.options.onTextSelected) {
                     if (range && typeof range.cloneRange === 'function') {
@@ -817,7 +755,6 @@ export class FoliateEngine {
                 }
             } else {
                 console.warn('[FoliateEngine] No annotation found for CFI:', value?.substring(0, 50));
-                console.debug('[FoliateEngine] Available annotations:', Array.from(this.annotations.values()).map(a => ({ id: a.id, loc: a.location?.substring(0, 50) })));
             }
         });
     }
@@ -1173,7 +1110,6 @@ export class FoliateEngine {
         if (!this.view) return;
         
         const clampedFraction = Math.max(0, Math.min(1, fraction));
-        console.debug('[FoliateEngine] goToFraction:', { fraction: clampedFraction });
         
         await this.view.goToFraction(clampedFraction);
 
@@ -1337,13 +1273,6 @@ export class FoliateEngine {
      * Synchronous zoom application - instant visual feedback
      */
     private applyZoomSync(): void {
-        console.debug('[FoliateEngine] applyZoomSync called', {
-            zoom_level: this.zoom_level,
-            flow: this.flow,
-            layout: this.layout,
-            hasRenderer: !!this.view?.renderer,
-            contentsCount: this.view?.renderer?.getContents?.()?.length ?? 0,
-        });
         if (!this.view?.renderer) {
             console.warn('[FoliateEngine] applyZoomSync: no renderer');
             return;
@@ -1360,7 +1289,6 @@ export class FoliateEngine {
         if (!this.isFixedLayoutFormat && typeof this.view.renderer.render === 'function') {
             this.view.renderer.render();
         }
-        console.debug('[FoliateEngine] applyZoomSync completed');
     }
 
     setMargins(_margins: number): void {
@@ -1403,7 +1331,6 @@ export class FoliateEngine {
 
     // Annotation methods
     async addHighlight(cfi: string, text: string, color: HighlightColor, bookId?: string): Promise<Annotation> {
-        console.debug('[FoliateEngine] addHighlight called:', { cfi: cfi.substring(0, 30), text: text.substring(0, 30), color });
         
         const annotation: Annotation = {
             id: crypto.randomUUID(),
@@ -1416,16 +1343,13 @@ export class FoliateEngine {
         };
 
         this.annotations.set(annotation.id, annotation);
-        console.debug('[FoliateEngine] Annotation stored, total annotations:', this.annotations.size);
         
         // Add to view for rendering
         try {
-            console.debug('[FoliateEngine] Calling view.addAnnotation with cfi:', cfi.substring(0, 30));
             await this.view?.addAnnotation?.({
                 value: cfi,
                 color: color,
             });
-            console.debug('[FoliateEngine] view.addAnnotation completed');
         } catch (e) {
             console.warn('[FoliateEngine] Failed to add annotation to view:', e);
         }
@@ -1451,29 +1375,20 @@ export class FoliateEngine {
     }
 
     async removeHighlight(id: string): Promise<void> {
-        console.debug('[FoliateEngine] removeHighlight called with id:', id);
         const annotation = this.annotations.get(id);
         if (!annotation) {
             console.warn('[FoliateEngine] Annotation not found for id:', id);
             return;
         }
         
-        console.debug('[FoliateEngine] Found annotation to delete:', {
-            id: annotation.id,
-            type: annotation.type,
-            location: annotation.location?.substring(0, 50),
-        });
         
         // Delete from internal map first
         this.annotations.delete(id);
-        console.debug('[FoliateEngine] Deleted from annotations map, remaining:', this.annotations.size);
         
         // Remove from foliate view
         try {
             if (this.view?.deleteAnnotation) {
-                console.debug('[FoliateEngine] Calling view.deleteAnnotation with location:', annotation.location?.substring(0, 50));
                 await this.view.deleteAnnotation({ value: annotation.location });
-                console.debug('[FoliateEngine] Successfully called view.deleteAnnotation');
             } else {
                 console.warn('<FoliateEngine> Initial CFI navigation returned undefined, CFI may be invalid');
                 // Fall back to beginning if CFI is invalid
@@ -1510,11 +1425,9 @@ export class FoliateEngine {
             return;
         }
 
-        console.debug('[FoliateEngine] Rendering annotations for section', sectionIndex);
         
         // Get all annotations and filter by section
         const allAnnotations = Array.from(this.annotations.values());
-        console.debug('[FoliateEngine] Total annotations to check:', allAnnotations.length);
         
         // We need to determine which annotations belong to this section
         // Since we don't have an easy way to check, we'll try to render all
@@ -1523,19 +1436,16 @@ export class FoliateEngine {
             // Render highlights for both 'highlight' and 'note' types
             if ((annotation.type === 'highlight' || annotation.type === 'note') && annotation.location) {
                 try {
-                    console.debug('[FoliateEngine] Re-rendering annotation for section', sectionIndex, ':', annotation.location.substring(0, 30));
                     await this.view?.addAnnotation?.({
                         value: annotation.location,
                         color: annotation.color,
                     });
                 } catch (e) {
                     // Silently ignore errors for annotations that don't belong to this section
-                    console.debug('[FoliateEngine] Annotation not in section', sectionIndex, ':', e);
                 }
             }
         }
         
-        console.debug('[FoliateEngine] Finished rendering annotations for section', sectionIndex);
     }
 
     /**
@@ -1893,7 +1803,6 @@ export class FoliateEngine {
                         const range = selection.getRangeAt(0);
                         const cfi = this.getCFIFromRange(content.index, range);
                         if (cfi) {
-                            console.debug('[FoliateEngine] Selection found:', { text: text.substring(0, 50), cfi });
                             return { text, cfi, range };
                         }
                     }
@@ -1901,7 +1810,6 @@ export class FoliateEngine {
             }
         } catch (e) {
             // Silently ignore errors during transitions
-            console.debug('[FoliateEngine] getSelectionFromDocument error:', e);
         }
         return null;
     }
@@ -1956,7 +1864,6 @@ export class FoliateEngine {
         if (!this.postMessageHandler) {
             this.postMessageHandler = (event: MessageEvent) => {
                 if (event.data?.type === 'foliate-selection') {
-                    console.debug('[FoliateEngine] Received selection from iframe via postMessage:', event.data);
                     
                     const { sectionIndex, text, clientX, clientY, rect } = event.data;
                     
@@ -1979,7 +1886,6 @@ export class FoliateEngine {
                                 const cfi = this.getCFIFromRange(sectionIndex, range);
                                 
                                 if (cfi) {
-                                    console.debug('[FoliateEngine] Calling callback with CFI:', cfi);
                                     try {
                                         callback(cfi, text, range.cloneRange());
                                     } catch {
@@ -2014,56 +1920,42 @@ export class FoliateEngine {
             };
             
             window.addEventListener('message', this.postMessageHandler);
-            console.debug('[FoliateEngine] Setup postMessage listener for iframe selections');
         }
 
         const contents = this.view.renderer.getContents?.() || [];
         
-        console.debug('[FoliateEngine] Setting up listeners for', contents.length, 'sections');
         
         for (const content of contents) {
             const doc = content.doc;
             const win = doc?.defaultView;
             if (!doc || !win) {
-                console.debug('[FoliateEngine] No doc or window for section', content.index);
                 continue;
             }
 
             // Skip if already has listeners
             if (this.iframeListenersAttached.has(doc)) {
-                console.debug('[FoliateEngine] Already has listeners for section', content.index);
                 continue;
             }
 
-            console.debug('[FoliateEngine] Attaching selection listener to iframe:', content.index);
 
             // Mark as having listeners
             this.iframeListenersAttached.add(doc);
 
             // Log document info for debugging
-            console.debug('[FoliateEngine] Document info for section', content.index, {
-                url: doc.URL,
-                title: doc.title,
-                bodyExists: !!doc.body,
-                windowExists: !!win,
-            });
 
             // Try to access iframe element directly and add load listener
             // This is more reliable than injected scripts in sandboxed iframes
             const iframeElement = doc.defaultView?.frameElement as HTMLIFrameElement;
             if (iframeElement) {
-                console.debug('[FoliateEngine] Found iframe element for section', content.index);
                 
                 // Listen for iframe load to re-attach listeners
                 iframeElement.addEventListener('load', () => {
-                    console.debug('[FoliateEngine] Iframe reloaded for section', content.index);
                     this.attachSelectionListenersToIframe(iframeElement, content.index, callback);
                 });
                 
                 // Attach listeners now
                 this.attachSelectionListenersToIframe(iframeElement, content.index, callback);
             } else {
-                console.debug('[FoliateEngine] No iframe element found for section', content.index, 'using script injection');
                 // Fallback to script injection
                 this.injectSelectionScript(doc, content.index, callback);
             }
@@ -2099,7 +1991,6 @@ export class FoliateEngine {
                 doc.body.style.touchAction = 'manipulation';
             }
             
-            console.debug('[FoliateEngine] Attaching listeners to iframe element for section', index);
             
             // Track last selection to avoid duplicates
             let lastSelectionKey = '';
@@ -2444,7 +2335,6 @@ export class FoliateEngine {
                 true,
             );
             
-            console.debug('[FoliateEngine] Successfully attached iframe listeners for section', index);
         } catch (err) {
             console.warn('[FoliateEngine] Failed to attach iframe listeners:', err);
         }
@@ -2594,7 +2484,6 @@ export class FoliateEngine {
             }
         } catch (e) {
             // Silently ignore errors during transitions
-            console.debug('[FoliateEngine] clearSelection error:', e);
         }
     }
 

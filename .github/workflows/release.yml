@@ -100,7 +100,7 @@ jobs:
   build-linux:
     name: Build Linux
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.deleted == false)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: create-release
     steps:
       - uses: actions/checkout@v5
@@ -191,6 +191,13 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Download ONNX Runtime for Intel Mac
+        run: |
+          curl -LO https://github.com/microsoft/onnxruntime/releases/download/v1.19.2/onnxruntime-osx-x86_64-1.19.2.tgz
+          tar -xzf onnxruntime-osx-x86_64-1.19.2.tgz
+          echo "ORT_STRATEGY=system" >> $GITHUB_ENV
+          echo "ORT_LIB_LOCATION=$PWD/onnxruntime-osx-x86_64-1.19.2/lib" >> $GITHUB_ENV
 
       - name: Regenerate platform icons from source
         run: pnpm tauri icon public/favicon.svg
@@ -586,7 +593,7 @@ jobs:
           EOF
 
       - name: Build Android release artifacts
-        run: pnpm tauri android build
+        run: pnpm tauri android build --split-per-abi
 
       - name: Collect signed Android artifacts
         shell: bash

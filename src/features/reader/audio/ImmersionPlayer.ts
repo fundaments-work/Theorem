@@ -227,7 +227,6 @@ export class ImmersionPlayer {
 
     private handleChunk(payload: TtsChunkPayload) {
         const ctx = this.getAudioCtx();
-        console.log(`[ImmersionPlayer] chunk #${payload.chunk_index + 1}/${payload.total_chunks} received, samples=${payload.audio_data.length}`);
 
         if (ctx.state === 'suspended' && this._state !== 'paused') {
             ctx.resume();

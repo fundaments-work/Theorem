@@ -1224,7 +1224,6 @@ export function ArticleViewer({
 
         // Log for debugging (no-op in production).
         if (didUpdate) {
-            console.debug("[ArticleViewer] Backfilled highlight location offsets");
         }
     }, [
         sanitizedContent,

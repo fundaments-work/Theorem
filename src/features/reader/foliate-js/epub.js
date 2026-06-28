@@ -738,7 +738,7 @@ class Loader {
         const childList = this.#children.get(parent)
         if (!childList?.includes(href)) {
             this.#refCount.set(href, this.#refCount.get(href) + 1)
-            //console.log(`referencing ${href}, now ${this.#refCount.get(href)}`)
+            //}`)
             if (childList) childList.push(href)
             else this.#children.set(parent, [href])
         }
@@ -747,9 +747,9 @@ class Loader {
     unref(href) {
         if (!this.#refCount.has(href)) return
         const count = this.#refCount.get(href) - 1
-        //console.log(`unreferencing ${href}, now ${count}`)
+        //
         if (count < 1) {
-            //console.log(`unloading ${href}`)
+            //
             URL.revokeObjectURL(this.#cache.get(href))
             this.#cache.delete(href)
             this.#refCount.delete(href)

@@ -251,7 +251,6 @@ function BookReaderPage() {
 
     const debug = useCallback((...args: unknown[]) => {
         if (import.meta.env.DEV) {
-            console.debug(...args);
         }
     }, []);
 
@@ -368,7 +367,6 @@ function BookReaderPage() {
         const book = getBook(bookId);
         if (!book) return;
 
-        console.log(`[Reader] extractBookCover: checking book ${book.id} (${book.format}, title="${book.title}", hasCover=${!!book.coverPath})`);
 
         try {
             const storagePath = book.storagePath || book.filePath;
@@ -387,7 +385,6 @@ function BookReaderPage() {
             // (not a generated SVG fallback).
             const hasRealCover = book.coverPath && !book.coverPath.startsWith('data:image/svg+xml');
             if (hasRealCover && book.coverExtractionDone) {
-                console.log(`[Reader] extractBookCover: skipping, already has real cover`);
                 return;
             }
 
@@ -397,7 +394,6 @@ function BookReaderPage() {
                 coverTimeoutMs: 8000,
             });
 
-            console.log(`[Reader] extractBookCover: got metadata title="${metadata.title}" author="${metadata.author}" hasCover=${!!metadata.coverDataUrl}`);
 
             const updates: Partial<Book> = {};
             if (metadata.coverDataUrl) {
@@ -411,16 +407,13 @@ function BookReaderPage() {
                 const blob = new Blob([fallbackSvg], { type: 'image/svg+xml' });
                 const dataUrl = await saveCoverImage(book.id, blob);
                 updates.coverPath = dataUrl;
-                console.log(`[Reader] extractBookCover: generated fallback SVG cover`);
             }
 
             if (shouldUseExtractedTitle(book.title, metadata.title, book.filePath)) {
                 updates.title = metadata.title;
-                console.log(`[Reader] extractBookCover: title updated "${book.title}" → "${metadata.title}"`);
             }
             if (shouldUseExtractedAuthor(book.author, metadata.author)) {
                 updates.author = metadata.author;
-                console.log(`[Reader] extractBookCover: author updated "${book.author}" → "${metadata.author}"`);
             }
             updates.coverExtractionDone = true;
 
@@ -446,7 +439,7 @@ function BookReaderPage() {
     }, []);
 
     const handlePdfPageChange = useCallback((page: number, total: number, scale: number) => {
-        // console.log('[PDF] Page changed:', page, 'of', total, 'zoom:', scale);
+        // 
         setPdfCurrentPage(Math.max(1, page));
         setPdfTotalPages((prevTotal) => {
             if (total > 0) {
@@ -568,13 +561,11 @@ function BookReaderPage() {
                         }
                     }
 
-                    console.log('[Reader] Loading PDF data into memory for mobile compatibility');
                     const data = await getBookData(book.id, storagePath);
                     if (isCancelled) return;
                     if (!data || data.byteLength === 0) {
                         throw new Error('Could not read PDF file from storage - data is empty.');
                     }
-                    console.log('[Reader] PDF data loaded, size:', data.byteLength);
                     setResolvedPdfPath("");
                     setPdfData(new Uint8Array(data));
                     return;
@@ -623,7 +614,6 @@ function BookReaderPage() {
 
             const storagePath = book.storagePath || book.filePath;
             void getBookBlob(book.id, storagePath).catch((error) => {
-                console.debug('[Reader] Prefetch skipped for book:', book.id, error);
             });
         }
     }, [currentBookId]);

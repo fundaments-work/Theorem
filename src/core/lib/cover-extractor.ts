@@ -372,7 +372,6 @@ export async function extractMetadata(
         author: '',
     };
 
-    console.log(`[CoverExtractor] Extracting metadata for ${format} file:`, filename);
 
     if (format === 'pdf') {
         try {
@@ -552,7 +551,6 @@ export async function extractCover(
     filename: string,
     bookId: string,
 ): Promise<string | null> {
-    console.log(`[CoverExtractor] Extracting cover for ${format}:`, filename);
     const metadata = await extractMetadata(data, format, filename, bookId);
     return metadata.coverDataUrl || null;
 }

@@ -581,7 +581,6 @@ export async function runDeviceSync(
 ): Promise<SyncResult> {
     const log = (msg: string) => {
         onProgress?.(msg);
-        console.log(`[sync-orchestrator] ${msg}`);
     };
 
     try {
@@ -710,16 +709,14 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
     }
     _isMerging = true;
     try {
-        console.log("[sync-orchestrator] Responder: sync-incoming-complete received, merging...");
         setStatus("syncing", "Receiving data from peer...");
 
         const incomingMap = await getIncomingSyncData();
         const domainCount = Object.keys(incomingMap).length;
 
         if (domainCount === 0) {
-            console.log("[sync-orchestrator] Responder: no incoming data to merge. Checking missing book files...");
             if (peerDeviceId) {
-                const responderLog = (msg: string) => console.log(`[sync-orchestrator] Responder: ${msg}`);
+                const responderLog = (msg: string) => 
                 try {
                     await discoverPeer(peerDeviceId);
                 } catch {
@@ -734,7 +731,6 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
             return;
         }
 
-        console.log(`[sync-orchestrator] Responder: merging ${domainCount} domain(s)...`);
         setStatus("syncing", "Merging data from peer...");
 
         // mergeIncomingData reads fresh state internally, so no need to snapshot here.
@@ -751,7 +747,6 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
             ? `Received: ${domainsUpdated.join(", ")}`
             : "No changes after merge";
 
-        console.log(`[sync-orchestrator] Responder: merge complete. ${summary}`);
 
         // Pull any missing book files on every responder merge pass.
         // The initiator's SyncCompleteMessage includes its server address,
@@ -767,7 +762,7 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
                 }
             } catch (_err) {}
             
-            const responderLog = (msg: string) => console.log(`[sync-orchestrator] Responder: ${msg}`);
+            const responderLog = (msg: string) => 
             try {
                 await discoverPeer(peerDeviceId);
             } catch {
@@ -846,7 +841,6 @@ export async function initSyncEventListener(): Promise<() => void> {
         responderEventUnlisten = null;
     };
 
-    console.log("[sync-orchestrator] Responder event listener registered.");
     return responderEventUnlisten;
 }
 

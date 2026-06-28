@@ -472,8 +472,6 @@ export async function pickBookFiles(): Promise<string[]> {
 
         // Debug logging for mobile
         if (isMobile()) {
-            console.log('[pickBookFiles] Dialog returned:', selected);
-            console.log('[pickBookFiles] Type:', typeof selected);
         }
 
         if (!selected) return [];
@@ -833,7 +831,6 @@ export async function pickAndImportBooksIncremental(
     } else if (isTauri() && isMobile()) {
         // Mobile Tauri (Android): Use browser file picker for better compatibility
         // The native dialog on Android returns content:// URIs which are hard to handle
-        console.log('[pickAndImportBooks] Using browser file picker for mobile');
         const files = await pickBookFilesBrowser();
         if (files.length === 0) {
             return [];

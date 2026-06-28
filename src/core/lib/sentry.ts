@@ -18,7 +18,6 @@ export function initSentry(
     const resolvedDsn = dsn ?? (typeof (globalThis as any).process?.env?.SENTRY_DSN === "string" ? (globalThis as any).process.env.SENTRY_DSN : undefined);
 
     if (!resolvedDsn) {
-        console.debug("[Sentry] No DSN configured, error reporting disabled.");
         return;
     }
 
@@ -46,7 +45,6 @@ export function initSentry(
     });
 
     isInitialized = true;
-    console.debug("[Sentry] Error reporting initialized.");
 }
 
 export { Sentry };

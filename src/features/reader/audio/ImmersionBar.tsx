@@ -163,7 +163,6 @@ export function ImmersionBar({
                 voice: ttsVoice,
             });
             console.timeEnd('[ImmersionBar] play→genId');
-            console.log('[ImmersionBar] got genId:', genId);
             immersionPlayer.setCurrentGenId(genId);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);

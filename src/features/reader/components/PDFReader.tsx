@@ -153,8 +153,8 @@ function ErrorState({
  *     ref={pdfRef}
  *     pdfPath="/path/to/document.pdf"
  *     theme="dark"
- *     onPageChange={(page, total, scale) => console.log(`Page ${page} of ${total} at ${scale * 100}%`)}
- *     onLoad={(info) => console.log(`Loaded ${info.title}`)}
+ *     onPageChange={(page, total, scale) => }
+ *     onLoad={(info) => }
  *     onError={(err) => console.error(err)}
  *   />
  * );
