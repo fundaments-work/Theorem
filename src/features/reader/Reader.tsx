@@ -1162,7 +1162,7 @@ function BookReaderPage() {
         const topInset = shouldShowReaderChrome
             ? Math.max(defaultInset, toolbarHeight + 4)
             : 16;
-        const bottomInset = (!isPdfFormat && shouldShowReaderChrome)
+        const bottomInset = (!isPdfFormat && (shouldShowReaderChrome || isMobileViewport))
             ? 48
             : 16;
 
@@ -2253,7 +2253,7 @@ function BookReaderPage() {
                             "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 backdrop-blur-xl",
                             immersionMode
                                 ? "translate-y-full pointer-events-none"
-                                : shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
+                                : (shouldShowReaderChrome || isMobileViewport) ? "translate-y-0" : "translate-y-full pointer-events-none",
                         )}
                     />
                 </>
