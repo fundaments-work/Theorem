@@ -2224,8 +2224,7 @@ function BookReaderPage() {
                     {/* Immersion Bar — only appears when headphone icon in titlebar is clicked */}
                     <div className={cn(
                         "fixed left-0 right-0 z-50 flex justify-center pointer-events-none transition-all duration-300",
-                        "px-2 sm:px-4",
-                        immersionMode ? "bottom-6" : "bottom-6"
+                        "bottom-0"
                     )}>
                         <div className={immersionMode ? "pointer-events-auto" : "pointer-events-none"}>
                             <ImmersionBar 
