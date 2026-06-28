@@ -897,7 +897,6 @@ export function LibraryPage() {
             }
 
         } catch (error) {
-            console.error("[Library] Fast metadata extraction failed for imported book:", book.id, error);
         }
     }, [updateBook]);
 
@@ -920,7 +919,6 @@ export function LibraryPage() {
 
             void performImportedBookMetadataExtraction(nextBook)
                 .catch((error) => {
-                    console.error("[Library] Import metadata queue task failed:", nextBook.id, error);
                 })
                 .finally(() => {
                     activeImportMetadataTasksRef.current = Math.max(0, activeImportMetadataTasksRef.current - 1);
@@ -1122,7 +1120,6 @@ export function LibraryPage() {
                             }
                         }
                     } catch (error) {
-                        console.warn(`[Library] generateFallbacks: failed for book ${book.id} (${book.format}):`, error);
                     }
 
                     processedCount++;
@@ -1175,7 +1172,6 @@ export function LibraryPage() {
                 },
             );
         } catch (err) {
-            console.error('Import error:', err);
         } finally {
             setIsImporting(false);
         }
@@ -1287,7 +1283,6 @@ export function LibraryPage() {
             setIsScanning(true);
             await scanAndImportFolder(normalizedFolderPath);
         } catch (err) {
-            console.error('Scan error:', err);
             alert(err instanceof Error ? err.message : 'Failed to scan selected folder.');
         } finally {
             setIsScanning(false);

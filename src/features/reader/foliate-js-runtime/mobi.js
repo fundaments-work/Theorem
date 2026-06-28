@@ -472,8 +472,6 @@ const getFont = async (buf, unzlib) => {
     if (flags & 1) try {
         return await unzlib(array)
     } catch (e) {
-        console.warn(e)
-        console.warn('Failed to decompress font')
     }
     return array
 }
@@ -533,8 +531,6 @@ export class MOBI extends PDB {
                 this.#start = boundary
                 isKF8 = true
             } catch (e) {
-                console.warn(e)
-                console.warn('Failed to open KF8; falling back to MOBI')
             }
         }
         await this.#setup()
@@ -772,7 +768,6 @@ class MOBI6 {
                     }, [])
             }
         } catch(e) {
-            console.warn(e)
         }
 
         this.metadata = this.mobi.getMetadata()
@@ -803,7 +798,6 @@ class MOBI6 {
             try {
                 img.src = await this.loadRecindex(recindex)
             } catch {
-                console.warn(`Failed to load image ${recindex}`)
             }
         }
         for (const media of doc.querySelectorAll('[mediarecindex]')) {
@@ -813,7 +807,6 @@ class MOBI6 {
                 media.src = await this.loadRecindex(mediarecindex)
                 if (recindex) media.poster = await this.loadRecindex(recindex)
             } catch {
-                console.warn(`Failed to load media ${mediarecindex}`)
             }
         }
         for (const a of doc.querySelectorAll('[filepos]')) {
@@ -1040,7 +1033,6 @@ class KF8 {
             this.toc = ncx?.map(map)
             this.landmarks = await this.getGuide()
         } catch(e) {
-            console.warn(e)
         }
 
         const { exth } = this.mobi.headers

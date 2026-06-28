@@ -139,7 +139,6 @@ export function AppTitlebar({
             const win = getCurrentWebviewWindow();
             await win.minimize();
         } catch (err) {
-            console.error("Failed to minimize window:", err);
         }
     };
 
@@ -155,7 +154,6 @@ export function AppTitlebar({
                 await win.maximize();
             }
         } catch (err) {
-            console.error("Failed to maximize window:", err);
         }
     };
 
@@ -167,7 +165,6 @@ export function AppTitlebar({
             const win = getCurrentWebviewWindow();
             await win.close();
         } catch (err) {
-            console.error("Failed to close window:", err);
         }
     };
 

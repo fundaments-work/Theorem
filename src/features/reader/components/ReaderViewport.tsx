@@ -224,7 +224,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 }
             } catch (err) {
                 if (!cancelled) {
-                    console.error('[ReaderViewport] Failed to open file:', err);
                 }
             }
         };

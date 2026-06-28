@@ -230,18 +230,18 @@ export function WindowTitlebar({
 
     const handleMinimize = async () => {
         if (!showDesktopWindowControls) return;
-        try { await getCurrentWebviewWindow().minimize(); } catch (err) { console.error(err); }
+        try { await getCurrentWebviewWindow().minimize(); } catch (err) {  }
     };
     const handleMaximize = async () => {
         if (!showDesktopWindowControls) return;
         try {
             const win = getCurrentWebviewWindow();
             if (isMaximized) await win.unmaximize(); else await win.maximize();
-        } catch (err) { console.error(err); }
+        } catch (err) {  }
     };
     const handleClose = async () => {
         if (!showDesktopWindowControls) return;
-        try { await getCurrentWebviewWindow().close(); } catch (err) { console.error(err); }
+        try { await getCurrentWebviewWindow().close(); } catch (err) {  }
     };
 
     const commonMenuItems: Array<{

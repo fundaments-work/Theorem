@@ -45,7 +45,6 @@ export function ShareStatsStudioModal({ statsData, onClose }: ShareStatsStudioMo
                     });
                 }
             } catch (err) {
-                console.error("Failed to generate preview:", err);
             } finally {
                 if (isMounted) {
                     setIsGenerating(false);
@@ -90,7 +89,6 @@ export function ShareStatsStudioModal({ statsData, onClose }: ShareStatsStudioMo
                 await shareImageNative(imageBlob, "ReadingStats");
                 onClose();
             } catch (e) {
-                console.error("Share failed", e);
             }
         }
     }, [imageBlob, onClose]);

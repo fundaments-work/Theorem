@@ -205,7 +205,6 @@ const languageInfo = lang => {
         const direction = (locale.getTextInfo?.() ?? locale.textInfo)?.direction
         return { canonical, locale, isCJK, direction }
     } catch (e) {
-        console.warn(e)
         return {}
     }
 }
@@ -359,10 +358,10 @@ export class View extends HTMLElement {
             if (book?.isExternal?.(href))
                 Promise.resolve(this.#emit('external-link', { a, href_ }, true))
                     .then(x => x ? globalThis.open(href_, '_blank') : null)
-                    .catch(e => console.error(e))
+                    .catch(e => )
             else Promise.resolve(this.#emit('link', { a, href }, true))
                 .then(x => x ? this.goTo(href) : null)
-                .catch(e => console.error(e))
+                .catch(e => )
         })
     }
     async addAnnotation(annotation, remove) {
@@ -453,8 +452,6 @@ export class View extends HTMLElement {
             if (CFI.isCFI.test(target)) return this.resolveCFI(target)
             return this.book.resolveHref(target)
         } catch (e) {
-            console.error(e)
-            console.error(`Could not resolve target ${target}`)
         }
     }
     async goTo(target) {
@@ -464,8 +461,6 @@ export class View extends HTMLElement {
             this.history.pushState(target)
             return resolved
         } catch(e) {
-            console.error(e)
-            console.error(`Could not go to ${target}`)
         }
     }
     async goToFraction(frac) {
@@ -479,8 +474,6 @@ export class View extends HTMLElement {
             await this.renderer.goTo({ ...obj, select: true })
             this.history.pushState(target)
         } catch(e) {
-            console.error(e)
-            console.error(`Could not go to ${target}`)
         }
     }
     deselect() {
@@ -506,8 +499,6 @@ export class View extends HTMLElement {
             if (!isRange) range.selectNodeContents(frag)
             return this.#tocProgress.getProgress(index, range)
         } catch(e) {
-            console.error(e)
-            console.error(`Could not get ${target}`)
         }
     }
     async prev(distance) {

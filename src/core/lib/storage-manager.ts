@@ -43,7 +43,6 @@ async function getIndexedDBKeysByPrefix(prefix: string): Promise<string[]> {
             typeof key === 'string' && key.startsWith(prefix)
         ));
     } catch (error) {
-        console.error('[StorageManager] Failed to list IndexedDB keys:', error);
         return [];
     }
 }
@@ -109,7 +108,6 @@ export async function getBookStorageStats(): Promise<{
                 tauriBooks: sqliteStats.tauri_books,
             };
         } catch (error) {
-            console.error('[StorageManager] Failed to load SQLite storage stats:', error);
         }
     }
 

@@ -47,7 +47,6 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
                     });
                 }
             } catch (err) {
-                console.error("Failed to generate preview:", err);
             } finally {
                 if (isMounted) {
                     setIsGenerating(false);
@@ -92,7 +91,6 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
                 await shareImageNative(imageBlob, book?.title || "Highlight");
                 onClose();
             } catch (e) {
-                console.error("Share failed", e);
                 setToast({ type: "error", message: "Share failed" });
             }
         }

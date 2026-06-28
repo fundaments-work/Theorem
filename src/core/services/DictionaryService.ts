@@ -101,7 +101,6 @@ export async function lookupDictionaryTerm(
             providersUsed: ["stardict"],
         };
     } catch (error) {
-        console.warn("[DictionaryService] StarDict lookup failed:", error);
         return null;
     }
 }

@@ -82,7 +82,6 @@ async function computeContentHash(buffer: ArrayBuffer): Promise<string | undefin
         const digest = await subtle.digest('SHA-256', buffer);
         return arrayBufferToHex(digest);
     } catch (error) {
-        console.warn('[Import] Failed to compute content hash:', error);
         return undefined;
     }
 }
@@ -506,7 +505,6 @@ export async function pickBookFiles(): Promise<string[]> {
 
         return paths;
     } catch (error) {
-        console.error('[pickBookFiles] Dialog error:', error);
         throw error;
     }
 }
@@ -542,18 +540,15 @@ export function pickBookFilesBrowser(): Promise<File[]> {
 export async function createBookEntryFromFile(file: File): Promise<Book | null> {
     const format = getBookFormat(file.name);
     if (!format) {
-        console.error('Unsupported file format:', file.name);
         return null;
     }
     if (!isImportFormatSupported(format)) {
-        console.error('[Import] CBR archives are not supported in this build:', file.name);
         return null;
     }
 
     // Read file as ArrayBuffer
     const buffer = await file.arrayBuffer();
     if (!buffer || buffer.byteLength === 0) {
-        console.error('Empty file or failed to read:', file.name);
         return null;
     }
     const contentHash = await computeContentHash(buffer);
@@ -563,7 +558,6 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
 
     // Check file size - warn if very large (> 100MB)
     if (fileSize > 100 * 1024 * 1024) {
-        console.warn('Large file detected:', file.name, formatFileSize(fileSize));
     }
 
     // Save to IndexedDB storage
@@ -620,7 +614,6 @@ export async function importBooksFromFilesIncremental(
                 }
                 return book;
             } catch (error) {
-                console.error('Failed to import book:', file.name, error);
                 onBookFailed?.(file.name, error);
                 return null;
             }
@@ -644,7 +637,6 @@ export async function readBookFile(filePath: string, bookId?: string): Promise<A
         }
         return data;
     } catch (error) {
-        console.error('[Import] Error reading file:', normalizedFilePath, error);
         throw new Error(`Failed to read book file: ${error}`);
     }
 }
@@ -713,13 +705,11 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
 
     // Check file size - warn if very large (> 100MB)
     if (fileSize > 100 * 1024 * 1024) {
-        console.warn('Large file detected:', normalizedFilePath, formatFileSize(fileSize));
     }
 
     // Read file content for storage
     const buffer = await readBookFile(readPath);
     if (!buffer || buffer.byteLength === 0) {
-        console.error('Empty file or failed to read:', normalizedFilePath);
         return null;
     }
     if (fileSize <= 0) {
@@ -730,11 +720,9 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         format = detectFormatFromBuffer(buffer);
     }
     if (!format) {
-        console.error('Unsupported file format:', normalizedFilePath);
         return null;
     }
     if (!isImportFormatSupported(format)) {
-        console.error('[Import] CBR archives are not supported in this build:', normalizedFilePath);
         return null;
     }
     const contentHash = await computeContentHash(buffer);
@@ -799,7 +787,6 @@ export async function importBooksIncremental(
                 }
                 return book;
             } catch (error) {
-                console.error('Failed to import book:', filePath, error);
                 onBookFailed?.(filePath, error);
                 return null;
             }
@@ -865,7 +852,6 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
             });
             return Array.isArray(result) ? result : [];
         } catch (error) {
-            console.warn('[scanFolderForBooks] Rust scan failed, falling back to JS:', error);
             // Fall through to JS implementation
         }
     }
@@ -989,7 +975,6 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
                 }
             }
         } catch (error) {
-            console.error('Error scanning directory:', normalizedDir, error);
         }
     }
 

@@ -152,7 +152,6 @@ export class ImmersionPlayer {
             }
         });
         const u2 = await listen<{ message: string }>('tts-error', (event) => {
-            console.error('[ImmersionPlayer] TTS error:', event.payload.message);
             this.callbacks.onError?.(event.payload.message);
             this.setState('idle');
         });

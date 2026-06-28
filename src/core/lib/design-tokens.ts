@@ -334,7 +334,6 @@ function notifyEnginesOfStyleChange(): void {
         try {
             callback();
         } catch (error) {
-            console.error("Error notifying engine of style change:", error);
         }
     });
 }

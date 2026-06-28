@@ -438,14 +438,12 @@ export function SettingsPage() {
                     try {
                         await store.persist?.clearStorage?.();
                     } catch (error) {
-                        console.error("[Settings] Failed to clear persisted store:", error);
                     }
                 }),
             );
 
             window.location.reload();
         } catch (error) {
-            console.error("[Settings] Failed to clear all data:", error);
         }
     };
 
@@ -525,7 +523,6 @@ export function SettingsPage() {
         try {
             await importStarDict(files);
         } catch (error) {
-            console.error("[Settings] Failed to import StarDict dictionary:", error);
             alert(error instanceof Error ? error.message : "Failed to import dictionary files.");
         } finally {
             event.target.value = "";
@@ -612,7 +609,6 @@ export function SettingsPage() {
                 : "";
             alert(`Backup saved (${formatFileSize(bundleSize)}).${warningSuffix}`);
         } catch (error) {
-            console.error("[Settings] Failed to export unified sync bundle:", error);
             alert(error instanceof Error ? error.message : "Failed to save backup.");
         }
     };

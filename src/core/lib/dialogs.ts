@@ -33,7 +33,6 @@ export async function showConfirm(options: ConfirmOptions): Promise<boolean> {
         });
         return result;
     } catch (error) {
-        console.error("Error showing confirmation dialog:", error);
         // Fallback to browser confirm
         return window.confirm(options.message);
     }
@@ -57,7 +56,6 @@ export async function showAsk(options: ConfirmOptions): Promise<boolean> {
         });
         return result;
     } catch (error) {
-        console.error("Error showing ask dialog:", error);
         return window.confirm(options.message);
     }
 }
@@ -85,7 +83,6 @@ export async function showMessage(options: MessageOptions): Promise<void> {
             okLabel: options.okLabel || "OK",
         });
     } catch (error) {
-        console.error("Error showing message dialog:", error);
         window.alert(options.message);
     }
 }
@@ -141,7 +138,6 @@ export async function showOpenFileDialog(options: FileDialogOptions = {}): Promi
         });
         return result;
     } catch (error) {
-        console.error("Error showing open file dialog:", error);
         return null;
     }
 }
@@ -155,7 +151,6 @@ export async function showOpenDirectoryDialog(options: DirectoryDialogOptions = 
         return null;
     }
     if (isMobile()) {
-        console.warn("Directory picker is not supported on mobile platforms.");
         return null;
     }
 
@@ -173,7 +168,6 @@ export async function showOpenDirectoryDialog(options: DirectoryDialogOptions = 
         }
         return result;
     } catch (error) {
-        console.error("Error showing directory picker dialog:", error);
         return null;
     }
 }
@@ -201,7 +195,6 @@ export async function showSaveFileDialog(options: SaveDialogOptions = {}): Promi
         });
         return result;
     } catch (error) {
-        console.error("Error showing save file dialog:", error);
         return null;
     }
 }

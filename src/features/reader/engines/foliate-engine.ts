@@ -390,7 +390,6 @@ export class FoliateEngine {
             
             
             if (this.sectionFractions.length === 0) {
-                console.warn('[FoliateEngine] No section fractions found, using fallback');
                 // Fallback: assume single section
                 this.sectionFractions = [0, 1];
             }
@@ -427,7 +426,6 @@ export class FoliateEngine {
                         'restoring saved location',
                     );
                     if (!result) {
-                        console.warn('[FoliateEngine] Initial CFI navigation returned undefined, CFI may be invalid');
                         // Fall back to beginning if CFI is invalid
                         await this.withTimeout(
                             this.view.goTo({ index: 0, fraction: 0 }),
@@ -437,7 +435,6 @@ export class FoliateEngine {
                     } else {
                     }
             } catch (err) {
-                console.warn('<FoliateEngine> Initial CFI navigation failed:', err);
                 // Fall back to beginning if CFI navigation throws
                 await this.withTimeout(
                     this.view.goTo({ index: 0, fraction: 0 }),
@@ -610,7 +607,6 @@ export class FoliateEngine {
                 try {
                     wrapEpubTextNodes(detail.doc.body, detail.doc);
                 } catch (e) {
-                    console.error('[FoliateEngine] Error wrapping epub text nodes:', e);
                 }
             }
             
@@ -619,7 +615,6 @@ export class FoliateEngine {
                 if (this.options.onTextSelected) {
                     this.setupIframeSelectionListener(this.options.onTextSelected);
                 } else {
-                    console.warn('[FoliateEngine] onTextSelected callback not set!');
                 }
                 
                 // Re-render all annotations for this section
@@ -632,7 +627,6 @@ export class FoliateEngine {
             const { draw, annotation, doc, range } = e.detail;
             
             if (!draw || !annotation) {
-                console.warn('[FoliateEngine] draw-annotation missing draw or annotation');
                 return;
             }
 
@@ -709,7 +703,6 @@ export class FoliateEngine {
                     return g;
                 }, annotation);
             } catch (err) {
-                console.error('[FoliateEngine] Error in draw-annotation:', err);
             }
         });
 
@@ -754,7 +747,6 @@ export class FoliateEngine {
                     }
                 }
             } else {
-                console.warn('[FoliateEngine] No annotation found for CFI:', value?.substring(0, 50));
             }
         });
     }
@@ -1126,7 +1118,6 @@ export class FoliateEngine {
         try {
             await this.view.next(distance);
         } catch (e) {
-            console.error('[FoliateEngine] next() error:', e);
         }
     }
 
@@ -1136,7 +1127,6 @@ export class FoliateEngine {
         try {
             await this.view.prev(distance);
         } catch (e) {
-            console.error('[FoliateEngine] prev() error:', e);
         }
     }
 
@@ -1274,7 +1264,6 @@ export class FoliateEngine {
      */
     private applyZoomSync(): void {
         if (!this.view?.renderer) {
-            console.warn('[FoliateEngine] applyZoomSync: no renderer');
             return;
         }
 
@@ -1351,7 +1340,6 @@ export class FoliateEngine {
                 color: color,
             });
         } catch (e) {
-            console.warn('[FoliateEngine] Failed to add annotation to view:', e);
         }
 
         return annotation;
@@ -1369,7 +1357,6 @@ export class FoliateEngine {
                     color: annotation.color,
                 });
             } catch (e) {
-                console.warn('[FoliateEngine] Failed to add annotation to view:', e);
             }
         }
     }
@@ -1377,7 +1364,6 @@ export class FoliateEngine {
     async removeHighlight(id: string): Promise<void> {
         const annotation = this.annotations.get(id);
         if (!annotation) {
-            console.warn('[FoliateEngine] Annotation not found for id:', id);
             return;
         }
         
@@ -1390,7 +1376,6 @@ export class FoliateEngine {
             if (this.view?.deleteAnnotation) {
                 await this.view.deleteAnnotation({ value: annotation.location });
             } else {
-                console.warn('<FoliateEngine> Initial CFI navigation returned undefined, CFI may be invalid');
                 // Fall back to beginning if CFI is invalid
                 await this.view.goTo({ index: 0, fraction: 0 });
                 // Clear invalid CFI by navigating to beginning
@@ -1399,7 +1384,6 @@ export class FoliateEngine {
                 }
             }
         } catch (e) {
-            console.error('[FoliateEngine] Failed to remove annotation from view:', e);
         }
     }
 
@@ -1421,7 +1405,6 @@ export class FoliateEngine {
      */
     async renderAnnotationsForSection(sectionIndex: number): Promise<void> {
         if (!this.view || !this.book) {
-            console.warn('[FoliateEngine] Cannot render annotations - view not ready');
             return;
         }
 
@@ -1454,7 +1437,6 @@ export class FoliateEngine {
     async loadAnnotations(annotations: Annotation[]): Promise<void> {
         // Wait for view to be ready
         if (!this.view || !this.book) {
-            console.warn('[FoliateEngine] Cannot load annotations - view not ready');
             return;
         }
 
@@ -1483,7 +1465,6 @@ export class FoliateEngine {
                     value: annotation.location,
                     color: annotation.color,
                 })?.catch((e: unknown) => {
-                    console.warn('[FoliateEngine] Failed to load annotation:', annotation.id, e);
                 }) ?? Promise.resolve(),
             ));
             // Yield to the renderer between batches
@@ -1586,7 +1567,6 @@ export class FoliateEngine {
                 }
             }
         } catch (error) {
-            console.warn('[FoliateEngine] Exact search failed:', error);
         }
 
         if (exactMatchCount === 0) {
@@ -1710,7 +1690,6 @@ export class FoliateEngine {
                     text: sectionSearchText,
                 });
             } catch (error) {
-                console.warn('[FoliateEngine] Failed to cache section text for search:', i, error);
             }
         }
 
@@ -1772,7 +1751,6 @@ export class FoliateEngine {
         try {
             return this.view.getCFI(index, range);
         } catch (e) {
-            console.warn('[FoliateEngine] Failed to get CFI from range:', e);
             return '';
         }
     }
@@ -1906,7 +1884,6 @@ export class FoliateEngine {
                                     }
                                 }
                             } catch (err) {
-                                console.warn('[FoliateEngine] Error getting CFI from postMessage selection:', err);
                             }
                         }
                     }
@@ -1980,7 +1957,6 @@ export class FoliateEngine {
             const win = iframe.contentWindow;
             
             if (!doc || !win) {
-                console.warn('[FoliateEngine] Cannot access iframe content for section', index);
                 return;
             }
 
@@ -2077,7 +2053,6 @@ export class FoliateEngine {
                             callback(cfi, text, syntheticEvent);
                         }
                     } catch (err) {
-                        console.warn('[FoliateEngine] Error while capturing iframe selection:', err);
                     }
                 }, SELECTION_CAPTURE_DELAY);
             };
@@ -2336,7 +2311,6 @@ export class FoliateEngine {
             );
             
         } catch (err) {
-            console.warn('[FoliateEngine] Failed to attach iframe listeners:', err);
         }
     }
 

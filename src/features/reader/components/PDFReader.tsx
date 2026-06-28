@@ -155,7 +155,7 @@ function ErrorState({
  *     theme="dark"
  *     onPageChange={(page, total, scale) => }
  *     onLoad={(info) => }
- *     onError={(err) => console.error(err)}
+ *     onError={(err) => }
  *   />
  * );
  * ```

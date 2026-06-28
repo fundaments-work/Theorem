@@ -27,11 +27,6 @@ export class RouteErrorBoundary extends Component<Props, State> {
     }
 
     componentDidCatch(error: Error, info: React.ErrorInfo) {
-        console.error(
-            `[RouteErrorBoundary] Caught error in route:`,
-            error,
-            info.componentStack,
-        );
     }
 
     componentDidUpdate(prevProps: Props) {

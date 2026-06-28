@@ -25,7 +25,6 @@ const getViewport = (doc, viewport) => {
     if (img) return { width: img.naturalWidth, height: img.naturalHeight }
 
     // just show *something*, i guess...
-    console.warn(new Error('Missing viewport properties'))
     return { width: 1000, height: 2000 }
 }
 

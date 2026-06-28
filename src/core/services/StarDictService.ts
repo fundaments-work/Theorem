@@ -50,7 +50,6 @@ async function readManifest(id: string): Promise<StoredStarDictManifest | null> 
         try {
             return JSON.parse(serialized) as StoredStarDictManifest;
         } catch (error) {
-            console.error("[StarDictService] Failed to parse stored manifest:", error);
             return null;
         }
     }
@@ -344,7 +343,6 @@ async function ensureLoadedDictionary(id: string): Promise<LoadedStarDict | null
 
     const manifest = await readManifest(id);
     if (!manifest) {
-        console.warn(`[StarDictService] No manifest found for dictionary ${id}`);
         return null;
     }
 
@@ -354,9 +352,6 @@ async function ensureLoadedDictionary(id: string): Promise<LoadedStarDict | null
     const syn = await readDictionaryPart(id, "syn");
 
     if (!ifo || !idx || !dict) {
-        console.warn(
-            `[StarDictService] Missing dictionary parts for ${id}: ifo=${!!ifo} idx=${!!idx} dict=${!!dict}`,
-        );
         return null;
     }
 
@@ -370,7 +365,6 @@ async function ensureLoadedDictionary(id: string): Promise<LoadedStarDict | null
         loadedDictionaries.set(id, runtime);
         return runtime;
     } catch (error) {
-        console.error(`[StarDictService] Failed to create runtime dictionary ${id}:`, error);
         return null;
     }
 }
@@ -558,7 +552,6 @@ export async function lookupInStarDictDictionary(
 ): Promise<VocabularyMeaning[]> {
     const dictionary = await ensureLoadedDictionary(id);
     if (!dictionary) {
-        console.warn(`[StarDictService] Dictionary ${id} not loaded for lookup "${term}"`);
         return [];
     }
 
@@ -569,7 +562,6 @@ export async function lookupInStarDictDictionary(
         }
         return parseDictionaryEntries(entries, "stardict");
     } catch (error) {
-        console.error(`[StarDictService] Lookup failed for "${term}" in ${id}:`, error);
         return [];
     }
 }
@@ -590,7 +582,6 @@ export async function lookupInStarDictDictionaries(
                 combined.push(...meanings);
             }
         } catch (error) {
-            console.warn("[StarDictService] Lookup failed:", error);
         }
     }
 

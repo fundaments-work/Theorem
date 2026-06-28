@@ -31,7 +31,6 @@ export function useReaderFullscreen({
                     await document.exitFullscreen();
                 }
             } catch (error) {
-                console.error(`${errorLabel} Fullscreen error:`, error);
             }
         };
 
@@ -48,7 +47,6 @@ export function useReaderFullscreen({
             document.removeEventListener("fullscreenchange", handleFullscreenChange);
             if (fullscreen && document.fullscreenElement) {
                 void document.exitFullscreen().catch((error) => {
-                    console.error(`${errorLabel} Fullscreen cleanup error:`, error);
                 });
             }
         };

@@ -332,7 +332,6 @@ async function createAndPersistFallbackCover(
         try {
             return await saveCoverImage(bookId, blob);
         } catch (error) {
-            console.warn('[CoverExtractor] Failed to persist fallback cover:', error);
         }
     }
 
@@ -442,7 +441,6 @@ export async function extractMetadata(
 
                 page.cleanup();
             } catch (coverError) {
-                console.warn('[CoverExtractor] PDF cover extraction failed:', coverError);
             }
 
             pdf.cleanup();
@@ -451,7 +449,6 @@ export async function extractMetadata(
             }
             return result;
         } catch (pdfError) {
-            console.warn('[CoverExtractor] Failed to extract PDF metadata:', pdfError);
             result.title = filename.replace(/\.[^/.]+$/, '');
             if (allowFallbackCover) {
                 result.coverDataUrl = await createAndPersistFallbackCover(result.title, result.author || 'Unknown Author', bookId);
@@ -519,7 +516,6 @@ export async function extractMetadata(
                     }
                 }
             } catch (coverError) {
-                console.warn('[CoverExtractor] Failed to extract cover:', coverError);
             }
         }
 
@@ -536,7 +532,6 @@ export async function extractMetadata(
         }
         return result;
     } catch (error) {
-        console.warn('[CoverExtractor] Failed to extract metadata:', error);
         result.title = filename.replace(/\.[^/.]+$/, '');
         if (allowFallbackCover) {
             result.coverDataUrl = await createAndPersistFallbackCover(result.title, result.author || 'Unknown Author', bookId);

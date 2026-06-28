@@ -372,7 +372,6 @@ function BookReaderPage() {
             const storagePath = book.storagePath || book.filePath;
             const data = await getBookData(book.id, storagePath);
             if (!data) {
-                console.warn(`[Reader] extractBookCover: no data for book ${book.id}`);
                 return;
             }
 
@@ -421,7 +420,6 @@ function BookReaderPage() {
                 updateBook(book.id, updates);
             }
         } catch (error) {
-            console.error(`[Reader] extractBookCover failed for book ${bookId}:`, error);
         }
     }, [getBook, updateBook]);
 
@@ -908,7 +906,6 @@ function BookReaderPage() {
 
             // If we have a target CFI but current location doesn't match, CFI is invalid
             if (target && loc.cfi && !loc.cfi.startsWith(target)) {
-                console.warn('[Reader] ✗ Invalid CFI target, clearing saved location');
                 if (currentBookId) {
                     updateProgress(currentBookId, 0, '', undefined);
                 }
@@ -1492,7 +1489,6 @@ function BookReaderPage() {
             // Load annotations into viewport (with delay to ensure foliate is ready)
             const timer = setTimeout(() => {
                 readerRef.current?.loadAnnotations?.(bookAnnotations).catch((err: Error) => {
-                    console.warn('[Reader] Failed to load annotations:', err);
                 });
             }, 500);
             return () => clearTimeout(timer);
@@ -1689,7 +1685,6 @@ function BookReaderPage() {
                 }
             }
         } catch (error) {
-            console.error("[Reader] Dictionary lookup failed:", error);
             setDictionaryLookupError("Dictionary lookup failed. Install a dictionary in Settings > Dictionary.");
         } finally {
             setDictionaryLookupLoading(false);
@@ -1733,7 +1728,6 @@ function BookReaderPage() {
                     await readerRef.current?.addAnnotation?.(updatedAnnotation);
                     debug('[Reader] Updated existing highlight color:', editingHighlightId, color);
                 } catch (err) {
-                    console.warn('[Reader] Failed to update highlight in viewport:', err);
                 }
             }
 
@@ -1769,7 +1763,6 @@ function BookReaderPage() {
                 const updatedAnnotation: Annotation = { ...existingHighlight, color, updatedAt: new Date() };
                 await readerRef.current?.addAnnotation?.(updatedAnnotation);
             } catch (err) {
-                console.warn('[Reader] Failed to update highlight in viewport:', err);
             }
             } else {
                 // Create new highlight - get annotation from engine with its ID
@@ -1823,10 +1816,8 @@ function BookReaderPage() {
                             timestamp: Date.now(),
                         };
                     } else {
-                        console.warn('[Reader] addHighlight returned null/undefined');
                     }
                 } catch (err) {
-                    console.warn('[Reader] Failed to add highlight to viewport:', err);
                 }
             }
 
@@ -1918,7 +1909,6 @@ function BookReaderPage() {
                 await readerRef.current?.addAnnotation?.(updatedAnnotation);
                 debug('[Reader] Re-rendered highlight with note in viewport');
             } catch (err) {
-                console.warn('[Reader] Failed to re-render highlight with note:', err);
             }
         } else {
             // Create new highlight with note
@@ -1942,7 +1932,6 @@ function BookReaderPage() {
             try {
                 await readerRef.current?.addHighlight?.(selectedCfi, selectedText, pendingHighlightColor);
             } catch (err) {
-                console.warn('[Reader] Failed to add highlight with note to viewport:', err);
             }
         }
 
@@ -2022,7 +2011,6 @@ function BookReaderPage() {
 
     const handleDeleteFromColorPicker = useCallback(async () => {
         if (!editingHighlightId) {
-            console.warn('[Reader] Delete called but no editingHighlightId set');
             return;
         }
 
@@ -2034,7 +2022,6 @@ function BookReaderPage() {
             await readerRef.current?.removeHighlight?.(editingHighlightId);
             debug('[Reader] Successfully removed highlight from viewport');
         } catch (err) {
-            console.warn('[Reader] Failed to remove highlight from viewport:', err);
         }
 
         // Then remove from store

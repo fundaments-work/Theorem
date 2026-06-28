@@ -113,7 +113,6 @@ class Reader {
         const { book } = this.view
         book.transformTarget?.addEventListener('data', ({ detail }) => {
             detail.data = Promise.resolve(detail.data).catch(e => {
-                console.error(new Error(`Failed to load ${detail.name}`, { cause: e }))
                 return ''
             })
         })
@@ -147,7 +146,7 @@ class Reader {
         const toc = book.toc
         if (toc) {
             this.#tocView = createTOCView(toc, href => {
-                this.view.goTo(href).catch(e => console.error(e))
+                this.view.goTo(href).catch(e => )
                 this.closeSideBar()
             })
             $('#toc-view').append(this.#tocView.element)
@@ -222,7 +221,7 @@ const dropHandler = e => {
         .find(item => item.kind === 'file')
     if (item) {
         const entry = item.webkitGetAsEntry()
-        open(entry.isFile ? item.getAsFile() : entry).catch(e => console.error(e))
+        open(entry.isFile ? item.getAsFile() : entry).catch(e => )
     }
 }
 const dropTarget = $('#drop-target')
@@ -230,10 +229,10 @@ dropTarget.addEventListener('drop', dropHandler)
 dropTarget.addEventListener('dragover', dragOverHandler)
 
 $('#file-input').addEventListener('change', e =>
-    open(e.target.files[0]).catch(e => console.error(e)))
+    open(e.target.files[0]).catch(e => ))
 $('#file-button').addEventListener('click', () => $('#file-input').click())
 
 const params = new URLSearchParams(location.search)
 const url = params.get('url')
-if (url) open(url).catch(e => console.error(e))
+if (url) open(url).catch(e => )
 else dropTarget.style.visibility = 'visible'

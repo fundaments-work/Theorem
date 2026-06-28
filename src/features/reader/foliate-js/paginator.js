@@ -1013,8 +1013,6 @@ export class Paginator extends HTMLElement {
             await this.#display(Promise.resolve(this.sections[index].load())
                 .then(src => ({ index, src, anchor, onLoad, select }))
                 .catch(e => {
-                    console.warn(e)
-                    console.warn(new Error(`Failed to load section ${index}`))
                     return {}
                 }))
         }

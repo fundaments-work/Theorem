@@ -63,7 +63,6 @@ async function flushPersistWrite(name: string): Promise<void> {
         await sqliteSetKv(sqliteKey, pendingValue);
         removeLocalItem(name);
     } catch (error) {
-        console.error('[PersistStorage] Failed to flush persisted key to SQLite:', name, error);
         setLocalItem(name, pendingValue);
     }
 }
@@ -149,7 +148,6 @@ export const theoremPersistStorage: StateStorage = {
             inMemoryPersistCache.set(name, null);
             return null;
         } catch (error) {
-            console.error('[PersistStorage] Failed to read persisted key from SQLite:', name, error);
             const fallbackValue = getLocalItem(name);
             inMemoryPersistCache.set(name, fallbackValue);
             return fallbackValue;
@@ -177,7 +175,6 @@ export const theoremPersistStorage: StateStorage = {
         try {
             await sqliteDeleteKv(sqliteKey);
         } catch (error) {
-            console.error('[PersistStorage] Failed to remove persisted key from SQLite:', name, error);
         }
 
         removeLocalItem(name);

@@ -120,7 +120,6 @@ export function ReaderSearch({
                 }
             }
         } catch (err) {
-            console.error('Search error:', err);
         } finally {
             if (currentSearchId === searchRef.current) {
                 setIsSearching(false);

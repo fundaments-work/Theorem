@@ -719,7 +719,7 @@ async function buildPdfToc(pdfDocument: PDFDocumentProxy): Promise<{ tocItems: T
             const convertedOutline = await convertPdfOutlineItems(pdfDocument, outline as unknown as PdfOutlineItemLike[], 0, 8);
             if (convertedOutline.length > 0) return { tocItems: convertedOutline, hasOutline: true };
         }
-    } catch (error) { console.warn("[PDFJsEngine] Failed to build PDF outline TOC:", error); }
+    } catch (error) {  }
     return { tocItems: [], hasOutline: false };
 }
 
@@ -765,7 +765,6 @@ class TauriPdfRangeTransport extends pdfjsLib.PDFDataRangeTransport {
             })
             .catch((error) => {
                 if (this.aborted) return;
-                console.warn("[PDFJsEngine] PDF range request failed:", error);
                 this.abort();
             });
     }
@@ -1027,14 +1026,14 @@ const PageCanvas = memo(function PageCanvas({
                         registerTextLayer(textLayerDiv, endOfContent);
                     } catch (textError) {
                         const isAbortError = textError instanceof Error && (textError.name === "AbortException" || textError.message.toLowerCase().includes("abort") || textError.message.toLowerCase().includes("cancel"));
-                        if (!isAbortError) console.warn("[PageCanvas] Text layer error:", textError);
+                        if (!isAbortError) 
                     }
                 }
 
                 if (!cancelled) { renderTaskRef.current = null; }
             } catch (error: unknown) {
                 const isCancelled = error instanceof Error && (error.message.includes("cancelled") || error.message.includes("Rendering cancelled"));
-                if (!isCancelled) console.error(error);
+                if (!isCancelled) 
             } finally {
                 cancelQueuedRenderSlot?.(); cancelQueuedRenderSlot = null;
                 releaseRenderSlot?.(); releaseRenderSlot = null;
@@ -1310,7 +1309,6 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         } catch (error) {
                             const msg = error instanceof Error ? error.message : String(error);
                             if (!msg.includes("Transport") && !msg.includes("destroyed")) {
-                                console.error("[PDFJsEngine] Error loading page:", pageNumber, error);
                             }
                             return null;
                         }
@@ -1328,7 +1326,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 return loadedAnyPage;
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
-                if (!msg.includes("Transport") && !msg.includes("destroyed")) console.error("[PDFJsEngine] Error loading specific pages:", error);
+                if (!msg.includes("Transport") && !msg.includes("destroyed")) 
                 return false;
             } finally {
                 numbersToLoad.forEach((pn) => loadingPageNumbersRef.current.delete(pn));
@@ -1379,8 +1377,7 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     pageText = getNormalizedPageText(pageTextContent);
                 } catch (error) {
                     const msg = error instanceof Error ? error.message : String(error);
-                    if (msg.includes("Transport") || msg.includes("destroyed")) { console.warn("[PDFJsEngine] Search stopped: document destroyed"); return; }
-                    console.warn("[PDFJsEngine] Failed to read page text for search:", pageNumber, error);
+                    if (msg.includes("Transport") || msg.includes("destroyed")) {  return; }
                 }
 
                 if (pageText) {
@@ -1502,7 +1499,6 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                 disableAutoFetch: false,
                             }).promise;
                         } catch (urlLoadError) {
-                            console.warn("[PDFJsEngine] Asset URL loading failed, trying Tauri range transport:", urlLoadError);
                             try {
                                 const fileSize = await invoke<number>("read_pdf_file_size", { path: pdfPath });
                                 dataByteLength = fileSize;
@@ -1516,7 +1512,6 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                     disableAutoFetch: false,
                                 }).promise;
                             } catch (rangeLoadError) {
-                                console.warn("[PDFJsEngine] Range transport loading failed, falling back to full read:", rangeLoadError);
                                 const fallbackData = await invoke<Uint8Array>("read_pdf_file", { path: pdfPath });
                                 dataByteLength = fallbackData.byteLength;
                                 pdf = await pdfjsLib.getDocument({ ...commonPdfOptions, data: toSerializablePdfData(fallbackData) }).promise;
@@ -1581,13 +1576,12 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                 };
                                 setCachedPdfDocumentInfo(infoCacheKey, finalInfo);
                                 callbacksRef.current.onLoad?.(finalInfo);
-                            } catch (metadataError) { console.warn("[PDFJsEngine] Deferred metadata load failed:", metadataError); }
+                            } catch (metadataError) {  }
                         })();
                     }
                 } catch (err) {
                     if (!cancelled) {
                         const errorMsg = err instanceof Error ? err.message : "Failed to load PDF";
-                        console.error("[PDFJsEngine] Error loading PDF:", err);
                         setError(errorMsg);
                         setIsInitialRenderStabilizing(false);
                         callbacksRef.current.onError?.(err instanceof Error ? err : new Error(errorMsg));

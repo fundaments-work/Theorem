@@ -120,7 +120,6 @@ export function DictionaryDownloadModal({ isOpen, onClose }: DictionaryDownloadM
             unlistenRef.current = null;
             abortRef.current = null;
             const message = err instanceof Error ? err.message : (typeof err === "string" ? err : JSON.stringify(err));
-            console.error("[DictionaryDownload]", message, err);
             setError(message || "Download failed");
             setActiveDownload(null);
         } finally {

@@ -298,13 +298,11 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
     const goToFraction = useCallback(async (fraction: number) => {
         const engine = engineRef.current;
         if (!engine) {
-            console.warn('[useDocumentReader] goToFraction failed - engine not initialized');
             return;
         }
         try {
             await engine.goToFraction(fraction);
         } catch (err) {
-            console.error('[useDocumentReader] goToFraction error:', err);
         }
     }, []);
 

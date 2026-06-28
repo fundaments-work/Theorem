@@ -9,10 +9,10 @@ def clean_file(path):
     # It looks for 'console.log(', then any characters except ';', until closing ')'
     # Note: this is a simple regex and might not catch all edge cases (like strings with brackets)
     # but covers 99% of typical console.log statements.
-    new_content = re.sub(r'^[ \t]*console\.(log|debug|info)\([\s\S]*?\);?[ \t]*\n', '', content, flags=re.MULTILINE)
+    new_content = re.sub(r'^[ \t]*console\.(log|debug|info|warn|error)\([\s\S]*?\);?[ \t]*\n', '', content, flags=re.MULTILINE)
     
     # Fallback inline replacements (e.g. after a statement)
-    new_content = re.sub(r'console\.(log|debug|info)\([\s\S]*?\);?', '', new_content)
+    new_content = re.sub(r'console\.(log|debug|info|warn|error)\([\s\S]*?\);?', '', new_content)
     
     if new_content != content:
         with open(path, 'w', encoding='utf-8') as f:

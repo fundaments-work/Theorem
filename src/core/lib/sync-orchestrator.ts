@@ -228,7 +228,6 @@ async function mergeIncomingData(
                 markUpdated("deletion_tombstones");
             }
         } catch (e) {
-            console.error("[sync-orchestrator] Failed to merge deletion_tombstones:", e);
         }
     }
 
@@ -280,7 +279,6 @@ async function mergeIncomingData(
                 currentLibState = { ...currentLibState, books: merged };
             }
         } catch (e) {
-            console.error("[sync-orchestrator] Failed to merge books:", e);
         }
     }
 
@@ -294,7 +292,6 @@ async function mergeIncomingData(
                 currentLibState = { ...currentLibState, annotations: merged };
             }
         } catch (e) {
-            console.error("[sync-orchestrator] Failed to merge annotations:", e);
         }
     }
 
@@ -308,7 +305,6 @@ async function mergeIncomingData(
                 currentLibState = { ...currentLibState, collections: merged };
             }
         } catch (e) {
-            console.error("[sync-orchestrator] Failed to merge collections:", e);
         }
     }
 
@@ -326,7 +322,6 @@ async function mergeIncomingData(
                 markUpdated("vocabulary");
             }
         } catch (e) {
-            console.error("[sync-orchestrator] Failed to merge vocabulary:", e);
         }
     }
 
@@ -351,7 +346,6 @@ async function mergeIncomingData(
             useSettingsStore.setState({ settings: merged });
             markUpdated("settings");
         } catch (e) {
-            console.error("[sync-orchestrator] Failed to merge settings:", e);
         }
     }
 
@@ -364,7 +358,6 @@ async function mergeIncomingData(
                 markUpdated("reading_stats");
             }
         } catch (e) {
-            console.error("[sync-orchestrator] Failed to merge reading_stats:", e);
         }
     }
 
@@ -381,7 +374,6 @@ async function mergeIncomingData(
                 markUpdated("rss_feeds");
             }
         } catch (e) {
-            console.error("[sync-orchestrator] Failed to merge rss_feeds:", e);
         }
     }
 
@@ -394,7 +386,6 @@ async function mergeIncomingData(
                 markUpdated("rss_articles");
             }
         } catch (e) {
-            console.error("[sync-orchestrator] Failed to merge rss_articles:", e);
         }
     }
 
@@ -416,7 +407,6 @@ async function mergeIncomingData(
             }));
             useRssStore.setState({ feeds: updatedFeeds });
         } catch (e) {
-            console.error("[sync-orchestrator] Failed to recalculate unreadCount:", e);
         }
     }
 
@@ -488,7 +478,7 @@ async function pullMissingBookFilesAndCovers(
             if (result.unavailable.length > 0) parts.push(`${result.unavailable.length} files unavailable`);
             if (result.failed.length > 0) {
                 parts.push(`${result.failed.length} files failed`);
-                for (const f of result.failed) console.warn(`[sync] File transfer failed for ${f.book_id}: ${f.error}`);
+                for (const f of result.failed) 
             }
             log(`File transfer: ${parts.join(", ")}`);
         } catch (error: unknown) {
@@ -666,7 +656,6 @@ export async function runDeviceSync(
         return { success: true, domainsUpdated };
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : String(error);
-        console.error("[sync-orchestrator] Sync failed:", errMsg);
         log(`Sync failed: ${errMsg}`);
         setStatus("error", errMsg);
         return { success: false, domainsUpdated: [], error: errMsg };
@@ -704,7 +693,6 @@ let _isMerging = false;
  */
 async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
     if (_isMerging) {
-        console.warn("[sync-orchestrator] Responder merge already in progress, skipping overlapping run.");
         return;
     }
     _isMerging = true;
@@ -778,7 +766,6 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
         await provisionSyncData();
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : String(error);
-        console.error("[sync-orchestrator] Responder merge failed:", errMsg);
         setStatus("error", `Responder merge failed: ${errMsg}`);
     } finally {
         _isMerging = false;
@@ -798,7 +785,6 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
  */
 export async function initSyncEventListener(): Promise<() => void> {
     if (!isTauri()) {
-        console.warn("[sync-orchestrator] initSyncEventListener: not in Tauri, skipping.");
         return () => {};
     }
 

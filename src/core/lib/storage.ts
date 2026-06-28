@@ -166,7 +166,6 @@ async function readExternalFile(path: string): Promise<ArrayBuffer | null> {
         }
         return null;
     } catch (error) {
-        console.error('[Storage] Failed to read external file path:', path, error);
         return null;
     }
 }
@@ -202,7 +201,6 @@ export async function getBookMaterializedPath(id: string, filePath?: string): Pr
             return materializedPath;
         }
     } catch (error) {
-        console.error('[Storage] Failed to resolve materialized SQLite book path:', error);
     }
 
     return null;
@@ -221,7 +219,6 @@ export async function saveBookData(id: string, data: ArrayBuffer): Promise<strin
             const storagePath = await sqliteSaveBookData(id, data);
             return storagePath;
         } catch (error) {
-            console.error('[Storage] Failed to persist binary to SQLite:', error);
         }
     }
 
@@ -229,7 +226,6 @@ export async function saveBookData(id: string, data: ArrayBuffer): Promise<strin
         await set(`${STORE_NAME}-${id}`, data);
         return `idb://${id}`;
     } catch (error) {
-        console.error('[Storage] Failed to save book data to IndexedDB:', error);
         throw error;
     }
 }
@@ -267,7 +263,6 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
                     }
                 }
             } catch (error) {
-                console.error('[Storage] Failed to read materialized SQLite book path:', error);
             }
 
             try {
@@ -280,7 +275,6 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
                     return sqliteData;
                 }
             } catch (error) {
-                console.error('[Storage] Failed to read binary from SQLite:', error);
             }
         }
 
@@ -297,7 +291,6 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
             );
             return data ?? null;
         } catch (error) {
-            console.error('[Storage] Failed to read book data from IndexedDB:', error);
             return null;
         }
     })();
@@ -365,7 +358,6 @@ export async function deleteBookData(id: string, filePath?: string): Promise<voi
         try {
             await sqliteDeleteBookData(sqliteBookId);
         } catch (error) {
-            console.error('[Storage] Failed to delete book from SQLite:', error);
         }
     }
 
@@ -374,7 +366,6 @@ export async function deleteBookData(id: string, filePath?: string): Promise<voi
         try {
             await del(`${STORE_NAME}-${indexedDbId}`);
         } catch (error) {
-            console.error('[Storage] Failed to delete book from IndexedDB:', error);
         }
     }
 }
@@ -400,7 +391,6 @@ export async function saveCoverImage(bookId: string, blob: Blob): Promise<string
             await sqliteSaveCoverImage(bookId, dataUrl);
             return dataUrl;
         } catch (error) {
-            console.error('[Storage] Failed to save cover image to SQLite, falling back to IndexedDB:', error);
         }
     }
 
@@ -408,7 +398,6 @@ export async function saveCoverImage(bookId: string, blob: Blob): Promise<string
         await set(`${COVERS_STORE}-${bookId}`, dataUrl);
         return dataUrl;
     } catch (error) {
-        console.error('[Storage] Failed to save cover image fallback:', error);
         throw error;
     }
 }
@@ -428,7 +417,6 @@ export async function getCoverImage(bookId: string): Promise<string | null> {
                 return cover;
             }
         } catch (error) {
-            console.error('[Storage] Failed to read cover from SQLite:', error);
         }
     }
 
@@ -438,7 +426,6 @@ export async function getCoverImage(bookId: string): Promise<string | null> {
         coverCache.set(bookId, result || '');
         return result;
     } catch (error) {
-        console.error('[Storage] Failed to get cover image from IndexedDB:', error);
         coverCache.set(bookId, '');
         return null;
     }
@@ -454,13 +441,11 @@ export async function deleteCoverImage(bookId: string): Promise<void> {
         try {
             await sqliteDeleteCoverImage(bookId);
         } catch (error) {
-            console.error('[Storage] Failed to delete cover image from SQLite:', error);
         }
     }
 
     try {
         await del(`${COVERS_STORE}-${bookId}`);
     } catch (error) {
-        console.error('[Storage] Failed to delete cover image from IndexedDB:', error);
     }
 }

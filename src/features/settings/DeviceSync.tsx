@@ -205,7 +205,6 @@ export function DeviceSyncSection() {
                 const devices = await getPairedDevices();
                 setPairedDevices(devices);
             } catch (e) {
-                console.error("[DeviceSync] Init failed:", e);
             }
         })();
     }, [available]);
@@ -227,10 +226,6 @@ export function DeviceSyncSection() {
                 }
             } catch (e) {
                 if (!cancelled) {
-                    console.warn(
-                        "[DeviceSync] Failed to auto-manage sync receiver:",
-                        e,
-                    );
                 }
             }
         };
@@ -266,17 +261,12 @@ export function DeviceSyncSection() {
             try {
                 await provisionSyncData();
             } catch (e) {
-                console.warn("[DeviceSync] Failed to provision sync data:", e);
             }
             try {
                 await ensureResponderSyncReady();
                 const info = await startSyncServer();
                 setServerInfo(info);
             } catch (e) {
-                console.warn(
-                    "[DeviceSync] Failed to initialize responder sync:",
-                    e,
-                );
             }
         } catch (e: any) {
             setError(e?.message || String(e));
@@ -302,10 +292,6 @@ export function DeviceSyncSection() {
                 try {
                     await ensureResponderSyncReady();
                 } catch (e) {
-                    console.warn(
-                        "[DeviceSync] Failed to auto-enable responder sync:",
-                        e,
-                    );
                 }
                 setDeviceSyncStatus("idle");
             } catch (e: any) {

@@ -497,7 +497,6 @@ function cleanupDiscardedImportedBook(book: Book): void {
     }
 
     deleteBookStorage(book.id).catch((error) => {
-        console.error("[LibraryStore] Failed to cleanup duplicate imported book storage:", error);
     });
 }
 
@@ -871,7 +870,6 @@ export const useLibraryStore = create<LibraryStore>()(
                 // Skip for synced-without-file books — they have no local storage to delete.
                 if (book && !book.syncedWithoutFile) {
                     deleteBookStorage(bookId).catch((error) => {
-                        console.error('[LibraryStore] Failed to delete book storage:', error);
                     });
                 }
 
@@ -2205,7 +2203,6 @@ export const useRssStore = create<RssStore>()(
                 } catch (err) {
                     const message = err instanceof Error ? err.message : 'Failed to add feed';
                     set({ isLoading: false, error: message });
-                    console.error('[RssStore] addFeed error:', err);
                     return null;
                 }
             },

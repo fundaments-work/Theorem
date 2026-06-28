@@ -237,7 +237,6 @@ function App() {
                 } else if (failures.length > 0) {
                     window.alert(`Failed to open file.\n\n${failures[0]?.source}\n${failures[0]?.message}`);
                 } else {
-                    console.warn(`Failed to import file: ${normalizedPath}`);
                 }
             }
         };
@@ -250,7 +249,6 @@ function App() {
                     await openPaths(pending.filter((value): value is string => typeof value === "string"));
                 }
             } catch (error) {
-                console.warn("[App] Failed to fetch pending open files:", error);
             }
 
             try {
@@ -265,7 +263,6 @@ function App() {
                     void openPaths(paths);
                 });
             } catch (error) {
-                console.warn("[App] Failed to listen for open-file events:", error);
             }
         };
 
@@ -354,7 +351,6 @@ function App() {
                 await ensureResponderSyncReady();
             } catch (error) {
                 if (!cancelled) {
-                    console.warn("[App] Failed to bootstrap responder sync:", error);
                 }
             }
             if (!cancelled) {
@@ -394,7 +390,6 @@ function App() {
                     await win.maximize();
                 }
             } catch (error) {
-                console.error("[App] Failed to enforce startup window size:", error);
             }
         };
 
