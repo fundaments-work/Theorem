@@ -627,9 +627,18 @@ export class Paginator extends HTMLElement {
                     this.#scrollToAnchor(selRange)
                 }
             })
-            doc.addEventListener('focusin', e => this.scrolled ? null :
+            doc.addEventListener('focusin', e => {
+                if (this.scrolled) return
+                // Don't scroll to the focused element while the user is
+                // actively selecting text with a pointer (touch/mouse).
+                // On mobile the browser can refocus the document body
+                // during selection, which would scroll to the start of
+                // the section (page 1) every time.
+                if (isPointerSelecting) return
+                if (Date.now() < this.#selectionActiveUntil) return
                 // NOTE: `requestAnimationFrame` is needed in WebKit
-                requestAnimationFrame(() => this.#scrollToAnchor(e.target)))
+                requestAnimationFrame(() => this.#scrollToAnchor(e.target))
+            })
         })
 
         this.#mediaQueryListener = () => {
