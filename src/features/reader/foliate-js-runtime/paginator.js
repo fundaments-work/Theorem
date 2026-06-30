@@ -454,6 +454,16 @@ export class Paginator extends HTMLElement {
     // the flag alive; expires 1.5s after the last selection change.
     // Used to suppress touch swipe page-turns while the user is selecting.
     #selectionActiveUntil = 0
+    // Android Scroll Pin (issue #20, mirrors Readest #873 workaround).
+    // During native touch text selection, Android WebView auto-scrolls
+    // #container to keep the OS selection handles visible; on a CSS
+    // multi-column layout this jumps the page to a random column. While a
+    // pointer selection is active we capture the page position and
+    // continuously restore it (rAF loop + scroll listener) until the
+    // selection is cleared, cancelling the OS auto-scroll.
+    #pinnedScrollPos = null
+    #pinRafId = 0
+    #restoringScroll = false
     constructor() {
         super()
         this.#root.innerHTML = `<style>
@@ -561,7 +571,12 @@ export class Paginator extends HTMLElement {
         this.#footer = this.#root.getElementById('footer')
 
         this.#observer.observe(this.#container)
-        this.#container.addEventListener('scroll', () => this.dispatchEvent(new Event('scroll')))
+        this.#container.addEventListener('scroll', () => {
+            this.dispatchEvent(new Event('scroll'))
+            // Cancel Android WebView's OS-level auto-scroll of the
+            // container during native text selection as early as possible.
+            this.#applyScrollPin()
+        })
         this.#container.addEventListener('scroll', debounce(() => {
             if (this.scrolled) {
                 if (this.#justAnchored) this.#justAnchored = false
@@ -589,6 +604,10 @@ export class Paginator extends HTMLElement {
             }
         })
         this.addEventListener('load', ({ detail: { doc } }) => {
+            // A new section is loading: clear any scroll pin left over
+            // from the previous doc's selection (it won't fire a
+            // collapse selectionchange itself).
+            this.#stopScrollPin()
             let isPointerSelecting = false
             doc.addEventListener('pointerdown', () => isPointerSelecting = true)
             doc.addEventListener('pointerup', () => isPointerSelecting = false)
@@ -605,16 +624,26 @@ export class Paginator extends HTMLElement {
             doc.addEventListener('selectionchange', () => {
                 if (this.scrolled) return
                 const sel = doc.getSelection()
-                if (!sel?.rangeCount) return
-                // Keep the touch-swipe page-turn suppression flag alive while
-                // the user is actively selecting text. Without it, the
-                // touchend after a drag-to-select would flip the page. The
-                // flag expires 1.5s after the last selection change so taps
-                // and swipes work again afterwards.
-                if (!sel.isCollapsed && sel.toString().trim().length > 0) {
+                const hasText = sel?.rangeCount
+                    && !sel.isCollapsed
+                    && sel.toString().trim().length > 0
+                if (!hasText) {
+                    // Selection cleared/collapsed — release the Android
+                    // scroll pin (#20) so the page can move freely again.
+                    // Run before the rangeCount guard, which would
+                    // otherwise short-circuit and leave the pin stuck.
+                    this.#stopScrollPin()
+                    if (!sel?.rangeCount) return
+                } else {
                     this.#selectionActiveUntil = Date.now() + 1500
                 }
                 if (isPointerSelecting && sel.type === 'Range') {
+                    // Pin the container scroll against Android WebView's
+                    // OS-level auto-scroll during native touch text
+                    // selection, which otherwise jumps the page on a
+                    // multi-column layout (#20). Keyboard selection
+                    // deliberately scrolls and is never pinned.
+                    this.#startScrollPin()
                     const range = this.#lastVisibleRange
                     if (range) checkPointerSelection(range, sel)
                 }
@@ -906,6 +935,37 @@ export class Paginator extends HTMLElement {
                 this.snap(this.#touchState.vx, this.#touchState.vy)
         })
     }
+    // --- Android Scroll Pin (issue #20) ---
+    // Capture the current page position and hold it against OS-level
+    // auto-scroll for the lifetime of a touch text selection.
+    #startScrollPin() {
+        if (this.#pinnedScrollPos !== null) return // already pinned
+        if (!this.#container) return
+        this.#pinnedScrollPos = this.#container[this.scrollProp]
+        this.#pinLoop()
+    }
+    #stopScrollPin() {
+        this.#pinnedScrollPos = null
+        if (this.#pinRafId) {
+            cancelAnimationFrame(this.#pinRafId)
+            this.#pinRafId = 0
+        }
+    }
+    #pinLoop() {
+        if (this.#pinnedScrollPos === null) return
+        this.#applyScrollPin()
+        this.#pinRafId = requestAnimationFrame(() => this.#pinLoop())
+    }
+    #applyScrollPin() {
+        if (this.#pinnedScrollPos === null) return
+        if (this.#restoringScroll || !this.#container) return
+        const prop = this.scrollProp
+        if (this.#container[prop] !== this.#pinnedScrollPos) {
+            this.#restoringScroll = true
+            this.#container[prop] = this.#pinnedScrollPos
+            this.#restoringScroll = false
+        }
+    }
     // allows one to process rects as if they were LTR and horizontal
     #getRectMapper() {
         if (this.scrolled) {
@@ -1163,6 +1223,7 @@ export class Paginator extends HTMLElement {
         this.#view.document.defaultView.focus()
     }
     destroy() {
+        this.#stopScrollPin()
         this.#observer.unobserve(this)
         this.#view.destroy()
         this.#view = null
