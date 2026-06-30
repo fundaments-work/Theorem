@@ -473,11 +473,6 @@ function BookReaderPage() {
                 setLoadError('Book not found in library');
                 return;
             }
-            if (book.format === 'cbr') {
-                setLoadError('CBR archives are not supported in this build. Convert to CBZ and re-import.');
-                loadedBookIdRef.current = null;
-                return;
-            }
             if (book.syncedWithoutFile) {
                 setLoadError('This book was synced from another device but the file has not been transferred yet. Sync again or re-import the book to read it.');
                 loadedBookIdRef.current = null;
@@ -2232,8 +2227,8 @@ function BookReaderPage() {
                                 startWordId={ttsData?.startWordId}
                                 pageCfi={location?.cfi}
                                 visible={immersionMode}
-                                onComplete={() => {
-                                    immersionPlayer.playPreloaded();
+                                onComplete={async () => {
+                                    await immersionPlayer.playPreloaded();
                                     readerRef.current?.next();
                                 }}
                                 onSynthesisComplete={handleTtsSynthesisComplete}

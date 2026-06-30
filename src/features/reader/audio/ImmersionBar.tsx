@@ -14,8 +14,6 @@ interface ImmersionBarProps {
     onSynthesisComplete?: () => void;
 }
 
-const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-
 const VOICES = [
     { value: "af_bella", label: "Bella (US F)" },
     { value: "af_nicole", label: "Nicole (US F)" },
@@ -39,7 +37,6 @@ export function ImmersionBar({
     const errorTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const initializedRef = useRef(false);
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
-    const ttsSpeed = useSettingsStore((s) => s.settings.tts.speed);
     const updateTtsSettings = useSettingsStore((s) => s.updateTtsSettings);
 
     const showError = useCallback(() => {
@@ -67,14 +64,14 @@ export function ImmersionBar({
     const transitioningRef = useRef(false);
 
     useEffect(() => {
-        immersionPlayer.speed = ttsSpeed;
-    }, [ttsSpeed]);
+        immersionPlayer.speed = 1.0;
+    }, []);
 
     useEffect(() => {
         if (initializedRef.current) return;
         initializedRef.current = true;
 
-        immersionPlayer.speed = ttsSpeed;
+        immersionPlayer.speed = 1.0;
 
         immersionPlayer.init({
             onStateChange: (state) => {
@@ -175,12 +172,6 @@ export function ImmersionBar({
         } catch { /* sample playback is best-effort */ }
     }, []);
 
-    const cycleSpeed = useCallback(() => {
-        const idx = SPEEDS.indexOf(ttsSpeed);
-        const next = SPEEDS[(idx + 1) % SPEEDS.length];
-        updateTtsSettings({ speed: next });
-    }, [ttsSpeed, updateTtsSettings]);
-
     const cycleVoice = useCallback(() => {
         const idx = VOICES.findIndex(v => v.value === ttsVoice);
         const next = VOICES[(idx + 1) % VOICES.length];
@@ -253,17 +244,6 @@ export function ImmersionBar({
                         </div>
                     )}
                 </div>
-
-                <div className="w-px h-4 bg-[var(--color-border)] shrink-0" />
-
-                {/* Speed — cycle on click */}
-                <button
-                    onClick={cycleSpeed}
-                    className="flex items-center justify-center h-7 px-1.5 rounded text-[11px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors shrink-0 min-w-[2.5rem]"
-                    title="Reading speed"
-                >
-                    {ttsSpeed}×
-                </button>
 
                 <div className="w-px h-4 bg-[var(--color-border)] shrink-0" />
 

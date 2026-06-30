@@ -148,7 +148,9 @@ export class ImmersionPlayer {
             if (p.generation_id === this.preloadGenId && !this.isPlayingPreload) {
                 this.bufferChunk(p);
             } else if (p.generation_id === this.currentGenId) {
-                this.handleChunk(p);
+                this.handleChunk(p).catch(e => {
+                    console.error('[ImmersionPlayer] handleChunk error:', e);
+                });
             }
         });
         const u2 = await listen<{ message: string }>('tts-error', (event) => {
@@ -188,7 +190,7 @@ export class ImmersionPlayer {
         this.preloadTotalChunks = payload.total_chunks;
     }
 
-    playPreloaded() {
+    async playPreloaded() {
         if (this.preloadGenId === 0 && this.preloadChunks.length === 0) {
             this.preloadChunks = [];
             this.preloadChunksReceived = 0;
@@ -213,7 +215,7 @@ export class ImmersionPlayer {
         this.isPlayingPreload = false;
 
         for (const chunk of this.preloadChunks) {
-            this.handleChunk(chunk);
+            await this.handleChunk(chunk);
         }
         this.preloadChunks = [];
     }
@@ -231,11 +233,11 @@ export class ImmersionPlayer {
         return this.audioCtx;
     }
 
-    private handleChunk(payload: TtsChunkPayload) {
+    private async handleChunk(payload: TtsChunkPayload) {
         const ctx = this.getAudioCtx();
 
         if (ctx.state === 'suspended' && this._state !== 'paused') {
-            ctx.resume();
+            await ctx.resume();
         }
 
         // Time-stretch the raw audio at the current speed.
