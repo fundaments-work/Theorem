@@ -21,6 +21,12 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, CBR, and RSS feeds — all in one workspace. H
 
 ---
 
+<p align="center">
+  <img src="./Screenshots/reader_screen.png" alt="Theorem reader with highlights and annotations in dark theme" width="700">
+  <br>
+  <em>Theorem reader — PDF with highlights, freehand drawing, and dark theme</em>
+</p>
+
 ## Features
 
 ### Multi-Format Reader
@@ -59,6 +65,12 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, CBR, and RSS feeds — all in one workspace. H
 - Annotation panel with quick navigation, editing, and deletion
 - Deletion tombstones for sync integrity (90-day retention)
 - Works across all formats including PDF and RSS articles
+
+<p align="center">
+  <img src="./Screenshots/highlights_page.png" alt="Theorem annotations panel with color-coded highlights" width="700">
+  <br>
+  <em>Annotation panel with color-coded highlights and notes</em>
+</p>
 
 ### PDF Annotations
 - Highlight with rectangular selection (supports multi-line rects)
@@ -99,6 +111,12 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, CBR, and RSS feeds — all in one workspace. H
 - Vocabulary capture and review workspace
 - Word lookup cache (LRU, 100 entries)
 
+<p align="center">
+  <img src="./Screenshots/vocabulary_page.png" alt="Theorem vocabulary workspace with saved terms and definitions" width="700">
+  <br>
+  <em>Vocabulary workspace — save words, view definitions, track your learning</em>
+</p>
+
 ### RSS Reader
 - Subscribe to feeds with full annotation tools
 - Article extraction via Mozilla Readability
@@ -109,6 +127,12 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, CBR, and RSS feeds — all in one workspace. H
 - Article favoriting
 - Noise filtering (strips ads, share buttons from extracted content)
 - Reader view with font/theme customization
+
+<p align="center">
+  <img src="./Screenshots/rss_page.png" alt="Theorem RSS feed reader with article list" width="700">
+  <br>
+  <em>RSS reader — subscribe, read, and annotate articles alongside your books</em>
+</p>
 
 ### Markdown Export (Obsidian / Logseq)
 - Export highlights and annotations to local Markdown files
@@ -139,6 +163,12 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, CBR, and RSS feeds — all in one workspace. H
 - Android content:// URI support
 - FBZ / fb2.zip compressed format support
 
+<p align="center">
+  <img src="./Screenshots/shelves_page.png" alt="Theorem library with organized bookshelves" width="700">
+  <br>
+  <em>Library with custom shelves, favorites, and grid view</em>
+</p>
+
 ### Reading Statistics
 - Reading time tracking (total and per-book, in minutes)
 - Pages completed and books finished
@@ -149,6 +179,12 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, CBR, and RSS feeds — all in one workspace. H
 - Achievement badges: First Book, Bookworm (5 books), On Fire (7-day streak), Highlighter (10 highlights)
 - Book completion tracking (auto at 100% or manual read/unread override)
 - Progress snapshot before finish for undo
+
+<p align="center">
+  <img src="./Screenshots/boomark_page.png" alt="Theorem bookmarks and reading progress tracking" width="700">
+  <br>
+  <em>Track reading progress, bookmarks, and completions</em>
+</p>
 
 ### LAN Device Sync
 - Encrypted peer-to-peer sync between Theorem installs on local network
@@ -166,6 +202,12 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, CBR, and RSS feeds — all in one workspace. H
 - Clear all application data with confirmation dialog
 - Storage usage breakdown: Books, Highlights & Notes, RSS Articles, Offline Dictionaries
 - Cache size configuration
+
+<p align="center">
+  <img src="./Screenshots/settings_page.png" alt="Theorem settings and data management" width="700">
+  <br>
+  <em>Settings with storage breakdown, backup export, and data management</em>
+</p>
 
 ### Cross-Platform
 - Desktop: Linux (`.deb`, `.AppImage`), macOS Intel + Apple Silicon (`.dmg`), Windows (`.msi`, `.exe`)
