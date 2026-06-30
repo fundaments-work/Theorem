@@ -5,13 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-06-30
-
-First stable release.
+## [1.0.1] - 2026-06-30
 
 ### Added
 
-- **CBR support** — RAR comic archives are now supported. Transparently converted to CBZ at import time via Rust `unrar-ng` decompression. No additional reading engine changes needed. OS file association registered for `.cbr`.
+- **CBR comic support** — RAR archives are now supported. Transparently converted to CBZ at import time via Rust `unrar-ng` decompression. OS file association registered for `.cbr`.
+- RAR magic byte detection in buffer-based format detection.
+
+### Fixed
+
+- **TTS on Android** — Fixed silent playback in production builds by properly awaiting AudioContext.resume() before scheduling audio.
+- **Auto-navigation during text selection** — `checkPointerSelection` disabled (upstream Foliate navigates to adjacent page when selection crosses column boundary, problematic on mobile).
+
+### Changed
+
+- **TTS speed control removed** — Non-functional. Speed button removed from ImmersionBar and Settings dropdown removed.
+- **Focusin handler guarded** — Prevents scroll to page 1 during mobile text selection. Added body/documentElement exclusion.
+- **README overhaul** — Complete rewrite with all features documented (highlight sharing, PDF annotations, backup/restore, achievements, FBZ/CBR, more). 7 screenshots added. Web demo badge. MIT vs AGPL FAQ.
+- **CHANGELOG corrected** — TTS status reflects current restored state, not the historical removal.
+
+## [1.0.0] - 2026-06-28
+
+First stable release. Subsequent fixes and additions in 1.0.1.
+
+### Added
+
 - **Reading achievements** — Unlock badges (First Book, Bookworm, On Fire, Highlighter) as you read.
 - **Reading goals** — Configurable daily reading goal (minutes) and yearly book goal.
 - **Activity heatmap** — 12-week reading activity grid in Statistics.
