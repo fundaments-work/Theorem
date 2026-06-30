@@ -2,16 +2,16 @@
 
 **Own your reading data. Forever.**
 
+[![Try the Web Demo](https://img.shields.io/badge/try%20the%20web%20demo-app.theorem.fundaments.work-8A2BE2?style=for-the-badge)](https://app.theorem.fundaments.work)
 [![Latest Release](https://img.shields.io/github/v/release/fundaments-work/theorem?label=latest&style=flat-square)](https://github.com/fundaments-work/theorem/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows%20%7C%20android-8A2BE2?style=flat-square)](https://github.com/fundaments-work/theorem/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/fundaments-work/theorem/ci.yml?branch=main&label=ci&style=flat-square)](https://github.com/fundaments-work/theorem/actions)
-[![TypeScript](https://img.shields.io/badge/TypeScript-~6.0-3178C6?style=flat-square)](https://www.typescriptlang.org)
-[![Rust](https://img.shields.io/badge/Rust-1.85+-DEA584?style=flat-square)](https://www.rust-lang.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/fundaments-work/theorem/pulls)
-[![Website](https://img.shields.io/badge/web-theorem.fundaments.work-8A2BE2?style=flat-square)](https://theorem.fundaments.work)
 
-[theorem.fundaments.work](https://theorem.fundaments.work) — website, docs, and release downloads.
+**[theorem.fundaments.work](https://theorem.fundaments.work)** — website, docs, and release downloads.
+
+**[app.theorem.fundaments.work](https://app.theorem.fundaments.work)** — try the fully functional web demo in your browser.
 
 Theorem is a **free, open-source, local-first** reading app built with [Tauri](https://tauri.app). It runs on **Linux, macOS, Windows, and Android** from a shared codebase.
 
@@ -302,6 +302,10 @@ Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelin
 **What formats are supported?** — EPUB, MOBI, AZW, AZW3, FB2, FBZ, CBZ, CBR, PDF, TXT, and RSS feeds.
 
 **Is CBR supported?** — Yes. CBR (RAR comic archives) are transparently converted to CBZ at import time.
+
+**Can I try it without installing?** — Yes. The [web demo](https://app.theorem.fundaments.work) runs in your browser. Everything works except LAN sync and TTS (which need the native Tauri backend).
+
+**Why MIT instead of AGPL?** — MIT lets anyone use, modify, and integrate the code without forcing them to open-source their changes. This encourages adoption by individuals, educators, and organizations who want to customize Theorem for their own needs. AGPL (used by Readest) is stronger copyleft — modifications must be shared, which can discourage contributions from corporate users. For a local-first reading app that stores all data as plain Markdown, the protection AGPL offers is unnecessary: your data is already portable and not locked to any vendor.
 
 ---
 
