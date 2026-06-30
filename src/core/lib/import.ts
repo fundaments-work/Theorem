@@ -373,7 +373,7 @@ async function initTauriPlugins() {
 /**
  * Determine book format from file extension
  * Supports: EPUB, MOBI/AZW, FB2, CBZ, PDF
- * Note: CBR is recognized for graceful rejection, but not currently importable.
+ * Note: CBR (RAR) is autoconverted to CBZ (ZIP) at import time via Rust read_cbr_as_cbz.
  */
 export function getBookFormat(filePath: string): BookFormat | null {
     const lowerPath = normalizePathForFormatLookup(filePath);

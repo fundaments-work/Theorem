@@ -14,7 +14,7 @@ Operational guide for AI coding agents working in this repository.
 - Navigation is store-driven (`useUIStore.currentRoute`), not React Router route objects.
 - Imports are primarily relative/barrel imports inside `src`. Do not assume `@/*` or `@theorem/*` aliases.
 - `src/features/reader/foliate-js/**` is vendored upstream code. Do not edit it unless explicitly required.
-- CBR is recognized for compatibility but intentionally unsupported for import/render.
+- CBR is supported via import-time conversion to CBZ (Rust `unrar-ng` decompression).
 
 ## Import Architecture
 - `src/core/index.ts` is the primary barrel: re-exports `lib/`, `store/`, `types/`, `services/`.

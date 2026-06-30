@@ -59,7 +59,7 @@ Use conventional commit prefixes:
 The text-to-speech system uses a Kokoro ONNX engine running in Rust via Tauri:
 
 - **Rust backend** (`src-tauri/src/tts.rs`, `tts_model.rs`) — sentence splitting, streaming PCM synthesis, model download/cache
-- **Frontend player** (`src/features/reader/audio/ImmersionPlayer.ts`) — Web Audio API scheduling, SoundTouch pitch-preserved speed, per-word highlighting
+- **Frontend player** (`src/features/reader/audio/ImmersionPlayer.ts`) — Web Audio API scheduling, per-word highlighting
 - **UI** (`src/features/reader/audio/ImmersionBar.tsx`) — floating playback controls
 
 **Important**: On first run, the app downloads the Kokoro model (~170MB) and 6 voice files from HuggingFace. Model files are cached locally.

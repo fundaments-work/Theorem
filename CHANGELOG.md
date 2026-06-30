@@ -5,159 +5,114 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-06-28
+## [1.0.0] - 2026-06-30
 
-First stable release. See GitHub release notes for the full feature list.
+First stable release.
 
-## [1.0.0-5] - 2026-06-22
+### Added
 
-### Removed
+- **CBR support** — RAR comic archives are now supported. Transparently converted to CBZ at import time via Rust `unrar-ng` decompression. No additional reading engine changes needed. OS file association registered for `.cbr`.
+- **Reading achievements** — Unlock badges (First Book, Bookworm, On Fire, Highlighter) as you read.
+- **Reading goals** — Configurable daily reading goal (minutes) and yearly book goal.
+- **Activity heatmap** — 12-week reading activity grid in Statistics.
+- **Reading speed tracking** — Words-per-minute average reading speed.
+- **Highlight share as image** — ShareStudio generates polished share-card images (highlight cards, reading stats). Export as PNG, copy to clipboard, or share via Web Share API / X (Twitter). Square (1080×1080) and Story (1080×1920) formats with multiple visual themes.
+- **Backup & restore** — Full backup bundle (books, annotations, dictionaries, vocabulary, RSS, settings, sync state) exportable as a single JSON file. Clear all application data option.
+- **Onboarding flow** — First-run step-by-step walkthrough covering library, reader, annotations, and sync.
+- **Open With file association** — Desktop users can open ebook files directly from their file manager ("Open With Theorem").
+- **Android content URI support** — Full pipeline for materializing and reading files from Android content:// URIs.
+- **FBZ / fb2.zip import** — Compressed FictionBook format support.
+- **Dictionary download from repository** — Browse and download remote StarDict dictionaries with progress tracking.
 
-- **Kokoro TTS system** — completely removed after being broken at the audio pipeline level (whisper-silent output, multi-second playback gaps, engine loss on concurrent calls). 2,561 lines removed across 22 files including the Rust ONNX backend, Web Audio pipeline, and all TTS UI components.
+### Fixed
+
+- **TTS on Android** — Fixed silent playback in production builds by properly awaiting AudioContext.resume() before scheduling audio. Previously the Web Audio context stayed suspended and audio was silently dropped.
+- **TTS speed control removed** — Playback speed control was non-functional (SoundTouch blocked on mobile, playbackRate shifted pitch without preservation). The UI controls have been removed to avoid confusion.
+- **EPUB reader timeout regression** — Some books were stuck at "Loading book..." indefinitely. Added timeout and fallback safeguards.
+- **Mobile reader back button** — Correctly exits to library instead of navigating elsewhere.
+- **Redundant navigation** — Prevented duplicate navigation actions during routing.
+- **Sync race conditions** — Resolved overlapping library updates during rapid data syncs.
+- **Sync security** — Addressed tombstone propagation and encryption edge cases.
+- **Storage timeout** — Increased read timeout for large books.
+- **Text truncation on mobile** — Fixed reader title wrapping on small screens.
 
 ### Changed
 
-- Stripped all TTS integration from Reader, ArticleViewer, and WindowTitlebar.
-- Removed `ttsEnabled` from ReaderSettings type and Zustand store defaults.
-- Removed `tts-rs` and `ort` Cargo dependencies.
-- Replaced vendored foliate-js `tts.js` with build-excluded stubs.
-- Removed dead `getCurrentSectionText` code from foliate-engine, useDocumentReader, and ReaderViewport.
-- Cleaned Playwright e2e tests and related devDependencies.
-- Updated README for first stable release.
+- **TTS system overhauled** — Complete rewrite of the Kokoro neural TTS pipeline: streaming parallel synthesis, Web Audio API gapless playback, per-word highlighting, voice switching, next-page preloading. Replaced Rust `tts-rs` ONNX bindings with `kokoro-en` (pure Rust phonemizer via misaki-lean, no espeak-ng subprocess needed).
+- **LAN sync re-architected** — Switched from blocking synchronous file payloads to async encrypted stream chunks. Reduced OOM risk on Android. Eliminated "Double JSON" serialization overhead.
+- **Import system rewritten** — Concurrency-controlled batch import with SHA-256 content hash deduplication. Magic byte format detection. Filename metadata extraction.
+- **Settings schema migrated** — Versioned Zustand migrations for all persisted stores (TTS, vault, sync, reading progress).
+- **Cross-platform build pipeline** — GitHub Actions CI/CD produces Linux (.deb, .AppImage), macOS (Intel + Apple Silicon .dmg), Windows (.msi, .exe), and Android (.apk) from a single codebase.
+
+### Removed
+
+- Playwright e2e tests and related devDependencies (replaced by expanded Vitest coverage).
+
+### Known Limitations
+
+- iOS is not currently supported (Tauri does not target iOS)
+- User is responsible for data backups (export bundle recommended for migration)
+- No Cross-device network sync beyond local LAN
+
+---
 
 ## [1.0.0-beta.5] - 2026-03-27
 
 ### Changed
 
-- Completely overhauled LAN Sync performance logic, changing blocking synchronous file payloads into asynchronous encrypted stream chunks for ultra-fast transfers without extreme RAM overheads.
-- Reduced strict file transferring limits to avoid OOM memory crashes on Android and lower-memory systems.
-- Re-architected data serialization structures eliminating CPU-heavy "Double JSON" stringification lags occurring during peer connections.
+- Overhauled LAN Sync performance — blocking synchronous file payloads → async encrypted stream chunks, reducing OOM on Android
+- Re-architected data serialization — eliminated "Double JSON" stringification lags
 
 ### Fixed
 
-- Resolved asynchronous race conditions overlapping library updates simultaneously when rapid data pushes arrived.
-- Fixed severe sync timeouts where SQLite-to-disk metadata file conversions were sequentially blocking `reqwest` transfers on the `tokio` thread.
+- Sync race conditions during rapid data pushes
+- SQLite-to-disk blocking timeout on tokio thread
 
 ## [1.0.0-beta.4] - 2026-03-24
 
 ### Fixed
 
-- Fixed reader screen title truncation on mobile devices by adjusting titlebar flex layouts to properly wrap or truncate long titles.
-- Fixed site title overlap with the sync button on the feeds page for mobile devices.
-- Added spinning animation to the sync button on the feeds page to better indicate active refresh and load states.
+- Reader title truncation on mobile
+- Feeds page overlap with sync button
+- Added spinning animation to sync button for active state feedback
 
 ## [1.0.0-beta.3] - 2026-03-23
 
 ### Added
 
-- Support for importing and opening files directly from OS file associations ("Open With") via Tauri events.
-- Added alerts in the library when book imports fail.
-
-### Changed
-
-- Enhanced book format detection to properly handle Android content URIs and various ZIP archives.
+- OS file association support ("Open With") via Tauri events
+- Import failure alerts in library
 
 ### Fixed
 
-- Increased storage read timeout to reliably handle large books.
-- Relaxed the import timeout and improved failure reporting.
-- Fixed mobile reader back button to correctly exit to the library.
-- Prevented redundant navigation actions during routing.
+- Storage read timeout for large books
+- Mobile reader back button routing
+- Redundant navigation prevention
 
 ## [1.0.0-beta.2] - 2026-03-09
 
 ### Added
 
-- Encrypted LAN device sync backend for syncing books, reading progress, and annotations across Theorem installs.
-- QR-based pairing and device sync controls in settings, including mobile scanner support.
-- Linux packaging and install scripts for distro-native bundles and local user-space installs.
-
-### Changed
-
-- Improved sync merge behavior, conflict handling, cover extraction, and paired-device UX across the full sync flow.
-- Updated the desktop bundle version to `1.0.0-2` for the sync beta release while keeping tag-based beta versioning.
+- Encrypted LAN device sync with QR pairing
+- Linux packaging scripts
 
 ### Fixed
 
-- Addressed sync security and tombstone propagation issues uncovered during the initial device sync rollout.
-- Hardened Linux local install fallback by extracting generated `.deb` bundles into `~/.local/` when system package tools are unavailable.
+- Sync security and tombstone propagation
+- Linux local install fallback
 
 ## [1.0.0-beta.1] - 2026-02-27
 
 ### Added
 
-- **Reader Engine**
-  - EPUB, MOBI, AZW, AZW3, FB2, CBZ, and PDF format support
-  - Foliate-based reflowable book rendering
-  - PDF.js-based PDF rendering with annotation support
-  - RSS feed reader with article extraction
-
-- **Library Management**
-  - Book import from local files
-  - Folder scanning for batch import
-  - Custom shelf organization
-  - Book metadata display
-
-- **Annotations**
-  - Highlight passages with multiple colors
-  - Add notes to highlights
-  - Annotation panel for navigation
-  - Export annotations to Markdown
-
-- **Vocabulary**
-  - Built-in dictionary lookup during reading
-  - StarDict dictionary support
-  - Vocabulary capture and review
-
-- **Markdown Export**
-  - Sync highlights and notes to local Markdown files
-  - Obsidian/Logseq vault integration
-  - Customizable export templates
-
-- **Settings**
-  - Theme customization (light/dark modes)
-  - Reading preferences
-  - Export path configuration
-
-- **Cross-Platform**
-  - Desktop support (Windows, macOS, Linux)
-  - Android support
-  - Web fallback for browser testing
-
-### Changed
-
-- Expanded `getFilteredAndSortedBooks` test coverage with a full behavior matrix:
-  - RSS visibility across main library and shelf contexts.
-  - Favorites + shelf interaction and filtered-scope search behavior.
-  - Search invariants for fuzzy relevance, whitespace queries, tags, and format labels.
-  - Sorting assertions for all supported sort keys and both directions.
-
-### Fixed
-
-- Resolved an EPUB reader regression where some books stayed indefinitely at `Loading book...`.
-- Added timeout and fallback safeguards in the EPUB storage/read pipeline to prevent cross-platform open hangs.
-- Added edge-case regression tests for author normalization and nullable/string-backed date fields.
-- Added a non-mutation assertion to guarantee filtering/sorting does not reorder the input array.
-- Updated desktop bundle versioning to an MSI-compatible format (`1.0.0-1`) for Windows release packaging.
-
-### CI
-
-- Added a dedicated `Build` job in CI to enforce production build success (`pnpm build`) on every push and pull request.
-- Hardened tag-based release workflow to publish desktop and Android artifacts from CI/CD.
-- Updated macOS release runners and signing flow with a safe ad-hoc fallback when signing secrets are unavailable or disabled.
-
-### Technical
-
-- React 19 + TypeScript frontend
-- Tauri 2.0 desktop runtime
-- Zustand state management
-- Tailwind CSS v4 styling
-- Custom mobile folder scanning plugin
-
-### Known Limitations
-
-- No cross-device sync (planned for future release)
-- CBR format recognized but not supported for import
-- User is responsible for data backups
-
-
+- **Reader Engine** — EPUB, MOBI, AZW/AZW3, FB2, CBZ, PDF support. Foliate-based reflowable rendering. PDF.js with annotation support. RSS feed reader.
+- **Library Management** — Import from local files, folder scanning, shelves/collections, favorites, ratings, tags, sorting, search.
+- **Annotations** — Color-coded highlights (6 colors), notes, bookmarks, annotation panel. PDF: highlights, freehand drawing, text notes. Overlayer: highlight, underline, strikethrough, squiggly.
+- **Vocabulary** — Built-in dictionary, StarDict support, vocabulary review.
+- **Markdown Export** — Obsidian/Logseq vault sync, per-book pages, vocabulary export, customizable naming.
+- **Neural TTS** — Kokoro ONNX engine, 6 voices, streaming playback, per-word highlighting.
+- **Reading Statistics** — Daily activity, reading time, streaks, reading speed, heatmap.
+- **Search** — Full-text in-book search, library search, RSS article search.
+- **Cross-Platform** — Desktop (Linux, macOS, Windows) + Android + Web fallback.
+- **Theming** — Light/dark/sepia reader themes. Custom fonts, margins, spacing, alignment, hyphenation.
+- **Multi-format support** — EPUB, MOBI, AZW, AZW3, FB2, CBZ, CBR, PDF, TXT, RSS articles.
