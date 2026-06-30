@@ -595,21 +595,13 @@ export class Paginator extends HTMLElement {
             let isKeyboardSelecting = false
             doc.addEventListener('keydown', () => isKeyboardSelecting = true)
             doc.addEventListener('keyup', () => isKeyboardSelecting = false)
-            // When a pointer drag extends the selection beyond the visible
-            // column, turn the page cleanly (full-page prev/next) instead of
-            // letting Android's native selection-handle auto-scroll creep the
-            // column container and reveal an adjacent column ("two-page
-            // bridge"). This is foliate's upstream behaviour that the
-            // runtime fork had removed, restored here.
-            const checkPointerSelection = debounce((range, sel) => {
-                if (!sel.rangeCount) return
-                const selRange = sel.getRangeAt(0)
-                const backward = selectionIsBackward(sel)
-                if (backward && selRange.compareBoundaryPoints(Range.START_TO_START, range) < 0)
-                    this.prev()
-                else if (!backward && selRange.compareBoundaryPoints(Range.END_TO_END, range) > 0)
-                    this.next()
-            }, 700)
+            // NOTE: checkPointerSelection intentionally disabled.
+            // Upstream foliate navigates to the adjacent page when a pointer
+            // drag extends the selection past the visible column. On mobile
+            // with CSS columns splitting a section across pages this fires
+            // far too eagerly — selecting text near a column edge grabs the
+            // adjacent page's content and triggers an unwanted page turn.
+            const checkPointerSelection = debounce((_range, _sel) => {}, 700)
             doc.addEventListener('selectionchange', () => {
                 if (this.scrolled) return
                 const sel = doc.getSelection()
