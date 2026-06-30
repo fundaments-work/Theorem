@@ -109,6 +109,15 @@
         "role": "Viewer"
       },
       {
+        "name": "CBR comic archive",
+        "description": "Comic book RAR archive",
+        "ext": [
+          "cbr"
+        ],
+        "mimeType": "application/vnd.comicbook-rar",
+        "role": "Viewer"
+      },
+      {
         "name": "PDF document",
         "description": "Portable document format",
         "ext": [

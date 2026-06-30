@@ -60,6 +60,7 @@ tar = "0.4"
 zip = "0.6"
 walkdir = "2"
 regex = "1.10.0"
+unrar-ng = "0.7.7"
 
 # TTS engine (ONNX Runtime + Kokoro)
 [target.'cfg(not(target_os = "android"))'.dependencies]

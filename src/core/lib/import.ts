@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { isTauri, isMobile } from './env';
 import { saveBookData, getBookData } from './storage';
 import { normalizeFilePath, safeDecodeURIComponent } from './utils';
+import { invoke } from '@tauri-apps/api/core';
 
 // Dynamically import Tauri plugins
 let tauriDialog: typeof import('@tauri-apps/plugin-dialog') | null = null;
@@ -20,7 +21,7 @@ const INSTANT_IMPORT_MODE = true;
 const CONTENT_HASH_MAX_BYTES = 4 * 1024 * 1024;
 const CONTENT_URI_READ_TIMEOUT_MS = 20000;
 const IMPORT_ENTRY_TIMEOUT_MS = 90000;
-const SUPPORTED_IMPORT_EXTENSIONS = ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'fb2.zip', 'cbz', 'pdf'];
+const SUPPORTED_IMPORT_EXTENSIONS = ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'fb2.zip', 'cbz', 'cbr', 'pdf'];
 const SUPPORTED_IMPORT_SUFFIXES = SUPPORTED_IMPORT_EXTENSIONS.map((extension) => `.${extension}`);
 const BROWSER_IMPORT_ACCEPT = SUPPORTED_IMPORT_SUFFIXES.join(',');
 type ImportFailureHandler = (source: string, error: unknown) => void;
@@ -304,6 +305,13 @@ function detectFormatFromBuffer(buffer: ArrayBuffer): BookFormat | null {
         return 'fb2';
     }
 
+    // Check for RAR (CBR) magic — RAR 4.x uses Rar!\x1A\x07\x00, RAR 5.x uses Rar!\x1A\x07\x01\x00
+    if (bytes.length >= 7 && bytes[0] === 0x52 && bytes[1] === 0x61
+        && bytes[2] === 0x72 && bytes[3] === 0x21 && bytes[4] === 0x1A
+        && bytes[5] === 0x07) {
+        return 'cbr';
+    }
+
     if (isZipSignature(bytes)) {
         // Probe multiple segments of the ZIP file for better detection
         const probeSize = Math.min(bytes.length, 524288); // Increased from 262144 to 524288
@@ -432,8 +440,8 @@ export function getBookFormat(filePath: string): BookFormat | null {
 /**
  * Returns true when the format can be imported and rendered in this build.
  */
-export function isImportFormatSupported(format: BookFormat): boolean {
-    return format !== 'cbr';
+export function isImportFormatSupported(_format: BookFormat): boolean {
+    return true;
 }
 
 /**
@@ -464,7 +472,7 @@ export async function pickBookFiles(): Promise<string[]> {
                 { name: 'EPUB', extensions: ['epub'] },
                 { name: 'Kindle (MOBI/AZW)', extensions: ['mobi', 'azw', 'azw3'] },
                 { name: 'FictionBook (FB2)', extensions: ['fb2', 'fbz', 'fb2.zip'] },
-                { name: 'Comics (CBZ)', extensions: ['cbz'] },
+                { name: 'Comics (CBZ, CBR)', extensions: ['cbz', 'cbr'] },
                 { name: 'PDF', extensions: ['pdf'] },
             ],
         });
@@ -730,7 +738,22 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     const id = uuidv4();
 
     // Save to app storage first
-    const storagePath = await saveBookData(id, buffer);
+    let storagePath = await saveBookData(id, buffer);
+    let finalFormat = format;
+
+    // Convert CBR (RAR comic archive) to CBZ (ZIP) on import, so the
+    // reading pipeline (which only understands ZIP-based CBZ) can handle
+    // it transparently.
+    if (format === 'cbr' && isTauri()) {
+        try {
+            const cbzData = await invoke<Uint8Array>('read_cbr_as_cbz', { path: storagePath });
+            storagePath = await saveBookData(id, (cbzData.buffer as ArrayBuffer));
+            finalFormat = 'cbz';
+        } catch (err) {
+            console.error('CBR to CBZ conversion failed:', err);
+            return null;
+        }
+    }
 
     // Resolve a stable filename for metadata extraction on Android content URIs.
     const resolvedFilename = ensureFilenameForFormat(extractFilenameFromPath(normalizedFilePath), format);
@@ -744,7 +767,7 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         author: filenameMetadata.author || "",
         filePath: normalizedFilePath,
         storagePath,
-        format,
+        format: finalFormat,
         contentHash,
         fileSize,
         addedAt: new Date(),

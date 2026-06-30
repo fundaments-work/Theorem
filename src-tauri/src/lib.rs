@@ -13,7 +13,7 @@ use std::env;
  * Tauri Library Module
  */
 use std::fs;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::ipc::Response;
@@ -108,6 +108,7 @@ fn is_supported_open_path(candidate: &str) -> bool {
         || lower.ends_with(".fbz")
         || lower.ends_with(".fb2.zip")
         || lower.ends_with(".cbz")
+        || lower.ends_with(".cbr")
         || lower.ends_with(".pdf")
 }
 
@@ -201,6 +202,50 @@ struct PdfMetadata {
 #[tauri::command]
 fn read_file(path: String) -> Result<Vec<u8>, String> {
     fs::read(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))
+}
+
+/// Reads a CBR (RAR comic archive) file and converts it to CBZ (ZIP) format
+/// in memory. The resulting ZIP bytes can be passed to the existing CBZ
+/// reading pipeline unchanged.
+#[tauri::command]
+fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
+    let archive = unrar_ng::Archive::new(&path)
+        .open_for_processing()
+        .map_err(|e| format!("Failed to open CBR archive '{}': {}", path, e))?;
+    let mut zip_buffer = Cursor::new(Vec::new());
+    {
+        let mut zip_writer = zip::ZipWriter::new(&mut zip_buffer);
+        let options =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        let mut archive = archive;
+        loop {
+            let entry = archive
+                .read_header()
+                .map_err(|e| format!("Failed to read CBR header: {}", e))?;
+            let Some(entry) = entry else { break };
+            let filename = entry.entry().filename.to_string_lossy().to_string();
+            if entry.entry().is_file() {
+                let (data, next_archive) = entry
+                    .read()
+                    .map_err(|e| format!("Failed to extract '{}': {}", filename, e))?;
+                zip_writer
+                    .start_file(filename.clone(), options)
+                    .map_err(|e| format!("Failed to write ZIP entry '{}': {}", filename, e))?;
+                zip_writer
+                    .write_all(&data)
+                    .map_err(|e| format!("Failed to write ZIP data for '{}': {}", filename, e))?;
+                archive = next_archive;
+            } else {
+                archive = entry
+                    .skip()
+                    .map_err(|e| format!("Failed to skip entry '{}': {}", filename, e))?;
+            }
+        }
+        zip_writer
+            .finish()
+            .map_err(|e| format!("Failed to finalize ZIP: {}", e))?;
+    }
+    Ok(zip_buffer.into_inner())
 }
 
 /**
@@ -662,7 +707,7 @@ fn scan_library_folder_desktop(folder_path: String) -> Result<Vec<String>, Strin
         }
 
         const SUPPORTED_EXTENSIONS: &[&str] = &[
-            ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".fbz", ".fb2.zip", ".cbz", ".pdf",
+            ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".fbz", ".fb2.zip", ".cbz", ".cbr", ".pdf",
         ];
 
         let mut book_files: Vec<String> = Vec::new();
@@ -911,6 +956,7 @@ pub fn run() {
             tts::get_tts_model_status,
             tts::delete_tts_model,
             read_file,
+            read_cbr_as_cbz,
             read_pdf_file,
             read_pdf_file_size,
             read_pdf_range,
