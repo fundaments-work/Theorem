@@ -281,7 +281,7 @@ const steps: OnboardingStep[] = [
         title: "Read Anything",
         subtitle: "All formats, one reader.",
         description:
-            "Import PDFs, EPUBs, MOBI, AZW, AZW3, FB2, CBZ, and RSS feeds. Read everything in a single unified workspace.",
+            "Import PDFs, EPUBs, MOBI, AZW, AZW3, FB2, CBZ, CBR, and RSS feeds. Read everything in a single unified workspace.",
         illustration: <FormatsIllustration />,
     },
     {
