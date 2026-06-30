@@ -629,11 +629,12 @@ export class Paginator extends HTMLElement {
             })
             doc.addEventListener('focusin', e => {
                 if (this.scrolled) return
+                // Never scroll to the document body or root — when the
+                // browser refocuses the iframe during text selection on
+                // mobile, scrolling to the body would jump to page 1.
+                if (e.target === doc.body || e.target === doc.documentElement) return
                 // Don't scroll to the focused element while the user is
                 // actively selecting text with a pointer (touch/mouse).
-                // On mobile the browser can refocus the document body
-                // during selection, which would scroll to the start of
-                // the section (page 1) every time.
                 if (isPointerSelecting) return
                 if (Date.now() < this.#selectionActiveUntil) return
                 // NOTE: `requestAnimationFrame` is needed in WebKit
