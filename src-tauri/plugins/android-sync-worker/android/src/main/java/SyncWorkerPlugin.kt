@@ -77,9 +77,8 @@ class SyncWorkerPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun updateNotification(invoke: Invoke) {
         try {
-            invoke.parseArgs(UpdateNotificationArgs::class.java)
-            val args = invoke.args as UpdateNotificationArgs
-            SyncForegroundService.updateStatusText(this@SyncWorkerPlugin.activity, args.text)
+            val args = invoke.parseArgs(UpdateNotificationArgs::class.java)
+            SyncForegroundService.updateStatusText(activity, args.text)
             invoke.resolve()
         } catch (error: Exception) {
             invoke.reject(error.message ?: "Failed to update notification")
