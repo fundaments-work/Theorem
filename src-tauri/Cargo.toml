@@ -89,6 +89,7 @@ ort = { version = "2.0.0-rc.12", default-features = false, features = ["load-dyn
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["load-dynamic", "ndarray"] }
 ndarray = "0.17.2"
 kokoro-en = { version = "0.1.4", default-features = false, features = ["misaki-lean"] }
+jni = "0.21"
 
 # Optimize only the packages that need it in dev mode.
 # debug-assertions = false removes the verbose #[cfg(debug_assertions)] eprintln!

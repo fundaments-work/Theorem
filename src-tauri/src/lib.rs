@@ -1128,37 +1128,34 @@ async fn cancel_sync_work(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Standalone background sync round — callable from WorkManager via JNI
-/// without the Tauri runtime. Starts the sync server, waits for incoming
-/// syncs from peers for ~3 minutes, then shuts down.
+/// Standalone background sync round — called from WorkManager via JNI.
+/// Uses the proper JNI naming convention so Android can find it.
+/// Runs without the Tauri runtime: loads sync identity, starts the
+/// sync server, waits for incoming syncs for 3 min, then shuts down.
+#[cfg(target_os = "android")]
 #[no_mangle]
-pub extern "C" fn run_background_sync(data_dir_ptr: *const std::os::raw::c_char) -> bool {
-    let data_dir_str = if data_dir_ptr.is_null() {
-        ".".to_string()
-    } else {
-        unsafe { std::ffi::CStr::from_ptr(data_dir_ptr) }
-            .to_str()
-            .unwrap_or(".")
-            .to_string()
+pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgroundSync(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    j_data_dir: jni::objects::JString,
+) -> jni::sys::jboolean {
+    let data_dir_str: String = match env.get_string(&j_data_dir) {
+        Ok(s) => s.into(),
+        Err(_) => ".".to_string(),
     };
 
     let data_dir = std::path::PathBuf::from(&data_dir_str);
-
-    eprintln!(
-        "[background-sync] Starting standalone sync round in {}",
-        data_dir_str
-    );
+    eprintln!("[background-sync] JNI sync round in {}", data_dir_str);
 
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
         Err(e) => {
             eprintln!("[background-sync] Failed to create runtime: {}", e);
-            return false;
+            return 0;
         }
     };
 
-    rt.block_on(async {
-        // Load sync identity and paired devices
+    let result = rt.block_on(async {
         let identity =
             match theorem_sync_core::sync_crypto::DeviceIdentity::load_or_create(&data_dir) {
                 Ok(id) => id,
@@ -1170,10 +1167,6 @@ pub extern "C" fn run_background_sync(data_dir_ptr: *const std::os::raw::c_char)
 
         let paired_devices = theorem_sync_core::sync_server::load_paired_devices(&data_dir);
 
-        if paired_devices.is_empty() {
-            eprintln!("[background-sync] No paired devices, starting server only");
-        }
-
         let server_state = std::sync::Arc::new(theorem_sync_core::sync_server::SyncServerState {
             identity,
             device_name: "Theorem Device".to_string(),
@@ -1184,7 +1177,6 @@ pub extern "C" fn run_background_sync(data_dir_ptr: *const std::os::raw::c_char)
             event_emitter: None,
         });
 
-        // Start sync server so peers can reach us
         let handle = match theorem_sync_core::sync_server::start_server(server_state).await {
             Ok(h) => {
                 eprintln!("[background-sync] Server listening on {}", h.addr);
@@ -1196,14 +1188,24 @@ pub extern "C" fn run_background_sync(data_dir_ptr: *const std::os::raw::c_char)
             }
         };
 
-        // Keep the server alive for 3 minutes to accept incoming syncs
         tokio::time::sleep(std::time::Duration::from_secs(180)).await;
 
-        // Shut down
         handle.shutdown_notify.notify_one();
-        eprintln!("[background-sync] Standalone sync round complete");
+        eprintln!("[background-sync] JNI sync round complete");
         true
-    })
+    });
+
+    if result {
+        1
+    } else {
+        0
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+#[no_mangle]
+pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgroundSync() -> u8 {
+    0
 }
 
 /// Hide the main window to the system tray.

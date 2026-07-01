@@ -5834,6 +5834,7 @@ dependencies = [
  "futures",
  "hex",
  "hkdf",
+ "jni",
  "kokoro-en",
  "local-ip-address",
  "ndarray",
