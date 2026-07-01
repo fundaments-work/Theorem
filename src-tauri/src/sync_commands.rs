@@ -1,9 +1,9 @@
 /// Theorem LAN Sync — Tauri Command Wrappers
 ///
 /// Bridges the Rust sync server with the Tauri frontend via IPC commands.
-use crate::sync_crypto::{self, DeviceIdentity};
-use crate::sync_protocol::*;
-use crate::sync_server::{
+use theorem_sync_core::sync_crypto::{self, DeviceIdentity};
+use theorem_sync_core::sync_protocol::*;
+use theorem_sync_core::sync_server::{
     self, EventEmitter, PendingPairing, SyncDataSnapshot, SyncServerHandle, SyncServerState,
 };
 
@@ -133,6 +133,7 @@ pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData,
         device_id: sync_state.server_state.identity.device_id.clone(),
         device_name: sync_state.server_state.device_name.clone(),
         nonce: hex::encode(nonce),
+        fingerprint: sync_state.server_state.identity.fingerprint.clone(),
     };
 
     let payload_json = serde_json::to_string(&qr_payload)
@@ -213,6 +214,7 @@ pub async fn submit_pairing_code(
         device_id: sync_state.server_state.identity.device_id.clone(),
         device_name: sync_state.server_state.device_name.clone(),
         encrypted_proof: BASE64.encode(proof_json.as_bytes()),
+        fingerprint: sync_state.server_state.identity.fingerprint.clone(),
     };
 
     // Send pairing request to host.
@@ -254,13 +256,36 @@ pub async fn submit_pairing_code(
         last_port: qr_payload.port,
         paired_at: format!("{}Z", now), // Simplified ISO
         last_sync_at: None,
+        fingerprint: pairing_response.fingerprint.clone(),
     };
 
     let paired_info = PairedDeviceInfo::from(&paired_device);
 
-    // Persist.
+    // Persist (with dedup by fingerprint).
     {
         let mut devices = sync_state.server_state.paired_devices.lock().await;
+
+        // Dedup: if a device with this fingerprint already exists under a
+        // different device_id, replace the old entry (same physical device,
+        // new key pair).
+        if !paired_device.fingerprint.is_empty() {
+            let old_id: Option<String> = devices
+                .values()
+                .find(|d| {
+                    d.fingerprint == paired_device.fingerprint
+                        && d.device_id != paired_device.device_id
+                })
+                .map(|d| d.device_id.clone());
+
+            if let Some(old_device_id) = old_id {
+                eprintln!(
+                    "[sync] Replacing old paired device {old_device_id} with new device {} (same fingerprint on scanner side)",
+                    paired_device.device_id
+                );
+                devices.remove(&old_device_id);
+            }
+        }
+
         devices.insert(paired_device.device_id.clone(), paired_device);
         sync_server::save_paired_devices(&sync_state.server_state.app_data_dir, &devices)?;
     }
@@ -276,6 +301,7 @@ pub async fn get_device_identity(app: tauri::AppHandle) -> Result<DeviceIdentity
         device_id: sync_state.server_state.identity.device_id.clone(),
         device_name: sync_state.server_state.device_name.clone(),
         public_key_hex: hex::encode(sync_state.server_state.identity.public_key_bytes()),
+        fingerprint: sync_state.server_state.identity.effective_fingerprint(),
     })
 }
 
@@ -285,6 +311,19 @@ pub async fn get_paired_devices(app: tauri::AppHandle) -> Result<Vec<PairedDevic
     let sync_state = app.state::<SyncAppState>();
     let devices = sync_state.server_state.paired_devices.lock().await;
     Ok(devices.values().map(PairedDeviceInfo::from).collect())
+}
+
+/// Set the device fingerprint from the frontend (used on Android where
+/// the ANDROID_ID is only accessible from Java/Kotlin).
+/// This updates the global fingerprint override, which takes precedence
+/// over the machine-derived fingerprint for all subsequent lookups.
+#[tauri::command]
+pub async fn set_device_fingerprint(
+    fingerprint: String,
+) -> Result<(), String> {
+    theorem_sync_core::sync_crypto::set_fingerprint_from_frontend(&fingerprint);
+    eprintln!("[sync] Device fingerprint set from frontend: {fingerprint}");
+    Ok(())
 }
 
 /// Remove a paired device.
@@ -433,14 +472,14 @@ pub async fn discover_peer(
         match client.get(&url).send().await {
             Ok(res) if res.status().is_success() => {
                 // Verify the device_id matches so we don't connect to the wrong device.
-                if let Ok(health) = res.json::<crate::sync_protocol::HealthResponse>().await {
+                if let Ok(health) = res.json::<theorem_sync_core::sync_protocol::HealthResponse>().await {
                     if health.device_id == peer_device_id {
                         // Update stored address if port changed.
                         if *port != peer.last_port {
                             let mut devices = sync_state.server_state.paired_devices.lock().await;
                             if let Some(d) = devices.get_mut(&peer_device_id) {
                                 d.last_port = *port;
-                                let _ = crate::sync_server::save_paired_devices(
+                                let _ = theorem_sync_core::sync_server::save_paired_devices(
                                     &sync_state.server_state.app_data_dir,
                                     &devices,
                                 );
@@ -475,7 +514,7 @@ fn encrypt_request<T: serde::Serialize>(
 
 async fn decrypt_response<T: serde::de::DeserializeOwned>(
     sym_key: &[u8; 32],
-    payload: &crate::sync_crypto::EncryptedPayload,
+    payload: &theorem_sync_core::sync_crypto::EncryptedPayload,
 ) -> Result<T, String> {
     let decrypted = sync_crypto::decrypt_payload(sym_key, payload)
         .map_err(|e| format!("Decrypt failed: {}", e))?;
@@ -522,7 +561,7 @@ async fn discover_peer_port(
                         if let Some(peer) = devices.get_mut(peer_device_id) {
                             peer.last_port = *candidate_port;
                         }
-                        let _ = crate::sync_server::save_paired_devices(
+                        let _ = theorem_sync_core::sync_server::save_paired_devices(
                             &sync_state.server_state.app_data_dir,
                             &devices,
                         );
@@ -709,7 +748,7 @@ pub async fn initiate_sync(
                     return Err(format!("Manifest rejected by peer: {}", res.status()));
                 }
 
-                let enc_res: crate::sync_crypto::EncryptedPayload = res
+                let enc_res: theorem_sync_core::sync_crypto::EncryptedPayload = res
                     .json()
                     .await
                     .map_err(|e| format!("Manifest response parse fail: {e}"))?;
@@ -757,7 +796,7 @@ pub async fn initiate_sync(
     // 3a. Batched push with retry on connection errors.
     if !push_domains.is_empty() {
         let push_count = push_domains.len();
-        let batch_payload = crate::sync_protocol::BatchedDomainPayload {
+        let batch_payload = theorem_sync_core::sync_protocol::BatchedDomainPayload {
             sender_device_id: my_device_id.clone(),
             domains: push_domains,
         };
@@ -799,7 +838,7 @@ pub async fn initiate_sync(
     // 3b. Batched pull with retry on connection errors.
     if !pull_domain_names.is_empty() {
         let pull_count = pull_domain_names.len();
-        let pull_req = crate::sync_protocol::BatchedPullRequest {
+        let pull_req = theorem_sync_core::sync_protocol::BatchedPullRequest {
             domains: pull_domain_names,
         };
         let pulled: BatchedPullResponse = try_with_discovery(
@@ -827,7 +866,7 @@ pub async fn initiate_sync(
                         return Err(format!("Batched pull rejected by peer: {}", res.status()));
                     }
 
-                    let enc_res: crate::sync_crypto::EncryptedPayload = res
+                    let enc_res: theorem_sync_core::sync_crypto::EncryptedPayload = res
                         .json()
                         .await
                         .map_err(|e| format!("Pull response parse fail: {e}"))?;
@@ -900,7 +939,7 @@ pub async fn initiate_sync(
         let mut devices = sync_state.server_state.paired_devices.lock().await;
         devices.insert(peer.device_id.clone(), peer);
         if let Err(e) =
-            crate::sync_server::save_paired_devices(&sync_state.server_state.app_data_dir, &devices)
+            theorem_sync_core::sync_server::save_paired_devices(&sync_state.server_state.app_data_dir, &devices)
         {
             eprintln!("[sync] Failed to persist paired devices after sync: {e}");
         }
@@ -1000,7 +1039,7 @@ pub async fn pull_book_files(
         ));
     }
 
-    let enc_res: crate::sync_crypto::EncryptedPayload = res
+    let enc_res: theorem_sync_core::sync_crypto::EncryptedPayload = res
         .json()
         .await
         .map_err(|e| format!("Availability response parse fail: {e}"))?;
@@ -1382,7 +1421,7 @@ async fn pull_single_cover(
         return Err(format!("Cover pull rejected: {}", res.status()));
     }
 
-    let enc_res: crate::sync_crypto::EncryptedPayload = res
+    let enc_res: theorem_sync_core::sync_crypto::EncryptedPayload = res
         .json()
         .await
         .map_err(|e| format!("Cover response parse fail: {e}"))?;

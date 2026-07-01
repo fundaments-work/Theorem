@@ -1,9 +1,6 @@
 mod database;
 mod epub_parser;
 mod sync_commands;
-mod sync_crypto;
-mod sync_protocol;
-mod sync_server;
 mod tts;
 mod tts_model;
 
@@ -1007,6 +1004,7 @@ pub fn run() {
             sync_commands::generate_pairing_qr,
             sync_commands::submit_pairing_code,
             sync_commands::get_device_identity,
+            sync_commands::set_device_fingerprint,
             sync_commands::get_paired_devices,
             sync_commands::unpair_device,
             sync_commands::set_sync_data,

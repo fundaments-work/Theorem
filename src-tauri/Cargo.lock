@@ -5219,6 +5219,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync-daemon"
+version = "1.0.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "hex",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "sha2",
+ "theorem-sync-core",
+ "tokio",
+]
+
+[[package]]
 name = "sync_wrapper"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5832,12 +5847,35 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-os",
  "tauri-plugin-single-instance",
+ "theorem-sync-core",
  "tokio",
  "tower-http 0.5.2",
  "unrar-ng",
  "walkdir",
  "x25519-dalek",
  "zip",
+]
+
+[[package]]
+name = "theorem-sync-core"
+version = "1.0.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "futures",
+ "hex",
+ "hkdf",
+ "local-ip-address",
+ "qrcode",
+ "rand 0.8.5",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tower-http 0.5.2",
+ "x25519-dalek",
 ]
 
 [[package]]
@@ -5946,6 +5984,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2 0.6.3",
  "tokio-macros",
  "windows-sys 0.61.2",

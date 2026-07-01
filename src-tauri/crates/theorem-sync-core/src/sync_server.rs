@@ -15,6 +15,7 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use futures::stream::{self, StreamExt};
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::Sha256;
 use std::collections::HashMap;
@@ -64,7 +65,7 @@ pub struct PendingPairing {
 
 /// Snapshot of app data provided by the frontend for sync operations.
 /// This is set before a sync and read by the server handlers.
-#[derive(Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct SyncDataSnapshot {
     /// JSON-serialized data per domain.
     pub domains: HashMap<String, String>,
@@ -363,21 +364,46 @@ async fn handle_pair(
 
     // Pairing successful — save the peer device.
     let now = sync_crypto::now_iso8601();
+    let fingerprint = if request.fingerprint.is_empty() {
+        String::new()
+    } else {
+        request.fingerprint.clone()
+    };
+
     let paired_device = PairedDevice {
         device_id: request.device_id.clone(),
         device_name: request.device_name.clone(),
         symmetric_key_b64: BASE64.encode(symmetric_key),
-        last_ip: String::new(), // Will be updated on first sync
+        last_ip: String::new(),
         last_port: 0,
         paired_at: now.clone(),
         last_sync_at: None,
+        fingerprint,
     };
 
     drop(pending_guard);
 
-    // Save to memory and disk.
+    // Save to memory and disk — with dedup by fingerprint.
     {
         let mut devices = state.paired_devices.lock().await;
+
+        // Dedup: if a device with the same fingerprint already exists,
+        // replace the old entry (the physical device regenerated its key pair).
+        if !paired_device.fingerprint.is_empty() {
+            let old_id: Option<String> = devices
+                .values()
+                .find(|d| d.fingerprint == paired_device.fingerprint && d.device_id != paired_device.device_id)
+                .map(|d| d.device_id.clone());
+
+            if let Some(old_device_id) = old_id {
+                eprintln!(
+                    "[sync] Replacing old paired device {old_device_id} with new device {} (same fingerprint)",
+                    paired_device.device_id
+                );
+                devices.remove(&old_device_id);
+            }
+        }
+
         devices.insert(request.device_id.clone(), paired_device);
         if let Err(e) = save_paired_devices(&state.app_data_dir, &devices) {
             eprintln!("[sync] Failed to persist paired devices after pairing: {e}");
@@ -404,6 +430,7 @@ async fn handle_pair(
         device_id: state.identity.device_id.clone(),
         device_name: state.device_name.clone(),
         encrypted_ack: BASE64.encode(ack_json.as_bytes()),
+        fingerprint: state.identity.fingerprint.clone(),
     }))
 }
 

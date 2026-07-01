@@ -13,6 +13,9 @@ pub struct DeviceIdentityInfo {
     pub device_id: String,
     pub device_name: String,
     pub public_key_hex: String,
+    /// Stable device fingerprint used for deduplication.
+    #[serde(default)]
+    pub fingerprint: String,
 }
 
 // ─── Pairing ───
@@ -35,6 +38,9 @@ pub struct PairingQrPayload {
     pub device_name: String,
     /// Random 32-byte nonce (hex-encoded), used as HKDF salt.
     pub nonce: String,
+    /// Stable device fingerprint for deduplication.
+    #[serde(default)]
+    pub fingerprint: String,
 }
 
 /// Data returned to the frontend after generating a pairing QR code.
@@ -58,6 +64,9 @@ pub struct PairingRequest {
     /// Encrypted proof: ChaCha20-Poly1305(derived_key, "THEOREM_PAIR_V1").
     /// Proves the scanner has the correct shared secret.
     pub encrypted_proof: String,
+    /// Scanner's stable device fingerprint for deduplication.
+    #[serde(default)]
+    pub fingerprint: String,
 }
 
 /// Response sent by the host back to the scanner after successful pairing.
@@ -69,6 +78,9 @@ pub struct PairingResponse {
     pub device_name: String,
     /// Encrypted acknowledgment (proves the host also has the shared secret).
     pub encrypted_ack: String,
+    /// Host's stable device fingerprint for deduplication.
+    #[serde(default)]
+    pub fingerprint: String,
 }
 
 // ─── Paired Device (persisted) ───
@@ -91,6 +103,9 @@ pub struct PairedDevice {
     pub paired_at: String,
     /// ISO 8601 timestamp of the last successful sync (if any).
     pub last_sync_at: Option<String>,
+    /// Peer's stable device fingerprint for deduplication.
+    #[serde(default)]
+    pub fingerprint: String,
 }
 
 /// Frontend-safe view of a paired device (no symmetric key exposed).
@@ -102,6 +117,9 @@ pub struct PairedDeviceInfo {
     pub last_port: u16,
     pub paired_at: String,
     pub last_sync_at: Option<String>,
+    /// Peer's stable device fingerprint for deduplication.
+    #[serde(default)]
+    pub fingerprint: String,
 }
 
 impl From<&PairedDevice> for PairedDeviceInfo {
@@ -113,6 +131,7 @@ impl From<&PairedDevice> for PairedDeviceInfo {
             last_port: device.last_port,
             paired_at: device.paired_at.clone(),
             last_sync_at: device.last_sync_at.clone(),
+            fingerprint: device.fingerprint.clone(),
         }
     }
 }

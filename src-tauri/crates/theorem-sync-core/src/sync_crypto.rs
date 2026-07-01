@@ -22,12 +22,20 @@ pub struct DeviceIdentity {
     secret: StaticSecret,
     pub public_key: X25519PublicKey,
     pub device_id: String,
+    /// Stable device fingerprint that survives identity file loss.
+    /// Derived from machine-id, ANDROID_ID, or a stable hardware identifier.
+    /// Used for deduplication when the same physical device re-pairs.
+    pub fingerprint: String,
 }
 
 /// Serializable form of device identity for disk storage.
 #[derive(Serialize, Deserialize)]
 struct StoredIdentity {
     secret_bytes: Vec<u8>,
+    /// Stable device fingerprint — optional for backward compatibility
+    /// with identity files created before this field was added.
+    #[serde(default)]
+    fingerprint: String,
 }
 
 /// Result of encrypting a payload with ChaCha20-Poly1305.
@@ -54,34 +62,55 @@ impl DeviceIdentity {
         let secret = StaticSecret::random_from_rng(OsRng);
         let public_key = X25519PublicKey::from(&secret);
         let device_id = Self::compute_device_id(&public_key);
+        let fingerprint = read_machine_fingerprint();
         Self {
             secret,
             public_key,
             device_id,
+            fingerprint,
         }
     }
 
     /// Load existing identity from disk, or create and persist a new one.
     pub fn load_or_create(app_data_dir: &Path) -> Result<Self, String> {
         let identity_path = app_data_dir.join("sync-identity.json");
+        let fingerprint = read_machine_fingerprint();
 
         // Try to load existing identity.
         if identity_path.exists() {
             let content = fs::read_to_string(&identity_path)
                 .map_err(|e| format!("Failed to read identity file: {e}"))?;
-            let stored: StoredIdentity = serde_json::from_str(&content)
+            let mut stored: StoredIdentity = serde_json::from_str(&content)
                 .map_err(|e| format!("Failed to parse identity file: {e}"))?;
             let secret_bytes: [u8; 32] = stored
                 .secret_bytes
+                .clone()
                 .try_into()
                 .map_err(|_| "Invalid secret key length".to_string())?;
             let secret = StaticSecret::from(secret_bytes);
             let public_key = X25519PublicKey::from(&secret);
             let device_id = Self::compute_device_id(&public_key);
+
+            // Update fingerprint if it was missing (migration from old format).
+            let needs_update = stored.fingerprint.is_empty() && !fingerprint.is_empty();
+            let fp = if stored.fingerprint.is_empty() {
+                fingerprint.clone()
+            } else {
+                stored.fingerprint.clone()
+            };
+
+            if needs_update {
+                stored.fingerprint = fingerprint.clone();
+                let updated = serde_json::to_string_pretty(&stored)
+                    .map_err(|e| format!("Failed to serialize identity: {e}"))?;
+                let _ = fs::write(&identity_path, updated);
+            }
+
             return Ok(Self {
                 secret,
                 public_key,
                 device_id,
+                fingerprint: fp,
             });
         }
 
@@ -89,6 +118,7 @@ impl DeviceIdentity {
         let identity = Self::generate();
         let stored = StoredIdentity {
             secret_bytes: identity.secret.to_bytes().to_vec(),
+            fingerprint: identity.fingerprint.clone(),
         };
         let content = serde_json::to_string_pretty(&stored)
             .map_err(|e| format!("Failed to serialize identity: {e}"))?;
@@ -114,6 +144,12 @@ impl DeviceIdentity {
     /// Get the public key bytes for sharing with a peer.
     pub fn public_key_bytes(&self) -> [u8; 32] {
         *self.public_key.as_bytes()
+    }
+
+    /// Get the effective device fingerprint, checking the frontend
+    /// override first (for Android where machine-id is not available).
+    pub fn effective_fingerprint(&self) -> String {
+        get_frontend_fingerprint().unwrap_or_else(|| self.fingerprint.clone())
     }
 }
 
@@ -356,6 +392,100 @@ pub fn decrypt_file_chunk(key: &[u8; 32], chunk_b64: &str) -> Result<Vec<u8>, St
     cipher
         .decrypt(&nonce, ciphertext)
         .map_err(|_| "Chunk decryption failed: invalid key or tampered data".to_string())
+}
+
+// ─── Device Fingerprint ───
+
+/// Read a stable device fingerprint that survives identity file loss.
+///
+/// Strategies per platform:
+/// - Linux: `/etc/machine-id` (128-bit hex, stable across reboots)
+/// - macOS: `IOPlatformUUID` via `ioreg` (too slow, so we use a hash of
+///   the system's serial number from `sysctl hw.model`)
+/// - Windows: Not yet implemented — uses empty string as fallback
+/// - Android: `Settings.Secure.ANDROID_ID` (handled via Tauri plugin)
+///
+/// If the fingerprint cannot be read, returns an empty string
+/// (the sync subsystem will still work, just without dedup).
+pub fn read_machine_fingerprint() -> String {
+    #[cfg(target_os = "linux")]
+    {
+        // Try /etc/machine-id first (most Linux distros).
+        if let Ok(content) = std::fs::read_to_string("/etc/machine-id") {
+            let trimmed = content.trim();
+            if !trimmed.is_empty() && trimmed.len() >= 32 {
+                return trimmed[..16].to_string();
+            }
+        }
+        // Fallback: /var/lib/dbus/machine-id
+        if let Ok(content) = std::fs::read_to_string("/var/lib/dbus/machine-id") {
+            let trimmed = content.trim();
+            if !trimmed.is_empty() {
+                return trimmed[..16.min(trimmed.len())].to_string();
+            }
+        }
+        String::new()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // Use IOPlatformUUID via ioreg on macOS
+        if let Ok(output) = std::process::Command::new("ioreg")
+            .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+            .output()
+        {
+            if let Ok(stdout) = String::from_utf8(output.stdout) {
+                for line in stdout.lines() {
+                    if line.contains("IOPlatformUUID") {
+                        if let Some(uuid_part) = line.split('=').nth(1) {
+                            let uuid = uuid_part.trim().trim_matches('"');
+                            if !uuid.is_empty() {
+                                return sha2_hash_first16(uuid.as_bytes());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        String::new()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: use a placeholder for now.
+        // Could use WMI or registry to read machine GUID.
+        String::new()
+    }
+    #[cfg(target_os = "android")]
+    {
+        // Android: ANDROID_ID is passed via Tauri plugin
+        // For now, fall back to empty (will be overridden by the frontend).
+        String::new()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android")))]
+    {
+        String::new()
+    }
+}
+
+/// Module-level static for frontend-provided fingerprint override.
+use std::sync::OnceLock;
+static FRONTEND_FINGERPRINT: OnceLock<String> = OnceLock::new();
+
+/// Helper: SHA-256 hash the input and return the first 16 hex characters.
+fn sha2_hash_first16(data: &[u8]) -> String {
+    use sha2::Digest;
+    let hash = sha2::Sha256::digest(data);
+    hex::encode(&hash[..8])
+}
+
+/// Set the device fingerprint via a Tauri command (for Android where
+/// the machine ID is only accessible from the Java/Kotlin side).
+pub fn set_fingerprint_from_frontend(fp: &str) {
+    let _ = FRONTEND_FINGERPRINT.set(fp.to_string());
+}
+
+/// Get any frontend-overridden fingerprint (for Android).
+fn get_frontend_fingerprint() -> Option<String> {
+    FRONTEND_FINGERPRINT.get().cloned()
 }
 
 // ─── QR Code Generation ───
