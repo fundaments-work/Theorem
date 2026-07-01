@@ -842,7 +842,8 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_app::init())
         .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_mobile_folder_scan::init());
+        .plugin(tauri_plugin_mobile_folder_scan::init())
+        .plugin(tauri_plugin_android_sync_worker::init());
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
@@ -902,6 +903,14 @@ pub fn run() {
                     eprintln!("[theorem] Warning: Failed to initialize sync: {}", e);
                 }
             }
+
+            // Manage background sync handle (used by Android ForegroundService
+            // and desktop background scheduler).
+            use sync_commands::BackgroundSyncHandle;
+            app.manage(BackgroundSyncHandle {
+                cancel: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+                running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            });
 
             // Collect any file association / CLI open targets at startup so the frontend can
             // import and open them once it is ready.
@@ -1014,11 +1023,70 @@ pub fn run() {
             sync_commands::initiate_sync,
             sync_commands::pull_book_files,
             sync_commands::pull_book_covers,
+            sync_commands::start_background_sync,
+            sync_commands::stop_background_sync,
+            set_android_fingerprint,
+            start_android_sync_worker,
+            stop_android_sync_worker,
             hide_to_tray,
             download_and_extract_stardict,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// On Android, reads ANDROID_ID via the mobile-folder-scan plugin and
+/// sets it as the device fingerprint. No-op on other platforms.
+#[tauri::command]
+async fn set_android_fingerprint(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        match tauri_plugin_mobile_folder_scan::get_android_id(&app) {
+            Ok(android_id) if !android_id.is_empty() => {
+                theorem_sync_core::sync_crypto::set_fingerprint_from_frontend(&android_id);
+                eprintln!("[sync] Android fingerprint set from ANDROID_ID");
+            }
+            _ => {
+                // Fallback: generate a placeholder fingerprint.
+                theorem_sync_core::sync_crypto::set_fingerprint_from_frontend("android:unknown");
+            }
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = &app;
+    }
+    Ok(())
+}
+
+/// Start the Android sync ForegroundService (keeps process alive for
+/// background sync). On non-Android platforms this is a no-op.
+#[tauri::command]
+async fn start_android_sync_worker(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        tauri_plugin_android_sync_worker::start_worker(
+            &app,
+            "Theorem Sync Active",
+            "Syncing data with paired devices",
+            300,
+        )?;
+        eprintln!("[sync] Android sync worker started");
+    }
+    let _ = &app;
+    Ok(())
+}
+
+/// Stop the Android sync ForegroundService.
+#[tauri::command]
+async fn stop_android_sync_worker(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        tauri_plugin_android_sync_worker::stop_worker(&app)?;
+        eprintln!("[sync] Android sync worker stopped");
+    }
+    let _ = &app;
+    Ok(())
 }
 
 /// Hide the main window to the system tray.

@@ -120,6 +120,13 @@ pub fn save_image<R: Runtime>(app: &AppHandle<R>, filename: &str, base64_data: &
 }
 
 #[cfg(target_os = "android")]
+#[derive(Deserialize)]
+struct GetAndroidIdResponse {
+    #[serde(rename = "androidId")]
+    android_id: String,
+}
+
+#[cfg(target_os = "android")]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct MaterializeContentUriPayload<'a> {
@@ -148,4 +155,20 @@ pub fn materialize_content_uri<R: Runtime>(app: &AppHandle<R>, uri: &str, file_n
         .map_err(|error| error.to_string())?;
 
     Ok(response.path)
+}
+
+/// Get the Android device's ANDROID_ID (stable per-device identifier).
+/// Only available on Android; returns empty string on other platforms.
+#[cfg(target_os = "android")]
+pub fn get_android_id<R: Runtime>(app: &AppHandle<R>) -> Result<String, String> {
+    let state = app.state::<MobileFolderScan<R>>();
+    let response = state
+        .handle
+        .run_mobile_plugin::<GetAndroidIdResponse>(
+            "getAndroidId",
+            serde_json::json!({}),
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(response.android_id)
 }

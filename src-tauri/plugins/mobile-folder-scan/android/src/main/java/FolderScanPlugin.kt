@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.provider.Settings
 import androidx.activity.result.ActivityResult
 import androidx.documentfile.provider.DocumentFile
 import app.tauri.Logger
@@ -237,6 +238,17 @@ class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
         invoke.reject(error.message ?: "Failed to save image")
       }
     }
+  }
+
+  @Command
+  fun getAndroidId(invoke: Invoke) {
+    val response = JSObject()
+    val androidId = Settings.Secure.getString(
+      activity.contentResolver,
+      Settings.Secure.ANDROID_ID
+    )
+    response.put("androidId", androidId ?: "")
+    invoke.resolve(response)
   }
 
   @Command

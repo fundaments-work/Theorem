@@ -7,7 +7,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { isTauri } from "./env";
+import { isTauri, isMobile } from "./env";
 import type {
     PairedDevice,
     DeviceIdentityInfo,
@@ -84,6 +84,17 @@ export async function submitPairingCode(
 export async function getDeviceIdentity(): Promise<DeviceIdentityInfo> {
     requireTauri("getDeviceIdentity");
     return invoke<DeviceIdentityInfo>("get_device_identity");
+}
+
+/**
+ * Override the device fingerprint (used on Android where ANDROID_ID
+ * replaces the desktop machine-id).
+ */
+export async function setDeviceFingerprint(
+    fingerprint: string,
+): Promise<void> {
+    requireTauri("setDeviceFingerprint");
+    return invoke("set_device_fingerprint", { fingerprint });
 }
 
 // ─── Paired Devices ───
@@ -228,5 +239,40 @@ export async function pullBookCovers(
 ): Promise<CoverTransferResult> {
     requireTauri("pullBookCovers");
     return invoke<CoverTransferResult>("pull_book_covers", { peerDeviceId, bookIds });
+}
+
+// ─── Background Sync ───
+
+/**
+ * Start the background sync scheduler (Rust-side periodic timer).
+ * On Android, also starts the ForegroundService to keep the process alive.
+ * @param intervalSecs How often to sync (default 300 = 5 min, min 60).
+ */
+export async function startBackgroundSync(intervalSecs?: number): Promise<void> {
+    requireTauri("startBackgroundSync");
+    await invoke("start_background_sync", { intervalSecs: intervalSecs ?? 300 });
+
+    // On Android, also start the ForegroundService.
+    if (isMobile()) {
+        try {
+            await invoke("start_android_sync_worker");
+        } catch {
+            // ForegroundService not available (or desktop fallback).
+        }
+    }
+}
+
+/** Stop the background sync scheduler and Android ForegroundService. */
+export async function stopBackgroundSync(): Promise<void> {
+    requireTauri("stopBackgroundSync");
+    await invoke("stop_background_sync");
+
+    if (isMobile()) {
+        try {
+            await invoke("stop_android_sync_worker");
+        } catch {
+            // ForegroundService not available.
+        }
+    }
 }
 

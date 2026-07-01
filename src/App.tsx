@@ -319,6 +319,19 @@ function App() {
         };
     }, []);
 
+    // On Android, initialize the device fingerprint (ANDROID_ID) for stable
+    // device identity across installs. No-op on desktop where machine-id is used.
+    useEffect(() => {
+        if (!isTauri()) {
+            return;
+        }
+        const initFingerprint = async () => {
+            const { invoke } = await import("@tauri-apps/api/core");
+            await invoke("set_android_fingerprint").catch(() => {});
+        };
+        void initFingerprint();
+    }, []);
+
     // Keep responder sync infrastructure ready globally so incoming peer sync
     // can merge without requiring users to open the Settings screen.
     // Also start auto-sync (startup, periodic, visibility-change, tray).
@@ -345,6 +358,19 @@ function App() {
             }
             if (!cancelled) {
                 await startAutoSync();
+            }
+            // Push data to Rust sync server and start background sync scheduler.
+            // This keeps sync running even when the app is backgrounded (Android)
+            // or supplements JS timers on desktop.
+            if (!cancelled) {
+                try {
+                    const { provisionSyncData } = await import("./core/lib/sync-orchestrator");
+                    await provisionSyncData();
+                    const { startBackgroundSync } = await import("./core/lib/device-sync");
+                    await startBackgroundSync(300);
+                } catch {
+                    // Background sync not available (non-Tauri).
+                }
             }
         };
 

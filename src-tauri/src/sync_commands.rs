@@ -12,15 +12,22 @@ use futures::stream::{self, StreamExt};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
+use tokio::time::Duration;
 
 /// Global sync state managed by Tauri.
 pub struct SyncAppState {
     pub server_state: Arc<SyncServerState>,
     pub server_handle: Arc<Mutex<Option<SyncServerHandle>>>,
+}
+
+/// Handle to cancel the background sync loop.
+pub struct BackgroundSyncHandle {
+    pub cancel: Arc<Mutex<Option<tokio::sync::watch::Sender<bool>>>>,
+    pub running: Arc<AtomicBool>,
 }
 
 /// Initialize the sync subsystem. Call this once during app startup.
@@ -1473,4 +1480,112 @@ async fn pull_single_cover(
     })
     .await
     .map_err(|e| format!("Cover save task failed: {e}"))?
+}
+
+// ─── Background Sync Scheduler ───
+
+/// Start the background sync loop. Runs periodically (default every 5 min)
+/// and initiates sync with all paired devices.
+///
+/// On Android, pair this with the ForegroundService to keep the process alive.
+/// On desktop, this is a convenience for periodic sync without JS timers.
+#[tauri::command]
+pub async fn start_background_sync(
+    app: tauri::AppHandle,
+    interval_secs: Option<u64>,
+) -> Result<(), String> {
+    // Check if already running
+    let bg_handle = app.state::<BackgroundSyncHandle>();
+    if bg_handle.running.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+
+    let interval = interval_secs.unwrap_or(300).max(60);
+    let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
+
+    // Store cancel handle
+    {
+        let mut cancel_lock = bg_handle.cancel.lock().await;
+        *cancel_lock = Some(cancel_tx);
+    }
+    bg_handle.running.store(true, Ordering::SeqCst);
+
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        let mut timer = tokio::time::interval(Duration::from_secs(interval));
+
+        loop {
+            tokio::select! {
+                _ = timer.tick() => {
+                    let sync_state = app_clone.state::<SyncAppState>();
+
+                    // Get all paired device IDs.
+                    let peer_ids: Vec<String> = {
+                        let devices = sync_state.server_state.paired_devices.lock().await;
+                        devices.keys().cloned().collect()
+                    };
+
+                    if peer_ids.is_empty() {
+                        eprintln!("[background-sync] No paired devices, skipping round");
+                        continue;
+                    }
+
+                    eprintln!(
+                        "[background-sync] Starting sync round with {} device(s)",
+                        peer_ids.len()
+                    );
+
+                    for peer_id in &peer_ids {
+                        let result = initiate_sync(app_clone.clone(), peer_id.clone()).await;
+                        match result {
+                            Ok(_) => {
+                                eprintln!("[background-sync] Completed sync with {peer_id}");
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "[background-sync] Sync with {peer_id} failed: {e}"
+                                );
+                            }
+                        }
+                    }
+
+                    eprintln!("[background-sync] Sync round complete");
+                }
+                _ = cancel_rx.changed() => {
+                    if *cancel_rx.borrow() {
+                        eprintln!("[background-sync] Stopped by cancel signal");
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Reset running flag on exit.
+        let bg = app_clone.state::<BackgroundSyncHandle>();
+        bg.running.store(false, Ordering::SeqCst);
+    });
+
+    eprintln!("[background-sync] Started (interval={interval}s)");
+    Ok(())
+}
+
+/// Stop the background sync loop.
+#[tauri::command]
+pub async fn stop_background_sync(app: tauri::AppHandle) -> Result<(), String> {
+    let bg_handle = app.state::<BackgroundSyncHandle>();
+    if !bg_handle.running.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+
+    let mut cancel_lock = bg_handle.cancel.lock().await;
+    if let Some(sender) = cancel_lock.take() {
+        let _ = sender.send(true);
+    }
+    drop(cancel_lock);
+
+    // Wait briefly for the loop to acknowledge.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    eprintln!("[background-sync] Stopped");
+    Ok(())
 }
