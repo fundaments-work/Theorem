@@ -18,10 +18,10 @@ import {
     Info,
     Headphones,
 } from "lucide-react";
-import { cn } from "../../../core";
-import { isMobile, isTauri } from "../../../core";
+import { cn } from "../../../core/lib/utils";
+import { isMobile, isTauri } from "../../../core/lib/env";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import type { DocMetadata, DocLocation } from "../../../core";
+import type { DocMetadata, DocLocation } from "../../../core/types";
 
 interface WindowTitlebarProps {
     metadata: DocMetadata | null;

@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
-import type { Annotation, Book } from "../../../core";
-import { shareOnX, buildShareText } from "../../../core";
+import type { Annotation, Book } from "../../../core/types";
+import { shareOnX, buildShareText } from "../../../core/lib/share";
 import { ExternalLink, Image, AlertCircle } from "lucide-react";
 import { ShareStudioModal } from "./ShareStudioModal";
 

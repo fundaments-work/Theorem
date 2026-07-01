@@ -3,37 +3,41 @@
  * Full-screen reading experience with document viewer and controls
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import { cn } from "../../core/lib/utils";
 import {
-    cn,
     getBookMaterializedPath,
     getBookBlob,
     getBookData,
     saveCoverImage,
+} from "../../core/lib/storage";
+import {
     extractMetadata,
-    extractFilenameFromPath,
-    ensureFilenameForFormat,
     shouldUseExtractedTitle,
     shouldUseExtractedAuthor,
-    isTauri,
-    isTauriMobile,
+} from "../../core/lib/cover-extractor";
+import { extractFilenameFromPath, ensureFilenameForFormat } from "../../core/lib/import";
+import { isTauri, isTauriMobile } from "../../core/lib/env";
+import {
     useVocabularyStore,
     useLibraryStore,
     useRssStore,
     useSettingsStore,
     useUIStore,
-    vocabularyTermFromLookup,
-    type Annotation,
-    type Book,
-    type BookFormat,
-    type DictionaryLookupResult,
-    type DocLocation,
-    type DocMetadata,
-    type HighlightColor,
-    type PdfZoomMode,
-    type ReaderSettings as ReaderSettingsState,
-    type TocItem,
-} from "../../core";
+} from "../../core/store";
+import { vocabularyTermFromLookup } from "../../core/services/DictionaryService";
+import type { DictionaryLookupResult } from "../../core/services/DictionaryService";
+import type {
+    Annotation,
+    Book,
+    BookFormat,
+    DocLocation,
+    DocMetadata,
+    HighlightColor,
+    PdfZoomMode,
+    ReaderSettings as ReaderSettingsState,
+    TocItem,
+} from "../../core/types";
 import { invoke } from "@tauri-apps/api/core";
 import { List } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -48,14 +52,22 @@ import { ReaderNavbar } from "./components/progress/ReaderNavbar";
 import { ReaderViewport } from "./components/ReaderViewport";
 import { HighlightColorPicker } from "./components/highlights/HighlightColorPicker";
 import { NoteEditor } from "./components/highlights/NoteEditor";
-import { PDFReader } from "./components/PDFReader";
+const PDFReader = lazy(() => import("./components/PDFReader"));
 import { ArticleViewer } from "./article-reader/ArticleViewer";
 import { useReaderFullscreen, useToolbarHeight } from "./hooks";
 import type { PDFJsEngineRef } from "./engines/pdfjs-engine";
 import type { ReaderViewportHandle } from "./components/ReaderViewport";
 import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
-import { ImmersionBar } from "./audio/ImmersionBar";
-import { immersionPlayer } from "./audio/ImmersionPlayer";
+const ImmersionBar = lazy(() => import("./audio/ImmersionBar"));
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _lazyImmersionPlayer: any = null;
+async function getImmersionPlayer() {
+    if (!_lazyImmersionPlayer) {
+        _lazyImmersionPlayer = (await import("./audio/ImmersionPlayer")).immersionPlayer;
+    }
+    return _lazyImmersionPlayer;
+}
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -224,7 +236,7 @@ function BookReaderPage() {
     useEffect(() => {
         if (!ttsEnabled && immersionMode) {
             setImmersionMode(false);
-            immersionPlayer.stop();
+            void getImmersionPlayer().then((p) => p.stop());
         }
     }, [ttsEnabled, immersionMode]);
     const suppressProgressRef = useRef(false);
@@ -1017,7 +1029,8 @@ function BookReaderPage() {
                     startFromId: nextData.startWordId,
                     voice: ttsVoice,
                 });
-                immersionPlayer.setPreloadGenId(genId);
+                const player = await getImmersionPlayer();
+                player.setPreloadGenId(genId);
             } catch {
                 // preload failure is non-critical
             }
@@ -2140,30 +2153,32 @@ function BookReaderPage() {
                 immersionMode && "pb-16",
             )}>
                 {isPdfFormat ? (
-                    <PDFReader
-                        ref={pdfReaderRef}
-                        pdfPath={resolvedPdfPath}
-                        pdfData={pdfData ?? undefined}
-                        originalFilename={currentBook?.title}
-                        initialPage={pdfInitialPage}
-                        initialZoom={pdfInitialZoom}
-                        initialZoomMode={pdfInitialZoomMode}
-                        theme={settings.readerSettings.theme}
-                        brightness={settings.readerSettings.brightness}
-                        onPageChange={handlePdfPageChange}
-                        onZoomModeChange={handlePdfZoomModeChange}
-                        onLoad={handlePdfLoad}
-                        onError={handlePdfError}
-                        onViewportTap={handleViewportTap}
-                        annotations={annotations}
-                        annotationMode={pdfAnnotationMode}
-                        highlightColor={pdfHighlightColor}
-                        penColor={pdfBrushColor}
-                        penWidth={pdfBrushWidth}
-                        onAnnotationAdd={handlePdfAnnotationAdd}
-                        onAnnotationChange={handlePdfAnnotationChange}
-                        onAnnotationRemove={handlePdfAnnotationRemove}
-                    />
+                    <Suspense fallback={<div className="flex items-center justify-center h-full">Loading PDF...</div>}>
+                        <PDFReader
+                            ref={pdfReaderRef}
+                            pdfPath={resolvedPdfPath}
+                            pdfData={pdfData ?? undefined}
+                            originalFilename={currentBook?.title}
+                            initialPage={pdfInitialPage}
+                            initialZoom={pdfInitialZoom}
+                            initialZoomMode={pdfInitialZoomMode}
+                            theme={settings.readerSettings.theme}
+                            brightness={settings.readerSettings.brightness}
+                            onPageChange={handlePdfPageChange}
+                            onZoomModeChange={handlePdfZoomModeChange}
+                            onLoad={handlePdfLoad}
+                            onError={handlePdfError}
+                            onViewportTap={handleViewportTap}
+                            annotations={annotations}
+                            annotationMode={pdfAnnotationMode}
+                            highlightColor={pdfHighlightColor}
+                            penColor={pdfBrushColor}
+                            penWidth={pdfBrushWidth}
+                            onAnnotationAdd={handlePdfAnnotationAdd}
+                            onAnnotationChange={handlePdfAnnotationChange}
+                            onAnnotationRemove={handlePdfAnnotationRemove}
+                        />
+                    </Suspense>
                 ) : (
                     <ReaderViewport
                         key={currentBookId || 'no-book'}
@@ -2233,17 +2248,20 @@ function BookReaderPage() {
                             immersionMode ? "pointer-events-auto" : "pointer-events-none",
                             "w-full sm:w-auto",
                         )}>
-                            <ImmersionBar 
-                                sectionText={ttsData?.text || ""}
-                                startWordId={ttsData?.startWordId}
-                                pageCfi={location?.cfi}
-                                visible={immersionMode}
-                                onComplete={async () => {
-                                    await immersionPlayer.playPreloaded();
-                                    readerRef.current?.next();
-                                }}
-                                onSynthesisComplete={handleTtsSynthesisComplete}
-                            />
+                            <Suspense fallback={null}>
+                                <ImmersionBar 
+                                    sectionText={ttsData?.text || ""}
+                                    startWordId={ttsData?.startWordId}
+                                    pageCfi={location?.cfi}
+                                    visible={immersionMode}
+                                    onComplete={async () => {
+                                        const player = await getImmersionPlayer();
+                                        await player.playPreloaded();
+                                        readerRef.current?.next();
+                                    }}
+                                    onSynthesisComplete={handleTtsSynthesisComplete}
+                                />
+                            </Suspense>
                         </div>
                     </div>
                     

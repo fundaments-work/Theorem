@@ -6,8 +6,8 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { ChevronDown, ChevronRight, X, List } from "lucide-react";
-import { cn } from "../../../core";
-import type { TocItem } from "../../../core";
+import { cn } from "../../../core/lib/utils";
+import type { TocItem } from "../../../core/types";
 import { Backdrop } from "../../../ui";
 
 interface TableOfContentsProps {

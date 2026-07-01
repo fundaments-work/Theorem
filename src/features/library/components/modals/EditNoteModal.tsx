@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-    cn,
-} from "../../../../core";
+import { cn } from "../../../../core/lib/utils";
 import { Modal, ModalBody, ModalFooter } from "../../../../ui";
 
 interface EditNoteModalProps {

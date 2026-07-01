@@ -1,11 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
-import type { Annotation, Book } from "../../../core";
-import {
-    generateShareCardImage,
-    downloadImage,
-    shareImageNative,
-    buildImageFilename,
-} from "../../../core";
+import type { Annotation, Book } from "../../../core/types";
+import { generateShareCardImage } from "../../../core/lib/share-canvas";
+import { downloadImage, shareImageNative, buildImageFilename } from "../../../core/lib/share";
 import type { ShareImageOptions } from "../../../core/lib/share-canvas";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "../../../ui";
 import { Download, Share2, CheckCircle, AlertCircle } from "lucide-react";

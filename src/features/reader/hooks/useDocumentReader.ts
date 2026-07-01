@@ -16,7 +16,7 @@ import type {
     SearchResult,
     ThemeSettings,
     TocItem,
-} from "../../../core";
+} from "../../../core/types";
 
 export interface UseDocumentReaderOptions {
     onLocationChange?: (location: DocLocation) => void;

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useMemo, type RefObject } from "react";
-import {
-    cn,
-    type FontFamily,
-    type ReaderSettings as ReaderSettingsState,
-    type RssArticle,
-} from "../../../core";
+import { cn } from "../../../core/lib/utils";
+import type {
+    FontFamily,
+    ReaderSettings as ReaderSettingsState,
+    RssArticle,
+} from "../../../core/types";
 import type { ArticleHeading } from "./types";
 import { formatArticleDate, sanitizeArticleHtml } from "./utils";
 

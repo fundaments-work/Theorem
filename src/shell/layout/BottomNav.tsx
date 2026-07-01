@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, memo } from "react";
 import {
     FolderOpen,
     Highlighter,
@@ -7,8 +7,9 @@ import {
     Rss,
     Settings,
 } from "lucide-react";
-import { useUIStore, useSettingsStore } from "../../core";
-import type { AppRoute } from "../../core";
+import { useUIStore } from "../../core/store";
+import { useSettingsStore } from "../../core/store";
+import type { AppRoute } from "../../core/types";
 
 interface NavItem {
     id: AppRoute;
@@ -25,7 +26,7 @@ const baseNavItems: NavItem[] = [
     { id: "settings", label: "Settings", icon: <Settings className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
 ];
 
-export function BottomNav() {
+export const BottomNav = memo(function BottomNav() {
     const currentRoute = useUIStore((state) => state.currentRoute);
     const setRoute = useUIStore((state) => state.setRoute);
     const vocabularyEnabled = useSettingsStore((state) => state.settings.vocabulary.vocabularyEnabled);
@@ -65,4 +66,4 @@ export function BottomNav() {
             </ul>
         </nav>
     );
-}
+});

@@ -4,9 +4,9 @@
  */
 
 import { X, Info, Calendar, Hash, Globe, FileText, User } from 'lucide-react';
-import type { DocMetadata } from '../../../core';
+import type { DocMetadata } from '../../../core/types';
 import { Backdrop, FloatingPanel } from '../../../ui';
-import { cn, normalizeAuthor } from '../../../core';
+import { cn, normalizeAuthor } from '../../../core/lib/utils';
 
 interface BookInfoPopoverProps {
     metadata: DocMetadata | null;

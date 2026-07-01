@@ -5,13 +5,14 @@
 
 import { useMemo, useState } from 'react';
 import { Bookmark, X, Trash2, ExternalLink, Highlighter, MoreVertical, Pencil, Share2 } from 'lucide-react';
-import { HIGHLIGHT_PICKER_COLORS } from "../../../core";
-import { cn, useLibraryStore, useUIStore } from "../../../core";
+import { HIGHLIGHT_PICKER_COLORS } from "../../../core/lib/design-tokens";
+import { cn } from "../../../core/lib/utils";
+import { useLibraryStore, useUIStore } from "../../../core/store";
 import { format } from 'date-fns';
 import { useShallow } from 'zustand/react/shallow';
 import { Backdrop, FloatingPanel } from "../../../ui";
 import { ShareMenu } from "../../library/components/ShareMenu";
-import type { Annotation, HighlightColor } from "../../../core";
+import type { Annotation, HighlightColor } from "../../../core/types";
 
 interface ReaderAnnotationsPanelProps {
     bookId: string;

@@ -17,8 +17,8 @@ import {
 } from "react";
 import { AlertCircle } from "lucide-react";
 import { PDFJsEngine, type PDFJsEngineRef, type PDFDocumentInfo } from "../engines/pdfjs-engine";
-import { cn } from "../../../core";
-import type { ReaderTheme, Annotation, HighlightColor, PdfZoomMode } from "../../../core";
+import { cn } from "../../../core/lib/utils";
+import type { ReaderTheme, Annotation, HighlightColor, PdfZoomMode } from "../../../core/types";
 
 // ============================================================================
 // Types

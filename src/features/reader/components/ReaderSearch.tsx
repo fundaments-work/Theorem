@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X, Loader2, ChevronRight } from 'lucide-react';
-import { cn } from "../../../core";
+import { cn } from "../../../core/lib/utils";
 import { Backdrop, FloatingPanel } from "../../../ui";
 
 export interface ReaderSearchMatch {

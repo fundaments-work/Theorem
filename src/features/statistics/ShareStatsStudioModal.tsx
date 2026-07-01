@@ -1,10 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
-import {
-    generateShareStatsImage,
-    downloadImage,
-    shareImageNative,
-    buildImageFilename,
-} from "../../core";
+import { generateShareStatsImage } from "../../core/lib/share-canvas";
+import { downloadImage, shareImageNative, buildImageFilename } from "../../core/lib/share";
 import type { ShareStatsData } from "../../core/lib/share-canvas";
 import type { ShareImageOptions } from "../../core/lib/share-canvas";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "../../ui";

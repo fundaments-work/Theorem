@@ -1,5 +1,6 @@
 import { Maximize2, RotateCw, SlidersHorizontal, X, ZoomIn, ZoomOut } from "lucide-react";
-import { cn, type PdfZoomMode } from "../../../core";
+import { cn } from "../../../core/lib/utils";
+import type { PdfZoomMode } from "../../../core/types";
 import { Backdrop, FloatingPanel } from "../../../ui";
 
 interface PDFViewSettingsPanelProps {

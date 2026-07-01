@@ -25,7 +25,8 @@ import {
     Signal,
     Lock,
 } from "lucide-react";
-import { cn, isMobile, isTauri } from "../../core";
+import { cn } from "../../core/lib/utils";
+import { isMobile, isTauri } from "../../core/lib/env";
 import { Modal, ModalBody, ModalHeader } from "../../ui";
 import {
     startSyncServer,

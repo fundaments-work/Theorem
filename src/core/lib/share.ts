@@ -1,6 +1,5 @@
 import type { Annotation } from "../types";
 import type { Book } from "../types";
-import { toPng } from "html-to-image";
 
 export function buildShareText(
     annotation: Annotation,
@@ -32,6 +31,7 @@ export function shareOnX(text: string): Window | null {
 }
 
 export async function captureCardAsImage(element: HTMLElement): Promise<Blob> {
+    const { toPng } = await import("html-to-image");
     const dataUrl = await toPng(element, {
         quality: 0.95,
         pixelRatio: 2,

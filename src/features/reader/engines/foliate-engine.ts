@@ -20,8 +20,8 @@ import type {
     ThemeSettings,
     ReaderTheme,
     BookFormat,
-} from '../../../core';
-import { isFixedLayout } from '../../../core';
+} from '../../../core/types';
+import { isFixedLayout } from '../../../core/types';
 import { getTheme } from '../foliate/themes';
 import { getCSS } from '../foliate/reader.js';
 import { 
@@ -29,9 +29,9 @@ import {
     getCurrentReaderSettings,
     getThemeColors,
     getHighlightSolidColor,
-} from '../../../core';
-import { rankByFuzzyQuery } from "../../../core";
-import { normalizeAuthor } from '../../../core';
+} from '../../../core/lib/design-tokens';
+import { rankByFuzzyQuery } from "../../../core/lib/search/fuzzy";
+import { normalizeAuthor } from '../../../core/lib/utils';
 
 const READER_SEARCH_EXACT_LIMIT = 120;
 const READER_SEARCH_FALLBACK_TRIGGER_THRESHOLD = 3;

@@ -1,4 +1,4 @@
-import type { RssArticle } from "../../../core";
+import type { RssArticle } from "../../../core/types";
 
 export function sanitizeArticleHtml(html: string): string {
     if (!html) {

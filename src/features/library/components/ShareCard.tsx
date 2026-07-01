@@ -1,5 +1,5 @@
-import type { Annotation, Book, HighlightColor } from "../../../core";
-import { cn } from "../../../core";
+import type { Annotation, Book, HighlightColor } from "../../../core/types";
+import { cn } from "../../../core/lib/utils";
 import { getResolvedColor } from "./share-card-colors";
 
 interface ShareCardProps {

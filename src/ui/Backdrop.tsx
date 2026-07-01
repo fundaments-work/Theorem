@@ -3,7 +3,7 @@
  * Reusable backdrop for panels and modals
  */
 
-import { cn } from '../core';
+import { cn } from '../core/lib/utils';
 
 interface BackdropProps {
     visible: boolean;

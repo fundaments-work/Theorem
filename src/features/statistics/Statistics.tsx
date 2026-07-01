@@ -4,10 +4,9 @@
  */
 
 import { useState, useMemo } from "react";
-import { cn, normalizeAuthor } from "../../core";
-import { useLibraryStore, useSettingsStore, useUIStore } from "../../core";
-import { formatReadingTime } from "../../core";
-import type { DailyReadingActivity } from "../../core";
+import { cn, normalizeAuthor, formatReadingTime } from "../../core/lib/utils";
+import { useLibraryStore, useSettingsStore, useUIStore } from "../../core/store";
+import type { DailyReadingActivity } from "../../core/types";
 import {
     BookOpen,
     Clock,
@@ -228,9 +227,10 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivit
 
 // Main page component
 export function StatisticsPage() {
-    const { books, annotations } = useLibraryStore();
-    const { stats } = useSettingsStore();
-    const { setRoute } = useUIStore();
+    const books = useLibraryStore((state) => state.books);
+    const annotations = useLibraryStore((state) => state.annotations);
+    const stats = useSettingsStore((state) => state.stats);
+    const setRoute = useUIStore((state) => state.setRoute);
     const [showShareModal, setShowShareModal] = useState(false);
 
     const shareStatsData = useMemo(() => {

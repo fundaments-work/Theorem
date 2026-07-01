@@ -1,6 +1,11 @@
-import { useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "../core";
+import { cn } from "../core/lib/utils";
+
+const ModalHeaderIdContext = createContext<string | undefined>(undefined);
+
+const FOCUSABLE_SELECTOR =
+    'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export interface ModalProps {
     isOpen: boolean;
@@ -9,6 +14,7 @@ export interface ModalProps {
     className?: string;
     size?: "sm" | "md" | "lg" | "xl" | "fullscreen";
     showCloseButton?: boolean;
+    ariaLabelledby?: string;
 }
 
 const sizeClasses = {
@@ -30,15 +36,80 @@ export function Modal({
     children,
     className,
     size = "md",
+    ariaLabelledby,
 }: ModalProps) {
+    const dialogRef = useRef<HTMLDivElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLElement | null>(null);
+    const autoHeaderId = useId();
+    const headerId = ariaLabelledby || autoHeaderId;
 
     useEffect(() => {
-        if (!isOpen) return;
+        if (isOpen) {
+            triggerRef.current = document.activeElement as HTMLElement;
+        }
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            if (triggerRef.current) {
+                try {
+                    triggerRef.current.focus();
+                } catch {
+                    // element may have been removed from DOM
+                }
+                triggerRef.current = null;
+            }
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            const dialog = dialogRef.current;
+            if (!dialog) return;
+            const focusable = dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+            if (focusable.length > 0) {
+                focusable[0].focus();
+            } else {
+                dialog.focus();
+            }
+        }, 0);
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === "Escape") {
                 onClose();
+                return;
+            }
+
+            if (e.key !== "Tab") return;
+
+            const dialog = dialogRef.current;
+            if (!dialog) return;
+
+            const focusable = dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+            if (focusable.length === 0) {
+                e.preventDefault();
+                return;
+            }
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (!dialog.contains(document.activeElement)) {
+                e.preventDefault();
+                first.focus();
+                return;
+            }
+
+            if (e.shiftKey) {
+                if (document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                }
+            } else {
+                if (document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
             }
         };
 
@@ -48,19 +119,28 @@ export function Modal({
             }
         };
 
-        // Lock body scroll when modal is open
         document.body.style.overflow = "hidden";
-
-        // Add event listeners
         document.addEventListener("keydown", handleKeyDown);
         document.addEventListener("mousedown", handleClickOutside);
 
         return () => {
+            clearTimeout(timer);
             document.body.style.overflow = "";
             document.removeEventListener("keydown", handleKeyDown);
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, [isOpen, onClose]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const main = document.querySelector("main") || document.getElementById("root");
+        if (main) {
+            main.setAttribute("aria-hidden", "true");
+            return () => {
+                main.removeAttribute("aria-hidden");
+            };
+        }
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -75,14 +155,20 @@ export function Modal({
             }}
         >
             <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={headerId}
+                tabIndex={-1}
                 className={cn(
-                    "flex w-full max-h-[var(--layout-modal-max-height)] max-w-[var(--layout-modal-width-md)] flex-col overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)]",
+                    "flex w-full max-h-[var(--layout-modal-max-height)] max-w-[var(--layout-modal-width-md)] flex-col overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)] outline-none",
                     sizeClasses[size],
                     className
                 )}
-                onClick={(e) => e.stopPropagation()}
             >
-                {children}
+                <ModalHeaderIdContext.Provider value={headerId}>
+                    {children}
+                </ModalHeaderIdContext.Provider>
             </div>
         </div>,
         document.body
@@ -96,9 +182,13 @@ interface ModalHeaderProps {
 }
 
 export function ModalHeader({ title, onClose, showCloseButton = true }: ModalHeaderProps) {
+    const headerId = useContext(ModalHeaderIdContext);
     return (
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
-            <h2 className="text-base font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-primary)]">
+            <h2
+                id={headerId}
+                className="text-base font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-primary)]"
+            >
                 {title}
             </h2>
             {showCloseButton && onClose && (

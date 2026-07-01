@@ -4,7 +4,7 @@
  */
 
 import { Bookmark, X, Trash2, ExternalLink } from 'lucide-react';
-import { useLibraryStore } from "../../../core";
+import { useLibraryStore } from "../../../core/store";
 import { format } from 'date-fns';
 import { Backdrop, FloatingPanel } from "../../../ui";
 

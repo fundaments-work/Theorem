@@ -5,22 +5,11 @@ import {
     useRef,
     useState,
 } from "react";
-import {
-    Annotation,
-    cn,
-    HIGHLIGHT_COLOR_TOKENS,
-    useVocabularyStore,
-    useLibraryStore,
-    useSettingsStore,
-    vocabularyTermFromLookup,
-    type DictionaryLookupResult,
-    type DocLocation,
-    type DocMetadata,
-    type HighlightColor,
-    type ReaderSettings as ReaderSettingsState,
-    type RssArticle,
-    type TocItem,
-} from "../../../core";
+import { cn } from "../../../core/lib/utils";
+import { HIGHLIGHT_COLOR_TOKENS } from "../../../core/lib/design-tokens";
+import { vocabularyTermFromLookup, type DictionaryLookupResult } from "../../../core/services/DictionaryService";
+import { useVocabularyStore, useLibraryStore, useSettingsStore } from "../../../core/store";
+import type { Annotation, DocLocation, DocMetadata, HighlightColor, RssArticle, TocItem, ReaderSettings as ReaderSettingsState } from "../../../core/types";
 import { Backdrop } from "../../../ui";
 import {
     ReaderSearch,

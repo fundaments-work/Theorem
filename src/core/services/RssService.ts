@@ -6,8 +6,7 @@
 
 import type { RssFeed, RssArticle } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { Readability } from '@mozilla/readability';
-import { XMLParser } from 'fast-xml-parser';
+import type { XMLParser } from 'fast-xml-parser';
 import { isTauri } from '../lib/env';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -177,7 +176,8 @@ function putCachedResponse(
 
 // ── XML Parser Factory ──
 
-function createFeedParser(): XMLParser {
+async function createFeedParser(): Promise<XMLParser> {
+    const { XMLParser } = await import('fast-xml-parser');
     return new XMLParser({
         ignoreAttributes: false,
         attributeNamePrefix: '@_',
@@ -672,7 +672,7 @@ function parseRdfFeed(root: FeedNode): ParsedFeed {
 
 // ── Main Feed Dispatcher ──
 
-function parseFeedXml(xmlText: string): ParsedFeed {
+async function parseFeedXml(xmlText: string): Promise<ParsedFeed> {
     // HTML detection.
     if (isHtmlContent(xmlText)) {
         const feedUrl = extractFeedUrlFromHtml(xmlText);
@@ -696,7 +696,7 @@ function parseFeedXml(xmlText: string): ParsedFeed {
     if (jsonFeed) return jsonFeed;
 
     // Parse XML.
-    const parser = createFeedParser();
+    const parser = await createFeedParser();
     let parsed: FeedNode;
     try {
         parsed = parser.parse(xmlText);
@@ -922,7 +922,8 @@ function selectArticleRoot(doc: Document): HTMLElement | null {
     return bestCandidate;
 }
 
-function extractArticleContentWithReadability(html: string, articleUrl: string): ExtractedArticleContent | null {
+async function extractArticleContentWithReadability(html: string, articleUrl: string): Promise<ExtractedArticleContent | null> {
+    const { Readability } = await import('@mozilla/readability');
     const domParser = new DOMParser();
     const metaDoc = domParser.parseFromString(html, 'text/html');
     const readabilityDoc = domParser.parseFromString(html, 'text/html');
@@ -1064,7 +1065,7 @@ async function fetchUrlContent(url: string): Promise<string> {
 export async function fetchAndExtractArticleContent(articleUrl: string): Promise<ExtractedArticleContent> {
     await articleRateLimiter.acquire();
     const htmlText = await fetchUrlContent(articleUrl);
-    const extracted = extractArticleContentWithReadability(htmlText, articleUrl)
+    const extracted = await extractArticleContentWithReadability(htmlText, articleUrl)
         || extractArticleContentFallback(htmlText, articleUrl);
     if (!extracted) {
         throw new Error('Could not extract full article content from source page.');
@@ -1168,7 +1169,7 @@ export async function fetchAndParseFeed(
                     newText = await newResponse.text();
                 }
                 if (!isHtmlContent(newText)) {
-                    const parsed = parseFeedXml(newText);
+                    const parsed = await parseFeedXml(newText);
                     const { articles, ...feedMeta } = parsed;
                     return { feed: feedMeta, articles };
                 }
@@ -1191,7 +1192,7 @@ export async function fetchAndParseFeed(
                     guessText = await guessRes.text();
                 }
                 if (!isHtmlContent(guessText)) {
-                    const parsed = parseFeedXml(guessText);
+                    const parsed = await parseFeedXml(guessText);
                     const { articles, ...feedMeta } = parsed;
                     return { feed: feedMeta, articles };
                 }
@@ -1201,7 +1202,7 @@ export async function fetchAndParseFeed(
         }
     }
 
-    const parsed = parseFeedXml(xmlText);
+    const parsed = await parseFeedXml(xmlText);
     const { articles, ...feedMeta } = parsed;
     return { feed: feedMeta, articles };
 }

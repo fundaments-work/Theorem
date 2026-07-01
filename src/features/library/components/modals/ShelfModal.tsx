@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-    cn,
-} from "../../../../core";
+import { cn } from "../../../../core/lib/utils";
 import { Modal, ModalBody, ModalFooter } from "../../../../ui";
 
 interface ShelfModalProps {
@@ -50,10 +48,11 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                 <ModalBody>
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1.5">
+                            <label htmlFor="shelf-name" className="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1.5">
                                 Name
                             </label>
                             <input
+                                id="shelf-name"
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
@@ -64,10 +63,11 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1.5">
+                            <label htmlFor="shelf-description" className="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1.5">
                                 Description <span className="text-[color:var(--color-text-muted)] font-normal">(optional)</span>
                             </label>
                             <textarea
+                                id="shelf-description"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Add a description for this shelf..."

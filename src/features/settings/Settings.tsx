@@ -6,26 +6,24 @@
 import { useRef, useState, useEffect, type ChangeEvent } from "react";
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { cn } from "../../core";
+import { cn, normalizeFilePath, formatFileSize } from "../../core/lib/utils";
+import { isMobile, isTauri, isTauriDesktop } from "../../core/lib/env";
 import {
     showOpenDirectoryDialog,
     showSaveFileDialog,
-    syncVaultMarkdownSnapshot,
-    exportUnifiedSyncBundle,
-    estimateSyncBundleSizeBytes,
-    isMobile,
-    isTauri,
-    isTauriDesktop,
-    normalizeFilePath,
-    pickLibraryFolderMobile,
+    confirmClearAllData,
+    confirmRemoveDictionary,
+} from "../../core/lib/dialogs";
+import { syncVaultMarkdownSnapshot } from "../../core/lib/vault-sync";
+import { exportUnifiedSyncBundle, estimateSyncBundleSizeBytes } from "../../core/lib/sync-bundle";
+import { pickLibraryFolderMobile } from "../../core/lib/mobile-folder-scan";
+import {
     useVocabularyStore,
     useLibraryStore,
     useRssStore,
     useSettingsStore,
     useUIStore,
-} from "../../core";
-import { formatFileSize } from "../../core";
-import { confirmClearAllData, confirmRemoveDictionary } from "../../core";
+} from "../../core/store";
 import { clearAllApplicationStorage, getRssStorageStats } from "../../core/lib/storage-manager";
 import { DeviceSyncSection } from "./DeviceSync";
 import { DictionaryDownloadModal } from "./DictionaryDownloadModal";
@@ -96,14 +94,15 @@ function Section({ title, description, icon, children }: SectionProps) {
 interface SettingRowProps {
     label: string;
     description?: string;
+    htmlFor?: string;
     children: React.ReactNode;
 }
 
-function SettingRow({ label, description, children }: SettingRowProps) {
+function SettingRow({ label, description, htmlFor, children }: SettingRowProps) {
     return (
         <div className="grid gap-3 border-b border-[var(--color-border-subtle)] py-4 first:pt-0 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div className="w-full sm:flex-1 sm:pr-4">
-                <label className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
+                <label htmlFor={htmlFor} className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
                     {label}
                 </label>
                 {description && (
@@ -189,16 +188,15 @@ function ButtonSelect<T extends string>({
 
 // Main page component
 export function SettingsPage() {
-    const {
-        settings,
-        updateSettings,
-        updateVocabularySettings,
-        updateTtsSettings,
-        resetSettings,
-        stats,
-        updateStats,
-    } = useSettingsStore();
-    const { books, annotations } = useLibraryStore();
+    const settings = useSettingsStore((state) => state.settings);
+    const updateSettings = useSettingsStore((state) => state.updateSettings);
+    const updateVocabularySettings = useSettingsStore((state) => state.updateVocabularySettings);
+    const updateTtsSettings = useSettingsStore((state) => state.updateTtsSettings);
+    const resetSettings = useSettingsStore((state) => state.resetSettings);
+    const stats = useSettingsStore((state) => state.stats);
+    const updateStats = useSettingsStore((state) => state.updateStats);
+    const books = useLibraryStore((state) => state.books);
+    const annotations = useLibraryStore((state) => state.annotations);
     const articles = useRssStore((state) => state.articles);
     const highlightsExportName = normalizeHighlightsExportName(settings.vault.highlightsFileName);
     const primaryLibraryFolder = settings.scanFolders[0] || "";
@@ -207,7 +205,10 @@ export function SettingsPage() {
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
     const vaultSyncMessage = useUIStore((state) => state.vaultSyncMessage);
     const vaultSyncAt = useUIStore((state) => state.vaultSyncAt);
-    const { vocabularyTerms, installedDictionaries, importStarDict, removeDictionary } = useVocabularyStore();
+    const vocabularyTerms = useVocabularyStore((state) => state.vocabularyTerms);
+    const installedDictionaries = useVocabularyStore((state) => state.installedDictionaries);
+    const importStarDict = useVocabularyStore((state) => state.importStarDict);
+    const removeDictionary = useVocabularyStore((state) => state.removeDictionary);
     const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
         if (typeof window === "undefined") {
             return "general";
@@ -778,9 +779,11 @@ export function SettingsPage() {
                         <SettingRow
                             label="Daily Reading Goal"
                             description="Minutes to read each day"
+                            htmlFor="daily-goal"
                         >
                             <div className="flex items-center gap-2">
                                 <input
+                                    id="daily-goal"
                                     type="number"
                                     value={stats.dailyGoal}
                                     onChange={(e) => updateStats({ dailyGoal: Math.max(1, Math.min(180, parseInt(e.target.value) || 0)) })}
@@ -800,9 +803,11 @@ export function SettingsPage() {
                         <SettingRow
                             label="Yearly Book Goal"
                             description="Books to complete this year"
+                            htmlFor="yearly-book-goal"
                         >
                             <div className="flex items-center gap-2">
                                 <input
+                                    id="yearly-book-goal"
                                     type="number"
                                     value={stats.yearlyBookGoal}
                                     onChange={(e) => updateStats({ yearlyBookGoal: Math.max(1, Math.min(100, parseInt(e.target.value) || 0)) })}

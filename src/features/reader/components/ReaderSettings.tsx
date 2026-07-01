@@ -24,14 +24,8 @@ import {
     Settings2,
     ZoomIn,
 } from "lucide-react";
-import {
-    cn,
-    isFixedLayout,
-    type BookFormat,
-    type FontFamily,
-    type ReaderSettings as ReaderSettingsType,
-    type ReaderTheme,
-} from "../../../core";
+import { cn } from "../../../core/lib/utils";
+import { isFixedLayout, type BookFormat, type FontFamily, type ReaderSettings as ReaderSettingsType, type ReaderTheme } from "../../../core/types";
 import { Backdrop, FloatingPanel } from "../../../ui";
 
 interface ReaderSettingsProps {

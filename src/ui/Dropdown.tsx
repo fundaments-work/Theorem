@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
-import { cn } from "../core";
+import { cn } from "../core/lib/utils";
 
 export interface DropdownOption<T = string> {
     value: T;

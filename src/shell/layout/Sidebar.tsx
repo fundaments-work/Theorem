@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, type ReactNode, memo } from "react";
 import {
     BookOpenText,
     Bookmark,
@@ -10,9 +10,10 @@ import {
     Rss,
     Settings,
 } from "lucide-react";
-import { cn } from "../../core";
-import { useUIStore, useSettingsStore } from "../../core";
-import type { AppRoute } from "../../core";
+import { cn } from "../../core/lib/utils";
+import { useUIStore } from "../../core/store";
+import { useSettingsStore } from "../../core/store";
+import type { AppRoute } from "../../core/types";
 import { TheoremLogo } from "../TheoremLogo";
 
 interface SidebarItem {
@@ -35,7 +36,7 @@ interface SidebarProps {
     onClose?: () => void;
 }
 
-export function Sidebar({ isMobile, onClose }: SidebarProps) {
+export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps) {
     const currentRoute = useUIStore((state) => state.currentRoute);
     const setRoute = useUIStore((state) => state.setRoute);
     const sidebarOpen = useUIStore((state) => state.sidebarOpen);
@@ -224,4 +225,4 @@ export function Sidebar({ isMobile, onClose }: SidebarProps) {
             </div>
         </aside>
     );
-}
+});

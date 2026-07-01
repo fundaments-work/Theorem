@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     HIGHLIGHT_COLORS,
     getHighlightSolidColor,
-} from "../../../core";
-import { cn } from "../../../core";
-import type { Annotation, HighlightColor } from "../../../core";
+} from "../../../core/lib/design-tokens";
+import { cn } from "../../../core/lib/utils";
+import type { Annotation, HighlightColor } from "../../../core/types";
 
 interface Point {
     x: number;

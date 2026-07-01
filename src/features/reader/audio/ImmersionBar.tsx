@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play, Pause, Square, Headphones, Volume2, AlertCircle } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { cn, useSettingsStore } from '../../../core';
+import { cn } from '../../../core/lib/utils';
+import { useSettingsStore } from '../../../core/store';
 import { immersionPlayer, type PlaybackState } from '../audio/ImmersionPlayer';
 
 interface ImmersionBarProps {
@@ -324,7 +325,7 @@ export function ImmersionBar({
                 </div>
             </div>
 
-            {/* Error toast - floats above the bar */}
+                {/* Error toast - floats above the bar */}
             {hasError && (
                 <div className="fixed left-1/2 -translate-x-1/2 bottom-[3.5rem] z-50 pointer-events-none">
                     <div className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-error)]/50 shadow-lg">
@@ -333,6 +334,14 @@ export function ImmersionBar({
                     </div>
                 </div>
             )}
+
+            <div role="status" aria-live="polite" className="sr-only">
+                {playbackState === "loading" ? "Loading"
+                    : playbackState === "playing" ? "Playing"
+                    : playbackState === "paused" ? "Paused"
+                    : hasError ? "Error"
+                    : ""}
+            </div>
         </>
     );
 }

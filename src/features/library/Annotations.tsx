@@ -4,11 +4,11 @@
  */
 
 import { useState, useMemo } from "react";
-import { HIGHLIGHT_SOLID_COLORS } from "../../core";
-import { cn } from "../../core";
-import { rankByFuzzyQuery } from "../../core";
-import { useLibraryStore, useUIStore } from "../../core";
-import type { HighlightColor } from "../../core";
+import { cn } from "../../core/lib/utils";
+import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
+import { useLibraryStore, useUIStore } from "../../core/store";
+import { HIGHLIGHT_SOLID_COLORS } from "../../core/lib/design-tokens";
+import type { HighlightColor } from "../../core/types";
 import { EditNoteModal } from "./components/modals/EditNoteModal";
 import { Dropdown } from "../../ui";
 import {
@@ -202,12 +202,13 @@ const filterTabs = [
 
 // Main page component
 export function AnnotationsPage() {
-    const { annotations, books, removeAnnotation, updateAnnotation } = useLibraryStore();
-    const {
-        currentBookId,
-        setRoute,
-        searchQuery,
-    } = useUIStore();
+    const annotations = useLibraryStore((state) => state.annotations);
+    const books = useLibraryStore((state) => state.books);
+    const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
+    const updateAnnotation = useLibraryStore((state) => state.updateAnnotation);
+    const currentBookId = useUIStore((state) => state.currentBookId);
+    const setRoute = useUIStore((state) => state.setRoute);
+    const searchQuery = useUIStore((state) => state.searchQuery);
     const [activeFilter, setActiveFilter] = useState<"all" | "highlights" | "notes">("all");
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
     const [editingId, setEditingId] = useState<string | null>(null);

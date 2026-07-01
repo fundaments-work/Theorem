@@ -6,7 +6,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save } from 'lucide-react';
-import { cn } from "../../../../core";
+import { cn } from "../../../../core/lib/utils";
 
 interface NoteEditorProps {
     isOpen: boolean;

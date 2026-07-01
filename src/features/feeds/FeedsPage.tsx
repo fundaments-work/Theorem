@@ -5,10 +5,10 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { cn } from "../../core";
-import { isTauri } from "../../core";
-import { useRssStore } from "../../core";
-import type { RssFeed, RssArticle } from "../../core";
+import { cn } from "../../core/lib/utils";
+import { isTauri } from "../../core/lib/env";
+import { useRssStore } from "../../core/store";
+import type { RssFeed, RssArticle } from "../../core/types";
 import {
     Rss, Plus, RefreshCw, Trash2, Loader2,
     AlertCircle,

@@ -7,12 +7,12 @@
  * - Minimal re-renders through efficient change detection
  */
 
-import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState } from 'react';
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState, memo } from 'react';
 import { useDocumentReader } from '../hooks/useDocumentReader';
-import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, BookFormat } from '../../../core';
-import type { ReaderSettings } from '../../../core';
-import { cn } from '../../../core';
-import { getSettingsChanges, useSettingsStore } from '../../../core';
+import { cn } from "../../../core/lib/utils";
+import { getSettingsChanges } from "../../../core/lib/design-tokens";
+import { useSettingsStore } from "../../../core/store";
+import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, BookFormat, ReaderSettings } from "../../../core/types";
 import { immersionPlayer } from '../audio/ImmersionPlayer';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -66,7 +66,7 @@ interface ReaderViewportProps {
     nativeFilePath?: string;
 }
 
-export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportProps>(({
+export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewportProps>(({
     file,
     settings,
     format = 'epub',
@@ -87,6 +87,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
 
     // Navigation feedback state
     const [navDirection, setNavDirection] = useState<'next' | 'prev' | null>(null);
+    const [pageAnnouncement, setPageAnnouncement] = useState("");
     const navTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     
     // Engine update batching
@@ -142,7 +143,12 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     } = useDocumentReader({
         onReady,
         onLocationsGenerated: () => {},
-        onLocationChange,
+        onLocationChange: (loc) => {
+            if (loc.pageInfo) {
+                setPageAnnouncement(`Page ${loc.pageInfo.currentPage} of ${loc.pageInfo.totalPages}`);
+            }
+            onLocationChange?.(loc);
+        },
         onError,
         onTextSelected: onTextSelected ? (cfi, text, rangeOrEvent) => {
             onTextSelected(cfi, text, rangeOrEvent);
@@ -721,9 +727,13 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                     }}
                 />
             )}
+
+            <div role="status" aria-live="polite" className="sr-only">
+                {pageAnnouncement}
+            </div>
         </div>
     );
-});
+}));
 
 ReaderViewport.displayName = 'ReaderViewport';
 

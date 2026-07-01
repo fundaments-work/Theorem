@@ -1,11 +1,7 @@
-import {
-    FORMAT_DISPLAY_NAMES,
-    normalizeAuthor,
-    rankByFuzzyQuery,
-    type Book,
-    type LibrarySortBy,
-    type LibrarySortOrder,
-} from "../../core";
+import { FORMAT_DISPLAY_NAMES } from "../../core/types";
+import { normalizeAuthor } from "../../core/lib/utils";
+import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
+import type { Book, LibrarySortBy, LibrarySortOrder } from "../../core/types";
 
 export interface LibraryFilterOptions {
     books: Book[];

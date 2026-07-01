@@ -4,11 +4,12 @@
  */
 
 import { useState, useMemo } from "react";
-import { cn, normalizeAuthor } from "../../core";
-import { rankByFuzzyQuery } from "../../core";
-import { useLibraryStore, useUIStore } from "../../core";
+import { cn, normalizeAuthor } from "../../core/lib/utils";
+import { getShelfColor, getShelfInitials } from "../../core/lib/design-tokens";
+import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
+import { useLibraryStore, useUIStore } from "../../core/store";
+import { confirmRemoveFromShelf } from "../../core/lib/dialogs";
 import { ShelfModal } from "./components/modals/ShelfModal";
-import { getShelfColor, getShelfInitials } from "../../core";
 import {
     FolderOpen,
     Plus,
@@ -23,8 +24,7 @@ import {
     LayoutGrid,
     CloudOff,
 } from "lucide-react";
-import type { Book, Collection, LibraryViewMode } from "../../core";
-import { confirmRemoveFromShelf } from "../../core";
+import type { Book, Collection, LibraryViewMode } from "../../core/types";
 
 // View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
@@ -414,8 +414,9 @@ interface ShelfDetailProps {
 }
 
 function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
-    const { books, removeBookFromCollection } = useLibraryStore();
-    const { setRoute } = useUIStore();
+    const books = useLibraryStore((state) => state.books);
+    const removeBookFromCollection = useLibraryStore((state) => state.removeBookFromCollection);
+    const setRoute = useUIStore((state) => state.setRoute);
     const [viewMode, setViewMode] = useState<LibraryViewMode>("grid");
 
     // Get actual books that exist in the library
@@ -554,14 +555,12 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
 
 // Main page component
 export function ShelvesPage() {
-    const {
-        collections,
-        books,
-        addCollection,
-        removeCollection,
-        updateCollection,
-    } = useLibraryStore();
-    const { searchQuery } = useUIStore();
+    const collections = useLibraryStore((state) => state.collections);
+    const books = useLibraryStore((state) => state.books);
+    const addCollection = useLibraryStore((state) => state.addCollection);
+    const removeCollection = useLibraryStore((state) => state.removeCollection);
+    const updateCollection = useLibraryStore((state) => state.updateCollection);
+    const searchQuery = useUIStore((state) => state.searchQuery);
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingShelf, setEditingShelf] = useState<{ id: string; name: string; description?: string } | undefined>();

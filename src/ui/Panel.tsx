@@ -4,7 +4,7 @@
  * Theme-aware - adapts to reader theme colors
  */
 
-import { cn } from '../core';
+import { cn } from '../core/lib/utils';
 import { ReactNode } from 'react';
 
 export type PanelPosition = 'left' | 'right';

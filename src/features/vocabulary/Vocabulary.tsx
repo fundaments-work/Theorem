@@ -5,11 +5,9 @@ import {
     X,
     ChevronLeft,
 } from "lucide-react";
-import {
-    cn,
-} from "../../core";
-import { useVocabularyStore, useUIStore } from "../../core";
-import type { VocabularyTerm } from "../../core";
+import { cn } from "../../core/lib/utils";
+import { useVocabularyStore, useUIStore } from "../../core/store";
+import type { VocabularyTerm } from "../../core/types";
 
 function getTermPrimaryDefinition(term: VocabularyTerm): string {
     const firstMeaning = term.meanings[0];

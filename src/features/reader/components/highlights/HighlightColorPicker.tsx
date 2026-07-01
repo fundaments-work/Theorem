@@ -7,15 +7,15 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouse
 import { createPortal } from 'react-dom';
 import { Check, Loader2, ArrowLeft } from 'lucide-react';
 import { ask } from '@tauri-apps/plugin-dialog';
+import { cn } from "../../../../core/lib/utils";
 import {
-    cn,
     HIGHLIGHT_COLOR_TOKENS,
     HIGHLIGHT_PICKER_ACTIVE_COLORS,
     HIGHLIGHT_PICKER_COLORS,
-    isTauri,
-    type DictionaryLookupResult,
-    type HighlightColor,
-} from "../../../../core";
+} from "../../../../core/lib/design-tokens";
+import { isTauri } from "../../../../core/lib/env";
+import type { HighlightColor } from "../../../../core/types";
+import type { DictionaryLookupResult } from "../../../../core/services";
 
 interface HighlightDictionaryViewState {
     term: string;

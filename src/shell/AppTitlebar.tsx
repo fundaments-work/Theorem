@@ -3,7 +3,7 @@
  * Frameless window title bar with navigation, search, and window controls
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import type { KeyboardEvent } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
@@ -14,17 +14,12 @@ import {
     BarChart3,
     ArrowDownUp,
 } from "lucide-react";
-import {
-    cn,
-    getPairedDevices,
-    getSearchPlaceholder,
-    hasSearchDomain,
-    isMobile,
-    isTauri,
-    resolveSearchDomain,
-    runDeviceSync,
-    useUIStore,
-} from "../core";
+import { cn } from "../core/lib/utils";
+import { isMobile, isTauri } from "../core/lib/env";
+import { useUIStore } from "../core/store";
+import { getPairedDevices } from "../core/lib/device-sync";
+import { runDeviceSync } from "../core/lib/sync-orchestrator";
+import { getSearchPlaceholder, hasSearchDomain, resolveSearchDomain } from "../core/lib/search/domain";
 import { TheoremLogo } from "./TheoremLogo";
 
 interface AppTitlebarProps {
@@ -42,7 +37,7 @@ const TITLEBAR_CLOSE_BUTTON = `${TITLEBAR_WINDOW_BUTTON} hover:bg-[color:color-m
 const TITLEBAR_SEARCH_INPUT =
     "ui-input bg-[var(--color-surface)] pl-[calc(var(--control-padding-x)+var(--icon-size-sm)+var(--spacing-md))]";
 
-export function AppTitlebar({
+export const AppTitlebar = memo(function AppTitlebar({
     title,
     className,
 }: AppTitlebarProps) {
@@ -393,6 +388,12 @@ export function AppTitlebar({
                                 )}
                             </span>
                         </button>
+                        <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+                            {deviceSyncStatus === "syncing" ? "Syncing with remote device"
+                                : deviceSyncStatus === "synced" ? "Sync complete"
+                                : deviceSyncStatus === "error" ? `Sync error: ${deviceSyncStatus || ""}`
+                                : ""}
+                        </span>
                         {lastSyncedLabel && (
                             <span className="hidden lg:block text-xs text-[color:var(--color-text-tertiary)] whitespace-nowrap">
                                 {lastSyncedLabel}
@@ -491,6 +492,6 @@ export function AppTitlebar({
             )}
         </div>
     );
-}
+});
 
 export default AppTitlebar;

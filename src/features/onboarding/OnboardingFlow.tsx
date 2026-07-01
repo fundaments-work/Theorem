@@ -7,7 +7,7 @@ import {
     ArrowRight,
     ArrowLeft,
 } from "lucide-react";
-import { cn } from "../../core";
+import { cn } from "../../core/lib/utils";
 import { TheoremLogo } from "../../shell/TheoremLogo";
 
 interface OnboardingFlowProps {

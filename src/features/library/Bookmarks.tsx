@@ -4,10 +4,10 @@
  */
 
 import { useState, useMemo } from "react";
-import { cn } from "../../core";
-import { rankByFuzzyQuery } from "../../core";
-import { useLibraryStore, useUIStore } from "../../core";
-import { confirmDeleteBookmark } from "../../core";
+import { cn } from "../../core/lib/utils";
+import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
+import { useLibraryStore, useUIStore } from "../../core/store";
+import { confirmDeleteBookmark } from "../../core/lib/dialogs";
 import { Dropdown } from "../../ui";
 import {
     Bookmark,
@@ -200,8 +200,11 @@ function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: Bo
 
 // Main page component
 export function BookmarksPage() {
-    const { annotations, books, removeAnnotation } = useLibraryStore();
-    const { setRoute, searchQuery } = useUIStore();
+    const annotations = useLibraryStore((state) => state.annotations);
+    const books = useLibraryStore((state) => state.books);
+    const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
+    const setRoute = useUIStore((state) => state.setRoute);
+    const searchQuery = useUIStore((state) => state.searchQuery);
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
     const bookLookup = useMemo(

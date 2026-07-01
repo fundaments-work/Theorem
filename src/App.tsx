@@ -2,24 +2,14 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react"
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { RouteErrorBoundary, KeyboardShortcutsHelp } from "./ui";
 import { AppTitlebar, Sidebar, BottomNav } from "./shell";
-import {
-    useUIStore,
-    useLibraryStore,
-    useSettingsStore,
-    isTauriDesktop,
-    isTauri,
-    isMobile,
-    initReaderStyles,
-    ensureResponderSyncReady,
-    startAutoSync,
-    importBooksIncremental,
-    getBookFormat,
-    isImportFormatSupported,
-    normalizeFilePath,
-    registerShortcuts,
-    useKeyboardShortcuts,
-    initI18n,
-} from "./core";
+import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
+import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
+import { initReaderStyles } from "./core/lib/design-tokens";
+import { ensureResponderSyncReady, startAutoSync } from "./core/lib/sync-orchestrator";
+import { importBooksIncremental, getBookFormat, isImportFormatSupported } from "./core/lib/import";
+import { normalizeFilePath } from "./core/lib/utils";
+import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
+import { initI18n } from "./core/lib/i18n";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 import { OnboardingFlow } from "./features/onboarding";
 

@@ -7,9 +7,9 @@ import {
     Pencil,
     Edit3
 } from "lucide-react";
-import { cn } from "../../../core";
-import { HIGHLIGHT_SOLID_COLORS } from "../../../core";
-import type { HighlightColor } from "../../../core";
+import { cn } from "../../../core/lib/utils";
+import { HIGHLIGHT_SOLID_COLORS } from "../../../core/lib/design-tokens";
+import type { HighlightColor } from "../../../core/types";
 
 interface PDFFloatingToolbarProps {
     annotationMode: 'none' | 'highlight' | 'pen' | 'text' | 'erase';

@@ -1,5 +1,6 @@
 import { Calendar, ExternalLink, Globe, User, X } from "lucide-react";
-import { isTauri, type RssArticle } from "../../../core";
+import { isTauri } from "../../../core/lib/env";
+import type { RssArticle } from "../../../core/types";
 import { FloatingPanel } from "../../../ui";
 import { formatArticleDate } from "./utils";
 

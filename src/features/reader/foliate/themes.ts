@@ -3,7 +3,8 @@
  * Ported from Foliate GTK app
  */
 
-import { getThemeColors, type ReaderTheme } from "../../../core";
+import { getThemeColors } from "../../../core/lib/design-tokens";
+import type { ReaderTheme } from "../../../core/types";
 
 export interface ThemeColors {
     fg: string;

@@ -6,8 +6,8 @@
 
 import { useCallback, useMemo, useState, useRef, memo } from "react";
 import { List } from "lucide-react";
-import { cn } from "../../../../core";
-import type { TocItem, DocLocation } from "../../../../core";
+import { cn } from "../../../../core/lib/utils";
+import type { TocItem, DocLocation } from "../../../../core/types";
 
 interface ReaderNavbarProps {
     location: DocLocation | null;

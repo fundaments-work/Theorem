@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, Check, AlertCircle, X } from "lucide-react";
 import { Modal, ModalHeader, ModalBody } from "../../ui";
-import { cn, isTauri } from "../../core";
-import { useVocabularyStore } from "../../core";
+import { cn } from "../../core/lib/utils";
+import { isTauri } from "../../core/lib/env";
+import { useVocabularyStore } from "../../core/store";
 
 interface DictEntry {
     name: string;

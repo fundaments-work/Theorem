@@ -3,41 +3,25 @@
  * Book management and import with right-click context menu, filtering, and sorting
  */
 
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import {
-    cn,
-    normalizeFilePath,
-    normalizeAuthor,
-    saveCoverImage,
-    buildFallbackCoverSvg,
-    shouldUseExtractedTitle,
-    shouldUseExtractedAuthor,
-} from "../../core";
-import { useLibraryStore, useUIStore, useSettingsStore } from "../../core";
-import { formatProgress, formatFileSize, formatRelativeDate } from "../../core";
-import {
-    ensureFilenameForFormat,
-    extractFilenameFromPath,
-    pickLibraryFolderMobile,
-    importBooksIncremental,
-    pickAndImportBooksIncremental,
-    scanLibraryFolderMobile,
-    scanFolderForBooks,
-} from "../../core";
+import { useState, useCallback, useEffect, useRef, useMemo, memo } from "react";
+import { cn, normalizeFilePath, normalizeAuthor, formatProgress, formatFileSize, formatRelativeDate } from "../../core/lib/utils";
+import { saveCoverImage, getBookData } from "../../core/lib/storage";
+import { buildFallbackCoverSvg, shouldUseExtractedTitle, shouldUseExtractedAuthor } from "../../core/lib/cover-extractor";
+import { ensureFilenameForFormat, extractFilenameFromPath, importBooksIncremental, pickAndImportBooksIncremental, scanFolderForBooks } from "../../core/lib/import";
+import { pickLibraryFolderMobile, scanLibraryFolderMobile } from "../../core/lib/mobile-folder-scan";
+import { isMobile, isTauri } from "../../core/lib/env";
+import { confirmDeleteBook, showOpenDirectoryDialog } from "../../core/lib/dialogs";
+import { useLibraryStore, useUIStore, useSettingsStore } from "../../core/store";
+import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "../../core/types";
+import { FORMAT_DISPLAY_NAMES } from "../../core/types";
 import {
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
     ChevronDown, Star, Check, CloudOff, Pencil
 } from "lucide-react";
-import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "../../core";
-import { FORMAT_DISPLAY_NAMES } from "../../core";
-import { isMobile, isTauri } from "../../core";
-import { getBookData } from "../../core";
 import { ContextMenu } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
 import { Modal, ModalBody, ModalFooter } from "../../ui";
-import { confirmDeleteBook } from "../../core";
-import { showOpenDirectoryDialog } from "../../core";
 import { getFilteredAndSortedBooks } from "./filtering";
 
 // View mode icons
@@ -53,7 +37,7 @@ const TOOLBAR_BUTTON_PRIMARY =
     "ui-btn-primary disabled:opacity-50";
 const TOOLBAR_ICON_BUTTON = "h-10 w-10 px-0";
 
-type ExtractMetadataFn = typeof import("../../core").extractMetadata;
+type ExtractMetadataFn = typeof import("../../core/lib/cover-extractor").extractMetadata;
 
 const IMPORT_METADATA_TIMEOUT_MS = isMobile() ? 9000 : 6000;
 const IMPORT_COVER_TIMEOUT_MS = isMobile() ? 7000 : 4000;
@@ -62,7 +46,7 @@ let extractMetadataPromise: Promise<ExtractMetadataFn> | null = null;
 
 async function getExtractMetadataFn(): Promise<ExtractMetadataFn> {
     if (!extractMetadataPromise) {
-        extractMetadataPromise = import("../../core").then(
+        extractMetadataPromise = import("../../core/lib/cover-extractor").then(
             (module) => module.extractMetadata,
         );
     }
@@ -212,7 +196,16 @@ function BookCard({
             <ContextMenu items={contextMenuItems}>
                 <div
                     className="group flex flex-col text-left w-full select-none"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open ${book.title}`}
                     onClick={handleCardClick}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onOpenBook(book);
+                        }
+                    }}
                 >
                     {/* Cover Image */}
                     <div
@@ -285,7 +278,16 @@ function BookCard({
             <ContextMenu items={contextMenuItems}>
                 <div
                     className="group flex w-full items-center gap-3 p-3 transition-colors hover:bg-[var(--color-surface-muted)] sm:gap-4 cursor-pointer select-none"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open ${book.title}`}
                     onClick={handleCardClick}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onOpenBook(book);
+                        }
+                    }}
                 >
                     {/* Cover Image */}
                     <div className={cn(
@@ -366,6 +368,15 @@ function BookCard({
             <div
                 onClick={handleCardClick}
                 className="group relative aspect-[2/3] bg-[var(--color-surface-muted)] overflow-hidden border border-[var(--color-border)] hover:shadow-lg transition-all duration-200 w-full cursor-pointer select-none"
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${book.title}`}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onOpenBook(book);
+                    }
+                }}
             >
                 {book.coverPath ? (
                     <img
@@ -412,6 +423,14 @@ function BookCard({
         </ContextMenu>
     );
 }
+
+export const MemoizedBookCard = memo(BookCard, (prev, next) => {
+    return prev.book.id === next.book.id &&
+        prev.book.progress === next.book.progress &&
+        prev.book.isFavorite === next.book.isFavorite &&
+        prev.book.coverPath === next.book.coverPath &&
+        prev.viewMode === next.viewMode;
+});
 
 // Empty State Component
 function EmptyLibrary({
@@ -772,8 +791,10 @@ export function LibraryPage() {
     const addBookToCollection = useLibraryStore((state) => state.addBookToCollection);
     const addCollection = useLibraryStore((state) => state.addCollection);
 
-    const { setRoute, searchQuery } = useUIStore();
-    const { settings, updateSettings } = useSettingsStore();
+    const setRoute = useUIStore((state) => state.setRoute);
+    const searchQuery = useUIStore((state) => state.searchQuery);
+    const settings = useSettingsStore((state) => state.settings);
+    const updateSettings = useSettingsStore((state) => state.updateSettings);
 
     const [isImporting, setIsImporting] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
@@ -1544,7 +1565,7 @@ export function LibraryPage() {
                         ) : settings.libraryViewMode === "list" ? (
                             <div className="space-y-1 pb-8">
                                 {sortedBooks.map((book) => (
-                                    <BookCard
+                                    <MemoizedBookCard
                                         key={book.id}
                                         book={book}
                                         viewMode={settings.libraryViewMode}
@@ -1561,7 +1582,7 @@ export function LibraryPage() {
                         ) : settings.libraryViewMode === "compact" ? (
                             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 pb-8">
                                 {sortedBooks.map((book) => (
-                                    <BookCard
+                                    <MemoizedBookCard
                                         key={book.id}
                                         book={book}
                                         viewMode={settings.libraryViewMode}
@@ -1578,7 +1599,7 @@ export function LibraryPage() {
                         ) : (
                             <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 pb-8">
                                 {sortedBooks.map((book) => (
-                                    <BookCard
+                                    <MemoizedBookCard
                                         key={book.id}
                                         book={book}
                                         viewMode={settings.libraryViewMode}

@@ -31,13 +31,14 @@ import {
     memo,
 } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { cn, isTauri, isWebKitBrowserEngine } from "../../../core";
+import { cn } from "../../../core/lib/utils";
+import { isTauri, isWebKitBrowserEngine } from "../../../core/lib/env";
 import { configurePdfJsWorker } from "../../../core/lib/pdfjs-runtime";
-import { rankByFuzzyQuery } from "../../../core";
+import { rankByFuzzyQuery } from "../../../core/lib/search/fuzzy";
 import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import type { Annotation, HighlightColor, PdfZoomMode, SearchResult, TocItem } from "../../../core";
+import type { Annotation, HighlightColor, PdfZoomMode, SearchResult, TocItem } from "../../../core/types";
 import { PDFAnnotationLayer } from "../components/PDFAnnotationLayer";
 
 import "./pdfjs-engine.css";
@@ -1098,7 +1099,7 @@ function findPageForScrollCenter(pageLayout: PageLayoutEntry[], centerY: number)
 
 // ─── PDFJsEngine ─────────────────────────────────────────────────────────────
 
-export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
+export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
     function PDFJsEngine({
         pdfPath, pdfData, originalFilename,
         initialPage = 1, initialZoom = DEFAULT_SCALE, initialZoomMode = DEFAULT_ZOOM_MODE,
@@ -2080,6 +2081,6 @@ export const PDFJsEngine = forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             </div>
         );
     }
-);
+));
 
 export default PDFJsEngine;
