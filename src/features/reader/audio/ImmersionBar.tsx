@@ -37,6 +37,7 @@ export function ImmersionBar({
     const errorTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const initializedRef = useRef(false);
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
+    const ttsSpeed = useSettingsStore((s) => s.settings.tts.speed);
     const updateTtsSettings = useSettingsStore((s) => s.updateTtsSettings);
 
     const showError = useCallback(() => {
@@ -111,6 +112,9 @@ export function ImmersionBar({
         clearError();
         console.time('[ImmersionBar] play→genId');
 
+        // Apply the current speed setting before starting playback (#27).
+        immersionPlayer.speed = ttsSpeed;
+
         if (playbackState === 'paused') {
             await immersionPlayer.resume();
             setIsContinuousMode(true);
@@ -142,7 +146,7 @@ export function ImmersionBar({
             setPlaybackState('idle');
             setIsContinuousMode(false);
         }
-    }, [sectionText, startWordId, playbackState, ttsVoice]);
+    }, [sectionText, startWordId, playbackState, ttsVoice, ttsSpeed, immersionPlayer]);
 
     const handlePause = useCallback(async () => {
         await immersionPlayer.pause();

@@ -143,26 +143,33 @@ export class ImmersionPlayer {
         for (const ul of this.unlisteners) ul();
         this.unlisteners = [];
 
-        const u1 = await listen<TtsChunkPayload>('audio-chunk', (event) => {
-            const p = event.payload;
-            if (p.generation_id === this.preloadGenId && !this.isPlayingPreload) {
-                this.bufferChunk(p);
-            } else if (p.generation_id === this.currentGenId) {
-                this.handleChunk(p).catch(e => {
-                    console.error('[ImmersionPlayer] handleChunk error:', e);
-                });
-            }
-        });
-        const u2 = await listen<{ message: string }>('tts-error', (event) => {
-            this.callbacks.onError?.(event.payload.message);
-            this.setState('idle');
-        });
-        const u3 = await listen<{ total_chunks: number }>('tts-done', (event) => {
-            this.totalChunks = event.payload.total_chunks;
-            this.callbacks.onSynthesisComplete?.();
-        });
+        try {
+            const u1 = await listen<TtsChunkPayload>('audio-chunk', (event) => {
+                const p = event.payload;
+                if (p.generation_id === this.preloadGenId && !this.isPlayingPreload) {
+                    this.bufferChunk(p);
+                } else if (p.generation_id === this.currentGenId) {
+                    this.handleChunk(p).catch(e => {
+                        console.error('[ImmersionPlayer] handleChunk error:', e);
+                    });
+                }
+            });
+            const u2 = await listen<{ message: string }>('tts-error', (event) => {
+                this.callbacks.onError?.(event.payload.message);
+                this.setState('idle');
+            });
+            const u3 = await listen<{ total_chunks: number }>('tts-done', (event) => {
+                this.totalChunks = event.payload.total_chunks;
+                this.callbacks.onSynthesisComplete?.();
+            });
 
-        this.unlisteners = [u1, u2, u3];
+            this.unlisteners = [u1, u2, u3];
+        } catch (e) {
+            // Tauri event listeners unavailable (web, Android with
+            // no ONNX runtime, etc.). The TTS button will show an
+            // error on first play attempt.
+            this.unlisteners = [];
+        }
     }
 
     /** Pre-create the AudioContext within a user-gesture context.

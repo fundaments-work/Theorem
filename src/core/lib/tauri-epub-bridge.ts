@@ -11,6 +11,10 @@ export interface EpubPrefetchResult {
     ncx?: string;
     encryption?: string;
     sizes: Record<string, number>;
+    /** All HTML/XHTML section files pre-decoded (href → text).
+     *  These go into textCache so loadText for every section returns
+     *  instantly without touching zip.js at all. */
+    sections?: Record<string, string>;
 }
 
 export interface PrefetchCache {
@@ -50,6 +54,13 @@ export async function tryNativePrefetchEpub(path: string): Promise<PrefetchCache
         }
         if (result.encryption) {
             textCache.set('META-INF/encryption.xml', result.encryption);
+        }
+        // Pre-decoded HTML section files — loadText() returns these
+        // instantly, skipping zip.js entirely for the critical path.
+        if (result.sections) {
+            for (const [href, text] of Object.entries(result.sections)) {
+                textCache.set(href, text);
+            }
         }
 
         const sizes = new Map<string, number>(Object.entries(result.sizes));

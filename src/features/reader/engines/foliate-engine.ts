@@ -1100,6 +1100,9 @@ export class FoliateEngine {
         if (!this.isFixedLayoutFormat) {
             this.view.renderer?.render?.();
         }
+        // Re-apply zoom to the new document after navigation — the 'load'
+        // event listener fires with a stale zoom_level during swipe bursts.
+        this.applyZoomSync();
     }
 
     async goToFraction(fraction: number): Promise<void> {
@@ -1114,6 +1117,7 @@ export class FoliateEngine {
         if (!this.isFixedLayoutFormat) {
             this.view.renderer?.render?.();
         }
+        this.applyZoomSync();
     }
 
     async next(distance?: number): Promise<void> {

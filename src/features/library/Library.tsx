@@ -103,6 +103,10 @@ function BookCard({
     const clickCountRef = useRef(0);
     const isCompleted = isBookMarkedRead(book);
     const updateBook = useLibraryStore((state) => state.updateBook);
+    const collections = useLibraryStore((state) => state.collections);
+    const removeBookFromCollection = useLibraryStore((state) => state.removeBookFromCollection);
+
+    const bookShelves = collections.filter((c) => c.bookIds.includes(book.id));
 
     const handleCardClick = () => {
         clickCountRef.current += 1;
@@ -159,6 +163,13 @@ function BookCard({
             icon: <BookMarked className="w-4 h-4" />,
             onClick: () => onAddToShelf(book.id),
         },
+        // Show which shelves this book belongs to with one-click removal (#26)
+        ...bookShelves.map((shelf) => ({
+            id: `shelf-${shelf.id}`,
+            label: `Remove from "${shelf.name}"`,
+            icon: <BookMarked className="w-4 h-4" />,
+            onClick: () => removeBookFromCollection(shelf.id, book.id),
+        })),
         {
             id: "separator1",
             label: "",

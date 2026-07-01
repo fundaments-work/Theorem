@@ -62,6 +62,38 @@ pub fn prefetch_zip_metadata(path: String) -> Result<ZipPrefetch, String> {
     //    If any step fails the command still succeeds with the sizes map alone.
     let epub = read_epub_metadata(&mut archive);
 
+    // 3. Pre-load HTML/XHTML section content so JS never touches zip.js
+    //    for the critical path. For a typical 20-section epub this adds
+    //    ~400 KB — far less than the 2-10 MB `read_file` IPC it replaces.
+    let mut sections: HashMap<String, String> = HashMap::new();
+    let section_exts = [".html", ".htm", ".xhtml", ".xml"];
+    for (name, size) in &sizes {
+        if *size == 0 || *size > 200_000 {
+            continue;
+        } // skip empty or huge
+        let lower = name.to_lowercase();
+        if !section_exts.iter().any(|e| lower.ends_with(e)) {
+            continue;
+        }
+        // Don't re-read files already in the epub metadata fields.
+        if epub.as_ref().map_or(false, |e| {
+            e.nav_path.as_deref() == Some(name.as_str())
+                || e.ncx_path.as_deref() == Some(name.as_str())
+                || e.opf_path == *name
+        }) {
+            continue;
+        }
+        if name == "META-INF/container.xml" || name == "META-INF/encryption.xml" {
+            continue;
+        }
+        if sections.len() >= 100 {
+            break;
+        }
+        if let Some(text) = read_zip_text(&mut archive, name) {
+            sections.insert(name.clone(), text);
+        }
+    }
+
     Ok(ZipPrefetch {
         container: epub.as_ref().and_then(|e| e.container.clone()),
         opf_path: epub.as_ref().map(|e| e.opf_path.clone()),
@@ -72,6 +104,7 @@ pub fn prefetch_zip_metadata(path: String) -> Result<ZipPrefetch, String> {
         ncx: epub.as_ref().and_then(|e| e.ncx.clone()),
         encryption: epub.as_ref().and_then(|e| e.encryption.clone()),
         sizes,
+        sections,
     })
 }
 
@@ -148,4 +181,7 @@ pub struct ZipPrefetch {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encryption: Option<String>,
     pub sizes: HashMap<String, u64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    #[serde(default)]
+    pub sections: HashMap<String, String>,
 }
