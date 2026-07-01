@@ -2135,7 +2135,10 @@ function BookReaderPage() {
             </div>
 
             {/* Reader Viewport - fills entire area, bars overlay on top */}
-            <div className="absolute inset-0 overflow-hidden">
+            <div className={cn(
+                "absolute inset-0 overflow-hidden",
+                immersionMode && "pb-16 sm:pb-14",
+            )}>
                 {isPdfFormat ? (
                     <PDFReader
                         ref={pdfReaderRef}
@@ -2226,7 +2229,10 @@ function BookReaderPage() {
                         "fixed left-0 right-0 z-50 flex justify-center pointer-events-none transition-all duration-300",
                         "bottom-0"
                     )}>
-                        <div className={immersionMode ? "pointer-events-auto" : "pointer-events-none"}>
+                        <div className={cn(
+                            immersionMode ? "pointer-events-auto" : "pointer-events-none",
+                            "w-full sm:w-auto",
+                        )}>
                             <ImmersionBar 
                                 sectionText={ttsData?.text || ""}
                                 startWordId={ttsData?.startWordId}

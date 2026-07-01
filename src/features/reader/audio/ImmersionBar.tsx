@@ -208,8 +208,11 @@ export function ImmersionBar({
             <div
                 className={cn(
                     'flex items-center gap-2 sm:gap-1.5 overflow-x-auto',
-                    'w-full sm:w-auto sm:px-4 py-3 px-3 sm:py-2.5',
-                    'sm:rounded-full rounded-t-xl rounded-b-none',
+                    'w-full px-4 sm:w-auto sm:px-4',
+                    'py-3 sm:py-2.5',
+                    'sm:rounded-full rounded-xl',
+                    'mx-0 sm:mx-0',
+                    'mb-0 sm:mb-0',
                     'bg-[var(--color-surface)]/95 backdrop-blur-xl',
                     'border border-[var(--color-border)]',
                     'shadow-[0_8px_32px_rgba(0,0,0,0.18)]',
@@ -217,7 +220,7 @@ export function ImmersionBar({
                     !visible && 'opacity-0 pointer-events-none translate-y-4',
                     className,
                 )}
-                style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+                style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))', marginBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
             >
                 {/* Icon + status */}
                 <div className="flex items-center gap-2 shrink-0">
