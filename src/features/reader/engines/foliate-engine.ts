@@ -337,7 +337,8 @@ export class FoliateEngine {
         flow: ReadingFlow = 'paged',
         zoom: number = 100,
         _margins: number = 10,
-        format: BookFormat = 'epub'
+        format: BookFormat = 'epub',
+        nativeFilePath?: string,
     ): Promise<void> {
         // Store format for format-specific behavior
         this.format = format;
@@ -361,7 +362,10 @@ export class FoliateEngine {
                 file = new File([buffer], _filename, { type: 'application/epub+zip' });
             }
             
-            this.book = await makeBook(file);
+            this.book = await makeBook(file,
+                nativeFilePath ? import('../../../core/lib/tauri-epub-bridge')
+                    .then(m => m.tryNativePrefetchEpub(nativeFilePath)) : undefined
+            );
             this.searchSectionCache = null;
             this.searchCacheBookRef = this.book;
 

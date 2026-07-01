@@ -1,4 +1,5 @@
 mod database;
+mod epub_parser;
 mod sync_commands;
 mod sync_crypto;
 mod sync_protocol;
@@ -955,6 +956,7 @@ pub fn run() {
             tts::cancel_tts_model_download,
             tts::get_tts_model_status,
             tts::delete_tts_model,
+            epub_parser::parse_epub_full,
             read_file,
             read_cbr_as_cbz,
             read_pdf_file,

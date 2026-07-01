@@ -45,7 +45,7 @@ export interface UseDocumentReaderReturn {
     canGoForward: boolean;
 
     // Actions
-    open: (source: File | Blob | ArrayBuffer | string, filename?: string, initialLocation?: string, layout?: PageLayout, savedLocations?: string, flow?: ReadingFlow, zoom?: number, margins?: number, format?: BookFormat) => Promise<void>;
+    open: (source: File | Blob | ArrayBuffer | string, filename?: string, initialLocation?: string, layout?: PageLayout, savedLocations?: string, flow?: ReadingFlow, zoom?: number, margins?: number, format?: BookFormat, nativeFilePath?: string) => Promise<void>;
     goTo: (target: string | number) => Promise<void>;
     goToFraction: (fraction: number) => Promise<void>;
     next: (distance?: number) => Promise<void>;
@@ -248,7 +248,8 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         flow: ReadingFlow = 'paged',
         zoom: number = 100,
         margins: number = 10,
-        format: BookFormat = 'epub'
+        format: BookFormat = 'epub',
+        nativeFilePath?: string,
     ) => {
         const engine = engineRef.current;
         if (!engine) {
@@ -273,7 +274,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         setError(null);
 
         try {
-            await engine.open(source, filename, initialLocation, layout, savedLocations, flow, zoom, margins, format);
+            await engine.open(source, filename, initialLocation, layout, savedLocations, flow, zoom, margins, format, nativeFilePath);
             if (!abortController.signal.aborted && mountedRef.current) {
                 setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
                 setInitState(prev => ({ ...prev, isLoading: false }));

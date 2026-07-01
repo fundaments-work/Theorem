@@ -2166,6 +2166,7 @@ function BookReaderPage() {
                         format={currentBook?.format}
                         initialLocation={initialLocation}
                         savedLocations={getBook(currentBookId || '')?.locations}
+                        nativeFilePath={currentBook?.storagePath || currentBook?.filePath}
                         onReady={handleReady}
                         onLocationChange={handleLocationChange}
                         onLocationsSaved={handleLocationsSaved}

@@ -62,6 +62,8 @@ interface ReaderViewportProps {
     onZoomGestureChange?: (zoom: number) => void;
     initialLocation?: string;
     savedLocations?: string;
+    /** Native filesystem path for Rust EPUB prefetch (desktop/mobile Tauri only) */
+    nativeFilePath?: string;
 }
 
 export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportProps>(({
@@ -79,6 +81,7 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
     onZoomGestureChange,
     initialLocation,
     savedLocations,
+    nativeFilePath,
 }, ref) => {
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
 
@@ -216,7 +219,8 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                     settings.flow,
                     settings.zoom,
                     settings.margins,
-                    format
+                    format,
+                    nativeFilePath
                 );
                 
                 if (!cancelled) {
