@@ -42,7 +42,12 @@ src/
     statistics/                   # Reading stats
     onboarding/                   # First-run onboarding flow
 src-tauri/
+  Cargo.toml                      # Workspace root (members: theorem, theorem-sync-core, sync-daemon)
   src/lib.rs                      # Tauri commands and runtime bootstrap
+  src/main.rs                     # Entry point (calls theorem_lib::run())
+  crates/
+    theorem-sync-core/            # Shared sync library (crypto, protocol, embedded HTTP server)
+    sync-daemon/                  # Standalone background sync daemon (sidecar)
   tauri.conf.json                 # Window config, CSP, bundling resources
 ```
 
