@@ -334,36 +334,36 @@ function App() {
         void initFingerprint();
     }, []);
 
-    // Keep responder sync infrastructure ready globally so incoming peer sync
-    // can merge without requiring users to open the Settings screen.
-    // Also start auto-sync (startup, periodic, visibility-change, tray).
-    // Deferred by several seconds to avoid competing with the initial render
-    // and UI shell setup, which causes noticeable startup lag.
+    // Start the sync responder server on app launch so peers can push
+    // data to us immediately. This runs regardless of autoSyncEnabled
+    // because the responder (incoming sync) should always be available.
+    // The auto-sync scheduler (outgoing) is only started if enabled.
     useEffect(() => {
         if (!isTauri() || !hasCompletedOnboarding) {
-            return;
-        }
-
-        const syncSettings = useSettingsStore.getState().settings.deviceSync;
-        if (!syncSettings.autoSyncEnabled) {
             return;
         }
 
         let cancelled = false;
         const bootstrap = async () => {
             if (cancelled) return;
+            // Step 1: Always start the sync server + provision data.
+            // This lets peers reach us even if auto-sync is off.
             try {
                 await ensureResponderSyncReady();
-            } catch (error) {
-                if (!cancelled) {
-                }
+            } catch {
+                // Sync server unavailable on this device.
             }
-            if (!cancelled) {
+            // Step 2: Start auto-sync scheduler if enabled.
+            const syncSettings = useSettingsStore.getState().settings.deviceSync;
+            if (cancelled || !syncSettings.autoSyncEnabled) {
+                return;
+            }
+            try {
                 await startAutoSync();
+            } catch {
+                // Auto-sync scheduling unavailable.
             }
-            // Push data to Rust sync server and start background sync scheduler.
-            // This keeps sync running even when the app is backgrounded (Android)
-            // or supplements JS timers on desktop.
+            // Step 3: Push data to Rust server + start background sync.
             if (!cancelled) {
                 try {
                     const { provisionSyncData } = await import("./core/lib/sync-orchestrator");
@@ -371,14 +371,14 @@ function App() {
                     const { startBackgroundSync } = await import("./core/lib/device-sync");
                     await startBackgroundSync(300);
                 } catch {
-                    // Background sync not available (non-Tauri).
+                    // Background sync not available on this platform.
                 }
             }
         };
 
         const timer = setTimeout(() => {
             void bootstrap();
-        }, 5000);
+        }, 2000);
 
         return () => {
             cancelled = true;

@@ -870,6 +870,7 @@ pub fn run() {
             });
             app.manage(tts::ModelState::new());
 
+            // TTS model download (all platforms, background).
             let downloads_app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let model_state = downloads_app.state::<tts::ModelState>();
@@ -879,16 +880,25 @@ pub fn run() {
                 }
             });
 
-            let tts_app = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let tts_state = tts_app.state::<tts::TtsState>();
-                tts::prewarm_engine(&tts_app, tts_state.inner()).await;
-            });
+            // TTS engine prewarm (desktop only — on mobile the engine is
+            // loaded lazily on first speech request to avoid the Kokoro ONNX
+            // init time pushing startup past Android's ANR timeout).
+            #[cfg(not(target_os = "android"))]
+            {
+                let tts_app = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let tts_state = tts_app.state::<tts::TtsState>();
+                    tts::prewarm_engine(&tts_app, tts_state.inner()).await;
+                });
+            }
 
             // Initialize LAN sync subsystem.
+            // On Android, app_data_dir can fail to resolve, so we try
+            // multiple fallback paths before giving up.
             let app_data_dir = app
                 .path()
                 .app_data_dir()
+                .or_else(|_| app.path().app_cache_dir())
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
 
             let device_name = std::env::var("HOSTNAME")
@@ -901,6 +911,9 @@ pub fn run() {
                 }
                 Err(e) => {
                     eprintln!("[theorem] Warning: Failed to initialize sync: {}", e);
+                    // Sync features will be unavailable but the app won't crash
+                    // — sync commands use get_sync_state() which returns a
+                    // clean error instead of panicking.
                 }
             }
 
@@ -1028,6 +1041,9 @@ pub fn run() {
             set_android_fingerprint,
             start_android_sync_worker,
             stop_android_sync_worker,
+            update_sync_notification,
+            schedule_sync_work,
+            cancel_sync_work,
             hide_to_tray,
             download_and_extract_stardict,
         ])
@@ -1087,6 +1103,109 @@ async fn stop_android_sync_worker(app: tauri::AppHandle) -> Result<(), String> {
     }
     let _ = &app;
     Ok(())
+}
+
+/// Update the Android sync notification text.
+#[tauri::command]
+async fn update_sync_notification(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    tauri_plugin_android_sync_worker::update_notification(&app, &text)?;
+    Ok(())
+}
+
+/// Schedule periodic WorkManager background sync (Android).
+#[tauri::command]
+async fn schedule_sync_work(app: tauri::AppHandle) -> Result<(), String> {
+    tauri_plugin_android_sync_worker::schedule_periodic_sync(&app)?;
+    eprintln!("[sync] Periodic WorkManager sync scheduled");
+    Ok(())
+}
+
+/// Cancel periodic WorkManager background sync (Android).
+#[tauri::command]
+async fn cancel_sync_work(app: tauri::AppHandle) -> Result<(), String> {
+    tauri_plugin_android_sync_worker::cancel_periodic_sync(&app)?;
+    eprintln!("[sync] Periodic WorkManager sync cancelled");
+    Ok(())
+}
+
+/// Standalone background sync round — called from WorkManager via JNI.
+/// Uses the proper JNI naming convention so Android can find it.
+/// Runs without the Tauri runtime: loads sync identity, starts the
+/// sync server, waits for incoming syncs for 3 min, then shuts down.
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgroundSync(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    j_data_dir: jni::objects::JString,
+) -> jni::sys::jboolean {
+    let data_dir_str: String = match env.get_string(&j_data_dir) {
+        Ok(s) => s.into(),
+        Err(_) => ".".to_string(),
+    };
+
+    let data_dir = std::path::PathBuf::from(&data_dir_str);
+    eprintln!("[background-sync] JNI sync round in {}", data_dir_str);
+
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(e) => {
+            eprintln!("[background-sync] Failed to create runtime: {}", e);
+            return 0;
+        }
+    };
+
+    let result = rt.block_on(async {
+        let identity =
+            match theorem_sync_core::sync_crypto::DeviceIdentity::load_or_create(&data_dir) {
+                Ok(id) => id,
+                Err(e) => {
+                    eprintln!("[background-sync] Failed to load identity: {}", e);
+                    return false;
+                }
+            };
+
+        let paired_devices = theorem_sync_core::sync_server::load_paired_devices(&data_dir);
+
+        let server_state = std::sync::Arc::new(theorem_sync_core::sync_server::SyncServerState {
+            identity,
+            device_name: "Theorem Device".to_string(),
+            paired_devices: tokio::sync::Mutex::new(paired_devices),
+            app_data_dir: data_dir,
+            pending_pairing: tokio::sync::Mutex::new(None),
+            sync_data: tokio::sync::Mutex::new(None),
+            event_emitter: None,
+        });
+
+        let handle = match theorem_sync_core::sync_server::start_server(server_state).await {
+            Ok(h) => {
+                eprintln!("[background-sync] Server listening on {}", h.addr);
+                h
+            }
+            Err(e) => {
+                eprintln!("[background-sync] Failed to start server: {}", e);
+                return false;
+            }
+        };
+
+        tokio::time::sleep(std::time::Duration::from_secs(180)).await;
+
+        handle.shutdown_notify.notify_one();
+        eprintln!("[background-sync] JNI sync round complete");
+        true
+    });
+
+    if result {
+        1
+    } else {
+        0
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+#[no_mangle]
+pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgroundSync() -> u8 {
+    0
 }
 
 /// Hide the main window to the system tray.

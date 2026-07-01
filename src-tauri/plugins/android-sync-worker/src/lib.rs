@@ -1,12 +1,13 @@
 use tauri::{
     plugin::{Builder, TauriPlugin},
-    Runtime,
+    AppHandle, Runtime,
 };
 
 #[cfg(target_os = "android")]
-use serde::{Deserialize, Serialize};
+use tauri::Manager;
+
 #[cfg(target_os = "android")]
-use tauri::{AppHandle, Manager};
+use serde::{Deserialize, Serialize};
 
 #[cfg(target_os = "android")]
 const PLUGIN_IDENTIFIER: &str = "work.fundamentals.theorem.syncworker";
@@ -14,6 +15,15 @@ const PLUGIN_IDENTIFIER: &str = "work.fundamentals.theorem.syncworker";
 #[cfg(target_os = "android")]
 struct SyncWorkerPluginState<R: Runtime> {
     handle: tauri::plugin::PluginHandle<R>,
+}
+
+/// Safely retrieve the plugin state without panicking.
+#[cfg(target_os = "android")]
+fn get_worker_state<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<tauri::State<'_, SyncWorkerPluginState<R>>, String> {
+    app.try_state::<SyncWorkerPluginState<R>>()
+        .ok_or_else(|| "Android sync worker plugin is not initialized.".to_string())
 }
 
 #[cfg(target_os = "android")]
@@ -57,7 +67,7 @@ pub fn start_worker<R: Runtime>(
     notification_text: &str,
     sync_interval_secs: u64,
 ) -> Result<(), String> {
-    let state = app.state::<SyncWorkerPluginState<R>>();
+    let state = get_worker_state(app)?;
     state
         .handle
         .run_mobile_plugin::<WorkerStatusResponse>(
@@ -76,10 +86,62 @@ pub fn start_worker<R: Runtime>(
 /// On non-Android platforms this is a no-op.
 #[cfg(target_os = "android")]
 pub fn stop_worker<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    let state = app.state::<SyncWorkerPluginState<R>>();
+    let state = get_worker_state(app)?;
     state
         .handle
         .run_mobile_plugin::<WorkerStatusResponse>("stopWorker", serde_json::json!({}))
         .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+/// Update the sync notification text on Android.
+/// On non-Android platforms this is a no-op.
+#[cfg(target_os = "android")]
+pub fn update_notification<R: Runtime>(app: &AppHandle<R>, text: &str) -> Result<(), String> {
+    let state = get_worker_state(app)?;
+    state
+        .handle
+        .run_mobile_plugin::<WorkerStatusResponse>(
+            "updateNotification",
+            serde_json::json!({ "text": text }),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn update_notification<R: Runtime>(_app: &AppHandle<R>, _text: &str) -> Result<(), String> {
+    Ok(())
+}
+
+/// Schedule periodic WorkManager sync on Android.
+#[cfg(target_os = "android")]
+pub fn schedule_periodic_sync<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let state = get_worker_state(app)?;
+    state
+        .handle
+        .run_mobile_plugin::<WorkerStatusResponse>("schedulePeriodicSync", serde_json::json!({}))
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn schedule_periodic_sync<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
+    Ok(())
+}
+
+/// Cancel periodic WorkManager sync on Android.
+#[cfg(target_os = "android")]
+pub fn cancel_periodic_sync<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let state = get_worker_state(app)?;
+    state
+        .handle
+        .run_mobile_plugin::<WorkerStatusResponse>("cancelPeriodicSync", serde_json::json!({}))
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn cancel_periodic_sync<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
     Ok(())
 }

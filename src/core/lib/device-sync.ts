@@ -245,20 +245,31 @@ export async function pullBookCovers(
 
 /**
  * Start the background sync scheduler (Rust-side periodic timer).
- * On Android, also starts the ForegroundService to keep the process alive.
+ * On Android, also starts the ForegroundService to keep the process alive
+ * when the app is backgrounded. Uses the "connectedDevice" foreground
+ * service type on Android 14+ (same as KDE Connect) which is not
+ * aggressively blocked by MIUI/Xiaomi.
  * @param intervalSecs How often to sync (default 300 = 5 min, min 60).
  */
 export async function startBackgroundSync(intervalSecs?: number): Promise<void> {
     requireTauri("startBackgroundSync");
-    await invoke("start_background_sync", { intervalSecs: intervalSecs ?? 300 });
+    const interval = intervalSecs ?? 300;
+    await invoke("start_background_sync", { intervalSecs: interval });
 
-    // On Android, also start the ForegroundService.
+    // On Android, start the ForegroundService + schedule WorkManager.
     if (isMobile()) {
         try {
             await invoke("start_android_sync_worker");
+            await updateSyncNotification(
+                `Ready — auto-sync every ${Math.round(interval / 60)} min`,
+            );
         } catch {
-            // ForegroundService not available (or desktop fallback).
+            // ForegroundService not available or denied.
         }
+        // Schedule WorkManager as a fallback — survives app kill.
+        // WorkManager fires every 15 min and runs a standalone sync
+        // round via JNI even if the Tauri process was killed.
+        await schedulePeriodicSyncWork();
     }
 }
 
@@ -273,6 +284,37 @@ export async function stopBackgroundSync(): Promise<void> {
         } catch {
             // ForegroundService not available.
         }
+        await cancelPeriodicSyncWork();
+    }
+}
+
+/** Update the sync notification text on Android (shows what's being synced). */
+export async function updateSyncNotification(text: string): Promise<void> {
+    if (!isMobile()) return;
+    try {
+        await invoke("update_sync_notification", { text });
+    } catch {
+        // Notification update not available.
+    }
+}
+
+/** Schedule periodic WorkManager background sync (survives app kill). */
+export async function schedulePeriodicSyncWork(): Promise<void> {
+    if (!isMobile()) return;
+    try {
+        await invoke("schedule_sync_work");
+    } catch {
+        // WorkManager not available.
+    }
+}
+
+/** Cancel periodic WorkManager background sync. */
+export async function cancelPeriodicSyncWork(): Promise<void> {
+    if (!isMobile()) return;
+    try {
+        await invoke("cancel_sync_work");
+    } catch {
+        // WorkManager not available.
     }
 }
 

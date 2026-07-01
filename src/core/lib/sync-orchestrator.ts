@@ -20,6 +20,7 @@ import {
     pullBookCovers,
     discoverPeer,
     getPairedDevices,
+    updateSyncNotification,
 } from "./device-sync";
 import {
     isDaemonRunning,
@@ -82,6 +83,10 @@ function setStatus(status: DeviceSyncStatus, msg?: string) {
         msg,
         status === "synced" ? new Date().toISOString() : undefined,
     );
+    // Update Android notification so the user sees what's being synced.
+    if (msg) {
+        void updateSyncNotification(msg);
+    }
 }
 
 /** Guards concurrent responder bootstrap attempts. */

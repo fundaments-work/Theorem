@@ -72,12 +72,26 @@ pub fn init_sync(
     })
 }
 
+/// Safely retrieve the sync state without panicking.
+///
+/// `app.state::<SyncAppState>()` panics if the state was never registered
+/// (which happens when `init_sync` fails during app startup — common on
+/// Android when `app_data_dir` resolution fails). This helper returns a
+/// clean `Err` instead so the frontend gets a graceful IPC rejection rather
+/// than a native panic that tears down the process.
+fn get_sync_state(app: &tauri::AppHandle) -> Result<tauri::State<'_, SyncAppState>, String> {
+    app.try_state::<SyncAppState>().ok_or_else(|| {
+        "Sync subsystem is not initialized. Sync features are unavailable on this device."
+            .to_string()
+    })
+}
+
 // ─── Tauri Commands ───
 
 /// Start the sync server and return its address info.
 #[tauri::command]
 pub async fn start_sync_server(app: tauri::AppHandle) -> Result<SyncServerInfo, String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
     let mut handle_guard = sync_state.server_handle.lock().await;
 
     if let Some(ref handle) = *handle_guard {
@@ -106,7 +120,7 @@ pub async fn start_sync_server(app: tauri::AppHandle) -> Result<SyncServerInfo, 
 /// Stop the sync server.
 #[tauri::command]
 pub async fn stop_sync_server(app: tauri::AppHandle) -> Result<(), String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
     let mut handle_guard = sync_state.server_handle.lock().await;
 
     if let Some(handle) = handle_guard.take() {
@@ -122,7 +136,7 @@ pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData,
     // Ensure server is running.
     let server_info = start_sync_server(app.clone()).await?;
 
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
 
     // Generate ephemeral keypair for this pairing session.
     // We use a StaticSecret here so we can store the bytes for later use.
@@ -183,7 +197,7 @@ pub async fn submit_pairing_code(
         ));
     }
 
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
 
     // Decode host's ephemeral public key and nonce.
     let host_public_bytes: [u8; 32] = hex::decode(&qr_payload.ephemeral_public_key)
@@ -303,7 +317,7 @@ pub async fn submit_pairing_code(
 /// Get this device's identity info.
 #[tauri::command]
 pub async fn get_device_identity(app: tauri::AppHandle) -> Result<DeviceIdentityInfo, String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
     Ok(DeviceIdentityInfo {
         device_id: sync_state.server_state.identity.device_id.clone(),
         device_name: sync_state.server_state.device_name.clone(),
@@ -315,7 +329,7 @@ pub async fn get_device_identity(app: tauri::AppHandle) -> Result<DeviceIdentity
 /// Get the list of paired devices.
 #[tauri::command]
 pub async fn get_paired_devices(app: tauri::AppHandle) -> Result<Vec<PairedDeviceInfo>, String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
     let devices = sync_state.server_state.paired_devices.lock().await;
     Ok(devices.values().map(PairedDeviceInfo::from).collect())
 }
@@ -334,7 +348,7 @@ pub async fn set_device_fingerprint(fingerprint: String) -> Result<(), String> {
 /// Remove a paired device.
 #[tauri::command]
 pub async fn unpair_device(app: tauri::AppHandle, device_id: String) -> Result<(), String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
     let mut devices = sync_state.server_state.paired_devices.lock().await;
 
     if devices.remove(&device_id).is_none() {
@@ -353,7 +367,7 @@ pub async fn set_sync_data(
     domains_map: HashMap<String, String>,
     manifest_map: HashMap<String, DomainVersion>,
 ) -> Result<(), String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
 
     let mut sync_data = sync_state.server_state.sync_data.lock().await;
     *sync_data = Some(SyncDataSnapshot {
@@ -369,7 +383,7 @@ pub async fn set_sync_data(
 /// Clears the incoming data after reading.
 #[tauri::command]
 pub async fn get_incoming_sync_data(app: tauri::AppHandle) -> Result<String, String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
     let mut sync_data = sync_state.server_state.sync_data.lock().await;
 
     let mut incoming: HashMap<String, String> = HashMap::new();
@@ -404,7 +418,7 @@ pub async fn update_peer_address(
     ip: String,
     port: u16,
 ) -> Result<(), String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
     let mut devices = sync_state.server_state.paired_devices.lock().await;
 
     if let Some(device) = devices.get_mut(&device_id) {
@@ -435,7 +449,7 @@ pub async fn discover_peer(
     app: tauri::AppHandle,
     peer_device_id: String,
 ) -> Result<(String, u16), String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
 
     let devices = sync_state.server_state.paired_devices.lock().await;
     let peer = devices
@@ -538,7 +552,7 @@ async fn discover_peer_port(
     ip: &str,
     last_known_port: u16,
 ) -> Result<(String, u16), String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
     let discovery_client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(1500))
         .build()
@@ -686,7 +700,7 @@ pub async fn initiate_sync(
     app: tauri::AppHandle,
     peer_device_id: String,
 ) -> Result<String, String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
 
     let devices = sync_state.server_state.paired_devices.lock().await;
     let mut peer = devices
@@ -995,7 +1009,7 @@ pub async fn pull_book_files(
     peer_device_id: String,
     book_ids: Vec<String>,
 ) -> Result<FileTransferResult, String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
 
     // Look up peer and derive key.
     let devices = sync_state.server_state.paired_devices.lock().await;
@@ -1328,7 +1342,7 @@ pub async fn pull_book_covers(
     peer_device_id: String,
     book_ids: Vec<String>,
 ) -> Result<CoverTransferResult, String> {
-    let sync_state = app.state::<SyncAppState>();
+    let sync_state = get_sync_state(&app)?;
 
     let devices = sync_state.server_state.paired_devices.lock().await;
     let peer = devices
@@ -1519,7 +1533,13 @@ pub async fn start_background_sync(
         loop {
             tokio::select! {
                 _ = timer.tick() => {
-                    let sync_state = app_clone.state::<SyncAppState>();
+                    let sync_state = match get_sync_state(&app_clone) {
+                        Ok(s) => s,
+                        Err(_) => {
+                            eprintln!("[background-sync] Sync not initialized, skipping round");
+                            continue;
+                        }
+                    };
 
                     // Get all paired device IDs.
                     let peer_ids: Vec<String> = {

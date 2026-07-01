@@ -18,3 +18,4 @@ base64 = "0.22"
 hex = "0.4"
 sha2 = "0.10"
 axum = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }
