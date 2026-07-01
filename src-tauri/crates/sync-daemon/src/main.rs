@@ -186,6 +186,10 @@ async fn main() {
 
 fn build_control_router(state: Arc<DaemonState>) -> axum::Router {
     use axum::routing::{get, post};
+    let cors = tower_http::cors::CorsLayer::new()
+        .allow_origin(tower_http::cors::Any)
+        .allow_methods(tower_http::cors::Any)
+        .allow_headers(tower_http::cors::Any);
     axum::Router::new()
         .route("/daemon/health", get(handle_health))
         .route("/daemon/status", get(handle_status))
@@ -193,6 +197,7 @@ fn build_control_router(state: Arc<DaemonState>) -> axum::Router {
         .route("/daemon/set-sync-data", post(handle_set_sync_data))
         .route("/daemon/configure", post(handle_configure))
         .route("/daemon/shutdown", post(handle_shutdown))
+        .layer(cors)
         .with_state(state)
 }
 
