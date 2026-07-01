@@ -663,11 +663,13 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
                 </div>
             )}
 
-            {/* Container with brightness filter applied via CSS variable */}
+            {/* Container with brightness filter applied via CSS filter.
+                 Full-bleed (inset-0) so brightness covers the entire viewport
+                 edge-to-edge without a visible seam. */}
             <div
                 ref={containerRef}
                 className={cn(
-                    'absolute inset-2 transition-opacity duration-300 z-0 reader-viewport',
+                    'absolute inset-0 transition-opacity duration-300 z-0 reader-viewport',
                     isLoading ? 'opacity-0' : 'opacity-100',
                 )}
                 style={{ 
