@@ -90,5 +90,23 @@ else
     echo "  ✓ No vendor/pdfjs references remain"
 fi
 
+# Apply runtime patches
+echo "Applying runtime patches..."
+PATCHES=(
+    "view-js-runtime.patch:view.js patched (prefetchPromise, parallel zip loading)"
+    "epub-js-runtime.patch:epub.js patched (in-flight loadText dedup)"
+    "dict-js-runtime.patch:dict.js patched (StarDict gzip/dictzip loading)"
+    "paginator-js-runtime.patch:paginator.js patched (overflow:clip, transform pagination)"
+)
+for entry in "${PATCHES[@]}"; do
+    file="${entry%%:*}"
+    msg="${entry#*:}"
+    patch -d "$RUNTIME_DIR" -p0 < "$REPO_ROOT/scripts/patches/$file" || {
+        echo "ERROR: $file patch failed" >&2
+        exit 1
+    }
+    echo "  ✓ $msg"
+done
+
 echo "Sync complete. Runtime at: $RUNTIME_DIR"
 echo "Size: $(du -sh "$RUNTIME_DIR" | cut -f1)"

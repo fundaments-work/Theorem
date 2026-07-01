@@ -1,0 +1,272 @@
+--- paginator.js	2026-07-01 01:59:25.627504908 +0545
++++ paginator.js	2026-07-01 10:34:58.717410450 +0545
+@@ -449,6 +449,18 @@
+     #touchState
+     #touchScrolled
+     #lastVisibleRange
++    // Timestamp until which text selection is considered active.
++    // Set on every non-collapsed selectionchange so drag-select keeps
++    // the flag alive; expires 1.5s after the last selection change.
++    // Used to suppress touch swipe page-turns while the user is selecting.
++    #selectionActiveUntil = 0
++    // Abstract scroll position for paginated mode. With #container set to
++    // `overflow: clip` it can no longer be scrolled (even programmatically),
++    // so pages are panned via `transform` on the view element. This field
++    // holds the offset that *would* have been #container[scrollProp]; all
++    // navigation math (start/end/page/snap/scrollBy) reads it instead of
++    // the inert scrollLeft/scrollTop. (#20 structural fix.)
++    #pageOffset = 0
+     constructor() {
+         super()
+         this.#root.innerHTML = `<style>
+@@ -499,18 +511,24 @@
+                 }
+             }
+         }
+-        #background {
++         #background {
+             grid-column: 1 / -1;
+             grid-row: 1 / -1;
+         }
+         #container {
+             grid-column: 2 / 5;
+             grid-row: 2;
+-            overflow: hidden;
++            /* clip (not hidden) makes #container a non-scroll container:
++             * scrollLeft/scrollTop become inert, so Android WebView's
++             * OS-level auto-scroll during native text selection can no
++             * longer move the page (#20). Pages are instead positioned
++             * via transform on the view element (#setViewPosition). */
++            overflow: clip;
+         }
+         :host([flow="scrolled"]) #container {
+             grid-column: 1 / -1;
+             grid-row: 1 / -1;
++            /* scrolled mode keeps real scrolling */
+             overflow: auto;
+         }
+         #header {
+@@ -583,15 +601,6 @@
+                 else setSelectionTo(this.#anchor, -1)
+             }
+         })
+-        const checkPointerSelection = debounce((range, sel) => {
+-            if (!sel.rangeCount) return
+-            const selRange = sel.getRangeAt(0)
+-            const backward = selectionIsBackward(sel)
+-            if (backward && selRange.compareBoundaryPoints(Range.START_TO_START, range) < 0)
+-                this.prev()
+-            else if (!backward && selRange.compareBoundaryPoints(Range.END_TO_END, range) > 0)
+-                this.next()
+-        }, 700)
+         this.addEventListener('load', ({ detail: { doc } }) => {
+             let isPointerSelecting = false
+             doc.addEventListener('pointerdown', () => isPointerSelecting = true)
+@@ -599,24 +608,51 @@
+             let isKeyboardSelecting = false
+             doc.addEventListener('keydown', () => isKeyboardSelecting = true)
+             doc.addEventListener('keyup', () => isKeyboardSelecting = false)
++            // NOTE: checkPointerSelection intentionally disabled.
++            // Upstream foliate navigates to the adjacent page when a pointer
++            // drag extends the selection past the visible column. On mobile
++            // with CSS columns splitting a section across pages this fires
++            // far too eagerly — selecting text near a column edge grabs the
++            // adjacent page's content and triggers an unwanted page turn.
++            const checkPointerSelection = debounce((_range, _sel) => {}, 700)
+             doc.addEventListener('selectionchange', () => {
+                 if (this.scrolled) return
+-                const range = this.#lastVisibleRange
+-                if (!range) return
+                 const sel = doc.getSelection()
+-                if (!sel.rangeCount) return
+-                if (isPointerSelecting && sel.type === 'Range')
+-                    checkPointerSelection(range, sel)
++                if (!sel?.rangeCount) return
++                // Keep the touch-swipe page-turn suppression flag alive while
++                // the user is actively selecting text. Without it, the
++                // touchend after a drag-to-select would flip the page. The
++                // flag expires 1.5s after the last selection change so taps
++                // and swipes work again afterwards.
++                if (!sel.isCollapsed && sel.toString().trim().length > 0) {
++                    this.#selectionActiveUntil = Date.now() + 1500
++                }
++                if (isPointerSelecting && sel.type === 'Range') {
++                    const range = this.#lastVisibleRange
++                    if (range) checkPointerSelection(range, sel)
++                }
+                 else if (isKeyboardSelecting) {
++                    const range = this.#lastVisibleRange
++                    if (!range) return
+                     const selRange = sel.getRangeAt(0).cloneRange()
+                     const backward = selectionIsBackward(sel)
+                     if (!backward) selRange.collapse()
+                     this.#scrollToAnchor(selRange)
+                 }
+             })
+-            doc.addEventListener('focusin', e => this.scrolled ? null :
++            doc.addEventListener('focusin', e => {
++                if (this.scrolled) return
++                // Never scroll to the document body or root — when the
++                // browser refocuses the iframe during text selection on
++                // mobile, scrolling to the body would jump to page 1.
++                if (e.target === doc.body || e.target === doc.documentElement) return
++                // Don't scroll to the focused element while the user is
++                // actively selecting text with a pointer (touch/mouse).
++                if (isPointerSelecting) return
++                if (Date.now() < this.#selectionActiveUntil) return
+                 // NOTE: `requestAnimationFrame` is needed in WebKit
+-                requestAnimationFrame(() => this.#scrollToAnchor(e.target)))
++                requestAnimationFrame(() => this.#scrollToAnchor(e.target))
++            })
+         })
+ 
+         this.#mediaQueryListener = () => {
+@@ -779,7 +815,12 @@
+         return this.#view.element.getBoundingClientRect()[this.sideProp]
+     }
+     get start() {
+-        return Math.abs(this.#container[this.scrollProp])
++        // Scrolled mode keeps a real scroll container; paginated mode
++        // reads the abstract offset (#container is overflow:clip and
++        // cannot be scrolled, even programmatically).
++        return this.scrolled
++            ? Math.abs(this.#container[this.scrollProp])
++            : Math.abs(this.#pageOffset)
+     }
+     get end() {
+         return this.start + this.size
+@@ -790,16 +831,46 @@
+     get pages() {
+         return Math.round(this.viewSize / this.size)
+     }
++    // Position the page in paginated mode without scrolling #container
++    // (which is overflow:clip and inert). Pans the wide view element via
++    // transform; the visual result is identical to the old scrollLeft set.
++    #setViewPosition(offset) {
++        const prev = this.#pageOffset
++        this.#pageOffset = offset
++        const el = this.#view?.element
++        if (el) {
++            const axis = this.#vertical ? 'Y' : 'X'
++            // Smooth page-turn flip for single-adjacent page moves; instant
++            // for jump navigation (goTo, scrollToAnchor, initial load).
++            const isFlip = !this.scrolled
++                && !this.getAttribute('animated')
++                && Math.abs(offset - prev) === this.size
++            if (isFlip) {
++                el.style.transition = 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)'
++            } else {
++                el.style.transition = 'none'
++            }
++            el.style.transform = `translate${axis}(${-offset}px)`
++        }
++        this.dispatchEvent(new Event('scroll'))
++    }
+     scrollBy(dx, dy) {
+         const delta = this.#vertical ? dy : dx
+-        const element = this.#container
+-        const { scrollProp } = this
+         const [offset, a, b] = this.#scrollBounds
+         const rtl = this.#rtl
+         const min = rtl ? offset - b : offset - a
+         const max = rtl ? offset + a : offset + b
+-        element[scrollProp] = Math.max(min, Math.min(max,
+-            element[scrollProp] + delta))
++        if (this.scrolled) {
++            const element = this.#container
++            const { scrollProp } = this
++            element[scrollProp] = Math.max(min, Math.min(max,
++                element[scrollProp] + delta))
++        } else {
++            // Paginated: #container is non-scrollable (overflow:clip),
++            // so pan the view via transform instead.
++            const next = Math.max(min, Math.min(max, this.#pageOffset + delta))
++            this.#setViewPosition(next)
++        }
+     }
+     snap(vx, vy) {
+         const velocity = this.#vertical ? vy : vx
+@@ -837,6 +908,16 @@
+             if (this.#touchScrolled) e.preventDefault()
+             return
+         }
++        // Don't scroll the page while the user is actively selecting text
++        // (e.g. dragging selection handles on mobile). The flag is kept alive
++        // by selectionchange events during the drag; it expires 1.5s after
++        // the last selection change so taps/swipes work again afterwards.
++        if (Date.now() < this.#selectionActiveUntil) return
++        const sel = this.#view?.document?.getSelection?.()
++        if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
++            this.#selectionActiveUntil = Date.now() + 1500
++            return
++        }
+         e.preventDefault()
+         const touch = e.changedTouches[0]
+         const x = touch.screenX, y = touch.screenY
+@@ -847,13 +928,24 @@
+         state.t = e.timeStamp
+         state.vx = dx / dt
+         state.vy = dy / dt
++        // Track velocity but DO NOT scrollBy() — pages must not move
++        // while the user is touching the screen. Jumping the page during
++        // a long-press text selection is the primary bug this fixes.
++        // The snap() on touchend handles the page turn.
+         this.#touchScrolled = true
+-        this.scrollBy(dx, dy)
+     }
+     #onTouchEnd() {
+         this.#touchScrolled = false
+         if (this.scrolled) return
+ 
++        // Don't snap to nearest page while the user is actively selecting text.
++        if (Date.now() < this.#selectionActiveUntil) return
++        const sel = this.#view?.document?.getSelection?.()
++        if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
++            this.#selectionActiveUntil = Date.now() + 1500
++            return
++        }
++
+         // XXX: Firefox seems to report scale as 1... sometimes...?
+         // at this point I'm basically throwing `requestAnimationFrame` at
+         // anything that doesn't work
+@@ -889,24 +981,33 @@
+         return this.#scrollToPage(Math.floor(offset / this.size) + (this.#rtl ? -1 : 1), reason)
+     }
+     async #scrollTo(offset, reason, smooth) {
+-        const element = this.#container
+-        const { scrollProp, size } = this
+-        if (element[scrollProp] === offset) {
++        const { size } = this
++        const scrolled = this.scrolled
++        // Paginated mode pans the view via transform (#container is
++        // overflow:clip and cannot be scrolled). Scrolled mode keeps
++        // real container scrolling.
++        const cur = () => scrolled
++            ? this.#container[this.scrollProp]
++            : this.#pageOffset
++        const apply = x => scrolled
++            ? this.#container[this.scrollProp] = x
++            : this.#setViewPosition(x)
++        if (cur() === offset) {
+             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
+             this.#afterScroll(reason)
+             return
+         }
+         // FIXME: vertical-rl only, not -lr
+-        if (this.scrolled && this.#vertical) offset = -offset
++        if (scrolled && this.#vertical) offset = -offset
+         if ((reason === 'snap' || smooth) && this.hasAttribute('animated')) return animate(
+-            element[scrollProp], offset, 300, easeOutQuad,
+-            x => element[scrollProp] = x,
++            cur(), offset, 300, easeOutQuad,
++            apply,
+         ).then(() => {
+             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
+             this.#afterScroll(reason)
+         })
+         else {
+-            element[scrollProp] = offset
++            apply(offset)
+             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
+             this.#afterScroll(reason)
+         }
