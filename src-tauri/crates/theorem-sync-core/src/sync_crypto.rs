@@ -460,7 +460,12 @@ pub fn read_machine_fingerprint() -> String {
         // For now, fall back to empty (will be overridden by the frontend).
         String::new()
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android")))]
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android"
+    )))]
     {
         String::new()
     }

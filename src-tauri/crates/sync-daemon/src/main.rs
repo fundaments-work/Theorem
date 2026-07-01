@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use theorem_sync_core::sync_crypto;
 use theorem_sync_core::sync_protocol::*;
-use theorem_sync_core::sync_server::{self, SyncServerState, SyncDataSnapshot};
+use theorem_sync_core::sync_server::{self, SyncDataSnapshot, SyncServerState};
 use tokio::sync::{Mutex, Notify};
 use tokio::time::{interval, Duration};
 
@@ -56,22 +56,27 @@ struct ApiResponse<T: Serialize> {
 }
 
 fn ok_response<T: Serialize>(data: T) -> axum::Json<ApiResponse<T>> {
-    axum::Json(ApiResponse { success: true, data: Some(data), error: None })
+    axum::Json(ApiResponse {
+        success: true,
+        data: Some(data),
+        error: None,
+    })
 }
 
 // ─── Entry Point ───
 
 #[tokio::main]
 async fn main() {
-    eprintln!("[sync-daemon] Starting Theorem Sync Daemon v{}", env!("CARGO_PKG_VERSION"));
+    eprintln!(
+        "[sync-daemon] Starting Theorem Sync Daemon v{}",
+        env!("CARGO_PKG_VERSION")
+    );
 
     let config_dir: PathBuf = std::env::args()
         .nth(1)
         .map(PathBuf::from)
         .or_else(|| std::env::var("THEOREM_CONFIG_DIR").ok().map(PathBuf::from))
-        .unwrap_or_else(|| {
-            dirs_data_dir().join("theorem")
-        });
+        .unwrap_or_else(|| dirs_data_dir().join("theorem"));
 
     eprintln!("[sync-daemon] Config directory: {}", config_dir.display());
     std::fs::create_dir_all(&config_dir).expect("Failed to create config directory");
@@ -104,7 +109,10 @@ async fn main() {
 
     let server_handle = match sync_server::start_server(server_state.clone()).await {
         Ok(handle) => {
-            eprintln!("[sync-daemon] Sync server listening on port {}", handle.addr.port());
+            eprintln!(
+                "[sync-daemon] Sync server listening on port {}",
+                handle.addr.port()
+            );
             handle
         }
         Err(e) => {
@@ -199,7 +207,8 @@ async fn handle_status(
 ) -> axum::Json<ApiResponse<DaemonStatus>> {
     let devices = state.server_state.paired_devices.lock().await;
     let paired: Vec<PairedDeviceInfo> = devices.values().map(PairedDeviceInfo::from).collect();
-    let last_sync_at = devices.values()
+    let last_sync_at = devices
+        .values()
         .filter_map(|d| d.last_sync_at.clone())
         .max();
     drop(devices);
@@ -247,7 +256,10 @@ async fn handle_configure(
     if let Some(auto_sync) = config.get("auto_sync_enabled").and_then(|v| v.as_bool()) {
         let mut enabled = state.auto_sync_enabled.lock().await;
         *enabled = auto_sync;
-        eprintln!("[sync-daemon] Auto-sync {}", if auto_sync { "enabled" } else { "disabled" });
+        eprintln!(
+            "[sync-daemon] Auto-sync {}",
+            if auto_sync { "enabled" } else { "disabled" }
+        );
     }
 
     ok_response("Configuration updated".to_string())
@@ -285,7 +297,12 @@ async fn auto_sync_loop(state: Arc<DaemonState>) {
         let peers: Vec<(String, String, u16, String)> = devices
             .iter()
             .map(|(id, d)| {
-                (id.clone(), d.last_ip.clone(), d.last_port, d.symmetric_key_b64.clone())
+                (
+                    id.clone(),
+                    d.last_ip.clone(),
+                    d.last_port,
+                    d.symmetric_key_b64.clone(),
+                )
             })
             .collect();
         drop(devices);
@@ -299,15 +316,11 @@ async fn auto_sync_loop(state: Arc<DaemonState>) {
                 continue;
             }
 
-            eprintln!("[sync-daemon] Auto-sync: attempting sync with peer {peer_id} at {ip}:{port}");
+            eprintln!(
+                "[sync-daemon] Auto-sync: attempting sync with peer {peer_id} at {ip}:{port}"
+            );
 
-            match run_sync_round(
-                &state.server_state,
-                peer_id,
-                ip,
-                *port,
-                sym_key_b64,
-            ).await {
+            match run_sync_round(&state.server_state, peer_id, ip, *port, sym_key_b64).await {
                 Ok(incoming_count) => {
                     if incoming_count > 0 {
                         eprintln!("[sync-daemon] Auto-sync: received {incoming_count} domain(s) from {peer_id}");
@@ -345,7 +358,8 @@ async fn run_sync_round(
 
     // 1. Pre-flight health check.
     let health_url = format!("http://{ip}:{port}/health");
-    let health_res = client.get(&health_url)
+    let health_res = client
+        .get(&health_url)
         .timeout(Duration::from_secs(5))
         .send()
         .await
@@ -362,7 +376,8 @@ async fn run_sync_round(
         last_sync_at: None,
         domains: data.manifest.clone(),
     });
-    let local_domains: Option<HashMap<String, String>> = sync_data_guard.as_ref().map(|d| d.domains.clone());
+    let local_domains: Option<HashMap<String, String>> =
+        sync_data_guard.as_ref().map(|d| d.domains.clone());
     drop(sync_data_guard);
 
     let local_manifest = match local_manifest {
@@ -395,8 +410,8 @@ async fn run_sync_round(
         .map_err(|e| format!("Manifest response parse: {e}"))?;
 
     let plan_value = decrypt::<serde_json::Value>(&sym_key, &enc_plan)?;
-    let plan: SyncPlan = serde_json::from_value(plan_value)
-        .map_err(|e| format!("Plan parse: {e}"))?;
+    let plan: SyncPlan =
+        serde_json::from_value(plan_value).map_err(|e| format!("Plan parse: {e}"))?;
 
     // 4. Process plan — collect domains to push and pull.
     let mut push_domains: HashMap<String, String> = HashMap::new();
@@ -463,8 +478,8 @@ async fn run_sync_round(
             .map_err(|e| format!("Pull resp parse: {e}"))?;
 
         let pull_value = decrypt::<serde_json::Value>(&sym_key, &enc_pull)?;
-        let pulled: BatchedPullResponse = serde_json::from_value(pull_value)
-            .map_err(|e| format!("Batched pull parse: {e}"))?;
+        let pulled: BatchedPullResponse =
+            serde_json::from_value(pull_value).map_err(|e| format!("Batched pull parse: {e}"))?;
 
         incoming_count = pulled.domains.len();
 
@@ -472,7 +487,8 @@ async fn run_sync_round(
             let mut sync_data = server_state.sync_data.lock().await;
             if let Some(ref mut data) = *sync_data {
                 for (domain, data_json) in &pulled.domains {
-                    data.domains.insert(format!("incoming_{}", domain), data_json.clone());
+                    data.domains
+                        .insert(format!("incoming_{}", domain), data_json.clone());
                 }
             }
         }
@@ -514,8 +530,8 @@ fn encrypt<T: serde::Serialize>(
     data: &T,
 ) -> Result<AuthenticatedRequest, String> {
     let json = serde_json::to_vec(data).map_err(|e| format!("Serialize: {e}"))?;
-    let payload = sync_crypto::encrypt_payload(sym_key, &json)
-        .map_err(|e| format!("Encrypt: {e}"))?;
+    let payload =
+        sync_crypto::encrypt_payload(sym_key, &json).map_err(|e| format!("Encrypt: {e}"))?;
     Ok(AuthenticatedRequest {
         device_id: device_id.to_string(),
         payload,
@@ -526,8 +542,8 @@ fn decrypt<T: serde::de::DeserializeOwned>(
     sym_key: &[u8; 32],
     payload: &sync_crypto::EncryptedPayload,
 ) -> Result<T, String> {
-    let decrypted = sync_crypto::decrypt_payload(sym_key, payload)
-        .map_err(|e| format!("Decrypt: {e}"))?;
+    let decrypted =
+        sync_crypto::decrypt_payload(sym_key, payload).map_err(|e| format!("Decrypt: {e}"))?;
     serde_json::from_slice(&decrypted).map_err(|e| format!("Parse: {e}"))
 }
 
@@ -567,7 +583,9 @@ fn dirs_data_dir() -> PathBuf {
     #[cfg(target_os = "macos")]
     {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-        PathBuf::from(home).join("Library").join("Application Support")
+        PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
     }
     #[cfg(target_os = "windows")]
     {

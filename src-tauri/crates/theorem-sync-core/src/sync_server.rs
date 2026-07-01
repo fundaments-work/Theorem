@@ -392,7 +392,10 @@ async fn handle_pair(
         if !paired_device.fingerprint.is_empty() {
             let old_id: Option<String> = devices
                 .values()
-                .find(|d| d.fingerprint == paired_device.fingerprint && d.device_id != paired_device.device_id)
+                .find(|d| {
+                    d.fingerprint == paired_device.fingerprint
+                        && d.device_id != paired_device.device_id
+                })
                 .map(|d| d.device_id.clone());
 
             if let Some(old_device_id) = old_id {

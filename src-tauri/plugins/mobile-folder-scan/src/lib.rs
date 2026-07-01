@@ -103,7 +103,11 @@ pub fn scan_folder<R: Runtime>(app: &AppHandle<R>, tree_uri: &str) -> Result<Vec
 }
 
 #[cfg(target_os = "android")]
-pub fn save_image<R: Runtime>(app: &AppHandle<R>, filename: &str, base64_data: &str) -> Result<String, String> {
+pub fn save_image<R: Runtime>(
+    app: &AppHandle<R>,
+    filename: &str,
+    base64_data: &str,
+) -> Result<String, String> {
     let state = app.state::<MobileFolderScan<R>>();
     let response = state
         .handle
@@ -141,16 +145,17 @@ struct MaterializeContentUriResponse {
 }
 
 #[cfg(target_os = "android")]
-pub fn materialize_content_uri<R: Runtime>(app: &AppHandle<R>, uri: &str, file_name: &str) -> Result<String, String> {
+pub fn materialize_content_uri<R: Runtime>(
+    app: &AppHandle<R>,
+    uri: &str,
+    file_name: &str,
+) -> Result<String, String> {
     let state = app.state::<MobileFolderScan<R>>();
     let response = state
         .handle
         .run_mobile_plugin::<MaterializeContentUriResponse>(
             "materializeContentUri",
-            MaterializeContentUriPayload {
-                uri,
-                file_name,
-            },
+            MaterializeContentUriPayload { uri, file_name },
         )
         .map_err(|error| error.to_string())?;
 
@@ -164,10 +169,7 @@ pub fn get_android_id<R: Runtime>(app: &AppHandle<R>) -> Result<String, String> 
     let state = app.state::<MobileFolderScan<R>>();
     let response = state
         .handle
-        .run_mobile_plugin::<GetAndroidIdResponse>(
-            "getAndroidId",
-            serde_json::json!({}),
-        )
+        .run_mobile_plugin::<GetAndroidIdResponse>("getAndroidId", serde_json::json!({}))
         .map_err(|error| error.to_string())?;
 
     Ok(response.android_id)

@@ -325,9 +325,7 @@ pub async fn get_paired_devices(app: tauri::AppHandle) -> Result<Vec<PairedDevic
 /// This updates the global fingerprint override, which takes precedence
 /// over the machine-derived fingerprint for all subsequent lookups.
 #[tauri::command]
-pub async fn set_device_fingerprint(
-    fingerprint: String,
-) -> Result<(), String> {
+pub async fn set_device_fingerprint(fingerprint: String) -> Result<(), String> {
     theorem_sync_core::sync_crypto::set_fingerprint_from_frontend(&fingerprint);
     eprintln!("[sync] Device fingerprint set from frontend: {fingerprint}");
     Ok(())
@@ -479,7 +477,10 @@ pub async fn discover_peer(
         match client.get(&url).send().await {
             Ok(res) if res.status().is_success() => {
                 // Verify the device_id matches so we don't connect to the wrong device.
-                if let Ok(health) = res.json::<theorem_sync_core::sync_protocol::HealthResponse>().await {
+                if let Ok(health) = res
+                    .json::<theorem_sync_core::sync_protocol::HealthResponse>()
+                    .await
+                {
                     if health.device_id == peer_device_id {
                         // Update stored address if port changed.
                         if *port != peer.last_port {
@@ -945,9 +946,10 @@ pub async fn initiate_sync(
     {
         let mut devices = sync_state.server_state.paired_devices.lock().await;
         devices.insert(peer.device_id.clone(), peer);
-        if let Err(e) =
-            theorem_sync_core::sync_server::save_paired_devices(&sync_state.server_state.app_data_dir, &devices)
-        {
+        if let Err(e) = theorem_sync_core::sync_server::save_paired_devices(
+            &sync_state.server_state.app_data_dir,
+            &devices,
+        ) {
             eprintln!("[sync] Failed to persist paired devices after sync: {e}");
         }
     }

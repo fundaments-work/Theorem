@@ -40,8 +40,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             }
             #[cfg(target_os = "android")]
             {
-                let handle =
-                    api.register_android_plugin(PLUGIN_IDENTIFIER, "SyncWorkerPlugin")?;
+                let handle = api.register_android_plugin(PLUGIN_IDENTIFIER, "SyncWorkerPlugin")?;
                 app.manage(SyncWorkerPluginState { handle });
             }
             Ok(())
@@ -80,10 +79,7 @@ pub fn stop_worker<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = app.state::<SyncWorkerPluginState<R>>();
     state
         .handle
-        .run_mobile_plugin::<WorkerStatusResponse>(
-            "stopWorker",
-            serde_json::json!({}),
-        )
+        .run_mobile_plugin::<WorkerStatusResponse>("stopWorker", serde_json::json!({}))
         .map_err(|error| error.to_string())?;
     Ok(())
 }
