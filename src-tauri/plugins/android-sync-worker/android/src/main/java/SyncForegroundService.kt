@@ -187,19 +187,17 @@ class SyncForegroundService : Service() {
             addTransportType(NetworkCapabilities.TRANSPORT_VPN)
         }.build()
 
-        networkCallback = object : ConnectivityManager.NetworkCallback() {
+        val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 Log.i(TAG, "Network available — sync will resume")
-                // The Rust tokio sync task will pick up the new network
-                // on its next scheduled round. No explicit restart needed.
             }
 
             override fun onLost(network: Network) {
                 Log.i(TAG, "Network lost — sync paused")
             }
         }
-
-        connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
+        networkCallback = cb
+        connectivityManager.registerNetworkCallback(networkRequest, cb)
     }
 
     private fun unregisterNetworkCallback() {
