@@ -153,15 +153,21 @@ class SyncForegroundService : Service() {
     // ─── Wake Lock ───
 
     private fun acquireWakeLock() {
-        if (wakeLock == null) {
-            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "theorem:sync_worker"
-            ).apply {
-                acquire(30 * 60 * 1000L) // 30 min max to prevent battery drain
+        try {
+            if (wakeLock == null) {
+                val powerManager = getSystemService(POWER_SERVICE) as? PowerManager
+                    ?: return
+                wakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "theorem:sync_worker"
+                ).apply {
+                    acquire(30 * 60 * 1000L) // 30 min max to prevent battery drain
+                }
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "Wake lock acquire failed: ${e.message}")
         }
+    }
     }
 
     private fun releaseWakeLock() {
