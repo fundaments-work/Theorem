@@ -25,10 +25,10 @@ export function buildShareText(
     return parts.join(" ");
 }
 
-export function shareOnX(text: string): void {
+export function shareOnX(text: string): Window | null {
     const url = new URL("https://x.com/intent/tweet");
     url.searchParams.set("text", text);
-    window.open(url.toString(), "_blank", "noopener,noreferrer");
+    return window.open(url.toString(), "_blank", "noopener,noreferrer");
 }
 
 export async function captureCardAsImage(element: HTMLElement): Promise<Blob> {

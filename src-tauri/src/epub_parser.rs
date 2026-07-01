@@ -76,7 +76,7 @@ pub fn prefetch_zip_metadata(path: String) -> Result<ZipPrefetch, String> {
             continue;
         }
         // Don't re-read files already in the epub metadata fields.
-        if epub.as_ref().map_or(false, |e| {
+        if epub.as_ref().is_some_and(|e| {
             e.nav_path.as_deref() == Some(name.as_str())
                 || e.ncx_path.as_deref() == Some(name.as_str())
                 || e.opf_path == *name

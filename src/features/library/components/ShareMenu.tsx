@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import type { Annotation, Book } from "../../../core";
 import { shareOnX, buildShareText } from "../../../core";
-import { ExternalLink, Image } from "lucide-react";
+import { ExternalLink, Image, AlertCircle } from "lucide-react";
 import { ShareStudioModal } from "./ShareStudioModal";
 
 interface ShareMenuProps {
@@ -12,11 +12,16 @@ interface ShareMenuProps {
 
 export function ShareMenu({ annotation, book, onClose }: ShareMenuProps) {
     const [showStudio, setShowStudio] = useState(false);
+    const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
     const handleShareOnX = useCallback(() => {
         const text = buildShareText(annotation, book);
-        shareOnX(text);
-        onClose();
+        const popup = shareOnX(text);
+        if (popup === null) {
+            setToast({ type: "error", message: "Popup was blocked" });
+        } else {
+            onClose();
+        }
     }, [annotation, book, onClose]);
 
     if (showStudio) {
@@ -33,6 +38,12 @@ export function ShareMenu({ annotation, book, onClose }: ShareMenuProps) {
         <>
             {/* Main share menu */}
             <div className="absolute right-0 top-full z-20 mt-1 w-48 border border-[var(--color-border)] bg-[var(--color-surface)] py-1">
+                {toast && (
+                    <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs text-[var(--color-error)] border-b border-[var(--color-border)]">
+                        <AlertCircle className="w-3 h-3" />
+                        {toast.message}
+                    </div>
+                )}
                 <button
                     onClick={() => setShowStudio(true)}
                     className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left font-sans text-[11px] font-medium text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"

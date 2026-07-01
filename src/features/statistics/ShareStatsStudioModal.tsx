@@ -45,6 +45,9 @@ export function ShareStatsStudioModal({ statsData, onClose }: ShareStatsStudioMo
                     });
                 }
             } catch (err) {
+                if (isMounted) {
+                    setToast({ type: "error", message: "Image generation failed" });
+                }
             } finally {
                 if (isMounted) {
                     setIsGenerating(false);
@@ -89,6 +92,7 @@ export function ShareStatsStudioModal({ statsData, onClose }: ShareStatsStudioMo
                 await shareImageNative(imageBlob, "ReadingStats");
                 onClose();
             } catch (e) {
+                setToast({ type: "error", message: "Share failed" });
             }
         }
     }, [imageBlob, onClose]);

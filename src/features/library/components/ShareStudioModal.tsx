@@ -47,6 +47,9 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
                     });
                 }
             } catch (err) {
+                if (isMounted) {
+                    setToast({ type: "error", message: "Image generation failed" });
+                }
             } finally {
                 if (isMounted) {
                     setIsGenerating(false);
