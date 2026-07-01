@@ -454,6 +454,13 @@ export class Paginator extends HTMLElement {
     // the flag alive; expires 1.5s after the last selection change.
     // Used to suppress touch swipe page-turns while the user is selecting.
     #selectionActiveUntil = 0
+    // Abstract scroll position for paginated mode. With #container set to
+    // `overflow: clip` it can no longer be scrolled (even programmatically),
+    // so pages are panned via `transform` on the view element. This field
+    // holds the offset that *would* have been #container[scrollProp]; all
+    // navigation math (start/end/page/snap/scrollBy) reads it instead of
+    // the inert scrollLeft/scrollTop. (#20 structural fix.)
+    #pageOffset = 0
     constructor() {
         super()
         this.#root.innerHTML = `<style>
@@ -511,11 +518,17 @@ export class Paginator extends HTMLElement {
         #container {
             grid-column: 2 / 5;
             grid-row: 2;
-            overflow: hidden;
+            /* clip (not hidden) makes #container a non-scroll container:
+             * scrollLeft/scrollTop become inert, so Android WebView's
+             * OS-level auto-scroll during native text selection can no
+             * longer move the page (#20). Pages are instead positioned
+             * via transform on the view element (#setViewPosition). */
+            overflow: clip;
         }
         :host([flow="scrolled"]) #container {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
+            /* scrolled mode keeps real scrolling */
             overflow: auto;
         }
         #header {
@@ -802,7 +815,12 @@ export class Paginator extends HTMLElement {
         return this.#view.element.getBoundingClientRect()[this.sideProp]
     }
     get start() {
-        return Math.abs(this.#container[this.scrollProp])
+        // Scrolled mode keeps a real scroll container; paginated mode
+        // reads the abstract offset (#container is overflow:clip and
+        // cannot be scrolled, even programmatically).
+        return this.scrolled
+            ? Math.abs(this.#container[this.scrollProp])
+            : Math.abs(this.#pageOffset)
     }
     get end() {
         return this.start + this.size
@@ -813,16 +831,37 @@ export class Paginator extends HTMLElement {
     get pages() {
         return Math.round(this.viewSize / this.size)
     }
+    // Position the page in paginated mode without scrolling #container
+    // (which is overflow:clip and inert). Pans the wide view element via
+    // transform; the visual result is identical to the old scrollLeft set.
+    #setViewPosition(offset) {
+        this.#pageOffset = offset
+        const el = this.#view?.element
+        if (el) {
+            const axis = this.#vertical ? 'Y' : 'X'
+            el.style.transform = `translate${axis}(${-offset}px)`
+        }
+        // Preserve the 'scroll' event the container used to emit on
+        // programmatic scroll (external listeners may rely on it).
+        this.dispatchEvent(new Event('scroll'))
+    }
     scrollBy(dx, dy) {
         const delta = this.#vertical ? dy : dx
-        const element = this.#container
-        const { scrollProp } = this
         const [offset, a, b] = this.#scrollBounds
         const rtl = this.#rtl
         const min = rtl ? offset - b : offset - a
         const max = rtl ? offset + a : offset + b
-        element[scrollProp] = Math.max(min, Math.min(max,
-            element[scrollProp] + delta))
+        if (this.scrolled) {
+            const element = this.#container
+            const { scrollProp } = this
+            element[scrollProp] = Math.max(min, Math.min(max,
+                element[scrollProp] + delta))
+        } else {
+            // Paginated: #container is non-scrollable (overflow:clip),
+            // so pan the view via transform instead.
+            const next = Math.max(min, Math.min(max, this.#pageOffset + delta))
+            this.#setViewPosition(next)
+        }
     }
     snap(vx, vy) {
         const velocity = this.#vertical ? vy : vx
@@ -933,24 +972,33 @@ export class Paginator extends HTMLElement {
         return this.#scrollToPage(Math.floor(offset / this.size) + (this.#rtl ? -1 : 1), reason)
     }
     async #scrollTo(offset, reason, smooth) {
-        const element = this.#container
-        const { scrollProp, size } = this
-        if (element[scrollProp] === offset) {
+        const { size } = this
+        const scrolled = this.scrolled
+        // Paginated mode pans the view via transform (#container is
+        // overflow:clip and cannot be scrolled). Scrolled mode keeps
+        // real container scrolling.
+        const cur = () => scrolled
+            ? this.#container[this.scrollProp]
+            : this.#pageOffset
+        const apply = x => scrolled
+            ? this.#container[this.scrollProp] = x
+            : this.#setViewPosition(x)
+        if (cur() === offset) {
             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
             return
         }
         // FIXME: vertical-rl only, not -lr
-        if (this.scrolled && this.#vertical) offset = -offset
+        if (scrolled && this.#vertical) offset = -offset
         if ((reason === 'snap' || smooth) && this.hasAttribute('animated')) return animate(
-            element[scrollProp], offset, 300, easeOutQuad,
-            x => element[scrollProp] = x,
+            cur(), offset, 300, easeOutQuad,
+            apply,
         ).then(() => {
             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
         })
         else {
-            element[scrollProp] = offset
+            apply(offset)
             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
         }
