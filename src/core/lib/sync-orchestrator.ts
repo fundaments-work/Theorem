@@ -22,6 +22,12 @@ import {
     getPairedDevices,
 } from "./device-sync";
 import {
+    isDaemonRunning,
+    pushSyncDataToDaemon,
+    triggerDaemonSync,
+    configureDaemon,
+} from "./device-sync-daemon";
+import {
     useLibraryStore,
     useVocabularyStore,
     useRssStore,
@@ -879,19 +885,34 @@ async function autoSyncRound(): Promise<void> {
  * Schedule a debounced sync triggered by data mutations.
  * Call this after annotations, books, or settings change.
  * The sync is batched: rapid mutations only trigger one sync.
+ *
+ * If the sync daemon is running, pushes latest data to it.
+ * Falls back to JS-based auto-sync round.
  */
 export function scheduleMutationSync(): void {
     if (_mutationSyncTimer) {
         clearTimeout(_mutationSyncTimer);
     }
-    _mutationSyncTimer = setTimeout(() => {
+    _mutationSyncTimer = setTimeout(async () => {
         _mutationSyncTimer = null;
+
+        // If daemon is available, push data to it and let it handle sync.
+        if (await isDaemonRunning().catch(() => false)) {
+            const built = await buildDomainsAndManifest();
+            await pushSyncDataToDaemon(built.domains, built.manifest);
+            await triggerDaemonSync().catch(() => {});
+            return;
+        }
+
         void autoSyncRound();
     }, MUTATION_SYNC_DEBOUNCE_MS);
 }
 
 /**
  * Start all auto-sync mechanisms.
+ *
+ * If the sync daemon is running, delegates to it and avoids JS timers.
+ * Otherwise falls back to in-process JS scheduling.
  *
  * Sets up:
  * - Startup sync (after initial delay)
@@ -903,13 +924,45 @@ export function scheduleMutationSync(): void {
  * Safe to call multiple times — cleans up previous runs.
  */
 export async function startAutoSync(): Promise<() => void> {
-    // Clean up any previous auto-sync
     stopAutoSync();
 
     if (!isTauri()) {
         return () => {};
     }
 
+    // Check if the sync daemon is running — if so, delegate to it.
+    const daemonAvailable = await isDaemonRunning();
+    if (daemonAvailable) {
+        const cleanups: Array<() => void> = [];
+
+        // Push initial data snapshot to daemon.
+        const built = await buildDomainsAndManifest();
+        await pushSyncDataToDaemon(built.domains, built.manifest);
+
+        // Configure daemon with our auto-sync preference.
+        const { settings } = useSettingsStore.getState();
+        await configureDaemon({
+            auto_sync_enabled: settings.deviceSync?.autoSyncEnabled ?? true,
+        });
+
+        // Still listen for tray events and forward to daemon.
+        if (isTauri()) {
+            try {
+                const { listen } = await import("@tauri-apps/api/event");
+                const unlisten = await listen("tray-sync-now", () => {
+                    void triggerDaemonSync();
+                });
+                cleanups.push(unlisten);
+            } catch {
+                // Tray event not available
+            }
+        }
+
+        _autoSyncCleanups = cleanups;
+        return () => stopAutoSync();
+    }
+
+    // Fallback: JS-based auto-sync (same as before).
     const cleanups: Array<() => void> = [];
 
     // 1. Startup sync — delay to let the app fully initialize
