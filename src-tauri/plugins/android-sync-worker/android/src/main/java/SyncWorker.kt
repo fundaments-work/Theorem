@@ -39,6 +39,10 @@ class SyncWorker(
         private const val NOTIFICATION_ID = 1001
         private const val WORK_NAME = "theorem-sync-periodic"
 
+        init {
+            System.loadLibrary("theorem_lib")
+        }
+
         /**
          * Schedule periodic background sync every 15 minutes.
          * Call this when the user enables auto-sync.
@@ -128,10 +132,4 @@ class SyncWorker(
      * Runs a standalone sync round without the Tauri runtime.
      */
     private external fun runBackgroundSync(dataDir: String): Boolean
-
-    companion object {
-        init {
-            System.loadLibrary("theorem_lib")
-        }
-    }
 }
