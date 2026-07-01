@@ -256,7 +256,7 @@ export async function startBackgroundSync(intervalSecs?: number): Promise<void> 
     const interval = intervalSecs ?? 300;
     await invoke("start_background_sync", { intervalSecs: interval });
 
-    // On Android, start the ForegroundService to keep the process alive.
+    // On Android, start the ForegroundService + schedule WorkManager.
     if (isMobile()) {
         try {
             await invoke("start_android_sync_worker");
@@ -266,6 +266,10 @@ export async function startBackgroundSync(intervalSecs?: number): Promise<void> 
         } catch {
             // ForegroundService not available or denied.
         }
+        // Schedule WorkManager as a fallback — survives app kill.
+        // WorkManager fires every 15 min and runs a standalone sync
+        // round via JNI even if the Tauri process was killed.
+        await schedulePeriodicSyncWork();
     }
 }
 
@@ -280,6 +284,7 @@ export async function stopBackgroundSync(): Promise<void> {
         } catch {
             // ForegroundService not available.
         }
+        await cancelPeriodicSyncWork();
     }
 }
 
@@ -290,6 +295,26 @@ export async function updateSyncNotification(text: string): Promise<void> {
         await invoke("update_sync_notification", { text });
     } catch {
         // Notification update not available.
+    }
+}
+
+/** Schedule periodic WorkManager background sync (survives app kill). */
+export async function schedulePeriodicSyncWork(): Promise<void> {
+    if (!isMobile()) return;
+    try {
+        await invoke("schedule_sync_work");
+    } catch {
+        // WorkManager not available.
+    }
+}
+
+/** Cancel periodic WorkManager background sync. */
+export async function cancelPeriodicSyncWork(): Promise<void> {
+    if (!isMobile()) return;
+    try {
+        await invoke("cancel_sync_work");
+    } catch {
+        // WorkManager not available.
     }
 }
 

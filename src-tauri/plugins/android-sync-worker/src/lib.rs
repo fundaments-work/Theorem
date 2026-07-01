@@ -113,3 +113,35 @@ pub fn update_notification<R: Runtime>(app: &AppHandle<R>, text: &str) -> Result
 pub fn update_notification<R: Runtime>(_app: &AppHandle<R>, _text: &str) -> Result<(), String> {
     Ok(())
 }
+
+/// Schedule periodic WorkManager sync on Android.
+#[cfg(target_os = "android")]
+pub fn schedule_periodic_sync<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let state = get_worker_state(app)?;
+    state
+        .handle
+        .run_mobile_plugin::<WorkerStatusResponse>("schedulePeriodicSync", serde_json::json!({}))
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn schedule_periodic_sync<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
+    Ok(())
+}
+
+/// Cancel periodic WorkManager sync on Android.
+#[cfg(target_os = "android")]
+pub fn cancel_periodic_sync<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let state = get_worker_state(app)?;
+    state
+        .handle
+        .run_mobile_plugin::<WorkerStatusResponse>("cancelPeriodicSync", serde_json::json!({}))
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn cancel_periodic_sync<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
+    Ok(())
+}

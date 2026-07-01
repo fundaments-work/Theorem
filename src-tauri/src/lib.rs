@@ -1042,6 +1042,8 @@ pub fn run() {
             start_android_sync_worker,
             stop_android_sync_worker,
             update_sync_notification,
+            schedule_sync_work,
+            cancel_sync_work,
             hide_to_tray,
             download_and_extract_stardict,
         ])
@@ -1108,6 +1110,100 @@ async fn stop_android_sync_worker(app: tauri::AppHandle) -> Result<(), String> {
 async fn update_sync_notification(app: tauri::AppHandle, text: String) -> Result<(), String> {
     tauri_plugin_android_sync_worker::update_notification(&app, &text)?;
     Ok(())
+}
+
+/// Schedule periodic WorkManager background sync (Android).
+#[tauri::command]
+async fn schedule_sync_work(app: tauri::AppHandle) -> Result<(), String> {
+    tauri_plugin_android_sync_worker::schedule_periodic_sync(&app)?;
+    eprintln!("[sync] Periodic WorkManager sync scheduled");
+    Ok(())
+}
+
+/// Cancel periodic WorkManager background sync (Android).
+#[tauri::command]
+async fn cancel_sync_work(app: tauri::AppHandle) -> Result<(), String> {
+    tauri_plugin_android_sync_worker::cancel_periodic_sync(&app)?;
+    eprintln!("[sync] Periodic WorkManager sync cancelled");
+    Ok(())
+}
+
+/// Standalone background sync round — callable from WorkManager via JNI
+/// without the Tauri runtime. Starts the sync server, waits for incoming
+/// syncs from peers for ~3 minutes, then shuts down.
+#[no_mangle]
+pub extern "C" fn run_background_sync(data_dir_ptr: *const std::os::raw::c_char) -> bool {
+    let data_dir_str = if data_dir_ptr.is_null() {
+        ".".to_string()
+    } else {
+        unsafe { std::ffi::CStr::from_ptr(data_dir_ptr) }
+            .to_str()
+            .unwrap_or(".")
+            .to_string()
+    };
+
+    let data_dir = std::path::PathBuf::from(&data_dir_str);
+
+    eprintln!(
+        "[background-sync] Starting standalone sync round in {}",
+        data_dir_str
+    );
+
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(e) => {
+            eprintln!("[background-sync] Failed to create runtime: {}", e);
+            return false;
+        }
+    };
+
+    rt.block_on(async {
+        // Load sync identity and paired devices
+        let identity =
+            match theorem_sync_core::sync_crypto::DeviceIdentity::load_or_create(&data_dir) {
+                Ok(id) => id,
+                Err(e) => {
+                    eprintln!("[background-sync] Failed to load identity: {}", e);
+                    return false;
+                }
+            };
+
+        let paired_devices = theorem_sync_core::sync_server::load_paired_devices(&data_dir);
+
+        if paired_devices.is_empty() {
+            eprintln!("[background-sync] No paired devices, starting server only");
+        }
+
+        let server_state = std::sync::Arc::new(theorem_sync_core::sync_server::SyncServerState {
+            identity,
+            device_name: "Theorem Device".to_string(),
+            paired_devices: tokio::sync::Mutex::new(paired_devices),
+            app_data_dir: data_dir,
+            pending_pairing: tokio::sync::Mutex::new(None),
+            sync_data: tokio::sync::Mutex::new(None),
+            event_emitter: None,
+        });
+
+        // Start sync server so peers can reach us
+        let handle = match theorem_sync_core::sync_server::start_server(server_state).await {
+            Ok(h) => {
+                eprintln!("[background-sync] Server listening on {}", h.addr);
+                h
+            }
+            Err(e) => {
+                eprintln!("[background-sync] Failed to start server: {}", e);
+                return false;
+            }
+        };
+
+        // Keep the server alive for 3 minutes to accept incoming syncs
+        tokio::time::sleep(std::time::Duration::from_secs(180)).await;
+
+        // Shut down
+        handle.shutdown_notify.notify_one();
+        eprintln!("[background-sync] Standalone sync round complete");
+        true
+    })
 }
 
 /// Hide the main window to the system tray.
