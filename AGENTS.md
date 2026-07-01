@@ -10,10 +10,55 @@ Operational guide for AI coding agents working in this repository.
   - PDF via PDF.js engine.
   - RSS article reading via dedicated article reader path.
 
+## Non-Negotiable Quality Gates (Before Every Commit)
+
+**These run before EVERY commit. No exceptions.**
+
+| Step | Command | Must Pass? |
+|------|---------|------------|
+| TypeScript typecheck | `pnpm typecheck` | Zero errors |
+| Rust format | `cd src-tauri && cargo fmt` | No diff |
+| Rust clippy | `cd src-tauri && cargo clippy` | Zero warnings |
+| Rust typecheck | `cd src-tauri && cargo check` | Zero errors |
+
+Rule: **Never commit or push code that fails any of these.** If you touch only `.ts`/`.tsx` files, at minimum run `pnpm typecheck`. If you touch any `.rs` file, run all four. If clippy emits warnings, fix them before committing — do not leave them for later.
+
+Additional validation per scope:
+
+| Scope | Extra verification |
+|-------|--------------------|
+| Persistence/migration changes | Audit migration version bump + defaults |
+| High-risk UI/runtime changes | `pnpm build` (verifies prod bundle) |
+| Tauri command signature change | Update both Rust and TypeScript call sites |
+| Any `lib.rs` module registration | Verify the module is declared + `pub use` if needed |
+
+## Pre-commit Workflow (Preferred Order)
+
+```bash
+# 1. Rust formatting (if any .rs file changed)
+cd src-tauri && cargo fmt && cd ..
+
+# 2. Rust clippy (must be zero warnings)
+cd src-tauri && cargo clippy && cd ..
+
+# 3. TypeScript typecheck
+pnpm typecheck
+
+# 4. If typecheck/clippy pass, commit
+git add -A
+git commit -m "..."
+
+# 5. Push
+git push origin <branch>
+```
+
+Do not skip clippy. Do not commit with clippy warnings still present. Fix them first.
+
 ## Non-Negotiable Reality Checks
 - Navigation is store-driven (`useUIStore.currentRoute`), not React Router route objects.
 - Imports are primarily relative/barrel imports inside `src`. Do not assume `@/*` or `@theorem/*` aliases.
 - `src/features/reader/foliate-js/**` is vendored upstream code. Do not edit it unless explicitly required.
+- `src/features/reader/foliate-js-runtime/**` is the runtime wrapper for foliate-js. This IS our code — modify freely.
 - CBR is supported via import-time conversion to CBZ (Rust `unrar-ng` decompression).
 
 ## Import Architecture
@@ -34,7 +79,19 @@ src/
   shell/                          # App chrome (sidebar, titlebar, bottom nav, error boundary)
   ui/                             # Shared UI primitives (Modal/Dropdown/Panel/ContextMenu/Backdrop)
   features/
-    reader/                       # Book + article reader flows and engines
+    reader/
+      engines/
+        foliate-engine.ts         # FoliateEngine class — main book rendering API
+        pdfjs-engine.tsx          # PDF.js engine
+      hooks/
+        useDocumentReader.ts      # Bridge between React and FoliateEngine
+      foliate-js/                # VENDORED — do not edit
+      foliate-js-runtime/        # OUR runtime wrapper — can edit
+        view.js                   # makeBook(), makeZipLoader(), FoliateView web component
+        epub.js                   # EPUB.init() — OPF/manifest/spine/TOC parsing
+        comic-book.js             # CBZ rendering
+        vendor/zip.js             # @zip.js/zip.js (minified, keep as-is)
+        vendor/fflate.js          # fflate for MOBI zlib decompression
     library/                      # Library/shelves/bookmarks/annotations pages
     vocabulary/                   # Vocabulary workspace
     feeds/                        # Feed subscriptions + article list
@@ -43,8 +100,13 @@ src/
     onboarding/                   # First-run onboarding flow
 src-tauri/
   Cargo.toml                      # Workspace root (members: theorem, theorem-sync-core, sync-daemon)
-  src/lib.rs                      # Tauri commands and runtime bootstrap
-  src/main.rs                     # Entry point (calls theorem_lib::run())
+  src/
+    lib.rs                        # Tauri commands + runtime bootstrap
+    main.rs                       # Entry point (calls theorem_lib::run())
+    epub_parser.rs                # Native EPUB pre-parser (prefetch_zip_metadata command)
+    tts.rs                        # TTS orchestration
+    tts_model.rs                  # Kokoro model download/management
+    sync_commands.rs              # All sync Tauri commands
   crates/
     theorem-sync-core/            # Shared sync library (crypto, protocol, embedded HTTP server)
     sync-daemon/                  # Standalone background sync daemon (sidecar)
@@ -59,9 +121,13 @@ src-tauri/
 - Build: `pnpm build`
 - Preview: `pnpm preview`
 - Rust-only build: `cd src-tauri && cargo build --release`
+- Rust check: `cd src-tauri && cargo check`
+- Rust format: `cd src-tauri && cargo fmt`
+- Rust lint: `cd src-tauri && cargo clippy`
 
 Notes:
 - Run root `pnpm` commands from repo root.
+- Run cargo commands from `src-tauri/`.
 - `pnpm build` runs `pnpm typecheck && vite build` — typecheck is a prerequisite.
 - `pnpm test` runs Vitest with jsdom. Test files live in `tests/**/*.test.ts`, setup in `tests/setup.ts`.
 
@@ -73,7 +139,7 @@ Notes:
   - `target/`, `src-tauri/target/`, `src-tauri/gen/schemas/`
   - `src-tauri/gen/android/` (entire generated Android Studio project)
   - `*.jks`, `*.keystore`, `*.aab`, `*.apk`, `output-metadata.json`
-- If your release workflow needs Android project files versioned, remove `src-tauri/gen/android/` from `.gitignore` and use the generated project’s nested `.gitignore` files (`src-tauri/gen/android/.gitignore`, `src-tauri/gen/android/app/.gitignore`) as baseline.
+- If your release workflow needs Android project files versioned, remove `src-tauri/gen/android/` from `.gitignore` and use the generated project's nested `.gitignore` files (`src-tauri/gen/android/.gitignore`, `src-tauri/gen/android/app/.gitignore`) as baseline.
 
 ## Architecture Rules
 
@@ -115,6 +181,19 @@ Notes:
   - viewport rendering
   - panel state
 
+### EPUB pre-parser (native Rust fast path)
+- `src-tauri/src/epub_parser.rs` provides `prefetch_zip_metadata` Tauri command.
+- On Tauri, the JS `makeZipLoader()` calls this in parallel with zip.js. When the prefetch provides `textCache` + `sizes`, zip.js's `getEntries()` is skipped entirely — all text comes from the pre-decoded cache.
+- The `makeZipLoader` function in `src/features/reader/foliate-js-runtime/view.js` is the bridge between the Rust prefetch and foliate-js.
+- Rust pre-parser uses `quick-xml` (streaming) for OPF/nav/NCX XML parsing, never regex.
+- `read_zip_entry()` has percent-encoded path fallback for real-world EPUBs.
+- `read_rootfile_path()` strips UTF-8/UTF-16 BOMs from container.xml.
+- The command runs on `tauri::async_runtime::spawn_blocking` for true parallelism.
+- When changing the `ZipPrefetch` struct or command signature, update both:
+  - `src-tauri/src/epub_parser.rs` (struct + command)
+  - `src/core/lib/tauri-epub-bridge.ts` (TypeScript interface `EpubPrefetchResult`)
+  - `src/features/reader/foliate-js-runtime/view.js` (consumer of the cache)
+
 ### Runtime split (web vs desktop)
 - Always guard desktop-only behavior with `isTauri()` (from `src/core/lib/env.ts`).
 - Additional guards: `isTauriDesktop()`, `isTauriMobile()`, `isMobile()` for finer-grained checks.
@@ -129,6 +208,7 @@ Notes:
   - design tokens/theme sync: `src/core/lib/design-tokens.ts` + CSS tokens
   - dialogs: `src/core/lib/dialogs.ts`
   - vault markdown sync: `src/core/lib/vault-sync.ts`
+  - epub prefetch bridge: `src/core/lib/tauri-epub-bridge.ts`
 - Services:
   - dictionary orchestration: `src/core/services/DictionaryService.ts`
   - StarDict import/lookup: `src/core/services/StarDictService.ts`
@@ -174,27 +254,33 @@ Notes:
   - `fetch_rss_feed`
   - `fetch_url_content`
   - `fetch_binary_content`
+  - `prefetch_zip_metadata`
+  - `ensure_tts_model`
+  - `cancel_tts_model_download`
+  - `get_tts_model_status`
+  - `delete_tts_model`
+  - `update_sync_notification`
 - SQLite-backed persistence (desktop Tauri only) uses `database::sqlite_*` commands, channeled through `src/core/lib/sqlite-storage.ts`.
 - If command payload/return changes, update both Rust and TS call sites together.
-- Run `cargo fmt` after Rust changes.
+- Run `cargo fmt` after Rust changes (required before every commit, see Quality Gates above).
+- Run `cargo clippy` after Rust changes (required before every commit, zero warnings allowed).
 
 ## Agent workflow expectations
 - Make focused changes; avoid unrelated refactors.
 - Preserve existing public APIs unless task requires change.
 - Prefer minimal-diff edits in reader/store files due high coupling.
 - For any persistence-affecting change, include migration updates in same change.
-- Validate before finishing:
-  - minimum: `pnpm typecheck`
-  - high-risk UI/runtime changes: also run `pnpm build`
-  - Rust touched: run `cargo fmt` and at least `cargo check` in `src-tauri/`
+- **Always run the Quality Gates before committing.** No exceptions.
+- If clippy emits warnings you don't understand, fix them with `cargo clippy --fix --lib` first, then manually for any remaining ones.
+- When adding a new Rust dependency, add it to `Cargo.toml` with the version that matches the existing lockfile if it's already a transitive dep.
 
 ## Performance & Bundling
 - **Never import from the barrel (`src/core/index.ts`).** Import directly from the source module:
-  - `cn` → `src/core/lib/utils`
-  - `useUIStore`/`useLibraryStore`/`useSettingsStore`/`useVocabularyStore`/`useRssStore` → `src/core/store`
-  - `isTauri`/`isMobile` etc. → `src/core/lib/env`
-  - Types → `src/core/types`
-  - Specific lib/services → their exact module path
+  - `cn` -> `src/core/lib/utils`
+  - `useUIStore`/`useLibraryStore`/`useSettingsStore`/`useVocabularyStore`/`useRssStore` -> `src/core/store`
+  - `isTauri`/`isMobile` etc. -> `src/core/lib/env`
+  - Types -> `src/core/types`
+  - Specific lib/services -> their exact module path
   - Barrel re-exports everything — importing from it prevents tree-shaking and bundles all stores/services together.
 - **Use Zustand individual selectors, never destructuring.** `const x = useStore(s => s.x)` subscribes to only `x`, while `const { x } = useStore()` subscribes to the entire store and re-renders on any change.
 - **Wrap heavy/reusable components in `React.memo()`**, especially:
@@ -226,3 +312,5 @@ Notes:
 - Do not hardcode colors where design tokens exist.
 - Do not directly edit vendored foliate-js internals for app-level behavior tweaks if the wrapper/engine layer can solve it.
 - Do not import from the barrel (`src/core/index.ts`). Import from specific source modules only.
+- Do not commit code that fails `pnpm typecheck`, `cargo fmt`, `cargo clippy`, or `cargo check`.
+- Do not leave clippy warnings unfixed — clean them up as part of the same commit.
