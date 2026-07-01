@@ -237,6 +237,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
 
     // Track open operations
     const openAbortRef = useRef<AbortController | null>(null);
+    const loadingDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Open document - with full settings support
     const open = useCallback(async (
@@ -263,7 +264,15 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         openAbortRef.current = abortController;
 
         // Reset state
-        setInitState({ isInitialized: true, isLoading: true, isReady: false });
+        setInitState({ isInitialized: true, isLoading: false, isReady: false });
+        // Grace period: only show loading indicator if the book takes more
+        // than 200ms to open. With the Rust prefetch + section text cache
+        // most books open in <50ms, so the spinner should rarely appear.
+        if (loadingDelayRef.current !== null) clearTimeout(loadingDelayRef.current);
+        loadingDelayRef.current = setTimeout(() => {
+            loadingDelayRef.current = null;
+            setInitState(s => s.isInitialized ? { ...s, isLoading: true } : s);
+        }, 200);
         setDataState({ metadata: null, toc: EMPTY_TOC, annotations: EMPTY_ANNOTATIONS });
         setLocationState({
             location: null,

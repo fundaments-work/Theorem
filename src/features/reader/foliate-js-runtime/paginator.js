@@ -835,14 +835,23 @@ export class Paginator extends HTMLElement {
     // (which is overflow:clip and inert). Pans the wide view element via
     // transform; the visual result is identical to the old scrollLeft set.
     #setViewPosition(offset) {
+        const prev = this.#pageOffset
         this.#pageOffset = offset
         const el = this.#view?.element
         if (el) {
             const axis = this.#vertical ? 'Y' : 'X'
+            // Smooth page-turn flip for single-adjacent page moves; instant
+            // for jump navigation (goTo, scrollToAnchor, initial load).
+            const isFlip = !this.scrolled
+                && !this.getAttribute('animated')
+                && Math.abs(offset - prev) === this.size
+            if (isFlip) {
+                el.style.transition = 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)'
+            } else {
+                el.style.transition = 'none'
+            }
             el.style.transform = `translate${axis}(${-offset}px)`
         }
-        // Preserve the 'scroll' event the container used to emit on
-        // programmatic scroll (external listeners may rely on it).
         this.dispatchEvent(new Event('scroll'))
     }
     scrollBy(dx, dy) {
