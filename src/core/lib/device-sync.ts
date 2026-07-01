@@ -252,14 +252,15 @@ export async function startBackgroundSync(intervalSecs?: number): Promise<void> 
     requireTauri("startBackgroundSync");
     await invoke("start_background_sync", { intervalSecs: intervalSecs ?? 300 });
 
-    // On Android, also start the ForegroundService.
-    if (isMobile()) {
-        try {
-            await invoke("start_android_sync_worker");
-        } catch {
-            // ForegroundService not available (or desktop fallback).
-        }
-    }
+    // NOTE: The Android ForegroundService (start_android_sync_worker) is
+    // disabled for now. On MIUI/Xiaomi devices, starting a ForegroundService
+    // with foregroundServiceType="dataSync" triggers a PermissionException
+    // that kills the process at the native level, bypassing both the JS
+    // try/catch and the Kotlin try/catch in SyncForegroundService.
+    // The Rust background-sync tokio task (started above) still runs
+    // while the app is in the foreground. To re-enable the ForegroundService,
+    // we need to request POST_NOTIFICATIONS at runtime and handle MIUI's
+    // aggressive permission enforcement.
 }
 
 /** Stop the background sync scheduler and Android ForegroundService. */

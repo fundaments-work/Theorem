@@ -870,6 +870,7 @@ pub fn run() {
             });
             app.manage(tts::ModelState::new());
 
+            // TTS model download (all platforms, background).
             let downloads_app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let model_state = downloads_app.state::<tts::ModelState>();
@@ -879,16 +880,25 @@ pub fn run() {
                 }
             });
 
-            let tts_app = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let tts_state = tts_app.state::<tts::TtsState>();
-                tts::prewarm_engine(&tts_app, tts_state.inner()).await;
-            });
+            // TTS engine prewarm (desktop only — on mobile the engine is
+            // loaded lazily on first speech request to avoid the Kokoro ONNX
+            // init time pushing startup past Android's ANR timeout).
+            #[cfg(not(target_os = "android"))]
+            {
+                let tts_app = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let tts_state = tts_app.state::<tts::TtsState>();
+                    tts::prewarm_engine(&tts_app, tts_state.inner()).await;
+                });
+            }
 
             // Initialize LAN sync subsystem.
+            // On Android, app_data_dir can fail to resolve, so we try
+            // multiple fallback paths before giving up.
             let app_data_dir = app
                 .path()
                 .app_data_dir()
+                .or_else(|_| app.path().app_cache_dir())
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
 
             let device_name = std::env::var("HOSTNAME")
@@ -901,6 +911,9 @@ pub fn run() {
                 }
                 Err(e) => {
                     eprintln!("[theorem] Warning: Failed to initialize sync: {}", e);
+                    // Sync features will be unavailable but the app won't crash
+                    // — sync commands use get_sync_state() which returns a
+                    // clean error instead of panicking.
                 }
             }
 

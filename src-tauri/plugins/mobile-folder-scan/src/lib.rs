@@ -16,6 +16,16 @@ struct MobileFolderScan<R: Runtime> {
     handle: tauri::plugin::PluginHandle<R>,
 }
 
+/// Safely retrieve the plugin state without panicking.
+/// Returns a clean error if the plugin failed to initialize.
+#[cfg(target_os = "android")]
+fn get_scan_state<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<tauri::State<'_, MobileFolderScan<R>>, String> {
+    app.try_state::<MobileFolderScan<R>>()
+        .ok_or_else(|| "Mobile folder scan plugin is not initialized.".to_string())
+}
+
 #[cfg(target_os = "android")]
 #[derive(Deserialize)]
 struct PickFolderResponse {
@@ -69,7 +79,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 
 #[cfg(target_os = "android")]
 pub fn pick_folder<R: Runtime>(app: &AppHandle<R>) -> Result<Option<String>, String> {
-    let state = app.state::<MobileFolderScan<R>>();
+    let state = get_scan_state(app)?;
     let response = state
         .handle
         .run_mobile_plugin::<PickFolderResponse>("pickFolder", serde_json::json!({}))
@@ -87,7 +97,7 @@ pub fn pick_folder<R: Runtime>(app: &AppHandle<R>) -> Result<Option<String>, Str
 
 #[cfg(target_os = "android")]
 pub fn scan_folder<R: Runtime>(app: &AppHandle<R>, tree_uri: &str) -> Result<Vec<String>, String> {
-    let state = app.state::<MobileFolderScan<R>>();
+    let state = get_scan_state(app)?;
     let response = state
         .handle
         .run_mobile_plugin::<ScanFolderResponse>(
@@ -108,7 +118,7 @@ pub fn save_image<R: Runtime>(
     filename: &str,
     base64_data: &str,
 ) -> Result<String, String> {
-    let state = app.state::<MobileFolderScan<R>>();
+    let state = get_scan_state(app)?;
     let response = state
         .handle
         .run_mobile_plugin::<SaveImageResponse>(
@@ -150,7 +160,7 @@ pub fn materialize_content_uri<R: Runtime>(
     uri: &str,
     file_name: &str,
 ) -> Result<String, String> {
-    let state = app.state::<MobileFolderScan<R>>();
+    let state = get_scan_state(app)?;
     let response = state
         .handle
         .run_mobile_plugin::<MaterializeContentUriResponse>(
@@ -166,7 +176,7 @@ pub fn materialize_content_uri<R: Runtime>(
 /// Only available on Android; returns empty string on other platforms.
 #[cfg(target_os = "android")]
 pub fn get_android_id<R: Runtime>(app: &AppHandle<R>) -> Result<String, String> {
-    let state = app.state::<MobileFolderScan<R>>();
+    let state = get_scan_state(app)?;
     let response = state
         .handle
         .run_mobile_plugin::<GetAndroidIdResponse>("getAndroidId", serde_json::json!({}))

@@ -16,6 +16,15 @@ struct SyncWorkerPluginState<R: Runtime> {
     handle: tauri::plugin::PluginHandle<R>,
 }
 
+/// Safely retrieve the plugin state without panicking.
+#[cfg(target_os = "android")]
+fn get_worker_state<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<tauri::State<'_, SyncWorkerPluginState<R>>, String> {
+    app.try_state::<SyncWorkerPluginState<R>>()
+        .ok_or_else(|| "Android sync worker plugin is not initialized.".to_string())
+}
+
 #[cfg(target_os = "android")]
 #[derive(Serialize)]
 struct StartWorkerPayload {
@@ -57,7 +66,7 @@ pub fn start_worker<R: Runtime>(
     notification_text: &str,
     sync_interval_secs: u64,
 ) -> Result<(), String> {
-    let state = app.state::<SyncWorkerPluginState<R>>();
+    let state = get_worker_state(app)?;
     state
         .handle
         .run_mobile_plugin::<WorkerStatusResponse>(
@@ -76,7 +85,7 @@ pub fn start_worker<R: Runtime>(
 /// On non-Android platforms this is a no-op.
 #[cfg(target_os = "android")]
 pub fn stop_worker<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    let state = app.state::<SyncWorkerPluginState<R>>();
+    let state = get_worker_state(app)?;
     state
         .handle
         .run_mobile_plugin::<WorkerStatusResponse>("stopWorker", serde_json::json!({}))

@@ -350,18 +350,23 @@ function App() {
         let cancelled = false;
         const bootstrap = async () => {
             if (cancelled) return;
+            // Each step is wrapped independently so a failure in one
+            // doesn't prevent the others from running. On Android, the
+            // sync server may not initialize (app_data_dir issues), and
+            // the ForegroundService may be denied — neither should crash
+            // the app.
             try {
                 await ensureResponderSyncReady();
-            } catch (error) {
-                if (!cancelled) {
-                }
+            } catch {
+                // Sync server unavailable on this device.
             }
             if (!cancelled) {
-                await startAutoSync();
+                try {
+                    await startAutoSync();
+                } catch {
+                    // Auto-sync scheduling unavailable.
+                }
             }
-            // Push data to Rust sync server and start background sync scheduler.
-            // This keeps sync running even when the app is backgrounded (Android)
-            // or supplements JS timers on desktop.
             if (!cancelled) {
                 try {
                     const { provisionSyncData } = await import("./core/lib/sync-orchestrator");
@@ -369,7 +374,7 @@ function App() {
                     const { startBackgroundSync } = await import("./core/lib/device-sync");
                     await startBackgroundSync(300);
                 } catch {
-                    // Background sync not available (non-Tauri).
+                    // Background sync not available on this platform.
                 }
             }
         };

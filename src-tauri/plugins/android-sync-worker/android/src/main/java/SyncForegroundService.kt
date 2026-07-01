@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 
 /**
@@ -40,8 +41,19 @@ class SyncForegroundService : Service() {
             return START_NOT_STICKY
         }
 
-        val notification = buildNotification()
-        startForeground(NOTIFICATION_ID, notification)
+        try {
+            val notification = buildNotification()
+            startForeground(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            // SecurityException on Android 14+ if FOREGROUND_SERVICE_DATA_SYNC
+            // permission is missing, or IllegalStateException if the service
+            // is not allowed to start in the foreground. Either way, don't
+            // crash the app — the Rust background sync scheduler still runs
+            // as a tokio task without the foreground service.
+            Log.e("SyncForegroundService", "Failed to start foreground: ${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         // Acquire partial wake lock so the process isn't suspended
         // while the Rust sync scheduler runs.
