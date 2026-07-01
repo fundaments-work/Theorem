@@ -5523,6 +5523,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-android-sync-worker"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "tauri-plugin-app"
 version = "2.0.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5838,6 +5848,7 @@ dependencies = [
  "tar",
  "tauri",
  "tauri-build",
+ "tauri-plugin-android-sync-worker",
  "tauri-plugin-app",
  "tauri-plugin-barcode-scanner",
  "tauri-plugin-dialog",
