@@ -62,29 +62,22 @@ class SyncForegroundService : Service() {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                // Android 14+ — use connectedDevice type (KDE Connect pattern).
-                // This type is for companion-device communication and is not
-                // aggressively blocked by MIUI/Xiaomi like dataSync is.
                 startForeground(
                     NOTIFICATION_ID,
                     notification,
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
                 )
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Android 10-13 — connectedDevice type not available, use dataSync.
                 startForeground(
                     NOTIFICATION_ID,
                     notification,
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
                 )
             } else {
-                // Android < 10 — no type parameter.
                 startForeground(NOTIFICATION_ID, notification)
             }
+            Log.i(TAG, "Foreground service started successfully")
         } catch (e: Exception) {
-            // SecurityException or ForegroundServiceStartNotAllowedException.
-            // Don't crash — the Rust background sync scheduler still runs
-            // as a tokio task without the foreground service.
             Log.e(TAG, "Failed to start foreground service: ${e.message}")
             stopSelf()
             return START_NOT_STICKY
@@ -109,7 +102,7 @@ class SyncForegroundService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Theorem Sync",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Background sync keeps your data up to date"
                 setShowBadge(false)
