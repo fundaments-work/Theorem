@@ -21,6 +21,11 @@ class StartWorkerArgs {
     var syncIntervalSecs: Long = 300
 }
 
+@InvokeArg
+class UpdateNotificationArgs {
+    var text: String = ""
+}
+
 @TauriPlugin
 class SyncWorkerPlugin(private val activity: Activity) : Plugin(activity) {
 
@@ -33,21 +38,12 @@ class SyncWorkerPlugin(private val activity: Activity) : Plugin(activity) {
         try {
             invoke.parseArgs(StartWorkerArgs::class.java)
 
-            // On Android 13+ (API 33), POST_NOTIFICATIONS is a runtime
-            // permission. Without it the foreground service notification
-            // won't appear, but the service itself still runs.
-            // The user can grant it in Settings → Apps → Theorem →
-            // Notifications.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 if (ContextCompat.checkSelfPermission(
                         activity, Manifest.permission.POST_NOTIFICATIONS
                     ) != PackageManager.PERMISSION_GRANTED
                 ) {
-                    Log.w(
-                        TAG,
-                        "POST_NOTIFICATIONS not granted — notification will not appear. " +
-                        "Grant in Settings > Apps > Theorem > Notifications."
-                    )
+                    Log.w(TAG, "POST_NOTIFICATIONS not granted")
                 }
             }
 
@@ -75,6 +71,18 @@ class SyncWorkerPlugin(private val activity: Activity) : Plugin(activity) {
             invoke.resolve(response)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "Failed to stop sync worker")
+        }
+    }
+
+    @Command
+    fun updateNotification(invoke: Invoke) {
+        try {
+            invoke.parseArgs(UpdateNotificationArgs::class.java)
+            val args = invoke.args as UpdateNotificationArgs
+            SyncForegroundService.updateStatusText(this@SyncWorkerPlugin.activity, args.text)
+            invoke.resolve()
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "Failed to update notification")
         }
     }
 }

@@ -1,12 +1,10 @@
 use tauri::{
     plugin::{Builder, TauriPlugin},
-    Runtime,
+    AppHandle, Runtime,
 };
 
 #[cfg(target_os = "android")]
 use serde::{Deserialize, Serialize};
-#[cfg(target_os = "android")]
-use tauri::{AppHandle, Manager};
 
 #[cfg(target_os = "android")]
 const PLUGIN_IDENTIFIER: &str = "work.fundamentals.theorem.syncworker";
@@ -90,5 +88,25 @@ pub fn stop_worker<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         .handle
         .run_mobile_plugin::<WorkerStatusResponse>("stopWorker", serde_json::json!({}))
         .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+/// Update the sync notification text on Android.
+/// On non-Android platforms this is a no-op.
+#[cfg(target_os = "android")]
+pub fn update_notification<R: Runtime>(app: &AppHandle<R>, text: &str) -> Result<(), String> {
+    let state = get_worker_state(app)?;
+    state
+        .handle
+        .run_mobile_plugin::<WorkerStatusResponse>(
+            "updateNotification",
+            serde_json::json!({ "text": text }),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn update_notification<R: Runtime>(_app: &AppHandle<R>, _text: &str) -> Result<(), String> {
     Ok(())
 }

@@ -1041,6 +1041,7 @@ pub fn run() {
             set_android_fingerprint,
             start_android_sync_worker,
             stop_android_sync_worker,
+            update_sync_notification,
             hide_to_tray,
             download_and_extract_stardict,
         ])
@@ -1099,6 +1100,13 @@ async fn stop_android_sync_worker(app: tauri::AppHandle) -> Result<(), String> {
         eprintln!("[sync] Android sync worker stopped");
     }
     let _ = &app;
+    Ok(())
+}
+
+/// Update the Android sync notification text.
+#[tauri::command]
+async fn update_sync_notification(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    tauri_plugin_android_sync_worker::update_notification(&app, &text)?;
     Ok(())
 }
 

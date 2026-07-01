@@ -253,19 +253,18 @@ export async function pullBookCovers(
  */
 export async function startBackgroundSync(intervalSecs?: number): Promise<void> {
     requireTauri("startBackgroundSync");
-    await invoke("start_background_sync", { intervalSecs: intervalSecs ?? 300 });
+    const interval = intervalSecs ?? 300;
+    await invoke("start_background_sync", { intervalSecs: interval });
 
     // On Android, start the ForegroundService to keep the process alive.
-    // The service uses "connectedDevice" type on API 34+ (KDE Connect pattern)
-    // and "dataSync" on older versions. START_STICKY ensures Android
-    // restarts it if killed.
     if (isMobile()) {
         try {
             await invoke("start_android_sync_worker");
+            await updateSyncNotification(
+                `Ready — auto-sync every ${Math.round(interval / 60)} min`,
+            );
         } catch {
-            // ForegroundService not available or denied. The Rust
-            // background-sync tokio task still runs while the app
-            // is in the foreground.
+            // ForegroundService not available or denied.
         }
     }
 }
@@ -281,6 +280,16 @@ export async function stopBackgroundSync(): Promise<void> {
         } catch {
             // ForegroundService not available.
         }
+    }
+}
+
+/** Update the sync notification text on Android (shows what's being synced). */
+export async function updateSyncNotification(text: string): Promise<void> {
+    if (!isMobile()) return;
+    try {
+        await invoke("update_sync_notification", { text });
+    } catch {
+        // Notification update not available.
     }
 }
 

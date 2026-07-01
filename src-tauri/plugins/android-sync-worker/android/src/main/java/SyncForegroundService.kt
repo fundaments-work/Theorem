@@ -40,6 +40,41 @@ class SyncForegroundService : Service() {
         const val NOTIFICATION_ID = 1001
         const val ACTION_STOP = "work.fundamentals.theorem.syncworker.STOP"
         private const val TAG = "SyncForegroundService"
+        private var statusText: String = "Syncing data with paired devices"
+
+        /**
+         * Update the notification text from the frontend. Called when
+         * sync events fire (e.g., "Last sync: 2 min ago", "Syncing books...").
+         */
+        fun updateStatusText(context: android.content.Context, text: String) {
+            statusText = text
+            try {
+                val notificationManager = context.getSystemService(
+                    android.content.Context.NOTIFICATION_SERVICE
+                ) as? android.app.NotificationManager
+                notificationManager?.notify(NOTIFICATION_ID, buildStaticNotification(context))
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to update notification: ${e.message}")
+            }
+        }
+
+        private fun buildStaticNotification(context: android.content.Context): android.app.Notification {
+            val stopIntent = Intent(context, SyncForegroundService::class.java).apply {
+                action = ACTION_STOP
+            }
+            val stopPendingIntent = android.app.PendingIntent.getService(
+                context, 0, stopIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            return androidx.core.app.NotificationCompat.Builder(context, CHANNEL_ID)
+                .setContentTitle("Theorem Sync Active")
+                .setContentText(statusText)
+                .setSmallIcon(android.R.drawable.ic_popup_sync)
+                .setOngoing(true)
+                .setSilent(true)
+                .addAction(android.R.drawable.ic_media_pause, "Stop", stopPendingIntent)
+                .build()
+        }
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
@@ -134,7 +169,7 @@ class SyncForegroundService : Service() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Theorem Sync Active")
-            .setContentText("Syncing data with paired devices")
+            .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_popup_sync)
             .setOngoing(true)
             .setSilent(true)
