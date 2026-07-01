@@ -168,7 +168,6 @@ class SyncForegroundService : Service() {
             Log.w(TAG, "Wake lock acquire failed: ${e.message}")
         }
     }
-    }
 
     private fun releaseWakeLock() {
         wakeLock?.let {
