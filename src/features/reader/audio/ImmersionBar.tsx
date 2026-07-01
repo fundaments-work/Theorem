@@ -37,7 +37,6 @@ export function ImmersionBar({
     const errorTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const initializedRef = useRef(false);
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
-    const ttsSpeed = useSettingsStore((s) => s.settings.tts.speed);
     const updateTtsSettings = useSettingsStore((s) => s.updateTtsSettings);
 
     const showError = useCallback(() => {
@@ -76,10 +75,6 @@ export function ImmersionBar({
 
         immersionPlayer.init({
             onStateChange: (state) => {
-                if (state !== 'loading' && loadingTimeoutRef.current) {
-                    clearTimeout(loadingTimeoutRef.current);
-                    loadingTimeoutRef.current = null;
-                }
                 setPlaybackState(state);
                 if (state === 'playing') {
                     transitioningRef.current = false;
@@ -109,16 +104,12 @@ export function ImmersionBar({
     }, []);
 
     const lastPlayedCfiRef = useRef('');
-    const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const handlePlay = useCallback(async () => {
         const text = sectionText.trim();
         if (!text) return;
         clearError();
         console.time('[ImmersionBar] play→genId');
-
-        // Apply the current speed setting before starting playback (#27).
-        immersionPlayer.speed = ttsSpeed;
 
         if (playbackState === 'paused') {
             await immersionPlayer.resume();
@@ -133,17 +124,6 @@ export function ImmersionBar({
 
         setPlaybackState('loading');
         setIsContinuousMode(true);
-        // If the Rust backend never returns audio chunks, transition to
-        // error state after 15 s instead of staying stuck at 'loading'.
-        if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
-        loadingTimeoutRef.current = setTimeout(() => {
-            loadingTimeoutRef.current = null;
-            showError();
-            setPlaybackState('idle');
-            setIsContinuousMode(false);
-            immersionPlayer.stop();
-            invoke<void>('stop_speech').catch(() => {});
-        }, 15000);
         lastPlayedCfiRef.current = pageCfi || '';
 
         immersionPlayer.prepare();
@@ -157,13 +137,12 @@ export function ImmersionBar({
             console.timeEnd('[ImmersionBar] play→genId');
             immersionPlayer.setCurrentGenId(genId);
         } catch (err: unknown) {
-            if (loadingTimeoutRef.current) { clearTimeout(loadingTimeoutRef.current); loadingTimeoutRef.current = null; }
             console.error('[ImmersionBar]', err instanceof Error ? err.message : String(err));
             showError();
             setPlaybackState('idle');
             setIsContinuousMode(false);
         }
-    }, [sectionText, startWordId, playbackState, ttsVoice, ttsSpeed]);
+    }, [sectionText, startWordId, playbackState, ttsVoice]);
 
     const handlePause = useCallback(async () => {
         await immersionPlayer.pause();
@@ -171,7 +150,6 @@ export function ImmersionBar({
     }, []);
 
     const handleStop = useCallback(async () => {
-        if (loadingTimeoutRef.current) { clearTimeout(loadingTimeoutRef.current); loadingTimeoutRef.current = null; }
         immersionPlayer.stop();
         setIsContinuousMode(false);
         try { await invoke<void>('stop_speech'); } catch { /* ok */ }
@@ -229,8 +207,6 @@ export function ImmersionBar({
                     'w-full px-4 sm:w-auto sm:px-4',
                     'py-3 sm:py-2.5',
                     'sm:rounded-full rounded-xl',
-                    'mx-0 sm:mx-0',
-                    'mb-0 sm:mb-0',
                     'bg-[var(--color-surface)]/95 backdrop-blur-xl',
                     'border border-[var(--color-border)]',
                     'shadow-[0_8px_32px_rgba(0,0,0,0.18)]',
@@ -238,7 +214,7 @@ export function ImmersionBar({
                     !visible && 'opacity-0 pointer-events-none translate-y-4',
                     className,
                 )}
-                style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))', marginBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+                style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
                 {/* Icon + status */}
                 <div className="flex items-center gap-2 shrink-0">
@@ -341,7 +317,7 @@ export function ImmersionBar({
                                 title="Stop"
                                 aria-label="Stop"
                             >
-                                <Square className="w-3 h-3 fill-current" />
+                                <Square className="w-4 sm:w-3 h-4 sm:h-3 fill-current" />
                             </button>
                         </>
                     )}

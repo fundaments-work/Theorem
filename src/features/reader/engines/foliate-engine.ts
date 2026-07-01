@@ -23,6 +23,7 @@ import type {
 } from '../../../core';
 import { isFixedLayout } from '../../../core';
 import { getTheme } from '../foliate/themes';
+import { getCSS } from '../foliate/reader.js';
 import { 
     registerEngineStyleCallback,
     getCurrentReaderSettings,
@@ -864,6 +865,12 @@ export class FoliateEngine {
             renderer.removeAttribute('animated');
         }
 
+        // Brightness as CSS filter on the paginator shadow-DOM background (#20 follow-up)
+        renderer.style.setProperty(
+            '--reader-brightness',
+            String((currentSettings?.brightness ?? 100) / 100),
+        );
+
         // Apply zoom for fixed-layout formats (CBZ, etc.) via renderer attribute
         if (this.isFixedLayoutFormat && this.flow !== 'scroll') {
             const zoomValue = this.zoom_level === 1.0 ? 'fit-page' : this.zoom_level;
@@ -913,7 +920,6 @@ export class FoliateEngine {
                           currentSettings.textAlign === 'center' ? 'center' : 'left';
 
         const theme = getTheme(this.theme);
-        const { getCSS } = await import('../foliate/reader.js');
 
         const readerStyle = {
             spacing: currentSettings.lineHeight,
