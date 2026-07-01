@@ -45,7 +45,7 @@ export interface UseDocumentReaderReturn {
     canGoForward: boolean;
 
     // Actions
-    open: (source: File | Blob | ArrayBuffer | string, filename?: string, initialLocation?: string, layout?: PageLayout, savedLocations?: string, flow?: ReadingFlow, zoom?: number, margins?: number, format?: BookFormat) => Promise<void>;
+    open: (source: File | Blob | ArrayBuffer | string, filename?: string, initialLocation?: string, layout?: PageLayout, savedLocations?: string, flow?: ReadingFlow, zoom?: number, margins?: number, format?: BookFormat, nativeFilePath?: string) => Promise<void>;
     goTo: (target: string | number) => Promise<void>;
     goToFraction: (fraction: number) => Promise<void>;
     next: (distance?: number) => Promise<void>;
@@ -237,6 +237,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
 
     // Track open operations
     const openAbortRef = useRef<AbortController | null>(null);
+    const loadingDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Open document - with full settings support
     const open = useCallback(async (
@@ -248,7 +249,8 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         flow: ReadingFlow = 'paged',
         zoom: number = 100,
         margins: number = 10,
-        format: BookFormat = 'epub'
+        format: BookFormat = 'epub',
+        nativeFilePath?: string,
     ) => {
         const engine = engineRef.current;
         if (!engine) {
@@ -262,7 +264,15 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         openAbortRef.current = abortController;
 
         // Reset state
-        setInitState({ isInitialized: true, isLoading: true, isReady: false });
+        setInitState({ isInitialized: true, isLoading: false, isReady: false });
+        // Grace period: only show loading indicator if the book takes more
+        // than 200ms to open. With the Rust prefetch + section text cache
+        // most books open in <50ms, so the spinner should rarely appear.
+        if (loadingDelayRef.current !== null) clearTimeout(loadingDelayRef.current);
+        loadingDelayRef.current = setTimeout(() => {
+            loadingDelayRef.current = null;
+            setInitState(s => s.isInitialized ? { ...s, isLoading: true } : s);
+        }, 200);
         setDataState({ metadata: null, toc: EMPTY_TOC, annotations: EMPTY_ANNOTATIONS });
         setLocationState({
             location: null,
@@ -273,7 +283,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         setError(null);
 
         try {
-            await engine.open(source, filename, initialLocation, layout, savedLocations, flow, zoom, margins, format);
+            await engine.open(source, filename, initialLocation, layout, savedLocations, flow, zoom, margins, format, nativeFilePath);
             if (!abortController.signal.aborted && mountedRef.current) {
                 setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
                 setInitState(prev => ({ ...prev, isLoading: false }));

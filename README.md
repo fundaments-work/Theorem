@@ -98,6 +98,7 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, CBR, and RSS feeds — all in one workspace. H
 - Per-word highlighting synchronized with audio
 - Preloads next page audio for seamless page turns
 - Voice switching during playback
+- **Note**: On Android and mobile devices, TTS synthesis is significantly slower than desktop (5–10s per sentence) due to CPU-only ONNX inference. Desktop (macOS, Windows, Linux) has near-real-time performance after model warmup.
 - Model management: download status, cancel/delete model
 - Auto-downloads model on first use (with progress tracking)
 - Test voice before playing

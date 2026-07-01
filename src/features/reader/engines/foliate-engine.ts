@@ -23,6 +23,7 @@ import type {
 } from '../../../core';
 import { isFixedLayout } from '../../../core';
 import { getTheme } from '../foliate/themes';
+import { getCSS } from '../foliate/reader.js';
 import { 
     registerEngineStyleCallback,
     getCurrentReaderSettings,
@@ -337,7 +338,8 @@ export class FoliateEngine {
         flow: ReadingFlow = 'paged',
         zoom: number = 100,
         _margins: number = 10,
-        format: BookFormat = 'epub'
+        format: BookFormat = 'epub',
+        nativeFilePath?: string,
     ): Promise<void> {
         // Store format for format-specific behavior
         this.format = format;
@@ -361,7 +363,10 @@ export class FoliateEngine {
                 file = new File([buffer], _filename, { type: 'application/epub+zip' });
             }
             
-            this.book = await makeBook(file);
+            this.book = await makeBook(file,
+                nativeFilePath ? import('../../../core/lib/tauri-epub-bridge')
+                    .then(m => m.tryNativePrefetchEpub(nativeFilePath)) : undefined
+            );
             this.searchSectionCache = null;
             this.searchCacheBookRef = this.book;
 
@@ -909,7 +914,6 @@ export class FoliateEngine {
                           currentSettings.textAlign === 'center' ? 'center' : 'left';
 
         const theme = getTheme(this.theme);
-        const { getCSS } = await import('../foliate/reader.js');
 
         const readerStyle = {
             spacing: currentSettings.lineHeight,
@@ -1096,6 +1100,9 @@ export class FoliateEngine {
         if (!this.isFixedLayoutFormat) {
             this.view.renderer?.render?.();
         }
+        // Re-apply zoom to the new document after navigation — the 'load'
+        // event listener fires with a stale zoom_level during swipe bursts.
+        this.applyZoomSync();
     }
 
     async goToFraction(fraction: number): Promise<void> {
@@ -1110,6 +1117,7 @@ export class FoliateEngine {
         if (!this.isFixedLayoutFormat) {
             this.view.renderer?.render?.();
         }
+        this.applyZoomSync();
     }
 
     async next(distance?: number): Promise<void> {

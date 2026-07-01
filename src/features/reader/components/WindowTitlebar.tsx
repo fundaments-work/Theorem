@@ -67,7 +67,7 @@ function ToolbarButton({
 }) {
     return (
         <button
-            onClick={onClick}
+            onClick={(e) => { e.stopPropagation(); onClick?.(); }}
             className={cn(
                 ICON_BUTTON_CLASS,
                 active ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,

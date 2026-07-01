@@ -464,6 +464,10 @@ function BookReaderPage() {
         loadedBookIdRef.current = currentBookId;
         setShowToolbar(true);
         setTtsData(null);
+        // Reset zoom to 100 % when opening a new book — the zoom setting is
+        // global and a previous session may have left it at another level (#23).
+        readerZoomRef.current = 100;
+        updateReaderSettings({ zoom: 100 });
 
         let isCancelled = false;
 
@@ -2131,7 +2135,10 @@ function BookReaderPage() {
             </div>
 
             {/* Reader Viewport - fills entire area, bars overlay on top */}
-            <div className="absolute inset-0 overflow-hidden">
+            <div className={cn(
+                "absolute inset-0 overflow-hidden transition-[padding] duration-300",
+                immersionMode && "pb-16",
+            )}>
                 {isPdfFormat ? (
                     <PDFReader
                         ref={pdfReaderRef}
@@ -2166,6 +2173,7 @@ function BookReaderPage() {
                         format={currentBook?.format}
                         initialLocation={initialLocation}
                         savedLocations={getBook(currentBookId || '')?.locations}
+                        nativeFilePath={currentBook?.storagePath || currentBook?.filePath}
                         onReady={handleReady}
                         onLocationChange={handleLocationChange}
                         onLocationsSaved={handleLocationsSaved}
@@ -2221,7 +2229,10 @@ function BookReaderPage() {
                         "fixed left-0 right-0 z-50 flex justify-center pointer-events-none transition-all duration-300",
                         "bottom-0"
                     )}>
-                        <div className={immersionMode ? "pointer-events-auto" : "pointer-events-none"}>
+                        <div className={cn(
+                            immersionMode ? "pointer-events-auto" : "pointer-events-none",
+                            "w-full sm:w-auto",
+                        )}>
                             <ImmersionBar 
                                 sectionText={ttsData?.text || ""}
                                 startWordId={ttsData?.startWordId}

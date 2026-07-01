@@ -313,9 +313,19 @@ export function AppTitlebar({
                                 onKeyDown={handleSearchKeyDown}
                                 className={cn(
                                     TITLEBAR_SEARCH_INPUT,
-                                    "pr-4"
+                                    "pr-8"
                                 )}
                             />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => useUIStore.getState().clearSearch()}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                                    aria-label="Clear search"
+                                >
+                                    ×
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}

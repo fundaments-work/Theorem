@@ -27,18 +27,31 @@ const isFBZ = ({ name, type }) =>
     type === 'application/x-zip-compressed-fb2'
     || name.endsWith('.fb2.zip') || name.endsWith('.fbz')
 
-const makeZipLoader = async file => {
+const makeZipLoader = async (file, prefetchPromise) => {
     const { configure, ZipReader, BlobReader, TextWriter, BlobWriter } =
         await import('./vendor/zip.js')
     configure({ useWebWorkers: false })
     const reader = new ZipReader(new BlobReader(file))
-    const entries = await reader.getEntries()
+
+    // Start zip.js central-directory parse and the (optional) native Rust
+    // prefetch in parallel. The EPubPrefetch provides pre-decoded text for
+    // container / OPF / nav / NCX + an uncompressed-size map so neither
+    // loadText() nor getSize() needs to touch zip.js for the critical path.
+    const entriesPromise = reader.getEntries()
+    const prefetch = await prefetchPromise
+    const entries = await entriesPromise
+
     const map = new Map(entries.map(entry => [entry.filename, entry]))
-    const load = f => (name, ...args) =>
-        map.has(name) ? f(map.get(name), ...args) : null
+    const textCache = prefetch?.textCache
+    const sizes = prefetch?.sizes
+
+    const load = f => (name, ...args) => {
+        if (textCache?.has(name)) return textCache.get(name)
+        return map.has(name) ? f(map.get(name), ...args) : null
+    }
     const loadText = load(entry => entry.getData(new TextWriter()))
     const loadBlob = load((entry, type) => entry.getData(new BlobWriter(type)))
-    const getSize = name => map.get(name)?.uncompressedSize ?? 0
+    const getSize = name => sizes?.get(name) ?? map.get(name)?.uncompressedSize ?? 0
     return { entries, loadText, loadBlob, getSize }
 }
 
@@ -76,7 +89,7 @@ const fetchFile = async url => {
     return new File([await res.blob()], new URL(res.url).pathname)
 }
 
-export const makeBook = async file => {
+export const makeBook = async (file, prefetchPromise) => {
     if (typeof file === 'string') file = await fetchFile(file)
     let book
     if (file.isDirectory) {
@@ -86,7 +99,7 @@ export const makeBook = async file => {
     }
     else if (!file.size) throw new NotFoundError('File not found')
     else if (await isZip(file)) {
-        const loader = await makeZipLoader(file)
+        const loader = await makeZipLoader(file, prefetchPromise)
         if (isCBZ(file)) {
             const { makeComicBook } = await import('./comic-book.js')
             book = makeComicBook(loader, file)

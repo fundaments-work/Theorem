@@ -934,7 +934,18 @@ export class EPUB {
     #loader
     #encryption
     constructor({ loadText, loadBlob, getSize, sha1 }) {
-        this.loadText = loadText
+        // In-flight dedup: nav computation and section loading can both
+        // call loadText() + createDocument() back-to-back for the same
+        // href, and without deduplication every chapter pays for two
+        // zip.js inflate operations per 100KB section.
+        const inflight = new Map()
+        const rawLoadText = loadText
+        this.loadText = async (uri) => {
+            if (inflight.has(uri)) return inflight.get(uri)
+            const p = rawLoadText(uri)
+            inflight.set(uri, p)
+            try { return await p } finally { inflight.delete(uri) }
+        }
         this.loadBlob = loadBlob
         this.getSize = getSize
         this.#encryption = new Encryption(deobfuscators(sha1))
