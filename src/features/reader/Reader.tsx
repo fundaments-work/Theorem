@@ -2135,7 +2135,10 @@ function BookReaderPage() {
             </div>
 
             {/* Reader Viewport - fills entire area, bars overlay on top */}
-            <div className="absolute inset-0 overflow-hidden">
+            <div className={cn(
+                "absolute inset-0 overflow-hidden transition-[padding] duration-300",
+                immersionMode && "pb-16",
+            )}>
                 {isPdfFormat ? (
                     <PDFReader
                         ref={pdfReaderRef}
