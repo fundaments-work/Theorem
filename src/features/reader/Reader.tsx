@@ -599,7 +599,12 @@ function BookReaderPage() {
         };
 
         loadBook();
-        return () => { isCancelled = true; };
+        return () => {
+            isCancelled = true;
+            // Reset the loaded-book guard so a strict-mode double-mount
+            // (React 18/19 development) actually loads the book on re-run.
+            loadedBookIdRef.current = null;
+        };
     }, [currentBookId, getBook]);
 
     // Preload the next few books to keep tap-to-open latency low on mobile.
