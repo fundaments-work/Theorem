@@ -2,9 +2,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from './env';
 
 export interface EpubPrefetchResult {
-    container: string;
-    opf_path: string;
-    opf: string;
+    container?: string;
+    opf_path?: string;
+    opf?: string;
     nav_path?: string;
     nav?: string;
     ncx_path?: string;
@@ -14,33 +14,34 @@ export interface EpubPrefetchResult {
 }
 
 export interface PrefetchCache {
-    /** filename → decoded text (fast-path for loadText calls) */
     textCache: Map<string, string>;
-    /** filename → uncompressed byte size (fast-path for getSize calls) */
     sizes: Map<string, number>;
 }
 
 /**
- * Prefetch OPF + nav/NCX + container XML bytes + entire zip size map from
- * the Rust native parser. On desktop/mobile Tauri this runs the zip in
- * parallel with @zip.js/zip.js's central-directory parse; the first to
- * return wins for the critical-path metadata, and zip sizes are serviced
- * instantly from the Rust-provided map.
+ * Opens the book zip in Rust, returns the uncompressed-size map for EVERY
+ * entry (works for all zip-based formats: EPUB, CBZ, FBZ) plus, for EPUB
+ * files, pre-decoded container/OPF/nav/NCX/encryption text.
  *
- * Returns null on failure so the caller falls through to the standard
- * zip.js path transparently.
+ * On Tauri desktop/mobile, zip.js getEntries() and this command run in
+ * parallel; the first to return wins for the critical path. For CBZ/FBZ
+ * the sizes map alone makes getSize() instant for every entry.
+ *
+ * Returns null on any failure so the caller falls through to the zip.js
+ * path transparently.
  */
 export async function tryNativePrefetchEpub(path: string): Promise<PrefetchCache | null> {
     if (!isTauri()) return null;
     try {
-        const result: EpubPrefetchResult = await invoke('parse_epub_full', { path });
+        const result: EpubPrefetchResult = await invoke('prefetch_zip_metadata', { path });
         const textCache = new Map<string, string>();
 
-        // Inject the pre-decoded XML/HTML bytes under their real zip
-        // entry paths so loadText() returns them without touching
-        // zip.js at all.
-        textCache.set('META-INF/container.xml', result.container);
-        textCache.set(result.opf_path, result.opf);
+        if (result.container) {
+            textCache.set('META-INF/container.xml', result.container);
+        }
+        if (result.opf_path && result.opf) {
+            textCache.set(result.opf_path, result.opf);
+        }
         if (result.nav_path && result.nav) {
             textCache.set(result.nav_path, result.nav);
         }

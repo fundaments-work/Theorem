@@ -208,45 +208,54 @@ fn read_file(path: String) -> Result<Vec<u8>, String> {
 /// Reads a CBR (RAR comic archive) file and converts it to CBZ (ZIP) format
 /// in memory. The resulting ZIP bytes can be passed to the existing CBZ
 /// reading pipeline unchanged.
+///
+/// CBR conversion requires the unrar-ng crate which bundles native C++
+/// unrar code — this does not cross-compile for the Android NDK, so the
+/// command is a no-op on Android (CBR must be pre-converted before transfer).
 #[tauri::command]
 fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
-    let archive = unrar_ng::Archive::new(&path)
-        .open_for_processing()
-        .map_err(|e| format!("Failed to open CBR archive '{}': {}", path, e))?;
-    let mut zip_buffer = Cursor::new(Vec::new());
+    #[cfg(target_os = "android")]
+    return Err("CBR conversion is not supported on Android".into());
+    #[cfg(not(target_os = "android"))]
     {
-        let mut zip_writer = zip::ZipWriter::new(&mut zip_buffer);
-        let options =
-            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
-        let mut archive = archive;
-        loop {
-            let entry = archive
-                .read_header()
-                .map_err(|e| format!("Failed to read CBR header: {}", e))?;
-            let Some(entry) = entry else { break };
-            let filename = entry.entry().filename.to_string_lossy().to_string();
-            if entry.entry().is_file() {
-                let (data, next_archive) = entry
-                    .read()
-                    .map_err(|e| format!("Failed to extract '{}': {}", filename, e))?;
-                zip_writer
-                    .start_file(filename.clone(), options)
-                    .map_err(|e| format!("Failed to write ZIP entry '{}': {}", filename, e))?;
-                zip_writer
-                    .write_all(&data)
-                    .map_err(|e| format!("Failed to write ZIP data for '{}': {}", filename, e))?;
-                archive = next_archive;
-            } else {
-                archive = entry
-                    .skip()
-                    .map_err(|e| format!("Failed to skip entry '{}': {}", filename, e))?;
+        let archive = unrar_ng::Archive::new(&path)
+            .open_for_processing()
+            .map_err(|e| format!("Failed to open CBR archive '{}': {}", path, e))?;
+        let mut zip_buffer = Cursor::new(Vec::new());
+        {
+            let mut zip_writer = zip::ZipWriter::new(&mut zip_buffer);
+            let options = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            let mut archive = archive;
+            loop {
+                let entry = archive
+                    .read_header()
+                    .map_err(|e| format!("Failed to read CBR header: {}", e))?;
+                let Some(entry) = entry else { break };
+                let filename = entry.entry().filename.to_string_lossy().to_string();
+                if entry.entry().is_file() {
+                    let (data, next_archive) = entry
+                        .read()
+                        .map_err(|e| format!("Failed to extract '{}': {}", filename, e))?;
+                    zip_writer
+                        .start_file(filename.clone(), options)
+                        .map_err(|e| format!("Failed to write ZIP entry '{}': {}", filename, e))?;
+                    zip_writer.write_all(&data).map_err(|e| {
+                        format!("Failed to write ZIP data for '{}': {}", filename, e)
+                    })?;
+                    archive = next_archive;
+                } else {
+                    archive = entry
+                        .skip()
+                        .map_err(|e| format!("Failed to skip entry '{}': {}", filename, e))?;
+                }
             }
+            zip_writer
+                .finish()
+                .map_err(|e| format!("Failed to finalize ZIP: {}", e))?;
         }
-        zip_writer
-            .finish()
-            .map_err(|e| format!("Failed to finalize ZIP: {}", e))?;
+        Ok(zip_buffer.into_inner())
     }
-    Ok(zip_buffer.into_inner())
 }
 
 /**
@@ -956,7 +965,7 @@ pub fn run() {
             tts::cancel_tts_model_download,
             tts::get_tts_model_status,
             tts::delete_tts_model,
-            epub_parser::parse_epub_full,
+            epub_parser::prefetch_zip_metadata,
             read_file,
             read_cbr_as_cbz,
             read_pdf_file,
