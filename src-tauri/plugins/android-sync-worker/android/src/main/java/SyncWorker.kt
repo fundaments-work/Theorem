@@ -76,8 +76,11 @@ class SyncWorker(
             setForeground(createForegroundInfo())
             Log.i(TAG, "Starting background sync round")
 
-            // Get app data directory
-            val dataDir = applicationContext.filesDir.absolutePath
+            // Get app data directory (parent of files dir).
+            // The sync identity (sync-identity.json) and paired devices
+            // are stored in the app data dir, not the files subdirectory.
+            val dataDir = applicationContext.filesDir.parentFile?.absolutePath
+                ?: applicationContext.filesDir.absolutePath
             Log.i(TAG, "Data dir: $dataDir")
 
             // Call into Rust native library to run standalone sync
