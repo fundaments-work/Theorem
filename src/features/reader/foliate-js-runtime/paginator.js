@@ -514,7 +514,6 @@ export class Paginator extends HTMLElement {
          #background {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
-            filter: brightness(var(--reader-brightness, 1));
         }
         #container {
             grid-column: 2 / 5;

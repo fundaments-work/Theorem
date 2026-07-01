@@ -865,12 +865,6 @@ export class FoliateEngine {
             renderer.removeAttribute('animated');
         }
 
-        // Brightness as CSS filter on the paginator shadow-DOM background (#20 follow-up)
-        renderer.style.setProperty(
-            '--reader-brightness',
-            String((currentSettings?.brightness ?? 100) / 100),
-        );
-
         // Apply zoom for fixed-layout formats (CBZ, etc.) via renderer attribute
         if (this.isFixedLayoutFormat && this.flow !== 'scroll') {
             const zoomValue = this.zoom_level === 1.0 ? 'fit-page' : this.zoom_level;
