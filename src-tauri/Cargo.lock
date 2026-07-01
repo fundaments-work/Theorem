@@ -5231,6 +5231,7 @@ dependencies = [
  "sha2",
  "theorem-sync-core",
  "tokio",
+ "tower-http 0.5.2",
 ]
 
 [[package]]

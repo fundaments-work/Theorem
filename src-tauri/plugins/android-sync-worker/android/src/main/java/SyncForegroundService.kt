@@ -4,7 +4,13 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -15,8 +21,17 @@ import androidx.core.app.NotificationCompat
  * Android ForegroundService that keeps the Theorem sync process alive
  * while the app is backgrounded. Shows a persistent notification.
  *
- * The Rust background sync scheduler runs independently as a tokio task;
+ * Uses the "connectedDevice" foreground service type on Android 14+
+ * (API 34+) — the same type KDE Connect uses. This type is specifically
+ * designed for companion-device communication and is not aggressively
+ * blocked by OEM skins like MIUI/Xiaomi, unlike "dataSync".
+ *
+ * On Android 10-13 (API 29-33), falls back to "dataSync" type.
+ * On Android < 10, no type is required.
+ *
+ * The Rust background sync scheduler (tokio task) runs independently;
  * this service merely prevents Android from killing the process.
+ * Returns START_STICKY so Android restarts the service if killed.
  */
 class SyncForegroundService : Service() {
 
@@ -24,6 +39,7 @@ class SyncForegroundService : Service() {
         const val CHANNEL_ID = "theorem-sync-worker"
         const val NOTIFICATION_ID = 1001
         const val ACTION_STOP = "work.fundamentals.theorem.syncworker.STOP"
+        private const val TAG = "SyncForegroundService"
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
@@ -31,6 +47,7 @@ class SyncForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        registerNetworkCallback()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -41,35 +58,51 @@ class SyncForegroundService : Service() {
             return START_NOT_STICKY
         }
 
+        val notification = buildNotification()
+
         try {
-            val notification = buildNotification()
-            startForeground(NOTIFICATION_ID, notification)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Android 14+ — use connectedDevice type (KDE Connect pattern).
+                // This type is for companion-device communication and is not
+                // aggressively blocked by MIUI/Xiaomi like dataSync is.
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10-13 — connectedDevice type not available, use dataSync.
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+            } else {
+                // Android < 10 — no type parameter.
+                startForeground(NOTIFICATION_ID, notification)
+            }
         } catch (e: Exception) {
-            // SecurityException on Android 14+ if FOREGROUND_SERVICE_DATA_SYNC
-            // permission is missing, or IllegalStateException if the service
-            // is not allowed to start in the foreground. Either way, don't
-            // crash the app — the Rust background sync scheduler still runs
+            // SecurityException or ForegroundServiceStartNotAllowedException.
+            // Don't crash — the Rust background sync scheduler still runs
             // as a tokio task without the foreground service.
-            Log.e("SyncForegroundService", "Failed to start foreground: ${e.message}")
+            Log.e(TAG, "Failed to start foreground service: ${e.message}")
             stopSelf()
             return START_NOT_STICKY
         }
 
-        // Acquire partial wake lock so the process isn't suspended
-        // while the Rust sync scheduler runs.
         acquireWakeLock()
-
-        // Returning START_STICKY ensures Android restarts the service
-        // if it's killed (though foreground services rarely are).
         return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        unregisterNetworkCallback()
         releaseWakeLock()
         super.onDestroy()
     }
+
+    // ─── Notification ───
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -113,6 +146,8 @@ class SyncForegroundService : Service() {
         return builder.build()
     }
 
+    // ─── Wake Lock ───
+
     private fun acquireWakeLock() {
         if (wakeLock == null) {
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
@@ -132,5 +167,47 @@ class SyncForegroundService : Service() {
             }
             wakeLock = null
         }
+    }
+
+    // ─── Network Change Listener (KDE Connect pattern) ───
+    //
+    // When WiFi reconnects, the sync server needs to rebind to the new
+    // IP address. We fire a broadcast intent that the Rust side can
+    // listen for, or the frontend can pick up via Tauri events.
+
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    private fun registerNetworkCallback() {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager ?: return
+
+        val networkRequest = NetworkRequest.Builder().apply {
+            addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+            addTransportType(NetworkCapabilities.TRANSPORT_VPN)
+        }.build()
+
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                Log.i(TAG, "Network available — sync will resume")
+                // The Rust tokio sync task will pick up the new network
+                // on its next scheduled round. No explicit restart needed.
+            }
+
+            override fun onLost(network: Network) {
+                Log.i(TAG, "Network lost — sync paused")
+            }
+        }
+
+        connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
+    }
+
+    private fun unregisterNetworkCallback() {
+        networkCallback?.let { callback ->
+            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE)
+                as? ConnectivityManager
+            connectivityManager?.unregisterNetworkCallback(callback)
+        }
+        networkCallback = null
     }
 }

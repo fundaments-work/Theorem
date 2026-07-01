@@ -245,22 +245,29 @@ export async function pullBookCovers(
 
 /**
  * Start the background sync scheduler (Rust-side periodic timer).
- * On Android, also starts the ForegroundService to keep the process alive.
+ * On Android, also starts the ForegroundService to keep the process alive
+ * when the app is backgrounded. Uses the "connectedDevice" foreground
+ * service type on Android 14+ (same as KDE Connect) which is not
+ * aggressively blocked by MIUI/Xiaomi.
  * @param intervalSecs How often to sync (default 300 = 5 min, min 60).
  */
 export async function startBackgroundSync(intervalSecs?: number): Promise<void> {
     requireTauri("startBackgroundSync");
     await invoke("start_background_sync", { intervalSecs: intervalSecs ?? 300 });
 
-    // NOTE: The Android ForegroundService (start_android_sync_worker) is
-    // disabled for now. On MIUI/Xiaomi devices, starting a ForegroundService
-    // with foregroundServiceType="dataSync" triggers a PermissionException
-    // that kills the process at the native level, bypassing both the JS
-    // try/catch and the Kotlin try/catch in SyncForegroundService.
-    // The Rust background-sync tokio task (started above) still runs
-    // while the app is in the foreground. To re-enable the ForegroundService,
-    // we need to request POST_NOTIFICATIONS at runtime and handle MIUI's
-    // aggressive permission enforcement.
+    // On Android, start the ForegroundService to keep the process alive.
+    // The service uses "connectedDevice" type on API 34+ (KDE Connect pattern)
+    // and "dataSync" on older versions. START_STICKY ensures Android
+    // restarts it if killed.
+    if (isMobile()) {
+        try {
+            await invoke("start_android_sync_worker");
+        } catch {
+            // ForegroundService not available or denied. The Rust
+            // background-sync tokio task still runs while the app
+            // is in the foreground.
+        }
+    }
 }
 
 /** Stop the background sync scheduler and Android ForegroundService. */
