@@ -4,6 +4,9 @@ use tauri::{
 };
 
 #[cfg(target_os = "android")]
+use tauri::Manager;
+
+#[cfg(target_os = "android")]
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_os = "android")]
