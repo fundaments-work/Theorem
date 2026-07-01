@@ -203,11 +203,10 @@ class SyncForegroundService : Service() {
     }
 
     private fun unregisterNetworkCallback() {
-        networkCallback?.let { callback ->
-            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE)
-                as? ConnectivityManager
-            connectivityManager?.unregisterNetworkCallback(callback)
-        }
+        val callback = networkCallback ?: return
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager
+        connectivityManager?.unregisterNetworkCallback(callback)
         networkCallback = null
     }
 }
