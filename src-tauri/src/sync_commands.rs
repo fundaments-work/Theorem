@@ -552,7 +552,7 @@ async fn discover_peer_port(
     ip: &str,
     last_known_port: u16,
 ) -> Result<(String, u16), String> {
-    let sync_state = get_sync_state(&app)?;
+    let sync_state = get_sync_state(app)?;
     let discovery_client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(1500))
         .build()

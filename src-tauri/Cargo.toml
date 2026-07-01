@@ -67,6 +67,10 @@ zip = "0.6"
 walkdir = "2"
 regex = "1.10.0"
 
+# EPUB pre-parser: streaming XML (replaces regex) + percent-encoded path fallback
+quick-xml = "0.36"
+percent-encoding = "2"
+
 # TTS engine (ONNX Runtime + Kokoro)
 [target.'cfg(not(target_os = "android"))'.dependencies]
 unrar-ng = "0.7.7"

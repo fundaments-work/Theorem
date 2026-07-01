@@ -28,31 +28,66 @@ const isFBZ = ({ name, type }) =>
     || name.endsWith('.fb2.zip') || name.endsWith('.fbz')
 
 const makeZipLoader = async (file, prefetchPromise) => {
-    const { configure, ZipReader, BlobReader, TextWriter, BlobWriter } =
-        await import('./vendor/zip.js')
-    configure({ useWebWorkers: false })
-    const reader = new ZipReader(new BlobReader(file))
-
-    // Start zip.js central-directory parse and the (optional) native Rust
-    // prefetch in parallel. The EPubPrefetch provides pre-decoded text for
-    // container / OPF / nav / NCX + an uncompressed-size map so neither
-    // loadText() nor getSize() needs to touch zip.js for the critical path.
-    const entriesPromise = reader.getEntries()
     const prefetch = await prefetchPromise
-    const entries = await entriesPromise
-
-    const map = new Map(entries.map(entry => [entry.filename, entry]))
     const textCache = prefetch?.textCache
     const sizes = prefetch?.sizes
 
-    const load = f => (name, ...args) => {
-        if (textCache?.has(name)) return textCache.get(name)
-        return map.has(name) ? f(map.get(name), ...args) : null
+    // No native prefetch (web platform, or Tauri without a file path):
+    // use the eager zip.js path — getSize must return real values for the
+    // EPUB section loop, and sections aren't pre-decoded.
+    if (!textCache && !sizes) {
+        const { configure, ZipReader, BlobReader, TextWriter, BlobWriter } =
+            await import('./vendor/zip.js')
+        configure({ useWebWorkers: false })
+        const reader = new ZipReader(new BlobReader(file))
+        const entries = await reader.getEntries()
+        const map = new Map(entries.map(e => [e.filename, e]))
+        const loadText = name =>
+            map.has(name) ? map.get(name).getData(new TextWriter()) : null
+        const loadBlob = (name, type) =>
+            map.has(name) ? map.get(name).getData(new BlobWriter(type)) : null
+        const getSize = name => map.get(name)?.uncompressedSize ?? 0
+        return { entries, loadText, loadBlob, getSize }
     }
-    const loadText = load(entry => entry.getData(new TextWriter()))
-    const loadBlob = load((entry, type) => entry.getData(new BlobWriter(type)))
-    const getSize = name => sizes?.get(name) ?? map.get(name)?.uncompressedSize ?? 0
-    return { entries, loadText, loadBlob, getSize }
+
+    // Fast path: Rust prefetch has pre-decoded all text files (container,
+    // OPF, nav, NCX, all HTML sections) and the size map. We skip zip.js
+    // entirely on the critical path — only lazy-load it when loadBlob
+    // needs an image/cover.
+    let _lazyZip = null
+    const getLazyZip = async () => {
+        if (!_lazyZip) {
+            _lazyZip = (async () => {
+                const { configure, ZipReader, BlobReader, TextWriter, BlobWriter } =
+                    await import('./vendor/zip.js')
+                configure({ useWebWorkers: false })
+                const reader = new ZipReader(new BlobReader(file))
+                const entries = await reader.getEntries()
+                const map = new Map(entries.map(e => [e.filename, e]))
+                return { entries, map, TextWriter, BlobWriter }
+            })()
+        }
+        return _lazyZip
+    }
+
+    const loadText = name => {
+        const cached = textCache.get(name)
+        if (cached !== undefined) return cached
+        return getLazyZip().then(({ map, TextWriter }) => {
+            const entry = map.get(name)
+            return entry ? entry.getData(new TextWriter()) : null
+        })
+    }
+
+    const loadBlob = (name, type) =>
+        getLazyZip().then(({ map, BlobWriter }) => {
+            const entry = map.get(name)
+            return entry ? entry.getData(new BlobWriter(type)) : null
+        })
+
+    const getSize = name => sizes.get(name) ?? 0
+
+    return { loadText, loadBlob, getSize, getLazyZip }
 }
 
 const getFileEntries = async entry => entry.isFile ? entry
@@ -102,11 +137,11 @@ export const makeBook = async (file, prefetchPromise) => {
         const loader = await makeZipLoader(file, prefetchPromise)
         if (isCBZ(file)) {
             const { makeComicBook } = await import('./comic-book.js')
-            book = makeComicBook(loader, file)
+            book = await makeComicBook(loader, file)
         }
         else if (isFBZ(file)) {
             const { makeFB2 } = await import('./fb2.js')
-            const { entries } = loader
+            const entries = loader.entries ?? (await loader.getLazyZip()).entries
             const entry = entries.find(entry => entry.filename.endsWith('.fb2'))
             const blob = await loader.loadBlob((entry ?? entries[0]).filename)
             book = await makeFB2(blob)
