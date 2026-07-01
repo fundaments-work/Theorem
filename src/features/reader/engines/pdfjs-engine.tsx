@@ -1110,7 +1110,8 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
     }, ref) {
         const containerRef = useRef<HTMLDivElement>(null);
         const zoomContainerRef = useRef<HTMLDivElement>(null);
-        const [isLoading, setIsLoading] = useState(true);
+        const [isLoading, setIsLoading] = useState(false);
+        const loadingGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
         const [error, setError] = useState<string | null>(null);
         const [currentPage, setCurrentPage] = useState(initialPage);
         const [totalPages, setTotalPages] = useState(0);
@@ -1456,7 +1457,16 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 if (requiresProvidedData && !pdfData) return;
 
                 try {
-                    setIsLoading(true); setError(null); setPages([]);
+                    setError(null); setPages([]);
+                    // Grace period: only show the loading spinner if PDF parsing
+                    // takes longer than 300ms. With pdfjs-dist prewarmed and
+                    // Tauri direct-asset URLs, many PDFs render fast enough that
+                    // no spinner is needed at all.
+                    if (loadingGraceTimerRef.current) clearTimeout(loadingGraceTimerRef.current);
+                    loadingGraceTimerRef.current = setTimeout(() => {
+                        loadingGraceTimerRef.current = null;
+                        setIsLoading(true);
+                    }, 300);
                     setIsViewportInteracting(false);
                     setIsInitialRenderStabilizing(true);
                     pageLayoutRef.current = [];
@@ -1538,6 +1548,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     const initialPages = [await pdf.getPage(clampedInitialPage)];
                     if (!cancelled) {
                         setPages(initialPages.sort((l, r) => l.pageNumber - r.pageNumber));
+                        if (loadingGraceTimerRef.current) { clearTimeout(loadingGraceTimerRef.current); loadingGraceTimerRef.current = null; }
                         setIsLoading(false);
                         renderStabilizationTimeoutRef.current = setTimeout(() => {
                             renderStabilizationTimeoutRef.current = null;
@@ -1585,6 +1596,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         const errorMsg = err instanceof Error ? err.message : "Failed to load PDF";
                         setError(errorMsg);
                         setIsInitialRenderStabilizing(false);
+                        if (loadingGraceTimerRef.current) { clearTimeout(loadingGraceTimerRef.current); loadingGraceTimerRef.current = null; }
                         callbacksRef.current.onError?.(err instanceof Error ? err : new Error(errorMsg));
                         setIsLoading(false);
                     }
@@ -1598,6 +1610,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 lastEdgePrefetchAtRef.current = 0;
                 lastScrollTopRef.current = 0;
                 pendingScrollPageRef.current = null;
+                if (loadingGraceTimerRef.current) { clearTimeout(loadingGraceTimerRef.current); loadingGraceTimerRef.current = null; }
                 if (initialPageRestoreTimeoutRef.current) { clearTimeout(initialPageRestoreTimeoutRef.current); initialPageRestoreTimeoutRef.current = null; }
                 if (interactionIdleTimeoutRef.current) { clearTimeout(interactionIdleTimeoutRef.current); interactionIdleTimeoutRef.current = null; }
                 if (renderStabilizationTimeoutRef.current) { clearTimeout(renderStabilizationTimeoutRef.current); renderStabilizationTimeoutRef.current = null; }
@@ -2031,7 +2044,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 )}
                 <div
                     ref={containerRef}
-                    className={cn("absolute inset-0 overflow-auto bg-[var(--color-surface)]", (isLoading || error) && "invisible")}
+                    className={cn("absolute inset-0 overflow-auto bg-[var(--color-surface)]", error && "invisible")}
                     onClick={handleViewportClick}
                 >
                     <div ref={zoomContainerRef} className="pdf-zoom-container flex flex-col items-center justify-start min-h-full py-2 sm:py-4 space-y-2 sm:space-y-4 px-1 sm:px-0 mx-auto">

@@ -388,9 +388,6 @@ export class FoliateEngine {
             );
 
             // Get section fractions for progress calculation
-            // Add delay to ensure view is fully ready
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
             this.sectionFractions = this.view.getSectionFractions() || [];
             
             

@@ -11,6 +11,7 @@ import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
 import { initI18n } from "./core/lib/i18n";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
+import { prewarmFoliateRuntime } from "./core/lib/foliate-runtime";
 import { OnboardingFlow } from "./features/onboarding";
 
 const LibraryPage = lazy(() =>
@@ -296,6 +297,7 @@ function App() {
                 return;
             }
             void prewarmPdfJsRuntime();
+            void prewarmFoliateRuntime();
             void loadReaderPage();
         };
 

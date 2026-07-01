@@ -63,24 +63,6 @@ interface PDFReaderProps {
 }
 
 // ============================================================================
-// Loading State Component
-// ============================================================================
-
-/**
- * Loading spinner with message
- */
-function LoadingState({ message = "Loading book..." }: { message?: string }) {
-    return (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)] z-20">
-            <div className="w-12 h-12 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
-            <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">
-                {message}
-            </p>
-        </div>
-    );
-}
-
-// ============================================================================
 // Error State Component
 // ============================================================================
 
@@ -193,7 +175,6 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
         const engineRef = useRef<PDFJsEngineRef>(null);
 
         // Local state for UI
-        const [isLoading, setIsLoading] = useState(true);
         const [error, setError] = useState<string | null>(null);
         const [currentPage, setCurrentPage] = useState(initialPage ?? 1);
         const [totalPages, setTotalPages] = useState(0);
@@ -271,7 +252,6 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
         // Handle load from engine
         const handleLoad = useCallback(
             (info: PDFDocumentInfo) => {
-                setIsLoading(false);
                 setTotalPages(info.totalPages);
                 const loadedScale = engineRef.current?.getZoom() ?? scale;
                 const loadedPage = engineRef.current?.getCurrentPage() ?? 1;
@@ -284,7 +264,6 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
         // Handle error from engine
         const handleError = useCallback(
             (err: Error) => {
-                setIsLoading(false);
                 setError(err.message);
                 onError?.(err);
             },
@@ -310,9 +289,6 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             >
                 {/* PDF Viewer Area - Full height, no toolbar */}
                 <div className="flex-1 relative overflow-hidden">
-                    {/* Loading State */}
-                    {isLoading && <LoadingState />}
-
                     {/* Error State */}
                     {error && <ErrorState error={error} />}
 

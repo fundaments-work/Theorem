@@ -183,6 +183,10 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
             },
             onReady: (meta: DocMetadata, tocItems: TocItem[]) => {
                 if (!mountedRef.current) return;
+                if (loadingDelayRef.current !== null) {
+                    clearTimeout(loadingDelayRef.current);
+                    loadingDelayRef.current = null;
+                }
                 setInitState(prev => ({ ...prev, isReady: true, isLoading: false }));
                 setDataState({ metadata: meta, toc: tocItems, annotations: engine.getAnnotations() });
                 setLocationState(prev => ({
@@ -193,6 +197,10 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
             },
             onError: (err: Error) => {
                 if (!mountedRef.current) return;
+                if (loadingDelayRef.current !== null) {
+                    clearTimeout(loadingDelayRef.current);
+                    loadingDelayRef.current = null;
+                }
                 setError(err);
                 setInitState(prev => ({ ...prev, isLoading: false }));
                 callbacksRef.current.onError?.(err);
@@ -285,11 +293,19 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         try {
             await engine.open(source, filename, initialLocation, layout, savedLocations, flow, zoom, margins, format, nativeFilePath);
             if (!abortController.signal.aborted && mountedRef.current) {
+                if (loadingDelayRef.current !== null) {
+                    clearTimeout(loadingDelayRef.current);
+                    loadingDelayRef.current = null;
+                }
                 setDataState(prev => ({ ...prev, annotations: engine.getAnnotations() }));
                 setInitState(prev => ({ ...prev, isLoading: false }));
             }
         } catch (err) {
             if (!abortController.signal.aborted && mountedRef.current) {
+                if (loadingDelayRef.current !== null) {
+                    clearTimeout(loadingDelayRef.current);
+                    loadingDelayRef.current = null;
+                }
                 setError(err as Error);
                 setInitState(prev => ({ ...prev, isLoading: false }));
             }

@@ -634,9 +634,14 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
 
     return (
         <div className={cn('relative w-full h-full overflow-hidden', className)}>
-            {/* Loading Overlay */}
+            {/* Loading Overlay — only appears after the 200ms grace period in
+                 useDocumentReader. Uses the reading theme background so the
+                 transition to content is seamless. */}
             {isLoading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)] z-20">
+                <div
+                    className="absolute inset-0 flex flex-col items-center justify-center z-20"
+                    style={{ backgroundColor: 'var(--reader-bg)' }}
+                >
                     <div className="w-12 h-12 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
                     <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">
                         Loading book...
