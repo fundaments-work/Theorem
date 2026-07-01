@@ -385,10 +385,6 @@ export const ReaderViewport = forwardRef<ReaderViewportHandle, ReaderViewportPro
         };
     }, [next, prev, goToFraction, showNavFeedback]);
 
-    useEffect(() => {
-        immersionPlayer.init();
-    }, []);
-
     // Scroll wheel navigation - DISABLED in paged mode per user request
     // User wants to use keyboard/touch only for navigation in paged mode
     // Wheel scrolling allowed only in scroll mode

@@ -138,7 +138,14 @@ export class ImmersionPlayer {
     }
 
     async init(callbacks: PlaybackCallbacks = {}) {
-        this.callbacks = callbacks;
+        // Merge instead of overwrite so multiple consumers (ImmersionBar,
+        // ReaderViewport) can call init() without destroying each other's
+        // state-change / error / complete callbacks.
+        if (callbacks.onStateChange) this.callbacks.onStateChange = callbacks.onStateChange;
+        if (callbacks.onError) this.callbacks.onError = callbacks.onError;
+        if (callbacks.onComplete) this.callbacks.onComplete = callbacks.onComplete;
+        if (callbacks.onChunkPlayed) this.callbacks.onChunkPlayed = callbacks.onChunkPlayed;
+        if (callbacks.onSynthesisComplete) this.callbacks.onSynthesisComplete = callbacks.onSynthesisComplete;
 
         for (const ul of this.unlisteners) ul();
         this.unlisteners = [];

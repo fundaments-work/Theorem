@@ -76,6 +76,10 @@ export function ImmersionBar({
 
         immersionPlayer.init({
             onStateChange: (state) => {
+                if (state !== 'loading' && loadingTimeoutRef.current) {
+                    clearTimeout(loadingTimeoutRef.current);
+                    loadingTimeoutRef.current = null;
+                }
                 setPlaybackState(state);
                 if (state === 'playing') {
                     transitioningRef.current = false;
@@ -105,6 +109,7 @@ export function ImmersionBar({
     }, []);
 
     const lastPlayedCfiRef = useRef('');
+    const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const handlePlay = useCallback(async () => {
         const text = sectionText.trim();
@@ -128,6 +133,17 @@ export function ImmersionBar({
 
         setPlaybackState('loading');
         setIsContinuousMode(true);
+        // If the Rust backend never returns audio chunks, transition to
+        // error state after 15 s instead of staying stuck at 'loading'.
+        if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = setTimeout(() => {
+            loadingTimeoutRef.current = null;
+            showError();
+            setPlaybackState('idle');
+            setIsContinuousMode(false);
+            immersionPlayer.stop();
+            invoke<void>('stop_speech').catch(() => {});
+        }, 15000);
         lastPlayedCfiRef.current = pageCfi || '';
 
         immersionPlayer.prepare();
@@ -141,6 +157,7 @@ export function ImmersionBar({
             console.timeEnd('[ImmersionBar] play→genId');
             immersionPlayer.setCurrentGenId(genId);
         } catch (err: unknown) {
+            if (loadingTimeoutRef.current) { clearTimeout(loadingTimeoutRef.current); loadingTimeoutRef.current = null; }
             console.error('[ImmersionBar]', err instanceof Error ? err.message : String(err));
             showError();
             setPlaybackState('idle');
@@ -154,6 +171,7 @@ export function ImmersionBar({
     }, []);
 
     const handleStop = useCallback(async () => {
+        if (loadingTimeoutRef.current) { clearTimeout(loadingTimeoutRef.current); loadingTimeoutRef.current = null; }
         immersionPlayer.stop();
         setIsContinuousMode(false);
         try { await invoke<void>('stop_speech'); } catch { /* ok */ }
@@ -207,7 +225,7 @@ export function ImmersionBar({
         <>
             <div
                 className={cn(
-                    'flex items-center gap-2 sm:gap-1.5 overflow-x-auto',
+                    'flex items-center justify-center gap-2 sm:gap-1.5 overflow-x-auto',
                     'w-full px-4 sm:w-auto sm:px-4',
                     'py-3 sm:py-2.5',
                     'sm:rounded-full rounded-xl',
