@@ -11,7 +11,9 @@ use std::env;
  * Tauri Library Module
  */
 use std::fs;
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+#[cfg(not(target_os = "android"))]
+use std::io::{Cursor, Write};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::ipc::Response;
@@ -210,6 +212,7 @@ fn read_file(path: String) -> Result<Vec<u8>, String> {
 /// unrar code — this does not cross-compile for the Android NDK, so the
 /// command is a no-op on Android (CBR must be pre-converted before transfer).
 #[tauri::command]
+#[allow(unused_variables)]
 fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
     #[cfg(target_os = "android")]
     return Err("CBR conversion is not supported on Android".into());

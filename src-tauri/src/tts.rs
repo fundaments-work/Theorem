@@ -172,6 +172,7 @@ async fn ensure_engine(app: &AppHandle, state: &TtsState) -> Result<(), String> 
 /// Polls for model availability (in case a background download is in progress)
 /// then loads.  On subsequent launches with cached models, this completes in
 /// ~5 s — the time it takes `KokoroTts::new` + dummy synth.
+#[cfg(not(target_os = "android"))]
 pub async fn prewarm_engine(app: &AppHandle, state: &TtsState) {
     let t0 = std::time::Instant::now();
     eprintln!("[tts] prewarm: start, waiting for models…");

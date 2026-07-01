@@ -476,6 +476,7 @@ use std::sync::OnceLock;
 static FRONTEND_FINGERPRINT: OnceLock<String> = OnceLock::new();
 
 /// Helper: SHA-256 hash the input and return the first 16 hex characters.
+#[cfg(target_os = "macos")]
 fn sha2_hash_first16(data: &[u8]) -> String {
     use sha2::Digest;
     let hash = sha2::Sha256::digest(data);
