@@ -585,8 +585,10 @@ function BookReaderPage() {
                     throw new Error('Could not read book file from storage.');
                 }
                 const expectedMimeType = getMimeTypeForBookFormat(book.format);
+                // Always create a new Blob to ensure React detects the change.
+                // If we pass the same Blob reference, React useState sees no change.
                 const typedBlob = blob.type === expectedMimeType
-                    ? blob
+                    ? new Blob([blob], { type: expectedMimeType })
                     : blob.slice(0, blob.size, expectedMimeType);
                 setFile(typedBlob);
             } catch (err) {
