@@ -283,7 +283,7 @@
     --app-accent-contrast: #000000;
     --app-success: #ffffff;
     --app-warning: #ffffff;
-    --app-error: #ff4444;
+    --app-error: #ef5350;
     --app-info: #b0b0b0;
     --app-overlay-subtle: color-mix(in srgb, #ffffff 8%, transparent);
     --app-overlay-medium: color-mix(in srgb, #ffffff 14%, transparent);

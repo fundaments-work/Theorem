@@ -183,9 +183,41 @@ Notes:
   - high-risk UI/runtime changes: also run `pnpm build`
   - Rust touched: run `cargo fmt` and at least `cargo check` in `src-tauri/`
 
+## Performance & Bundling
+- **Never import from the barrel (`src/core/index.ts`).** Import directly from the source module:
+  - `cn` → `src/core/lib/utils`
+  - `useUIStore`/`useLibraryStore`/`useSettingsStore`/`useVocabularyStore`/`useRssStore` → `src/core/store`
+  - `isTauri`/`isMobile` etc. → `src/core/lib/env`
+  - Types → `src/core/types`
+  - Specific lib/services → their exact module path
+  - Barrel re-exports everything — importing from it prevents tree-shaking and bundles all stores/services together.
+- **Use Zustand individual selectors, never destructuring.** `const x = useStore(s => s.x)` subscribes to only `x`, while `const { x } = useStore()` subscribes to the entire store and re-renders on any change.
+- **Wrap heavy/reusable components in `React.memo()`**, especially:
+  - List items rendered via `.map()` (e.g., `BookCard`)
+  - `forwardRef` components (e.g., `ReaderViewport`, `PDFJsEngine`)
+  - Shell chrome (`Sidebar`, `BottomNav`, `AppTitlebar`)
+- **Lazy-load heavy deps that aren't needed on every route:**
+  - `soundtouchjs` (TTS) — lazy `import("./audio/ImmersionPlayer")` only when user activates TTS
+  - `pdfjs-dist` — already dynamic via `prewarmPdfJsRuntime()`
+  - `@mozilla/readability`, `fast-xml-parser` — dynamic `import()` inside RSS functions
+  - `html-to-image` — dynamic `import()` inside `captureCardAsImage`/`downloadImage`
+- **Use `React.lazy()` for route-level components** (already done in `App.tsx`).
+- **Use `pnpm build` to verify chunk splitting** — inspect `dist/assets/` for unexpected size bloat.
+
+## Accessibility Requirements
+- **Modal component**: Must have `role="dialog"`, `aria-modal="true"`, `aria-labelledby` connected to header, focus trap (Tab/Shift+Tab within modal only), focus restoration on close, and `aria-hidden="true"` on background content while open.
+- **Interactive elements must be keyboard accessible**: Any `<div>` with `onClick` must have `role="button"`, `tabIndex={0}`, and `onKeyDown` handler for Enter/Space.
+- **Icon-only buttons must have `aria-label`** (or `aria-labelledby`). `title` alone is insufficient for screen readers.
+- **Form inputs must use `htmlFor`/`id`** for label association. Wrapping `<label>` around `<input>` is not reliable for screen readers.
+- **Dynamic content needs `aria-live` regions**: Use `role="status" aria-live="polite"` with `sr-only` class for status announcements (sync, playback, navigation).
+- **Range sliders** must retain visible focus indicators — never `outline: none` without a visible `box-shadow`/`ring` alternative.
+- **Color contrast** must meet WCAG AA (4.5:1 for normal text). Dark theme error colors need lighter hues (e.g., `#ef5350` on black).
+- **Navigation landmarks** (`<nav>`) should have distinct `aria-label` (e.g., `"Main navigation"`, `"Primary navigation"`).
+
 ## Explicit anti-patterns for this repo
 - Do not introduce React Router routing for page navigation.
 - Always use React portal model for overlay
 - Do not replace Zustand route state with local component routing state.
 - Do not hardcode colors where design tokens exist.
 - Do not directly edit vendored foliate-js internals for app-level behavior tweaks if the wrapper/engine layer can solve it.
+- Do not import from the barrel (`src/core/index.ts`). Import from specific source modules only.

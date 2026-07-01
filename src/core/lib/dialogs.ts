@@ -26,7 +26,7 @@ export async function showConfirm(options: ConfirmOptions): Promise<boolean> {
 
     try {
         const result = await confirm(options.message, {
-            title: options.title || "Confirm",
+            title: options.title,
             kind: options.kind || "warning",
             okLabel: options.okLabel || "OK",
             cancelLabel: options.cancelLabel || "Cancel",
@@ -49,7 +49,7 @@ export async function showAsk(options: ConfirmOptions): Promise<boolean> {
 
     try {
         const result = await ask(options.message, {
-            title: options.title || "Question",
+            title: options.title,
             kind: options.kind || "info",
             okLabel: options.okLabel || "Yes",
             cancelLabel: options.cancelLabel || "No",
@@ -206,7 +206,6 @@ export async function showSaveFileDialog(options: SaveDialogOptions = {}): Promi
  */
 export async function confirmDeleteBook(bookTitle: string): Promise<boolean> {
     return showConfirm({
-        title: "Delete Book",
         message: `Are you sure you want to delete "${bookTitle}"? This action cannot be undone.`,
         okLabel: "Delete",
         cancelLabel: "Keep",
@@ -219,7 +218,6 @@ export async function confirmDeleteBook(bookTitle: string): Promise<boolean> {
  */
 export async function confirmClearAllData(): Promise<boolean> {
     return showConfirm({
-        title: "Clear All Data",
         message: "This will permanently delete all your books, highlights, notes, vocabulary, shelves, and settings. This action cannot be undone.",
         okLabel: "Clear Everything",
         cancelLabel: "Cancel",
@@ -232,7 +230,6 @@ export async function confirmClearAllData(): Promise<boolean> {
  */
 export async function confirmRemoveFromShelf(bookTitle: string, shelfName: string): Promise<boolean> {
     return showConfirm({
-        title: "Remove from Shelf",
         message: `Remove "${bookTitle}" from "${shelfName}"?`,
         okLabel: "Remove",
         cancelLabel: "Keep",
@@ -245,7 +242,6 @@ export async function confirmRemoveFromShelf(bookTitle: string, shelfName: strin
  */
 export async function confirmDeleteShelf(shelfName: string): Promise<boolean> {
     return showConfirm({
-        title: "Delete Shelf",
         message: `Delete the shelf "${shelfName}"? Books in this shelf will remain in your library.`,
         okLabel: "Delete",
         cancelLabel: "Keep",
@@ -258,7 +254,6 @@ export async function confirmDeleteShelf(shelfName: string): Promise<boolean> {
  */
 export async function confirmDeleteBookmark(): Promise<boolean> {
     return showConfirm({
-        title: "Delete Bookmark",
         message: "Are you sure you want to delete this bookmark?",
         okLabel: "Delete",
         cancelLabel: "Keep",
@@ -271,7 +266,6 @@ export async function confirmDeleteBookmark(): Promise<boolean> {
  */
 export async function confirmRemoveDictionary(dictionaryName: string): Promise<boolean> {
     return showConfirm({
-        title: "Remove Dictionary",
         message: `Remove "${dictionaryName}"? Offline word lookups from this dictionary will stop working.`,
         okLabel: "Remove",
         cancelLabel: "Keep",

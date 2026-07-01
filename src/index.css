@@ -216,6 +216,7 @@ input[type=range] {
 
 input[type=range]:focus {
     outline: none;
+    box-shadow: 0 0 0 2px var(--color-accent);
 }
 
 input[type=range]::-webkit-slider-runnable-track {
