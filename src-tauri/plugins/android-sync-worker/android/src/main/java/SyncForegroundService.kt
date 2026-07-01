@@ -135,6 +135,29 @@ class SyncForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /**
+     * Called when the user swipes the app from Recent Apps.
+     * Schedules a service restart via AlarmManager so the sync
+     * process survives task removal (common on MIUI/Xiaomi).
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val restartIntent = Intent(applicationContext, SyncForegroundService::class.java)
+        val pendingIntent = PendingIntent.getService(
+            applicationContext,
+            1,
+            restartIntent,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmManager = getSystemService(ALARM_SERVICE) as? android.app.AlarmManager
+        alarmManager?.set(
+            android.app.AlarmManager.ELAPSED_REALTIME,
+            android.os.SystemClock.elapsedRealtime() + 1000,
+            pendingIntent
+        )
+        Log.i(TAG, "Task removed — scheduled service restart in 1s")
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         unregisterNetworkCallback()
         releaseWakeLock()
