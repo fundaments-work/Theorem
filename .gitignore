@@ -24,11 +24,23 @@ coverage
 target
 src-tauri/target
 
+# Cargo local configuration (machine-specific)
+.cargo/
+
+# Rust analyzer files
+*.rs.bk
+
 # Local Tauri CLI symlink (user convenience, points to node_modules)
 src-tauri/tauri
 
 # Tauri generated schema files
 src-tauri/gen/schemas
+
+# Tauri runtime state (local workspace data, not for version control)
+.tauri/
+
+# Plugin Android build outputs
+src-tauri/plugins/*/android/build/
 
 # Android (Tauri generated project)
 src-tauri/gen/android/
@@ -40,16 +52,37 @@ src-tauri/gen/android/
 *.apk
 output-metadata.json
 
+# Android local SDK path (machine-specific)
+local.properties
+
+# Gradle caches and build outputs
+.gradle/
+*.dex
+*.class
+
+# Kotlin compiler cache
+.kotlin/
+
+# Python (build scripts, tooling helpers)
+__pycache__/
+*.pyc
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
+*.iml
+*.iws
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Development environment
+.envrc
+.direnv/
 
 # PDFium integration documentation (temporary)
 ANNOTATIONS_IMPLEMENTATION.md
