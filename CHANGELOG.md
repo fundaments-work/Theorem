@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-07-02
+
+### Fixed
+
+- **TTS autoplay on word tap** — Removed the `.tts-word` click-to-play feature entirely. Tapping any word no longer triggers `generate_speech` regardless of `ttsEnabled`. Only the ImmersionBar play button starts playback.
+- **TTS word doubling** — Removed the `isContinuousMode` auto-play effect in ImmersionBar that raced with `handleTtsComplete`. Both called `generate_speech` for the same page text, causing every word to play twice.
+- **TTS continues after closing immersion bar** — `handleTtsComplete` now checks `immersionMode` before auto-advancing. Added ref-based guard against stale in-flight async calls.
+- **TTS memory leak — audio buffers not freed on stop** — `desktop_audio::stop_audio()` changed from `player.stop()` (atomic flag, queue drained at 1 chunk/5ms) to `player.clear()` (immediate queue drain + pause).
+- **TTS memory — 3× IPC overhead per chunk** — Removed `audio_data` from `TtsChunk` IPC struct (48KB+ `Vec<f32>` serialized as JSON per chunk, never read by frontend). Replaced with `duration_ms` computed on Rust side. Saves ~400KB per chunk in memory + IPC bandwidth.
+- **TTS memory — stale closures in singleton** — `ImmersionPlayer.destroy()` now clears `this.callbacks`, preventing old React component closures from being held indefinitely.
+- **Immersion toggle causes page turn** — Removed `pb-16` padding transition on viewport container that resized the foliate paginator, triggering column recalculation.
+- **3D page-flip animation stutter** — Reverted the Web Animations API 3-keyframe rotateY effect back to a CSS `ease-out` transition. Fixed missing closing brace on `#container` CSS rule that broke all subsequent selectors.
+- **Page-turn animation only plays on same-chapter pages** — Removed `Math.abs(offset - prev) === this.size` gate from `#setViewPosition`. Added `animate` parameter: `scrollBy` (touch drag) passes `false`, programmatic nav uses `true`. Always calls `#setViewPosition` even when offset matches, ensuring newly-created view elements get the CSS transition.
+- **Settings sync interrupts page-turn animation** — Deferred `applySettingsSync/Async` in `next()`/`prev()` via `setTimeout(350)` so renderer attribute changes (column count, flow) don't trigger a re-layout during the 0.3s CSS transition.
+- **Desktop window controls hidden when toolbar slides away** — Window titlebar now has `onDoubleClick={handleMaximize}` for standard double-click maximize/restore behavior.
+
+### Changed
+
+- **Sync icon** — Replaced `animate-spin` rotation on `ArrowDownUp` icon with a colored dot indicator: idle (grey), syncing (amber+pulse), synced (green), error (red). Last synced label moved to left of icon.
+- **Sync/statistics buttons** — Now use `ui-icon-btn` class on desktop too, giving them a visible `background: var(--color-surface)` consistent with mobile.
+- **Page-turn easing** — Changed from `cubic-bezier(0.22, 1, 0.36, 1)` (dual y=1.0, caused mid-turn plateau) to `cubic-bezier(0, 0, 0.58, 1)` (CSS ease-out, natural deceleration).
+
+### Removed
+
+- **Dead component** — Removed unused `ShareCard.tsx`.
+- **Unused barrel files** — Removed `article-reader/index.ts`, `components/index.ts`, `highlights/index.ts`, `progress/index.ts` (nothing imported from them).
+- **Dead CSS classes** — Removed `.epub-container`, `.epub-container iframe`, `.reader-screen`, `.theme-transition`, `.reader-container` from `index.css`.
+- **Commented-out console.log** — Cleaned up 3 lines in `foliate-js-runtime/epub.js`.
+- **Unused PDF.js vendor** — Removed `foliate-js/vendor/pdfjs/` directory (~10.5MB, app uses `pdfjs-dist` npm package).
+
 ## [1.0.2] - 2026-07-01
 
 ### Added
