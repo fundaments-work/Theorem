@@ -1108,11 +1108,18 @@ export class FoliateEngine {
     }
 
     // Navigation methods
+    private awaitFrame(): Promise<void> {
+        return new Promise(resolve => requestAnimationFrame(() => resolve()));
+    }
+
     async goTo(target: string | number): Promise<void> {
         if (!this.view) return;
         await this.view.goTo(target);
-        // Re-apply zoom + re-render columns now that the new section has
-        // loaded and zoom was applied by the load event handler.
+        // Wait one frame so the browser paints the initial layout from
+        // View.load() before we re-apply zoom and re-render columns.
+        // Omitting this causes blank pages — expand() inside the
+        // synchronous renderer.render() can measure 0-dimension content.
+        await this.awaitFrame();
         this.applyZoomSync();
     }
 
@@ -1122,7 +1129,7 @@ export class FoliateEngine {
         const clampedFraction = Math.max(0, Math.min(1, fraction));
         
         await this.view.goToFraction(clampedFraction);
-        // Re-apply zoom + re-render columns after jump navigation.
+        await this.awaitFrame();
         this.applyZoomSync();
     }
 

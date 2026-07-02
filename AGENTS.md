@@ -69,48 +69,48 @@ Do not skip clippy. Do not commit with clippy warnings still present. Fix them f
 ## Repository Map
 ```text
 src/
-  App.tsx                         # Route switch driven by useUIStore
+  App.tsx                       # Route switch driven by useUIStore
   core/
-    index.ts                      # Barrel re-exporting lib, store, types, services
-    types/index.ts                # Core domain contracts (Book, Annotation, settings, routes)
-    store/index.ts                # Zustand stores + persistence + migrations
-    lib/                          # Runtime helpers (env, storage, import, design tokens, dialogs, vault sync)
-    services/                     # Dictionary, StarDict, RSS services
-  shell/                          # App chrome (sidebar, titlebar, bottom nav, error boundary)
-  ui/                             # Shared UI primitives (Modal/Dropdown/Panel/ContextMenu/Backdrop)
+    index.ts                    # Barrel re-exporting lib, store, types, services
+    types/index.ts              # Core domain contracts (Book, Annotation, settings, routes)
+    store/index.ts              # Zustand stores + persistence + migrations
+    lib/                        # Runtime helpers (env, storage, import, design tokens, dialogs, vault sync)
+    services/                   # Dictionary, StarDict, RSS services
+  shell/                        # App chrome (sidebar, titlebar, bottom nav, error boundary)
+  ui/                           # Shared UI primitives (Modal/Dropdown/Panel/ContextMenu/Backdrop)
   features/
     reader/
       engines/
-        foliate-engine.ts         # FoliateEngine class — main book rendering API
-        pdfjs-engine.tsx          # PDF.js engine
+        foliate-engine.ts       # FoliateEngine class — main book rendering API
+        pdfjs-engine.tsx        # PDF.js engine
       hooks/
-        useDocumentReader.ts      # Bridge between React and FoliateEngine
-      foliate-js/                # VENDORED — do not edit
-      foliate-js-runtime/        # OUR runtime wrapper — can edit
-        view.js                   # makeBook(), makeZipLoader(), FoliateView web component
-        epub.js                   # EPUB.init() — OPF/manifest/spine/TOC parsing
-        comic-book.js             # CBZ rendering
-        vendor/zip.js             # @zip.js/zip.js (minified, keep as-is)
-        vendor/fflate.js          # fflate for MOBI zlib decompression
-    library/                      # Library/shelves/bookmarks/annotations pages
-    vocabulary/                   # Vocabulary workspace
-    feeds/                        # Feed subscriptions + article list
-    settings/                     # App settings and data management
-    statistics/                   # Reading stats
-    onboarding/                   # First-run onboarding flow
+        useDocumentReader.ts    # Bridge between React and FoliateEngine
+      foliate-js/               # VENDORED — do not edit
+      foliate-js-runtime/       # OUR runtime wrapper — can edit
+        view.js                 # makeBook(), makeZipLoader(), FoliateView web component
+        epub.js                 # EPUB.init() — OPF/manifest/spine/TOC parsing
+        comic-book.js           # CBZ rendering
+        vendor/zip.js           # @zip.js/zip.js (minified, keep as-is)
+        vendor/fflate.js        # fflate for MOBI zlib decompression
+    library/                    # Library/shelves/bookmarks/annotations pages
+    vocabulary/                 # Vocabulary workspace
+    feeds/                      # Feed subscriptions + article list
+    settings/                   # App settings and data management
+    statistics/                 # Reading stats
+    onboarding/                 # First-run onboarding flow
 src-tauri/
-  Cargo.toml                      # Workspace root (members: theorem, theorem-sync-core, sync-daemon)
+  Cargo.toml                    # Workspace root (members: theorem, theorem-sync-core, sync-daemon)
   src/
-    lib.rs                        # Tauri commands + runtime bootstrap
-    main.rs                       # Entry point (calls theorem_lib::run())
-    epub_parser.rs                # Native EPUB pre-parser (prefetch_zip_metadata command)
-    tts.rs                        # TTS orchestration
-    tts_model.rs                  # Kokoro model download/management
-    sync_commands.rs              # All sync Tauri commands
+    lib.rs                      # Tauri commands + runtime bootstrap
+    main.rs                     # Entry point (calls theorem_lib::run())
+    epub_parser.rs              # Native EPUB pre-parser (prefetch_zip_metadata command)
+    tts.rs                      # TTS orchestration
+    tts_model.rs                # Kokoro model download/management
+    sync_commands.rs            # All sync Tauri commands
   crates/
-    theorem-sync-core/            # Shared sync library (crypto, protocol, embedded HTTP server)
-    sync-daemon/                  # Standalone background sync daemon (sidecar)
-  tauri.conf.json                 # Window config, CSP, bundling resources
+    theorem-sync-core/          # Shared sync library (crypto, protocol, embedded HTTP server)
+    sync-daemon/                # Standalone background sync daemon (sidecar)
+  tauri.conf.json               # Window config, CSP, bundling resources
 ```
 
 ## Required Commands
@@ -199,6 +199,14 @@ Notes:
 - Additional guards: `isTauriDesktop()`, `isTauriMobile()`, `isMobile()` for finer-grained checks.
 - Keep browser fallbacks for dialogs/storage/network where already implemented.
 - RSS/article fetch logic intentionally uses Tauri invokes in desktop mode to bypass browser CORS restrictions.
+
+### Column layout (paginator internals)
+- The `foliate-paginator` uses a CSS grid in its closed shadow DOM.
+- The `#container` (grid cell that holds the view) has a fixed size determined by grid track sizing — NOT by iframe content. Its `getBoundingClientRect()` is valid immediately, no layout-settle delay needed.
+- The `beforeRender()` call during `View.load()` measures `#container` ONLY. Since the container size is grid-determined, the measurement is correct on the very first attempt.
+- Zoom is applied to the new section's document via `applyZoomToDocument()` inside the `load` event handler, which fires BEFORE `beforeRender()` and `columnize()`. So columns are calculated with zoom already active.
+- Navigation methods (`goTo`, `goToFraction`, `open`) call `applyZoomSync()` after navigation completes. This re-applies zoom (redundant, harmless) and calls the paginator's `render()` to recalculate columns as a safety net.
+- The relocate handler's section-change detection (`next()`/`prev()` wrapping to a new chapter) uses single `requestAnimationFrame(() => applyZoomSync())` — the RAF batches concurrent calls, not to wait for layout settle.
 
 ## Placement Rules (Where New Code Goes)
 - Shared domain types/contracts: `src/core/types/index.ts`
@@ -314,3 +322,4 @@ Notes:
 - Do not import from the barrel (`src/core/index.ts`). Import from specific source modules only.
 - Do not commit code that fails `pnpm typecheck`, `cargo fmt`, `cargo clippy`, or `cargo check`.
 - Do not leave clippy warnings unfixed — clean them up as part of the same commit.
+- **Do not add `awaitSettledLayout()` / double-RAF delays after navigation.** The paginator's container dimensions are determined by CSS grid track sizing, not by iframe content — they're correct immediately.
