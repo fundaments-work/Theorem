@@ -157,6 +157,9 @@ export class FoliateEngine {
     private _awaitingInitialRelocate = false;
     /** Tracks the last section index to detect chapter boundary crosses. */
     private _lastSectionIndex = -1;
+    /** When true, the relocate handler skips its deferred applyZoomSync —
+     *  goTo/goToFraction already runs applyZoomSync after navigation. */
+    private _navigationInProgress = false;
 
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
@@ -421,47 +424,54 @@ export class FoliateEngine {
             
             // Set flag BEFORE navigation - relocate fires synchronously during goTo()
             this._awaitingInitialRelocate = true;
+            // Suppress the relocate handler's deferred applyZoomSync during
+            // explicit navigation — we run it ourselves below.
+            this._navigationInProgress = true;
             
-            if (initialLocation) {
-                try {
-                    const result = await this.withTimeout(
-                        this.view.goTo(initialLocation),
-                        READER_NAVIGATION_TIMEOUT_MS,
-                        'restoring saved location',
-                    );
-                    if (!result) {
-                        // Fall back to beginning if CFI is invalid
-                        await this.withTimeout(
-                            this.view.goTo({ index: 0, fraction: 0 }),
+            try {
+                if (initialLocation) {
+                    try {
+                        const result = await this.withTimeout(
+                            this.view.goTo(initialLocation),
                             READER_NAVIGATION_TIMEOUT_MS,
-                            'navigating to the start',
+                            'restoring saved location',
                         );
-                    } else {
+                        if (!result) {
+                            // Fall back to beginning if CFI is invalid
+                            await this.withTimeout(
+                                this.view.goTo({ index: 0, fraction: 0 }),
+                                READER_NAVIGATION_TIMEOUT_MS,
+                                'navigating to the start',
+                            );
+                        } else {
+                        }
+                } catch (err) {
+                    // Fall back to beginning if CFI navigation throws
+                    await this.withTimeout(
+                        this.view.goTo({ index: 0, fraction: 0 }),
+                        READER_NAVIGATION_TIMEOUT_MS,
+                        'navigating to the start',
+                    );
+                    // Clear invalid CFI by navigating to beginning
+                    if (this.options.onLocationChange) {
+                        this.options.onLocationChange({ cfi: '', percentage: 0, tocItem: undefined, pageItem: undefined, pageInfo: undefined });
                     }
-            } catch (err) {
-                // Fall back to beginning if CFI navigation throws
-                await this.withTimeout(
-                    this.view.goTo({ index: 0, fraction: 0 }),
-                    READER_NAVIGATION_TIMEOUT_MS,
-                    'navigating to the start',
-                );
-                // Clear invalid CFI by navigating to beginning
-                if (this.options.onLocationChange) {
-                    this.options.onLocationChange({ cfi: '', percentage: 0, tocItem: undefined, pageItem: undefined, pageInfo: undefined });
                 }
-            }
-            } else {
-                await this.withTimeout(
-                    this.view.goTo({ index: 0, fraction: 0 }),
-                    READER_NAVIGATION_TIMEOUT_MS,
-                    'navigating to the start',
-                );
-            }
+                } else {
+                    await this.withTimeout(
+                        this.view.goTo({ index: 0, fraction: 0 }),
+                        READER_NAVIGATION_TIMEOUT_MS,
+                        'navigating to the start',
+                    );
+                }
 
-            // Re-apply zoom + re-render columns now that the initial section
-            // has loaded — ensures columns are calculated with both the
-            // paginator's CSS and our inline zoom applied.
-            this.applyZoomSync();
+                // Re-apply zoom + re-render columns now that the initial section
+                // has loaded — ensures columns are calculated with both the
+                // paginator's CSS and our inline zoom applied.
+                this.applyZoomSync();
+            } finally {
+                this._navigationInProgress = false;
+            }
 
             // Signal that book is ready
             this.options.onReady?.(metadata, toc);
@@ -586,12 +596,17 @@ export class FoliateEngine {
 
             // Detect chapter boundary cross (section index changed) and
             // re-render columns. This handles page-turn wraps to the next
-            // chapter via next()/prev() — our explicit goTo/ goToFraction
-            // already run applyZoomSync internally.
+            // chapter via next()/prev(). Always update _lastSectionIndex
+            // so page turns within the same section don't falsely trigger.
+            // Skip the deferred applyZoomSync when an explicit navigation
+            // (goTo/goToFraction/open) is already in progress — those
+            // methods run their own applyZoomSync after navigation.
             const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
             if (sectionIndex >= 0 && sectionIndex !== this._lastSectionIndex) {
                 this._lastSectionIndex = sectionIndex;
-                requestAnimationFrame(() => this.applyZoomSync());
+                if (!this._navigationInProgress) {
+                    requestAnimationFrame(() => this.applyZoomSync());
+                }
             }
 
             // After initial navigation, wait for first relocate then apply full settings update
@@ -1114,23 +1129,27 @@ export class FoliateEngine {
 
     async goTo(target: string | number): Promise<void> {
         if (!this.view) return;
-        await this.view.goTo(target);
-        // Wait one frame so the browser paints the initial layout from
-        // View.load() before we re-apply zoom and re-render columns.
-        // Omitting this causes blank pages — expand() inside the
-        // synchronous renderer.render() can measure 0-dimension content.
-        await this.awaitFrame();
-        this.applyZoomSync();
+        this._navigationInProgress = true;
+        try {
+            await this.view.goTo(target);
+            await this.awaitFrame();
+            this.applyZoomSync();
+        } finally {
+            this._navigationInProgress = false;
+        }
     }
 
     async goToFraction(fraction: number): Promise<void> {
         if (!this.view) return;
-        
-        const clampedFraction = Math.max(0, Math.min(1, fraction));
-        
-        await this.view.goToFraction(clampedFraction);
-        await this.awaitFrame();
-        this.applyZoomSync();
+        this._navigationInProgress = true;
+        try {
+            const clampedFraction = Math.max(0, Math.min(1, fraction));
+            await this.view.goToFraction(clampedFraction);
+            await this.awaitFrame();
+            this.applyZoomSync();
+        } finally {
+            this._navigationInProgress = false;
+        }
     }
 
     async next(distance?: number): Promise<void> {
