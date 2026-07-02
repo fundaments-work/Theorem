@@ -260,6 +260,17 @@ async function mergeIncomingData(
         if (prunedBooks.length !== libraryState.books.length) markUpdated("books");
         if (prunedAnnotations.length !== libraryState.annotations.length) markUpdated("annotations");
         if (prunedCollections.length !== libraryState.collections.length) markUpdated("collections");
+
+        // Same pruning for RSS feeds and articles — tombstoned feeds must be
+        // removed even when no rss_feeds/rss_articles domain arrives.
+        const rssState = useRssStore.getState();
+        const prunedFeeds = mergeRssFeeds([], rssState.feeds, allTombstones);
+        const prunedArticles = mergeRssArticles([], rssState.articles, undefined, allTombstones);
+
+        useRssStore.setState({ feeds: prunedFeeds.feeds, articles: prunedArticles });
+
+        if (prunedFeeds.feeds.length !== rssState.feeds.length) markUpdated("rss_feeds");
+        if (prunedArticles.length !== rssState.articles.length) markUpdated("rss_articles");
     }
 
     // Read a snapshot of current state for merges that depends on it.
@@ -554,8 +565,11 @@ export async function ensureResponderSyncReady(): Promise<void> {
     }
 
     responderReadyPromise = (async () => {
-        await startSyncServer();
+        // Provision data FIRST so the server never starts without data.
+        // If startSyncServer runs first, a peer could get 503 before
+        // provisionSyncData completes.
         await provisionSyncData();
+        await startSyncServer();
 
         if (!responderEventUnlisten) {
             responderEventUnlisten = await initSyncEventListener();
