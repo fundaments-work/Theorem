@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -16,5 +17,19 @@
             android:foregroundServiceType="connectedDevice|dataSync"
             android:stopWithTask="false"
             android:exported="false" />
+
+        <!--
+        Override WorkManager's SystemForegroundService to declare the correct
+        foregroundServiceType. Without this, startForeground() with
+        connectedDevice type crashes on Android 14+ (API 34):
+        "foregroundServiceType 0x00000001 is not a subset of
+        foregroundServiceType attribute 0x00000000"
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="connectedDevice|dataSync"
+            android:exported="false"
+            android:stopWithTask="false"
+            tools:replace="android:foregroundServiceType" />
     </application>
 </manifest>
