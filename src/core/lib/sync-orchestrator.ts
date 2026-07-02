@@ -379,7 +379,7 @@ async function mergeIncomingData(
         try {
             const incoming = JSON.parse(incomingMap["rss_feeds"]);
             if (Array.isArray(incoming)) {
-                const result = mergeRssFeeds(incoming, useRssStore.getState().feeds);
+                const result = mergeRssFeeds(incoming, useRssStore.getState().feeds, allTombstones);
                 useRssStore.setState({ feeds: result.feeds });
                 feedIdMap = result.feedIdMap;
                 markUpdated("rss_feeds");
@@ -392,7 +392,7 @@ async function mergeIncomingData(
         try {
             const incoming = JSON.parse(incomingMap["rss_articles"]);
             if (Array.isArray(incoming)) {
-                const merged = mergeRssArticles(incoming, useRssStore.getState().articles, feedIdMap);
+                const merged = mergeRssArticles(incoming, useRssStore.getState().articles, feedIdMap, allTombstones);
                 useRssStore.setState({ articles: merged });
                 markUpdated("rss_articles");
             }

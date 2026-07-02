@@ -427,15 +427,20 @@ function mergeMeanings(
 export function mergeRssFeeds(
     incoming: RssFeed[],
     existing: RssFeed[],
+    tombstones: DeletionTombstone[] = [],
 ): { feeds: RssFeed[]; feedIdMap: Map<string, string> } {
+    const deletedFeedIds = tombstoneIdSet(tombstones, "feed");
     const byUrl = new Map<string, RssFeed>();
     const feedIdMap = new Map<string, string>();
 
     for (const feed of existing) {
+        if (deletedFeedIds.has(feed.id)) continue;
         byUrl.set(feed.url, feed);
     }
 
     for (const inc of incoming) {
+        if (deletedFeedIds.has(inc.id)) continue;
+
         const match = byUrl.get(inc.url);
         if (!match) {
             byUrl.set(inc.url, inc);
@@ -475,10 +480,13 @@ export function mergeRssArticles(
     incoming: RssArticle[],
     existing: RssArticle[],
     feedIdMap?: Map<string, string>,
+    tombstones: DeletionTombstone[] = [],
 ): RssArticle[] {
+    const deletedFeedIds = tombstoneIdSet(tombstones, "feed");
     const byId = new Map<string, RssArticle>();
 
     for (const article of existing) {
+        if (deletedFeedIds.has(article.feedId)) continue;
         byId.set(article.id, article);
     }
 
@@ -486,6 +494,8 @@ export function mergeRssArticles(
         // Remap feedId if this article references a remote feed that was
         // deduplicated into a local feed with a different ID.
         const remappedFeedId = feedIdMap?.get(inc.feedId) ?? inc.feedId;
+        if (deletedFeedIds.has(remappedFeedId)) continue;
+
         const remapped = remappedFeedId !== inc.feedId ? { ...inc, feedId: remappedFeedId } : inc;
 
         const match = byId.get(remapped.id);

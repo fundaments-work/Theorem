@@ -2208,9 +2208,18 @@ export const useRssStore = create<RssStore>()(
             },
 
             removeFeed: (feedId: string) => {
+                const now = new Date().toISOString();
                 set(state => ({
                     feeds: state.feeds.filter(f => f.id !== feedId),
                     articles: state.articles.filter(a => a.feedId !== feedId),
+                }));
+                // Record a deletion tombstone so the sync layer propagates
+                // the removal to paired devices instead of re-adding the feed.
+                useLibraryStore.setState(state => ({
+                    deletionTombstones: [
+                        ...state.deletionTombstones,
+                        { entityId: feedId, entityType: "feed", deletedAt: now },
+                    ],
                 }));
             },
 
