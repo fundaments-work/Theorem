@@ -863,7 +863,7 @@ export class Paginator extends HTMLElement {
                 && Math.abs(offset - prev) === this.size
 
             if (isFlip) {
-                el.style.transition = 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)'
+                el.style.transition = 'transform 0.3s cubic-bezier(0.1, 0.7, 0.1, 1)'
             } else {
                 el.style.transition = 'none'
             }
