@@ -159,6 +159,11 @@ export class FoliateEngine {
     /** When true, the relocate handler skips its deferred applyZoomSync —
      *  goTo/goToFraction already runs applyZoomSync after navigation. */
     private _navigationInProgress = false;
+    /** Set by the relocate handler when a chapter boundary is crossed
+     *  during an explicit navigation.  next/prev use this to decide
+     *  whether applySettingsSync/Async is needed (fix column layout on
+     *  the new chapter) without disrupting every in-chapter page turn. */
+    private _sectionChanged = false;
 
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
@@ -604,7 +609,9 @@ export class FoliateEngine {
             const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
             if (sectionIndex >= 0 && sectionIndex !== this._lastSectionIndex) {
                 this._lastSectionIndex = sectionIndex;
-                if (!this._navigationInProgress) {
+                if (this._navigationInProgress) {
+                    this._sectionChanged = true;
+                } else {
                     requestAnimationFrame(() => {
                         this.applyZoomSync();
                         this.scheduleSettingsUpdate();
@@ -1155,10 +1162,11 @@ export class FoliateEngine {
         if (!this.view?.renderer) return;
         if (Date.now() < this.selectionNavLockUntil) return;
         this._navigationInProgress = true;
+        this._sectionChanged = false;
         try {
             await this.view.next(distance);
             this.applyZoomSync();
-            if (!this.isFixedLayoutFormat) {
+            if (this._sectionChanged && !this.isFixedLayoutFormat) {
                 this.applySettingsSync();
                 this.applySettingsAsync().catch(() => {});
             }
@@ -1171,10 +1179,11 @@ export class FoliateEngine {
         if (!this.view?.renderer) return;
         if (Date.now() < this.selectionNavLockUntil) return;
         this._navigationInProgress = true;
+        this._sectionChanged = false;
         try {
             await this.view.prev(distance);
             this.applyZoomSync();
-            if (!this.isFixedLayoutFormat) {
+            if (this._sectionChanged && !this.isFixedLayoutFormat) {
                 this.applySettingsSync();
                 this.applySettingsAsync().catch(() => {});
             }
