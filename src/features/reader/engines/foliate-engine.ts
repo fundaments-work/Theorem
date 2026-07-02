@@ -155,6 +155,8 @@ export class FoliateEngine {
     private searchSectionCache: ReaderSearchSectionCacheItem[] | null = null;
     private searchCacheBookRef: unknown = null;
     private _awaitingInitialRelocate = false;
+    /** Tracks the last section index to detect chapter boundary crosses. */
+    private _lastSectionIndex = -1;
 
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
@@ -584,7 +586,22 @@ export class FoliateEngine {
             };
 
             this.currentLocation = location;
-            
+
+            // Detect chapter boundary cross (section index changed) and
+            // schedule a deferred re-render to fix column layout that may
+            // have drifted during view.load() / #display when the container
+            // dimensions were not yet settled.
+            const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
+            if (sectionIndex >= 0 && sectionIndex !== this._lastSectionIndex) {
+                this._lastSectionIndex = sectionIndex;
+                requestAnimationFrame(() => {
+                    if (!this.isFixedLayoutFormat) {
+                        this.view.renderer?.render?.();
+                    }
+                    this.applyZoomSync();
+                });
+            }
+
             // After initial navigation, wait for first relocate then apply full settings update
             if (this._awaitingInitialRelocate) {
                 this._awaitingInitialRelocate = false;
@@ -1136,14 +1153,6 @@ export class FoliateEngine {
         if (Date.now() < this.selectionNavLockUntil) return;
         try {
             await this.view.next(distance);
-            // Deferred re-render to fix column layout when chapter boundary
-            // is crossed — the new section's container may not be fully
-            // settled during view.next() / #goToNextSection.
-            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-            if (!this.isFixedLayoutFormat) {
-                this.view.renderer?.render?.();
-            }
-            this.applyZoomSync();
         } catch (e) {
         }
     }
@@ -1153,14 +1162,6 @@ export class FoliateEngine {
         if (Date.now() < this.selectionNavLockUntil) return;
         try {
             await this.view.prev(distance);
-            // Deferred re-render to fix column layout when chapter boundary
-            // is crossed — the new section's container may not be fully
-            // settled during view.prev() / #goToPreviousSection.
-            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-            if (!this.isFixedLayoutFormat) {
-                this.view.renderer?.render?.();
-            }
-            this.applyZoomSync();
         } catch (e) {
         }
     }
