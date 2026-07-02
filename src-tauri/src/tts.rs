@@ -339,6 +339,11 @@ pub async fn generate_speech(
 
         let voice_name = voice.as_deref().unwrap_or("af_bella").to_string();
 
+        // On Android, prepare native AudioTrack before streaming chunks so
+        // audio plays through the platform speaker instead of Web Audio API.
+        #[cfg(target_os = "android")]
+        let _ = tauri_plugin_android_tts_audio::prepare_audio(&app_clone, 24000);
+
         // buffered(4): starts up to 4 chunk syntheses concurrently.
         // G2P (phonemizer) runs in parallel across chunks; ONNX inference
         // serializes naturally on the session Mutex. Chunk 0 is polled first
@@ -387,6 +392,8 @@ pub async fn generate_speech(
         while let Some((i, chunk_text, dom_id, synth_result)) = stream.next().await {
             if app_clone.webview_windows().is_empty() {
                 eprintln!("[tts] aborting because all windows are closed");
+                #[cfg(target_os = "android")]
+                let _ = tauri_plugin_android_tts_audio::stop_audio(&app_clone);
                 return;
             }
 
@@ -396,6 +403,8 @@ pub async fn generate_speech(
                     "[tts] generation {} aborted during stream (current={})",
                     gen_id, current
                 );
+                #[cfg(target_os = "android")]
+                let _ = tauri_plugin_android_tts_audio::stop_audio(&app_clone);
                 return;
             }
 
@@ -409,6 +418,14 @@ pub async fn generate_speech(
                     }
                     apply_fade_out(&mut audio_data, 24000);
                     let end_time = audio_data.len() as f32 / 24000.0;
+
+                    // Clone raw samples for native AudioTrack on Android.
+                    // `audio_data` is moved into TtsChunk below; clone first.
+                    #[cfg(target_os = "android")]
+                    let audio_for_track = audio_data.clone();
+                    #[cfg(not(target_os = "android"))]
+                    let _audio_for_track = &audio_data;
+
                     let chunk_data = TtsChunk {
                         audio_data,
                         sample_rate: 24000,
@@ -423,9 +440,23 @@ pub async fn generate_speech(
                         generation_id: gen_id,
                     };
 
+                    // Emit event so the frontend can do word highlighting
                     if let Err(e) = app_clone.emit("audio-chunk", chunk_data) {
                         eprintln!("[tts] failed to emit audio-chunk: {}", e);
                         return;
+                    }
+
+                    // On Android, also write the raw audio to native AudioTrack
+                    // (bypasses Web Audio API which is unreliable on Android WebView).
+                    #[cfg(target_os = "android")]
+                    if let Err(e) = tauri_plugin_android_tts_audio::write_audio(
+                        &app_clone,
+                        audio_for_track,
+                        24000,
+                        gen_id,
+                        i as u32,
+                    ) {
+                        eprintln!("[tts] failed to write audio to native AudioTrack: {}", e);
                     }
                 }
                 Err(err_msg) => {
@@ -438,6 +469,8 @@ pub async fn generate_speech(
                             message: format!("Synthesis error on chunk {}: {}", i, err_msg),
                         },
                     );
+                    #[cfg(target_os = "android")]
+                    let _ = tauri_plugin_android_tts_audio::stop_audio(&app_clone);
                     return;
                 }
             }
@@ -463,6 +496,8 @@ pub async fn stop_speech(app: AppHandle) -> Result<(), String> {
         .generation_id
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     eprintln!("[tts] stop_speech called (gen_id {} → {})", prev, prev + 1);
+    #[cfg(target_os = "android")]
+    let _ = tauri_plugin_android_tts_audio::stop_audio(&app);
     Ok(())
 }
 

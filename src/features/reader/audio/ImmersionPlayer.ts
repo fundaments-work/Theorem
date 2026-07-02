@@ -2,21 +2,30 @@
  * ImmersionPlayer — Web Audio playback engine for streamed TTS chunks.
  *
  * Listens for `audio-chunk`, `tts-error`, and `tts-done` Tauri events.
- * Each chunk is scheduled on the Web Audio timeline so playback is
- * gapless and starts as soon as the first chunk arrives.
+ * On desktop, each chunk is scheduled on the Web Audio timeline for
+ * gapless playback.  On Android (isTauriMobile), audio is handled by
+ * native AudioTrack via the android-tts-audio Tauri plugin — the player
+ * only tracks state, word highlighting, and completion.
  *
- * Pitch-preserved speed control via SoundTouch offline time-stretching.
- * Each chunk is stretched before scheduling — synthesis stays at 1×.
+ * Pitch-preserved speed control via SoundTouch offline time-stretching
+ * (desktop only — mobile uses playbackRate or native playback speed).
  */
 
+import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { SoundTouch, SimpleFilter, WebAudioBufferSource } from 'soundtouchjs';
+import { isTauriMobile } from '../../../core/lib/env';
 
 /// Whether to use SoundTouch offline stretching (desktop) or simple
 /// playbackRate (mobile). SoundTouch gives pitch-preserved speed but
 /// blocks the main thread per chunk — too slow on mobile CPUs.
 const USE_SOUNDTOUCH = typeof window !== 'undefined'
     && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+/// On Android, audio plays through native AudioTrack (android-tts-audio
+/// plugin). The player skips all Web Audio API scheduling — only state
+/// management and word highlighting run on the JS side.
+const NATIVE_AUDIO = isTauriMobile();
 
 /// Output gain boost — Kokoro audio peaks around 0.5, so 3× brings it
 /// to a comfortable listening level without clipping.
@@ -174,8 +183,10 @@ export class ImmersionPlayer {
 
     /** Pre-create the AudioContext within a user-gesture context.
      *  On Android, new AudioContext() must be called synchronously
-     *  during a user interaction (click/tap), not in an async callback. */
+     *  during a user interaction (click/tap), not in an async callback.
+     *  When using native AudioTrack, this is a no-op. */
     prepare(): void {
+        if (NATIVE_AUDIO) return;
         this.getAudioCtx();
     }
 
@@ -241,6 +252,39 @@ export class ImmersionPlayer {
     }
 
     private async handleChunk(payload: TtsChunkPayload) {
+        this.chunksReceived = payload.chunk_index + 1;
+        this.totalChunks = payload.total_chunks;
+
+        if (NATIVE_AUDIO) {
+            // On Android, audio plays natively via AudioTrack — no Web Audio
+            // scheduling. Highlight the chunk's word immediately since audio
+            // arrives in sync with the event.
+            if (payload.words.length > 0) {
+                this.highlightWord(payload.words[0].dom_id);
+            }
+
+            if (this._state !== 'playing' && this._state !== 'paused') {
+                this.setState('playing');
+            }
+
+            this.callbacks.onChunkPlayed?.(payload.chunk_index, payload.total_chunks);
+
+            // Check completion: if all chunks received, the native AudioTrack
+            // will drain naturally. Use a brief delay before firing onComplete
+            // to let the AudioTrack play out (estimated chunk duration).
+            if (this.totalChunks > 0 && this.chunksReceived >= this.totalChunks) {
+                const estDuration = (payload.audio_data.length / payload.sample_rate) * 1000;
+                setTimeout(() => {
+                    this.clearHighlights();
+                    this.setState('idle');
+                    if (!this.skipOnComplete) {
+                        this.callbacks.onComplete?.();
+                    }
+                }, estDuration + 200);
+            }
+            return;
+        }
+
         const ctx = this.getAudioCtx();
 
         if (ctx.state === 'suspended' && this._state !== 'paused') {
@@ -268,8 +312,6 @@ export class ImmersionPlayer {
         const startAt = Math.max(ctx.currentTime, this.scheduledEnd);
         source.start(startAt);
         this.scheduledEnd = startAt + effectiveDuration;
-        this.chunksReceived = payload.chunk_index + 1;
-        this.totalChunks = payload.total_chunks;
 
         // Scale word timestamps to match stretched duration ratio
         const stretchRatio = payload.audio_data.length > 0
@@ -378,6 +420,15 @@ export class ImmersionPlayer {
     }
 
     async pause() {
+        if (NATIVE_AUDIO) {
+            try {
+                await invoke('plugin:android-tts-audio|pause_audio');
+            } catch (e) {
+                console.warn('[ImmersionPlayer] native pause failed:', e);
+            }
+            this.setState('paused');
+            return;
+        }
         if (this.audioCtx && this.audioCtx.state === 'running') {
             await this.audioCtx.suspend();
             this.setState('paused');
@@ -385,6 +436,15 @@ export class ImmersionPlayer {
     }
 
     async resume() {
+        if (NATIVE_AUDIO) {
+            try {
+                await invoke('plugin:android-tts-audio|resume_audio');
+            } catch (e) {
+                console.warn('[ImmersionPlayer] native resume failed:', e);
+            }
+            this.setState('playing');
+            return;
+        }
         if (this.audioCtx && this.audioCtx.state === 'suspended') {
             await this.audioCtx.resume();
             this.setState('playing');
@@ -394,6 +454,12 @@ export class ImmersionPlayer {
     stop() {
         this.clearHighlights();
         this.skipOnComplete = false;
+
+        if (NATIVE_AUDIO) {
+            invoke('plugin:android-tts-audio|stop_audio').catch((e) => {
+                console.warn('[ImmersionPlayer] native stop failed:', e);
+            });
+        }
 
         if (this.audioCtx) {
             this.audioCtx.close().catch(() => {});
