@@ -20,6 +20,7 @@ import { TableOfContents } from "../components/TableOfContents";
 import { WindowTitlebar } from "../components/WindowTitlebar";
 import { HighlightColorPicker } from "../components/highlights/HighlightColorPicker";
 import { NoteEditor } from "../components/highlights/NoteEditor";
+import { ArrowLeft } from "lucide-react";
 import { useReaderFullscreen } from "../hooks";
 import {
     ArticleReaderContent,
@@ -492,7 +493,7 @@ export function ArticleViewer({
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
 
     const [activePanel, setActivePanel] = useState<ArticleReaderPanel>(null);
-    const [showChrome, setShowChrome] = useState(true);
+    const [showChrome, setShowChrome] = useState(false);
     const [readingProgress, setReadingProgress] = useState(0);
     const [headings, setHeadings] = useState<ArticleHeading[]>([]);
     const [showColorPicker, setShowColorPicker] = useState(false);
@@ -1500,7 +1501,30 @@ export function ArticleViewer({
                     onClose={closePanel}
                 />
 
-                <div className="absolute inset-0 overflow-hidden">
+                {/* Floating back arrow — always visible, independent of chrome */}
+                <button
+                    onClick={onClose}
+                    className={cn(
+                        "fixed top-3 left-3 z-40 flex items-center justify-center",
+                        "w-9 h-9 rounded-full",
+                        "bg-black/10 dark:bg-white/10 backdrop-blur-sm",
+                        "hover:bg-black/20 dark:hover:bg-white/20 transition-colors",
+                        "text-[var(--reader-fg,var(--color-text))]",
+                    )}
+                    aria-label="Back to feeds"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
+
+                <div
+                    className="absolute inset-0 overflow-hidden"
+                    onClick={() => {
+                        const sel = window.getSelection();
+                        if (!sel || sel.isCollapsed) {
+                            setShowChrome(s => !s);
+                        }
+                    }}
+                >
                     <ArticleReaderContent
                         article={article}
                         feedTitle={feedTitle}
