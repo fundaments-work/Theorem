@@ -460,7 +460,7 @@ export class FoliateEngine {
 
             // Deferred re-render to settle column layout after the initial
             // section loads — container dimensions may not be stable yet.
-            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            await this.awaitSettledLayout();
             if (!this.isFixedLayoutFormat) {
                 this.view.renderer?.render?.();
             }
@@ -594,7 +594,7 @@ export class FoliateEngine {
             const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
             if (sectionIndex >= 0 && sectionIndex !== this._lastSectionIndex) {
                 this._lastSectionIndex = sectionIndex;
-                requestAnimationFrame(() => {
+                this.awaitSettledLayout().then(() => {
                     if (!this.isFixedLayoutFormat) {
                         this.view.renderer?.render?.();
                     }
@@ -1116,12 +1116,23 @@ export class FoliateEngine {
     }
 
     // Navigation methods
+    /** Helper: wait for the next two animation frames so the browser
+     *  has a chance to fully settle the layout of newly-loaded sections.
+     *  A single RAF is often insufficient because iframe content may take
+     *  multiple frames to render. */
+    private awaitSettledLayout(): Promise<void> {
+        return new Promise<void>(resolve => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => resolve());
+            });
+        });
+    }
+
     async goTo(target: string | number): Promise<void> {
         if (!this.view) return;
         await this.view.goTo(target);
-        // Wait for next animation frame so the browser has settled the layout
-        // of the newly-loaded section before we re-measure the container.
-        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        // Wait for layout to settle after new section loads
+        await this.awaitSettledLayout();
         if (!this.isFixedLayoutFormat) {
             this.view.renderer?.render?.();
         }
@@ -1136,9 +1147,8 @@ export class FoliateEngine {
         const clampedFraction = Math.max(0, Math.min(1, fraction));
         
         await this.view.goToFraction(clampedFraction);
-        // Wait for next animation frame so the browser has settled the layout
-        // of the newly-loaded section before we re-measure the container.
-        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        // Wait for layout to settle after new section loads
+        await this.awaitSettledLayout();
 
         // After jump navigation, re-render to fix column layout that may have
         // drifted during the ResizeObserver race in view.load() / #display.
