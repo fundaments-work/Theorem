@@ -469,6 +469,7 @@ export class FoliateEngine {
                 // has loaded — ensures columns are calculated with both the
                 // paginator's CSS and our inline zoom applied.
                 this.applyZoomSync();
+                this.scheduleSettingsUpdate();
             } finally {
                 this._navigationInProgress = false;
             }
@@ -1133,7 +1134,13 @@ export class FoliateEngine {
         try {
             await this.view.goTo(target);
             await this.awaitFrame();
+            // Re-apply zoom + re-render columns.  Also schedule a full
+            // settings update on the next frame to re-apply CSS to the
+            // new section's document — this fixes column misalignment
+            // that occurs when the initial setStyles() during View.load()
+            // races with the browser's layout pipeline on desktop.
             this.applyZoomSync();
+            this.scheduleSettingsUpdate();
         } finally {
             this._navigationInProgress = false;
         }
@@ -1147,6 +1154,7 @@ export class FoliateEngine {
             await this.view.goToFraction(clampedFraction);
             await this.awaitFrame();
             this.applyZoomSync();
+            this.scheduleSettingsUpdate();
         } finally {
             this._navigationInProgress = false;
         }

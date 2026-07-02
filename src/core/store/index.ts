@@ -85,7 +85,7 @@ const defaultDeviceSyncSettings: AppSettings["deviceSync"] = {
 };
 
 const defaultTtsSettings: TtsSettings = {
-    enabled: true,
+    enabled: false,
     voice: "af_bella",
     speed: 1.0,
 };

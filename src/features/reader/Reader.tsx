@@ -1016,32 +1016,31 @@ function BookReaderPage() {
         };
     }, [location?.cfi, isPdfFormat]);
 
-    // Preload next page audio when the current page's SYNTHESIS completes
-    // (tts-done event). At this point all chunks have been emitted but audio
-    // is still playing on the Web Audio timeline — the ideal moment to start
-    // synthesizing the next page so it's ready when the current page finishes.
-    //
-    // This replaces the old useEffect that fired on page load (which raced
-    // with the user's first play and wasted synthesis work).
-    const handleTtsSynthesisComplete = useCallback(() => {
+    // Synthesize the next page's audio after the current page finishes
+    // playing.  This is called from ImmersionBar's onComplete callback.
+    // NOTE: The old implementation preloaded audio via a tts-done →
+    // generate_speech chain that caused infinite autoplay because the
+    // Rust backend plays audio on every generate_speech call.  This
+    // sequential approach waits for the user to actually advance before
+    // synthesizing the next page.
+    const handleTtsComplete = useCallback(async () => {
         if (isPdfFormat) return;
-        const nextData = readerRef.current?.getNextPageTextForTts?.();
-        if (!nextData?.text) return;
-
-        const ttsVoice = settings.tts.voice;
-        (async () => {
-            try {
-                const genId = await invoke<number>('generate_speech', {
-                    text: nextData.text,
-                    startFromId: nextData.startWordId,
-                    voice: ttsVoice,
-                });
-                const player = await getImmersionPlayer();
-                player.setPreloadGenId(genId);
-            } catch {
-                // preload failure is non-critical
-            }
-        })();
+        const player = await getImmersionPlayer();
+        await readerRef.current?.next();
+        // Wait one frame for the new page to render before extracting text
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        const newData = readerRef.current?.getVisibleTextForTts?.();
+        if (!newData?.text) return;
+        try {
+            const genId = await invoke<number>('generate_speech', {
+                text: newData.text,
+                startFromId: newData.startWordId,
+                voice: settings.tts.voice,
+            });
+            player.setCurrentGenId(genId);
+        } catch {
+            // synthesis failure is non-critical
+        }
     }, [isPdfFormat, settings.tts.voice]);
 
     useEffect(() => {
@@ -2246,31 +2245,31 @@ function BookReaderPage() {
             {/* Bottom Progress Navbar */}
             {isBookReady && !isPdfFormat && (
                 <>
-                    {/* Immersion Bar — only appears when headphone icon in titlebar is clicked */}
-                    <div className={cn(
-                        "fixed left-0 right-0 z-50 flex justify-center pointer-events-none transition-all duration-300",
-                        "bottom-0"
-                    )}>
+                    {/* Immersion Bar — only mounted when TTS is active to
+                        prevent the tts-done listener from triggering audio
+                        autoplay when the user hasn't enabled TTS. */}
+                    {immersionMode && (
                         <div className={cn(
-                            immersionMode ? "pointer-events-auto" : "pointer-events-none",
-                            "w-full sm:w-auto",
+                            "fixed left-0 right-0 z-50 flex justify-center pointer-events-none transition-all duration-300",
+                            "bottom-0"
                         )}>
-                            <Suspense fallback={null}>
-                                <ImmersionBar 
-                                    sectionText={ttsData?.text || ""}
-                                    startWordId={ttsData?.startWordId}
-                                    pageCfi={location?.cfi}
-                                    visible={immersionMode}
-                                    onComplete={async () => {
-                                        const player = await getImmersionPlayer();
-                                        await player.playPreloaded();
-                                        readerRef.current?.next();
-                                    }}
-                                    onSynthesisComplete={handleTtsSynthesisComplete}
-                                />
-                            </Suspense>
+                            <div className={cn(
+                                "pointer-events-auto",
+                                "w-full sm:w-auto",
+                            )}>
+                                <Suspense fallback={null}>
+                                    <ImmersionBar 
+                                        sectionText={ttsData?.text || ""}
+                                        startWordId={ttsData?.startWordId}
+                                        pageCfi={location?.cfi}
+                                        visible={true}
+                                        onComplete={handleTtsComplete}
+                                        onSynthesisComplete={undefined}
+                                    />
+                                </Suspense>
+                            </div>
                         </div>
-                    </div>
+                    )}
                     
                     <ReaderNavbar
                         location={location}

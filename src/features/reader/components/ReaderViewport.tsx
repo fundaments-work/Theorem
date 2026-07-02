@@ -158,7 +158,9 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         shouldForceViewportTap,
         onTtsWordClick: (wordId: string, textToRead: string) => {
             immersionPlayer.stop();
-            invoke('generate_speech', { text: textToRead, startFromId: wordId, voice: ttsVoice });
+            invoke<number>('generate_speech', { text: textToRead, startFromId: wordId, voice: ttsVoice })
+                .then(genId => immersionPlayer.setCurrentGenId(genId))
+                .catch(() => {});
         },
     });
 
