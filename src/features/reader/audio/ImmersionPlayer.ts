@@ -72,6 +72,9 @@ export class ImmersionPlayer {
         this.callbacks.onStateChange?.(s);
     }
 
+    private initPromise: Promise<void> | null = null;
+    private isDestroyed = false;
+
     async init(callbacks: PlaybackCallbacks = {}) {
         if (callbacks.onStateChange) this.callbacks.onStateChange = callbacks.onStateChange;
         if (callbacks.onError) this.callbacks.onError = callbacks.onError;
@@ -79,27 +82,43 @@ export class ImmersionPlayer {
         if (callbacks.onChunkPlayed) this.callbacks.onChunkPlayed = callbacks.onChunkPlayed;
         if (callbacks.onSynthesisComplete) this.callbacks.onSynthesisComplete = callbacks.onSynthesisComplete;
 
-        for (const ul of this.unlisteners) ul();
-        this.unlisteners = [];
+        if (this.initPromise) {
+            await this.initPromise;
+            return;
+        }
 
-        const u1 = await listen<TtsChunkPayload>('audio-chunk', (event) => {
-            const p = event.payload;
-            if (p.generation_id === this.preloadGenId && !this.isPlayingPreload) {
-                this.bufferChunk(p);
-            } else if (p.generation_id === this.currentGenId) {
-                this.handleChunk(p);
+        this.isDestroyed = false;
+        this.initPromise = (async () => {
+            for (const ul of this.unlisteners) ul();
+            this.unlisteners = [];
+
+            const u1 = await listen<TtsChunkPayload>('audio-chunk', (event) => {
+                const p = event.payload;
+                if (p.generation_id === this.preloadGenId && !this.isPlayingPreload) {
+                    this.bufferChunk(p);
+                } else if (p.generation_id === this.currentGenId) {
+                    this.handleChunk(p);
+                }
+            });
+            const u2 = await listen<{ message: string }>('tts-error', (event) => {
+                this.callbacks.onError?.(event.payload.message);
+                this.setState('idle');
+            });
+            const u3 = await listen<{ total_chunks: number }>('tts-done', (event) => {
+                this.totalChunks = event.payload.total_chunks;
+                this.callbacks.onSynthesisComplete?.();
+            });
+
+            if (this.isDestroyed) {
+                u1();
+                u2();
+                u3();
+            } else {
+                this.unlisteners = [u1, u2, u3];
             }
-        });
-        const u2 = await listen<{ message: string }>('tts-error', (event) => {
-            this.callbacks.onError?.(event.payload.message);
-            this.setState('idle');
-        });
-        const u3 = await listen<{ total_chunks: number }>('tts-done', (event) => {
-            this.totalChunks = event.payload.total_chunks;
-            this.callbacks.onSynthesisComplete?.();
-        });
+        })();
 
-        this.unlisteners = [u1, u2, u3];
+        await this.initPromise;
     }
 
     /** No-op — AudioContext is no longer used. Native audio plays from Rust. */
@@ -271,8 +290,10 @@ export class ImmersionPlayer {
 
     destroy() {
         this.stop();
+        this.isDestroyed = true;
         for (const ul of this.unlisteners) ul();
         this.unlisteners = [];
+        this.initPromise = null;
     }
 }
 

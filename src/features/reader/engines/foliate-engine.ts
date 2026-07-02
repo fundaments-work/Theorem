@@ -608,21 +608,17 @@ export class FoliateEngine {
                 if (!this._navigationInProgress) {
                     requestAnimationFrame(() => {
                         this.applyZoomSync();
-                        // Re-apply the full CSS stylesheet to the new
-                        // section's document on the next frame — fixes
-                        // column misalignment after page-turn chapter
-                        // wraps where the initial setStyles() during
-                        // View.load() raced the browser's layout.
                         this.scheduleSettingsUpdate();
                     });
                 }
             }
 
-            // After initial navigation, wait for first relocate then apply full settings update
             if (this._awaitingInitialRelocate) {
                 this._awaitingInitialRelocate = false;
-                this.scheduleSettingsUpdate();
-            } else {
+                requestAnimationFrame(() => {
+                    this.applyZoomSync();
+                    this.scheduleSettingsUpdate();
+                });
             }
 
             this.options.onLocationChange?.(location);
@@ -1131,22 +1127,13 @@ export class FoliateEngine {
         });
     }
 
-    // Navigation methods
-    private awaitFrame(): Promise<void> {
-        return new Promise(resolve => requestAnimationFrame(() => resolve()));
-    }
+
 
     async goTo(target: string | number): Promise<void> {
         if (!this.view) return;
         this._navigationInProgress = true;
         try {
             await this.view.goTo(target);
-            await this.awaitFrame();
-            // Re-apply zoom + re-render columns.  Also schedule a full
-            // settings update on the next frame to re-apply CSS to the
-            // new section's document — this fixes column misalignment
-            // that occurs when the initial setStyles() during View.load()
-            // races with the browser's layout pipeline on desktop.
             this.applyZoomSync();
             this.scheduleSettingsUpdate();
         } finally {
@@ -1160,7 +1147,6 @@ export class FoliateEngine {
         try {
             const clampedFraction = Math.max(0, Math.min(1, fraction));
             await this.view.goToFraction(clampedFraction);
-            await this.awaitFrame();
             this.applyZoomSync();
             this.scheduleSettingsUpdate();
         } finally {
@@ -1333,7 +1319,35 @@ export class FoliateEngine {
         
         if (!this.isFixedLayoutFormat && typeof this.view.renderer.render === 'function') {
             this.view.renderer.render();
+            this._retryIfBrokenLayout(0);
         }
+    }
+
+    /**
+     * On desktop WebKitGTK the paginator may measure container dimensions
+     * before CSS grid track sizing has settled.  If the render produced a
+     * broken layout (NaN/zero pages), retry on the next frame.
+     */
+    private _retryIfBrokenLayout(retries: number): void {
+        if (retries >= 3) return;
+        try {
+            const renderer = this.view?.renderer as any;
+            const pages = renderer?.pages;
+            const viewSize = renderer?.viewSize;
+            if (Number.isFinite(pages) && pages > 0 && Number.isFinite(viewSize) && viewSize > 0) return;
+        } catch {
+            return;
+        }
+        requestAnimationFrame(() => {
+            try {
+                if (typeof this.view?.renderer?.render === 'function') {
+                    this.view.renderer.render();
+                }
+            } catch {
+                // renderer may be gone if book was closed during retry
+            }
+            this._retryIfBrokenLayout(retries + 1);
+        });
     }
 
     setMargins(_margins: number): void {

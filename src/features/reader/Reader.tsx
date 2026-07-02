@@ -1024,7 +1024,7 @@ function BookReaderPage() {
     // sequential approach waits for the user to actually advance before
     // synthesizing the next page.
     const handleTtsComplete = useCallback(async () => {
-        if (isPdfFormat) return;
+        if (isPdfFormat || !ttsEnabled) return;
         const player = await getImmersionPlayer();
         await readerRef.current?.next();
         // Wait one frame for the new page to render before extracting text
@@ -1041,7 +1041,7 @@ function BookReaderPage() {
         } catch {
             // synthesis failure is non-critical
         }
-    }, [isPdfFormat, settings.tts.voice]);
+    }, [isPdfFormat, settings.tts.voice, ttsEnabled]);
 
     useEffect(() => {
         if (!isPdfFormat || !currentBookId || pdfTotalPages <= 0) {

@@ -84,6 +84,7 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
     nativeFilePath,
 }, ref) => {
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
+    const ttsEnabled = useSettingsStore((s) => s.settings.tts.enabled);
 
     // Navigation feedback state
     const [navDirection, setNavDirection] = useState<'next' | 'prev' | null>(null);
@@ -156,12 +157,12 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         onLocationsSaved,
         onViewportTap,
         shouldForceViewportTap,
-        onTtsWordClick: (wordId: string, textToRead: string) => {
+        onTtsWordClick: ttsEnabled ? (wordId: string, textToRead: string) => {
             immersionPlayer.stop();
             invoke<number>('generate_speech', { text: textToRead, startFromId: wordId, voice: ttsVoice })
                 .then(genId => immersionPlayer.setCurrentGenId(genId))
                 .catch(() => {});
-        },
+        } : undefined,
     });
 
     // Expose methods via ref
@@ -393,9 +394,7 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         };
     }, [next, prev, goToFraction, showNavFeedback]);
 
-    useEffect(() => {
-        immersionPlayer.init();
-    }, []);
+
 
     // Scroll wheel navigation - DISABLED in paged mode per user request
     // User wants to use keyboard/touch only for navigation in paged mode
