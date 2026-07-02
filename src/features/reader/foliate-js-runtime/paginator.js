@@ -267,6 +267,14 @@ class View {
                 this.#rtl = rtl
 
                 this.#contentRange.selectNodeContents(doc.body)
+
+                // On WebKitGTK, the iframe 'load' event fires before the shadow
+                // DOM CSS grid track sizes are committed to layout. Reading
+                // this.container.offsetWidth forces a synchronous style/layout
+                // flush so that the subsequent #container.getBoundingClientRect()
+                // in beforeRender() returns the real dimensions, not stale zeros.
+                void this.container.offsetWidth
+
                 const layout = beforeRender?.({ vertical, rtl, background })
                 this.#iframe.style.display = 'block'
                 this.render(layout)
@@ -789,13 +797,14 @@ export class Paginator extends HTMLElement {
     }
     render() {
         if (!this.#view) return
+        // Force a synchronous layout flush before measuring — on WebKitGTK
+        // getBoundingClientRect() may return stale zeros until a layout-
+        // triggering property is read after any pending style change.
+        void this.offsetWidth
         const { width, height } = this.#container.getBoundingClientRect()
         const measuredSize = this.#vertical ? height : width
         if (this.getAttribute('flow') !== 'scrolled' && measuredSize === 0) {
-            // WebKitGTK can paint the iframe before the CSS grid track sizes
-            // have resolved, causing #container to report zero dimensions.
-            // Defer one frame so the grid has time to settle before we
-            // measure and columnize.
+            // Dimensions still zero even after flush — defer one frame.
             requestAnimationFrame(() => this.render())
             return
         }
