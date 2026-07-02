@@ -20,7 +20,6 @@ import { TableOfContents } from "../components/TableOfContents";
 import { WindowTitlebar } from "../components/WindowTitlebar";
 import { HighlightColorPicker } from "../components/highlights/HighlightColorPicker";
 import { NoteEditor } from "../components/highlights/NoteEditor";
-import { ArrowLeft } from "lucide-react";
 import { useReaderFullscreen } from "../hooks";
 import {
     ArticleReaderContent,
@@ -1527,22 +1526,6 @@ export function ArticleViewer({
                     />
                 </div>
             </div>
-
-            {/* Floating back arrow — outside theme wrapper so filter/overflow don't clip it */}
-            <button
-                onClick={onClose}
-                className={cn(
-                    "fixed left-3 z-40 flex items-center justify-center",
-                    "w-9 h-9 rounded-full",
-                    "bg-black/10 dark:bg-white/10 backdrop-blur-sm",
-                    "hover:bg-black/20 dark:hover:bg-white/20 transition-colors",
-                    "text-[var(--reader-fg,var(--color-text))]",
-                    "top-[max(env(safe-area-inset-top,0px),8px)]",
-                )}
-                aria-label="Back to feeds"
-            >
-                <ArrowLeft className="w-4 h-4" />
-            </button>
 
             <HighlightColorPicker
                 isOpen={showColorPicker}
