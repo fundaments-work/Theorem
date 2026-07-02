@@ -283,17 +283,6 @@ foliate-view * {
 }
 
 /* Reader Viewport - Strict no-scroll policy */
-.epub-container {
-    overflow: hidden !important;
-    touch-action: none !important;
-}
-
-.epub-container iframe {
-    overflow: hidden !important;
-    touch-action: none !important;
-    overscroll-behavior: none !important;
-}
-
 /* Prevent all scrolling in reader context */
 [data-reading-mode="paged"] {
     overflow: hidden !important;
@@ -311,22 +300,6 @@ foliate-view * {
 .reader-viewport {
     filter: brightness(var(--reader-brightness, 100%));
     transition: filter 0.05s ease;
-}
-
-/* Brightness applied to whole reader screen - instant */
-.reader-screen {
-    filter: brightness(var(--reader-brightness, 100%));
-}
-
-/* Theme transition for smooth color changes */
-.theme-transition {
-    transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-/* Reader container uses CSS variables for instant updates */
-.reader-container {
-    background-color: var(--reader-bg);
-    color: var(--reader-fg);
 }
 
 /* ===============================

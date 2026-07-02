@@ -57,7 +57,7 @@ Do not skip clippy. Do not commit with clippy warnings still present. Fix them f
 ## Non-Negotiable Reality Checks
 - Navigation is store-driven (`useUIStore.currentRoute`), not React Router route objects.
 - Imports are primarily relative/barrel imports inside `src`. Do not assume `@/*` or `@theorem/*` aliases.
-- `src/features/reader/foliate-js/**` is vendored upstream code. Do not edit it unless explicitly required.
+- `src/features/reader/foliate-js/**` is vendored upstream code (only `vendor/`, `README.md`, `LICENSE` remain — the duplicated JS files have been removed in favor of `foliate-js-runtime/`). Do not edit unless explicitly required.
 - `src/features/reader/foliate-js-runtime/**` is the runtime wrapper for foliate-js. This IS our code — modify freely.
 - CBR is supported via import-time conversion to CBZ (Rust `unrar-ng` decompression).
 

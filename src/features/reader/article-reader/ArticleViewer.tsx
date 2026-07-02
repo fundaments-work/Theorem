@@ -21,12 +21,9 @@ import { WindowTitlebar } from "../components/WindowTitlebar";
 import { HighlightColorPicker } from "../components/highlights/HighlightColorPicker";
 import { NoteEditor } from "../components/highlights/NoteEditor";
 import { useReaderFullscreen } from "../hooks";
-import {
-    ArticleReaderContent,
-    ArticleReaderInfoPanel,
-    type ArticleHeading,
-    type ArticleReaderPanel,
-} from "./index";
+import { ArticleReaderContent } from "./ArticleReaderContent";
+import { ArticleReaderInfoPanel } from "./ArticleReaderInfoPanel";
+import type { ArticleHeading, ArticleReaderPanel } from "./types";
 import { buildArticleDescription, formatArticleDate, sanitizeArticleHtml } from "./utils";
 
 
