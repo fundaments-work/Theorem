@@ -29,8 +29,6 @@ interface AppTitlebarProps {
 
 const TITLEBAR_ICON_BUTTON =
     "ui-icon-btn !h-9 !w-9";
-const TITLEBAR_DESKTOP_ACTION_BUTTON =
-    "inline-flex h-9 w-9 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)] data-[active=true]:border-[var(--color-text-primary)] data-[active=true]:bg-[var(--color-surface-muted)] data-[active=true]:text-[color:var(--color-text-primary)]";
 const TITLEBAR_WINDOW_BUTTON =
     "inline-flex h-8 w-8 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
 const TITLEBAR_CLOSE_BUTTON = `${TITLEBAR_WINDOW_BUTTON} hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]`;
@@ -353,7 +351,7 @@ export const AppTitlebar = memo(function AppTitlebar({
                                 void handleQuickSync();
                             }}
                             className={cn(
-                                showDesktopWindowControls ? TITLEBAR_DESKTOP_ACTION_BUTTON : TITLEBAR_ICON_BUTTON,
+                                TITLEBAR_ICON_BUTTON,
                                 (deviceSyncStatus === "syncing" || isQuickSyncing) && "text-[color:var(--color-accent)]",
                                 deviceSyncStatus === "error" && "text-[color:var(--color-error)]",
                             )}
@@ -398,9 +396,7 @@ export const AppTitlebar = memo(function AppTitlebar({
 
                     <button
                         onClick={() => setRoute("statistics")}
-                        className={cn(
-                            showDesktopWindowControls ? TITLEBAR_DESKTOP_ACTION_BUTTON : TITLEBAR_ICON_BUTTON
-                        )}
+                        className={TITLEBAR_ICON_BUTTON}
                         title="Statistics"
                         data-active={currentRoute === "statistics" ? "true" : undefined}
                         aria-pressed={currentRoute === "statistics"}
