@@ -72,7 +72,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dead CSS classes** — `.epub-container`, `.epub-container iframe`, `.reader-screen`, `.theme-transition`, `.reader-container` from `index.css`.
 - **Commented-out console.log** — 3 lines in `foliate-js-runtime/epub.js`.
 - **Unused PDF.js vendor** — `foliate-js/vendor/pdfjs/` directory (~10.5MB, app uses `pdfjs-dist` npm package).
-- **Vendored foliate-js** — Converted to proper git submodule (`johnfactotum/foliate-js`). Run `git submodule update --init --recursive` after clone.
+- **Vendored foliate-js** — Converted to git submodule pointing to `fundaments-work/foliate-js` fork.
+  Fork stripped of `vendor/pdfjs/` (~10.5MB unused PDF.js build artifacts, app uses `pdfjs-dist` npm package).
+  Nightly GitHub Action syncs upstream `johnfactotum/foliate-js` changes into the fork automatically.
+  Clone with `git clone --recurse-submodules`.
 - **TTS Anti-Bite Detachment regex** — Replaced by trailing `_` phonemizer workaround.
 
 ## [1.0.2] - 2026-07-01

@@ -282,7 +282,7 @@ All builds are available on the [Releases page](https://github.com/fundaments-wo
 ### Setup
 
 ```bash
-git clone https://github.com/fundaments-work/theorem.git
+git clone --recurse-submodules https://github.com/fundaments-work/theorem.git
 cd theorem
 pnpm install
 ```
