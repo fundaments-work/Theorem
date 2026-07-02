@@ -1,4 +1,5 @@
 mod database;
+mod desktop_audio;
 mod epub_parser;
 mod sync_commands;
 mod tts;
@@ -984,6 +985,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             tts::generate_speech,
             tts::stop_speech,
+            tts::pause_speech,
+            tts::resume_speech,
             tts::ensure_tts_model,
             tts::cancel_tts_model_download,
             tts::get_tts_model_status,

@@ -339,6 +339,16 @@ pub async fn generate_speech(
 
         let voice_name = voice.as_deref().unwrap_or("af_bella").to_string();
 
+        // Helper macro to stop native audio on the current platform.
+        macro_rules! stop_native_audio {
+            () => {
+                #[cfg(target_os = "android")]
+                let _ = tauri_plugin_android_tts_audio::stop_audio(&app_clone);
+                #[cfg(not(target_os = "android"))]
+                crate::desktop_audio::stop_audio();
+            };
+        }
+
         // On Android, prepare native AudioTrack before streaming chunks so
         // audio plays through the platform speaker instead of Web Audio API.
         #[cfg(target_os = "android")]
@@ -392,8 +402,7 @@ pub async fn generate_speech(
         while let Some((i, chunk_text, dom_id, synth_result)) = stream.next().await {
             if app_clone.webview_windows().is_empty() {
                 eprintln!("[tts] aborting because all windows are closed");
-                #[cfg(target_os = "android")]
-                let _ = tauri_plugin_android_tts_audio::stop_audio(&app_clone);
+                stop_native_audio!();
                 return;
             }
 
@@ -403,8 +412,7 @@ pub async fn generate_speech(
                     "[tts] generation {} aborted during stream (current={})",
                     gen_id, current
                 );
-                #[cfg(target_os = "android")]
-                let _ = tauri_plugin_android_tts_audio::stop_audio(&app_clone);
+                stop_native_audio!();
                 return;
             }
 
@@ -419,12 +427,9 @@ pub async fn generate_speech(
                     apply_fade_out(&mut audio_data, 24000);
                     let end_time = audio_data.len() as f32 / 24000.0;
 
-                    // Clone raw samples for native AudioTrack on Android.
+                    // Clone raw samples for native audio playback on all platforms.
                     // `audio_data` is moved into TtsChunk below; clone first.
-                    #[cfg(target_os = "android")]
-                    let audio_for_track = audio_data.clone();
-                    #[cfg(not(target_os = "android"))]
-                    let _audio_for_track = &audio_data;
+                    let audio_for_playback = audio_data.clone();
 
                     let chunk_data = TtsChunk {
                         audio_data,
@@ -446,17 +451,21 @@ pub async fn generate_speech(
                         return;
                     }
 
-                    // On Android, also write the raw audio to native AudioTrack
-                    // (bypasses Web Audio API which is unreliable on Android WebView).
+                    // Play audio through the native platform audio backend
+                    // (bypasses Web Audio API entirely on all platforms).
                     #[cfg(target_os = "android")]
                     if let Err(e) = tauri_plugin_android_tts_audio::write_audio(
                         &app_clone,
-                        audio_for_track,
+                        audio_for_playback,
                         24000,
                         gen_id,
                         i as u32,
                     ) {
                         eprintln!("[tts] failed to write audio to native AudioTrack: {}", e);
+                    }
+                    #[cfg(not(target_os = "android"))]
+                    if let Err(e) = crate::desktop_audio::write_audio(audio_for_playback, 24000) {
+                        eprintln!("[tts] failed to write audio to native desktop audio: {}", e);
                     }
                 }
                 Err(err_msg) => {
@@ -469,8 +478,7 @@ pub async fn generate_speech(
                             message: format!("Synthesis error on chunk {}: {}", i, err_msg),
                         },
                     );
-                    #[cfg(target_os = "android")]
-                    let _ = tauri_plugin_android_tts_audio::stop_audio(&app_clone);
+                    stop_native_audio!();
                     return;
                 }
             }
@@ -498,6 +506,28 @@ pub async fn stop_speech(app: AppHandle) -> Result<(), String> {
     eprintln!("[tts] stop_speech called (gen_id {} → {})", prev, prev + 1);
     #[cfg(target_os = "android")]
     let _ = tauri_plugin_android_tts_audio::stop_audio(&app);
+    #[cfg(not(target_os = "android"))]
+    crate::desktop_audio::stop_audio();
+    Ok(())
+}
+
+/// Pause native audio playback (keeps the synthesis queue, pauses output).
+#[tauri::command]
+pub async fn pause_speech(_app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    tauri_plugin_android_tts_audio::pause_audio(&_app)?;
+    #[cfg(not(target_os = "android"))]
+    crate::desktop_audio::pause_audio();
+    Ok(())
+}
+
+/// Resume paused native audio playback.
+#[tauri::command]
+pub async fn resume_speech(_app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    tauri_plugin_android_tts_audio::resume_audio(&_app)?;
+    #[cfg(not(target_os = "android"))]
+    crate::desktop_audio::resume_audio();
     Ok(())
 }
 

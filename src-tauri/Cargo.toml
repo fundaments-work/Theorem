@@ -77,6 +77,7 @@ percent-encoding = "2"
 unrar-ng = "0.7.7"
 ndarray = "0.17.2"
 kokoro-en = { version = "0.1.4", default-features = false, features = ["misaki-lean"] }
+rodio = "0.22.2"
 
 # Apple Silicon + Linux + Windows: ort default features (download-binaries has prebuilt binaries)
 [target.'cfg(all(not(target_os = "android"), any(target_arch = "x86_64", target_arch = "aarch64"), not(target_vendor = "apple")))'.dependencies]
