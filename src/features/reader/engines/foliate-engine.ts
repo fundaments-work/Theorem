@@ -159,11 +159,6 @@ export class FoliateEngine {
     /** When true, the relocate handler skips its deferred applyZoomSync —
      *  goTo/goToFraction already runs applyZoomSync after navigation. */
     private _navigationInProgress = false;
-    /** Set by the relocate handler when a chapter boundary is crossed
-     *  during an explicit navigation.  next/prev use this to decide
-     *  whether applySettingsSync/Async is needed (fix column layout on
-     *  the new chapter) without disrupting every in-chapter page turn. */
-    private _sectionChanged = false;
 
     constructor(options: FoliateEngineOptions = {}) {
         this.options = options;
@@ -609,9 +604,7 @@ export class FoliateEngine {
             const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
             if (sectionIndex >= 0 && sectionIndex !== this._lastSectionIndex) {
                 this._lastSectionIndex = sectionIndex;
-                if (this._navigationInProgress) {
-                    this._sectionChanged = true;
-                } else {
+                if (!this._navigationInProgress) {
                     requestAnimationFrame(() => {
                         this.applyZoomSync();
                         this.scheduleSettingsUpdate();
@@ -633,7 +626,7 @@ export class FoliateEngine {
             // (reason === 'selection'), re-render annotations so highlights from
             // the previous visible area stay painted in the new scroll position.
             if (detail.reason === 'selection') {
-            const sectionIndex = typeof detail.section?.current === 'number' ? detail.section.current : -1;
+                const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
                 this.renderAnnotationsForSection(sectionIndex);
             }
         });
@@ -1162,13 +1155,13 @@ export class FoliateEngine {
         if (!this.view?.renderer) return;
         if (Date.now() < this.selectionNavLockUntil) return;
         this._navigationInProgress = true;
-        this._sectionChanged = false;
         try {
             await this.view.next(distance);
             this.applyZoomSync();
-            if (this._sectionChanged && !this.isFixedLayoutFormat) {
-                this.applySettingsSync();
-                this.applySettingsAsync().catch(() => {});
+            if (!this.isFixedLayoutFormat) {
+                setTimeout(() => {
+                    this.scheduleSettingsUpdate();
+                }, 350);
             }
         } finally {
             this._navigationInProgress = false;
@@ -1179,13 +1172,13 @@ export class FoliateEngine {
         if (!this.view?.renderer) return;
         if (Date.now() < this.selectionNavLockUntil) return;
         this._navigationInProgress = true;
-        this._sectionChanged = false;
         try {
             await this.view.prev(distance);
             this.applyZoomSync();
-            if (this._sectionChanged && !this.isFixedLayoutFormat) {
-                this.applySettingsSync();
-                this.applySettingsAsync().catch(() => {});
+            if (!this.isFixedLayoutFormat) {
+                setTimeout(() => {
+                    this.scheduleSettingsUpdate();
+                }, 350);
             }
         } finally {
             this._navigationInProgress = false;
