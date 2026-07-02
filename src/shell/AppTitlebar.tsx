@@ -371,21 +371,16 @@ export const AppTitlebar = memo(function AppTitlebar({
                             aria-label="Sync devices"
                         >
                             <span className="relative inline-flex">
-                                <ArrowDownUp
+                                <ArrowDownUp className="w-5 h-5" />
+                                <span
                                     className={cn(
-                                        "w-5 h-5",
-                                        (deviceSyncStatus === "syncing" || isQuickSyncing) && "animate-spin",
+                                        "absolute -bottom-px -right-px w-2.5 h-2.5 rounded-full ring-2 ring-[var(--color-surface)] transition-colors duration-300",
+                                        deviceSyncStatus === "idle" && "bg-gray-400",
+                                        deviceSyncStatus === "syncing" && "bg-amber-400 animate-pulse",
+                                        deviceSyncStatus === "synced" && "bg-green-500",
+                                        deviceSyncStatus === "error" && "bg-red-500",
                                     )}
                                 />
-                                {(deviceSyncStatus === "synced" || deviceSyncStatus === "error") && (
-                                    <span
-                                        className={cn(
-                                            "absolute -bottom-px -right-px w-2.5 h-2.5 rounded-full ring-2 ring-[var(--color-surface)]",
-                                            deviceSyncStatus === "synced" && "bg-green-500",
-                                            deviceSyncStatus === "error" && "bg-red-500",
-                                        )}
-                                    />
-                                )}
                             </span>
                         </button>
                         <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">

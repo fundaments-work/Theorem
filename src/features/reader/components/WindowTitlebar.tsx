@@ -81,34 +81,6 @@ function ToolbarButton({
     );
 }
 
-function WindowControlButton({
-    onClick,
-    title,
-    danger = false,
-    children,
-}: {
-    onClick: () => void;
-    title: string;
-    danger?: boolean;
-    children: React.ReactNode;
-}) {
-    return (
-        <button
-            onClick={onClick}
-            className={cn(
-                "inline-flex h-8 w-8 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]",
-                danger
-                    ? "hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]"
-                    : "text-[color:var(--color-text-secondary)]",
-            )}
-            style={{ color: "var(--reader-fg)" }}
-            title={title}
-        >
-            {children}
-        </button>
-    );
-}
-
 interface MenuProps {
     isOpen: boolean;
     onClose: () => void;
@@ -289,6 +261,7 @@ export function WindowTitlebar({
                 WebkitBackdropFilter: 'blur(20px)',
                 borderBottom: '1px solid color-mix(in srgb, var(--reader-fg, var(--color-text)) 10%, transparent)',
             }}
+            onDoubleClick={showDesktopWindowControls ? handleMaximize : undefined}
         >
             <div className="h-10 lg:h-9 flex items-center gap-1 pl-3 pr-2">
                 {/* Left: Back + Title */}
@@ -370,9 +343,9 @@ export function WindowTitlebar({
                 {/* Desktop Window Controls */}
                 {showDesktopWindowControls && (
                     <div className="hidden lg:flex items-center gap-1 ml-2 pl-2 border-l border-[var(--color-border)]">
-                        <WindowControlButton onClick={handleMinimize} title="Minimize"><Minus className="w-4 h-4" /></WindowControlButton>
-                        <WindowControlButton onClick={handleMaximize} title="Maximize"><Maximize2 className="w-4 h-4" /></WindowControlButton>
-                        <WindowControlButton onClick={handleClose} title="Close" danger><X className="w-4 h-4" /></WindowControlButton>
+                        <button onClick={handleMinimize} className={ICON_BUTTON_CLASS} title="Minimize"><Minus className="w-4 h-4" /></button>
+                        <button onClick={handleMaximize} className={ICON_BUTTON_CLASS} title={isMaximized ? "Restore" : "Maximize"}><Maximize2 className="w-4 h-4" /></button>
+                        <button onClick={handleClose} className={cn(ICON_BUTTON_CLASS, "hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]")} title="Close"><X className="w-4 h-4" /></button>
                     </div>
                 )}
             </div>

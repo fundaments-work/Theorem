@@ -853,21 +853,15 @@ export class Paginator extends HTMLElement {
     // Position the page in paginated mode without scrolling #container
     // (which is overflow:clip and inert). Pans the wide view element via
     // transform; the visual result is identical to the old scrollLeft set.
-    #setViewPosition(offset) {
+    #setViewPosition(offset, animate = true) {
         const prev = this.#pageOffset
         this.#pageOffset = offset
         const el = this.#view?.element
         if (el) {
             const axis = this.#vertical ? 'Y' : 'X'
-            const isFlip = !this.scrolled
-                && !this.getAttribute('animated')
-                && Math.abs(offset - prev) === this.size
-
-            if (isFlip) {
-                el.style.transition = 'transform 0.3s cubic-bezier(0, 0, 0.58, 1)'
-            } else {
-                el.style.transition = 'none'
-            }
+            el.style.transition = animate
+                ? 'transform 0.3s cubic-bezier(0, 0, 0.58, 1)'
+                : 'none'
             el.style.transform = `translate${axis}(${-offset}px)`
         }
         this.dispatchEvent(new Event('scroll'))
@@ -887,7 +881,7 @@ export class Paginator extends HTMLElement {
             // Paginated: #container is non-scrollable (overflow:clip),
             // so pan the view via transform instead.
             const next = Math.max(min, Math.min(max, this.#pageOffset + delta))
-            this.#setViewPosition(next)
+            this.#setViewPosition(next, false)
         }
     }
     snap(vx, vy) {
@@ -1013,6 +1007,11 @@ export class Paginator extends HTMLElement {
         if (cur() === offset) {
             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
+            // Always call apply in paginated mode so #setViewPosition can
+            // set the CSS transition on newly-created view elements after
+            // chapter transitions. Without this, the transition is never
+            // set and page turns within the new chapter are instant.
+            if (!scrolled) apply(offset)
             return
         }
         // FIXME: vertical-rl only, not -lr
