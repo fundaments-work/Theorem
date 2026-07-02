@@ -346,6 +346,11 @@ export const AppTitlebar = memo(function AppTitlebar({
                     )}
 
                     <div className="flex items-center gap-1.5">
+                        {lastSyncedLabel && (
+                            <span className="hidden lg:block text-xs text-[color:var(--color-text-tertiary)] whitespace-nowrap">
+                                {lastSyncedLabel}
+                            </span>
+                        )}
                         <button
                             onClick={() => {
                                 void handleQuickSync();
@@ -387,11 +392,6 @@ export const AppTitlebar = memo(function AppTitlebar({
                                 : deviceSyncStatus === "error" ? `Sync error: ${deviceSyncStatus || ""}`
                                 : ""}
                         </span>
-                        {lastSyncedLabel && (
-                            <span className="hidden lg:block text-xs text-[color:var(--color-text-tertiary)] whitespace-nowrap">
-                                {lastSyncedLabel}
-                            </span>
-                        )}
                     </div>
 
                     <button
