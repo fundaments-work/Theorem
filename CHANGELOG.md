@@ -7,33 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.3] - 2026-07-02
 
-### Fixed
+### Added
 
-- **TTS autoplay on word tap** — Removed the `.tts-word` click-to-play feature entirely. Tapping any word no longer triggers `generate_speech` regardless of `ttsEnabled`. Only the ImmersionBar play button starts playback.
-- **TTS word doubling** — Removed the `isContinuousMode` auto-play effect in ImmersionBar that raced with `handleTtsComplete`. Both called `generate_speech` for the same page text, causing every word to play twice.
-- **TTS continues after closing immersion bar** — `handleTtsComplete` now checks `immersionMode` before auto-advancing. Added ref-based guard against stale in-flight async calls.
-- **TTS memory leak — audio buffers not freed on stop** — `desktop_audio::stop_audio()` changed from `player.stop()` (atomic flag, queue drained at 1 chunk/5ms) to `player.clear()` (immediate queue drain + pause).
-- **TTS memory — 3× IPC overhead per chunk** — Removed `audio_data` from `TtsChunk` IPC struct (48KB+ `Vec<f32>` serialized as JSON per chunk, never read by frontend). Replaced with `duration_ms` computed on Rust side. Saves ~400KB per chunk in memory + IPC bandwidth.
-- **TTS memory — stale closures in singleton** — `ImmersionPlayer.destroy()` now clears `this.callbacks`, preventing old React component closures from being held indefinitely.
-- **Immersion toggle causes page turn** — Removed `pb-16` padding transition on viewport container that resized the foliate paginator, triggering column recalculation.
-- **3D page-flip animation stutter** — Reverted the Web Animations API 3-keyframe rotateY effect back to a CSS `ease-out` transition. Fixed missing closing brace on `#container` CSS rule that broke all subsequent selectors.
-- **Page-turn animation only plays on same-chapter pages** — Removed `Math.abs(offset - prev) === this.size` gate from `#setViewPosition`. Added `animate` parameter: `scrollBy` (touch drag) passes `false`, programmatic nav uses `true`. Always calls `#setViewPosition` even when offset matches, ensuring newly-created view elements get the CSS transition.
-- **Settings sync interrupts page-turn animation** — Deferred `applySettingsSync/Async` in `next()`/`prev()` via `setTimeout(350)` so renderer attribute changes (column count, flow) don't trigger a re-layout during the 0.3s CSS transition.
-- **Desktop window controls hidden when toolbar slides away** — Window titlebar now has `onDoubleClick={handleMaximize}` for standard double-click maximize/restore behavior.
+- **Android background sync daemon** — `sync-daemon` sidecar binary with embedded HTTP server for LAN sync. Runs as a foreground service (`connectedDevice` type) with persistent notification. WorkManager periodic sync every 15 minutes + battery optimization exemption. Survives task removal.
+- **Android sync foreground service** — `SyncForegroundService.kt` manages the persistent notification and lifecycle. Auto-starts on app launch. Updates notification with sync status messages.
+- **Android device identity** — Stable per-device ID generated on first launch, stored in app preferences. Used for sync pairing and authentication.
+- **Sync daemon status in settings** — UI shows daemon running/stopped status, last sync time. Control API via HTTP on loopback.
+- **Back arrow in article reader** — Dedicated floating back arrow below the mobile status bar with `safe-area-inset-top` support. Prevents stale article state from hijacking book opens.
+- **RSS feed deletion sync** — Tombstone propagation ensures deleted feeds are removed on paired devices.
+- **Colored sync status indicator** — Replaced rotating `animate-spin` icon with status dot: idle (grey), syncing (amber+pulse), synced (green), error (red). Last synced label moved to left of icon.
+- **Page-turn animation on all navigations** — `#setViewPosition` now always animates in paginated mode (not just same-chapter turns). Touch drag stays instant via `animate=false`.
 
 ### Changed
 
-- **Sync icon** — Replaced `animate-spin` rotation on `ArrowDownUp` icon with a colored dot indicator: idle (grey), syncing (amber+pulse), synced (green), error (red). Last synced label moved to left of icon.
-- **Sync/statistics buttons** — Now use `ui-icon-btn` class on desktop too, giving them a visible `background: var(--color-surface)` consistent with mobile.
-- **Page-turn easing** — Changed from `cubic-bezier(0.22, 1, 0.36, 1)` (dual y=1.0, caused mid-turn plateau) to `cubic-bezier(0, 0, 0.58, 1)` (CSS ease-out, natural deceleration).
+- **TTS: native audio on desktop** — Completely removed Web Audio API for TTS playback. Desktop now uses `rodio` (Rust audio library) for gapless native audio output. Android uses raw `AudioTrack` via a custom Tauri plugin. Bypasses WebView audio entirely.
+- **TTS: native audio on Android** — New `tauri-plugin-android-tts-audio` plugin writes PCM audio directly to Android `AudioTrack`. No more Web Audio API latency or autoplay restrictions.
+- **TTS: increased chunk size** — First chunk 150 chars, subsequent chunks 500 chars (was 80/150). Reduces chunk boundaries by ~3-4×, eliminating audible fade-out dips between sentences.
+- **TTS: removed Anti-Bite Detachment regex** — The phonemizer workaround is no longer needed; the `misaki-lean` bug fix appends a trailing `_` instead.
+- **Sync/statistics buttons** — Now use `ui-icon-btn` class on desktop too, giving consistent visible `background: var(--color-surface)` with mobile.
+- **Page-turn easing** — Changed from `cubic-bezier(0.22, 1, 0.36, 1)` (dual y=1.0 caused mid-turn plateau) to `cubic-bezier(0, 0, 0.58, 1)` (CSS ease-out, natural deceleration).
+- **Reader toolbar** — Double-click on titlebar now toggles maximize/restore (standard desktop behavior).
+- **Git ignore** — Explicit policy for generated Android project files, SDK files, build outputs.
+
+### Fixed
+
+- **TTS autoplay on word tap** — Removed the `.tts-word` click-to-play feature. Tapping any word no longer triggers `generate_speech` regardless of `ttsEnabled`.
+- **TTS word doubling** — Removed `isContinuousMode` auto-play effect in ImmersionBar that raced with `handleTtsComplete`. Both called `generate_speech` for same text.
+- **TTS continues after closing immersion bar** — `handleTtsComplete` now guards on `immersionMode`. Ref-based check prevents stale in-flight async calls.
+- **TTS memory: audio buffers not freed on stop** — `desktop_audio::stop_audio()` changed from `player.stop()` (atomic flag, 1 chunk/5ms drain) to `player.clear()` (immediate queue drain + pause).
+- **TTS memory: 3× IPC overhead per chunk** — Removed `audio_data` from `TtsChunk` IPC (48KB+ `Vec<f32>` serialized as JSON, never read by frontend). Added `duration_ms` on Rust side. Saves ~400KB per chunk.
+- **TTS memory: stale closures in singleton** — `ImmersionPlayer.destroy()` now clears `this.callbacks`, preventing old React closures from being held indefinitely.
+- **Immersion toggle causes page turn** — Removed `pb-16` padding transition on viewport container that resized the foliate paginator and triggered column recalculation.
+- **3D page-flip animation broken CSS** — Restored missing closing brace on `#container` CSS rule (deleted when reverting the 3D flip). The unclosed rule merged `#container` with all subsequent selectors, causing broken layout that appeared as animation stutter.
+- **Page-turn animation stutters mid-turn** — Settings sync (`applySettingsSync`) in `next()`/`prev()` called immediately after navigation, triggering renderer attribute changes (column count, flow) during the 0.3s CSS transition. Deferred via `setTimeout(350)` so it fires after the animation completes.
+- **Broken column layout on multi-column desktop** — `next()`/`prev()` now call `applySettingsSync`/`Async` after navigation (deferred past transition) to ensure correct column count, inline-size, and flow mode.
+- **Book stuck at "Loading..."** — Force new Blob reference in `loadBook` to trigger React re-render. Reset `loadedBookIdRef` on effect cleanup to prevent infinite loading.
+- **TTS column layout misalignment** — Repeated layout sync and zoom application after navigation. Added chapter-boundary detection so re-renders only happen when needed.
+- **Android: crash on Android 14** — `SystemForegroundService` missing `foregroundServiceType` in AndroidManifest. Crash when binding WorkManager notification.
+- **Android: WorkManager JNI crash** — Fixed `Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgroundSync` native method naming.
+- **Android: redundant companion object** — Merged duplicate `companion object` blocks in `SyncWorker.kt`.
+- **Android: smart cast errors** — Fixed Kotlin smart cast on `networkCallback` in `NetworkCallback` registration/unregistration.
+- **Android: WakeLock + notification permissions** — Added `WAKE_LOCK` and `POST_NOTIFICATIONS` permissions. Wrapped `acquireWakeLock` in try/catch.
+- **Android: task removal kills sync** — Set `stopWithTask=false` and restart in `onTaskRemoved` to keep sync alive.
+- **Android: notification importance** — Increased to `IMPORTANCE_LOW` for reliable display.
+- **Sync: 503 race condition** — Prevents concurrent sync requests from causing HTTP 503 errors. Propagates RSS feed deletions as tombstones.
+- **Sync: crashes on Android and desktop** — Eliminated multiple crash sources in sync orchestrator, crypto, and server.
+- **RSS article reader back button** — Restored back navigation. Fixed stale article state hijacking book opens when switching between reader and feeds.
+- **Rust compiler warnings** — All warnings eliminated for production builds.
+- **3D page-flip shadow overlay** — Reverted `#flip-shadow` element, `perspective: 2000px` CSS, and Web Animations API 3-keyframe effect.
+
+### Performance
+
+- **Instant book opening** — Rust-native EPUB prefetch reads zip metadata in parallel with JS. Container.xml, OPF, nav, NCX, and ALL HTML section text are pre-decoded and cached. `loadText`/`getSize` calls skip `@zip.js/zip.js` entirely on the critical path. Book opening drops from ~1.5s to <50ms on desktop, <150ms on Android.
+- **Eliminated barrel imports** — Every import now uses direct module paths instead of `src/core/index.ts`. Barrel re-exports prevented tree-shaking and bundled all stores/services together.
+- **React.memo on heavy components** — Wrapped `BookCard`, `ReaderViewport`, `PDFJsEngine`, `Sidebar`, `BottomNav`, `AppTitlebar`.
+- **Lazy-loaded heavy dependencies** — `soundtouchjs` (TTS), `pdfjs-dist`, `@mozilla/readability`, `fast-xml-parser`, `html-to-image` all use dynamic `import()`.
+- **Zustand individual selectors** — All store consumers now use `useStore(s => s.x)` instead of destructuring `const { x } = useStore()`.
+- **Layout reflow on same-section page turns** — Only triggers render when layout is genuinely broken (size === 0). Keybard navigation and page turns skip unnecessary columnization.
 
 ### Removed
 
 - **Dead component** — Removed unused `ShareCard.tsx`.
-- **Unused barrel files** — Removed `article-reader/index.ts`, `components/index.ts`, `highlights/index.ts`, `progress/index.ts` (nothing imported from them).
-- **Dead CSS classes** — Removed `.epub-container`, `.epub-container iframe`, `.reader-screen`, `.theme-transition`, `.reader-container` from `index.css`.
-- **Commented-out console.log** — Cleaned up 3 lines in `foliate-js-runtime/epub.js`.
-- **Unused PDF.js vendor** — Removed `foliate-js/vendor/pdfjs/` directory (~10.5MB, app uses `pdfjs-dist` npm package).
+- **Unused barrel files** — `article-reader/index.ts`, `components/index.ts`, `highlights/index.ts`, `progress/index.ts`.
+- **Dead CSS classes** — `.epub-container`, `.epub-container iframe`, `.reader-screen`, `.theme-transition`, `.reader-container` from `index.css`.
+- **Commented-out console.log** — 3 lines in `foliate-js-runtime/epub.js`.
+- **Unused PDF.js vendor** — `foliate-js/vendor/pdfjs/` directory (~10.5MB, app uses `pdfjs-dist` npm package).
+- **TTS Anti-Bite Detachment regex** — Replaced by trailing `_` phonemizer workaround.
 
 ## [1.0.2] - 2026-07-01
 
