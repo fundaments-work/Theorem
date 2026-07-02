@@ -1157,18 +1157,34 @@ export class FoliateEngine {
     async next(distance?: number): Promise<void> {
         if (!this.view?.renderer) return;
         if (Date.now() < this.selectionNavLockUntil) return;
+        const sectionBefore = this._lastSectionIndex;
+        this._navigationInProgress = true;
         try {
             await this.view.next(distance);
+            if (this._lastSectionIndex !== sectionBefore) {
+                this.applyZoomSync();
+                this.scheduleSettingsUpdate();
+            }
         } catch (e) {
+        } finally {
+            this._navigationInProgress = false;
         }
     }
 
     async prev(distance?: number): Promise<void> {
         if (!this.view?.renderer) return;
         if (Date.now() < this.selectionNavLockUntil) return;
+        const sectionBefore = this._lastSectionIndex;
+        this._navigationInProgress = true;
         try {
             await this.view.prev(distance);
+            if (this._lastSectionIndex !== sectionBefore) {
+                this.applyZoomSync();
+                this.scheduleSettingsUpdate();
+            }
         } catch (e) {
+        } finally {
+            this._navigationInProgress = false;
         }
     }
 
