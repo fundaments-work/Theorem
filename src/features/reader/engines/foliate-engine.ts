@@ -633,7 +633,7 @@ export class FoliateEngine {
             // (reason === 'selection'), re-render annotations so highlights from
             // the previous visible area stay painted in the new scroll position.
             if (detail.reason === 'selection') {
-                const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
+            const sectionIndex = typeof detail.section?.current === 'number' ? detail.section.current : -1;
                 this.renderAnnotationsForSection(sectionIndex);
             }
         });
