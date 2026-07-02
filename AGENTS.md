@@ -57,7 +57,7 @@ Do not skip clippy. Do not commit with clippy warnings still present. Fix them f
 ## Non-Negotiable Reality Checks
 - Navigation is store-driven (`useUIStore.currentRoute`), not React Router route objects.
 - Imports are primarily relative/barrel imports inside `src`. Do not assume `@/*` or `@theorem/*` aliases.
-- `src/features/reader/foliate-js/**` is vendored upstream code (only `vendor/`, `README.md`, `LICENSE` remain — the duplicated JS files have been removed in favor of `foliate-js-runtime/`). Do not edit unless explicitly required.
+- `src/features/reader/foliate-js/**` is vendored upstream code (git submodule pointing to `johnfactotum/foliate-js`). Do not edit. Run `git submodule update --init --recursive` after clone, and `git submodule update --remote` to pull upstream changes.
 - `src/features/reader/foliate-js-runtime/**` is the runtime wrapper for foliate-js. This IS our code — modify freely.
 - CBR is supported via import-time conversion to CBZ (Rust `unrar-ng` decompression).
 
@@ -85,7 +85,7 @@ src/
         pdfjs-engine.tsx        # PDF.js engine
       hooks/
         useDocumentReader.ts    # Bridge between React and FoliateEngine
-      foliate-js/               # VENDORED — do not edit
+      foliate-js/               # VENDORED — git submodule (johnfactotum/foliate-js)
       foliate-js-runtime/       # OUR runtime wrapper — can edit
         view.js                 # makeBook(), makeZipLoader(), FoliateView web component
         epub.js                 # EPUB.init() — OPF/manifest/spine/TOC parsing
@@ -114,7 +114,7 @@ src-tauri/
 ```
 
 ## Required Commands
-- Install: `pnpm install`
+- Install: `git clone --recurse-submodules && pnpm install`
 - Web dev: `pnpm dev`
 - Desktop dev: `pnpm dev:tauri` or `pnpm tauri dev`
 - Typecheck: `pnpm typecheck`
