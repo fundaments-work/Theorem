@@ -1157,34 +1157,20 @@ export class FoliateEngine {
     async next(distance?: number): Promise<void> {
         if (!this.view?.renderer) return;
         if (Date.now() < this.selectionNavLockUntil) return;
-        const sectionBefore = this._lastSectionIndex;
-        this._navigationInProgress = true;
         try {
             await this.view.next(distance);
-            if (this._lastSectionIndex !== sectionBefore) {
-                this.applyZoomSync();
-                this.scheduleSettingsUpdate();
-            }
+            this.applyZoomSync();
         } catch (e) {
-        } finally {
-            this._navigationInProgress = false;
         }
     }
 
     async prev(distance?: number): Promise<void> {
         if (!this.view?.renderer) return;
         if (Date.now() < this.selectionNavLockUntil) return;
-        const sectionBefore = this._lastSectionIndex;
-        this._navigationInProgress = true;
         try {
             await this.view.prev(distance);
-            if (this._lastSectionIndex !== sectionBefore) {
-                this.applyZoomSync();
-                this.scheduleSettingsUpdate();
-            }
+            this.applyZoomSync();
         } catch (e) {
-        } finally {
-            this._navigationInProgress = false;
         }
     }
 
@@ -1332,10 +1318,18 @@ export class FoliateEngine {
                 this.applyZoomToDocument(doc);
             }
         }
-        
+
         if (!this.isFixedLayoutFormat && typeof this.view.renderer.render === 'function') {
-            this.view.renderer.render();
-            this._retryIfBrokenLayout(0);
+            // Skip a full re-render when the paginator already has a valid
+            // layout (size > 0). The render() forces a layout flush + full
+            // columnize which is expensive on every page turn. Only do it
+            // when the layout is genuinely broken (size === 0).
+            const renderer = this.view.renderer as any;
+            const currentSize = renderer?.size ?? 0;
+            if (currentSize === 0) {
+                this.view.renderer.render();
+                this._retryIfBrokenLayout(0);
+            }
         }
     }
 
