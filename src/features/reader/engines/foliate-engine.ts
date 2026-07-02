@@ -456,6 +456,14 @@ export class FoliateEngine {
                 );
             }
 
+            // Deferred re-render to settle column layout after the initial
+            // section loads — container dimensions may not be stable yet.
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            if (!this.isFixedLayoutFormat) {
+                this.view.renderer?.render?.();
+            }
+            this.applyZoomSync();
+
             // Signal that book is ready
             this.options.onReady?.(metadata, toc);
 
@@ -1094,6 +1102,9 @@ export class FoliateEngine {
     async goTo(target: string | number): Promise<void> {
         if (!this.view) return;
         await this.view.goTo(target);
+        // Wait for next animation frame so the browser has settled the layout
+        // of the newly-loaded section before we re-measure the container.
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         if (!this.isFixedLayoutFormat) {
             this.view.renderer?.render?.();
         }
@@ -1108,6 +1119,9 @@ export class FoliateEngine {
         const clampedFraction = Math.max(0, Math.min(1, fraction));
         
         await this.view.goToFraction(clampedFraction);
+        // Wait for next animation frame so the browser has settled the layout
+        // of the newly-loaded section before we re-measure the container.
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 
         // After jump navigation, re-render to fix column layout that may have
         // drifted during the ResizeObserver race in view.load() / #display.
@@ -1122,6 +1136,14 @@ export class FoliateEngine {
         if (Date.now() < this.selectionNavLockUntil) return;
         try {
             await this.view.next(distance);
+            // Deferred re-render to fix column layout when chapter boundary
+            // is crossed — the new section's container may not be fully
+            // settled during view.next() / #goToNextSection.
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            if (!this.isFixedLayoutFormat) {
+                this.view.renderer?.render?.();
+            }
+            this.applyZoomSync();
         } catch (e) {
         }
     }
@@ -1131,6 +1153,14 @@ export class FoliateEngine {
         if (Date.now() < this.selectionNavLockUntil) return;
         try {
             await this.view.prev(distance);
+            // Deferred re-render to fix column layout when chapter boundary
+            // is crossed — the new section's container may not be fully
+            // settled during view.prev() / #goToPreviousSection.
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            if (!this.isFixedLayoutFormat) {
+                this.view.renderer?.render?.();
+            }
+            this.applyZoomSync();
         } catch (e) {
         }
     }
