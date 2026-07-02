@@ -532,6 +532,7 @@ export class Paginator extends HTMLElement {
              * longer move the page (#20). Pages are instead positioned
              * via transform on the view element (#setViewPosition). */
             overflow: clip;
+        }
         :host([flow="scrolled"]) #container {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
@@ -863,7 +864,7 @@ export class Paginator extends HTMLElement {
                 && Math.abs(offset - prev) === this.size
 
             if (isFlip) {
-                el.style.transition = 'transform 0.3s cubic-bezier(0.1, 0.7, 0.1, 1)'
+                el.style.transition = 'transform 0.3s cubic-bezier(0, 0, 0.58, 1)'
             } else {
                 el.style.transition = 'none'
             }

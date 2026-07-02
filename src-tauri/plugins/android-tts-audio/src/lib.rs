@@ -7,9 +7,6 @@ use tauri::{
 use tauri::Manager;
 
 #[cfg(target_os = "android")]
-use serde::Deserialize;
-
-#[cfg(target_os = "android")]
 const PLUGIN_IDENTIFIER: &str = "work.fundamentals.theorem.ttsaudio";
 
 #[cfg(target_os = "android")]
