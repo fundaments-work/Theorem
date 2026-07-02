@@ -458,12 +458,9 @@ export class FoliateEngine {
                 );
             }
 
-            // Deferred re-render to settle column layout after the initial
-            // section loads — container dimensions may not be stable yet.
-            await this.awaitSettledLayout();
-            if (!this.isFixedLayoutFormat) {
-                this.view.renderer?.render?.();
-            }
+            // Re-apply zoom + re-render columns now that the initial section
+            // has loaded — ensures columns are calculated with both the
+            // paginator's CSS and our inline zoom applied.
             this.applyZoomSync();
 
             // Signal that book is ready
@@ -588,18 +585,13 @@ export class FoliateEngine {
             this.currentLocation = location;
 
             // Detect chapter boundary cross (section index changed) and
-            // schedule a deferred re-render to fix column layout that may
-            // have drifted during view.load() / #display when the container
-            // dimensions were not yet settled.
+            // re-render columns. This handles page-turn wraps to the next
+            // chapter via next()/prev() — our explicit goTo/ goToFraction
+            // already run applyZoomSync internally.
             const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
             if (sectionIndex >= 0 && sectionIndex !== this._lastSectionIndex) {
                 this._lastSectionIndex = sectionIndex;
-                this.awaitSettledLayout().then(() => {
-                    if (!this.isFixedLayoutFormat) {
-                        this.view.renderer?.render?.();
-                    }
-                    this.applyZoomSync();
-                });
+                requestAnimationFrame(() => this.applyZoomSync());
             }
 
             // After initial navigation, wait for first relocate then apply full settings update
@@ -1116,28 +1108,11 @@ export class FoliateEngine {
     }
 
     // Navigation methods
-    /** Helper: wait for the next two animation frames so the browser
-     *  has a chance to fully settle the layout of newly-loaded sections.
-     *  A single RAF is often insufficient because iframe content may take
-     *  multiple frames to render. */
-    private awaitSettledLayout(): Promise<void> {
-        return new Promise<void>(resolve => {
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => resolve());
-            });
-        });
-    }
-
     async goTo(target: string | number): Promise<void> {
         if (!this.view) return;
         await this.view.goTo(target);
-        // Wait for layout to settle after new section loads
-        await this.awaitSettledLayout();
-        if (!this.isFixedLayoutFormat) {
-            this.view.renderer?.render?.();
-        }
-        // Re-apply zoom to the new document after navigation — the 'load'
-        // event listener fires with a stale zoom_level during swipe bursts.
+        // Re-apply zoom + re-render columns now that the new section has
+        // loaded and zoom was applied by the load event handler.
         this.applyZoomSync();
     }
 
@@ -1147,14 +1122,7 @@ export class FoliateEngine {
         const clampedFraction = Math.max(0, Math.min(1, fraction));
         
         await this.view.goToFraction(clampedFraction);
-        // Wait for layout to settle after new section loads
-        await this.awaitSettledLayout();
-
-        // After jump navigation, re-render to fix column layout that may have
-        // drifted during the ResizeObserver race in view.load() / #display.
-        if (!this.isFixedLayoutFormat) {
-            this.view.renderer?.render?.();
-        }
+        // Re-apply zoom + re-render columns after jump navigation.
         this.applyZoomSync();
     }
 
