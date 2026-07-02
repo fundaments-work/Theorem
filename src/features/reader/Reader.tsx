@@ -2445,6 +2445,7 @@ export function ReaderPage() {
     const currentArticle = useRssStore((state) => state.currentArticle);
     const feeds = useRssStore((state) => state.feeds);
     const closeArticleViewer = useRssStore((state) => state.closeArticleViewer);
+    const setCurrentArticle = useRssStore((state) => state.setCurrentArticle);
 
     useEffect(() => {
         if (currentRoute === "reader" && !currentArticle && !currentBookId) {
@@ -2452,7 +2453,15 @@ export function ReaderPage() {
         }
     }, [currentArticle, currentBookId, currentRoute, setRoute]);
 
-    if (currentRoute === "reader" && currentArticle) {
+    // Clear stale RSS article state when a book is being opened
+    useEffect(() => {
+        if (currentRoute === "reader" && currentBookId && currentArticle) {
+            setCurrentArticle(null);
+        }
+    }, [currentRoute, currentBookId, currentArticle, setCurrentArticle]);
+
+    // Article mode: only when no bookId is set (book takes priority)
+    if (currentRoute === "reader" && currentArticle && !currentBookId) {
         const feedTitle = feeds.find((feed) => feed.id === currentArticle.feedId)?.title;
 
         return (
