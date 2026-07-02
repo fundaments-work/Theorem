@@ -61,9 +61,6 @@ export function ImmersionBar({
         onSynthesisCompleteRef.current = onSynthesisComplete;
     }, [onSynthesisComplete]);
 
-    const [isContinuousMode, setIsContinuousMode] = useState(false);
-    const transitioningRef = useRef(false);
-
     useEffect(() => {
         immersionPlayer.speed = 1.0;
     }, []);
@@ -77,19 +74,12 @@ export function ImmersionBar({
         immersionPlayer.init({
             onStateChange: (state) => {
                 setPlaybackState(state);
-                if (state === 'playing') {
-                    transitioningRef.current = false;
-                }
             },
             onError: (msg) => {
                 console.error('[ImmersionBar]', msg);
                 showError();
-                setIsContinuousMode(false);
-                transitioningRef.current = false;
             },
             onComplete: () => {
-                transitioningRef.current = true;
-                setTimeout(() => { transitioningRef.current = false; }, 2000);
                 onCompleteRef.current?.();
             },
             onSynthesisComplete: () => {
@@ -110,13 +100,13 @@ export function ImmersionBar({
         const text = sectionText.trim();
         if (!text) return;
         clearError();
-        console.time('[ImmersionBar] play→genId');
 
         if (playbackState === 'paused') {
             await immersionPlayer.resume();
-            setIsContinuousMode(true);
             return;
         }
+
+        if (playbackState === 'loading') return;
 
         if (playbackState === 'playing') {
             immersionPlayer.stop();
@@ -124,7 +114,6 @@ export function ImmersionBar({
         }
 
         setPlaybackState('loading');
-        setIsContinuousMode(true);
         lastPlayedCfiRef.current = pageCfi || '';
 
         immersionPlayer.prepare();
@@ -135,31 +124,26 @@ export function ImmersionBar({
                 startFromId: startWordId,
                 voice: ttsVoice,
             });
-            console.timeEnd('[ImmersionBar] play→genId');
             immersionPlayer.setCurrentGenId(genId);
         } catch (err: unknown) {
             console.error('[ImmersionBar]', err instanceof Error ? err.message : String(err));
             showError();
             setPlaybackState('idle');
-            setIsContinuousMode(false);
         }
     }, [sectionText, startWordId, playbackState, ttsVoice]);
 
     const handlePause = useCallback(async () => {
         await immersionPlayer.pause();
-        setIsContinuousMode(false);
     }, []);
 
     const handleStop = useCallback(async () => {
         immersionPlayer.stop();
-        setIsContinuousMode(false);
         try { await invoke<void>('stop_speech'); } catch { /* ok */ }
     }, []);
 
     const handleTestVoice = useCallback(async (voice: string) => {
         immersionPlayer.stop();
         immersionPlayer.skipOnComplete = true;
-        setIsContinuousMode(false);
         try { await invoke<void>('stop_speech'); } catch { /* ok */ }
         const sample = "Hello, this is " + voice.replace(/^[a-z]+_/, '') + " speaking.";
         try {
@@ -178,14 +162,6 @@ export function ImmersionBar({
         const next = VOICES[(idx + 1) % VOICES.length];
         updateTtsSettings({ voice: next.value });
     }, [ttsVoice, updateTtsSettings]);
-
-    useEffect(() => {
-        if (transitioningRef.current) return;
-        const text = sectionText.trim();
-        if (isContinuousMode && playbackState === 'idle' && text && pageCfi && lastPlayedCfiRef.current !== pageCfi) {
-            handlePlay();
-        }
-    }, [isContinuousMode, playbackState, sectionText, pageCfi, handlePlay]);
 
     const prevVoiceRef = useRef(ttsVoice);
     useEffect(() => {

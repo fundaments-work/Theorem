@@ -11,10 +11,7 @@ import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useSta
 import { useDocumentReader } from '../hooks/useDocumentReader';
 import { cn } from "../../../core/lib/utils";
 import { getSettingsChanges } from "../../../core/lib/design-tokens";
-import { useSettingsStore } from "../../../core/store";
 import type { DocLocation, DocMetadata, TocItem, HighlightColor, Annotation, BookFormat, ReaderSettings } from "../../../core/types";
-import { immersionPlayer } from '../audio/ImmersionPlayer';
-import { invoke } from '@tauri-apps/api/core';
 
 const FORMAT_EXTENSION_MAP: Record<BookFormat, string> = {
     epub: 'epub',
@@ -83,9 +80,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
     savedLocations,
     nativeFilePath,
 }, ref) => {
-    const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
-    const ttsEnabled = useSettingsStore((s) => s.settings.tts.enabled);
-
     // Navigation feedback state
     const [navDirection, setNavDirection] = useState<'next' | 'prev' | null>(null);
     const [pageAnnouncement, setPageAnnouncement] = useState("");
@@ -157,12 +151,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         onLocationsSaved,
         onViewportTap,
         shouldForceViewportTap,
-        onTtsWordClick: ttsEnabled ? (wordId: string, textToRead: string) => {
-            immersionPlayer.stop();
-            invoke<number>('generate_speech', { text: textToRead, startFromId: wordId, voice: ttsVoice })
-                .then(genId => immersionPlayer.setCurrentGenId(genId))
-                .catch(() => {});
-        } : undefined,
     });
 
     // Expose methods via ref

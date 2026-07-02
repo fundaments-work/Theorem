@@ -38,12 +38,18 @@ pub fn write_audio(samples: Vec<f32>, sample_rate: u32) -> Result<(), String> {
     Ok(())
 }
 
-/// Stop playback and clear the queued audio.
+/// Stop playback and clear the queued audio immediately.
+/// `player.stop()` only sets an atomic flag — queued `Arc<[f32]>` buffers
+/// drain at ~1 chunk per 5 ms (`PeriodicAccess` period).  During CUDA
+/// the synthesis rate (~80 chars/s) can outpace playback (~60 chars/s),
+/// so the queue grows unboundedly.  `player.clear()` drains every queued
+/// source and pauses the output synchronously, releasing all audio memory
+/// immediately.
 pub fn stop_audio() {
     #[cfg(not(target_os = "android"))]
     if let Ok(guard) = AUDIO.lock() {
         if let Some((_, player)) = guard.as_ref() {
-            player.stop();
+            player.clear();
         }
     }
 }

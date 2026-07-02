@@ -469,9 +469,6 @@ export class Paginator extends HTMLElement {
     // navigation math (start/end/page/snap/scrollBy) reads it instead of
     // the inert scrollLeft/scrollTop. (#20 structural fix.)
     #pageOffset = 0
-    #flipAnimation = null
-    #flipShadowAnimation = null
-    #flipShadow = null
     constructor() {
         super()
         this.#root.innerHTML = `<style>
@@ -535,35 +532,6 @@ export class Paginator extends HTMLElement {
              * longer move the page (#20). Pages are instead positioned
              * via transform on the view element (#setViewPosition). */
             overflow: clip;
-            perspective: 2000px;
-            perspective-origin: center center;
-        }
-        #flip-shadow {
-            grid-column: 2 / 5;
-            grid-row: 2;
-            pointer-events: none;
-            z-index: 5;
-            opacity: 0;
-            overflow: hidden;
-            background: linear-gradient(to right,
-                transparent 0%,
-                rgba(0,0,0,0.07) 40%,
-                rgba(0,0,0,0.12) 50%,
-                rgba(0,0,0,0.07) 60%,
-                transparent 100%);
-            background-size: 50% 100%;
-            background-repeat: no-repeat;
-            background-position: 50% 0;
-        }
-        #flip-shadow.vertical {
-            background: linear-gradient(to bottom,
-                transparent 0%,
-                rgba(0,0,0,0.07) 40%,
-                rgba(0,0,0,0.12) 50%,
-                rgba(0,0,0,0.07) 60%,
-                transparent 100%);
-            background-size: 100% 50%;
-        }
         :host([flow="scrolled"]) #container {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
@@ -602,7 +570,6 @@ export class Paginator extends HTMLElement {
             <div id="background" part="filter"></div>
             <div id="header"></div>
             <div id="container"></div>
-            <div id="flip-shadow"></div>
             <div id="footer"></div>
         </div>
         `
@@ -610,7 +577,6 @@ export class Paginator extends HTMLElement {
         this.#top = this.#root.getElementById('top')
         this.#background = this.#root.getElementById('background')
         this.#container = this.#root.getElementById('container')
-        this.#flipShadow = this.#root.getElementById('flip-shadow')
         this.#header = this.#root.getElementById('header')
         this.#footer = this.#root.getElementById('footer')
 
@@ -895,65 +861,15 @@ export class Paginator extends HTMLElement {
             const isFlip = !this.scrolled
                 && !this.getAttribute('animated')
                 && Math.abs(offset - prev) === this.size
-                && !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
-
-            if (this.#flipAnimation) {
-                try { this.#flipAnimation.commitStyles() } catch {}
-                this.#flipAnimation.cancel()
-                this.#flipAnimation = null
-            }
 
             if (isFlip) {
-                const dir = offset > prev ? 1 : -1
-                const rotAxis = this.#vertical ? 'X' : 'Y'
-                const peak = (this.#rtl ? -dir : dir) * 4
-
-                this.#flipAnimation = el.animate([
-                    {
-                        transform: `translate${axis}(${-prev}px) rotate${rotAxis}(0deg)`,
-                        easing: 'cubic-bezier(0.42, 0, 0.58, 1)',
-                    },
-                    {
-                        transform: `translate${axis}(${-(prev + offset) / 2}px) rotate${rotAxis}(${peak}deg)`,
-                        easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                    },
-                    { transform: `translate${axis}(${-offset}px) rotate${rotAxis}(0deg)` },
-                ], { duration: 450, fill: 'none' })
-
-                const finalTransform = `translate${axis}(${-offset}px)`
-                this.#flipAnimation.onfinish = () => {
-                    this.#flipAnimation = null
-                    el.style.transform = finalTransform
-                }
-                this.#animateFlipShadow(dir)
+                el.style.transition = 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)'
             } else {
                 el.style.transition = 'none'
-                el.style.transform = `translate${axis}(${-offset}px)`
-                if (this.#flipShadow) this.#flipShadow.style.opacity = '0'
             }
+            el.style.transform = `translate${axis}(${-offset}px)`
         }
         this.dispatchEvent(new Event('scroll'))
-    }
-    #animateFlipShadow(dir) {
-        if (!this.#flipShadow) return
-        if (this.#flipShadowAnimation) {
-            try { this.#flipShadowAnimation.commitStyles() } catch {}
-            this.#flipShadowAnimation.cancel()
-            this.#flipShadowAnimation = null
-        }
-        this.#flipShadow.classList.toggle('vertical', this.#vertical)
-        const sweep = this.#rtl ? -dir : dir
-        const start = sweep > 0 ? '100%' : '0%'
-        const end = sweep > 0 ? '0%' : '100%'
-        this.#flipShadowAnimation = this.#flipShadow.animate([
-            { opacity: 0, backgroundPosition: `${start} 0` },
-            { opacity: 1, backgroundPosition: '50% 0' },
-            { opacity: 0, backgroundPosition: `${end} 0` },
-        ], { duration: 450, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)' })
-        this.#flipShadowAnimation.onfinish = () => {
-            this.#flipShadowAnimation = null
-            this.#flipShadow.style.opacity = '0'
-        }
     }
     scrollBy(dx, dy) {
         const delta = this.#vertical ? dy : dx

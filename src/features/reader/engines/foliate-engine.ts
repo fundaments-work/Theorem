@@ -62,7 +62,6 @@ export interface FoliateEngineOptions {
     onReady?: (metadata: DocMetadata, toc: TocItem[]) => void;
     onError?: (error: Error) => void;
     onTextSelected?: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void;
-    onTtsWordClick?: (wordId: string, textToRead: string) => void;
     onViewportTap?: () => void;
     shouldForceViewportTap?: () => boolean;
 }
@@ -2333,31 +2332,6 @@ export class FoliateEngine {
                     this.selectionNavLockUntil = Date.now() + 2000;
                 }
                 scheduleSelectionCapture();
-            }, true);
-
-            doc.addEventListener('click', (e: MouseEvent) => {
-                const target = e.target as HTMLElement;
-                if (target && target.classList && target.classList.contains('tts-word')) {
-                    const wordId = target.id;
-                    let text = target.textContent || '';
-                    const walker = doc.createTreeWalker(
-                        doc.body,
-                        NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
-                        null
-                    );
-                    walker.currentNode = target;
-                    while(walker.nextNode()) {
-                        if (walker.currentNode.nodeType === Node.TEXT_NODE) {
-                            text += walker.currentNode.nodeValue + ' ';
-                        } else if (walker.currentNode.nodeType === Node.ELEMENT_NODE) {
-                            const el = walker.currentNode as HTMLElement;
-                            if (el.classList.contains('tts-word')) {
-                                text += el.textContent + ' ';
-                            }
-                        }
-                    }
-                    this.options.onTtsWordClick?.(wordId, text.replace(/\s+/g, ' ').trim());
-                }
             }, true);
 
             // Listen for mouseup on the iframe window

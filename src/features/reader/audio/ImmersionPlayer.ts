@@ -21,7 +21,6 @@ export interface PlaybackCallbacks {
 }
 
 interface TtsChunkPayload {
-    audio_data: number[];
     sample_rate: number;
     words: Array<{
         word: string;
@@ -32,6 +31,7 @@ interface TtsChunkPayload {
     chunk_index: number;
     total_chunks: number;
     generation_id: number;
+    duration_ms: number;
 }
 
 export class ImmersionPlayer {
@@ -193,7 +193,6 @@ export class ImmersionPlayer {
         if (this.completeTimer) {
             clearTimeout(this.completeTimer);
         }
-        const estMs = (lastChunk.audio_data.length / lastChunk.sample_rate) * 1000;
         this.completeTimer = setTimeout(() => {
             this.completeTimer = null;
             this.clearHighlights();
@@ -201,7 +200,7 @@ export class ImmersionPlayer {
             if (!this.skipOnComplete) {
                 this.callbacks.onComplete?.();
             }
-        }, estMs + 300);
+        }, lastChunk.duration_ms + 300);
     }
 
     private highlightWord(domId: string) {
@@ -293,6 +292,7 @@ export class ImmersionPlayer {
         this.isDestroyed = true;
         for (const ul of this.unlisteners) ul();
         this.unlisteners = [];
+        this.callbacks = {};
         this.initPromise = null;
     }
 }

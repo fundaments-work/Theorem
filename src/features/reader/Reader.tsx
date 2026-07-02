@@ -232,6 +232,9 @@ function BookReaderPage() {
     const [ttsData, setTtsData] = useState<{ text: string; startWordId: string } | null>(null);
     const ttsEnabled = settings.tts.enabled;
     const [immersionMode, setImmersionMode] = useState(false);
+    const immersionModeRef = useRef(immersionMode);
+    // Keep ref in sync
+    useEffect(() => { immersionModeRef.current = immersionMode; }, [immersionMode]);
     // Exit immersion mode if TTS is disabled while active
     useEffect(() => {
         if (!ttsEnabled && immersionMode) {
@@ -1024,7 +1027,7 @@ function BookReaderPage() {
     // sequential approach waits for the user to actually advance before
     // synthesizing the next page.
     const handleTtsComplete = useCallback(async () => {
-        if (isPdfFormat || !ttsEnabled) return;
+        if (isPdfFormat || !ttsEnabled || !immersionMode) return;
         const player = await getImmersionPlayer();
         await readerRef.current?.next();
         // Wait one frame for the new page to render before extracting text
@@ -1032,6 +1035,8 @@ function BookReaderPage() {
         const newData = readerRef.current?.getVisibleTextForTts?.();
         if (!newData?.text) return;
         try {
+            // Guard against stale in-flight calls after immersion mode is disabled
+            if (!immersionModeRef.current) return;
             const genId = await invoke<number>('generate_speech', {
                 text: newData.text,
                 startFromId: newData.startWordId,
@@ -1041,7 +1046,7 @@ function BookReaderPage() {
         } catch {
             // synthesis failure is non-critical
         }
-    }, [isPdfFormat, settings.tts.voice, ttsEnabled]);
+    }, [isPdfFormat, settings.tts.voice, ttsEnabled, immersionMode]);
 
     useEffect(() => {
         if (!isPdfFormat || !currentBookId || pdfTotalPages <= 0) {
@@ -2154,10 +2159,7 @@ function BookReaderPage() {
             </div>
 
             {/* Reader Viewport - fills entire area, bars overlay on top */}
-            <div className={cn(
-                "absolute inset-0 overflow-hidden transition-[padding] duration-300",
-                immersionMode && "pb-16",
-            )}>
+            <div className="absolute inset-0 overflow-hidden">
                 {isPdfFormat ? (
                     <Suspense fallback={<div className="flex items-center justify-center h-full">Loading PDF...</div>}>
                         <PDFReader

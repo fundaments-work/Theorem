@@ -57,9 +57,12 @@ fn normalize_for_tts(text: &str) -> String {
 }
 
 /// A chunk of TTS audio with per-word timing metadata.
+/// NOTE: `audio_data` is NOT included in IPC — the frontend only needs
+/// `words[0].dom_id` for highlighting and `duration_ms` to schedule the
+/// completion timer.  Serialising full float arrays (~48 KB per 500 ms chunk)
+/// over JSON IPC was a major source of memory pressure.
 #[derive(Serialize, Clone)]
 pub struct TtsChunk {
-    pub audio_data: Vec<f32>,
     pub sample_rate: u32,
     pub words: Vec<WordTimestamp>,
     /// Index of this chunk in the current generation batch (0-based).
@@ -69,6 +72,9 @@ pub struct TtsChunk {
     /// Generation ID from generate_speech — lets the frontend distinguish
     /// preloaded audio from the currently-playing generation.
     pub generation_id: u64,
+    /// Estimated playback duration of this chunk in milliseconds.
+    /// Used by the frontend to schedule the completion callback.
+    pub duration_ms: f64,
 }
 
 /// Per-word timing entry, matched to a DOM span by `dom_id`.
@@ -421,13 +427,13 @@ pub async fn generate_speech(
                     }
                     apply_fade_out(&mut audio_data, 24000);
                     let end_time = audio_data.len() as f32 / 24000.0;
+                    let duration_ms = (audio_data.len() as f64 / 24000.0) * 1000.0;
 
-                    // Clone raw samples for native audio playback on all platforms.
-                    // `audio_data` is moved into TtsChunk below; clone first.
-                    let audio_for_playback = audio_data.clone();
-
+                    // Emit event so the frontend can do word highlighting.
+                    // audio_data is NOT sent over IPC — the frontend only needs
+                    // words[0].dom_id and duration_ms.  Sending 48 KB+ float
+                    // arrays as JSON was the #1 memory culprit.
                     let chunk_data = TtsChunk {
-                        audio_data,
                         sample_rate: 24000,
                         words: vec![WordTimestamp {
                             word: chunk_text.clone(),
@@ -438,9 +444,8 @@ pub async fn generate_speech(
                         chunk_index: i as u32,
                         total_chunks: total,
                         generation_id: gen_id,
+                        duration_ms,
                     };
-
-                    // Emit event so the frontend can do word highlighting
                     if let Err(e) = app_clone.emit("audio-chunk", chunk_data) {
                         eprintln!("[tts] failed to emit audio-chunk: {}", e);
                         return;
@@ -450,16 +455,12 @@ pub async fn generate_speech(
                     // (bypasses Web Audio API entirely on all platforms).
                     #[cfg(target_os = "android")]
                     if let Err(e) = tauri_plugin_android_tts_audio::write_audio(
-                        &app_clone,
-                        audio_for_playback,
-                        24000,
-                        gen_id,
-                        i as u32,
+                        &app_clone, audio_data, 24000, gen_id, i as u32,
                     ) {
                         eprintln!("[tts] failed to write audio to native AudioTrack: {}", e);
                     }
                     #[cfg(not(target_os = "android"))]
-                    if let Err(e) = crate::desktop_audio::write_audio(audio_for_playback, 24000) {
+                    if let Err(e) = crate::desktop_audio::write_audio(audio_data, 24000) {
                         eprintln!("[tts] failed to write audio to native desktop audio: {}", e);
                     }
                 }
