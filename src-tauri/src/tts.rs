@@ -38,17 +38,11 @@ fn normalize_for_tts(text: &str) -> String {
     let re_missing_space = Regex::new(r"([.!?,\x22])([a-zA-Z])").unwrap();
     s = re_missing_space.replace_all(&s, "$1 $2").to_string();
 
-    // 4. The "Anti-Bite" Detachment
-    // Add a space BEFORE punctuation so espeak-ng doesn't swallow the final consonant.
-    // "good," becomes "good ," -> guarantees the 'd' is fully pronounced.
-    let re_detach_punct = Regex::new(r"([a-zA-Z])([.,!?])").unwrap();
-    s = re_detach_punct.replace_all(&s, "$1 $2").to_string();
-
-    // 5. Clean up any double spaces we might have created
+    // 4. Clean up any double spaces we might have created
     let re_double_spaces = Regex::new(r"\s+").unwrap();
     s = re_double_spaces.replace_all(&s, " ").to_string();
 
-    // 6. The "misaki-lean" bug workaround
+    // 5. The "misaki-lean" bug workaround
     // The pure-Rust `misaki-lean` dictionary phonemizer has a catastrophic bug where it
     // drops the last character of every word it tokenizes (e.g., "time." -> "tim", "91" -> "9").
     // We append a dummy `_` to the end of every alphanumeric sequence so the phonemizer
@@ -269,19 +263,20 @@ pub async fn generate_speech(
     let dom_id = start_from_id.unwrap_or_else(|| "tts-w-0".to_string());
     let normalized = normalize_for_tts(&text);
 
-    // Merge short sentences into chunks. The first chunk is kept small so
-    // audio starts playing in ~5s on slower hardware (CPU inference of
-    // ~21 chars/s). With FIRST_CHUNK_LEN=100, chunk 0 takes ~5s synth →
-    // audio starts immediately while buffered(4) begins G2P for chunks 1-3
-    // in parallel so they're ready by the time chunk 0 finishes playing.
+    // Merge short sentences into chunks. The first chunk is kept modest so
+    // audio starts playing quickly even on slower hardware (CPU inference of
+    // ~21 chars/s). Larger chunks mean fewer boundaries between them, which
+    // eliminates the audible fade-out dip that was noticeable with 150-char
+    // chunks.
     //
     // Empirical tuning (post-warmup):
     //   engine.synth rate ≈ 21 chars/s on a single-thread CPU
+    //   desktop CUDA ≈ 80+ chars/s
     //   audio playback rate ≈ 60 chars/s
-    //   With small chunks: first audio in ~5s, gapless on short pages,
-    //   brief loading gaps may appear on very long pages with this hardware.
-    const FIRST_CHUNK_LEN: usize = 100;
-    const TARGET_CHUNK_LEN: usize = 150;
+    //   With FIRST_CHUNK_LEN=150: first audio in ~2s (CUDA) / ~7s (CPU)
+    //   With TARGET_CHUNK_LEN=500: 3-4× fewer boundaries than before
+    const FIRST_CHUNK_LEN: usize = 150;
+    const TARGET_CHUNK_LEN: usize = 500;
     let raw_sentences = split_sentences(&normalized);
     let chunks: Vec<String> = {
         let mut result: Vec<String> = Vec::new();
@@ -569,8 +564,11 @@ mod tests {
 
     #[test]
     fn test_normalize_whitespace() {
+        // Without the (now-removed) Anti-Bite Detachment, periods stay
+        // attached to the word — "world." → "world_." which the phonemizer
+        // handles correctly instead of treating "." as a separate token.
         let normalized = super::normalize_for_tts("Hello    world.  Spaced. ");
-        assert_eq!(normalized, "Hello_ world_ . Spaced_ .  ");
+        assert_eq!(normalized, "Hello_ world_. Spaced_.  ");
     }
 
     #[test]
