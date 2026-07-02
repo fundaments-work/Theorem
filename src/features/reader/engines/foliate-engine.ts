@@ -606,7 +606,15 @@ export class FoliateEngine {
             if (sectionIndex >= 0 && sectionIndex !== this._lastSectionIndex) {
                 this._lastSectionIndex = sectionIndex;
                 if (!this._navigationInProgress) {
-                    requestAnimationFrame(() => this.applyZoomSync());
+                    requestAnimationFrame(() => {
+                        this.applyZoomSync();
+                        // Re-apply the full CSS stylesheet to the new
+                        // section's document on the next frame — fixes
+                        // column misalignment after page-turn chapter
+                        // wraps where the initial setStyles() during
+                        // View.load() raced the browser's layout.
+                        this.scheduleSettingsUpdate();
+                    });
                 }
             }
 
