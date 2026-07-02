@@ -789,6 +789,16 @@ export class Paginator extends HTMLElement {
     }
     render() {
         if (!this.#view) return
+        const { width, height } = this.#container.getBoundingClientRect()
+        const measuredSize = this.#vertical ? height : width
+        if (this.getAttribute('flow') !== 'scrolled' && measuredSize === 0) {
+            // WebKitGTK can paint the iframe before the CSS grid track sizes
+            // have resolved, causing #container to report zero dimensions.
+            // Defer one frame so the grid has time to settle before we
+            // measure and columnize.
+            requestAnimationFrame(() => this.render())
+            return
+        }
         this.#view.render(this.#beforeRender({
             vertical: this.#vertical,
             rtl: this.#rtl,
