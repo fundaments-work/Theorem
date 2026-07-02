@@ -808,14 +808,12 @@ export class FoliateEngine {
      * Handle style changes from the main app (when CSS variables are updated)
      */
     private handleExternalStyleChange(): void {
-        // Get current settings from the main app
         const currentSettings = getCurrentReaderSettings();
         if (!currentSettings) return;
         
-        // Update internal theme reference
         this.theme = currentSettings.theme;
+        this.zoom_level = this.clampZoomLevel(currentSettings.zoom / 100, this.flow);
         
-        // Schedule async settings update for things that need foliate's renderer
         this.scheduleSettingsUpdate();
     }
 
@@ -1157,20 +1155,32 @@ export class FoliateEngine {
     async next(distance?: number): Promise<void> {
         if (!this.view?.renderer) return;
         if (Date.now() < this.selectionNavLockUntil) return;
+        this._navigationInProgress = true;
         try {
             await this.view.next(distance);
             this.applyZoomSync();
-        } catch (e) {
+            if (!this.isFixedLayoutFormat) {
+                this.applySettingsSync();
+                this.applySettingsAsync().catch(() => {});
+            }
+        } finally {
+            this._navigationInProgress = false;
         }
     }
 
     async prev(distance?: number): Promise<void> {
         if (!this.view?.renderer) return;
         if (Date.now() < this.selectionNavLockUntil) return;
+        this._navigationInProgress = true;
         try {
             await this.view.prev(distance);
             this.applyZoomSync();
-        } catch (e) {
+            if (!this.isFixedLayoutFormat) {
+                this.applySettingsSync();
+                this.applySettingsAsync().catch(() => {});
+            }
+        } finally {
+            this._navigationInProgress = false;
         }
     }
 
@@ -1181,11 +1191,15 @@ export class FoliateEngine {
     async scrollUp(distance?: number): Promise<void> {
         if (Date.now() < this.selectionNavLockUntil) return;
         if (this.flow === 'scroll') {
-            // In scroll mode, use foliate-js's scroll methods if available
-            const scrollDistance = distance ?? this.getScrollDistance();
-            await this.view?.prev?.(scrollDistance);
+            this._navigationInProgress = true;
+            try {
+                const scrollDistance = distance ?? this.getScrollDistance();
+                await this.view?.prev?.(scrollDistance);
+                this.applyZoomSync();
+            } finally {
+                this._navigationInProgress = false;
+            }
         } else {
-            // In paginated mode, go to previous page
             await this.prev();
         }
     }
@@ -1197,11 +1211,15 @@ export class FoliateEngine {
     async scrollDown(distance?: number): Promise<void> {
         if (Date.now() < this.selectionNavLockUntil) return;
         if (this.flow === 'scroll') {
-            // In scroll mode, use foliate-js's scroll methods if available
-            const scrollDistance = distance ?? this.getScrollDistance();
-            await this.view?.next?.(scrollDistance);
+            this._navigationInProgress = true;
+            try {
+                const scrollDistance = distance ?? this.getScrollDistance();
+                await this.view?.next?.(scrollDistance);
+                this.applyZoomSync();
+            } finally {
+                this._navigationInProgress = false;
+            }
         } else {
-            // In paginated mode, go to next page
             await this.next();
         }
     }
@@ -1315,7 +1333,20 @@ export class FoliateEngine {
         for (const content of contents) {
             const doc = content.doc;
             if (doc?.documentElement) {
-                this.applyZoomToDocument(doc);
+                const root = doc.documentElement;
+                if (this.isFixedLayoutFormat) {
+                    this.applyZoomToDocument(doc);
+                } else {
+                    const currentZoom = root.style.getPropertyValue('--reader-zoom');
+                    const currentSettings = getCurrentReaderSettings();
+                    const expectedBaseFontSize = currentSettings?.fontSize ?? 16;
+                    const expectedFontSizeStr = `${expectedBaseFontSize * this.zoom_level}px`;
+                    const currentFontSize = root.style.getPropertyValue('font-size');
+                    
+                    if (currentZoom !== String(this.zoom_level) || currentFontSize !== expectedFontSizeStr) {
+                        this.applyZoomToDocument(doc);
+                    }
+                }
             }
         }
 
