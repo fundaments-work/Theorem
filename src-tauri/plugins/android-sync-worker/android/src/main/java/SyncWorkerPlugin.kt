@@ -12,6 +12,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
+import app.tauri.annotation.PermissionCallback
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
@@ -29,7 +30,14 @@ class UpdateNotificationArgs {
     var text: String = ""
 }
 
-@TauriPlugin
+@TauriPlugin(
+    permissions = [
+        app.tauri.annotation.Permission(
+            strings = [Manifest.permission.POST_NOTIFICATIONS],
+            alias = "notifications"
+        )
+    ]
+)
 class SyncWorkerPlugin(private val activity: Activity) : Plugin(activity) {
 
     companion object {
@@ -41,34 +49,52 @@ class SyncWorkerPlugin(private val activity: Activity) : Plugin(activity) {
         try {
             invoke.parseArgs(StartWorkerArgs::class.java)
 
-            // Check POST_NOTIFICATIONS on Android 13+
+            // Request POST_NOTIFICATIONS on Android 13+ before starting
+            // the ForegroundService. Without this, notifications are
+            // suppressed by the system.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 if (ContextCompat.checkSelfPermission(
                         activity, Manifest.permission.POST_NOTIFICATIONS
                     ) != PackageManager.PERMISSION_GRANTED
                 ) {
-                    Log.w(TAG, "POST_NOTIFICATIONS not granted")
+                    Log.i(TAG, "Requesting POST_NOTIFICATIONS permission")
+                    requestPermissionForAliases(
+                        arrayOf("notifications"), invoke, "onPostNotificationsResult"
+                    )
+                    return
                 }
             }
 
-            // Request battery optimization exemption — this is the KEY
-            // fix for MIUI/Xiaomi. Without this, MIUI kills the process
-            // when the user swipes the app from recents, and Android 12+
-            // blocks AlarmManager restarts ("Background start not allowed").
-            // With this exemption, the system treats the app as exempt
-            // from Doze mode and App Standby, so the ForegroundService
-            // survives task removal.
-            requestBatteryOptimizationExemption()
-
-            val intent = Intent(activity, SyncForegroundService::class.java)
-            activity.startForegroundService(intent)
-
-            val response = JSObject()
-            response.put("running", true)
-            invoke.resolve(response)
+            doStartWorker(invoke)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "Failed to start sync worker")
         }
+    }
+
+    @PermissionCallback
+    fun onPostNotificationsResult(invoke: Invoke) {
+        // Permission result received — start the service regardless
+        // of whether the user granted or denied. The service runs
+        // either way; only the notification visibility changes.
+        doStartWorker(invoke)
+    }
+
+    private fun doStartWorker(invoke: Invoke) {
+        // Request battery optimization exemption — this is the KEY
+        // fix for MIUI/Xiaomi. Without this, MIUI kills the process
+        // when the user swipes the app from recents, and Android 12+
+        // blocks AlarmManager restarts ("Background start not allowed").
+        // With this exemption, the system treats the app as exempt
+        // from Doze mode and App Standby, so the ForegroundService
+        // survives task removal.
+        requestBatteryOptimizationExemption()
+
+        val intent = Intent(activity, SyncForegroundService::class.java)
+        activity.startForegroundService(intent)
+
+        val response = JSObject()
+        response.put("running", true)
+        invoke.resolve(response)
     }
 
     /**

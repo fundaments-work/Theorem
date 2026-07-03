@@ -99,5 +99,6 @@ src-tauri/models/
 *.wav
 *.onnx
 
-# Build artifacts
+# AppImage extraction artifacts
 *.AppImage
+squashfs-root/

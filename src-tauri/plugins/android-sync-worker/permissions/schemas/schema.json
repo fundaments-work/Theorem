@@ -295,6 +295,30 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the cancel_periodic_sync command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cancel-periodic-sync",
+          "markdownDescription": "Enables the cancel_periodic_sync command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the cancel_periodic_sync command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cancel-periodic-sync",
+          "markdownDescription": "Denies the cancel_periodic_sync command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the schedule_periodic_sync command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-schedule-periodic-sync",
+          "markdownDescription": "Enables the schedule_periodic_sync command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the schedule_periodic_sync command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-schedule-periodic-sync",
+          "markdownDescription": "Denies the schedule_periodic_sync command without any pre-configured scope."
+        },
+        {
           "description": "Enables the start_worker command without any pre-configured scope.",
           "type": "string",
           "const": "allow-start-worker",
@@ -317,6 +341,18 @@
           "type": "string",
           "const": "deny-stop-worker",
           "markdownDescription": "Denies the stop_worker command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the update_notification command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-update-notification",
+          "markdownDescription": "Enables the update_notification command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the update_notification command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-update-notification",
+          "markdownDescription": "Denies the update_notification command without any pre-configured scope."
         }
       ]
     }

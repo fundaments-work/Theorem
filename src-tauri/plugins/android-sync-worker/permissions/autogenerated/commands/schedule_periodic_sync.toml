@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-schedule-periodic-sync"
+description = "Enables the schedule_periodic_sync command without any pre-configured scope."
+commands.allow = ["schedule_periodic_sync"]
+
+[[permission]]
+identifier = "deny-schedule-periodic-sync"
+description = "Denies the schedule_periodic_sync command without any pre-configured scope."
+commands.deny = ["schedule_periodic_sync"]
