@@ -135,10 +135,12 @@ fi
 # The binary must be at src-tauri/binaries/sync-daemon-{target_triple}
 # before `pnpm tauri build` packages the bundle.
 printf "Building sync-daemon sidecar...\n"
+cd "$repo_root/src-tauri"
 cargo build -p sync-daemon --release --target x86_64-unknown-linux-gnu
-mkdir -p "$repo_root/src-tauri/binaries"
-cp -f "$repo_root/src-tauri/target/x86_64-unknown-linux-gnu/release/sync-daemon" \
-      "$repo_root/src-tauri/binaries/sync-daemon-x86_64-unknown-linux-gnu"
+mkdir -p binaries
+cp -f "target/x86_64-unknown-linux-gnu/release/sync-daemon" \
+      "binaries/sync-daemon-x86_64-unknown-linux-gnu"
+cd "$repo_root"
 
 if ! pnpm tauri build --bundles "${bundles[@]}" "${tauri_args[@]}"; then
     cat >&2 <<'EOF'
