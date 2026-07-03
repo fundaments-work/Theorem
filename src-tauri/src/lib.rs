@@ -848,7 +848,8 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_mobile_folder_scan::init())
         .plugin(tauri_plugin_android_sync_worker::init())
-        .plugin(tauri_plugin_android_tts_audio::init());
+        .plugin(tauri_plugin_android_tts_audio::init())
+        .plugin(tauri_plugin_shell::init());
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
@@ -910,6 +911,7 @@ pub fn run() {
                 .or_else(|_| std::env::var("COMPUTERNAME"))
                 .unwrap_or_else(|_| "Theorem Device".to_string());
 
+            let daemon_data_dir = app_data_dir.clone();
             match sync_commands::init_sync(app_data_dir, device_name, app.handle().clone()) {
                 Ok(sync_state) => {
                     app.manage(sync_state);
@@ -935,6 +937,38 @@ pub fn run() {
             let startup_args: Vec<String> = std::env::args().skip(1).collect();
             let open_paths = collect_open_paths(startup_args, None);
             enqueue_open_paths(app.handle(), open_paths, false);
+
+            // ── Launch sync-daemon sidecar (desktop only) ──
+            // The daemon runs the sync HTTP server and periodic auto-sync
+            // independently of the GUI, surviving app restart.
+            // If the sidecar binary is not bundled (e.g. dev mode), this
+            // is a no-op — the in-app sync server takes over.
+            #[cfg(desktop)]
+            {
+                let daemon_app = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use tauri_plugin_shell::ShellExt;
+                    let cmd = daemon_app.shell().sidecar("sync-daemon");
+                    match cmd {
+                        Ok(cmd) => {
+                            let cmd = cmd.args([
+                                daemon_data_dir.to_string_lossy().as_ref(),
+                            ]);
+                            match cmd.spawn() {
+                                Ok((_rx, child)) => {
+                                    eprintln!("[sync-daemon] Sidecar launched (pid={})", child.pid());
+                                }
+                                Err(e) => {
+                                    eprintln!("[sync-daemon] Sidecar spawn failed: {e} (in-app sync will be used)");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[sync-daemon] Sidecar not available: {e} (in-app sync will be used)");
+                        }
+                    }
+                });
+            }
 
             // ── System tray (desktop only) ──
             #[cfg(desktop)]

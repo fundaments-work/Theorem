@@ -143,6 +143,13 @@ jobs:
       - name: Regenerate platform icons from source
         run: pnpm tauri icon public/favicon.svg
 
+      - name: Build sync-daemon sidecar binary
+        run: |
+          cargo build -p sync-daemon --release --target x86_64-unknown-linux-gnu
+          mkdir -p src-tauri/binaries
+          cp src-tauri/target/x86_64-unknown-linux-gnu/release/sync-daemon \
+             src-tauri/binaries/sync-daemon-x86_64-unknown-linux-gnu
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:

@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "theorem"
-version = "1.0.0"
+version = "1.0.4"
 description = "Local-first desktop reader for PDFs, EPUBs, MOBI, and RSS with neural TTS, highlights, vocabulary building, and Markdown export."
 authors = ["Fundamentals"]
 license = "MIT"
@@ -34,6 +34,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-os = "2"
 tauri-plugin-app = "2.0.0-alpha.1"
 tauri-plugin-barcode-scanner = "2"
+tauri-plugin-shell = "2"
 tauri-plugin-http = { version = "2", features = ["rustls-tls"] }
 tauri-plugin-mobile-folder-scan = { path = "plugins/mobile-folder-scan" }
 tauri-plugin-android-sync-worker = { path = "plugins/android-sync-worker" }

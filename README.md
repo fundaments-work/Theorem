@@ -257,7 +257,17 @@ Yes. Local-first reading, annotation, and Markdown export without a paid subscri
 
 ---
 
-## Download
+## Install
+
+### Linux (one command)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fundaments-work/Theorem/main/scripts/install-linux.sh | bash
+```
+
+This downloads the latest release, installs the app, and sets up the **sync-daemon** as a systemd user service for 24/7 background sync — even when the app is closed.
+
+### Manual Download
 
 | Platform | Download |
 |----------|----------|
@@ -267,7 +277,7 @@ Yes. Local-first reading, annotation, and Markdown export without a paid subscri
 | Windows | `.msi` or `.exe` |
 | Android | `.apk` |
 
-All builds are available on the [Releases page](https://github.com/fundaments-work/theorem/releases/latest). See [theorem.fundaments.work](https://theorem.fundaments.work) for documentation and downloads.
+All builds are on the [Releases page](https://github.com/fundaments-work/theorem/releases/latest). See [theorem.fundaments.work](https://theorem.fundaments.work) for docs.
 
 ---
 

@@ -131,6 +131,15 @@ if [[ ! -d "$repo_root/node_modules" ]]; then
     pnpm install --frozen-lockfile
 fi
 
+# Build the sync-daemon sidecar so Tauri bundles it in the AppImage.
+# The binary must be at src-tauri/binaries/sync-daemon-{target_triple}
+# before `pnpm tauri build` packages the bundle.
+printf "Building sync-daemon sidecar...\n"
+cargo build -p sync-daemon --release --target x86_64-unknown-linux-gnu
+mkdir -p "$repo_root/src-tauri/binaries"
+cp -f "$repo_root/src-tauri/target/x86_64-unknown-linux-gnu/release/sync-daemon" \
+      "$repo_root/src-tauri/binaries/sync-daemon-x86_64-unknown-linux-gnu"
+
 if ! pnpm tauri build --bundles "${bundles[@]}" "${tauri_args[@]}"; then
     cat >&2 <<'EOF'
 Linux packaging failed.
