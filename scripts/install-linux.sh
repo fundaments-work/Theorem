@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-output_dir="$repo_root/dist/packages/linux"
+repo_root=""
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+output_dir="${repo_root:+$repo_root/dist/packages/linux}"
+output_dir="${output_dir:-/tmp/theorem-install}"
 
 # ── Detect distro and architecture ──
 ARCH="$(uname -m)"
@@ -164,7 +168,11 @@ install_appimage() {
 
     install -Dm755 "$artifact" "$APP_DIR/Theorem.AppImage"
     ln -sf "$APP_DIR/Theorem.AppImage" "$BIN_DIR/theorem"
-    install -Dm644 "$repo_root/src-tauri/icons/128x128.png" "$icons_dir/theorem.png"
+    if [[ -n "$repo_root" ]]; then
+        install -Dm644 "$repo_root/src-tauri/icons/128x128.png" "$icons_dir/theorem.png"
+    else
+        curl -fsSL -o "$icons_dir/theorem.png" "https://raw.githubusercontent.com/$GH_REPO/main/src-tauri/icons/128x128.png"
+    fi
 
     cat > "$HOME/.local/share/applications/theorem.desktop" <<EOF2
 [Desktop Entry]
