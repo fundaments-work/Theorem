@@ -102,6 +102,3 @@ src-tauri/models/
 # AppImage extraction artifacts
 *.AppImage
 squashfs-root/
-
-# Sidecar binary (built by makepackage-linux.sh before bundling)
-src-tauri/binaries/

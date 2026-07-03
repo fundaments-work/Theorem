@@ -174,12 +174,6 @@ jobs:
       - name: Fetch dependencies
         run: cargo fetch --manifest-path src-tauri/Cargo.toml
 
-      - name: Build sync-daemon (required by Tauri build script)
-        run: |
-          cargo build -p sync-daemon --manifest-path src-tauri/Cargo.toml
-          mkdir -p src-tauri/binaries
-          cp src-tauri/target/debug/sync-daemon src-tauri/binaries/sync-daemon-x86_64-unknown-linux-gnu
-
       - name: Check Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 

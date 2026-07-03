@@ -39,9 +39,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": [
-      "binaries/sync-daemon"
-    ],
     "category": "Education",
     "publisher": "Fundamentals",
     "homepage": "https://github.com/sapienskid/theorem",

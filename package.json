@@ -68,7 +68,6 @@
         "@tauri-apps/plugin-http": "^2.5.9",
         "@tauri-apps/plugin-opener": "^2.5.4",
         "@tauri-apps/plugin-os": "^2.3.2",
-        "@tauri-apps/plugin-shell": "^2.3.5",
         "@tauri-apps/plugin-window": "2.0.0-alpha.1",
         "@tauri-controls/react": "^0.4.0",
         "@types/uuid": "^10.0.0",

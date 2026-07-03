@@ -57,46 +57,19 @@ stop_systemd_service() {
     systemctl --user disable --now "$SYSTEMD_SERVICE" 2>/dev/null || true
 }
 
-install_daemon_from_bundle() {
-    local bundle_path="$1"
-    local bundle_type="$2"
-    local temp_dir
-    local daemon_src=""
-
-    temp_dir="$(mktemp -d)"
-    trap 'rm -rf "$temp_dir"' RETURN
+install_daemon() {
+    local daemon_url="https://github.com/$GH_REPO/releases/download/v${VERSION}/sync-daemon"
+    local daemon_dest="$DAEMON_BIN"
 
     mkdir -p "$DAEMON_DIR"
 
-    case "$bundle_type" in
-        deb)
-            # .deb: daemon is inside the data.tar.gz at usr/lib/theorem/binaries/
-            bsdtar -xf "$bundle_path" -C "$temp_dir"
-            bsdtar -xzf "$temp_dir/data.tar.gz" -C "$temp_dir" 2>/dev/null || true
-            daemon_src="$(find "$temp_dir" -path "*/lib/theorem/binaries/sync-daemon" -type f 2>/dev/null | head -1)"
-            ;;
-        rpm)
-            # .rpm: extract cpio archive
-            bsdtar -xf "$bundle_path" -C "$temp_dir" 2>/dev/null || rpm2cpio "$bundle_path" | cpio -idm -D "$temp_dir" 2>/dev/null || true
-            daemon_src="$(find "$temp_dir" -path "*/lib/theorem/binaries/sync-daemon" -type f 2>/dev/null | head -1)"
-            ;;
-        appimage)
-            # AppImage: extract squashfs and find the daemon
-            "$bundle_path" --appimage-extract 2>/dev/null
-            daemon_src="$(find "$temp_dir/squashfs-root" -name "sync-daemon" -type f 2>/dev/null | head -1)"
-            if [[ -z "$daemon_src" ]]; then
-                daemon_src="$(find "$temp_dir" -path "*/binaries/sync-daemon" -type f 2>/dev/null | head -1)"
-            fi
-            ;;
-    esac
-
-    if [[ -n "$daemon_src" && -f "$daemon_src" ]]; then
-        install -Dm755 "$daemon_src" "$DAEMON_BIN"
-        # Symlink in ~/.local/bin for convenience
-        ln -sf "$DAEMON_BIN" "$BIN_DIR/theorem-daemon" 2>/dev/null || true
-        printf "Installed sync-daemon to %s\n" "$DAEMON_BIN"
+    printf "Downloading sync-daemon from %s ...\n" "$daemon_url"
+    if curl -fsSL "$daemon_url" -o "$daemon_dest"; then
+        chmod +x "$daemon_dest"
+        ln -sf "$daemon_dest" "$BIN_DIR/theorem-daemon" 2>/dev/null || true
+        printf "Installed sync-daemon to %s\n" "$daemon_dest"
     else
-        printf "Warning: sync-daemon binary not found in %s bundle.\n" "$bundle_type" >&2
+        printf "Warning: sync-daemon not available in this release.\n" >&2
         printf "Only the app was installed. Background sync will use the in-app timer.\n" >&2
     fi
 }
@@ -297,7 +270,7 @@ esac
 
 # Install daemon + systemd service
 printf "\n--- Setting up sync-daemon ---\n"
-install_daemon_from_bundle "$ARTIFACT" "$bundle"
+install_daemon
 install_systemd_service
 
 printf "\n✅ Theorem v%s installed successfully!\n" "$VERSION"

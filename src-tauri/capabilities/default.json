@@ -220,16 +220,6 @@
         { "url": "https://www.reader-dict.com/**" },
         { "url": "https://github.com/**" }
       ]
-    },
-    "shell:allow-execute",
-    "shell:allow-spawn",
-    "shell:allow-stdin-write",
-    {
-      "identifier": "shell:allow-open",
-      "allow": [
-        { "url": "https://*" },
-        { "url": "http://*" }
-      ]
     }
   ]
 }

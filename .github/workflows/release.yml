@@ -169,13 +169,17 @@ jobs:
       - name: Regenerate platform icons from source
         run: pnpm tauri icon public/favicon.svg
 
-      - name: Build sync-daemon sidecar binary
+      - name: Build sync-daemon (separate release asset)
         working-directory: src-tauri
-        run: |
-          cargo build -p sync-daemon --release --target x86_64-unknown-linux-gnu
-          mkdir -p binaries
-          cp target/x86_64-unknown-linux-gnu/release/sync-daemon \
-             binaries/sync-daemon-x86_64-unknown-linux-gnu
+        run: cargo build -p sync-daemon --release --target x86_64-unknown-linux-gnu
+
+      - name: Upload sync-daemon as release asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.create-release.outputs.release_tag }}
+          draft: true
+          files: |
+            src-tauri/target/x86_64-unknown-linux-gnu/release/sync-daemon
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0

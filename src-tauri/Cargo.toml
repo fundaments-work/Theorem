@@ -34,7 +34,6 @@ tauri-plugin-dialog = "2"
 tauri-plugin-os = "2"
 tauri-plugin-app = "2.0.0-alpha.1"
 tauri-plugin-barcode-scanner = "2"
-tauri-plugin-shell = "2"
 tauri-plugin-http = { version = "2", features = ["rustls-tls"] }
 tauri-plugin-mobile-folder-scan = { path = "plugins/mobile-folder-scan" }
 tauri-plugin-android-sync-worker = { path = "plugins/android-sync-worker" }
@@ -46,7 +45,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 
 # ── LAN Device Sync ──
 theorem-sync-core = { path = "crates/theorem-sync-core" }
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros", "process"] }
 axum = "0.7"
 tower-http = { version = "0.5", features = ["compression-gzip", "decompression-gzip"] }
 futures = "0.3"
