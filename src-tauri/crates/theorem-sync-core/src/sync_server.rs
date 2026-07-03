@@ -6,7 +6,7 @@ use crate::sync_crypto::{self, DeviceIdentity, EncryptedPayload};
 use crate::sync_protocol::*;
 
 use axum::{
-    extract::State,
+    extract::{ConnectInfo, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -181,12 +181,15 @@ pub async fn start_server(state: Arc<SyncServerState>) -> Result<SyncServerHandl
 
     // Spawn the server in a background tokio task.
     tokio::spawn(async move {
-        axum::serve(listener, app)
-            .with_graceful_shutdown(async move {
-                shutdown_clone.notified().await;
-            })
-            .await
-            .ok();
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .with_graceful_shutdown(async move {
+            shutdown_clone.notified().await;
+        })
+        .await
+        .ok();
     });
 
     Ok(SyncServerHandle {
@@ -237,10 +240,21 @@ async fn decrypt_request<T: serde::de::DeserializeOwned>(
     state: &Arc<SyncServerState>,
     req: &AuthenticatedRequest,
 ) -> Result<(T, [u8; 32]), (StatusCode, String)> {
-    let devices = state.paired_devices.lock().await;
-    let device = devices
-        .get(&req.device_id)
-        .ok_or_else(|| (StatusCode::FORBIDDEN, "Device not paired".into()))?;
+    let device = {
+        let devices = state.paired_devices.lock().await;
+        if let Some(d) = devices.get(&req.device_id) {
+            d.clone()
+        } else {
+            drop(devices);
+            let fresh = load_paired_devices(&state.app_data_dir);
+            let mut devices = state.paired_devices.lock().await;
+            *devices = fresh;
+            devices
+                .get(&req.device_id)
+                .cloned()
+                .ok_or_else(|| (StatusCode::FORBIDDEN, "Device not paired".into()))?
+        }
+    };
 
     let sym_key_vec = BASE64
         .decode(&device.symmetric_key_b64)
@@ -252,8 +266,6 @@ async fn decrypt_request<T: serde::de::DeserializeOwned>(
             "Key length is not 32 bytes".into(),
         )
     })?;
-
-    drop(devices);
 
     let decrypted = sync_crypto::decrypt_payload(&sym_key, &req.payload)
         .map_err(|e| (StatusCode::FORBIDDEN, format!("Decrypt failed: {}", e)))?;
@@ -299,6 +311,7 @@ async fn handle_health(State(state): State<Arc<SyncServerState>>) -> impl IntoRe
 /// POST /pair — Handle incoming pairing request from scanner device.
 async fn handle_pair(
     State(state): State<Arc<SyncServerState>>,
+    ConnectInfo(remote_addr): ConnectInfo<SocketAddr>,
     Json(request): Json<PairingRequest>,
 ) -> Result<Json<PairingResponse>, (StatusCode, String)> {
     eprintln!("[sync-server] POST /pair from device={}", request.device_id);
@@ -374,7 +387,7 @@ async fn handle_pair(
         device_id: request.device_id.clone(),
         device_name: request.device_name.clone(),
         symmetric_key_b64: BASE64.encode(symmetric_key),
-        last_ip: String::new(),
+        last_ip: remote_addr.ip().to_string(),
         last_port: 0,
         paired_at: now.clone(),
         last_sync_at: None,

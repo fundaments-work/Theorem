@@ -1,6 +1,6 @@
 [package]
 name = "sync-daemon"
-version = "1.0.4"
+version = "1.0.5"
 edition = "2021"
 description = "Theorem LAN sync background daemon — runs independently of the GUI"
 

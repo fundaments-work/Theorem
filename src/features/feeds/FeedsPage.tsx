@@ -12,9 +12,13 @@ import type { RssFeed, RssArticle } from "../../core/types";
 import {
     Rss, Plus, RefreshCw, Trash2, Loader2,
     AlertCircle,
-    LayoutTemplate, ArrowLeft, MoreHorizontal
+    LayoutTemplate, ArrowLeft, MoreHorizontal,
+    ExternalLink, BookOpen, CheckCheck, EyeOff, Link2,
 } from "lucide-react";
 import { AddFeedModal } from "./AddFeedModal";
+import { ContextMenu } from "../../ui";
+import type { ContextMenuItem } from "../../ui";
+import { sanitizeArticleHtml } from "../reader/article-reader/utils";
 
 // ── Helper ──
 
@@ -36,12 +40,6 @@ function formatArticleDate(date: Date | string | undefined): string {
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function stripHtml(html: string): string {
-    const div = document.createElement("div");
-    div.innerHTML = html;
-    return div.textContent || div.innerText || "";
 }
 
 function useTouchVisibleActions(): boolean {
@@ -208,105 +206,163 @@ function ArticleCard({
     article,
     feedTitle,
     onRead,
+    onDelete,
+    onToggleRead,
 }: {
     article: RssArticle;
     feedTitle?: string;
     onRead: () => void;
+    onDelete?: (articleId: string) => void;
+    onToggleRead?: (articleId: string) => void;
 }) {
-    const summary = useMemo(() => {
+    const summaryHtml = useMemo(() => {
         const text = article.summary || article.content;
-        return stripHtml(text).substring(0, 200);
+        if (!text) return "";
+        const html = sanitizeArticleHtml(text);
+        return html;
     }, [article.summary, article.content]);
 
     const dateStr = formatArticleDate(article.publishedAt ?? article.fetchedAt);
 
+    const contextMenuItems: ContextMenuItem[] = [
+        {
+            id: "read",
+            label: "Read Article",
+            icon: <BookOpen className="w-4 h-4" />,
+            onClick: onRead,
+        },
+        ...(article.url ? [{
+            id: "open-original",
+            label: "Open Original",
+            icon: <ExternalLink className="w-4 h-4" />,
+            onClick: () => {
+                if (isTauri()) {
+                    import("@tauri-apps/plugin-opener").then(
+                        ({ openUrl }) => openUrl(article.url),
+                    );
+                } else {
+                    window.open(article.url, "_blank", "noopener,noreferrer");
+                }
+            },
+        }] as ContextMenuItem[] : []),
+        {
+            id: "copy-link",
+            label: "Copy Link",
+            icon: <Link2 className="w-4 h-4" />,
+            onClick: () => {
+                navigator.clipboard.writeText(article.url || "").catch(() => {});
+            },
+        },
+        ...(onToggleRead ? [{
+            id: "toggle-read",
+            label: article.isRead ? "Mark Unread" : "Mark Read",
+            icon: article.isRead ? <EyeOff className="w-4 h-4" /> : <CheckCheck className="w-4 h-4" />,
+            onClick: () => onToggleRead(article.id),
+        }] as ContextMenuItem[] : []),
+        ...(onDelete ? [{
+            id: "separator",
+            label: "",
+            separator: true,
+        }] as ContextMenuItem[] : []),
+        ...(onDelete ? [{
+            id: "delete",
+            label: "Delete Article",
+            icon: <Trash2 className="w-4 h-4" />,
+            danger: true,
+            onClick: () => onDelete(article.id),
+        }] as ContextMenuItem[] : []),
+    ];
+
     return (
-        <div
-            onClick={onRead}
-            className={cn(
-                "group p-4 sm:p-5 border transition-all duration-200 cursor-pointer",
-                article.isRead
-                    ? "border-transparent bg-[var(--color-surface-muted)]/30 opacity-70 hover:opacity-100"
-                    : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]/30 hover:shadow-sm",
-                "active:scale-[0.99]"
-            )}
-        >
-            <div className="flex gap-4 sm:gap-5">
-                {/* Article Content */}
-                <div className="flex-1 min-w-0">
-                    {/* Meta line */}
-                    <div className="flex items-center gap-2 mb-2">
-                        {feedTitle && (
-                            <span className="text-[10px] uppercase font-bold tracking-wider text-[color:var(--color-accent)]">
-                                {feedTitle}
-                            </span>
-                        )}
-                        {dateStr && (
-                            <>
-                                <span className="text-[color:var(--color-text-muted)] text-[10px]">•</span>
-                                <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] flex items-center gap-1 uppercase tracking-wide">
-                                    {dateStr}
-                                </span>
-                            </>
-                        )}
-                    </div>
-
-                    {/* Title */}
-                    <h3 className={cn(
-                        "text-base font-semibold line-clamp-2 mb-2 leading-tight",
-                        article.isRead
-                            ? "text-[color:var(--color-text-secondary)]"
-                            : "text-[color:var(--color-text-primary)]",
-                    )}>
-                        {article.title}
-                    </h3>
-
-                    {/* Summary */}
-                    {summary && (
-                        <p className="text-sm text-[color:var(--color-text-muted)] line-clamp-2 leading-relaxed">
-                            {summary}
-                        </p>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 mt-4">
-                        {article.url && (
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isTauri()) {
-                                        import("@tauri-apps/plugin-opener").then(
-                                            ({ openUrl }) => openUrl(article.url),
-                                        );
-                                    } else {
-                                        window.open(article.url, "_blank", "noopener,noreferrer");
-                                    }
-                                }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                            >
-                                <span>Read Full Article</span>
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* Thumbnail */}
-                {article.imageUrl && (
-                    <div className="hidden sm:block w-24 h-24 flex-shrink-0 overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)]">
-                        <img
-                            src={article.imageUrl}
-                            alt=""
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                                (e.target as HTMLImageElement).parentElement!.style.display = 'none';
-                            }}
-                        />
-                    </div>
+        <ContextMenu items={contextMenuItems}>
+            <div
+                onClick={onRead}
+                className={cn(
+                    "group p-4 sm:p-5 border transition-all duration-200 cursor-pointer",
+                    article.isRead
+                        ? "border-transparent bg-[var(--color-surface-muted)]/30 opacity-70 hover:opacity-100"
+                        : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]/30 hover:shadow-sm",
+                    "active:scale-[0.99]"
                 )}
+            >
+                <div className="flex gap-4 sm:gap-5">
+                    {/* Article Content */}
+                    <div className="flex-1 min-w-0">
+                        {/* Meta line */}
+                        <div className="flex items-center gap-2 mb-2">
+                            {feedTitle && (
+                                <span className="text-[10px] uppercase font-bold tracking-wider text-[color:var(--color-accent)]">
+                                    {feedTitle}
+                                </span>
+                            )}
+                            {dateStr && (
+                                <>
+                                    <span className="text-[color:var(--color-text-muted)] text-[10px]">•</span>
+                                    <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] flex items-center gap-1 uppercase tracking-wide">
+                                        {dateStr}
+                                    </span>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Title */}
+                        <h3 className={cn(
+                            "text-base font-semibold line-clamp-2 mb-2 leading-tight",
+                            article.isRead
+                                ? "text-[color:var(--color-text-secondary)]"
+                                : "text-[color:var(--color-text-primary)]",
+                        )}>
+                            {article.title}
+                        </h3>
+
+                        {/* Summary */}
+                        {summaryHtml && (
+                            <div
+                                className="text-sm text-[color:var(--color-text-muted)] line-clamp-2 leading-relaxed [&_p]:inline [&_a]:text-[color:var(--color-accent)] [&_a]:underline [&_strong]:font-bold [&_em]:italic"
+                                dangerouslySetInnerHTML={{ __html: summaryHtml }}
+                            />
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 mt-4">
+                            {article.url && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (isTauri()) {
+                                            import("@tauri-apps/plugin-opener").then(
+                                                ({ openUrl }) => openUrl(article.url),
+                                            );
+                                        } else {
+                                            window.open(article.url, "_blank", "noopener,noreferrer");
+                                        }
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                >
+                                    <span>Read Full Article</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Thumbnail */}
+                    {article.imageUrl && (
+                        <div className="hidden sm:block w-24 h-24 flex-shrink-0 overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)]">
+                            <img
+                                src={article.imageUrl}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).parentElement!.style.display = 'none';
+                                }}
+                            />
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+        </ContextMenu>
     );
 }
 
@@ -364,6 +420,8 @@ export function FeedsPage() {
     const error = useRssStore((s) => s.error);
     const addFeed = useRssStore((s) => s.addFeed);
     const removeFeed = useRssStore((s) => s.removeFeed);
+    const deleteArticle = useRssStore((s) => s.deleteArticle);
+    const toggleArticleRead = useRssStore((s) => s.toggleArticleRead);
     const refreshAll = useRssStore((s) => s.refreshAll);
     const getArticlesForFeed = useRssStore((s) => s.getArticlesForFeed);
     const getAllArticles = useRssStore((s) => s.getAllArticles);
@@ -710,6 +768,8 @@ export function FeedsPage() {
                                                     article={article}
                                                     feedTitle={!selectedFeedId ? feedTitleById.get(article.feedId) : undefined}
                                                     onRead={() => openArticleInReader(article)}
+                                                    onDelete={deleteArticle}
+                                                    onToggleRead={toggleArticleRead}
                                                 />
                                             </div>
                                         );

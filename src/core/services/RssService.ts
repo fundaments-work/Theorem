@@ -1,5 +1,5 @@
 /**
- * RSS Service
+ * Rss Service
  * Fetches and parses RSS/Atom/JSON/RDF feeds using fast-xml-parser for robust
  * XML handling, with @mozilla/readability for full-article extraction.
  */
@@ -9,6 +9,9 @@ import { v4 as uuidv4 } from 'uuid';
 import type { XMLParser } from 'fast-xml-parser';
 import { isTauri } from '../lib/env';
 import { invoke } from '@tauri-apps/api/core';
+import MarkdownIt from 'markdown-it';
+
+const md = new MarkdownIt({ html: true, linkify: true, breaks: true });
 
 // ── Types ──
 
@@ -1058,6 +1061,29 @@ async function fetchUrlContent(url: string): Promise<string> {
 
 // ── Public API ──
 
+function looksLikeMarkdown(text: string): boolean {
+    if (!text || text.length < 3) return false;
+    return /^#{1,6}\s/m.test(text)
+        || /^\s*[-*+]\s/m.test(text)
+        || /\*\*[^*]+\*\*/.test(text)
+        || /\[.+?\]\(.+?\)/.test(text)
+        || /^>\s/m.test(text)
+        || /`{3}[\s\S]*?`{3}/.test(text)
+        || /^\s*\d+[.)]\s/m.test(text)
+        || /~~.+?~~/.test(text);
+}
+
+export async function convertMarkdownToHtml(html: string): Promise<string> {
+    if (!html || !looksLikeMarkdown(html) || /<[a-zA-Z][^>]*>/.test(html)) {
+        return html;
+    }
+    try {
+        return md.render(html);
+    } catch {
+        return html;
+    }
+}
+
 /**
  * Fetches the linked article URL and extracts full readable content.
  * Falls back to feed content if extraction fails.
@@ -1070,6 +1096,8 @@ export async function fetchAndExtractArticleContent(articleUrl: string): Promise
     if (!extracted) {
         throw new Error('Could not extract full article content from source page.');
     }
+    // Convert markdown content to HTML for proper rendering
+    extracted.content = await convertMarkdownToHtml(extracted.content);
     return extracted;
 }
 
@@ -1210,27 +1238,27 @@ export async function fetchAndParseFeed(
 /**
  * Convert parsed feed results into store-ready objects.
  */
-export function materializeFeed(
+export async function materializeFeed(
     url: string,
     parsed: Awaited<ReturnType<typeof fetchAndParseFeed>>,
-): { feed: RssFeed; articles: RssArticle[] } {
+): Promise<{ feed: RssFeed; articles: RssArticle[] }> {
     const feedId = uuidv4();
     const now = new Date();
 
-    const articles: RssArticle[] = parsed.articles.map(a => ({
+    const articles: RssArticle[] = await Promise.all(parsed.articles.map(async a => ({
         id: uuidv4(),
         feedId,
         title: a.title,
         author: a.author,
         url: a.url,
-        content: a.content,
-        summary: a.summary,
+        content: await convertMarkdownToHtml(a.content),
+        summary: await convertMarkdownToHtml(a.summary ?? ""),
         imageUrl: a.imageUrl,
         publishedAt: a.publishedAt,
         fetchedAt: now,
         isRead: false,
         isFavorite: false,
-    }));
+    })));
 
     const feed: RssFeed = {
         id: feedId,

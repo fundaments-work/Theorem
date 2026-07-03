@@ -2090,6 +2090,7 @@ import type { RssFeed, RssArticle } from '../types';
 import {
     fetchAndParseFeed,
     materializeFeed,
+    convertMarkdownToHtml,
 } from '../services/RssService';
 
 const rssArticleSortCache = new WeakMap<RssArticle[], {
@@ -2160,9 +2161,11 @@ interface RssStore {
 
     addFeed: (url: string) => Promise<RssFeed | null>;
     removeFeed: (feedId: string) => void;
+    deleteArticle: (articleId: string) => void;
     refreshFeed: (feedId: string) => Promise<void>;
     refreshAll: () => Promise<void>;
     markArticleRead: (articleId: string) => void;
+    toggleArticleRead: (articleId: string) => void;
     toggleArticleFavorite: (articleId: string) => void;
     getArticlesForFeed: (feedId: string) => RssArticle[];
     getAllArticles: () => RssArticle[];
@@ -2185,7 +2188,7 @@ export const useRssStore = create<RssStore>()(
                 set({ isLoading: true, error: undefined });
                 try {
                     const parsed = await fetchAndParseFeed(url);
-                    const { feed, articles } = materializeFeed(url, parsed);
+                    const { feed, articles } = await materializeFeed(url, parsed);
 
                     // Check for duplicate feed URL
                     const existing = get().feeds.find(f => f.url === url);
@@ -2223,6 +2226,19 @@ export const useRssStore = create<RssStore>()(
                 }));
             },
 
+            deleteArticle: (articleId: string) => {
+                const now = new Date().toISOString();
+                set(state => ({
+                    articles: state.articles.filter(a => a.id !== articleId),
+                }));
+                useLibraryStore.setState(state => ({
+                    deletionTombstones: [
+                        ...state.deletionTombstones,
+                        { entityId: articleId, entityType: "rss_article", deletedAt: now },
+                    ],
+                }));
+            },
+
             refreshFeed: async (feedId: string) => {
                 const feed = get().feeds.find(f => f.id === feedId);
                 if (!feed) return;
@@ -2236,22 +2252,22 @@ export const useRssStore = create<RssStore>()(
                         get().articles.filter(a => a.feedId === feedId).map(a => a.url),
                     );
 
-                    const newArticles: RssArticle[] = parsed.articles
+                    const newArticles: RssArticle[] = await Promise.all(parsed.articles
                         .filter(a => !existingUrls.has(a.url))
-                        .map(a => ({
+                        .map(async a => ({
                             id: crypto.randomUUID(),
                             feedId,
                             title: a.title,
                             author: a.author,
                             url: a.url,
-                            content: a.content,
-                            summary: a.summary,
+                            content: await convertMarkdownToHtml(a.content),
+                            summary: await convertMarkdownToHtml(a.summary ?? ""),
                             imageUrl: a.imageUrl,
                             publishedAt: a.publishedAt,
                             fetchedAt: now,
                             isRead: false,
                             isFavorite: false,
-                        }));
+                        })));
 
                     set(state => {
                         const feedArticles = state.articles.filter(a => a.feedId === feedId);
@@ -2294,6 +2310,27 @@ export const useRssStore = create<RssStore>()(
                         feeds: wasRead ? state.feeds : state.feeds.map(f =>
                             f.id === article.feedId
                                 ? { ...f, unreadCount: Math.max(0, f.unreadCount - 1) }
+                                : f,
+                        ),
+                    };
+                });
+            },
+
+            toggleArticleRead: (articleId: string) => {
+                set(state => {
+                    const article = state.articles.find(a => a.id === articleId);
+                    if (!article) return state;
+                    const newRead = !article.isRead;
+                    return {
+                        articles: state.articles.map(a =>
+                            a.id === articleId ? { ...a, isRead: newRead } : a,
+                        ),
+                        feeds: state.feeds.map(f =>
+                            f.id === article.feedId
+                                ? { ...f, unreadCount: newRead
+                                    ? Math.max(0, f.unreadCount - 1)
+                                    : f.unreadCount + 1
+                                }
                                 : f,
                         ),
                     };

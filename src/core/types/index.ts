@@ -149,7 +149,7 @@ export interface Collection {
 // peer devices can honour the deletion during sync instead of re-creating
 // the entity from their own copy.  Tombstones are kept for a bounded period
 // (default 90 days) and then garbage-collected.
-export type TombstoneEntity = "book" | "annotation" | "collection" | "feed";
+export type TombstoneEntity = "book" | "annotation" | "collection" | "feed" | "rss_article";
 
 export interface DeletionTombstone {
     /** ID of the deleted entity (book.id / annotation.id / collection.id). */

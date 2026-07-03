@@ -1,6 +1,6 @@
 [package]
 name = "theorem-sync-core"
-version = "1.0.0"
+version = "1.0.5"
 edition = "2021"
 description = "Theorem LAN sync core library — crypto, protocol, and embedded HTTP server"
 

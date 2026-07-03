@@ -5640,7 +5640,7 @@ dependencies = [
 
 [[package]]
 name = "sync-daemon"
-version = "1.0.4"
+version = "1.0.5"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -6255,7 +6255,7 @@ dependencies = [
 
 [[package]]
 name = "theorem"
-version = "1.0.4"
+version = "1.0.5"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -6305,7 +6305,7 @@ dependencies = [
 
 [[package]]
 name = "theorem-sync-core"
-version = "1.0.0"
+version = "1.0.5"
 dependencies = [
  "axum",
  "base64 0.22.1",

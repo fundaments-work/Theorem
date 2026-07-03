@@ -1,12 +1,48 @@
 import type { RssArticle } from "../../../core/types";
+import MarkdownIt from "markdown-it";
+
+const md = new MarkdownIt({ html: true, linkify: true, breaks: true });
+
+function looksLikeMarkdown(text: string): boolean {
+    if (!text || text.length < 3) return false;
+    return /^#{1,6}\s/m.test(text)
+        || /^\s*[-*+]\s/m.test(text)
+        || /\*\*[^*]+\*\*/.test(text)
+        || /\[.+?\]\(.+?\)/.test(text)
+        || /^>\s/m.test(text)
+        || /`{3}[\s\S]*?`{3}/.test(text)
+        || /^\s*\d+[.)]\s/m.test(text)
+        || /~~.+?~~/.test(text);
+}
+
+export function processArticleHtml(raw: string): string {
+    if (!raw) return "";
+    if (looksLikeMarkdown(raw) && !/<[a-zA-Z][^>]*>/.test(raw)) {
+        try {
+            return md.render(raw);
+        } catch {
+            return raw;
+        }
+    }
+    return raw;
+}
 
 export function sanitizeArticleHtml(html: string): string {
     if (!html) {
         return "";
     }
 
+    let processed = html;
+    if (looksLikeMarkdown(html) && !/<[a-zA-Z][^>]*>/.test(html)) {
+        try {
+            processed = md.render(html);
+        } catch {
+            processed = html;
+        }
+    }
+
     const temp = document.createElement("div");
-    temp.innerHTML = html;
+    temp.innerHTML = processed;
 
     temp
         .querySelectorAll("script, style, link[rel='stylesheet'], iframe, object, embed, form")

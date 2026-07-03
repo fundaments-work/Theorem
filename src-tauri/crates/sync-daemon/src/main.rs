@@ -298,6 +298,15 @@ async fn auto_sync_loop(state: Arc<DaemonState>) {
             continue;
         }
 
+        // Reload paired devices from disk before each round so the daemon
+        // picks up devices paired by the main Tauri app while the daemon
+        // was already running.
+        {
+            let fresh = sync_server::load_paired_devices(&state.server_state.app_data_dir);
+            let mut devices = state.server_state.paired_devices.lock().await;
+            *devices = fresh;
+        }
+
         let devices = state.server_state.paired_devices.lock().await;
         let peers: Vec<(String, String, u16, String)> = devices
             .iter()

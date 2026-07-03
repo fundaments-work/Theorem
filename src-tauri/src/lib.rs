@@ -910,6 +910,7 @@ pub fn run() {
                 .or_else(|_| std::env::var("COMPUTERNAME"))
                 .unwrap_or_else(|_| "Theorem Device".to_string());
 
+            #[allow(unused_variables)]
             let daemon_data_dir = app_data_dir.clone();
             match sync_commands::init_sync(app_data_dir, device_name, app.handle().clone()) {
                 Ok(sync_state) => {

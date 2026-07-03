@@ -72,6 +72,9 @@ function BookCard({
     onAddToShelf,
     onMarkAsRead,
     onMarkAsUnread,
+    isSelecting,
+    isSelected,
+    onToggleSelect,
 }: {
     book: Book;
     viewMode: LibraryViewMode;
@@ -82,6 +85,9 @@ function BookCard({
     onAddToShelf: (bookId: string) => void;
     onMarkAsRead: (bookId: string) => void;
     onMarkAsUnread: (bookId: string) => void;
+    isSelecting?: boolean;
+    isSelected?: boolean;
+    onToggleSelect?: (bookId: string) => void;
 }) {
     const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const clickCountRef = useRef(0);
@@ -93,19 +99,20 @@ function BookCard({
     const bookShelves = collections.filter((c) => c.bookIds.includes(book.id));
 
     const handleCardClick = () => {
+        if (isSelecting && onToggleSelect) {
+            onToggleSelect(book.id);
+            return;
+        }
         clickCountRef.current += 1;
 
         if (clickCountRef.current === 1) {
-            // First click - wait to see if it's a double click
             clickTimeoutRef.current = setTimeout(() => {
                 if (clickCountRef.current === 1) {
-                    // Single click - open book
                     onOpenBook(book);
                 }
                 clickCountRef.current = 0;
             }, 250);
         } else if (clickCountRef.current === 2) {
-            // Double click - toggle favorite
             if (clickTimeoutRef.current) {
                 clearTimeout(clickTimeoutRef.current);
             }
@@ -225,6 +232,18 @@ function BookCard({
                         ) : (
                             <div className="book-cover-placeholder w-full h-full text-[10px] p-2 flex items-center justify-center bg-[var(--color-surface-muted)]">
                                 <span className="line-clamp-3 text-center uppercase tracking-tighter opacity-40 font-bold">{book.title}</span>
+                            </div>
+                        )}
+
+                        {/* Selection Checkbox */}
+                        {isSelecting && (
+                            <div className={cn(
+                                "absolute top-2 left-2 w-6 h-6 flex items-center justify-center transition-all duration-200 z-10",
+                                isSelected
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] scale-100"
+                                    : "bg-white/80 text-[color:var(--color-text-secondary)] scale-100 border border-[var(--color-border)]"
+                            )}>
+                                {isSelected && <Check className="w-3.5 h-3.5" />}
                             </div>
                         )}
 
@@ -429,7 +448,9 @@ export const MemoizedBookCard = memo(BookCard, (prev, next) => {
         prev.book.progress === next.book.progress &&
         prev.book.isFavorite === next.book.isFavorite &&
         prev.book.coverPath === next.book.coverPath &&
-        prev.viewMode === next.viewMode;
+        prev.viewMode === next.viewMode &&
+        prev.isSelecting === next.isSelecting &&
+        prev.isSelected === next.isSelected;
 });
 
 // Empty State Component
@@ -793,12 +814,16 @@ export function LibraryPage() {
 
     const setRoute = useUIStore((state) => state.setRoute);
     const searchQuery = useUIStore((state) => state.searchQuery);
+    const selectedBooks = useUIStore((state) => state.selectedBooks);
+    const toggleBookSelection = useUIStore((state) => state.toggleBookSelection);
+    const clearSelection = useUIStore((state) => state.clearSelection);
     const settings = useSettingsStore((state) => state.settings);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
 
     const [isImporting, setIsImporting] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [isExtractingCovers, setIsExtractingCovers] = useState(false);
+    const [isSelecting, setIsSelecting] = useState(false);
 
     // Filter dropdown state
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -1350,6 +1375,39 @@ export function LibraryPage() {
         }
     }, [removeBook, books]);
 
+    const handleBatchDelete = useCallback(async () => {
+        if (selectedBooks.length === 0) return;
+        const confirmed = await confirmDeleteBook(`${selectedBooks.length} selected book(s)`);
+        if (confirmed) {
+            for (const id of selectedBooks) {
+                removeBook(id);
+            }
+            clearSelection();
+            setIsSelecting(false);
+        }
+    }, [selectedBooks, removeBook, clearSelection]);
+
+    const handleBatchAddToShelf = useCallback(() => {
+        setAddToShelfBookId(null); // null means add all selected
+        setIsAddToShelfModalOpen(true);
+    }, []);
+
+    const handleBatchMarkRead = useCallback(() => {
+        for (const id of selectedBooks) {
+            markBookCompleted(id, "manual");
+        }
+        clearSelection();
+        setIsSelecting(false);
+    }, [selectedBooks, markBookCompleted, clearSelection]);
+
+    const handleBatchMarkUnread = useCallback(() => {
+        for (const id of selectedBooks) {
+            markBookUnread(id);
+        }
+        clearSelection();
+        setIsSelecting(false);
+    }, [selectedBooks, markBookUnread, clearSelection]);
+
     const handleShowInfo = useCallback((book: Book) => {
         setInfoModalBook(book);
         setIsInfoModalOpen(true);
@@ -1368,22 +1426,35 @@ export function LibraryPage() {
         markBookUnread(bookId);
     }, [markBookUnread]);
 
-    const handleAddBookToShelf = useCallback((bookId: string, shelfId: string) => {
-        addBookToCollection(bookId, shelfId);
-    }, [addBookToCollection]);
+    const handleAddBookToShelf = useCallback((bookId: string | null, shelfId: string) => {
+        if (bookId) {
+            addBookToCollection(bookId, shelfId);
+        } else {
+            // Batch mode: add all selected books
+            for (const id of selectedBooks) {
+                addBookToCollection(id, shelfId);
+            }
+            clearSelection();
+            setIsSelecting(false);
+        }
+    }, [addBookToCollection, selectedBooks, clearSelection]);
 
     const handleCreateShelf = useCallback((name: string) => {
         const newShelf: Collection = {
             id: crypto.randomUUID(),
             name,
-            bookIds: addToShelfBookId ? [addToShelfBookId] : [],
+            bookIds: addToShelfBookId ? [addToShelfBookId] : isSelecting ? [...selectedBooks] : [],
             kind: "general",
             createdAt: new Date(),
         };
         addCollection(newShelf);
         setIsAddToShelfModalOpen(false);
         setAddToShelfBookId(null);
-    }, [addCollection, addToShelfBookId]);
+        if (isSelecting) {
+            clearSelection();
+            setIsSelecting(false);
+        }
+    }, [addCollection, addToShelfBookId, isSelecting, selectedBooks, clearSelection]);
 
     // Toggle view mode
     const toggleViewMode = () => {
@@ -1432,6 +1503,22 @@ export function LibraryPage() {
                 <div className="flex items-center gap-2 sm:gap-4 ml-auto">
                     {/* Import and View Mode grouped left */}
                     <ImportButton onImport={handleAddBooks} isLoading={isImporting} />
+
+                    <button
+                        onClick={() => {
+                            if (isSelecting) {
+                                clearSelection();
+                            }
+                            setIsSelecting(!isSelecting);
+                        }}
+                        className={cn(
+                            TOOLBAR_BUTTON_BASE, TOOLBAR_ICON_BUTTON, "border-2",
+                            isSelecting && "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                        )}
+                        title={isSelecting ? "Cancel Selection" : "Select Books"}
+                    >
+                        <CheckCheck className="w-4 h-4" />
+                    </button>
 
                     <button
                         onClick={toggleViewMode}
@@ -1576,6 +1663,9 @@ export function LibraryPage() {
                                         onAddToShelf={handleAddToShelf}
                                         onMarkAsRead={handleMarkAsRead}
                                         onMarkAsUnread={handleMarkAsUnread}
+                                        isSelecting={isSelecting}
+                                        isSelected={selectedBooks.includes(book.id)}
+                                        onToggleSelect={toggleBookSelection}
                                     />
                                 ))}
                             </div>
@@ -1593,6 +1683,9 @@ export function LibraryPage() {
                                         onAddToShelf={handleAddToShelf}
                                         onMarkAsRead={handleMarkAsRead}
                                         onMarkAsUnread={handleMarkAsUnread}
+                                        isSelecting={isSelecting}
+                                        isSelected={selectedBooks.includes(book.id)}
+                                        onToggleSelect={toggleBookSelection}
                                     />
                                 ))}
                             </div>
@@ -1610,6 +1703,9 @@ export function LibraryPage() {
                                         onAddToShelf={handleAddToShelf}
                                         onMarkAsRead={handleMarkAsRead}
                                         onMarkAsUnread={handleMarkAsUnread}
+                                        isSelecting={isSelecting}
+                                        isSelected={selectedBooks.includes(book.id)}
+                                        onToggleSelect={toggleBookSelection}
                                     />
                                 ))}
                             </div>
@@ -1724,6 +1820,44 @@ export function LibraryPage() {
                     </aside>
                 )}
             </div>
+
+            {/* Batch Action Bar */}
+            {isSelecting && selectedBooks.length > 0 && (
+                <div className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t-2 border-[var(--color-accent)] shadow-[0_-8px_32px_rgba(0,0,0,0.15)] px-4 py-3 flex items-center gap-3 justify-center flex-wrap">
+                    <span className="text-sm font-bold text-[color:var(--color-text-primary)] mr-2">
+                        {selectedBooks.length} selected
+                    </span>
+                    <button
+                        onClick={handleBatchMarkRead}
+                        className="ui-btn px-3 py-1.5 text-xs font-bold border-2 uppercase"
+                    >
+                        <CheckCheck className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Mark Read</span>
+                    </button>
+                    <button
+                        onClick={handleBatchMarkUnread}
+                        className="ui-btn px-3 py-1.5 text-xs font-bold border-2 uppercase"
+                    >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Mark Unread</span>
+                    </button>
+                    <button
+                        onClick={handleBatchAddToShelf}
+                        className="ui-btn px-3 py-1.5 text-xs font-bold border-2 uppercase"
+                    >
+                        <BookMarked className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Add to Shelf</span>
+                    </button>
+                    <div className="h-5 w-px bg-[var(--color-border)]" />
+                    <button
+                        onClick={handleBatchDelete}
+                        className="ui-btn px-3 py-1.5 text-xs font-bold border-2 uppercase bg-[var(--color-error)]/10 text-[var(--color-error)] border-[var(--color-error)]/30 hover:bg-[var(--color-error)]/20"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Delete</span>
+                    </button>
+                </div>
+            )}
 
             {/* Book Info Modal */}
             <BookInfoModal

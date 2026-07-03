@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "theorem"
-version = "1.0.4"
+version = "1.0.5"
 description = "Local-first desktop reader for PDFs, EPUBs, MOBI, and RSS with neural TTS, highlights, vocabulary building, and Markdown export."
 authors = ["Fundamentals"]
 license = "MIT"
