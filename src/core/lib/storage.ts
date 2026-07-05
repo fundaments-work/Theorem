@@ -370,6 +370,52 @@ export async function deleteBookData(id: string, filePath?: string): Promise<voi
     }
 }
 
+async function downsampleCoverImage(blob: Blob, maxWidth = 240, maxHeight = 360): Promise<Blob> {
+    if (typeof window === "undefined" || typeof document === "undefined" || !window.HTMLCanvasElement) {
+        return blob;
+    }
+    if (blob.type === "image/svg+xml") {
+        return blob;
+    }
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            let width = img.naturalWidth || img.width;
+            let height = img.naturalHeight || img.height;
+            if (width <= maxWidth && height <= maxHeight) {
+                resolve(blob);
+                return;
+            }
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+                resolve(blob);
+                return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+                (resizedBlob) => {
+                    resolve(resizedBlob || blob);
+                },
+                "image/jpeg",
+                0.8,
+            );
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(blob);
+        };
+        img.src = url;
+    });
+}
+
 async function blobToDataUrl(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -383,7 +429,13 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
  * Save cover image as data URL.
  */
 export async function saveCoverImage(bookId: string, blob: Blob): Promise<string> {
-    const dataUrl = await blobToDataUrl(blob);
+    let finalBlob = blob;
+    try {
+        finalBlob = await downsampleCoverImage(blob);
+    } catch (e) {
+        // fallback to original
+    }
+    const dataUrl = await blobToDataUrl(finalBlob);
     coverCache.set(bookId, dataUrl);
 
     if (isTauri()) {

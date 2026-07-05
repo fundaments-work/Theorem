@@ -1,5 +1,6 @@
 import type { Annotation, Book, HighlightColor } from "../types";
 import { getResolvedColor } from "../../features/library/components/share-card-colors";
+import { isMobile } from "./env";
 
 function resolveAccentColor(color: HighlightColor | undefined): string {
     if (!color) return getResolvedColor("--color-text-muted");
@@ -140,9 +141,14 @@ export async function generateShareCardImage(
     book: Pick<Book, "title" | "author"> | undefined,
     options: ShareImageOptions = { format: "square", theme: "match", showNote: true }
 ): Promise<Blob> {
+    // Cap canvas at 540px wide on mobile to stay well under Android's 256MB WebView heap.
+    const canvasWidth = isMobile() ? 540 : 1080;
+    const canvasHeight = options.format === "story"
+        ? (isMobile() ? 960 : 1920)
+        : canvasWidth;
     const canvas = document.createElement("canvas");
-    canvas.width = 1080;
-    canvas.height = options.format === "story" ? 1920 : 1080;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
     
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Could not get 2d context");
@@ -385,7 +391,7 @@ export async function generateShareCardImage(
         canvas.toBlob((blob) => {
             if (blob) resolve(blob);
             else reject(new Error("Canvas toBlob failed"));
-        }, "image/png", 0.95);
+        }, isMobile() ? "image/jpeg" : "image/png", isMobile() ? 0.88 : 0.95);
     });
 }
 
@@ -600,9 +606,14 @@ export async function generateShareStatsImage(
     statsData: ShareStatsData,
     options: ShareImageOptions = { format: "square", theme: "match", showNote: true }
 ): Promise<Blob> {
+    // Cap canvas at 540px wide on mobile to stay well under Android's 256MB WebView heap.
+    const canvasWidth = isMobile() ? 540 : 1080;
+    const canvasHeight = options.format === "story"
+        ? (isMobile() ? 960 : 1920)
+        : canvasWidth;
     const canvas = document.createElement("canvas");
-    canvas.width = 1080;
-    canvas.height = options.format === "story" ? 1920 : 1080;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
     
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Could not get 2d context");
@@ -948,6 +959,6 @@ export async function generateShareStatsImage(
         canvas.toBlob((blob) => {
             if (blob) resolve(blob);
             else reject(new Error("Canvas toBlob failed"));
-        }, "image/png", 0.95);
+        }, isMobile() ? "image/jpeg" : "image/png", isMobile() ? 0.88 : 0.95);
     });
 }

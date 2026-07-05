@@ -879,6 +879,9 @@ let _isAutoSyncing = false;
 async function autoSyncRound(): Promise<void> {
     if (!isTauri() || _isAutoSyncing) return;
 
+    const { settings } = useSettingsStore.getState();
+    if (!settings.deviceSync?.autoSyncEnabled) return;
+
     const devices = await getPairedDevices().catch(() => []);
     if (devices.length === 0) return;
 
@@ -909,6 +912,9 @@ async function autoSyncRound(): Promise<void> {
  * Falls back to JS-based auto-sync round.
  */
 export function scheduleMutationSync(): void {
+    const { settings } = useSettingsStore.getState();
+    if (!settings.deviceSync?.autoSyncEnabled) return;
+
     if (_mutationSyncTimer) {
         clearTimeout(_mutationSyncTimer);
     }

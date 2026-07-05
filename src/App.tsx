@@ -5,7 +5,7 @@ import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
 import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
 import { initReaderStyles } from "./core/lib/design-tokens";
-import { ensureResponderSyncReady, startAutoSync } from "./core/lib/sync-orchestrator";
+import { ensureResponderSyncReady, startAutoSync, stopAutoSync } from "./core/lib/sync-orchestrator";
 import { importBooksIncremental, getBookFormat, isImportFormatSupported } from "./core/lib/import";
 import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
@@ -69,6 +69,7 @@ function App() {
     const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
     const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
     const hasCompletedOnboarding = useSettingsStore((state) => state.settings.hasCompletedOnboarding);
+    const autoSyncEnabled = useSettingsStore((state) => state.settings.deviceSync?.autoSyncEnabled ?? true);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
@@ -354,8 +355,7 @@ function App() {
                 // Sync server unavailable on this device.
             }
             // Step 2: Start auto-sync scheduler if enabled.
-            const syncSettings = useSettingsStore.getState().settings.deviceSync;
-            if (cancelled || !syncSettings.autoSyncEnabled) {
+            if (cancelled || !autoSyncEnabled) {
                 return;
             }
             try {
@@ -383,8 +383,9 @@ function App() {
         return () => {
             cancelled = true;
             clearTimeout(timer);
+            stopAutoSync();
         };
-    }, [hasCompletedOnboarding]);
+    }, [hasCompletedOnboarding, autoSyncEnabled]);
 
     // Ensure the desktop window doesn't start in a mobile-like size.
     useEffect(() => {

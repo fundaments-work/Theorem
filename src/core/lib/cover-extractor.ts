@@ -408,7 +408,7 @@ export async function extractMetadata(
                 const ctx = canvas.getContext('2d');
 
                 if (ctx) {
-                    const maxDimension = isMobile() ? 600 : 1000;
+                    const maxDimension = isMobile() ? 400 : 1000;
                     let scale = isMobile() ? 0.3 : 0.5;
                     if (viewport.width > maxDimension || viewport.height > maxDimension) {
                         const maxViewportDim = Math.max(viewport.width, viewport.height);
@@ -416,8 +416,10 @@ export async function extractMetadata(
                     }
 
                     const adjustedViewport = page.getViewport({ scale });
-                    canvas.width = adjustedViewport.width;
-                    canvas.height = adjustedViewport.height;
+                    // Hard clamp — prevents a single canvas allocation from exceeding
+                    // Android's 256 MB WebView heap limit on high-DPI devices.
+                    canvas.width = Math.min(adjustedViewport.width, maxDimension);
+                    canvas.height = Math.min(adjustedViewport.height, maxDimension);
 
                     await withTimeout(
                         page.render({
