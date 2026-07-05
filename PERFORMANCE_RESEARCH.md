@@ -252,6 +252,47 @@ Desktop toolkit handles book parsing natively in the renderer process.
 
 ---
 
+## 6. Benchmark Results (v1.0.6)
+
+> Run: `pnpm test tests/library-performance.test.ts`
+> Full analysis: `PERF_BENCHMARK_ANALYSIS.md`
+
+### JS pipeline cost (measured, no DOM rendering)
+
+| Library size | Sort avg | Fuse warm search avg | Verdict |
+|---|---|---|---|
+| 50 books | 0.014ms | 0.45ms | ✅ No action |
+| 200 books | 0.041ms | 1.82ms | ✅ No action |
+| 500 books | 0.114ms | 4.65ms | ✅ No action |
+| 1000 books | 0.205ms | 9.39ms | ⚠ Monitor |
+
+### Key findings from benchmarks
+
+- **Sort is not a bottleneck** at any realistic library size (< 0.35ms at 1000 books).
+- **Fuse search at 500 books = ~5ms per debounced tick.** With the 250ms
+  debounce, this fires ≤ 4×/sec — acceptable. At 1000 books it approaches
+  10ms and may merit a Web Worker.
+- **Filter layer is negligible** — `.filter()` on 500 books < 0.1ms.
+- **WeakMap cache speedup is ~1.2–1.5×**, which is modest. The index build
+  is fast; most Fuse time is in `.search()` itself.
+- **RSS normalization is free** — 1000 URLs normalized in < 0.12ms.
+- **DOM rendering cost is NOT included** in these numbers. Virtual scrolling
+  value must be assessed via DevTools flame chart, not these JS benchmarks.
+
+### Updated priority based on evidence
+
+| Priority | Change | Evidence | Status |
+|---|---|---|---|
+| Done | Debounce search 250ms | Eliminates 4–10ms/keystroke Fuse calls | ✅ v1.0.6 |
+| Done | Fuse WeakMap cache | 1.2–1.5× speedup; prevents index rebuild | ✅ v1.0.6 |
+| Done | Shared context menu | Eliminates N portal instances → 1 | ✅ v1.0.6 |
+| Monitor | Virtual scrolling | JS ok; DOM cost unknown without profiling | ⬜ Todo |
+| Monitor | Fuse Web Worker | Only urgent at > 1000 books | ⬜ Todo |
+| Low | SQLite FTS5 | Fuse only 5ms at 500 books; not a bottleneck | ⬜ Todo |
+| Low | Thumbnail covers | Not measured; likely high impact on memory | ⬜ Todo |
+
+---
+
 ## References
 
 - [Readest GitHub](https://github.com/readest/readest)
