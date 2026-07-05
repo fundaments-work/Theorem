@@ -46,10 +46,10 @@ actively optimizing library performance — their 0.10.6 release notes include
 | Technique | Adopted by Theorem? |
 |-----------|-------------------|
 | Virtual scrolling | No — renders all 200+ cards in DOM |
-| Debounced search (300ms) | No — fires on every keystroke |
+| Debounced search (300ms) | ✅ **Done** — 250ms `useDebounce` hook added (v1.0.6) |
 | Cover image optimization | No — raw data URIs from IDB |
 | Progressive/Suspense loading | Partial — React.lazy for route-level only |
-| Pre-computed indices | No — Fuse index rebuilt per keystroke |
+| Pre-computed indices | ✅ **Done** — Fuse instance cached in `WeakMap` keyed on books array (v1.0.6) |
 
 ---
 
@@ -79,7 +79,7 @@ Desktop toolkit handles book parsing natively in the renderer process.
 | Technique | Adopted by Theorem? |
 |-----------|-------------------|
 | Pagination (not infinite scroll) | No — infinite scroll with all cards rendered |
-| Single shared context menu | No — 200+ ContextMenu instances |
+| Single shared context menu | ✅ **Done** — global `ContextMenuRoot` portal + `useContextMenuStore` (v1.0.6) |
 | File-based cover cache | No — IndexedDB blob reads per cover |
 | SQLite metadata with lazy loading | Partial — SQLite KV store for persistence |
 
@@ -128,7 +128,7 @@ Desktop toolkit handles book parsing natively in the renderer process.
 | Technique | Adopted by Theorem? |
 |-----------|-------------------|
 | Virtual scrolling / view recycling | No |
-| Library search via DB query (not in-memory) | No — Fuse.js on every keystroke |
+| Library search via DB query (not in-memory) | No — Fuse.js in-memory (Fuse instance now cached per book set) |
 | Thumbnail-sized covers in list view | No — full-size covers in library |
 | Paginated browsing (not infinite) | Could go either way |
 | Lazy detail loading (tap to see metadata) | No — all data loaded upfront |
@@ -180,9 +180,9 @@ Desktop toolkit handles book parsing natively in the renderer process.
 
 - **Avoid selector factories**: `sortedBooks` is a `useMemo` that depends on
   `books`, `searchQuery`, `selectedShelfBookIds`, `settings.librarySortBy`,
-  etc. Any of these changing triggers re-computation. Fine for what it does,
-  but `searchQuery` changes on every keystroke (no debounce), so the entire
-  sort + filter pipeline runs per keystroke.
+  etc. Any of these changing triggers re-computation. Fine for what it does.
+  ✅ `searchQuery` is now debounced 250ms via `useDebounce`, and the Fuse
+  index is rebuilt only when the `books` array identity changes.
 
 ---
 
@@ -190,16 +190,16 @@ Desktop toolkit handles book parsing natively in the renderer process.
 
 ### Immediate (High Impact, Low Effort)
 
-1. **Debounce search input to 250ms** — Prevents Fuse re-index on every
-   keystroke. Single-line change in AppTitlebar.tsx using a `useDebounce` hook.
+1. ✅ **Debounce search input to 250ms** *(Done — v1.0.6)* — `useDebounce`
+   hook applied in `Library.tsx` and `Shelves.tsx`. Eliminates Fuse re-run
+   on every keystroke; input field stays instant.
 
-2. **Fix Fuse instance reuse** — Create the `Fuse` instance once per item set
-   (inside the `useMemo` for `sortedBooks`), then call `.search()` on it
-   when `searchQuery` changes. Currently `rankByFuzzyQuery` creates a new
-   `new Fuse(...)` every call.
+2. ✅ **Fix Fuse instance reuse** *(Done — v1.0.6)* — `WeakMap<Book[], Fuse>`
+   cache in `filtering.ts`. Index rebuilt only when the `books` array reference
+   changes (i.e., on import/delete), not on every search call.
 
-3. **Remove `if (bookId)` guard in `AddToShelfModal.renderShelfItem`**
-   — Fixes bulk add-to-shelf bug. Single line deletion.
+3. ✅ **Remove `if (bookId)` guard in `AddToShelfModal.renderShelfItem`** *(Done — v1.0.6)*
+   — Fixed bulk add-to-shelf. Single line change.
 
 ### Moderate (Medium Impact, Medium Effort)
 
@@ -207,9 +207,10 @@ Desktop toolkit handles book parsing natively in the renderer process.
    grid in Library.tsx with a virtualized grid. Only ~20-30 cards rendered
    instead of 200+. ~4kB bundle addition.
 
-5. **Shared ContextMenu pattern** — Instead of one ContextMenu instance per
-   BookCard, use a single context menu that tracks which card was right-clicked.
-   Reduces 200+ portal instances to 1.
+5. ✅ **Shared ContextMenu pattern** *(Done — v1.0.6)* — Single `ContextMenuRoot`
+   portal mounted once in `App.tsx` backed by `useContextMenuStore` (Zustand).
+   `ContextMenu` wrapper components just call `store.open(x, y, items)`. Down
+   from 200+ portal instances to 1.
 
 6. **Thumbnail cover pipeline** — Generate 120px thumbnail covers for the
    library view. Store covers as files (Tauri) or blob URLs. Full-size cover
@@ -236,18 +237,18 @@ Desktop toolkit handles book parsing natively in the renderer process.
 
 ### Summary Ranking
 
-| Priority | Change | Effort | Impact |
-|----------|--------|--------|--------|
-| P0 | Debounce search (250ms) | 1 hour | Eliminates per-keystroke Fuse rebuild |
-| P0 | Reuse Fuse instance | 30 min | Same — prevents redundant index building |
-| P0 | Fix bulk add-to-shelf `if (bookId)` | 1 line | Fixes broken feature |
-| P1 | Virtual scrolling | 2-3 days | 90% reduction in DOM nodes for large libraries |
-| P1 | Shared context menu | 1 day | Reduces 200+ portal instances to 1 |
-| P1 | Background cover hydration | 1-2 days | Faster startup, no blocking on covers |
-| P1 | Thumbnail covers in library | 2-3 days | Faster list render, less memory |
-| P2 | SQLite FTS5 for search | 3-5 days | O(log n) search, no Fuse overhead |
-| P2 | Event-driven sync (remove poll) | 2-3 days | Immediate sync, no wasted cycles |
-| P3 | Paginated library view | 3-5 days | Further DOM reduction, UX trade-off |
+| Priority | Change | Effort | Impact | Status |
+|----------|--------|--------|--------|--------|
+| P0 | Debounce search (250ms) | 1 hour | Eliminates per-keystroke Fuse rebuild | ✅ Done (v1.0.6) |
+| P0 | Reuse Fuse instance | 30 min | Prevents redundant index building | ✅ Done (v1.0.6) |
+| P0 | Fix bulk add-to-shelf `if (bookId)` | 1 line | Fixes broken feature | ✅ Done (v1.0.6) |
+| P1 | Virtual scrolling | 2-3 days | 90% reduction in DOM nodes for large libraries | ⬜ Todo |
+| P1 | Shared context menu | 1 day | Reduces 200+ portal instances to 1 | ✅ Done (v1.0.6) |
+| P1 | Background cover hydration | 1-2 days | Faster startup, no blocking on covers | ⬜ Todo |
+| P1 | Thumbnail covers in library | 2-3 days | Faster list render, less memory | ⬜ Todo |
+| P2 | SQLite FTS5 for search | 3-5 days | O(log n) search, no Fuse overhead | ⬜ Todo |
+| P2 | Event-driven sync (remove poll) | 2-3 days | Immediate sync, no wasted cycles | ⬜ Todo |
+| P3 | Paginated library view | 3-5 days | Further DOM reduction, UX trade-off | ⬜ Todo |
 
 ---
 

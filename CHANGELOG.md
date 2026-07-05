@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — v1.0.6
+
+### Fixed
+
+- **RSS duplicate subscriptions** — `useRssStore.addFeed` and `refreshFeed` now normalize feed and article URLs (lowercase + trailing-slash strip) before comparison. Subscribing to `https://Example.com/feed/` and `https://example.com/feed` no longer creates two separate feeds or duplicate articles.
+- **RSS remove feed UX** — Replaced the dropdown action menu in `FeedListItem` with a direct hover-triggered trash button. Eliminates the stacking-context overlap that caused the dropdown to appear behind adjacent feed rows in the virtualized list.
+- **Shelf search and context menus** — `ShelfDetail` now uses the shared `MemoizedBookCard`, `BookInfoModal`, and `AddToShelfModal` from `Library.tsx`. Books inside a shelf now have the same right-click context menu as the main library (Open, Info, Add to Shelf, Remove from shelf, Rename, Delete).
+- **Bulk "Add to Shelf" broken** — Removed incorrect `if (bookId)` guard in `AddToShelfModal` that short-circuited the shelf assignment when `bookId` was null (bulk path). Multi-select → Add to Shelf now works correctly.
+
+### Performance
+
+- **Shared context menu portal** — Replaced per-card `ContextMenu` portals with a single global `ContextMenuRoot` mounted once in `App.tsx`. `ContextMenu` wrapper components now call `useContextMenuStore.open(x, y, items)` instead of creating their own portal and state. Reduces portal overhead from O(n) (one per visible card) to O(1).
+- **Fuse index caching** — `getFilteredAndSortedBooks` in `filtering.ts` caches the `Fuse` instance in a `WeakMap<Book[], Fuse>`. The index is rebuilt only when the `books` array reference changes (on import or delete), not on every search call. Previously a new `new Fuse(items, options)` was constructed on every keystroke.
+- **Debounced search (250ms)** — `useDebounce` hook added (`src/core/lib/useDebounce.ts`). Both `Library.tsx` and `Shelves.tsx` now debounce `searchQuery` before passing it to `getFilteredAndSortedBooks`. Eliminates the per-keystroke filter + sort pipeline re-run while keeping the text input instant.
+
 ## [1.0.5] - 2026-07-03
 
 ### Added
