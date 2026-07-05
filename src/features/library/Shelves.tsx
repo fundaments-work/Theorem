@@ -4,12 +4,14 @@
  */
 
 import { useState, useMemo } from "react";
-import { cn, normalizeAuthor } from "../../core/lib/utils";
+import { cn } from "../../core/lib/utils";
 import { getShelfColor, getShelfInitials } from "../../core/lib/design-tokens";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
-import { useLibraryStore, useUIStore } from "../../core/store";
-import { confirmRemoveFromShelf } from "../../core/lib/dialogs";
+import { useLibraryStore, useUIStore, useSettingsStore } from "../../core/store";
+import { confirmDeleteBook } from "../../core/lib/dialogs";
 import { ShelfModal } from "./components/modals/ShelfModal";
+import { MemoizedBookCard, BookInfoModal, AddToShelfModal } from "./Library";
+import { getFilteredAndSortedBooks } from "./filtering";
 import {
     FolderOpen,
     Plus,
@@ -17,12 +19,10 @@ import {
     Edit3,
     Trash2,
     BookOpen,
-    X,
     Grid3X3,
     List,
     ArrowLeft,
     LayoutGrid,
-    CloudOff,
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode } from "../../core/types";
 
@@ -89,181 +89,7 @@ function EmptyShelfDetail({ shelfName, onAddBooks }: { shelfName: string; onAddB
     );
 }
 
-// Book Card Component (reused from Library)
-function BookCard({
-    book,
-    viewMode,
-    onOpenBook,
-    onRemoveFromShelf,
-}: {
-    book: Book;
-    viewMode: LibraryViewMode;
-    onOpenBook: (book: Book) => void;
-    onRemoveFromShelf: (bookId: string) => void | Promise<void>;
-}) {
-    // Grid view
-    if (viewMode === "grid") {
-        return (
-            <div className="group relative">
-                <button
-                    onClick={() => onOpenBook(book)}
-                    className="block w-full text-left"
-                >
-                    <div className="relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden border border-[var(--color-border)] transition-all duration-200 group-hover:shadow-lg">
-                        {book.coverPath ? (
-                            <img
-                                src={book.coverPath}
-                                alt={book.title}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                            />
-                        ) : (
-                            <div className="book-cover-placeholder w-full h-full text-xs p-2 flex items-center justify-center">
-                                <span className="line-clamp-3 text-center">{book.title}</span>
-                            </div>
-                        )}
-
-                        {/* Progress Bar */}
-                        {book.progress > 0 && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
-                                <div
-                                    className="h-full bg-[var(--color-accent)]"
-                                    style={{ width: `${book.progress * 100}%` }}
-                                />
-                            </div>
-                        )}
-
-                        {/* Synced Without File Badge */}
-                        {book.syncedWithoutFile && (
-                            <div className="absolute top-2 left-2 w-6 h-6 flex items-center justify-center text-white rounded-sm pointer-events-none" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
-                                <CloudOff className="w-3 h-3" />
-                            </div>
-                        )}
-                    </div>
-                    <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] line-clamp-1 mb-0.5">
-                        {book.title}
-                    </h3>
-                    <p className="text-xs text-[color:var(--color-text-secondary)] line-clamp-1">
-                        {normalizeAuthor(book.author) || "Unknown Author"}
-                    </p>
-                </button>
-                {/* Remove button */}
-                <button
-                    onClick={async (e) => {
-                        e.stopPropagation();
-                        await onRemoveFromShelf(book.id);
-                    }}
-                    className="absolute top-2 right-2 p-1.5 bg-[var(--color-overlay-strong)] text-[color:var(--color-text-inverse)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--color-overlay-strong-hover)]"
-                    title="Remove from shelf"
-                >
-                    <X className="w-3.5 h-3.5" />
-                </button>
-            </div>
-        );
-    }
-
-    // List view
-    if (viewMode === "list") {
-        return (
-            <div className="group flex items-center gap-4 p-3 border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-text-muted)] transition-colors">
-                <button
-                    onClick={() => onOpenBook(book)}
-                    className="flex-shrink-0"
-                >
-                    {book.coverPath ? (
-                        <img
-                            src={book.coverPath}
-                            alt={book.title}
-                            className="w-12 h-16 object-cover shadow-sm"
-                            loading="lazy"
-                        />
-                    ) : (
-                        <div className="w-12 h-16 bg-[var(--color-surface-muted)] flex items-center justify-center">
-                            <BookOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
-                        </div>
-                    )}
-                </button>
-                <div className="flex-1 min-w-0">
-                    <button onClick={() => onOpenBook(book)} className="text-left w-full">
-                        <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] truncate hover:text-[color:var(--color-accent)] transition-colors">
-                            {book.title}
-                        </h3>
-                    </button>
-                    <p className="text-xs text-[color:var(--color-text-secondary)] truncate">
-                        {normalizeAuthor(book.author) || "Unknown Author"}
-                    </p>
-                    {book.syncedWithoutFile && (
-                        <div className="flex items-center gap-0.5 mt-0.5 text-[color:var(--color-warning)]" title="Book file not available locally">
-                            <CloudOff className="w-3 h-3" />
-                            <span className="text-[var(--font-size-3xs)]">No file</span>
-                        </div>
-                    )}
-                </div>
-                <button
-                    onClick={async (e) => {
-                        e.stopPropagation();
-                        await onRemoveFromShelf(book.id);
-                    }}
-                    className="p-2 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-error)] opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Remove from shelf"
-                >
-                    <X className="w-4 h-4" />
-                </button>
-            </div>
-        );
-    }
-
-    // Compact view
-    return (
-        <div className="group relative">
-            <button
-                onClick={() => onOpenBook(book)}
-                className="block w-full relative aspect-[2/3] bg-[var(--color-surface-muted)] overflow-hidden border border-[var(--color-border)] hover:shadow-lg transition-all duration-200"
-            >
-                {book.coverPath ? (
-                    <img
-                        src={book.coverPath}
-                        alt={book.title}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                    />
-                ) : (
-                    <div className="book-cover-placeholder w-full h-full text-[var(--font-size-3xs)] p-2 flex items-center justify-center">
-                        <span className="line-clamp-3 text-center">{book.title}</span>
-                    </div>
-                )}
-
-                {/* Progress Bar */}
-                {book.progress > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
-                        <div
-                            className="h-full bg-[var(--color-accent)]"
-                            style={{ width: `${book.progress * 100}%` }}
-                        />
-                    </div>
-                )}
-
-                {/* Synced Without File Badge */}
-                {book.syncedWithoutFile && (
-                    <div className="absolute top-1 left-1 w-5 h-5 flex items-center justify-center text-white rounded-sm pointer-events-none" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
-                        <CloudOff className="w-2.5 h-2.5" />
-                    </div>
-                )}
-            </button>
-            {/* Remove button */}
-            <button
-                onClick={async (e) => {
-                    e.stopPropagation();
-                    await onRemoveFromShelf(book.id);
-                }}
-                className="absolute top-1 right-1 p-1 bg-[var(--color-overlay-strong)] text-[color:var(--color-text-inverse)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--color-overlay-strong-hover)]"
-                title="Remove from shelf"
-            >
-                <X className="w-3 h-3" />
-            </button>
-        </div>
-    );
-}
+// Book Card Component removed in favor of MemoizedBookCard from Library.tsx
 
 // Shelf card component
 interface ShelfCardProps {
@@ -415,25 +241,50 @@ interface ShelfDetailProps {
 
 function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     const books = useLibraryStore((state) => state.books);
-    const removeBookFromCollection = useLibraryStore((state) => state.removeBookFromCollection);
+    const collections = useLibraryStore((state) => state.collections);
+    const addCollection = useLibraryStore((state) => state.addCollection);
+    const addBookToCollection = useLibraryStore((state) => state.addBookToCollection);
+    const removeBook = useLibraryStore((state) => state.removeBook);
+    const toggleFavorite = useLibraryStore((state) => state.toggleFavorite);
+    const markBookCompleted = useLibraryStore((state) => state.markBookCompleted);
+    const markBookUnread = useLibraryStore((state) => state.markBookUnread);
+
     const setRoute = useUIStore((state) => state.setRoute);
+    const searchQuery = useUIStore((state) => state.searchQuery);
+    const settings = useSettingsStore((state) => state.settings);
+    
     const [viewMode, setViewMode] = useState<LibraryViewMode>("grid");
 
-    // Get actual books that exist in the library
-    const shelfBooks = useMemo(() => {
-        return shelf.bookIds
-            .map((id) => books.find((b) => b.id === id))
-            .filter((book): book is Book => book !== undefined);
-    }, [shelf.bookIds, books]);
+    // Modal states
+    const [infoModalBook, setInfoModalBook] = useState<Book | null>(null);
+    const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+    const [addToShelfBookId, setAddToShelfBookId] = useState<string | null>(null);
+    const [isAddToShelfModalOpen, setIsAddToShelfModalOpen] = useState(false);
 
-    const handleRemoveBook = async (bookId: string) => {
-        const book = books.find(b => b.id === bookId);
-        const confirmed = await confirmRemoveFromShelf(book?.title || "this book", shelf.name);
-        if (confirmed) {
-            removeBookFromCollection(bookId, shelf.id);
-        }
+    const handleCreateShelf = (name: string) => {
+        addCollection({
+            id: crypto.randomUUID(),
+            name,
+            bookIds: [],
+            kind: "general",
+            createdAt: new Date(),
+        });
     };
 
+    // Get actual books that exist in the library, filtered and sorted
+    const shelfBooks = useMemo(() => {
+        const shelfBookIdsSet = new Set(shelf.bookIds);
+        return getFilteredAndSortedBooks({
+            books,
+            searchQuery,
+            selectedShelfBookIds: shelfBookIdsSet,
+            showFavoritesOnly: false,
+            sortBy: settings.librarySortBy,
+            sortOrder: settings.librarySortOrder,
+        });
+    }, [shelf.bookIds, books, searchQuery, settings.librarySortBy, settings.librarySortOrder]);
+
+    // Unused remove handler removed
     const handleOpenBook = (book: Book) => {
         if (book.syncedWithoutFile) {
             window.alert(
@@ -513,12 +364,21 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             {viewMode === "grid" && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
                     {shelfBooks.map((book) => (
-                        <BookCard
+                        <MemoizedBookCard
                             key={book.id}
                             book={book}
                             viewMode={viewMode}
                             onOpenBook={handleOpenBook}
-                            onRemoveFromShelf={handleRemoveBook}
+                            onToggleFavorite={toggleFavorite}
+                            onDeleteBook={(id) => {
+                                confirmDeleteBook(book.title).then((confirmed) => {
+                                    if (confirmed) removeBook(id);
+                                });
+                            }}
+                            onShowInfo={(b) => { setInfoModalBook(b); setIsInfoModalOpen(true); }}
+                            onAddToShelf={(id) => { setAddToShelfBookId(id); setIsAddToShelfModalOpen(true); }}
+                            onMarkAsRead={markBookCompleted}
+                            onMarkAsUnread={markBookUnread}
                         />
                     ))}
                 </div>
@@ -526,12 +386,21 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             {viewMode === "list" && (
                 <div className="space-y-2">
                     {shelfBooks.map((book) => (
-                        <BookCard
+                        <MemoizedBookCard
                             key={book.id}
                             book={book}
                             viewMode={viewMode}
                             onOpenBook={handleOpenBook}
-                            onRemoveFromShelf={handleRemoveBook}
+                            onToggleFavorite={toggleFavorite}
+                            onDeleteBook={(id) => {
+                                confirmDeleteBook(book.title).then((confirmed) => {
+                                    if (confirmed) removeBook(id);
+                                });
+                            }}
+                            onShowInfo={(b) => { setInfoModalBook(b); setIsInfoModalOpen(true); }}
+                            onAddToShelf={(id) => { setAddToShelfBookId(id); setIsAddToShelfModalOpen(true); }}
+                            onMarkAsRead={markBookCompleted}
+                            onMarkAsUnread={markBookUnread}
                         />
                     ))}
                 </div>
@@ -539,16 +408,42 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             {viewMode === "compact" && (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
                     {shelfBooks.map((book) => (
-                        <BookCard
+                        <MemoizedBookCard
                             key={book.id}
                             book={book}
                             viewMode={viewMode}
                             onOpenBook={handleOpenBook}
-                            onRemoveFromShelf={handleRemoveBook}
+                            onToggleFavorite={toggleFavorite}
+                            onDeleteBook={(id) => {
+                                confirmDeleteBook(book.title).then((confirmed) => {
+                                    if (confirmed) removeBook(id);
+                                });
+                            }}
+                            onShowInfo={(b) => { setInfoModalBook(b); setIsInfoModalOpen(true); }}
+                            onAddToShelf={(id) => { setAddToShelfBookId(id); setIsAddToShelfModalOpen(true); }}
+                            onMarkAsRead={markBookCompleted}
+                            onMarkAsUnread={markBookUnread}
                         />
                     ))}
                 </div>
             )}
+
+            {/* Modals */}
+            <BookInfoModal
+                book={infoModalBook}
+                isOpen={isInfoModalOpen}
+                onClose={() => setIsInfoModalOpen(false)}
+            />
+            <AddToShelfModal
+                isOpen={isAddToShelfModalOpen}
+                onClose={() => setIsAddToShelfModalOpen(false)}
+                bookId={addToShelfBookId}
+                collections={collections.filter(c => c.kind === "general")}
+                onAddToShelf={(bookId, shelfId) => {
+                    if (bookId) addBookToCollection(bookId, shelfId);
+                }}
+                onCreateShelf={handleCreateShelf}
+            />
         </div>
     );
 }

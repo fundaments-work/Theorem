@@ -12,7 +12,7 @@ import type { RssFeed, RssArticle } from "../../core/types";
 import {
     Rss, Plus, RefreshCw, Trash2, Loader2,
     AlertCircle,
-    LayoutTemplate, ArrowLeft, MoreHorizontal,
+    LayoutTemplate, ArrowLeft,
     ExternalLink, BookOpen, CheckCheck, EyeOff, Link2,
 } from "lucide-react";
 import { AddFeedModal } from "./AddFeedModal";
@@ -86,24 +86,7 @@ function FeedListItem({
     onDelete: () => void;
     showTouchActions: boolean;
 }) {
-    const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
-    const actionMenuRef = useRef<HTMLDivElement | null>(null);
-
-    useEffect(() => {
-        if (!isActionMenuOpen) {
-            return;
-        }
-
-        const handlePointerDown = (event: PointerEvent) => {
-            if (actionMenuRef.current?.contains(event.target as Node)) {
-                return;
-            }
-            setIsActionMenuOpen(false);
-        };
-
-        document.addEventListener("pointerdown", handlePointerDown);
-        return () => document.removeEventListener("pointerdown", handlePointerDown);
-    }, [isActionMenuOpen]);
+    // Unused state removed
 
     return (
         <div
@@ -158,44 +141,23 @@ function FeedListItem({
                 </span>
             )}
 
-            <div ref={actionMenuRef} className="relative flex-shrink-0">
-                <button
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        setIsActionMenuOpen((open) => !open);
-                    }}
-                    className={cn(
-                        "p-1.5 transition-colors",
-                        showTouchActions
-                            ? "opacity-100"
-                            : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
-                        isActionMenuOpen
-                            ? "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]"
-                            : "text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"
-                    )}
-                    title="Feed actions"
-                    aria-label={`Actions for ${feed.title}`}
-                    aria-expanded={isActionMenuOpen}
-                >
-                    <MoreHorizontal className="w-3.5 h-3.5" />
-                </button>
-
-                {isActionMenuOpen && (
-                    <div className="absolute right-0 top-full mt-1 z-20 min-w-36 border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg">
-                        <button
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                setIsActionMenuOpen(false);
-                                onDelete();
-                            }}
-                            className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs font-medium text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10 whitespace-nowrap"
-                        >
-                            <Trash2 className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span>Remove feed</span>
-                        </button>
-                    </div>
+            <button
+                onClick={(event) => {
+                    event.stopPropagation();
+                    onDelete();
+                }}
+                className={cn(
+                    "p-1.5 transition-colors flex-shrink-0",
+                    showTouchActions
+                        ? "opacity-100"
+                        : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+                    "text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-error)]/10"
                 )}
-            </div>
+                title="Remove feed"
+                aria-label={`Remove ${feed.title}`}
+            >
+                <Trash2 className="w-3.5 h-3.5" />
+            </button>
         </div>
     );
 }

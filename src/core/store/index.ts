@@ -2190,18 +2190,25 @@ export const useRssStore = create<RssStore>()(
                     const parsed = await fetchAndParseFeed(url);
                     const { feed, articles } = await materializeFeed(url, parsed);
 
+                    const normalizeUrl = (u: string) => u.toLowerCase().replace(/\/+$/, '');
+                    const normalizedNewUrl = normalizeUrl(url);
+
                     // Check for duplicate feed URL
-                    const existing = get().feeds.find(f => f.url === url);
+                    const existing = get().feeds.find(f => normalizeUrl(f.url) === normalizedNewUrl);
                     if (existing) {
                         set({ isLoading: false, error: 'This feed is already subscribed.' });
                         return null;
                     }
 
-                    set(state => ({
-                        feeds: [...state.feeds, feed],
-                        articles: [...state.articles, ...articles],
-                        isLoading: false,
-                    }));
+                    set(state => {
+                        const existingArticleUrls = new Set(state.articles.map(a => normalizeUrl(a.url)));
+                        const uniqueArticles = articles.filter(a => !existingArticleUrls.has(normalizeUrl(a.url)));
+                        return {
+                            feeds: [...state.feeds, feed],
+                            articles: [...state.articles, ...uniqueArticles],
+                            isLoading: false,
+                        };
+                    });
                     return feed;
                 } catch (err) {
                     const message = err instanceof Error ? err.message : 'Failed to add feed';
@@ -2247,13 +2254,15 @@ export const useRssStore = create<RssStore>()(
                     const parsed = await fetchAndParseFeed(feed.url);
                     const now = new Date();
 
+                    const normalizeUrl = (u: string) => u.toLowerCase().replace(/\/+$/, '');
+
                     // Get existing article URLs to avoid duplicates
                     const existingUrls = new Set(
-                        get().articles.filter(a => a.feedId === feedId).map(a => a.url),
+                        get().articles.filter(a => a.feedId === feedId).map(a => normalizeUrl(a.url)),
                     );
 
                     const newArticles: RssArticle[] = await Promise.all(parsed.articles
-                        .filter(a => !existingUrls.has(a.url))
+                        .filter(a => !existingUrls.has(normalizeUrl(a.url)))
                         .map(async a => ({
                             id: crypto.randomUUID(),
                             feedId,

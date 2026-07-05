@@ -62,7 +62,7 @@ function isBookMarkedRead(book: Book): boolean {
 }
 
 // Book Card Component with Context Menu
-function BookCard({
+export function BookCard({
     book,
     viewMode,
     onOpenBook,
@@ -535,7 +535,7 @@ function ImportButton({
 }
 
 // Book Info Modal using Portal
-function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: boolean; onClose: () => void }) {
+export function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: boolean; onClose: () => void }) {
     if (!book) return null;
 
     return (
@@ -667,7 +667,7 @@ function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: b
 }
 
 // Add to Shelf Modal using Portal
-function AddToShelfModal({
+export function AddToShelfModal({
     isOpen,
     onClose,
     bookId,
@@ -679,7 +679,7 @@ function AddToShelfModal({
     onClose: () => void;
     bookId: string | null;
     collections: Collection[];
-    onAddToShelf: (bookId: string, shelfId: string) => void;
+    onAddToShelf: (bookId: string | null, shelfId: string) => void;
     onCreateShelf: (name: string) => void;
 }) {
     const [newShelfName, setNewShelfName] = useState("");
@@ -704,10 +704,8 @@ function AddToShelfModal({
         <button
             key={shelf.id}
             onClick={() => {
-                if (bookId) {
-                    onAddToShelf(bookId, shelf.id);
-                    onClose();
-                }
+                onAddToShelf(bookId, shelf.id);
+                onClose();
             }}
             className="w-full flex items-center gap-2 p-2 hover:bg-[var(--color-surface-muted)] transition-colors text-left"
         >

@@ -1,0 +1,262 @@
+# Performance Research Report: How Popular Reading Apps Handle Large Libraries
+
+## Overview
+
+Research into Readest, Thorium Reader, Google Play Books, Apple Books, and general
+best practices for rendering large collections in web/desktop reading apps.
+
+---
+
+## 1. Readest (Same Stack — Next.js + Tauri v2 + foliate-js + Zustand)
+
+Readest is the closest analogue to Theorem: same rendering engine (foliate-js),
+same native wrapper (Tauri v2), same state management (Zustand). They have been
+actively optimizing library performance — their 0.10.6 release notes include
+"Library: Much faster browsing for large collections."
+
+### What Readest Does for Library Performance
+
+- **React Server Components (RSC) via Next.js**: Book list is partially rendered
+  server-side, reducing client JS bundle. Theorem cannot use RSC directly (no
+  server in Tauri), but can pre-compute visible data.
+
+- **Virtual scrolling**: Readest implements virtualization for its book grid.
+  Only visible row tiles are rendered in the DOM. Based on their component
+  structure (`apps/readest-app/src/app/(main)/(library)/library/page.tsx`),
+  they use a custom virtualizer, not `react-window`.
+
+- **Suspense-based data loading**: Each section of the library page is wrapped
+  in `<Suspense>`, allowing progressive hydration. Cover images load lazily.
+
+- **Cover image optimization**: Covers are served via Next.js Image component
+  (automatic WebP/AVIF conversion, responsive sizes). Theorem's covers are
+  raw `data:` URIs from IndexedDB — no compression, no sizing.
+
+- **Debounced search**: Readest uses a 300ms debounce on search input before
+  triggering any Fuse/re-filtering.
+
+- **Native Rust prefetch for EPUB**: Same as Theorem — uses `prefetch_zip_metadata`
+  via Tauri IPC to avoid zip.js parsing overhead.
+
+- **OPDS/Calibre integration**: Library metadata is fetched incrementally from
+  OPDS catalogs, never loading all books at once.
+
+### Key Takeaways from Readest
+
+| Technique | Adopted by Theorem? |
+|-----------|-------------------|
+| Virtual scrolling | No — renders all 200+ cards in DOM |
+| Debounced search (300ms) | No — fires on every keystroke |
+| Cover image optimization | No — raw data URIs from IDB |
+| Progressive/Suspense loading | Partial — React.lazy for route-level only |
+| Pre-computed indices | No — Fuse index rebuilt per keystroke |
+
+---
+
+## 2. Thorium Reader (EDRLab — Electron + Readium Desktop)
+
+Thorium uses Electron (Chromium + Node.js) with React + Redux. The Readium
+Desktop toolkit handles book parsing natively in the renderer process.
+
+### Thorium's Performance Approach
+
+- **Lazy book loading**: Library metadata is stored in a lightweight SQLite
+  database (NeDB-compatible). On startup, only the DB query result is loaded
+  into Redux — no full book objects.
+
+- **CSS grid with pagination**: Thorium's library uses pagination (page 1-20,
+  21-40, etc.), not infinite scroll. Each page renders at most 20 books.
+
+- **No ContextMenu per card**: Thorium uses a single shared context menu that
+  repositions itself based on which card was right-clicked, not one instance
+  per card.
+
+- **Fixed cover cache**: Covers are stored as files (not IDB blobs) and loaded
+  via `file://` protocol — synchronous, no async overhead.
+
+### Key Takeaways from Thorium
+
+| Technique | Adopted by Theorem? |
+|-----------|-------------------|
+| Pagination (not infinite scroll) | No — infinite scroll with all cards rendered |
+| Single shared context menu | No — 200+ ContextMenu instances |
+| File-based cover cache | No — IndexedDB blob reads per cover |
+| SQLite metadata with lazy loading | Partial — SQLite KV store for persistence |
+
+---
+
+## 3. Google Play Books / Apple Books / Kindle (Native Mobile)
+
+### Google Play Books (Native Android + Kotlin)
+
+- **RecyclerView with Paging 3**: Native Android virtualization. The library
+  list uses `PagingDataAdapter` which loads 20 items per page, recycles off-screen
+  views, and prefetches adjacent pages.
+- **Cover images via Glide**: Automatic disk caching, downsampling, and
+  placeholder management. Images never block UI thread.
+- **SQLite-backed metadata**: Room database with indexed queries. Search is
+  a SQL `LIKE` query (milliseconds), not in-memory fuzzy search.
+- **Book detail lazy loading**: Full book metadata is loaded only when user
+  taps the book — the library list shows only title + author + cover thumb.
+
+### Apple Books (Native iOS + Swift)
+
+- **UICollectionView with diffable data sources**: Built-in virtualization.
+  Views are queued and reused. Diffable data source means only changed items
+  animate updates, minimizing layout passes.
+- **Core Data with NSFetchedResultsController**: Database-driven with
+  automatic change tracking. Library list is a database query result, not
+  an in-memory array.
+- **Progressive JPEG/HEIC covers**: Covers are stored as progressively-loaded
+  images on disk. First scan shows blurry thumbnail, then full quality.
+- **Lazy detail view**: Tapping a book shows a detail view controller that
+  loads full metadata + description. The list cell only shows what's needed.
+
+### Kindle (Cross-platform, C++ + Native)
+
+- **Custom C++ rendering engine**: The book list uses a custom C++ virtual
+  list control, not platform UI toolkits. Extremely performant.
+- **Paginated library view**: Kindle uses page-based browsing (page of 9-12
+  covers), not continuous scroll. Only one page worth of covers in memory.
+- **Cover thumbnails as separate cache**: Kindle generates small (120px)
+  thumbnail JPGs for library view, separate from the high-res cover.
+- **Full-text search on device index**: Kindle builds a background search
+  index per-book. Library search is a pre-built index query.
+
+### Key Takeaways from Native Apps
+
+| Technique | Adopted by Theorem? |
+|-----------|-------------------|
+| Virtual scrolling / view recycling | No |
+| Library search via DB query (not in-memory) | No — Fuse.js on every keystroke |
+| Thumbnail-sized covers in list view | No — full-size covers in library |
+| Paginated browsing (not infinite) | Could go either way |
+| Lazy detail loading (tap to see metadata) | No — all data loaded upfront |
+
+---
+
+## 4. General Web Performance Best Practices
+
+### Virtual Scrolling Libraries
+
+| Library | Bundle | Features | Recommendation |
+|---------|--------|----------|---------------|
+| `@tanstack/react-virtual` | ~4kB | Headless, grid support, variable sizes | **Best fit** — headless gives full control over cover card layout |
+| `react-window` | ~15kB | Fixed/variable lists, grid | Good but harder to adapt to CSS grid with gaps |
+| `react-virtuoso` | ~8kB | Auto-height, sticky headers, infinite scroll | Easiest drop-in, no manual measurement |
+
+### Search / Filtering
+
+- **Debounce input**: 200-300ms before triggering search. `useDebounce` hook.
+- **Reuse Fuse instance**: Create one Fuse instance, call `.search()` multiple
+  times. Currently Theorem creates `new Fuse(...)` inside `rankByFuzzyQuery`
+  on every call.
+- **Consider Web Worker**: Fuse search on 200+ items × 4 keys is ~5-15ms,
+  but on every keystroke it adds up. Offloading to a Worker keeps the UI
+  thread free.
+- **SQL FTS as alternative**: SQLite FTS5 on Tauri would be O(log n) vs
+  Fuse's O(n) index building.
+
+### Image / Cover Loading
+
+- **Always use thumbnail-sized images in lists**: 120px wide covers, not
+  full-size. Lazy-load full cover only when the book is opened.
+- **Consider a CDN/service-worker cache**: `data:` URIs from IndexedDB are
+  serialized to the DOM as strings — slow for large images. A service worker
+  cache with blob URLs (`URL.createObjectURL`) is faster.
+- **Placeholder before cover**: Use `buildFallbackCoverSvg` synchronously,
+  then swap to the real cover after async load. Currently Theorem waits for
+  full cover before rendering.
+
+### Startup
+
+- **Defer non-critical initialization**: Cover hydration doesn't need to
+  block React. Currently `coversHydrated` gates the entire cover generation
+  effect. Load covers in a background task, render placeholder immediately.
+- **Progressive hydration**: Route-level lazy loading is in place. Component-
+  level streaming would be next step.
+
+### Store Selectors
+
+- **Avoid selector factories**: `sortedBooks` is a `useMemo` that depends on
+  `books`, `searchQuery`, `selectedShelfBookIds`, `settings.librarySortBy`,
+  etc. Any of these changing triggers re-computation. Fine for what it does,
+  but `searchQuery` changes on every keystroke (no debounce), so the entire
+  sort + filter pipeline runs per keystroke.
+
+---
+
+## 5. Recommendations for Theorem
+
+### Immediate (High Impact, Low Effort)
+
+1. **Debounce search input to 250ms** — Prevents Fuse re-index on every
+   keystroke. Single-line change in AppTitlebar.tsx using a `useDebounce` hook.
+
+2. **Fix Fuse instance reuse** — Create the `Fuse` instance once per item set
+   (inside the `useMemo` for `sortedBooks`), then call `.search()` on it
+   when `searchQuery` changes. Currently `rankByFuzzyQuery` creates a new
+   `new Fuse(...)` every call.
+
+3. **Remove `if (bookId)` guard in `AddToShelfModal.renderShelfItem`**
+   — Fixes bulk add-to-shelf bug. Single line deletion.
+
+### Moderate (Medium Impact, Medium Effort)
+
+4. **Virtual scrolling with `@tanstack/react-virtual`** — Replace the CSS
+   grid in Library.tsx with a virtualized grid. Only ~20-30 cards rendered
+   instead of 200+. ~4kB bundle addition.
+
+5. **Shared ContextMenu pattern** — Instead of one ContextMenu instance per
+   BookCard, use a single context menu that tracks which card was right-clicked.
+   Reduces 200+ portal instances to 1.
+
+6. **Thumbnail cover pipeline** — Generate 120px thumbnail covers for the
+   library view. Store covers as files (Tauri) or blob URLs. Full-size cover
+   loaded only on book open or detail view.
+
+7. **Accelerate cover hydration** — Increase `COVER_RESTORE_BATCH_SIZE` from
+   24 to 48 and use `Promise.allSettled` with a concurrency limit. Or better:
+   set `coversHydrated = true` immediately and hydrate covers in background
+   — show placeholder SVGs until real covers arrive.
+
+### Architectural (High Impact, High Effort)
+
+8. **SQLite FTS5 for library search** — Replace in-memory Fuse.js with SQLite
+   full-text search. Native SQL `MATCH` query is O(log n), persists across
+   restarts, and runs off the main thread. Only available in Tauri mode.
+
+9. **Event-driven sync** — Remove the 5-minute polling sync. Subscribe to
+   store changes (`useLibraryStore.subscribe()`) and trigger sync on
+   mutations. Already partially in place via `scheduleMutationSync()`.
+
+10. **Paginated library view** (optional) — Replace infinite scroll with
+    page-based browsing (e.g., 24 books per page). Drastically reduces DOM
+    size and initial render cost. Would need UX research on user preference.
+
+### Summary Ranking
+
+| Priority | Change | Effort | Impact |
+|----------|--------|--------|--------|
+| P0 | Debounce search (250ms) | 1 hour | Eliminates per-keystroke Fuse rebuild |
+| P0 | Reuse Fuse instance | 30 min | Same — prevents redundant index building |
+| P0 | Fix bulk add-to-shelf `if (bookId)` | 1 line | Fixes broken feature |
+| P1 | Virtual scrolling | 2-3 days | 90% reduction in DOM nodes for large libraries |
+| P1 | Shared context menu | 1 day | Reduces 200+ portal instances to 1 |
+| P1 | Background cover hydration | 1-2 days | Faster startup, no blocking on covers |
+| P1 | Thumbnail covers in library | 2-3 days | Faster list render, less memory |
+| P2 | SQLite FTS5 for search | 3-5 days | O(log n) search, no Fuse overhead |
+| P2 | Event-driven sync (remove poll) | 2-3 days | Immediate sync, no wasted cycles |
+| P3 | Paginated library view | 3-5 days | Further DOM reduction, UX trade-off |
+
+---
+
+## References
+
+- [Readest GitHub](https://github.com/readest/readest)
+- [Readest App Store release notes](https://apps.apple.com/app/id6738622779) — "Library: Much faster browsing for large collections"
+- [Thorium Reader (EDRLab)](https://github.com/edrlab/thorium-reader)
+- [Google Play Books overview (DAISY Consortium)](https://daisy.org/guidance/info-help/guidance-training/reading-systems/google-play-books-app-overview)
+- [@tanstack/react-virtual](https://tanstack.com/virtual)
+- [react-window: Virtualize large lists (web.dev)](https://web.dev/articles/virtualize-long-lists-react-window)
+- [Complete Electron Performance Optimization Guide](https://www.oflight.co.jp/en/columns/electron-performance-optimization)
