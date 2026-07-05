@@ -12,6 +12,7 @@ import { confirmDeleteBook } from "../../core/lib/dialogs";
 import { ShelfModal } from "./components/modals/ShelfModal";
 import { MemoizedBookCard, BookInfoModal, AddToShelfModal } from "./Library";
 import { getFilteredAndSortedBooks } from "./filtering";
+import { useDebounce } from "../../core/lib/useDebounce";
 import {
     FolderOpen,
     Plus,
@@ -272,17 +273,19 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     };
 
     // Get actual books that exist in the library, filtered and sorted
+    const debouncedSearchQuery = useDebounce(searchQuery, 250);
+
     const shelfBooks = useMemo(() => {
         const shelfBookIdsSet = new Set(shelf.bookIds);
         return getFilteredAndSortedBooks({
             books,
-            searchQuery,
+            searchQuery: debouncedSearchQuery,
             selectedShelfBookIds: shelfBookIdsSet,
             showFavoritesOnly: false,
             sortBy: settings.librarySortBy,
             sortOrder: settings.librarySortOrder,
         });
-    }, [shelf.bookIds, books, searchQuery, settings.librarySortBy, settings.librarySortOrder]);
+    }, [shelf.bookIds, books, debouncedSearchQuery, settings.librarySortBy, settings.librarySortOrder]);
 
     // Unused remove handler removed
     const handleOpenBook = (book: Book) => {
@@ -467,9 +470,11 @@ export function ShelvesPage() {
         [books],
     );
 
+    const debouncedSearchQuery = useDebounce(searchQuery, 250);
+
     // Filter shelves by search query
     const filteredShelves = useMemo(() => {
-        if (!searchQuery.trim()) {
+        if (!debouncedSearchQuery.trim()) {
             return generalCollections;
         }
 
@@ -479,7 +484,7 @@ export function ShelvesPage() {
                 name: shelf.name,
                 description: shelf.description || "",
             })),
-            searchQuery,
+            debouncedSearchQuery,
             {
                 keys: [
                     { name: "name", weight: 0.65 },
@@ -488,7 +493,7 @@ export function ShelvesPage() {
             },
         );
         return rankedShelves.map(({ item }) => item.shelf);
-    }, [generalCollections, searchQuery]);
+    }, [generalCollections, debouncedSearchQuery]);
 
     // Helper to get actual books count (excluding deleted books)
     const getActualBookCount = (bookIds: string[]) => {

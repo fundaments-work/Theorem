@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { RouteErrorBoundary, KeyboardShortcutsHelp } from "./ui";
+import { RouteErrorBoundary, KeyboardShortcutsHelp, ContextMenuRoot } from "./ui";
 import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
 import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
@@ -499,6 +499,8 @@ function App() {
                 isOpen={showShortcutsHelp}
                 onClose={() => setShowShortcutsHelp(false)}
             />
+            
+            <ContextMenuRoot />
         </div>
     );
 }

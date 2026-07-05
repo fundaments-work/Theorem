@@ -1,6 +1,6 @@
 import { FORMAT_DISPLAY_NAMES } from "../../core/types";
 import { normalizeAuthor } from "../../core/lib/utils";
-import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
+
 import type { Book, LibrarySortBy, LibrarySortOrder } from "../../core/types";
 
 export interface LibraryFilterOptions {
@@ -12,6 +12,10 @@ export interface LibraryFilterOptions {
     sortOrder: LibrarySortOrder;
 }
 
+import Fuse from "fuse.js";
+
+const booksFuseCache = new WeakMap<Book[], Fuse<any>>();
+
 export function getFilteredAndSortedBooks({
     books,
     searchQuery,
@@ -20,9 +24,44 @@ export function getFilteredAndSortedBooks({
     sortBy,
     sortOrder,
 }: LibraryFilterOptions): Book[] {
-    let result = books;
+    let searchResults = books;
+    const trimmedQuery = searchQuery.trim();
 
-    // In main library view (no shelf selected), RSS entries stay on Feeds page.
+    // 1. Search (using cached Fuse instance over ALL books to prevent redundant index building)
+    if (trimmedQuery) {
+        let fuse = booksFuseCache.get(books);
+        if (!fuse) {
+            const searchableItems = books.map((book) => ({
+                book,
+                title: book.title,
+                author: normalizeAuthor(book.author),
+                tags: book.tags.join(" "),
+                format: `${FORMAT_DISPLAY_NAMES[book.format]} ${book.format}`,
+            }));
+            
+            fuse = new Fuse(searchableItems, {
+                keys: [
+                    { name: "title", weight: 0.45 },
+                    { name: "author", weight: 0.3 },
+                    { name: "tags", weight: 0.15 },
+                    { name: "format", weight: 0.1 },
+                ],
+                threshold: 0.34,
+                ignoreLocation: true,
+                includeScore: true,
+                shouldSort: true,
+                minMatchCharLength: 2,
+            });
+            booksFuseCache.set(books, fuse);
+        }
+        
+        const rawResults = fuse.search(trimmedQuery);
+        searchResults = rawResults.map((r) => r.item.book);
+    }
+
+    // 2. Filter
+    let result = searchResults;
+
     if (selectedShelfBookIds) {
         result = result.filter((book) => selectedShelfBookIds.has(book.id));
     } else {
@@ -33,27 +72,10 @@ export function getFilteredAndSortedBooks({
         result = result.filter((book) => book.isFavorite);
     }
 
-    const trimmedQuery = searchQuery.trim();
+    // If there was a search query, Fuse already sorted by relevance, 
+    // so we only apply the manual sort if there's no active search.
     if (trimmedQuery) {
-        const rankedBooks = rankByFuzzyQuery(
-            result.map((book) => ({
-                book,
-                title: book.title,
-                author: normalizeAuthor(book.author),
-                tags: book.tags.join(" "),
-                format: `${FORMAT_DISPLAY_NAMES[book.format]} ${book.format}`,
-            })),
-            trimmedQuery,
-            {
-                keys: [
-                    { name: "title", weight: 0.45 },
-                    { name: "author", weight: 0.3 },
-                    { name: "tags", weight: 0.15 },
-                    { name: "format", weight: 0.1 },
-                ],
-            },
-        );
-        return rankedBooks.map(({ item }) => item.book);
+        return result;
     }
 
     const sorted = [...result];

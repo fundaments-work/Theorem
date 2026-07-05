@@ -23,6 +23,7 @@ import { ContextMenu } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
 import { Modal, ModalBody, ModalFooter } from "../../ui";
 import { getFilteredAndSortedBooks } from "./filtering";
+import { useDebounce } from "../../core/lib/useDebounce";
 
 // View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
@@ -1032,10 +1033,12 @@ export function LibraryPage() {
         return new Set(selectedShelf.bookIds);
     }, [selectedShelf]);
 
+    const debouncedSearchQuery = useDebounce(searchQuery, 250);
+
     const sortedBooks = useMemo(() => {
         return getFilteredAndSortedBooks({
             books,
-            searchQuery,
+            searchQuery: debouncedSearchQuery,
             selectedShelfBookIds,
             showFavoritesOnly,
             sortBy: settings.librarySortBy,
@@ -1043,7 +1046,7 @@ export function LibraryPage() {
         });
     }, [
         books,
-        searchQuery,
+        debouncedSearchQuery,
         selectedShelfBookIds,
         settings.librarySortBy,
         settings.librarySortOrder,
