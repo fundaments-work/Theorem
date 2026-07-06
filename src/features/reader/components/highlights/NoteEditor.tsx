@@ -170,7 +170,7 @@ export function NoteEditor({
 
             {/* Selected text preview */}
             {selectedText && (
-                <div className="mb-3 px-2 py-1.5 bg-[var(--color-surface-variant)] text-xs text-[color:var(--color-text-secondary)] line-clamp-2">
+                <div className="mb-3 px-2 py-1.5 bg-[var(--color-surface-muted)] text-xs text-[color:var(--color-text-secondary)] line-clamp-2">
                     &ldquo;{selectedText.slice(0, 100)}{selectedText.length > 100 ? '...' : ''}&rdquo;
                 </div>
             )}
