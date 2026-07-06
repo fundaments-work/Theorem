@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { cn } from "../../core/lib/utils";
 import {
     getBookMaterializedPath,
@@ -171,7 +172,7 @@ function BookReaderPage() {
     const saveVocabularyTerm = useVocabularyStore((state) => state.saveVocabularyTerm);
     const installedDictionaryCount = useVocabularyStore((state) => state.installedDictionaries.length);
 
-    const settings = useSettingsStore((state) => state.settings);
+    const settings = useSettingsStore(useShallow((state) => state.settings));
     const updateReaderSettings = useSettingsStore((state) => state.updateReaderSettings);
     const stats = useSettingsStore((state) => state.stats);
     const updateStats = useSettingsStore((state) => state.updateStats);
@@ -412,7 +413,7 @@ function BookReaderPage() {
             if (metadata.coverDataUrl) {
                 updates.coverPath = metadata.coverDataUrl;
             } else if (!book.coverPath) {
-                const { buildFallbackCoverSvg } = await import('../../core');
+                const { buildFallbackCoverSvg } = await import('../../core/lib/cover-extractor');
                 const fallbackSvg = buildFallbackCoverSvg(
                     metadata.title || book.title,
                     metadata.author || book.author || 'Unknown Author',

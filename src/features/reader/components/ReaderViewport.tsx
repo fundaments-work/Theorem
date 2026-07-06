@@ -294,7 +294,7 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
                     changedKeys.includes('forcePublisherStyles');
 
                 if (needsThemeUpdate) {
-                    const { getThemeColors } = await import('../../../core');
+                    const { getThemeColors } = await import('../../../core/lib/design-tokens');
                     const themeColors = getThemeColors(settings.theme);
 
                     applyTheme({

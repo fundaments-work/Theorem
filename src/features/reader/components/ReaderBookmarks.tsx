@@ -23,7 +23,8 @@ export function ReaderBookmarks({
     onNavigate,
     className,
 }: ReaderBookmarksProps) {
-    const { getBookAnnotations, removeAnnotation } = useLibraryStore();
+    const getBookAnnotations = useLibraryStore((s) => s.getBookAnnotations);
+    const removeAnnotation = useLibraryStore((s) => s.removeAnnotation);
     const bookmarks = getBookAnnotations(bookId).filter(a => a.type === 'bookmark');
 
     return (

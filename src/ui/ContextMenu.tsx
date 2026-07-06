@@ -39,7 +39,10 @@ export const useContextMenuStore = create<ContextMenuState>((set) => ({
 }));
 
 export function ContextMenuRoot() {
-    const { isOpen, position, items, close } = useContextMenuStore();
+    const isOpen = useContextMenuStore((s) => s.isOpen);
+    const position = useContextMenuStore((s) => s.position);
+    const items = useContextMenuStore((s) => s.items);
+    const close = useContextMenuStore((s) => s.close);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const handleClickOutside = useCallback((e: MouseEvent) => {
