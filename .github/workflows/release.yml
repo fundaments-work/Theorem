@@ -409,16 +409,6 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup WiX v3
-        shell: pwsh
-        run: |
-          $wixDir = "$env:RUNNER_TEMP\wix314"
-          mkdir $wixDir -Force
-          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip" -OutFile "$wixDir\wix.zip"
-          Expand-Archive "$wixDir\wix.zip" -DestinationPath $wixDir -Force
-          echo "$wixDir" | Out-File -FilePath $env:GITHUB_PATH -Append
-          echo "TAURI_WIX_TOOLS_PATH=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Append
-
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
