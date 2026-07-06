@@ -24,6 +24,14 @@ function isAndroid(): boolean {
     return _isAndroid;
 }
 
+function isDesktopTauri(): boolean {
+    try {
+        return !!(window as any).__TAURI_INTERNALS__ && !isAndroid();
+    } catch {
+        return false;
+    }
+}
+
 function synthAvailable(): boolean {
     return typeof window !== "undefined" && !!window.speechSynthesis;
 }
@@ -70,10 +78,11 @@ export class ImmersionPlayer {
 
         if (isAndroid()) {
             await this._speakAndroid(text, voiceParam);
+        } else if (isDesktopTauri()) {
+            await this._speakInvoke(text, voiceParam);
         } else if (synthAvailable()) {
             this._speakWeb(text, voiceParam, rate);
         }
-        // No TTS available: silently ignore
     }
 
     // ─── Android (invoke → TextToSpeech plugin) ───
@@ -119,7 +128,26 @@ export class ImmersionPlayer {
         await this._speakAndroid(remaining, this.voice);
     }
 
-    // ─── Web Speech API (desktop) ───
+    // ─── Desktop Tauri (invoke → libspeechd on Linux) ───
+
+    private async _speakInvoke(text: string, _voiceParam: string | null) {
+        this.setState('loading');
+        try {
+            await invoke("tts_speak", { text, voice: "" });
+            this.setState('playing');
+            // libspeechd speaks synchronously — estimate completion.
+            const estimatedMs = Math.max(2000, (text.length / ((158 * 5.1) / 60)) * 1000);
+            this.completeTimer = setTimeout(() => {
+                this.completeTimer = null;
+                this._onDone();
+            }, estimatedMs);
+        } catch (err: unknown) {
+            this._onDone();
+            this.callbacks.onError?.(err instanceof Error ? err.message : String(err));
+        }
+    }
+
+    // ─── Web Speech API (macOS/Windows desktop, browser) ───
 
     private _speakWeb(text: string, voiceParam: string | null, rate: number) {
         const s = window.speechSynthesis;
@@ -155,26 +183,33 @@ export class ImmersionPlayer {
         if (this._state !== 'playing') return;
         if (isAndroid()) {
             await this._pauseAndroid();
+        } else if (isDesktopTauri()) {
+            await invoke("tts_pause").catch(() => {});
+            this.setState('paused');
         } else if (synthAvailable()) {
             window.speechSynthesis.pause();
-            return; // state set by onpause callback
+            return;
+        } else {
+            this.setState('paused');
         }
-        this.setState('paused');
     }
 
     async resume() {
         if (this._state !== 'paused') return;
         if (isAndroid()) {
             await this._resumeAndroid();
+        } else if (isDesktopTauri()) {
+            await invoke("tts_resume").catch(() => {});
+            this.setState('playing');
         } else if (synthAvailable()) {
             window.speechSynthesis.resume();
-            return; // state set by onresume callback
+            return;
         }
     }
 
     async stop() {
         this._clearPending();
-        if (isAndroid()) {
+        if (isAndroid() || isDesktopTauri()) {
             await invoke("tts_stop").catch(() => {});
         } else if (synthAvailable()) {
             window.speechSynthesis.cancel();

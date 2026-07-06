@@ -1,6 +1,7 @@
 mod database;
 mod epub_parser;
 mod sync_commands;
+mod tts_linux;
 
 use reqwest::blocking::Client;
 use serde::Serialize;
@@ -858,13 +859,18 @@ fn apply_linux_webkit_workarounds() {
     }
 }
 
-// ─── TTS Commands (Android only — desktop uses Web Speech API) ───
+// ─── TTS Commands ───
+// Linux: libspeechd FFI (real pause/resume/stop).
+// Android: TextToSpeech plugin.
+// macOS/Windows: JS Web Speech API handles playback (no-op here).
 
 #[tauri::command]
-fn tts_speak(app: tauri::AppHandle, text: String, voice: String) -> Result<(), String> {
+fn tts_speak(_app: tauri::AppHandle, text: String, _voice: String) -> Result<(), String> {
     #[cfg(target_os = "android")]
     return tauri_plugin_android_tts_audio::tts_speak(&app, text, voice);
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "linux")]
+    return tts_linux::linux_tts_speak(&text);
+    #[cfg(not(any(target_os = "android", target_os = "linux")))]
     {
         let _ = (app, text, voice);
         Ok(())
@@ -872,10 +878,38 @@ fn tts_speak(app: tauri::AppHandle, text: String, voice: String) -> Result<(), S
 }
 
 #[tauri::command]
-fn tts_stop(app: tauri::AppHandle) -> Result<(), String> {
+fn tts_stop(_app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
     return tauri_plugin_android_tts_audio::tts_stop(&app);
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "linux")]
+    return tts_linux::linux_tts_stop();
+    #[cfg(not(any(target_os = "android", target_os = "linux")))]
+    {
+        let _ = app;
+        Ok(())
+    }
+}
+
+#[tauri::command]
+fn tts_pause(_app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    return tauri_plugin_android_tts_audio::tts_stop(&app);
+    #[cfg(target_os = "linux")]
+    return tts_linux::linux_tts_pause();
+    #[cfg(not(any(target_os = "android", target_os = "linux")))]
+    {
+        let _ = app;
+        Ok(())
+    }
+}
+
+#[tauri::command]
+fn tts_resume(_app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    return Ok(());
+    #[cfg(target_os = "linux")]
+    return tts_linux::linux_tts_resume();
+    #[cfg(not(any(target_os = "android", target_os = "linux")))]
     {
         let _ = app;
         Ok(())
@@ -1057,6 +1091,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             tts_speak,
             tts_stop,
+            tts_pause,
+            tts_resume,
             tts_get_voices,
             epub_parser::prefetch_zip_metadata,
             read_file,
