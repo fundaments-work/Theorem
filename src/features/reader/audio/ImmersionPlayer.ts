@@ -7,6 +7,15 @@
  *
  * Zero binary cost, no Rust IPC needed for playback.
  */
+
+function synth(): SpeechSynthesis {
+    return window.speechSynthesis;
+}
+
+function synthAvailable(): boolean {
+    return typeof window !== "undefined" && !!window.speechSynthesis;
+}
+
 export type PlaybackState = 'idle' | 'loading' | 'playing' | 'paused';
 
 export interface PlaybackCallbacks {
@@ -33,19 +42,15 @@ export class ImmersionPlayer {
         this.callbacks = callbacks;
     }
 
-    /**
-     * Speak the given text. Returns immediately — playback is async.
-     * The `onComplete` callback fires when speech ends naturally,
-     * enabling auto-advance for immersion/audiobook mode.
-     */
     speak(text: string, voice: string | null, rate: number = 1) {
-        speechSynthesis.cancel();
+        if (!synthAvailable()) return;
+        synth().cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = rate;
 
         if (voice) {
-            const voices = speechSynthesis.getVoices();
+            const voices = synth().getVoices();
             const match = voices.find(v => v.name === voice || v.lang.startsWith(voice));
             if (match) utterance.voice = match;
         }
@@ -65,37 +70,40 @@ export class ImmersionPlayer {
         };
 
         this.setState('loading');
-        speechSynthesis.speak(utterance);
+        synth().speak(utterance);
     }
 
     pause() {
-        speechSynthesis.pause();
+        if (synthAvailable()) synth().pause();
     }
 
     resume() {
-        speechSynthesis.resume();
+        if (synthAvailable()) synth().resume();
     }
 
     stop() {
-        speechSynthesis.cancel();
+        if (synthAvailable()) synth().cancel();
         this.setState('idle');
     }
 
-    /** Get available system voices. */
     static getVoices(): SpeechSynthesisVoice[] {
-        return speechSynthesis.getVoices();
+        if (!synthAvailable()) return [];
+        return synth().getVoices();
     }
 
-    /** Preload voices. Call once on user interaction. */
     static loadVoices(): Promise<SpeechSynthesisVoice[]> {
         return new Promise((resolve) => {
-            const voices = speechSynthesis.getVoices();
+            if (!synthAvailable()) {
+                resolve([]);
+                return;
+            }
+            const voices = synth().getVoices();
             if (voices.length > 0) {
                 resolve(voices);
                 return;
             }
-            speechSynthesis.onvoiceschanged = () => {
-                resolve(speechSynthesis.getVoices());
+            synth().onvoiceschanged = () => {
+                resolve(synth().getVoices());
             };
         });
     }

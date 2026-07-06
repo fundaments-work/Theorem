@@ -358,15 +358,16 @@ export function SettingsPage() {
     const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
     useEffect(() => {
+        if (typeof window === "undefined" || !window.speechSynthesis) return;
         const loadVoices = () => {
-            const voices = speechSynthesis.getVoices();
+            const voices = window.speechSynthesis.getVoices();
             if (voices.length > 0) {
                 setAvailableVoices(voices);
             }
         };
         loadVoices();
-        speechSynthesis.onvoiceschanged = loadVoices;
-        return () => { speechSynthesis.onvoiceschanged = null; };
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+        return () => { window.speechSynthesis.onvoiceschanged = null; };
     }, []);
 
     useEffect(() => {
