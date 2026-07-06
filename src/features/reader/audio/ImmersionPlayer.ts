@@ -1,15 +1,9 @@
 /**
  * ImmersionPlayer — native platform TTS.
- *
- * Desktop: Web Speech API (window.speechSynthesis) which delegates to
- *   speech-dispatcher on Linux, NSSpeechSynthesizer on macOS, SAPI on Windows.
- *   Real pause/resume, real completion callbacks, voice selection.
- *
- * Android: android.speech.tts.TextToSpeech via Tauri plugin.
+ * Android: TextToSpeech plugin. Desktop: shell commands via invoke.
+ * All Tauri platforms share the same estimation-based pause/resume.
  */
 import { invoke } from "@tauri-apps/api/core";
-
-// ─── Platform detection ───
 
 let _isAndroid: boolean | null = null;
 
@@ -18,25 +12,14 @@ function isAndroid(): boolean {
     try {
         _isAndroid = !!(window as any).__TAURI_INTERNALS__ &&
             navigator.userAgent.toLowerCase().includes('android');
-    } catch {
-        _isAndroid = false;
-    }
+    } catch { _isAndroid = false; }
     return _isAndroid;
 }
 
-function isDesktopTauri(): boolean {
-    try {
-        return !!(window as any).__TAURI_INTERNALS__ && !isAndroid();
-    } catch {
-        return false;
-    }
+function isTauri(): boolean {
+    try { return !!(window as any).__TAURI_INTERNALS__; }
+    catch { return false; }
 }
-
-function synthAvailable(): boolean {
-    return typeof window !== "undefined" && !!window.speechSynthesis;
-}
-
-// ─── Types ───
 
 export type PlaybackState = 'idle' | 'loading' | 'playing' | 'paused';
 
@@ -46,12 +29,11 @@ export interface PlaybackCallbacks {
     onComplete?: () => void;
 }
 
-// ─── Player ───
+const BASE_CHARS_PER_SEC = (158 * 5.1) / 60;
 
 export class ImmersionPlayer {
     private callbacks: PlaybackCallbacks = {};
     private _state: PlaybackState = 'idle';
-    // Tauri estimation state (Android only — no real pause/reume)
     private fullText: string = '';
     private fullWords: string[] = [];
     private voice: string | null = null;
@@ -66,34 +48,18 @@ export class ImmersionPlayer {
         this.callbacks.onStateChange?.(s);
     }
 
-    init(callbacks: PlaybackCallbacks = {}) {
-        this.callbacks = callbacks;
-    }
+    init(callbacks: PlaybackCallbacks = {}) { this.callbacks = callbacks; }
 
-    // ─── Speak ───
-
-    async speak(text: string, voiceParam: string | null, rate: number = 1) {
+    async speak(text: string, voiceParam: string | null, _rate: number = 1) {
         this._clearPending();
-        if (!text.trim()) return;
+        if (!text.trim() || !isTauri()) return;
 
-        if (isAndroid()) {
-            await this._speakAndroid(text, voiceParam);
-        } else if (isDesktopTauri()) {
-            await this._speakInvoke(text, voiceParam);
-        } else if (synthAvailable()) {
-            this._speakWeb(text, voiceParam, rate);
-        }
-    }
-
-    // ─── Android (invoke → TextToSpeech plugin) ───
-
-    private async _speakAndroid(text: string, voiceParam: string | null) {
-        const BASE_CHARS_PER_SEC = (158 * 5.1) / 60; // 158 wpm × 5.1 chars = ~13.4 cps
         this.fullText = text;
         this.fullWords = text.trim().split(/\s+/);
         this.voice = voiceParam;
         this.startTime = performance.now();
         this.setState('loading');
+
         try {
             await invoke("tts_speak", { text, voice: voiceParam || "" });
             this.setState('playing');
@@ -107,11 +73,13 @@ export class ImmersionPlayer {
         }
     }
 
-    private async _pauseAndroid() {
+    async pause() {
+        if (this._state !== 'playing') return;
         if (this.completeTimer) { clearTimeout(this.completeTimer); this.completeTimer = null; }
         await invoke("tts_stop").catch(() => {});
+        // Estimate position and truncate to word boundary.
         const elapsedSec = (performance.now() - this.startTime) / 1000;
-        const charsSpoken = Math.floor(elapsedSec * ((158 * 5.1) / 60));
+        const charsSpoken = Math.floor(elapsedSec * BASE_CHARS_PER_SEC);
         let charCount = 0, wordsToDrop = 0;
         for (let i = 0; i < this.fullWords.length; i++) {
             charCount += this.fullWords[i].length;
@@ -119,98 +87,19 @@ export class ImmersionPlayer {
         }
         this.fullText = this.fullWords.slice(wordsToDrop).join(" ");
         this.fullWords = this.fullWords.slice(wordsToDrop);
-    }
-
-    private async _resumeAndroid() {
-        const remaining = this.fullText.trim();
-        if (!remaining) { this._onDone(); return; }
-        await this._speakAndroid(remaining, this.voice);
-    }
-
-    // ─── Desktop Tauri (invoke → libspeechd on Linux) ───
-
-    private async _speakInvoke(text: string, _voiceParam: string | null) {
-        this.setState('loading');
-        try {
-            await invoke("tts_speak", { text, voice: "" });
-            this.setState('playing');
-            // libspeechd speaks synchronously — estimate completion.
-            const estimatedMs = Math.max(2000, (text.length / ((158 * 5.1) / 60)) * 1000);
-            this.completeTimer = setTimeout(() => {
-                this.completeTimer = null;
-                this._onDone();
-            }, estimatedMs);
-        } catch (err: unknown) {
-            this._onError(err instanceof Error ? err.message : String(err));
-        }
-    }
-
-    // ─── Web Speech API (macOS/Windows desktop, browser) ───
-
-    private _speakWeb(text: string, voiceParam: string | null, rate: number) {
-        const s = window.speechSynthesis;
-        s.cancel();
-
-        const u = new SpeechSynthesisUtterance(text);
-        u.rate = rate;
-
-        if (voiceParam) {
-            const voices = s.getVoices();
-            const match = voices.find(v => v.name === voiceParam);
-            if (match) u.voice = match;
-        }
-
-        u.onstart = () => this.setState('playing');
-        u.onpause = () => this.setState('paused');
-        u.onresume = () => this.setState('playing');
-        u.onend = () => this._onDone();
-        u.onerror = (e) => {
-            this.setState('idle');
-            if (e.error !== 'canceled' && e.error !== 'interrupted') {
-                this.callbacks.onError?.(e.error);
-            }
-        };
-
-        this.setState('loading');
-        s.speak(u);
-    }
-
-    // ─── Public controls ───
-
-    async pause() {
-        if (this._state !== 'playing') return;
-        if (isDesktopTauri()) {
-            // Desktop TTS can't pause — stop instead (same as reset).
-            await this.stop();
-            return;
-        }
-        if (isAndroid()) {
-            await this._pauseAndroid();
-        } else if (synthAvailable()) {
-            window.speechSynthesis.pause();
-            return;
-        }
         this.setState('paused');
     }
 
     async resume() {
-        if (this._state !== 'paused') return;
-        if (isDesktopTauri()) return; // desktop: stopped, can't resume
-        if (isAndroid()) {
-            await this._resumeAndroid();
-        } else if (synthAvailable()) {
-            window.speechSynthesis.resume();
-            return;
-        }
+        if (this._state !== 'paused' || !isTauri()) return;
+        const remaining = this.fullText.trim();
+        if (!remaining) { this._onDone(); return; }
+        await this.speak(remaining, this.voice);
     }
 
     async stop() {
         this._clearPending();
-        if (isAndroid() || isDesktopTauri()) {
-            await invoke("tts_stop").catch(() => {});
-        } else if (synthAvailable()) {
-            window.speechSynthesis.cancel();
-        }
+        if (isTauri()) await invoke("tts_stop").catch(() => {});
         this.fullText = ''; this.fullWords = []; this.voice = null;
         this.setState('idle');
     }
@@ -229,10 +118,7 @@ export class ImmersionPlayer {
         this.fullText = ''; this.fullWords = []; this.voice = null;
         this.setState('idle');
         this.callbacks.onError?.(msg);
-        // Do NOT call onComplete — don't auto-advance on error.
     }
-
-    // ─── Voices ───
 
     static async getVoices(): Promise<{ name: string; lang: string }[]> {
         if (isAndroid()) {
@@ -241,7 +127,7 @@ export class ImmersionPlayer {
                 if (v.length > 0) return v.map(x => ({ name: x.name, lang: x.locale }));
             } catch { /* fall through */ }
         }
-        if (synthAvailable()) {
+        if (typeof window !== "undefined" && window.speechSynthesis) {
             const voices = window.speechSynthesis.getVoices();
             if (voices.length > 0) return voices.map(v => ({ name: v.name, lang: v.lang }));
         }
@@ -249,24 +135,12 @@ export class ImmersionPlayer {
     }
 
     static async loadVoices(): Promise<{ name: string; lang: string }[]> {
-        if (isAndroid()) {
-            const v = await ImmersionPlayer.getVoices();
-            if (v.length > 0) return v;
-        }
-        if (!synthAvailable()) return [];
-        return new Promise(resolve => {
-            const voices = window.speechSynthesis.getVoices();
-            if (voices.length > 0) { resolve(voices.map(v => ({ name: v.name, lang: v.lang }))); return; }
-            window.speechSynthesis.onvoiceschanged = () => {
-                resolve(window.speechSynthesis.getVoices().map(v => ({ name: v.name, lang: v.lang })));
-            };
-        });
+        return ImmersionPlayer.getVoices();
     }
 
     destroy() {
         this._clearPending();
-        if (isAndroid() || isDesktopTauri()) { invoke("tts_stop").catch(() => {}); }
-        else if (synthAvailable()) { window.speechSynthesis.cancel(); }
+        if (isTauri()) invoke("tts_stop").catch(() => {});
         this.callbacks = {};
     }
 }

@@ -109,7 +109,7 @@ export function ImmersionBar({
     }, [ttsVoice, voices, updateTtsSettings]);
 
     const currentVoiceLabel = voices.find(v => v.name === ttsVoice)
-        ?.name?.replace(/\(.*\)/, '').trim().split(' ').slice(0, 2).join(' ') || 'Default';
+        ?.name?.replace(/\(.*\)/, '').trim().split(' ').slice(0, 2).join(' ') || '';
 
     const isActive = playbackState !== 'idle';
 
@@ -139,9 +139,6 @@ export function ImmersionBar({
                     />
                     {playbackState === 'loading' && (
                         <span className="w-4 h-4 border-[2px] border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
-                    )}
-                    {playbackState === 'paused' && (
-                        <span className="text-xs font-medium text-[color:var(--color-text-muted)] select-none shrink-0">Paused</span>
                     )}
                     {playbackState === 'playing' && (
                         <div className="flex items-end gap-[3px] h-4 shrink-0">
