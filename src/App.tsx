@@ -323,10 +323,9 @@ function App() {
         void initFingerprint();
     }, []);
 
-    // Start the sync responder server on app launch so peers can push
-    // data to us immediately. This runs regardless of autoSyncEnabled
-    // because the responder (incoming sync) should always be available.
-    // The auto-sync scheduler (outgoing) is only started if enabled.
+    // Start the sync server + auto-sync scheduler when auto-sync is enabled.
+    // The sync server is also started on-demand from DeviceSync.tsx when the
+    // user opens the sync settings page (for pairing/manual sync).
     useEffect(() => {
         if (!isTauri() || !hasCompletedOnboarding) {
             return;
@@ -334,28 +333,25 @@ function App() {
 
         let cancelled = false;
         const bootstrap = async () => {
-            if (cancelled) return;
-            // Step 1: Always start the sync server + provision data.
-            // This lets peers reach us even if auto-sync is off.
+            if (cancelled || !autoSyncEnabled) {
+                return;
+            }
+            // Step 1: Start sync server so peers can push data to us.
             try {
                 await ensureResponderSyncReady();
             } catch {
                 // Sync server unavailable on this device.
             }
-            // Step 2: Start auto-sync scheduler if enabled.
-            if (cancelled || !autoSyncEnabled) {
-                return;
-            }
+            if (cancelled) return;
+            // Step 2: Start JS-based auto-sync scheduler.
             try {
                 await startAutoSync();
             } catch {
                 // Auto-sync scheduling unavailable.
             }
-            // Step 3: Push data to Rust server + start background sync.
+            // Step 3: Start Rust background sync loop.
             if (!cancelled) {
                 try {
-                    const { provisionSyncData } = await import("./core/lib/sync-orchestrator");
-                    await provisionSyncData();
                     const { startBackgroundSync } = await import("./core/lib/device-sync");
                     await startBackgroundSync(300);
                 } catch {
@@ -372,6 +368,9 @@ function App() {
             cancelled = true;
             clearTimeout(timer);
             stopAutoSync();
+            import("./core/lib/device-sync").then((mod) => {
+                mod.stopBackgroundSync().catch(() => {});
+            }).catch(() => {});
         };
     }, [hasCompletedOnboarding, autoSyncEnabled]);
 
