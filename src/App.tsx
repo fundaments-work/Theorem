@@ -484,7 +484,7 @@ function App() {
                 <AppTitlebar title="Theorem" />
 
                 {/* Page Content */}
-                <main ref={mainScrollRef} className="flex-1 overflow-y-auto pb-16 md:pb-0 md:px-8 md:py-6 custom-scrollbar">
+                <main id="app-main" ref={mainScrollRef} className="flex-1 overflow-y-auto pb-16 md:pb-0 md:px-8 md:py-6 custom-scrollbar">
                     <RouteErrorBoundary>
                         <Suspense fallback={<PageFallback />}>
                             {renderPage()}

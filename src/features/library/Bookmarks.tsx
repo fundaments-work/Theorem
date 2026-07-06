@@ -3,7 +3,7 @@
  * View and manage all bookmarks across books
  */
 
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core/lib/utils";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
@@ -271,11 +271,9 @@ export function BookmarksPage() {
         return filtered;
     }, [bookmarks, searchQuery, sortBy, bookLookup]);
 
-    const scrollRef = useRef<HTMLDivElement>(null);
-
     const rowVirtualizer = useVirtualizer({
         count: filteredBookmarks.length,
-        getScrollElement: useCallback(() => scrollRef.current, []),
+        getScrollElement: useCallback(() => document.getElementById('app-main'), []),
         estimateSize: useCallback(() => viewMode === "grid" ? 220 : 80, [viewMode]),
         overscan: 3,
     });
@@ -304,9 +302,9 @@ export function BookmarksPage() {
     }
 
     return (
-        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in flex flex-col">
+        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             {/* Header */}
-            <div className="flex items-start justify-between mb-10 shrink-0">
+            <div className="flex items-start justify-between mb-10">
                 <div>
                     <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         Bookmarks
@@ -368,9 +366,8 @@ export function BookmarksPage() {
                     </p>
                 </div>
             ) : (
-                <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" style={{ height: "calc(100vh - 16rem)" }}>
-                    <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
-                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                             const bookmark = filteredBookmarks[virtualRow.index];
                             return (
                                 <div
@@ -404,7 +401,6 @@ export function BookmarksPage() {
                             );
                         })}
                     </div>
-                </div>
             )}
         </div>
     );

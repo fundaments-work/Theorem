@@ -1059,35 +1059,41 @@ export function LibraryPage() {
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    const [gridCols, setGridCols] = useState(4);
+    const [observedCols, setObservedCols] = useState(4);
+
+    const computeColumnCount = useCallback((width: number) => {
+        if (settings.libraryViewMode === "list") return 1;
+        if (settings.libraryViewMode === "compact") {
+            if (width >= 1280) return 6;
+            if (width >= 1024) return 5;
+            if (width >= 640) return 4;
+            return 3;
+        }
+        if (width >= 1536) return 8;
+        if (width >= 1280) return 7;
+        if (width >= 1024) return 5;
+        if (width >= 768) return 4;
+        if (width >= 640) return 3;
+        return 2;
+    }, [settings.libraryViewMode]);
+
+    const gridCols = useMemo(() => {
+        if (settings.libraryViewMode === "list") return 1;
+        const w = scrollRef.current?.clientWidth;
+        if (!w || w === 0) return observedCols;
+        return computeColumnCount(w);
+    }, [settings.libraryViewMode, observedCols, computeColumnCount]);
 
     useEffect(() => {
         const el = scrollRef.current;
         if (!el) return;
-
-        const computeCols = () => {
-            if (settings.libraryViewMode === "list") return 1;
+        const observer = new ResizeObserver(() => {
             const w = el.clientWidth;
-            if (settings.libraryViewMode === "compact") {
-                if (w >= 1280) return 6;
-                if (w >= 1024) return 5;
-                if (w >= 640) return 4;
-                return 3;
-            }
-            if (w >= 1536) return 8;
-            if (w >= 1280) return 7;
-            if (w >= 1024) return 5;
-            if (w >= 768) return 4;
-            if (w >= 640) return 3;
-            return 2;
-        };
-
-        setGridCols(computeCols());
-
-        const observer = new ResizeObserver(() => setGridCols(computeCols()));
+            if (w > 0) setObservedCols(computeColumnCount(w));
+        });
         observer.observe(el);
         return () => observer.disconnect();
-    }, [settings.libraryViewMode]);
+    }, [computeColumnCount]);
 
     const isListView = settings.libraryViewMode === "list";
     const virtualRowCount = isListView
@@ -1618,7 +1624,7 @@ export function LibraryPage() {
                 </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-start mt-8">
+            <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-start mt-8 relative">
                 <div className="flex-1 w-full">
                     {/* Mobile Only: Inline Filter Drawer */}
                     <div className={cn(
@@ -1776,9 +1782,11 @@ export function LibraryPage() {
                     </section>
                 </div>
 
-                {/* Desktop: Sticky Swiss Sidebar */}
+                {/* Desktop: Filter Overlay */}
                 {showFilterDropdown && (
-                    <aside className="hidden md:block w-72 shrink-0 border-2 border-[var(--color-border)] bg-[var(--color-surface-muted)] animate-in slide-in-from-right-4 duration-300">
+                    <>
+                        <div className="hidden md:block fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
+                        <aside className="hidden md:block w-72 absolute right-0 top-0 z-40 border-2 border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl animate-in slide-in-from-right-4 duration-200 max-h-[80vh] overflow-y-auto">
                         <div className="divide-y-2 divide-[var(--color-border)]">
                             {/* Sort */}
                             <div className="p-5">
@@ -1881,6 +1889,7 @@ export function LibraryPage() {
                             </div>
                         </div>
                     </aside>
+                    </>
                 )}
             </div>
 

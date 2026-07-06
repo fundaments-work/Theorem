@@ -290,35 +290,41 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    const [gridCols, setGridCols] = useState(4);
+    const [observedCols, setObservedCols] = useState(4);
+
+    const computeColumnCount = useCallback((width: number) => {
+        if (viewMode === "list") return 1;
+        if (viewMode === "compact") {
+            if (width >= 1280) return 8;
+            if (width >= 1024) return 6;
+            if (width >= 768) return 5;
+            if (width >= 640) return 4;
+            return 3;
+        }
+        if (width >= 1280) return 6;
+        if (width >= 1024) return 5;
+        if (width >= 768) return 4;
+        if (width >= 640) return 3;
+        return 2;
+    }, [viewMode]);
+
+    const gridCols = useMemo(() => {
+        if (viewMode === "list") return 1;
+        const w = scrollRef.current?.clientWidth;
+        if (!w || w === 0) return observedCols;
+        return computeColumnCount(w);
+    }, [viewMode, observedCols, computeColumnCount]);
 
     useEffect(() => {
         const el = scrollRef.current;
         if (!el) return;
-
-        const computeCols = () => {
-            if (viewMode === "list") return 1;
+        const observer = new ResizeObserver(() => {
             const w = el.clientWidth;
-            if (viewMode === "compact") {
-                if (w >= 1280) return 8;
-                if (w >= 1024) return 6;
-                if (w >= 768) return 5;
-                if (w >= 640) return 4;
-                return 3;
-            }
-            if (w >= 1280) return 6;
-            if (w >= 1024) return 5;
-            if (w >= 768) return 4;
-            if (w >= 640) return 3;
-            return 2;
-        };
-
-        setGridCols(computeCols());
-
-        const observer = new ResizeObserver(() => setGridCols(computeCols()));
+            if (w > 0) setObservedCols(computeColumnCount(w));
+        });
         observer.observe(el);
         return () => observer.disconnect();
-    }, [viewMode]);
+    }, [computeColumnCount]);
 
     const isListView = viewMode === "list";
     const virtualRowCount = isListView
