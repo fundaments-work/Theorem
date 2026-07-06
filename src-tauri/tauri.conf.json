@@ -38,7 +38,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage", "nsis", "dmg"],
+    "targets": "all",
     "category": "Education",
     "publisher": "Fundamentals",
     "homepage": "https://github.com/sapienskid/theorem",
