@@ -24,16 +24,18 @@ export function ImmersionBar({
 }: ImmersionBarProps) {
     const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
     const [hasError, setHasError] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
     const [voices, setVoices] = useState<VoiceInfo[]>([]);
     const errorTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const initializedRef = useRef(false);
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
     const updateTtsSettings = useSettingsStore((s) => s.updateTtsSettings);
 
-    const showError = useCallback(() => {
+    const showError = useCallback((msg?: string) => {
+        setErrorMsg(msg || 'Unknown error');
         setHasError(true);
         clearTimeout(errorTimerRef.current);
-        errorTimerRef.current = setTimeout(() => setHasError(false), 4000);
+        errorTimerRef.current = setTimeout(() => setHasError(false), 8000);
     }, []);
 
     const clearError = useCallback(() => {
@@ -58,8 +60,8 @@ export function ImmersionBar({
             onStateChange: (state) => {
                 setPlaybackState(state);
             },
-            onError: (_msg) => {
-                showError();
+            onError: (msg) => {
+                showError(msg);
             },
             onComplete: () => {
                 onCompleteRef.current?.();
@@ -240,7 +242,7 @@ export function ImmersionBar({
                 <div className="fixed left-1/2 -translate-x-1/2 bottom-[3.5rem] z-50 pointer-events-none">
                     <div className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-error)]/50 shadow-lg">
                         <AlertCircle className="w-3.5 h-3.5 text-[color:var(--color-error)] shrink-0" />
-                        <span className="text-[12px] font-medium text-[color:var(--color-error)] whitespace-nowrap">Something went wrong</span>
+                        <span className="text-[12px] font-medium text-[color:var(--color-error)] whitespace-nowrap">{errorMsg}</span>
                     </div>
                 </div>
             )}
