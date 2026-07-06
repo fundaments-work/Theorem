@@ -98,23 +98,55 @@ export class ImmersionPlayer {
             clearTimeout(this.completeTimer);
             this.completeTimer = null;
         }
-        await tauriInvoke("tts_stop").catch(() => {});
-
-        const elapsedSec = (performance.now() - this.startTime) / 1000;
-        const charsSpoken = Math.floor(elapsedSec * this.charsPerSec);
-        let charCount = 0;
-        let wordsToDrop = 0;
-        for (let i = 0; i < this.fullWords.length; i++) {
-            charCount += this.fullWords[i].length;
-            if (charCount >= charsSpoken) { wordsToDrop = i + 1; break; }
+        // Try real pause first (Linux spd-say supports it). Fall back to stop + estimate.
+        try {
+            await tauriInvoke("tts_pause");
+            // On Linux, real pause succeeded. Start counting elapsed time for resume position.
+            const elapsedMs = performance.now() - this.startTime;
+            const elapsedSec = elapsedMs / 1000;
+            const charsSpoken = Math.floor(elapsedSec * this.charsPerSec);
+            let charCount = 0;
+            let wordsToDrop = 0;
+            for (let i = 0; i < this.fullWords.length; i++) {
+                charCount += this.fullWords[i].length;
+                if (charCount >= charsSpoken) { wordsToDrop = i + 1; break; }
+            }
+            this.fullText = this.fullWords.slice(wordsToDrop).join(" ");
+            this.fullWords = this.fullWords.slice(wordsToDrop);
+        } catch {
+            // Not supported — stop instead and estimate position.
+            await tauriInvoke("tts_stop").catch(() => {});
+            const elapsedSec = (performance.now() - this.startTime) / 1000;
+            const charsSpoken = Math.floor(elapsedSec * this.charsPerSec);
+            let charCount = 0;
+            let wordsToDrop = 0;
+            for (let i = 0; i < this.fullWords.length; i++) {
+                charCount += this.fullWords[i].length;
+                if (charCount >= charsSpoken) { wordsToDrop = i + 1; break; }
+            }
+            this.fullText = this.fullWords.slice(wordsToDrop).join(" ");
+            this.fullWords = this.fullWords.slice(wordsToDrop);
         }
-        this.fullText = this.fullWords.slice(wordsToDrop).join(" ");
-        this.fullWords = this.fullWords.slice(wordsToDrop);
         this.setState('paused');
     }
 
     async resume() {
         if (this._state !== 'paused' || !isTauri()) return;
+        // Try real resume first (Linux spd-say supports it).
+        try {
+            await tauriInvoke("tts_resume");
+            this.startTime = performance.now();
+            const remainingLength = this.fullText.length;
+            const estimatedMs = Math.max(2000, (remainingLength / this.charsPerSec) * 1000);
+            this.completeTimer = setTimeout(() => {
+                this.completeTimer = null;
+                this._onDone();
+            }, estimatedMs);
+            this.setState('playing');
+            return;
+        } catch {
+            // Not supported — re-speak the remaining text.
+        }
         const remaining = this.fullText.trim();
         if (!remaining) { this._onDone(); return; }
         await this.speak(remaining, this.voice);

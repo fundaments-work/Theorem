@@ -206,17 +206,20 @@ export class FoliateEngine {
             if (!doc || !doc.body) continue;
             const body = doc.body as HTMLElement;
             if (visibleRange) {
-                // Extract only the text within the visible range.
-                // cloneContents() creates a DocumentFragment of the visible portion.
-                try {
-                    const fragment = visibleRange.cloneContents();
-                    const wrapper = doc.createElement("div");
-                    wrapper.appendChild(fragment);
-                    wrapper.querySelectorAll('img, svg, figure, script, style, noscript').forEach((e: Element) => e.remove());
-                    fullText += (wrapper.innerText || wrapper.textContent || '') + "\n";
-                } catch {
-                    fullText += (visibleRange.toString() || '') + "\n";
+                // Use toString() first — it's the most reliable cross-platform way
+                // to get visible text. cloneContents() is a backup for formatted text.
+                let rangeText = "";
+                try { rangeText = visibleRange.toString(); } catch { /* ignore */ }
+                if (!rangeText.trim()) {
+                    try {
+                        const fragment = visibleRange.cloneContents();
+                        const wrapper = doc.createElement("div");
+                        wrapper.appendChild(fragment);
+                        wrapper.querySelectorAll('img, svg, figure, script, style, noscript').forEach((e: Element) => e.remove());
+                        rangeText = wrapper.innerText || wrapper.textContent || '';
+                    } catch { /* ignore */ }
                 }
+                fullText += rangeText + "\n";
             } else {
                 fullText += (body.innerText || '') + "\n";
             }

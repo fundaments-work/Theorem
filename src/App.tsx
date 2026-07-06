@@ -100,14 +100,17 @@ function App() {
                 const searchInput = document.querySelector<HTMLInputElement>('input[placeholder*="Search"]');
                 if (searchInput) { searchInput.focus(); searchInput.select(); }
             }},
-            { label: "Clear search",        keys: "Escape", category: "Search",     handler: () => {
-                useUIStore.getState().clearSearch();
-            }},
             // Sidebar
             { label: "Toggle sidebar",      keys: "Ctrl+B", category: "App",        handler: () => {
                 useUIStore.getState().toggleSidebar();
             }},
-            // Reader only — registered conditionally below
+            // Library actions
+            { label: "Select all",          keys: "Ctrl+A", category: "Library",    handler: () => {
+                const route = useUIStore.getState().currentRoute;
+                if (route !== "library" && route !== "shelves" && route !== "bookmarks") return;
+                const toggleSelectMode = (document.querySelector('[data-action="toggle-select-mode"]') as HTMLButtonElement);
+                if (toggleSelectMode) toggleSelectMode.click();
+            }},
         ]);
     }, [setRoute]);
 
