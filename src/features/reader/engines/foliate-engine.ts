@@ -206,11 +206,17 @@ export class FoliateEngine {
             if (!doc || !doc.body) continue;
             const body = doc.body as HTMLElement;
             if (visibleRange) {
-                const clone = body.cloneNode(true) as HTMLElement;
+                // Extract only the text within the visible range.
+                // cloneContents() creates a DocumentFragment of the visible portion.
                 try {
-                    clone.querySelectorAll('img, svg, figure, script, style, noscript').forEach(e => e.remove());
-                } catch {}
-                fullText += (clone.innerText || '') + "\n";
+                    const fragment = visibleRange.cloneContents();
+                    const wrapper = doc.createElement("div");
+                    wrapper.appendChild(fragment);
+                    wrapper.querySelectorAll('img, svg, figure, script, style, noscript').forEach((e: Element) => e.remove());
+                    fullText += (wrapper.innerText || wrapper.textContent || '') + "\n";
+                } catch {
+                    fullText += (visibleRange.toString() || '') + "\n";
+                }
             } else {
                 fullText += (body.innerText || '') + "\n";
             }
