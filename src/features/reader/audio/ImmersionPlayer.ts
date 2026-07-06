@@ -266,7 +266,7 @@ export class ImmersionPlayer {
 
     destroy() {
         this._clearPending();
-        if (isAndroid()) { invoke("tts_stop").catch(() => {}); }
+        if (isAndroid() || isDesktopTauri()) { invoke("tts_stop").catch(() => {}); }
         else if (synthAvailable()) { window.speechSynthesis.cancel(); }
         this.callbacks = {};
     }

@@ -20,14 +20,14 @@ extern "C" {
     ) -> *mut SPDConnection;
 
     fn spd_close(connection: *mut SPDConnection);
-
     fn spd_say(
         connection: *mut SPDConnection,
         priority: SPDPriority,
         text: *const std::os::raw::c_char,
     ) -> i32;
-
     fn spd_stop(connection: *mut SPDConnection) -> i32;
+    fn spd_stop_all(connection: *mut SPDConnection) -> i32;
+    fn spd_cancel_all(connection: *mut SPDConnection) -> i32;
     fn spd_pause(connection: *mut SPDConnection) -> i32;
     fn spd_resume(connection: *mut SPDConnection) -> i32;
 }
@@ -78,8 +78,12 @@ pub fn linux_tts_speak(text: &str) -> Result<(), String> {
 pub fn linux_tts_stop() -> Result<(), String> {
     let guard = CONNECTION.lock().map_err(|e| format!("lock: {e}"))?;
     if let Some(conn) = guard.as_ref() {
+        // stop_all + cancel_all: stops current and clears queue
         unsafe {
-            spd_stop(conn.0);
+            spd_stop_all(conn.0);
+        }
+        unsafe {
+            spd_cancel_all(conn.0);
         }
     }
     Ok(())
@@ -88,8 +92,12 @@ pub fn linux_tts_stop() -> Result<(), String> {
 pub fn linux_tts_pause() -> Result<(), String> {
     let guard = CONNECTION.lock().map_err(|e| format!("lock: {e}"))?;
     if let Some(conn) = guard.as_ref() {
-        unsafe {
-            spd_pause(conn.0);
+        let ret = unsafe { spd_pause(conn.0) };
+        if ret != 0 {
+            // espeak-ng backend doesn't support pause — stop instead
+            unsafe {
+                spd_stop(conn.0);
+            }
         }
     }
     Ok(())
@@ -98,8 +106,9 @@ pub fn linux_tts_pause() -> Result<(), String> {
 pub fn linux_tts_resume() -> Result<(), String> {
     let guard = CONNECTION.lock().map_err(|e| format!("lock: {e}"))?;
     if let Some(conn) = guard.as_ref() {
-        unsafe {
-            spd_resume(conn.0);
+        let ret = unsafe { spd_resume(conn.0) };
+        if ret != 0 {
+            // Can't resume — JS will re-speak from estimated position
         }
     }
     Ok(())
