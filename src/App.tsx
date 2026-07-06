@@ -80,7 +80,7 @@ function App() {
         return registerShortcuts("app", [
             {
                 label: "Show keyboard shortcuts",
-                keys: "?",
+                keys: "Shift+?",
                 category: "App",
                 handler: () => setShowShortcutsHelp((prev) => !prev),
             },

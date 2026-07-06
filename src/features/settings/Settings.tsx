@@ -8,6 +8,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { cn, normalizeFilePath, formatFileSize } from "../../core/lib/utils";
 import { isMobile, isTauri, isTauriDesktop } from "../../core/lib/env";
+import { getAllShortcuts, formatShortcutKeys } from "../../core/lib/keyboard-shortcuts";
 import {
     showOpenDirectoryDialog,
     showSaveFileDialog,
@@ -51,9 +52,10 @@ import {
     AlertCircle,
     CheckCircle2,
     Loader2,
+    Keyboard,
 } from "lucide-react";
 
-type SettingsTab = "general" | "dictionary" | "integrations" | "storage" | "about";
+type SettingsTab = "general" | "dictionary" | "integrations" | "storage" | "shortcuts" | "about";
 const SETTINGS_TAB_SESSION_KEY = "theorem-settings:active-tab";
 const SETTINGS_FOCUS_SECTION_SESSION_KEY = "theorem-settings:focus-section";
 
@@ -737,6 +739,7 @@ export function SettingsPage() {
         { id: "dictionary" as const, label: "Dictionary" },
         { id: "integrations" as const, label: "Devices & Export" },
         { id: "storage" as const, label: "Data & Storage" },
+        { id: "shortcuts" as const, label: "Shortcuts" },
         { id: "about" as const, label: "About" },
     ];
 
@@ -1396,6 +1399,36 @@ export function SettingsPage() {
 
             {/* Storage Settings */}
             {activeTab === "storage" && <StorageTab onClearData={handleClearData} onExportData={handleExportData} />}
+
+            {activeTab === "shortcuts" && (
+                <div className="space-y-8">
+                    <Section
+                        title="Keyboard Shortcuts"
+                        description="Available shortcuts throughout the app"
+                        icon={<Keyboard className="w-5 h-5" />}
+                    >
+                        <div className="space-y-6">
+                            {(() => {
+                                const all = getAllShortcuts();
+                                const categories = [...new Set(all.map(s => s.category))];
+                                return categories.map(cat => (
+                                    <div key={cat}>
+                                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-2">{cat}</h3>
+                                        <div className="space-y-1">
+                                            {all.filter(s => s.category === cat).map(s => (
+                                                <div key={s.label} className="flex items-center justify-between py-1.5 px-3 bg-[var(--color-surface-muted)] text-xs">
+                                                    <span className="text-[color:var(--color-text-primary)]">{s.label}</span>
+                                                    <kbd className="px-2 py-0.5 text-[10px] font-mono bg-[var(--color-surface)] border border-[var(--color-border)] text-[color:var(--color-accent)]">{formatShortcutKeys(s.keys)}</kbd>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ));
+                            })()}
+                        </div>
+                    </Section>
+                </div>
+            )}
 
             {activeTab === "about" && (
                 <div className="space-y-8">
