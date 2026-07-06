@@ -885,32 +885,38 @@ export function SettingsPage() {
                     >
                         <SettingRow
                             label="Enable Text-to-Speech"
-                            description="Use system voice to read books aloud"
+                            description={isTauri() ? "Use system voice to read books aloud" : "Not available in web browser"}
                         >
-                            <Toggle
-                                checked={settings.tts.enabled}
-                                onChange={(checked) => updateTtsSettings({ enabled: checked })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Voice"
-                            description="Your system's text-to-speech voice"
-                        >
-                            {availableVoices.length > 0 ? (
-                                <Dropdown
-                                    value={settings.tts.voice}
-                                    onChange={(v) => updateTtsSettings({ voice: v })}
-                                    options={availableVoices.map(v => ({ value: v.name, label: v.name }))}
-                                    variant="filled"
-                                    size="sm"
+                            {isTauri() ? (
+                                <Toggle
+                                    checked={settings.tts.enabled}
+                                    onChange={(checked) => updateTtsSettings({ enabled: checked })}
                                 />
                             ) : (
-                                <span className="text-[11px] text-[color:var(--color-text-muted)]">
-                                    {settings.tts.voice || 'Loading voices\u2026'}
-                                </span>
+                                <span className="text-[11px] font-medium text-[color:var(--color-text-muted)]">Off</span>
                             )}
                         </SettingRow>
+
+                        {isTauri() && (
+                            <SettingRow
+                                label="Voice"
+                                description="Your system's text-to-speech voice"
+                            >
+                                {availableVoices.length > 0 ? (
+                                    <Dropdown
+                                        value={settings.tts.voice}
+                                        onChange={(v) => updateTtsSettings({ voice: v })}
+                                        options={availableVoices.map(v => ({ value: v.name, label: v.name }))}
+                                        variant="filled"
+                                        size="sm"
+                                    />
+                                ) : (
+                                    <span className="text-[11px] text-[color:var(--color-text-muted)]">
+                                        {settings.tts.voice || 'Loading voices\u2026'}
+                                    </span>
+                                )}
+                            </SettingRow>
+                        )}
                     </Section>
 
                     <Section
