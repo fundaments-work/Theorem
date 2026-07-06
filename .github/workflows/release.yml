@@ -409,15 +409,6 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup WiX Toolset
-        shell: pwsh
-        run: |
-          # WiX v3 is required by Tauri for MSI bundling
-          $wixPath = "$env:RUNNER_TEMP\wix"
-          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip" -OutFile "$env:RUNNER_TEMP\wix.zip"
-          Expand-Archive "$env:RUNNER_TEMP\wix.zip" -DestinationPath $wixPath
-          echo "$wixPath" | Out-File -FilePath $env:GITHUB_PATH -Append
-
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
