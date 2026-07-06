@@ -2191,6 +2191,8 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                 { value: 'fitP', label: 'Fit Page' },
                                 { value: '100', label: '100%' },
                             ]}
+                            value={String(Math.round(scale * 100))}
+                            placeholder={`${Math.round(scale * 100)}%`}
                             onChange={(v) => {
                                 if (v === 'fitW' && containerRef.current && firstLoadedPage) {
                                     applyZoom(getFitWidthScale(containerRef.current, firstLoadedPage), { mode: "width-fit", preserveMode: true });
@@ -2200,7 +2202,6 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                     applyZoom(DEFAULT_SCALE, { mode: "custom" });
                                 }
                             }}
-                            placeholder={`${Math.round(scale * 100)}%`}
                             size="sm"
                             variant="default"
                             align="right"
