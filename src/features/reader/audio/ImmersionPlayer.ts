@@ -103,8 +103,7 @@ export class ImmersionPlayer {
                 this._onDone();
             }, estimatedMs);
         } catch (err: unknown) {
-            this._onDone();
-            this.callbacks.onError?.(err instanceof Error ? err.message : String(err));
+            this._onError(err instanceof Error ? err.message : String(err));
         }
     }
 
@@ -142,8 +141,7 @@ export class ImmersionPlayer {
                 this._onDone();
             }, estimatedMs);
         } catch (err: unknown) {
-            this._onDone();
-            this.callbacks.onError?.(err instanceof Error ? err.message : String(err));
+            this._onError(err instanceof Error ? err.message : String(err));
         }
     }
 
@@ -226,6 +224,13 @@ export class ImmersionPlayer {
         this.fullText = ''; this.fullWords = []; this.voice = null;
         this.setState('idle');
         this.callbacks.onComplete?.();
+    }
+
+    private _onError(msg: string) {
+        this.fullText = ''; this.fullWords = []; this.voice = null;
+        this.setState('idle');
+        this.callbacks.onError?.(msg);
+        // Do NOT call onComplete — don't auto-advance on error.
     }
 
     // ─── Voices ───

@@ -8,11 +8,7 @@ type SPDConnection = std::ffi::c_void;
 #[repr(i32)]
 #[allow(non_camel_case_types, dead_code)]
 enum SPDPriority {
-    Important = 1,
-    Message = 2,
     Text = 3,
-    Notification = 4,
-    Progress = 5,
 }
 
 extern "C" {
@@ -58,7 +54,7 @@ fn ensure_connection() -> Result<(), String> {
         unsafe {
             let conn = spd_open(name.as_ptr(), std::ptr::null(), std::ptr::null(), 0);
             if conn.is_null() {
-                return Err("spd_open failed: speech-dispatcher not running?".into());
+                return Err("spd_open returned null — is speech-dispatcher running? Try: systemctl --user status speech-dispatcher".into());
             }
             *guard = Some(Conn(conn));
         }
@@ -73,7 +69,7 @@ pub fn linux_tts_speak(text: &str) -> Result<(), String> {
     let c_text = CString::new(text).map_err(|e| format!("text: {e}"))?;
     let ret = unsafe { spd_say(conn.0, SPDPriority::Text, c_text.as_ptr()) };
     if ret != 0 {
-        Err(format!("spd_say returned {ret}"))
+        Err(format!("spd_say returned error code {}", ret))
     } else {
         Ok(())
     }
