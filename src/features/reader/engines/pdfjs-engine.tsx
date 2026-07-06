@@ -160,6 +160,7 @@ const PDF_SEARCH_FALLBACK_PAGE_CHAR_LIMIT = 8_000;
 //          At 8000 chars/page a 500-page PDF was allocating ~4 MB just for this
 //          array; 600 KB is more than enough for Fuse.js to rank results well.
 const PDF_SEARCH_FALLBACK_TOTAL_CHAR_BUDGET = 600_000;
+const PDF_SEARCH_MAX_PAGES_SCANNED = 500;
 
 const PDF_SEARCH_EXCERPT_CONTEXT_CHARS = 80;
 const PDF_SEARCH_EXACT_SCAN_PROGRESS_WEIGHT = 0.9;
@@ -1429,10 +1430,12 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             // FIX 3: track total chars to enforce budget
             let searchablePagesCharTotal = 0;
             let exactMatchCount = 0;
+            let pagesScanned = 0;
             const totalPageCount = Math.max(1, activePdfDocument.numPages);
 
             for (let pageNumber = 1; pageNumber <= totalPageCount; pageNumber++) {
                 if (searchSessionRef.current !== sessionId) return;
+                pagesScanned++;
                 let pageText = "";
                 try {
                     if (!activePdfDocument || searchSessionRef.current !== sessionId) return;
@@ -1463,6 +1466,10 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 }
                 yield { progress: (pageNumber / totalPageCount) * PDF_SEARCH_EXACT_SCAN_PROGRESS_WEIGHT };
                 if (exactMatchCount >= PDF_SEARCH_EXACT_LIMIT) break;
+                if (pagesScanned >= PDF_SEARCH_MAX_PAGES_SCANNED && searchablePages.length > 0) {
+                    yield { progress: PDF_SEARCH_EXACT_SCAN_PROGRESS_WEIGHT };
+                    break;
+                }
             }
 
             if (searchSessionRef.current !== sessionId) return;
@@ -2167,20 +2174,31 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     </div>
                 </div>
                 {!isLoading && !error && totalPages > 0 && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none px-3 py-1.5 bg-[var(--color-surface)]/90 backdrop-blur-md border border-[var(--color-border)] text-xs sm:text-sm text-[color:var(--color-text-secondary)] shadow-lg shadow-black/5">
-                        <span className="font-medium text-[color:var(--color-text-primary)]">{currentPage}</span>
-                        <span className="mx-1 text-[color:var(--color-text-muted)]">/</span>
-                        <span>{totalPages}</span>
-                        <span className="mx-2 w-px h-3 bg-[var(--color-border)] hidden sm:inline-block" />
-                        <button
-                            type="button"
-                            onClick={() => { applyZoom(DEFAULT_SCALE, { mode: "custom" }); }}
-                            className="hidden sm:inline-flex opacity-80 hover:opacity-100 transition-opacity pointer-events-auto [font-variant-numeric:tabular-nums]"
-                            aria-label="Reset zoom to 100 percent"
-                            title="Reset zoom to 100%"
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 px-2 py-1.5 bg-[var(--color-surface)]/90 backdrop-blur-md border border-[var(--color-border)] text-[11px] text-[color:var(--color-text-secondary)] shadow-lg shadow-black/5 flex items-center gap-2">
+                        <span className="font-medium text-[color:var(--color-text-primary)] tabular-nums">{currentPage}</span>
+                        <span className="text-[color:var(--color-text-muted)]">/</span>
+                        <span className="tabular-nums">{totalPages}</span>
+                        <span className="mx-0.5 w-px h-3 bg-[var(--color-border)]" />
+                        <select
+                            value={`${Math.round(scale * 100)}`}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === 'fitW' && containerRef.current && firstLoadedPage) {
+                                    applyZoom(getFitWidthScale(containerRef.current, firstLoadedPage), { mode: "width-fit", preserveMode: true });
+                                } else if (v === 'fitP' && containerRef.current && firstLoadedPage) {
+                                    applyZoom(getFitPageScale(containerRef.current, firstLoadedPage), { mode: "page-fit", preserveMode: true });
+                                } else if (v === '100') {
+                                    applyZoom(DEFAULT_SCALE, { mode: "custom" });
+                                }
+                            }}
+                            className="bg-transparent text-[10px] font-medium tabular-nums text-[color:var(--color-text-primary)] border-0 outline-none cursor-pointer appearance-none hover:opacity-100 opacity-80 transition-opacity"
+                            title="Zoom"
                         >
-                            {Math.round(scale * 100)}%
-                        </button>
+                            <option value={`${Math.round(scale * 100)}`} disabled className="text-[color:var(--color-text-muted)] bg-[var(--color-surface)]">{Math.round(scale * 100)}%</option>
+                            <option value="fitW" className="bg-[var(--color-surface)] text-[color:var(--color-text-primary)]">Fit Width</option>
+                            <option value="fitP" className="bg-[var(--color-surface)] text-[color:var(--color-text-primary)]">Fit Page</option>
+                            <option value="100" className="bg-[var(--color-surface)] text-[color:var(--color-text-primary)]">100%</option>
+                        </select>
                     </div>
                 )}
             </div>

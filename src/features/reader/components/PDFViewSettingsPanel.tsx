@@ -1,4 +1,4 @@
-import { Maximize2, RotateCw, SlidersHorizontal, X, ZoomIn, ZoomOut, ScrollText, Columns } from "lucide-react";
+import { Maximize2, RotateCw, SlidersHorizontal, X, ZoomIn, ZoomOut, ScrollText, PanelBottomOpen } from "lucide-react";
 import { cn } from "../../../core/lib/utils";
 import type { PdfZoomMode } from "../../../core/types";
 import { Backdrop, FloatingPanel } from "../../../ui";
@@ -161,7 +161,7 @@ export function PDFViewSettingsPanel({
                                     data-active={presentationMode === 'paged'}
                                 >
                                     <span className="inline-flex items-center justify-center gap-1.5">
-                                        <Columns className="w-4 h-4" />
+                                        <PanelBottomOpen className="w-4 h-4" />
                                         <span>Paged</span>
                                     </span>
                                 </button>
