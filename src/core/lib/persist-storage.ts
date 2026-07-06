@@ -9,6 +9,12 @@ const inMemoryPersistCache = new Map<string, string | null>();
 const pendingPersistWrites = new Map<string, string>();
 const pendingPersistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let flushHandlersInstalled = false;
+const PERSIST_CACHE_MAX_ENTRY_CHARS = 500_000;
+
+function setPersistCacheEntry(name: string, value: string | null): void {
+    if (value && value.length > PERSIST_CACHE_MAX_ENTRY_CHARS) return;
+    inMemoryPersistCache.set(name, value);
+}
 
 function asSqlitePersistKey(name: string): string {
     return `${SQLITE_PERSIST_KEY_PREFIX}${name}`;
@@ -125,7 +131,7 @@ export const theoremPersistStorage: StateStorage = {
 
         if (!isTauri()) {
             const localValue = getLocalItem(name);
-            inMemoryPersistCache.set(name, localValue);
+            setPersistCacheEntry(name, localValue);
             return localValue;
         }
 
@@ -134,29 +140,29 @@ export const theoremPersistStorage: StateStorage = {
         try {
             const sqliteValue = await sqliteGetKv(sqliteKey);
             if (sqliteValue != null) {
-                inMemoryPersistCache.set(name, sqliteValue);
+                setPersistCacheEntry(name, sqliteValue);
                 return sqliteValue;
             }
 
             const legacyValue = getLocalItem(name);
             if (legacyValue != null) {
-                inMemoryPersistCache.set(name, legacyValue);
+                setPersistCacheEntry(name, legacyValue);
                 await sqliteSetKv(sqliteKey, legacyValue);
                 return legacyValue;
             }
 
-            inMemoryPersistCache.set(name, null);
+            setPersistCacheEntry(name, null);
             return null;
         } catch (error) {
             const fallbackValue = getLocalItem(name);
-            inMemoryPersistCache.set(name, fallbackValue);
+            setPersistCacheEntry(name, fallbackValue);
             return fallbackValue;
         }
     },
 
     async setItem(name, value) {
         installFlushHandlers();
-        inMemoryPersistCache.set(name, value);
+        setPersistCacheEntry(name, value);
         schedulePersistWrite(name, value);
     },
 
