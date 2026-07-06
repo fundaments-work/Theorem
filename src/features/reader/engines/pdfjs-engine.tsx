@@ -36,6 +36,7 @@ import { isTauri, isWebKitBrowserEngine } from "../../../core/lib/env";
 import { configurePdfJsWorker } from "../../../core/lib/pdfjs-runtime";
 import { rankByFuzzyQuery } from "../../../core/lib/search/fuzzy";
 import * as pdfjsLib from "pdfjs-dist";
+import { Dropdown } from "../../../ui";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import type { Annotation, HighlightColor, PdfZoomMode, SearchResult, TocItem } from "../../../core/types";
@@ -1168,6 +1169,11 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const [rotation, setRotation] = useState(0);
         const [presentationMode, setPresentationModeState] = useState<'scroll' | 'paged'>(initialPresentationMode);
         const presentationModeRef = useRef<'scroll' | 'paged'>(initialPresentationMode);
+
+        useEffect(() => {
+            setPresentationModeState(initialPresentationMode);
+            presentationModeRef.current = initialPresentationMode;
+        }, [initialPresentationMode]);
         const [isViewportInteracting, setIsViewportInteracting] = useState(false);
         const [isInitialRenderStabilizing, setIsInitialRenderStabilizing] = useState(false);
         const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
@@ -2179,26 +2185,42 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         <span className="text-[color:var(--color-text-muted)]">/</span>
                         <span className="tabular-nums">{totalPages}</span>
                         <span className="mx-0.5 w-px h-3 bg-[var(--color-border)]" />
-                        <select
-                            value={`${Math.round(scale * 100)}`}
-                            onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === 'fitW' && containerRef.current && firstLoadedPage) {
-                                    applyZoom(getFitWidthScale(containerRef.current, firstLoadedPage), { mode: "width-fit", preserveMode: true });
-                                } else if (v === 'fitP' && containerRef.current && firstLoadedPage) {
-                                    applyZoom(getFitPageScale(containerRef.current, firstLoadedPage), { mode: "page-fit", preserveMode: true });
-                                } else if (v === '100') {
-                                    applyZoom(DEFAULT_SCALE, { mode: "custom" });
-                                }
-                            }}
-                            className="bg-transparent text-[10px] font-medium tabular-nums text-[color:var(--color-text-primary)] border-0 outline-none cursor-pointer appearance-none hover:opacity-100 opacity-80 transition-opacity"
-                            title="Zoom"
-                        >
-                            <option value={`${Math.round(scale * 100)}`} disabled className="text-[color:var(--color-text-muted)] bg-[var(--color-surface)]">{Math.round(scale * 100)}%</option>
-                            <option value="fitW" className="bg-[var(--color-surface)] text-[color:var(--color-text-primary)]">Fit Width</option>
-                            <option value="fitP" className="bg-[var(--color-surface)] text-[color:var(--color-text-primary)]">Fit Page</option>
-                            <option value="100" className="bg-[var(--color-surface)] text-[color:var(--color-text-primary)]">100%</option>
-                        </select>
+                        <div className="relative flex items-center gap-1">
+                            <button
+                                type="button"
+                                className="tabular-nums text-[10px] font-medium text-[color:var(--color-text-primary)] opacity-80 hover:opacity-100 transition-opacity"
+                                title="Fit width"
+                                onClick={() => {
+                                    if (containerRef.current && firstLoadedPage) {
+                                        applyZoom(getFitWidthScale(containerRef.current, firstLoadedPage), { mode: "width-fit", preserveMode: true });
+                                    }
+                                }}
+                            >
+                                {Math.round(scale * 100)}%
+                            </button>
+                            <Dropdown
+                                options={[
+                                    { value: 'fitW', label: 'Fit Width' },
+                                    { value: 'fitP', label: 'Fit Page' },
+                                    { value: '100', label: '100%' },
+                                ]}
+                                onChange={(v) => {
+                                    if (v === 'fitW' && containerRef.current && firstLoadedPage) {
+                                        applyZoom(getFitWidthScale(containerRef.current, firstLoadedPage), { mode: "width-fit", preserveMode: true });
+                                    } else if (v === 'fitP' && containerRef.current && firstLoadedPage) {
+                                        applyZoom(getFitPageScale(containerRef.current, firstLoadedPage), { mode: "page-fit", preserveMode: true });
+                                    } else if (v === '100') {
+                                        applyZoom(DEFAULT_SCALE, { mode: "custom" });
+                                    }
+                                }}
+                                size="sm"
+                                variant="default"
+                                align="right"
+                                showCheckmark={false}
+                                placeholder=""
+                                className="[&_button]:w-auto [&_button]:px-1 [&_button]:py-0.5 [&_button]:text-[10px] [&_span]:hidden"
+                            />
+                        </div>
                     </div>
                 )}
             </div>
