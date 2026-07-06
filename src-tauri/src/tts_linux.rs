@@ -27,13 +27,3 @@ pub fn linux_tts_stop() -> Result<(), String> {
         .ok();
     Ok(())
 }
-
-pub fn linux_tts_pause() -> Result<(), String> {
-    // spd-say has no pause flag. Stop instead — JS handles position estimation.
-    linux_tts_stop()
-}
-
-pub fn linux_tts_resume() -> Result<(), String> {
-    // Resume after stop: JS re-speaks from estimated position.
-    Ok(())
-}

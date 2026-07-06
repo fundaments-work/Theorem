@@ -860,9 +860,7 @@ fn apply_linux_webkit_workarounds() {
 }
 
 // ─── TTS Commands ───
-// Linux: libspeechd FFI (real pause/resume/stop).
-// Android: TextToSpeech plugin.
-// macOS/Windows: JS Web Speech API handles playback (no-op here).
+// Linux: spd-say CLI. macOS: say command. Windows: PowerShell SAPI. Android: plugin.
 
 #[tauri::command]
 fn tts_speak(_app: tauri::AppHandle, text: String, _voice: String) -> Result<(), String> {
@@ -870,11 +868,26 @@ fn tts_speak(_app: tauri::AppHandle, text: String, _voice: String) -> Result<(),
     return tauri_plugin_android_tts_audio::tts_speak(&app, text, voice);
     #[cfg(target_os = "linux")]
     return tts_linux::linux_tts_speak(&text);
-    #[cfg(not(any(target_os = "android", target_os = "linux")))]
+    #[cfg(target_os = "macos")]
     {
-        let _ = (app, text, voice);
-        Ok(())
+        let mut c = std::process::Command::new("say");
+        if !voice.is_empty() {
+            c.arg("-v").arg(&voice);
+        }
+        c.arg(&text)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        c.spawn().map_err(|e| format!("say: {e}"))?;
     }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("powershell").args([
+            "-NoProfile", "-Command",
+            &format!(r#"Add-Type -AssemblyName System.Speech; $s=New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak('{}')"#, text.replace('"', "'")),
+        ]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
+        .spawn().map_err(|e| format!("TTS: {e}"))?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -883,51 +896,45 @@ fn tts_stop(_app: tauri::AppHandle) -> Result<(), String> {
     return tauri_plugin_android_tts_audio::tts_stop(&app);
     #[cfg(target_os = "linux")]
     return tts_linux::linux_tts_stop();
-    #[cfg(not(any(target_os = "android", target_os = "linux")))]
+    #[cfg(target_os = "macos")]
     {
-        let _ = app;
-        Ok(())
+        std::process::Command::new("killall")
+            .arg("say")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .ok();
     }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "powershell.exe"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .ok();
+    }
+    Ok(())
 }
 
 #[tauri::command]
-fn tts_pause(_app: tauri::AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return tauri_plugin_android_tts_audio::tts_stop(&app);
-    #[cfg(target_os = "linux")]
-    return tts_linux::linux_tts_pause();
-    #[cfg(not(any(target_os = "android", target_os = "linux")))]
-    {
-        let _ = app;
-        Ok(())
-    }
+fn tts_pause(app: tauri::AppHandle) -> Result<(), String> {
+    tts_stop(app)
 }
 
 #[tauri::command]
 fn tts_resume(_app: tauri::AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return Ok(());
-    #[cfg(target_os = "linux")]
-    return tts_linux::linux_tts_resume();
-    #[cfg(not(any(target_os = "android", target_os = "linux")))]
-    {
-        let _ = app;
-        Ok(())
-    }
+    Ok(())
 }
 
 #[tauri::command]
 fn tts_get_voices(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
     #[cfg(target_os = "android")]
     return tauri_plugin_android_tts_audio::tts_get_voices(&app);
-    #[cfg(not(target_os = "android"))]
-    {
-        let _ = app;
-        Ok(Vec::new())
-    }
+    let _ = app;
+    Ok(Vec::new())
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
     apply_linux_webkit_workarounds();
