@@ -3,7 +3,7 @@
  * App configuration and preferences
  */
 
-import { useRef, useState, useEffect, type ChangeEvent } from "react";
+import { useRef, useState, useEffect, memo, type ChangeEvent } from "react";
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { cn, normalizeFilePath, formatFileSize } from "../../core/lib/utils";
@@ -186,6 +186,137 @@ function ButtonSelect<T extends string>({
     );
 }
 
+const StorageTab = memo(function StorageTab({ onClearData, onExportData }: { onClearData: () => void; onExportData: () => void }) {
+    const books = useLibraryStore((s) => s.books);
+    const annotations = useLibraryStore((s) => s.annotations);
+    const installedDictionaries = useVocabularyStore((s) => s.installedDictionaries);
+    const [rssStats, setRssStats] = useState<{ articleCount: number; totalSize: number }>({ articleCount: 0, totalSize: 0 });
+
+    useEffect(() => {
+        getRssStorageStats().then(setRssStats);
+    }, []);
+
+    const totalStorage = books.reduce((acc, b) => acc + b.fileSize, 0);
+    const offlineDictionarySize = installedDictionaries.reduce((acc, d) => acc + d.sizeBytes, 0);
+
+    return (
+        <div className="space-y-8">
+            <Section
+                title="Storage Usage"
+                description="Manage your data and storage"
+                icon={<Database className="w-5 h-5" />}
+            >
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
+                        <div className="flex items-center gap-3">
+                            <BookOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
+                            <div>
+                                <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Books</p>
+                                <p className="text-xs text-[color:var(--color-text-muted)]">
+                                    {books.length} {books.length === 1 ? "book" : "books"}
+                                </p>
+                            </div>
+                        </div>
+                        <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
+                            {formatFileSize(totalStorage)}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
+                        <div className="flex items-center gap-3">
+                            <FolderOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
+                            <div>
+                                <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Highlights & Notes</p>
+                                <p className="text-xs text-[color:var(--color-text-muted)]">
+                                    {annotations.length} {annotations.length === 1 ? "annotation" : "annotations"}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
+                        <div className="flex items-center gap-3">
+                            <Rss className="w-5 h-5 text-[color:var(--color-text-muted)]" />
+                            <div>
+                                <p className="font-medium text-sm text-[color:var(--color-text-primary)]">RSS Articles</p>
+                                <p className="text-xs text-[color:var(--color-text-muted)]">
+                                    {rssStats.articleCount} {rssStats.articleCount === 1 ? "article" : "articles"} cached
+                                </p>
+                            </div>
+                        </div>
+                        <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
+                            {formatFileSize(rssStats.totalSize)}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
+                        <div className="flex items-center gap-3">
+                            <Languages className="w-5 h-5 text-[color:var(--color-text-muted)]" />
+                            <div>
+                                <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Offline Dictionaries</p>
+                                <p className="text-xs text-[color:var(--color-text-muted)]">
+                                    {installedDictionaries.length > 0
+                                        ? `${installedDictionaries.length} installed`
+                                        : "None installed"}
+                                </p>
+                            </div>
+                        </div>
+                        <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
+                            {formatFileSize(offlineDictionarySize)}
+                        </span>
+                    </div>
+                </div>
+            </Section>
+
+            <Section
+                title="Data Management"
+                description="Clear app data or create a backup file"
+                icon={<Trash2 className="w-5 h-5" />}
+            >
+                <div className="space-y-3">
+                    <button
+                        onClick={onClearData}
+                        className={cn(
+                            "w-full flex items-center gap-3 p-4",
+                            "border border-[var(--color-error)]/20",
+                            "text-[color:var(--color-error)] hover:bg-[var(--color-error)]/5",
+                            "transition-colors text-left"
+                        )}
+                    >
+                        <AlertTriangle className="w-5 h-5" />
+                        <div className="flex-1">
+                            <p className="font-medium text-sm">Clear All Data</p>
+                            <p className="text-xs opacity-80">
+                                Delete all books, highlights, vocabulary, and settings. This cannot be undone.
+                            </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
+
+                    <button
+                        onClick={onExportData}
+                        className={cn(
+                            "w-full flex items-center gap-3 p-4",
+                            "border border-[var(--color-border)]",
+                            "text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]",
+                            "transition-colors text-left"
+                        )}
+                    >
+                        <Download className="w-5 h-5" />
+                        <div className="flex-1">
+                            <p className="font-medium text-sm">Create Backup File</p>
+                            <p className="text-xs text-[color:var(--color-text-muted)]">
+                                Save a full backup bundle with books, highlights, vocabulary, RSS, and dictionaries
+                            </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
+                </div>
+            </Section>
+        </div>
+    );
+});
+
 // Main page component
 export function SettingsPage() {
     const settings = useSettingsStore((state) => state.settings);
@@ -195,9 +326,6 @@ export function SettingsPage() {
     const resetSettings = useSettingsStore((state) => state.resetSettings);
     const stats = useSettingsStore((state) => state.stats);
     const updateStats = useSettingsStore((state) => state.updateStats);
-    const books = useLibraryStore((state) => state.books);
-    const annotations = useLibraryStore((state) => state.annotations);
-    const articles = useRssStore((state) => state.articles);
     const highlightsExportName = normalizeHighlightsExportName(settings.vault.highlightsFileName);
     const primaryLibraryFolder = settings.scanFolders[0] || "";
     const isMobilePlatform = isMobile();
@@ -205,10 +333,9 @@ export function SettingsPage() {
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
     const vaultSyncMessage = useUIStore((state) => state.vaultSyncMessage);
     const vaultSyncAt = useUIStore((state) => state.vaultSyncAt);
-    const vocabularyTerms = useVocabularyStore((state) => state.vocabularyTerms);
-    const installedDictionaries = useVocabularyStore((state) => state.installedDictionaries);
     const importStarDict = useVocabularyStore((state) => state.importStarDict);
     const removeDictionary = useVocabularyStore((state) => state.removeDictionary);
+    const installedDictionaries = useVocabularyStore((state) => state.installedDictionaries);
     const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
         if (typeof window === "undefined") {
             return "general";
@@ -355,18 +482,6 @@ export function SettingsPage() {
 
     const deviceSyncSectionRef = useRef<HTMLDivElement | null>(null);
     const markdownExportSectionRef = useRef<HTMLDivElement | null>(null);
-
-    const totalStorage = books.reduce((acc, b) => acc + b.fileSize, 0);
-    const offlineDictionarySize = installedDictionaries.reduce(
-        (acc, dictionary) => acc + dictionary.sizeBytes,
-        0,
-    );
-
-    const [rssStats, setRssStats] = useState<{ articleCount: number; totalSize: number }>({ articleCount: 0, totalSize: 0 });
-
-    useEffect(() => {
-        getRssStorageStats().then(setRssStats);
-    }, []);
 
     useEffect(() => {
         if (typeof window === "undefined") {
@@ -542,11 +657,14 @@ export function SettingsPage() {
             enabled: settings.vault.vaultPath.trim().length > 0,
             autoExportHighlights: true,
         };
+        const libraryState = useLibraryStore.getState();
+        const vocabularyState = useVocabularyStore.getState();
+        const rssState = useRssStore.getState();
         const result = await syncVaultMarkdownSnapshot({
-            books,
-            annotations,
-            rssArticles: articles,
-            vocabularyTerms,
+            books: libraryState.books,
+            annotations: libraryState.annotations,
+            rssArticles: rssState.articles,
+            vocabularyTerms: vocabularyState.vocabularyTerms,
             settings: normalizedVaultSettings,
         });
 
@@ -1277,122 +1395,7 @@ export function SettingsPage() {
             )}
 
             {/* Storage Settings */}
-            {activeTab === "storage" && (
-                <div className="space-y-8">
-                    <Section
-                        title="Storage Usage"
-                        description="Manage your data and storage"
-                        icon={<Database className="w-5 h-5" />}
-                    >
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
-                                <div className="flex items-center gap-3">
-                                    <BookOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
-                                    <div>
-                                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Books</p>
-                                        <p className="text-xs text-[color:var(--color-text-muted)]">
-                                            {books.length} {books.length === 1 ? "book" : "books"}
-                                        </p>
-                                    </div>
-                                </div>
-                                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
-                                    {formatFileSize(totalStorage)}
-                                </span>
-                            </div>
-
-                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
-                                <div className="flex items-center gap-3">
-                                    <FolderOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
-                                    <div>
-                                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Highlights & Notes</p>
-                                        <p className="text-xs text-[color:var(--color-text-muted)]">
-                                            {annotations.length} {annotations.length === 1 ? "annotation" : "annotations"}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
-                                <div className="flex items-center gap-3">
-                                    <Rss className="w-5 h-5 text-[color:var(--color-text-muted)]" />
-                                    <div>
-                                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">RSS Articles</p>
-                                        <p className="text-xs text-[color:var(--color-text-muted)]">
-                                            {rssStats.articleCount} {rssStats.articleCount === 1 ? "article" : "articles"} cached
-                                        </p>
-                                    </div>
-                                </div>
-                                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
-                                    {formatFileSize(rssStats.totalSize)}
-                                </span>
-                            </div>
-
-                            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-muted)]">
-                                <div className="flex items-center gap-3">
-                                    <Languages className="w-5 h-5 text-[color:var(--color-text-muted)]" />
-                                    <div>
-                                        <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Offline Dictionaries</p>
-                                        <p className="text-xs text-[color:var(--color-text-muted)]">
-                                            {installedDictionaries.length > 0
-                                                ? `${installedDictionaries.length} installed`
-                                                : "None installed"}
-                                        </p>
-                                    </div>
-                                </div>
-                                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
-                                    {formatFileSize(offlineDictionarySize)}
-                                </span>
-                            </div>
-                        </div>
-                    </Section>
-
-                    <Section
-                        title="Data Management"
-                        description="Clear app data or create a backup file"
-                        icon={<Trash2 className="w-5 h-5" />}
-                    >
-                        <div className="space-y-3">
-                            <button
-                                onClick={handleClearData}
-                                className={cn(
-                                    "w-full flex items-center gap-3 p-4",
-                                    "border border-[var(--color-error)]/20",
-                                    "text-[color:var(--color-error)] hover:bg-[var(--color-error)]/5",
-                                    "transition-colors text-left"
-                                )}
-                            >
-                                <AlertTriangle className="w-5 h-5" />
-                                <div className="flex-1">
-                                    <p className="font-medium text-sm">Clear All Data</p>
-                                    <p className="text-xs opacity-80">
-                                        Delete all books, highlights, vocabulary, and settings. This cannot be undone.
-                                    </p>
-                                </div>
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-
-                            <button
-                                onClick={handleExportData}
-                                className={cn(
-                                    "w-full flex items-center gap-3 p-4",
-                                    "border border-[var(--color-border)]",
-                                    "text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]",
-                                    "transition-colors text-left"
-                                )}
-                            >
-                                <Download className="w-5 h-5" />
-                                <div className="flex-1">
-                                    <p className="font-medium text-sm">Create Backup File</p>
-                                    <p className="text-xs text-[color:var(--color-text-muted)]">
-                                        Save a full backup bundle with books, highlights, vocabulary, RSS, and dictionaries
-                                    </p>
-                                </div>
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </Section>
-                </div>
-            )}
+            {activeTab === "storage" && <StorageTab onClearData={handleClearData} onExportData={handleExportData} />}
 
             {activeTab === "about" && (
                 <div className="space-y-8">
