@@ -86,11 +86,11 @@ pub fn tts_stop<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
 #[cfg(target_os = "android")]
 pub fn tts_get_voices<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<serde_json::Value>, String> {
     let state = get_audio_state(app)?;
-    let result = state
+    let result: serde_json::Value = state
         .handle
-        .run_mobile_plugin::<Vec<serde_json::Value>>("getVoices", serde_json::json!({}))
+        .run_mobile_plugin("getVoices", serde_json::json!({}))
         .map_err(|error| error.to_string())?;
-    Ok(result)
+    Ok(result["voices"].as_array().cloned().unwrap_or_default())
 }
 
 #[cfg(not(target_os = "android"))]

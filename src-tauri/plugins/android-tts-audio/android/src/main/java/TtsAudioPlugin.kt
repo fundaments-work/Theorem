@@ -130,7 +130,9 @@ class TtsAudioPlugin(private val activity: Activity) : Plugin(activity) {
         try {
             val tts = getTts()
             if (!isInitialized) {
-                invoke.resolve(emptyList<Map<String, String>>())
+                val empty = JSObject()
+                empty.put("voices", emptyList<Map<String, String>>())
+                invoke.resolve(empty)
                 return
             }
             val voices = tts.voices.map { v ->
@@ -140,7 +142,9 @@ class TtsAudioPlugin(private val activity: Activity) : Plugin(activity) {
                     "quality" to v.quality.toString(),
                 )
             }
-            invoke.resolve(voices)
+            val result = JSObject()
+            result.put("voices", voices)
+            invoke.resolve(result)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "Failed to get voices")
         }
