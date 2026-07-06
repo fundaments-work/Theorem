@@ -1213,7 +1213,8 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
             event_emitter: None,
         });
 
-        let handle = match theorem_sync_core::sync_server::start_server(server_state).await {
+        let handle = match theorem_sync_core::sync_server::start_server(server_state.clone()).await
+        {
             Ok(h) => {
                 eprintln!("[background-sync] Server listening on {}", h.addr);
                 h
