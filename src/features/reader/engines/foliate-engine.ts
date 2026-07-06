@@ -198,34 +198,21 @@ export class FoliateEngine {
         const contents = this.view.renderer.getContents();
         if (!contents || contents.length === 0) return null;
 
-        const visibleRange = (this.view as any)?.lastLocation?.range;
-        let fullText = "";
+        const parts: string[] = [];
 
         for (const content of contents) {
             const doc = content.document || content.doc;
             if (!doc || !doc.body) continue;
             const body = doc.body as HTMLElement;
-            if (visibleRange) {
-                let rangeText = "";
-                try { rangeText = visibleRange.toString(); } catch { /* ignore */ }
-                if (!rangeText.trim()) {
-                    try {
-                        const fragment = visibleRange.cloneContents();
-                        const wrapper = doc.createElement("div");
-                        wrapper.appendChild(fragment);
-                        wrapper.querySelectorAll('img, svg, figure, script, style, noscript').forEach((e: Element) => e.remove());
-                        rangeText = wrapper.innerText || wrapper.textContent || '';
-                    } catch { /* ignore */ }
-                }
-                // Final fallback: if range gave nothing, use body text
-                fullText += (rangeText || body.innerText || '') + "\n";
-            } else {
-                fullText += (body.innerText || '') + "\n";
-            }
+
+            // In paged mode, getContents() already returns only the visible
+            // iframes. Use body.innerText directly — it's reliable cross-platform.
+            const bodyText = (body.innerText || body.textContent || '').trim();
+            if (bodyText) parts.push(bodyText);
         }
 
-        if (!fullText.trim()) return null;
-        return { text: fullText.trim(), startWordId: "" };
+        if (parts.length === 0) return null;
+        return { text: parts.join("\n"), startWordId: "" };
     }
 
     /** Like getVisibleTextForTts but returns text AFTER visible (for preloading next page). */
