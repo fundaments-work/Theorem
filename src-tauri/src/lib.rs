@@ -858,69 +858,15 @@ fn apply_linux_webkit_workarounds() {
     }
 }
 
-// ─── TTS Commands ───
-//
-// Desktop: platform shell commands → native system speech APIs.
-//   macOS: 'say' (NSSpeechSynthesizer). Pause/resume not supported — estimation-based.
-//   Linux: 'spd-say' (speech-dispatcher). Real pause/resume via --pause/--resume/--stop.
-//   Windows: PowerShell System.Speech.Synthesis (SAPI). Pause/resume not supported.
-//
-// Android: android.speech.tts.TextToSpeech via plugin.
+// ─── TTS Commands (Android only — desktop uses Web Speech API) ───
 
 #[tauri::command]
 fn tts_speak(app: tauri::AppHandle, text: String, voice: String) -> Result<(), String> {
     #[cfg(target_os = "android")]
-    {
-        return tauri_plugin_android_tts_audio::tts_speak(&app, text, voice);
-    }
+    return tauri_plugin_android_tts_audio::tts_speak(&app, text, voice);
     #[cfg(not(target_os = "android"))]
     {
-        use std::process::{Command, Stdio};
-        let _ = app;
-        let _ = voice;
-
-        #[cfg(target_os = "macos")]
-        {
-            let mut cmd = Command::new("say");
-            if !voice.is_empty() {
-                cmd.arg("-v").arg(&voice);
-            }
-            cmd.arg(&text);
-            cmd.stdout(Stdio::null()).stderr(Stdio::null());
-            cmd.spawn().map_err(|e| format!("say: {e}"))?;
-        }
-        #[cfg(target_os = "linux")]
-        {
-            // spd-say with --wait blocks until speech completes, giving us
-            // real completion detection. Fall back to espeak-ng if unavailable.
-            let result = Command::new("spd-say")
-                .arg("--wait")
-                .arg(&text)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn();
-            if result.is_err() {
-                Command::new("espeak-ng")
-                    .arg(&text)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn()
-                    .map_err(|e| format!("espeak-ng: {e}"))?;
-            }
-        }
-        #[cfg(target_os = "windows")]
-        {
-            let escaped = text.replace('"', "'");
-            Command::new("powershell").args([
-                "-NoProfile", "-Command",
-                &format!("Add-Type -AssemblyName System.Speech; $s=New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak('{}')", escaped),
-            ]).stdout(Stdio::null()).stderr(Stdio::null())
-            .spawn().map_err(|e| format!("TTS: {e}"))?;
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-        {
-            return Err("TTS not supported".into());
-        }
+        let _ = (app, text, voice);
         Ok(())
     }
 }
@@ -928,84 +874,10 @@ fn tts_speak(app: tauri::AppHandle, text: String, voice: String) -> Result<(), S
 #[tauri::command]
 fn tts_stop(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
-    {
-        return tauri_plugin_android_tts_audio::tts_stop(&app);
-    }
+    return tauri_plugin_android_tts_audio::tts_stop(&app);
     #[cfg(not(target_os = "android"))]
     {
         let _ = app;
-        #[cfg(target_os = "linux")]
-        {
-            std::process::Command::new("spd-say")
-                .arg("--stop")
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .ok();
-        }
-        #[cfg(target_os = "macos")]
-        {
-            std::process::Command::new("killall")
-                .arg("say")
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .ok();
-        }
-        #[cfg(target_os = "windows")]
-        {
-            std::process::Command::new("taskkill")
-                .args(["/F", "/IM", "powershell.exe"])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .ok();
-        }
-        Ok(())
-    }
-}
-
-#[tauri::command]
-fn tts_pause(app: tauri::AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    {
-        return tauri_plugin_android_tts_audio::tts_stop(&app); // Android: no pause, stop instead
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let _ = app;
-        #[cfg(target_os = "linux")]
-        {
-            std::process::Command::new("spd-say")
-                .arg("--pause")
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .ok();
-        }
-        Ok(())
-    }
-}
-
-#[tauri::command]
-fn tts_resume(app: tauri::AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    {
-        // Android TextToSpeech doesn't support resume. Handled by JS estimation.
-        return Ok(());
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let _ = app;
-        #[cfg(target_os = "linux")]
-        {
-            std::process::Command::new("spd-say")
-                .arg("--resume")
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .ok();
-        }
         Ok(())
     }
 }
@@ -1013,14 +885,10 @@ fn tts_resume(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn tts_get_voices(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
     #[cfg(target_os = "android")]
-    {
-        return tauri_plugin_android_tts_audio::tts_get_voices(&app);
-    }
+    return tauri_plugin_android_tts_audio::tts_get_voices(&app);
     #[cfg(not(target_os = "android"))]
     {
         let _ = app;
-        // Desktop: voice list not available from shell commands.
-        // The user selects system voice via OS settings.
         Ok(Vec::new())
     }
 }
@@ -1189,8 +1057,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             tts_speak,
             tts_stop,
-            tts_pause,
-            tts_resume,
             tts_get_voices,
             epub_parser::prefetch_zip_metadata,
             read_file,

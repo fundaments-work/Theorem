@@ -897,7 +897,7 @@ export function SettingsPage() {
                             )}
                         </SettingRow>
 
-                        {isTauri() && availableVoices.length > 0 && (
+                        {availableVoices.length > 0 && (
                             <SettingRow
                                 label="Voice"
                                 description="Your system's text-to-speech voice"
