@@ -84,42 +84,30 @@ function App() {
                 category: "App",
                 handler: () => setShowShortcutsHelp((prev) => !prev),
             },
-            {
-                label: "Go to Library",
-                keys: "Ctrl+1",
-                category: "Navigation",
-                handler: () => setRoute("library"),
-            },
-            {
-                label: "Go to Shelves",
-                keys: "Ctrl+2",
-                category: "Navigation",
-                handler: () => setRoute("shelves"),
-            },
-            {
-                label: "Go to Feeds",
-                keys: "Ctrl+3",
-                category: "Navigation",
-                handler: () => setRoute("feeds"),
-            },
-            {
-                label: "Go to Vocabulary",
-                keys: "Ctrl+4",
-                category: "Navigation",
-                handler: () => setRoute("vocabulary"),
-            },
-            {
-                label: "Go to Settings",
-                keys: "Ctrl+,",
-                category: "Navigation",
-                handler: () => setRoute("settings"),
-            },
-            {
-                label: "Go to Statistics",
-                keys: "Ctrl+5",
-                category: "Navigation",
-                handler: () => setRoute("statistics"),
-            },
+            // Navigation
+            { label: "Go to Library",       keys: "Ctrl+1", category: "Navigation", handler: () => setRoute("library") },
+            { label: "Go to Shelves",       keys: "Ctrl+2", category: "Navigation", handler: () => setRoute("shelves") },
+            { label: "Go to Feeds",         keys: "Ctrl+3", category: "Navigation", handler: () => setRoute("feeds") },
+            { label: "Go to Vocabulary",    keys: "Ctrl+4", category: "Navigation", handler: () => setRoute("vocabulary") },
+            { label: "Go to Statistics",    keys: "Ctrl+5", category: "Navigation", handler: () => setRoute("statistics") },
+            { label: "Go to Workbench",     keys: "Ctrl+6", category: "Navigation", handler: () => setRoute("annotations") },
+            { label: "Go to Bookmarks",     keys: "Ctrl+7", category: "Navigation", handler: () => setRoute("bookmarks") },
+            { label: "Go to Settings",      keys: "Ctrl+,", category: "Navigation", handler: () => setRoute("settings") },
+            // Search & Filter
+            { label: "Find / Search",       keys: "Ctrl+F", category: "Search",     handler: () => {
+                const route = useUIStore.getState().currentRoute;
+                if (route === "reader") return; // handled by reader engine
+                const searchInput = document.querySelector<HTMLInputElement>('input[placeholder*="Search"]');
+                if (searchInput) { searchInput.focus(); searchInput.select(); }
+            }},
+            { label: "Clear search",        keys: "Escape", category: "Search",     handler: () => {
+                useUIStore.getState().clearSearch();
+            }},
+            // Sidebar
+            { label: "Toggle sidebar",      keys: "Ctrl+B", category: "App",        handler: () => {
+                useUIStore.getState().toggleSidebar();
+            }},
+            // Reader only — registered conditionally below
         ]);
     }, [setRoute]);
 
