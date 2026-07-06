@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo, memo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn, normalizeFilePath, normalizeAuthor, formatProgress, formatFileSize, formatRelativeDate } from "../../core/lib/utils";
 import { saveCoverImage, getBookData } from "../../core/lib/storage";
 import { buildFallbackCoverSvg, shouldUseExtractedTitle, shouldUseExtractedAuthor } from "../../core/lib/cover-extractor";
@@ -229,6 +230,7 @@ export function BookCard({
                                 alt={book.title}
                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                                 loading="lazy"
+                                decoding="async"
                             />
                         ) : (
                             <div className="book-cover-placeholder w-full h-full text-[10px] p-2 flex items-center justify-center bg-[var(--color-surface-muted)]">
@@ -320,6 +322,7 @@ export function BookCard({
                                 alt={book.title}
                                 className="w-full h-full object-cover"
                                 loading="lazy"
+                                decoding="async"
                             />
                         ) : (
                             <div className="book-cover-placeholder w-full h-full text-[0.625rem] leading-tight p-1 flex items-center justify-center">
@@ -404,6 +407,7 @@ export function BookCard({
                         alt={book.title}
                         className="w-full h-full object-cover"
                         loading="lazy"
+                        decoding="async"
                     />
                 ) : (
                     <div className="book-cover-placeholder w-full h-full text-[var(--font-size-3xs)] p-2 flex items-center justify-center">
@@ -1053,6 +1057,60 @@ export function LibraryPage() {
         showFavoritesOnly,
     ]);
 
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    const [gridCols, setGridCols] = useState(4);
+
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+
+        const computeCols = () => {
+            if (settings.libraryViewMode === "list") return 1;
+            const w = el.clientWidth;
+            if (settings.libraryViewMode === "compact") {
+                if (w >= 1280) return 6;
+                if (w >= 1024) return 5;
+                if (w >= 640) return 4;
+                return 3;
+            }
+            if (w >= 1536) return 8;
+            if (w >= 1280) return 7;
+            if (w >= 1024) return 5;
+            if (w >= 768) return 4;
+            if (w >= 640) return 3;
+            return 2;
+        };
+
+        setGridCols(computeCols());
+
+        const observer = new ResizeObserver(() => setGridCols(computeCols()));
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [settings.libraryViewMode]);
+
+    const isListView = settings.libraryViewMode === "list";
+    const virtualRowCount = isListView
+        ? sortedBooks.length
+        : Math.ceil(sortedBooks.length / Math.max(gridCols, 1));
+
+    const getRowEstimateSize = useCallback(() => {
+        if (isListView) return 68;
+        const el = scrollRef.current;
+        if (!el || gridCols <= 1) return 300;
+        const gap = settings.libraryViewMode === "compact" ? 8 : 20;
+        const cardW = (el.clientWidth - (gridCols - 1) * gap) / gridCols;
+        const textH = settings.libraryViewMode === "compact" ? 0 : 72;
+        return Math.round(cardW * 1.5 + textH + gap);
+    }, [isListView, gridCols, settings.libraryViewMode]);
+
+    const rowVirtualizer = useVirtualizer({
+        count: virtualRowCount,
+        getScrollElement: useCallback(() => scrollRef.current, []),
+        estimateSize: getRowEstimateSize,
+        overscan: 3,
+    });
+
     // Lightweight fallback cover generation for books that need covers.
     // Real cover/metadata extraction happens when books are opened in the reader.
     useEffect(() => {
@@ -1635,7 +1693,7 @@ export function LibraryPage() {
                     </div>
 
                     {/* Books Grid/List/Compact */}
-                    <section className="flex-1 min-h-0 overflow-y-auto">
+                    <section ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
                         {sortedBooks.length === 0 ? (
                             <div className="text-center py-16 border-2 border-dashed border-[var(--color-border)]">
                                 <p className="text-[color:var(--color-text-muted)] font-bold uppercase text-xs tracking-widest">
@@ -1650,65 +1708,69 @@ export function LibraryPage() {
                                     </button>
                                 )}
                             </div>
-                        ) : settings.libraryViewMode === "list" ? (
-                            <div className="space-y-1 pb-8">
-                                {sortedBooks.map((book) => (
-                                    <MemoizedBookCard
-                                        key={book.id}
-                                        book={book}
-                                        viewMode={settings.libraryViewMode}
-                                        onOpenBook={handleOpenBook}
-                                        onToggleFavorite={handleToggleFavorite}
-                                        onDeleteBook={handleDeleteBook}
-                                        onShowInfo={handleShowInfo}
-                                        onAddToShelf={handleAddToShelf}
-                                        onMarkAsRead={handleMarkAsRead}
-                                        onMarkAsUnread={handleMarkAsUnread}
-                                        isSelecting={isSelecting}
-                                        isSelected={selectedBooks.includes(book.id)}
-                                        onToggleSelect={toggleBookSelection}
-                                    />
-                                ))}
-                            </div>
-                        ) : settings.libraryViewMode === "compact" ? (
-                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 pb-8">
-                                {sortedBooks.map((book) => (
-                                    <MemoizedBookCard
-                                        key={book.id}
-                                        book={book}
-                                        viewMode={settings.libraryViewMode}
-                                        onOpenBook={handleOpenBook}
-                                        onToggleFavorite={handleToggleFavorite}
-                                        onDeleteBook={handleDeleteBook}
-                                        onShowInfo={handleShowInfo}
-                                        onAddToShelf={handleAddToShelf}
-                                        onMarkAsRead={handleMarkAsRead}
-                                        onMarkAsUnread={handleMarkAsUnread}
-                                        isSelecting={isSelecting}
-                                        isSelected={selectedBooks.includes(book.id)}
-                                        onToggleSelect={toggleBookSelection}
-                                    />
-                                ))}
-                            </div>
                         ) : (
-                            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 pb-8">
-                                {sortedBooks.map((book) => (
-                                    <MemoizedBookCard
-                                        key={book.id}
-                                        book={book}
-                                        viewMode={settings.libraryViewMode}
-                                        onOpenBook={handleOpenBook}
-                                        onToggleFavorite={handleToggleFavorite}
-                                        onDeleteBook={handleDeleteBook}
-                                        onShowInfo={handleShowInfo}
-                                        onAddToShelf={handleAddToShelf}
-                                        onMarkAsRead={handleMarkAsRead}
-                                        onMarkAsUnread={handleMarkAsUnread}
-                                        isSelecting={isSelecting}
-                                        isSelected={selectedBooks.includes(book.id)}
-                                        onToggleSelect={toggleBookSelection}
-                                    />
-                                ))}
+                            <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+                                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                    const rowStart = virtualRow.index * (isListView ? 1 : gridCols);
+                                    const count = isListView
+                                        ? 1
+                                        : Math.min(gridCols, sortedBooks.length - rowStart);
+                                    const rowItems = isListView
+                                        ? [sortedBooks[virtualRow.index]]
+                                        : sortedBooks.slice(rowStart, rowStart + count);
+
+                                    const bookCardProps = {
+                                        onOpenBook: handleOpenBook,
+                                        onToggleFavorite: handleToggleFavorite,
+                                        onDeleteBook: handleDeleteBook,
+                                        onShowInfo: handleShowInfo,
+                                        onAddToShelf: handleAddToShelf,
+                                        onMarkAsRead: handleMarkAsRead,
+                                        onMarkAsUnread: handleMarkAsUnread,
+                                        isSelecting,
+                                        onToggleSelect: toggleBookSelection,
+                                    };
+
+                                    return (
+                                        <div
+                                            key={virtualRow.key}
+                                            style={{
+                                                position: "absolute",
+                                                top: 0,
+                                                left: 0,
+                                                width: "100%",
+                                                transform: `translateY(${virtualRow.start}px)`,
+                                            }}
+                                        >
+                                            {isListView ? (
+                                                <div className="space-y-1 pb-8">
+                                                    <MemoizedBookCard
+                                                        key={rowItems[0].id}
+                                                        book={rowItems[0]}
+                                                        viewMode={settings.libraryViewMode}
+                                                        isSelected={selectedBooks.includes(rowItems[0].id)}
+                                                        {...bookCardProps}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className={settings.libraryViewMode === "compact"
+                                                    ? "grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 pb-8"
+                                                    : "grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 pb-8"
+                                                }>
+                                                    {rowItems.map((book) => (
+                                                        <MemoizedBookCard
+                                                            key={book.id}
+                                                            book={book}
+                                                            viewMode={settings.libraryViewMode}
+                                                            isSelected={selectedBooks.includes(book.id)}
+                                                            {...bookCardProps}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </section>

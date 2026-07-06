@@ -299,7 +299,7 @@ const favoriteBooksResultCache = new WeakMap<Book[], Book[]>();
 const booksByCategoryResultCache = new WeakMap<Book[], Map<string, Book[]>>();
 const highlightsResultCache = new WeakMap<Annotation[], Map<string, Annotation[]>>();
 const bookmarksResultCache = new WeakMap<Annotation[], Map<string, Annotation[]>>();
-const COVER_RESTORE_BATCH_SIZE = 24;
+const COVER_RESTORE_BATCH_SIZE = 48;
 
 function getBookLookup(books: Book[]): Map<string, Book> {
     const existingLookup = bookLookupCache.get(books);
@@ -547,28 +547,6 @@ function collectBookIdsMissingCoverPath(
     }
 
     return [...ids];
-}
-
-async function loadCoverLookup(bookIds: string[]): Promise<Map<string, string>> {
-    const coverLookup = new Map<string, string>();
-
-    for (let i = 0; i < bookIds.length; i += COVER_RESTORE_BATCH_SIZE) {
-        const batchIds = bookIds.slice(i, i + COVER_RESTORE_BATCH_SIZE);
-        const batchEntries = await Promise.all(
-            batchIds.map(async (bookId) => {
-                const coverPath = await getCoverImage(bookId);
-                return [bookId, coverPath] as const;
-            }),
-        );
-
-        for (const [bookId, coverPath] of batchEntries) {
-            if (coverPath) {
-                coverLookup.set(bookId, coverPath);
-            }
-        }
-    }
-
-    return coverLookup;
 }
 
 function applyCoverLookupToBooks(books: Book[], coverLookup: Map<string, string>): Book[] {
@@ -1503,39 +1481,55 @@ export const useLibraryStore = create<LibraryStore>()(
                     state.recentBooksCache,
                 );
 
+                // Unblock UI immediately — covers hydrate incrementally in background
+                useLibraryStore.setState({ coversHydrated: true });
+
                 if (bookIdsMissingCoverPath.length === 0) {
-                    useLibraryStore.setState({ coversHydrated: true });
                     return;
                 }
 
                 void (async () => {
                     try {
-                        const coverLookup = await loadCoverLookup(bookIdsMissingCoverPath);
-                        if (coverLookup.size === 0) {
-                            return;
-                        }
-
-                        useLibraryStore.setState((currentState) => {
-                            const books = applyCoverLookupToBooks(currentState.books, coverLookup);
-                            const recentBooksCache = applyCoverLookupToRecentCache(
-                                currentState.recentBooksCache,
-                                coverLookup,
+                        for (let i = 0; i < bookIdsMissingCoverPath.length; i += COVER_RESTORE_BATCH_SIZE) {
+                            const batchIds = bookIdsMissingCoverPath.slice(i, i + COVER_RESTORE_BATCH_SIZE);
+                            const batchEntries = await Promise.all(
+                                batchIds.map(async (bookId) => {
+                                    const coverPath = await getCoverImage(bookId);
+                                    return [bookId, coverPath] as const;
+                                }),
                             );
 
-                            if (
-                                books === currentState.books
-                                && recentBooksCache === currentState.recentBooksCache
-                            ) {
-                                return currentState;
+                            const batchLookup = new Map<string, string>();
+                            for (const [bookId, coverPath] of batchEntries) {
+                                if (coverPath) {
+                                    batchLookup.set(bookId, coverPath);
+                                }
                             }
 
-                            return {
-                                books,
-                                recentBooksCache,
-                            };
-                        });
-                    } finally {
-                        useLibraryStore.setState({ coversHydrated: true });
+                            if (batchLookup.size === 0) continue;
+
+                            useLibraryStore.setState((currentState) => {
+                                const books = applyCoverLookupToBooks(currentState.books, batchLookup);
+                                const recentBooksCache = applyCoverLookupToRecentCache(
+                                    currentState.recentBooksCache,
+                                    batchLookup,
+                                );
+
+                                if (
+                                    books === currentState.books
+                                    && recentBooksCache === currentState.recentBooksCache
+                                ) {
+                                    return currentState;
+                                }
+
+                                return {
+                                    books,
+                                    recentBooksCache,
+                                };
+                            });
+                        }
+                    } catch {
+                        // Silently fail — covers will be generated lazily on library view
                     }
                 })();
             },

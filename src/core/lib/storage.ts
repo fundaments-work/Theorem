@@ -23,11 +23,23 @@ const STORAGE_READ_TIMEOUT_MS = 30000;
 
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
 
+const COVER_CACHE_MAX = 100;
+const THUMBNAIL_CACHE_MAX = 200;
+
 const blobCache = new Map<string, Blob>();
 const pendingDataReads = new Map<string, Promise<ArrayBuffer | null>>();
 const pendingBlobReads = new Map<string, Promise<Blob | null>>();
 const materializedPathCache = new Map<string, string>();
 const coverCache = new Map<string, string>();
+
+function lruSet<K, V>(map: Map<K, V>, key: K, value: V, maxSize: number): void {
+    map.delete(key);
+    map.set(key, value);
+    if (map.size > maxSize) {
+        const firstKey = map.keys().next().value;
+        if (firstKey !== undefined) map.delete(firstKey);
+    }
+}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
@@ -370,7 +382,7 @@ export async function deleteBookData(id: string, filePath?: string): Promise<voi
     }
 }
 
-async function downsampleCoverImage(blob: Blob, maxWidth = 240, maxHeight = 360): Promise<Blob> {
+async function downsampleCoverImage(blob: Blob, maxWidth = 200, maxHeight = 300): Promise<Blob> {
     if (typeof window === "undefined" || typeof document === "undefined" || !window.HTMLCanvasElement) {
         return blob;
     }
@@ -400,13 +412,23 @@ async function downsampleCoverImage(blob: Blob, maxWidth = 240, maxHeight = 360)
                 return;
             }
             ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob(
-                (resizedBlob) => {
-                    resolve(resizedBlob || blob);
-                },
-                "image/jpeg",
-                0.8,
-            );
+            try {
+                canvas.toBlob(
+                    (resizedBlob) => {
+                        resolve(resizedBlob || blob);
+                    },
+                    "image/webp",
+                    0.75,
+                );
+            } catch {
+                canvas.toBlob(
+                    (resizedBlob) => {
+                        resolve(resizedBlob || blob);
+                    },
+                    "image/jpeg",
+                    0.8,
+                );
+            }
         };
         img.onerror = () => {
             URL.revokeObjectURL(url);
@@ -414,6 +436,61 @@ async function downsampleCoverImage(blob: Blob, maxWidth = 240, maxHeight = 360)
         };
         img.src = url;
     });
+}
+
+const thumbnailCache = new Map<string, string>();
+
+async function generateThumbnail(dataUrl: string, maxWidth: number, maxHeight: number): Promise<string | null> {
+    if (typeof window === "undefined" || !window.HTMLCanvasElement) return null;
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const width = img.naturalWidth || img.width;
+            const height = img.naturalHeight || img.height;
+            if (width <= maxWidth && height <= maxHeight) {
+                resolve(dataUrl);
+                return;
+            }
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.round(width * ratio);
+            canvas.height = Math.round(height * ratio);
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+                resolve(null);
+                return;
+            }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            try {
+                canvas.toBlob(
+                    (blob) => {
+                        if (!blob) { resolve(null); return; }
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result as string);
+                        reader.onerror = () => resolve(null);
+                        reader.readAsDataURL(blob);
+                    },
+                    "image/webp",
+                    0.7,
+                );
+            } catch {
+                resolve(null);
+            }
+        };
+        img.onerror = () => resolve(null);
+        img.src = dataUrl;
+    });
+}
+
+export async function getCoverThumbnail(bookId: string, coverPath: string, size = 120): Promise<string> {
+    const cacheKey = `${bookId}:${size}`;
+    const cached = thumbnailCache.get(cacheKey);
+    if (cached) return cached;
+
+    const thumb = await generateThumbnail(coverPath, size, Math.round(size * 1.5));
+    const result = thumb || coverPath;
+    lruSet(thumbnailCache, cacheKey, result, THUMBNAIL_CACHE_MAX);
+    return result;
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -436,7 +513,7 @@ export async function saveCoverImage(bookId: string, blob: Blob): Promise<string
         // fallback to original
     }
     const dataUrl = await blobToDataUrl(finalBlob);
-    coverCache.set(bookId, dataUrl);
+    lruSet(coverCache, bookId, dataUrl, COVER_CACHE_MAX);
 
     if (isTauri()) {
         try {
@@ -465,7 +542,7 @@ export async function getCoverImage(bookId: string): Promise<string | null> {
         try {
             const cover = await sqliteGetCoverImage(bookId);
             if (cover) {
-                coverCache.set(bookId, cover);
+                lruSet(coverCache, bookId, cover, COVER_CACHE_MAX);
                 return cover;
             }
         } catch (error) {
@@ -475,10 +552,10 @@ export async function getCoverImage(bookId: string): Promise<string | null> {
     try {
         const dataUrl = await get<string>(`${COVERS_STORE}-${bookId}`);
         const result = dataUrl ?? null;
-        coverCache.set(bookId, result || '');
+        lruSet(coverCache, bookId, result || '', COVER_CACHE_MAX);
         return result;
     } catch (error) {
-        coverCache.set(bookId, '');
+        lruSet(coverCache, bookId, '', COVER_CACHE_MAX);
         return null;
     }
 }
