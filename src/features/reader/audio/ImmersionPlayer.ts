@@ -179,26 +179,19 @@ export class ImmersionPlayer {
 
     async pause() {
         if (this._state !== 'playing') return;
-        if (isAndroid()) {
+        if (isAndroid() || isDesktopTauri()) {
             await this._pauseAndroid();
-        } else if (isDesktopTauri()) {
-            await invoke("tts_pause").catch(() => {});
-            this.setState('paused');
         } else if (synthAvailable()) {
             window.speechSynthesis.pause();
             return;
-        } else {
-            this.setState('paused');
         }
+        this.setState('paused');
     }
 
     async resume() {
         if (this._state !== 'paused') return;
-        if (isAndroid()) {
+        if (isAndroid() || isDesktopTauri()) {
             await this._resumeAndroid();
-        } else if (isDesktopTauri()) {
-            await invoke("tts_resume").catch(() => {});
-            this.setState('playing');
         } else if (synthAvailable()) {
             window.speechSynthesis.resume();
             return;
