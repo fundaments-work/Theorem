@@ -198,17 +198,38 @@ export class FoliateEngine {
         const contents = this.view.renderer.getContents();
         if (!contents || contents.length === 0) return null;
 
+        const visibleRange = (this.view as any)?.lastLocation?.range as Range | undefined;
         const parts: string[] = [];
 
         for (const content of contents) {
             const doc = content.document || content.doc;
             if (!doc || !doc.body) continue;
-            const body = doc.body as HTMLElement;
 
-            // In paged mode, getContents() already returns only the visible
-            // iframes. Use body.innerText directly — it's reliable cross-platform.
-            const bodyText = (body.innerText || body.textContent || '').trim();
-            if (bodyText) parts.push(bodyText);
+            if (visibleRange) {
+                // visibleRange marks what's on screen. Extract text from it.
+                let rangeText = "";
+                try { rangeText = visibleRange.toString(); } catch { /* ignore */ }
+                rangeText = rangeText.trim();
+                if (!rangeText) {
+                    // toString() failed on some backends. Try cloneContents.
+                    try {
+                        const frag = visibleRange.cloneContents();
+                        const w = doc.createElement("div");
+                        w.appendChild(frag);
+                        rangeText = (w.textContent || '').trim();
+                    } catch { /* ignore */ }
+                }
+                if (!rangeText) {
+                    // Both failed — fall back to body text.
+                    const body = doc.body as HTMLElement;
+                    rangeText = (body.innerText || '').trim();
+                }
+                if (rangeText) parts.push(rangeText);
+            } else {
+                const body = doc.body as HTMLElement;
+                const bodyText = (body.innerText || '').trim();
+                if (bodyText) parts.push(bodyText);
+            }
         }
 
         if (parts.length === 0) return null;
