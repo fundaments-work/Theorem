@@ -280,7 +280,7 @@ function ArticleCard({
                         {/* Summary */}
                         {summaryHtml && (
                             <div
-                                className="text-sm text-[color:var(--color-text-muted)] line-clamp-2 leading-relaxed [&_p]:inline [&_a]:text-[color:var(--color-accent)] [&_a]:underline [&_strong]:font-bold [&_em]:italic"
+                                className="text-sm text-[color:var(--color-text-muted)] line-clamp-2 leading-relaxed [&_p]:inline [&_a]:text-[color:var(--color-accent)] [&_a]:underline [&_strong]:font-bold [&_em]:italic [&_img]:hidden [&_figure]:hidden"
                                 dangerouslySetInnerHTML={{ __html: summaryHtml }}
                             />
                         )}
