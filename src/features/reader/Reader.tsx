@@ -39,7 +39,6 @@ import type {
     ReaderSettings as ReaderSettingsState,
     TocItem,
 } from "../../core/types";
-import { invoke } from "@tauri-apps/api/core";
 import { List } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { WindowTitlebar } from "./components/WindowTitlebar";
@@ -61,15 +60,7 @@ import type { ReaderViewportHandle } from "./components/ReaderViewport";
 import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
 import { registerShortcuts } from "../../core/lib/keyboard-shortcuts";
 const ImmersionBar = lazy(() => import("./audio/ImmersionBar"));
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _lazyImmersionPlayer: any = null;
-async function getImmersionPlayer() {
-    if (!_lazyImmersionPlayer) {
-        _lazyImmersionPlayer = (await import("./audio/ImmersionPlayer")).immersionPlayer;
-    }
-    return _lazyImmersionPlayer;
-}
+import { immersionPlayer } from "./audio/ImmersionPlayer";
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -242,7 +233,7 @@ function BookReaderPage() {
     useEffect(() => {
         if (!ttsEnabled && immersionMode) {
             setImmersionMode(false);
-            void getImmersionPlayer().then((p) => p.stop());
+            immersionPlayer.stop();
         }
     }, [ttsEnabled, immersionMode]);
     const suppressProgressRef = useRef(false);
@@ -988,10 +979,7 @@ function BookReaderPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentBookId, scheduleProgressUpdate, updateProgress]);
 
-    // Update TTS extract after layout settles (always, even during suppression).
-    // Uses a single extraction per page turn + retries only if text is empty
-    // (DOM not yet rendered). Avoids mid-page restarts from progressive DOM
-    // updates (#14).
+    // Update TTS extract after layout settles.
     useEffect(() => {
         if (isPdfFormat || !location?.cfi) return;
 
@@ -1023,34 +1011,16 @@ function BookReaderPage() {
         };
     }, [location?.cfi, isPdfFormat]);
 
-    // Synthesize the next page's audio after the current page finishes
-    // playing.  This is called from ImmersionBar's onComplete callback.
-    // NOTE: The old implementation preloaded audio via a tts-done →
-    // generate_speech chain that caused infinite autoplay because the
-    // Rust backend plays audio on every generate_speech call.  This
-    // sequential approach waits for the user to actually advance before
-    // synthesizing the next page.
+    // Auto-advance to the next page when the current page's audio finishes.
+    // Called from ImmersionBar's onComplete callback.
     const handleTtsComplete = useCallback(async () => {
         if (isPdfFormat || !ttsEnabled || !immersionMode) return;
-        const player = await getImmersionPlayer();
         await readerRef.current?.next();
-        // Wait one frame for the new page to render before extracting text
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         const newData = readerRef.current?.getVisibleTextForTts?.();
         if (!newData?.text) return;
-        try {
-            // Guard against stale in-flight calls after immersion mode is disabled
-            if (!immersionModeRef.current) return;
-            const genId = await invoke<number>('generate_speech', {
-                text: newData.text,
-                startFromId: newData.startWordId,
-                voice: settings.tts.voice,
-            });
-            player.setCurrentGenId(genId);
-        } catch {
-            // synthesis failure is non-critical
-        }
-    }, [isPdfFormat, settings.tts.voice, ttsEnabled, immersionMode]);
+        setTtsData(newData);
+    }, [isPdfFormat, ttsEnabled, immersionMode]);
 
     useEffect(() => {
         if (!isPdfFormat || !currentBookId || pdfTotalPages <= 0) {
@@ -2318,11 +2288,8 @@ function BookReaderPage() {
                                 <Suspense fallback={null}>
                                     <ImmersionBar 
                                         sectionText={ttsData?.text || ""}
-                                        startWordId={ttsData?.startWordId}
-                                        pageCfi={location?.cfi}
                                         visible={true}
                                         onComplete={handleTtsComplete}
-                                        onSynthesisComplete={undefined}
                                     />
                                 </Suspense>
                             </div>

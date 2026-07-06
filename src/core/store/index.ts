@@ -1532,6 +1532,16 @@ export const useLibraryStore = create<LibraryStore>()(
                         // Silently fail — covers will be generated lazily on library view
                     }
                 })();
+
+                // GC expired tombstones on rehydrate (not just during sync).
+                if (state.deletionTombstones?.length > 0) {
+                    const cutoff = new Date();
+                    cutoff.setDate(cutoff.getDate() - 90);
+                    const cutoffStr = cutoff.toISOString();
+                    state.deletionTombstones = state.deletionTombstones.filter(
+                        (t: { deletedAt: string }) => t.deletedAt > cutoffStr,
+                    );
+                }
             },
         }
     )
@@ -1780,6 +1790,16 @@ export const useSettingsStore = create<SettingsStore>()(
                 // Migration: Ensure dailyActivity exists for old stored data
                 if (state && !state.stats.dailyActivity) {
                     state.stats.dailyActivity = [];
+                }
+
+                // Prune dailyActivity to last 365 days to prevent unbounded growth.
+                if (state?.stats?.dailyActivity && state.stats.dailyActivity.length > 0) {
+                    const cutoff = new Date();
+                    cutoff.setDate(cutoff.getDate() - 365);
+                    const cutoffStr = cutoff.toISOString().split('T')[0];
+                    state.stats.dailyActivity = state.stats.dailyActivity.filter(
+                        (d: { date: string }) => d.date >= cutoffStr,
+                    );
                 }
             },
         }

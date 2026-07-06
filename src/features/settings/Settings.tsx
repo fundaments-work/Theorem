@@ -4,8 +4,6 @@
  */
 
 import { useRef, useState, useEffect, memo, type ChangeEvent } from "react";
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
 import { cn, normalizeFilePath, formatFileSize } from "../../core/lib/utils";
 import { isMobile, isTauri, isTauriDesktop } from "../../core/lib/env";
 import { getAllShortcuts, formatShortcutKeys } from "../../core/lib/keyboard-shortcuts";
@@ -48,10 +46,7 @@ import {
     BookOpenCheck,
     Headphones,
     Target,
-    CloudDownload,
     AlertCircle,
-    CheckCircle2,
-    Loader2,
     Keyboard,
 } from "lucide-react";
 
@@ -359,121 +354,19 @@ export function SettingsPage() {
     const [showDictDownloadModal, setShowDictDownloadModal] = useState(false);
     const [dictionaryRemovedName, setDictionaryRemovedName] = useState<string | null>(null);
 
-    // ── TTS model status ──
-    interface ModelState {
-        status: 'checking' | 'ok' | 'missing' | 'downloading' | 'error';
-        message: string;
-        progressPct: number;
-        currentFile: string;
-    }
-    const [modelState, setModelState] = useState<ModelState>({
-        status: 'checking',
-        message: 'Checking…',
-        progressPct: 0,
-        currentFile: '',
-    });
-    const unlistenersRef = useRef<UnlistenFn[]>([]);
-
-    const checkModelStatus = async () => {
-        if (!isTauri()) {
-            setModelState({ status: 'ok', message: 'Web fallback — no TTS engine needed', progressPct: 0, currentFile: '' });
-            return;
-        }
-        try {
-            const res = await invoke<{ ok: boolean; missingFiles: string[] }>('get_tts_model_status');
-            if (res.ok) {
-                setModelState({ status: 'ok', message: 'Ready', progressPct: 100, currentFile: '' });
-            } else {
-                setModelState({
-                    status: 'missing',
-                    message: `${res.missingFiles.length} file(s) missing`,
-                    progressPct: 0,
-                    currentFile: '',
-                });
-            }
-        } catch {
-            setModelState({ status: 'error', message: 'Failed to check model status', progressPct: 0, currentFile: '' });
-        }
-    };
-
-    const handleDownloadModel = async () => {
-        if (!isTauri()) return;
-        setModelState({ status: 'downloading', message: 'Starting download…', progressPct: 0, currentFile: '' });
-        try {
-            await invoke('ensure_tts_model');
-            // Status will be updated via events
-        } catch (e: unknown) {
-            setModelState({
-                status: 'error',
-                message: e instanceof Error ? e.message : String(e),
-                progressPct: 0,
-                currentFile: '',
-            });
-        }
-    };
-
-    const handleCancelDownload = async () => {
-        try { await invoke('cancel_tts_model_download'); } catch { /* ok */ }
-    };
-
-    const handleDeleteModel = async () => {
-        if (!isTauri()) return;
-        setModelState({ status: 'checking', message: 'Removing…', progressPct: 0, currentFile: '' });
-        try {
-            await invoke('delete_tts_model');
-            await checkModelStatus();
-        } catch (e: unknown) {
-            setModelState({
-                status: 'error',
-                message: e instanceof Error ? e.message : String(e),
-                progressPct: 0,
-                currentFile: '',
-            });
-        }
-    };
+    // ── TTS system voices ──
+    const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
     useEffect(() => {
-        checkModelStatus();
-
-        if (!isTauri()) return;
-
-        (async () => {
-            const u1 = await listen<{
-                currentFile: string;
-                downloadedBytes: number;
-                totalBytes: number;
-                fileIndex: number;
-                totalFiles: number;
-            }>('tts-download-progress', (event) => {
-                const p = event.payload;
-                const pct = p.totalBytes > 0 ? Math.round((p.downloadedBytes / p.totalBytes) * 100) : 0;
-                setModelState({
-                    status: 'downloading',
-                    message: `File ${p.fileIndex + 1}/${p.totalFiles}`,
-                    progressPct: Math.min(99, pct),
-                    currentFile: p.currentFile,
-                });
-            });
-
-            const u2 = await listen('tts-download-complete', () => {
-                setModelState({ status: 'ok', message: 'Ready', progressPct: 100, currentFile: '' });
-            });
-
-            const u3 = await listen<{ message: string }>('tts-download-error', (event) => {
-                setModelState({
-                    status: 'error',
-                    message: event.payload.message,
-                    progressPct: 0,
-                    currentFile: '',
-                });
-            });
-
-            unlistenersRef.current = [u1, u2, u3];
-        })();
-
-        return () => {
-            unlistenersRef.current.forEach((u) => u());
+        const loadVoices = () => {
+            const voices = speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                setAvailableVoices(voices);
+            }
         };
+        loadVoices();
+        speechSynthesis.onvoiceschanged = loadVoices;
+        return () => { speechSynthesis.onvoiceschanged = null; };
     }, []);
 
     useEffect(() => {
@@ -993,12 +886,12 @@ export function SettingsPage() {
 
                     <Section
                         title="Text-to-Speech"
-                        description="Voice, speed, and engine for immersion reading"
+                        description="Read aloud using your device's built-in voice"
                         icon={<Headphones className="w-5 h-5" />}
                     >
                         <SettingRow
                             label="Enable Text-to-Speech"
-                            description="Enable immersion reading with neural TTS"
+                            description="Use system voice to read books aloud"
                         >
                             <Toggle
                                 checked={settings.tts.enabled}
@@ -1008,95 +901,21 @@ export function SettingsPage() {
 
                         <SettingRow
                             label="Voice"
-                            description="Kokoro TTS voice for audio playback"
+                            description="Your system's text-to-speech voice"
                         >
-                            <Dropdown
-                                value={settings.tts.voice}
-                                onChange={(v) => updateTtsSettings({ voice: v })}
-                                options={[
-                                    { value: "af_bella", label: "Bella (US F)" },
-                                    { value: "af_nicole", label: "Nicole (US F)" },
-                                    { value: "af_sarah", label: "Sarah (US F)" },
-                                    { value: "am_adam", label: "Adam (US M)" },
-                                    { value: "am_michael", label: "Michael (US M)" },
-                                    { value: "bm_george", label: "George (UK M)" },
-                                ]}
-                                variant="filled"
-                                size="sm"
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Speech engine"
-                            description="Kokoro ONNX model status"
-                        >
-                            <div className="flex items-center gap-3">
-                                {(modelState.status === 'ok' || modelState.status === 'checking') && (
-                                    <div className="flex items-center gap-3">
-                                        <span className="flex items-center gap-1.5 text-[11px] text-[color:var(--color-text-secondary)]">
-                                            {modelState.status === 'checking' ? (
-                                                <Loader2 className="w-3 h-3 animate-spin" />
-                                            ) : (
-                                                <CheckCircle2 className="w-3 h-3 text-[color:var(--color-accent)]" />
-                                            )}
-                                            {modelState.message}
-                                        </span>
-                                        {modelState.status === 'ok' && (
-                                            <button
-                                                onClick={handleDeleteModel}
-                                                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] hover:bg-[var(--color-overlay-subtle)] transition-colors"
-                                                title="Remove downloaded model files"
-                                            >
-                                                <Trash2 className="w-3 h-3" />
-                                                Remove
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-                                {modelState.status === 'missing' && (
-                                    <button
-                                        onClick={handleDownloadModel}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:bg-[var(--color-accent-hover)] transition-colors"
-                                    >
-                                        <CloudDownload className="w-3 h-3" />
-                                        Download voices
-                                    </button>
-                                )}
-                                {modelState.status === 'downloading' && (
-                                    <div className="flex flex-col gap-1">
-                                        <span className="flex items-center gap-1.5 text-[11px] text-[color:var(--color-accent)]">
-                                            <Loader2 className="w-3 h-3 animate-spin" />
-                                            {modelState.message}
-                                        </span>
-                                        <div className="w-36 h-1.5 rounded-full bg-[var(--color-surface-muted)] overflow-hidden">
-                                            <div
-                                                className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-300"
-                                                style={{ width: `${modelState.progressPct}%` }}
-                                            />
-                                        </div>
-                                        <button
-                                            onClick={handleCancelDownload}
-                                            className="text-[10px] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] mt-0.5"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                )}
-                                {modelState.status === 'error' && (
-                                    <div className="flex items-center gap-2">
-                                        <span className="flex items-center gap-1 text-[11px] text-[color:var(--color-error)]">
-                                            <AlertCircle className="w-3 h-3" />
-                                            {modelState.message}
-                                        </span>
-                                        <button
-                                            onClick={handleDownloadModel}
-                                            className="text-[11px] text-[color:var(--color-accent)] hover:underline"
-                                        >
-                                            Retry
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
+                            {availableVoices.length > 0 ? (
+                                <Dropdown
+                                    value={settings.tts.voice}
+                                    onChange={(v) => updateTtsSettings({ voice: v })}
+                                    options={availableVoices.map(v => ({ value: v.name, label: v.name }))}
+                                    variant="filled"
+                                    size="sm"
+                                />
+                            ) : (
+                                <span className="text-[11px] text-[color:var(--color-text-muted)]">
+                                    {settings.tts.voice || 'Loading voices\u2026'}
+                                </span>
+                            )}
                         </SettingRow>
                     </Section>
 

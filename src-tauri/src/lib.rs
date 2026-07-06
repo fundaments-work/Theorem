@@ -1,9 +1,6 @@
 mod database;
-mod desktop_audio;
 mod epub_parser;
 mod sync_commands;
-mod tts;
-mod tts_model;
 
 use reqwest::blocking::Client;
 use serde::Serialize;
@@ -866,16 +863,6 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     apply_linux_webkit_workarounds();
 
-    // Disable espeak-ng subprocess calls in the G2P phonemizer.
-    // kokoro-en spawns an espeak-ng process for EVERY text segment (10-30x
-    // per page). Each fork+exec takes 50-200ms, totalling 2-6s of pure
-    // subprocess overhead. The pure-Rust misaki-lean path is instant by
-    // comparison and produces near-identical quality for English prose.
-    // Users who need espeak-ng can set KOKORO_ESPEAK_NG=1 explicitly.
-    if std::env::var("KOKORO_ESPEAK_NG").is_err() {
-        std::env::set_var("KOKORO_ESPEAK_NG", "0");
-    }
-
     let builder = tauri::Builder::default()
         .manage(PendingOpenFiles::default())
         .on_window_event(|window, event| {
@@ -892,8 +879,7 @@ pub fn run() {
         .plugin(tauri_plugin_app::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_mobile_folder_scan::init())
-        .plugin(tauri_plugin_android_sync_worker::init())
-        .plugin(tauri_plugin_android_tts_audio::init());
+        .plugin(tauri_plugin_android_sync_worker::init());
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
@@ -912,36 +898,6 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            // TTS engine (ONNX + Kokoro). On Android uses pure-Rust tract backend
-            // for ONNX inference (slower but no native binaries needed).
-            app.manage(tts::TtsState {
-                engine: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
-                generation_id: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
-            });
-            app.manage(tts::ModelState::new());
-
-            // TTS model download (all platforms, background).
-            let downloads_app = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let model_state = downloads_app.state::<tts::ModelState>();
-                if let Err(e) = tts_model::ensure_models(&downloads_app, model_state.inner()).await
-                {
-                    eprintln!("[tts] background model download failed: {}", e);
-                }
-            });
-
-            // TTS engine prewarm (desktop only — on mobile the engine is
-            // loaded lazily on first speech request to avoid the Kokoro ONNX
-            // init time pushing startup past Android's ANR timeout).
-            #[cfg(not(target_os = "android"))]
-            {
-                let tts_app = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    let tts_state = tts_app.state::<tts::TtsState>();
-                    tts::prewarm_engine(&tts_app, tts_state.inner()).await;
-                });
-            }
-
             // Initialize LAN sync subsystem.
             // On Android, app_data_dir can fail to resolve, so we try
             // multiple fallback paths before giving up.
@@ -1063,14 +1019,6 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            tts::generate_speech,
-            tts::stop_speech,
-            tts::pause_speech,
-            tts::resume_speech,
-            tts::ensure_tts_model,
-            tts::cancel_tts_model_download,
-            tts::get_tts_model_status,
-            tts::delete_tts_model,
             epub_parser::prefetch_zip_metadata,
             read_file,
             read_cbr_as_cbz,

@@ -105,8 +105,7 @@ src-tauri/
     main.rs                     # Entry point (calls theorem_lib::run())
     epub_parser.rs              # Native EPUB pre-parser (prefetch_zip_metadata command)
     tts.rs                      # TTS orchestration
-    tts_model.rs                # Kokoro model download/management
-    sync_commands.rs            # All sync Tauri commands
+    sync_commands.rs          # All sync Tauri commands
   crates/
     theorem-sync-core/          # Shared sync library (crypto, protocol, embedded HTTP server)
     sync-daemon/                # Standalone background sync daemon (sidecar)
@@ -263,10 +262,6 @@ Notes:
   - `fetch_url_content`
   - `fetch_binary_content`
   - `prefetch_zip_metadata`
-  - `ensure_tts_model`
-  - `cancel_tts_model_download`
-  - `get_tts_model_status`
-  - `delete_tts_model`
   - `update_sync_notification`
 - SQLite-backed persistence (desktop Tauri only) uses `database::sqlite_*` commands, channeled through `src/core/lib/sqlite-storage.ts`.
 - If command payload/return changes, update both Rust and TS call sites together.
@@ -296,7 +291,6 @@ Notes:
   - `forwardRef` components (e.g., `ReaderViewport`, `PDFJsEngine`)
   - Shell chrome (`Sidebar`, `BottomNav`, `AppTitlebar`)
 - **Lazy-load heavy deps that aren't needed on every route:**
-  - `soundtouchjs` (TTS) — lazy `import("./audio/ImmersionPlayer")` only when user activates TTS
   - `pdfjs-dist` — already dynamic via `prewarmPdfJsRuntime()`
   - `@mozilla/readability`, `fast-xml-parser` — dynamic `import()` inside RSS functions
   - `html-to-image` — dynamic `import()` inside `captureCardAsImage`/`downloadImage`

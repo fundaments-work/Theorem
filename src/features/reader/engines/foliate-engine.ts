@@ -66,54 +66,6 @@ export interface FoliateEngineOptions {
     shouldForceViewportTap?: () => boolean;
 }
 
-function wrapEpubTextNodes(containerElement: HTMLElement, doc: Document) {
-    if (!doc.getElementById('tts-styles')) {
-        const style = doc.createElement('style');
-        style.id = 'tts-styles';
-        style.textContent = `
-            .tts-word {
-                transition: background-color 0.1s linear, color 0.1s linear;
-                border-radius: 2px;
-            }
-            .tts-word.active {
-                background-color: rgba(255, 212, 0, 0.4) !important;
-                color: inherit;
-            }
-        `;
-        doc.head.appendChild(style);
-    }
-
-    let wordCounter = 0;
-    const walker = doc.createTreeWalker(
-        containerElement,
-        NodeFilter.SHOW_TEXT,
-        null,
-    );
-
-    let textNodes: Node[] = [];
-    while (walker.nextNode()) textNodes.push(walker.currentNode);
-
-    textNodes.forEach(node => {
-        const text = node.nodeValue || '';
-        // Split text by words while retaining space/punctuation formatting
-        const words = text.split(/(\s+)/); 
-        
-        const fragment = doc.createDocumentFragment();
-        words.forEach(part => {
-            if (part.trim().length > 0) {
-                const span = doc.createElement('span');
-                span.className = 'tts-word transition-colors duration-100 linear';
-                span.id = `w_${wordCounter++}`;
-                span.textContent = part;
-                fragment.appendChild(span);
-            } else {
-                fragment.appendChild(doc.createTextNode(part));
-            }
-        });
-        
-        node.parentNode?.replaceChild(fragment, node);
-    });
-}
 
 export class FoliateEngine {
     private container: HTMLElement | null = null;
@@ -246,34 +198,29 @@ export class FoliateEngine {
         const contents = this.view.renderer.getContents();
         if (!contents || contents.length === 0) return null;
 
-        let fullText = "";
-        let firstWordId = "";
-
         const visibleRange = (this.view as any)?.lastLocation?.range;
+        let fullText = "";
 
         for (const content of contents) {
             const doc = content.document || content.doc;
-            if (!doc) continue;
-
-            const ttsWords = Array.from(doc.querySelectorAll('.tts-word')) as HTMLElement[];
-            for (const node of ttsWords) {
-                // If we have a visible range, only include words that intersect it
-                if (visibleRange && !visibleRange.intersectsNode(node)) {
-                    continue;
-                }
-
-                if (!firstWordId) {
-                    firstWordId = node.id;
-                }
-                fullText += (node.textContent || '') + " ";
+            if (!doc || !doc.body) continue;
+            const body = doc.body as HTMLElement;
+            if (visibleRange) {
+                const clone = body.cloneNode(true) as HTMLElement;
+                try {
+                    clone.querySelectorAll('img, svg, figure, script, style, noscript').forEach(e => e.remove());
+                } catch {}
+                fullText += (clone.innerText || '') + "\n";
+            } else {
+                fullText += (body.innerText || '') + "\n";
             }
         }
 
         if (!fullText.trim()) return null;
-        return { text: fullText.trim(), startWordId: firstWordId };
+        return { text: fullText.trim(), startWordId: "" };
     }
 
-    /** Like getVisibleTextForTts but returns text AFTER the visible range (for preloading next page). */
+    /** Like getVisibleTextForTts but returns text AFTER visible (for preloading next page). */
     public getNextPageTextForTts(): { text: string; startWordId: string } | null {
         if (!this.view?.renderer?.getContents) return null;
 
@@ -642,10 +589,6 @@ export class FoliateEngine {
             // Clear the attached listeners set for new sections
             if (detail?.doc) {
                 this.iframeListenersAttached.delete(detail.doc);
-                try {
-                    wrapEpubTextNodes(detail.doc.body, detail.doc);
-                } catch (e) {
-                }
             }
             
             // Re-setup selection listeners and re-render highlights after a short delay

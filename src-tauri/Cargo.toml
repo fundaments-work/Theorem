@@ -5,7 +5,7 @@ resolver = "2"
 [package]
 name = "theorem"
 version = "1.0.5"
-description = "Local-first desktop reader for PDFs, EPUBs, MOBI, and RSS with neural TTS, highlights, vocabulary building, and Markdown export."
+description = "Local-first desktop reader for PDFs, EPUBs, MOBI, and RSS."
 authors = ["Fundamentals"]
 license = "MIT"
 homepage = "https://github.com/sapienskid/theorem"
@@ -37,7 +37,6 @@ tauri-plugin-barcode-scanner = "2"
 tauri-plugin-http = { version = "2", features = ["rustls-tls"] }
 tauri-plugin-mobile-folder-scan = { path = "plugins/mobile-folder-scan" }
 tauri-plugin-android-sync-worker = { path = "plugins/android-sync-worker" }
-tauri-plugin-android-tts-audio = { path = "plugins/android-tts-audio" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls", "cookies", "stream"] }
@@ -66,62 +65,26 @@ bzip2 = "0.4"
 tar = "0.4"
 zip = "0.6"
 walkdir = "2"
-regex = "1.10.0"
 
 # EPUB pre-parser: streaming XML (replaces regex) + percent-encoded path fallback
 quick-xml = "0.36"
 percent-encoding = "2"
 
-# TTS engine (ONNX Runtime + Kokoro)
+# Platform-specific
 [target.'cfg(not(target_os = "android"))'.dependencies]
 unrar-ng = "0.7.7"
-ndarray = "0.17.2"
-kokoro-en = { version = "0.1.4", default-features = false, features = ["misaki-lean"] }
-rodio = "0.22.2"
 
-# Apple Silicon + Linux + Windows: ort default features (download-binaries has prebuilt binaries)
-[target.'cfg(all(not(target_os = "android"), any(target_arch = "x86_64", target_arch = "aarch64"), not(target_vendor = "apple")))'.dependencies]
-ort = "2.0.0-rc.12"
-
-[target.aarch64-apple-darwin.dependencies]
-ort = "2.0.0-rc.12"
-
-# Intel Mac: no prebuilt binaries from download-binaries, use load-dynamic (provide dylib in CI)
-[target.x86_64-apple-darwin.dependencies]
-ort = { version = "2.0.0-rc.12", default-features = false, features = ["load-dynamic", "ndarray"] }
-
-# Android: load ONNX Runtime dynamically from the bundled .so in jniLibs/
 [target.'cfg(target_os = "android")'.dependencies]
-ort = { version = "2.0.0-rc.12", default-features = false, features = ["load-dynamic", "ndarray"] }
-ndarray = "0.17.2"
-kokoro-en = { version = "0.1.4", default-features = false, features = ["misaki-lean"] }
 jni = "0.21"
-
-# Optimize only the packages that need it in dev mode.
-# debug-assertions = false removes the verbose #[cfg(debug_assertions)] eprintln!
-# in kokoro-en's synthesizer.rs that prints every G2P phoneme string (2500+ chars
-# per chunk) — without this, TTS in dev mode spends 90% of its time doing stderr I/O.
-[profile.dev]
-debug-assertions = false
-
-# Only optimize the TTS pipeline packages — every other crate compiles at
-# opt-level=0 which is 5-10× faster for incremental dev builds.
-[profile.dev.package.kokoro-en]
-opt-level = 3
-
-[profile.dev.package.ort]
-opt-level = 3
-
-[profile.dev.package.ndarray]
-opt-level = 3
-
-[profile.dev.package.regex]
-opt-level = 3
 
 # Optimize for release (reduces binary size significantly)
 [profile.release]
-opt-level = "s"      # Optimize for size
-strip = true         # Strip symbols from binary
-lto = true           # Enable Link Time Optimization
-codegen-units = 1    # Maximize optimization (takes longer to compile)
+opt-level = "s"         # Optimize for size
+strip = "symbols"       # Strip all symbols
+lto = true              # Enable Link Time Optimization
+codegen-units = 1       # Maximize optimization (takes longer to compile)
+panic = "abort"         # Remove unwinding tables (~1.3 MB saved for C++ deps like unrar-ng)
 
+# Dev profile: keep debug builds fast
+[profile.dev]
+debug-assertions = false

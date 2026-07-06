@@ -1,40 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play, Pause, Square, Headphones, Volume2, AlertCircle } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
 import { cn } from '../../../core/lib/utils';
 import { useSettingsStore } from '../../../core/store';
-import { immersionPlayer, type PlaybackState } from '../audio/ImmersionPlayer';
+import { immersionPlayer, ImmersionPlayer, type PlaybackState } from '../audio/ImmersionPlayer';
 
 interface ImmersionBarProps {
     sectionText: string;
-    startWordId?: string;
-    pageCfi?: string;
     className?: string;
     visible?: boolean;
     onComplete?: () => void;
-    onSynthesisComplete?: () => void;
 }
-
-const VOICES = [
-    { value: "af_bella", label: "Bella (US F)" },
-    { value: "af_nicole", label: "Nicole (US F)" },
-    { value: "af_sarah", label: "Sarah (US F)" },
-    { value: "am_adam", label: "Adam (US M)" },
-    { value: "am_michael", label: "Michael (US M)" },
-    { value: "bm_george", label: "George (UK M)" },
-];
 
 export function ImmersionBar({
     sectionText,
-    startWordId = 'tts-w-0',
-    pageCfi,
     className,
     visible = true,
     onComplete,
-    onSynthesisComplete,
 }: ImmersionBarProps) {
     const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
     const [hasError, setHasError] = useState(false);
+    const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
     const errorTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const initializedRef = useRef(false);
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
@@ -56,125 +41,73 @@ export function ImmersionBar({
         onCompleteRef.current = onComplete;
     }, [onComplete]);
 
-    const onSynthesisCompleteRef = useRef(onSynthesisComplete);
     useEffect(() => {
-        onSynthesisCompleteRef.current = onSynthesisComplete;
-    }, [onSynthesisComplete]);
-
-    useEffect(() => {
-        immersionPlayer.speed = 1.0;
+        ImmersionPlayer.loadVoices().then(setVoices);
     }, []);
 
     useEffect(() => {
         if (initializedRef.current) return;
         initializedRef.current = true;
 
-        immersionPlayer.speed = 1.0;
-
         immersionPlayer.init({
             onStateChange: (state) => {
                 setPlaybackState(state);
             },
-            onError: (msg) => {
-                console.error('[ImmersionBar]', msg);
+            onError: (_msg) => {
                 showError();
             },
             onComplete: () => {
                 onCompleteRef.current?.();
             },
-            onSynthesisComplete: () => {
-                onSynthesisCompleteRef.current?.();
-            }
         });
 
         return () => {
             immersionPlayer.destroy();
             initializedRef.current = false;
-            invoke<void>('stop_speech').catch(() => {});
         };
     }, []);
 
-    const lastPlayedCfiRef = useRef('');
-
-    const handlePlay = useCallback(async () => {
+    const handlePlay = useCallback(() => {
         const text = sectionText.trim();
         if (!text) return;
         clearError();
 
         if (playbackState === 'paused') {
-            await immersionPlayer.resume();
+            immersionPlayer.resume();
             return;
         }
 
         if (playbackState === 'loading') return;
 
-        if (playbackState === 'playing') {
-            immersionPlayer.stop();
-            try { await invoke<void>('stop_speech'); } catch { /* ok */ }
-        }
+        const rate = 1.0;
+        immersionPlayer.speak(text, ttsVoice, rate);
+    }, [sectionText, playbackState, ttsVoice]);
 
-        setPlaybackState('loading');
-        lastPlayedCfiRef.current = pageCfi || '';
-
-        immersionPlayer.prepare();
-
-        try {
-            const genId = await invoke<number>('generate_speech', {
-                text,
-                startFromId: startWordId,
-                voice: ttsVoice,
-            });
-            immersionPlayer.setCurrentGenId(genId);
-        } catch (err: unknown) {
-            console.error('[ImmersionBar]', err instanceof Error ? err.message : String(err));
-            showError();
-            setPlaybackState('idle');
-        }
-    }, [sectionText, startWordId, playbackState, ttsVoice]);
-
-    const handlePause = useCallback(async () => {
-        await immersionPlayer.pause();
+    const handlePause = useCallback(() => {
+        immersionPlayer.pause();
     }, []);
 
-    const handleStop = useCallback(async () => {
+    const handleStop = useCallback(() => {
         immersionPlayer.stop();
-        try { await invoke<void>('stop_speech'); } catch { /* ok */ }
     }, []);
 
-    const handleTestVoice = useCallback(async (voice: string) => {
+    const handleTestVoice = useCallback((voiceName: string) => {
         immersionPlayer.stop();
-        immersionPlayer.skipOnComplete = true;
-        try { await invoke<void>('stop_speech'); } catch { /* ok */ }
-        const sample = "Hello, this is " + voice.replace(/^[a-z]+_/, '') + " speaking.";
-        try {
-            const genId = await invoke<number>('generate_speech', {
-                text: sample,
-                startFromId: 'tts-w-0',
-                voice,
-            });
-            immersionPlayer.setCurrentGenId(genId);
-            setPlaybackState('loading');
-        } catch { /* sample playback is best-effort */ }
+        const sample = "Hello, this is a voice sample.";
+        immersionPlayer.speak(sample, voiceName, 1.0);
     }, []);
 
     const cycleVoice = useCallback(() => {
-        const idx = VOICES.findIndex(v => v.value === ttsVoice);
-        const next = VOICES[(idx + 1) % VOICES.length];
-        updateTtsSettings({ voice: next.value });
-    }, [ttsVoice, updateTtsSettings]);
+        if (voices.length === 0) return;
+        const idx = voices.findIndex(v => v.name === ttsVoice);
+        const next = voices[(idx + 1) % voices.length];
+        if (next) updateTtsSettings({ voice: next.name });
+    }, [ttsVoice, voices, updateTtsSettings]);
 
-    const prevVoiceRef = useRef(ttsVoice);
-    useEffect(() => {
-        if (prevVoiceRef.current === ttsVoice) return;
-        prevVoiceRef.current = ttsVoice;
-
-        if (playbackState === 'playing' || playbackState === 'loading') {
-            handlePlay();
-        }
-    }, [ttsVoice, playbackState, handlePlay]);
+    const currentVoiceLabel = voices.find(v => v.name === ttsVoice)
+        ?.name?.replace(/\(.*\)/, '').trim().split(' ').slice(0, 2).join(' ') || 'Default';
 
     const isActive = playbackState !== 'idle';
-    const currentVoiceLabel = VOICES.find(v => v.value === ttsVoice)?.label.split(' ')[0] || 'Voice';
 
     return (
         <>
@@ -193,7 +126,6 @@ export function ImmersionBar({
                 )}
                 style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
-                {/* Icon + status */}
                 <div className="flex items-center gap-2 shrink-0">
                     <Headphones
                         className={cn(
@@ -223,30 +155,31 @@ export function ImmersionBar({
                     )}
                 </div>
 
+                {voices.length > 0 && (
+                    <>
+                        <div className="w-px h-5 bg-[var(--color-border)] shrink-0" />
+
+                        <button
+                            onClick={cycleVoice}
+                            className="flex items-center justify-center h-8 sm:h-7 px-2 sm:px-1.5 rounded text-xs sm:text-[11px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors shrink-0"
+                            title="Change voice"
+                        >
+                            {currentVoiceLabel}
+                        </button>
+
+                        <button
+                            onClick={() => handleTestVoice(ttsVoice)}
+                            className="flex items-center justify-center w-8 sm:w-6 h-8 sm:h-6 rounded text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-overlay-subtle)] shrink-0"
+                            title="Test this voice"
+                            aria-label="Test voice"
+                        >
+                            <Volume2 className="w-4 sm:w-3 h-4 sm:h-3" />
+                        </button>
+                    </>
+                )}
+
                 <div className="w-px h-5 bg-[var(--color-border)] shrink-0" />
 
-                {/* Voice — cycle on click */}
-                <button
-                    onClick={cycleVoice}
-                    className="flex items-center justify-center h-8 sm:h-7 px-2 sm:px-1.5 rounded text-xs sm:text-[11px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors shrink-0"
-                    title="Voice"
-                >
-                    {currentVoiceLabel}
-                </button>
-
-                {/* Test voice */}
-                <button
-                    onClick={() => handleTestVoice(ttsVoice)}
-                    className="flex items-center justify-center w-8 sm:w-6 h-8 sm:h-6 rounded text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-overlay-subtle)] shrink-0"
-                    title="Test this voice"
-                    aria-label="Test voice"
-                >
-                    <Volume2 className="w-4 sm:w-3 h-4 sm:h-3" />
-                </button>
-
-                <div className="w-px h-5 bg-[var(--color-border)] shrink-0" />
-
-                {/* Controls */}
                 <div className="flex items-center gap-1.5 shrink-0">
                     {playbackState === 'idle' || playbackState === 'loading' ? (
                         <button
@@ -301,7 +234,6 @@ export function ImmersionBar({
                 </div>
             </div>
 
-                {/* Error toast - floats above the bar */}
             {hasError && (
                 <div className="fixed left-1/2 -translate-x-1/2 bottom-[3.5rem] z-50 pointer-events-none">
                     <div className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-error)]/50 shadow-lg">

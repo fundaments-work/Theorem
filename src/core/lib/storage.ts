@@ -209,7 +209,7 @@ export async function getBookMaterializedPath(id: string, filePath?: string): Pr
             `resolving materialized SQLite path for '${sqliteBookId}'`,
         );
         if (materializedPath) {
-            materializedPathCache.set(sqliteBookId, materializedPath);
+            lruSet(materializedPathCache, sqliteBookId, materializedPath, 500);
             return materializedPath;
         }
     } catch (error) {
