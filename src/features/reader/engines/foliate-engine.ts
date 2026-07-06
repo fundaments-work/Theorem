@@ -206,8 +206,6 @@ export class FoliateEngine {
             if (!doc || !doc.body) continue;
             const body = doc.body as HTMLElement;
             if (visibleRange) {
-                // Use toString() first — it's the most reliable cross-platform way
-                // to get visible text. cloneContents() is a backup for formatted text.
                 let rangeText = "";
                 try { rangeText = visibleRange.toString(); } catch { /* ignore */ }
                 if (!rangeText.trim()) {
@@ -219,7 +217,8 @@ export class FoliateEngine {
                         rangeText = wrapper.innerText || wrapper.textContent || '';
                     } catch { /* ignore */ }
                 }
-                fullText += rangeText + "\n";
+                // Final fallback: if range gave nothing, use body text
+                fullText += (rangeText || body.innerText || '') + "\n";
             } else {
                 fullText += (body.innerText || '') + "\n";
             }

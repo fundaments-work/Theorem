@@ -985,9 +985,9 @@ function BookReaderPage() {
 
         let cancelled = false;
         let retries = 0;
-        const MAX_RETRIES = 5;
+        const MAX_RETRIES = 8;
         const INITIAL_DELAY = 500;
-        const RETRY_INTERVAL = 300;
+        const RETRY_INTERVAL = 250;
 
         const extract = () => {
             if (cancelled) return;
