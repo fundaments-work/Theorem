@@ -68,8 +68,8 @@ pub fn linux_tts_speak(text: &str) -> Result<(), String> {
     let conn = guard.as_ref().ok_or("no connection")?;
     let c_text = CString::new(text).map_err(|e| format!("text: {e}"))?;
     let ret = unsafe { spd_say(conn.0, SPDPriority::Text, c_text.as_ptr()) };
-    if ret != 0 {
-        Err(format!("spd_say returned error code {}", ret))
+    if ret == 0 {
+        Err("spd_say failed — speech-dispatcher rejected the text".into())
     } else {
         Ok(())
     }
