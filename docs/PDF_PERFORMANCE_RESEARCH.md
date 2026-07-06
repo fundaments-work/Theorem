@@ -75,7 +75,7 @@ When a page area exceeds 4x screen size and covers <75% of the page:
 
 ## Recommendations
 
-### P0: Zoom Rescaling (Biggest UX Impact)
+### P0: Zoom Rescaling (Biggest UX Impact) ✅ Done (v1.0.7)
 
 Instead of re-rendering on every zoom change:
 1. Cache last rendered canvas as `ImageBitmap` or `OffscreenCanvas`
@@ -85,7 +85,7 @@ Instead of re-rendering on every zoom change:
 
 For small zoom changes (<15%), rescale is visually indistinguishable from re-render but takes 0.5ms instead of 100ms.
 
-### P0: Virtual Scrolling for Page DOM
+### P0: Virtual Scrolling for Page DOM ✅ Done (v1.0.7)
 
 Only keep visible + 2-3 buffer pages in DOM. Use IntersectionObserver to:
 1. Mount `PageCanvas` + text layer when page enters buffer zone
@@ -103,7 +103,7 @@ PDF.js PRs #20053 and #20729 implement `OffscreenCanvas` rendering in worker. En
 
 Requires WebKitGTK OffscreenCanvas support verification.
 
-### P1: Fix Rust Metadata Extraction
+### P1: Fix Rust Metadata Extraction ✅ Done (v1.0.7)
 
 `get_pdf_metadata` reads entire file. Change to:
 1. Read first 64 KB (contains header + Info dict in most files)

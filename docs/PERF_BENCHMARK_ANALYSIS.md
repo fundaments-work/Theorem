@@ -134,3 +134,65 @@ Virtual scrolling removes 90%+ of that DOM cost.
 ### Not worth doing yet
 - ❌ SQLite FTS5 — Fuse is only ~5ms at 500 books. Not a bottleneck until >1000 books.
 - ❌ Paginated library — UX trade-off is real; JS/DOM cost doesn't justify it yet.
+
+---
+
+## 7. Virtualization Benchmarks (v1.0.7)
+
+> Run: `pnpm test tests/library-virtualization.test.ts`
+
+Results from `tests/library-virtualization.test.ts` — JS pipeline cost of
+the `@tanstack/react-virtual` integration (column detection, row estimation,
+virtual item slicing). Does NOT include DOM render cost.
+
+### Column count detection (all modes × all breakpoints)
+
+| Operation | Time |
+|-----------|------|
+| Column detection (any viewport width) | < 0.025ms |
+| Row height estimation | < 0.031ms |
+
+Column detection and row estimation are both O(1) — trivial arithmetic.
+
+### Full virtual row pipeline (sorted books → visible rows)
+
+| Library size | Grid (1200px, 5 cols) | List (800px) |
+|---|---|---|
+| 50 books | 0.126ms | 0.092ms |
+| 100 books | 0.010ms | 0.011ms |
+| 200 books | 0.013ms | 0.013ms |
+| 500 books | 0.007ms | 0.005ms |
+| 1000 books | 0.007ms | 0.009ms |
+
+First-run at each size includes JIT warmup (~0.1ms); subsequent runs are
+~0.005–0.013ms regardless of library size. The JS pipeline cost of
+virtualization is **negligible** — sub-frame at all realistic sizes.
+
+### DOM reduction achieved
+
+Grid (1200px, 5 cols, 800px viewport, overscan=3):
+
+| Library size | Rendered items | DOM reduction |
+|---|---|---|
+| 50 books | 30 | 40% |
+| 200 books | 30 | **85%** |
+| 500 books | 30 | **94%** |
+| 1000 books | 30 | **97%** |
+
+List (800px viewport, overscan=5):
+
+| Library size | Rendered items | DOM reduction |
+|---|---|---|
+| 50 books | 23 | 54% |
+| 500 books | 23 | **95%** |
+| 1000 books | 23 | **98%** |
+
+### View mode switch cost
+
+Switching grid → compact → list at 500 books: **0.012ms total** (sub-frame).
+
+### Conclusion
+
+Virtualization JS pipeline adds < 0.13ms overhead while removing 85–98% of
+DOM nodes at 200+ books. The bottleneck was always DOM rendering (not JS),
+so this directly addresses the primary performance issue identified in v1.0.6.

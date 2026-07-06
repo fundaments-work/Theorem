@@ -242,10 +242,10 @@ Desktop toolkit handles book parsing natively in the renderer process.
 | P0 | Debounce search (250ms) | 1 hour | Eliminates per-keystroke Fuse rebuild | ✅ Done (v1.0.6) |
 | P0 | Reuse Fuse instance | 30 min | Prevents redundant index building | ✅ Done (v1.0.6) |
 | P0 | Fix bulk add-to-shelf `if (bookId)` | 1 line | Fixes broken feature | ✅ Done (v1.0.6) |
-| P1 | Virtual scrolling | 2-3 days | 90% reduction in DOM nodes for large libraries | ⬜ Todo |
+| P1 | Virtual scrolling | 2-3 days | 90% reduction in DOM nodes for large libraries | ✅ Done (v1.0.7) |
 | P1 | Shared context menu | 1 day | Reduces 200+ portal instances to 1 | ✅ Done (v1.0.6) |
-| P1 | Background cover hydration | 1-2 days | Faster startup, no blocking on covers | ⬜ Todo |
-| P1 | Thumbnail covers in library | 2-3 days | Faster list render, less memory | ⬜ Todo |
+| P1 | Background cover hydration | 1-2 days | Faster startup, no blocking on covers | ✅ Done (v1.0.7) |
+| P1 | Thumbnail covers in library | 2-3 days | Faster list render, less memory | ✅ Done (v1.0.7) |
 | P2 | SQLite FTS5 for search | 3-5 days | O(log n) search, no Fuse overhead | ⬜ Todo |
 | P2 | Event-driven sync (remove poll) | 2-3 days | Immediate sync, no wasted cycles | ⬜ Todo |
 | P3 | Paginated library view | 3-5 days | Further DOM reduction, UX trade-off | ⬜ Todo |
