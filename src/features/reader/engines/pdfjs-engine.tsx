@@ -54,6 +54,8 @@ export interface PDFJsEngineProps {
     initialPage?: number;
     initialZoom?: number;
     initialZoomMode?: PdfZoomMode;
+    presentationMode?: 'scroll' | 'paged';
+    onPresentationModeChange?: (mode: 'scroll' | 'paged') => void;
     onLoad?: (info: PDFDocumentInfo) => void;
     onError?: (error: Error) => void;
     onPageChange?: (page: number, totalPages: number, scale: number) => void;
@@ -107,6 +109,8 @@ export interface PDFJsEngineRef {
     rotateCounterClockwise: () => void;
     zoomFitPage: () => void;
     zoomFitWidth: () => void;
+    setPresentationMode: (mode: 'scroll' | 'paged') => void;
+    getPresentationMode: () => 'scroll' | 'paged';
     search: (query: string) => AsyncGenerator<SearchResult | { progress: number } | "done">;
     clearSearch: () => void;
 }
@@ -1146,6 +1150,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
     function PDFJsEngine({
         pdfPath, pdfData, originalFilename,
         initialPage = 1, initialZoom = DEFAULT_SCALE, initialZoomMode = DEFAULT_ZOOM_MODE,
+        presentationMode: initialPresentationMode = 'scroll', onPresentationModeChange,
         onLoad, onError, onPageChange, onZoomModeChange, onViewportTap, className,
         annotations = [], annotationMode = 'none',
         highlightColor = "yellow", penColor = "blue", penWidth = 2,
@@ -1160,6 +1165,8 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const [totalPages, setTotalPages] = useState(0);
         const [scale, setScale] = useState(DEFAULT_SCALE);
         const [rotation, setRotation] = useState(0);
+        const [presentationMode, setPresentationModeState] = useState<'scroll' | 'paged'>(initialPresentationMode);
+        const presentationModeRef = useRef<'scroll' | 'paged'>(initialPresentationMode);
         const [isViewportInteracting, setIsViewportInteracting] = useState(false);
         const [isInitialRenderStabilizing, setIsInitialRenderStabilizing] = useState(false);
         const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
@@ -1280,24 +1287,6 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             return () => { cancelAnimationFrame(rafId); };
         }, [pages, scale, rotation, totalPages, rebuildPageLayout]);
 
-        // FIX 4: debounce ResizeObserver to prevent rapid layout-flush bursts
-        useEffect(() => {
-            const container = containerRef.current;
-            if (!container || typeof ResizeObserver === "undefined") return;
-            const observer = new ResizeObserver(() => {
-                if (resizeDebounceTimerRef.current !== null) clearTimeout(resizeDebounceTimerRef.current);
-                resizeDebounceTimerRef.current = setTimeout(() => {
-                    resizeDebounceTimerRef.current = null;
-                    window.requestAnimationFrame(() => { rebuildPageLayout(); });
-                }, RESIZE_OBSERVER_DEBOUNCE_MS);
-            });
-            observer.observe(container);
-            return () => {
-                observer.disconnect();
-                if (resizeDebounceTimerRef.current !== null) { clearTimeout(resizeDebounceTimerRef.current); resizeDebounceTimerRef.current = null; }
-            };
-        }, [rebuildPageLayout]);
-
         // FIX 8 — Apply the zoom-anchor scroll adjustment after scale changes.
         //
         // Ordering guarantee: React flushes child useLayoutEffects before parent
@@ -1332,6 +1321,35 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             callbacksRef.current.onPageChange?.(currentPageRef.current, totalPagesRef.current, clampedScale);
             return clampedScale;
         }, [setZoomMode]);
+
+        // FIX 4: debounce ResizeObserver to prevent rapid layout-flush bursts.
+        //         Also re-applies fit-scale when zoom mode is width-fit or page-fit.
+        useEffect(() => {
+            const container = containerRef.current;
+            if (!container || typeof ResizeObserver === "undefined") return;
+            const observer = new ResizeObserver(() => {
+                if (resizeDebounceTimerRef.current !== null) clearTimeout(resizeDebounceTimerRef.current);
+                resizeDebounceTimerRef.current = setTimeout(() => {
+                    resizeDebounceTimerRef.current = null;
+                    window.requestAnimationFrame(() => {
+                        rebuildPageLayout();
+                        const fp = pages[0];
+                        if (fp && containerRef.current) {
+                            if (zoomModeRef.current === 'width-fit') {
+                                applyZoom(getFitWidthScale(containerRef.current, fp), { preserveMode: true });
+                            } else if (zoomModeRef.current === 'page-fit') {
+                                applyZoom(getFitPageScale(containerRef.current, fp), { preserveMode: true });
+                            }
+                        }
+                    });
+                }, RESIZE_OBSERVER_DEBOUNCE_MS);
+            });
+            observer.observe(container);
+            return () => {
+                observer.disconnect();
+                if (resizeDebounceTimerRef.current !== null) { clearTimeout(resizeDebounceTimerRef.current); resizeDebounceTimerRef.current = null; }
+            };
+        }, [rebuildPageLayout, applyZoom, pages]);
 
         const getLoadedPageNumbers = useCallback(() => new Set(pages.map((page) => page.pageNumber)), [pages]);
 
@@ -2065,6 +2083,12 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             rotateCounterClockwise: () => { setRotation((prev) => (prev - 90 + 360) % 360); },
             zoomFitPage: () => { if (!containerRef.current || !firstLoadedPage) return; applyZoom(getFitPageScale(containerRef.current, firstLoadedPage), { mode: "page-fit", preserveMode: true }); },
             zoomFitWidth: () => { if (!containerRef.current || !firstLoadedPage) return; applyZoom(getFitWidthScale(containerRef.current, firstLoadedPage), { mode: "width-fit", preserveMode: true }); },
+            setPresentationMode: (mode: 'scroll' | 'paged') => {
+                presentationModeRef.current = mode;
+                setPresentationModeState(mode);
+                onPresentationModeChange?.(mode);
+            },
+            getPresentationMode: () => presentationModeRef.current,
             search: (query: string) => search(query),
             clearSearch: () => clearSearch(),
         }), [applyZoom, clearSearch, firstLoadedPage, navigateToPage, search]);
@@ -2090,6 +2114,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     ref={containerRef}
                     className={cn("absolute inset-0 overflow-auto bg-[var(--color-surface)]", error && "invisible")}
                     onClick={handleViewportClick}
+                    style={presentationMode === 'paged' ? { scrollSnapType: 'y mandatory' } : undefined}
                 >
                     <div ref={zoomContainerRef} className="pdf-zoom-container flex flex-col items-center justify-start min-h-full py-2 sm:py-4 space-y-2 sm:space-y-4 px-1 sm:px-0 mx-auto">
                         {pages.map((page) => {
@@ -2109,13 +2134,19 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                                         style={{
                                             width: `${getCssDimension(viewport.width, isDesktopWebKit)}px`,
                                             height: `${getCssDimension(viewport.height, isDesktopWebKit)}px`,
+                                            ...(presentationMode === 'paged' ? { scrollSnapAlign: 'start' } : {}),
                                         }}
                                     />
                                 );
                             }
 
                             return (
-                                <div key={`page-${page.pageNumber}`} className="pdf-page-wrapper" data-page-number={page.pageNumber}>
+                                <div
+                                    key={`page-${page.pageNumber}`}
+                                    className="pdf-page-wrapper"
+                                    data-page-number={page.pageNumber}
+                                    style={presentationMode === 'paged' ? { scrollSnapAlign: 'start' } : undefined}
+                                >
                                     <PageCanvas
                                         page={page} scale={scale} rotation={rotation}
                                         isRenderActive={pageIsInCanvasRenderWindow}

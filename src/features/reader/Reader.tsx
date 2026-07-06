@@ -191,6 +191,7 @@ function BookReaderPage() {
     const [pdfTotalPages, setPdfTotalPages] = useState(0);
     const [pdfZoom, setPdfZoom] = useState(DEFAULT_PDF_ZOOM);
     const [pdfZoomMode, setPdfZoomMode] = useState<PdfZoomMode>(DEFAULT_PDF_ZOOM_MODE);
+    const [pdfPresentationMode, setPdfPresentationMode] = useState<'scroll' | 'paged'>('scroll');
     const [pdfInitialPage, setPdfInitialPage] = useState(1);
     const [pdfInitialZoom, setPdfInitialZoom] = useState(DEFAULT_PDF_ZOOM);
     const [pdfInitialZoomMode, setPdfInitialZoomMode] = useState<PdfZoomMode>(DEFAULT_PDF_ZOOM_MODE);
@@ -505,6 +506,7 @@ function BookReaderPage() {
             setPdfTotalPages(0);
             setPdfZoom(DEFAULT_PDF_ZOOM);
             setPdfZoomMode(DEFAULT_PDF_ZOOM_MODE);
+            setPdfPresentationMode('scroll');
             setPdfInitialPage(1);
             setPdfInitialZoom(DEFAULT_PDF_ZOOM);
             setPdfInitialZoomMode(DEFAULT_PDF_ZOOM_MODE);
@@ -1341,6 +1343,11 @@ function BookReaderPage() {
         setPdfZoomMode('width-fit');
     }, []);
 
+    const handlePdfPresentationModeChange = useCallback((mode: 'scroll' | 'paged') => {
+        pdfReaderRef.current?.setPresentationMode(mode);
+        setPdfPresentationMode(mode);
+    }, []);
+
     const handlePdfZoomIn = useCallback(() => {
         pdfReaderRef.current?.zoomIn();
         setPdfZoomMode('custom');
@@ -2171,6 +2178,8 @@ function BookReaderPage() {
                             initialPage={pdfInitialPage}
                             initialZoom={pdfInitialZoom}
                             initialZoomMode={pdfInitialZoomMode}
+                            presentationMode={pdfPresentationMode}
+                            onPresentationModeChange={handlePdfPresentationModeChange}
                             theme={settings.readerSettings.theme}
                             brightness={settings.readerSettings.brightness}
                             onPageChange={handlePdfPageChange}
@@ -2323,12 +2332,14 @@ function BookReaderPage() {
                     onClose={() => setActivePanel(null)}
                     zoom={pdfZoom}
                     zoomMode={pdfZoomMode}
+                    presentationMode={pdfPresentationMode}
                     onZoomIn={handlePdfZoomIn}
                     onZoomOut={handlePdfZoomOut}
                     onZoomReset={handlePdfZoomReset}
                     onFitPage={handlePdfZoomFitPage}
                     onFitWidth={handlePdfZoomFitWidth}
                     onRotate={() => pdfReaderRef.current?.rotateClockwise()}
+                    onPresentationModeChange={handlePdfPresentationModeChange}
                 />
             ) : (
                 <ReaderSettings

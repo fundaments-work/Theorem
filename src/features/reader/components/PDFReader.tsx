@@ -37,6 +37,10 @@ interface PDFReaderProps {
     initialZoom?: number;
     /** Initial zoom mode */
     initialZoomMode?: PdfZoomMode;
+    /** Page presentation mode */
+    presentationMode?: 'scroll' | 'paged';
+    /** Callback when presentation mode changes */
+    onPresentationModeChange?: (mode: 'scroll' | 'paged') => void;
     /** Theme mode for the reader */
     theme?: ReaderTheme;
     /** Brightness level (0-200) */
@@ -153,6 +157,8 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             initialPage,
             initialZoom,
             initialZoomMode,
+            presentationMode = 'scroll',
+            onPresentationModeChange,
             theme = "light",
             brightness = 100,
             onPageChange,
@@ -236,6 +242,8 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                 yield "done" as const;
             })(),
             clearSearch: () => engineRef.current?.clearSearch(),
+            setPresentationMode: (mode: 'scroll' | 'paged') => engineRef.current?.setPresentationMode(mode),
+            getPresentationMode: () => engineRef.current?.getPresentationMode() ?? 'scroll',
         }));
 
         // Handle page change from engine
@@ -301,6 +309,8 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                         initialPage={initialPage}
                         initialZoom={initialZoom}
                         initialZoomMode={initialZoomMode}
+                        presentationMode={presentationMode}
+                        onPresentationModeChange={onPresentationModeChange}
                         onPageChange={handlePageChange}
                         onZoomModeChange={onZoomModeChange}
                         onLoad={handleLoad}
