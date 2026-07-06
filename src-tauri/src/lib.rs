@@ -976,6 +976,7 @@ pub fn run() {
                 cancel: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
                 running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 data_version: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+                wake: std::sync::Arc::new(tokio::sync::Notify::new()),
             });
 
             // Collect any file association / CLI open targets at startup so the frontend can
@@ -1278,6 +1279,35 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
         tokio::time::sleep(std::time::Duration::from_secs(180)).await;
 
         handle.shutdown_notify.notify_one();
+
+        // Persist any incoming data received from peers during this window.
+        // Without this, data pushed by peers while the app was killed is lost
+        // when the ephemeral tokio runtime is dropped.
+        let incoming_cache_path = server_state.app_data_dir.join("sync-incoming-cache.json");
+        let sync_data = server_state.sync_data.lock().await;
+        if let Some(ref snapshot) = *sync_data {
+            let incoming: std::collections::HashMap<String, String> = snapshot
+                .domains
+                .iter()
+                .filter(|(k, _)| k.starts_with("incoming_"))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            if !incoming.is_empty() {
+                if let Ok(json) = serde_json::to_string_pretty(&incoming) {
+                    if let Err(e) = std::fs::write(&incoming_cache_path, &json) {
+                        eprintln!("[background-sync] Failed to persist incoming data cache: {e}");
+                    } else {
+                        eprintln!(
+                            "[background-sync] Persisted {} incoming domain(s) to {}",
+                            incoming.len(),
+                            incoming_cache_path.display()
+                        );
+                    }
+                }
+            }
+        }
+        drop(sync_data);
+
         eprintln!("[background-sync] JNI sync round complete");
         true
     });

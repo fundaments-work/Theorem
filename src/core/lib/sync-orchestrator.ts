@@ -940,10 +940,21 @@ export function scheduleMutationSync(): void {
             return;
         }
 
+        // No daemon: provision data to Rust server, then wake the
+        // background sync loop so it picks up the new data immediately
+        // instead of waiting for the next timer tick.
+        try {
+            await provisionSyncData();
+        } catch {
+            // Non-critical — data will be provisioned on next sync.
+        }
         void autoSyncRound();
     }, MUTATION_SYNC_DEBOUNCE_MS);
 
-    // Wake Rust background sync immediately so it picks up changes.
+    // Wake Rust background sync immediately. The sync loop will see the
+    // bumped data_version and check for changes. If the provisionSyncData
+    // above hasn't fired yet, the sync loop will find the data unchanged
+    // and skip — but the next tick (after the debounce) will pick it up.
     if (isTauri()) {
         import("./device-sync").then((mod) => {
             mod.wakeBackgroundSync().catch(() => {});

@@ -29,6 +29,7 @@ pub struct BackgroundSyncHandle {
     pub cancel: Arc<Mutex<Option<tokio::sync::watch::Sender<bool>>>>,
     pub running: Arc<AtomicBool>,
     pub data_version: Arc<AtomicU64>,
+    pub wake: Arc<tokio::sync::Notify>,
 }
 
 /// Initialize the sync subsystem. Call this once during app startup.
@@ -385,12 +386,42 @@ pub async fn set_sync_data(
 /// Retrieve any incoming data pushed by a peer during responder-mode sync.
 /// Returns a JSON map of `"incoming_{domain}" -> data_json`.
 /// Clears the incoming data after reading.
+///
+/// Also loads persisted incoming data from prior standalone WorkManager sync
+/// rounds (Android only). The JNI standalone sync persists received data to
+/// `sync-incoming-cache.json` before its ephemeral runtime exits.
+/// This data is loaded once on the first call and the cache file is deleted.
 #[tauri::command]
 pub async fn get_incoming_sync_data(app: tauri::AppHandle) -> Result<String, String> {
     let sync_state = get_sync_state(&app)?;
     let mut sync_data = sync_state.server_state.sync_data.lock().await;
 
     let mut incoming: HashMap<String, String> = HashMap::new();
+
+    // Load any persisted incoming data from prior WorkManager/JNI sync rounds.
+    // This data was received while the app was killed (Android background worker).
+    let cache_path = sync_state
+        .server_state
+        .app_data_dir
+        .join("sync-incoming-cache.json");
+    if cache_path.exists() {
+        if let Ok(cache_json) = std::fs::read_to_string(&cache_path) {
+            if let Ok(cached_incoming) =
+                serde_json::from_str::<HashMap<String, String>>(&cache_json)
+            {
+                eprintln!(
+                    "[sync] Loaded {} cached incoming domain(s) from {}",
+                    cached_incoming.len(),
+                    cache_path.display()
+                );
+                for (k, v) in cached_incoming {
+                    incoming.insert(k.replace("incoming_", ""), v);
+                }
+            }
+        }
+        // Delete the cache file after loading so it's not re-applied on next boot.
+        let _ = std::fs::remove_file(&cache_path);
+    }
 
     if let Some(data) = sync_data.as_mut() {
         // Collect all incoming_ prefixed domains
@@ -1535,63 +1566,16 @@ pub async fn start_background_sync(
     bg_handle.running.store(true, Ordering::SeqCst);
 
     let app_clone = app.clone();
+    let wake = bg_handle.wake.clone();
     tokio::spawn(async move {
         let mut timer = tokio::time::interval(Duration::from_secs(interval));
         let mut last_synced_version: u64 = 0;
 
         loop {
             tokio::select! {
-                _ = timer.tick() => {
-                    let bg = app_clone.state::<BackgroundSyncHandle>();
-                    let current_version = bg.data_version.load(Ordering::SeqCst);
-
-                    // Skip if data hasn't changed since last sync round.
-                    if current_version == last_synced_version {
-                        continue;
-                    }
-
-                    let sync_state = match get_sync_state(&app_clone) {
-                        Ok(s) => s,
-                        Err(_) => {
-                            eprintln!("[background-sync] Sync not initialized, skipping round");
-                            continue;
-                        }
-                    };
-
-                    // Get all paired device IDs.
-                    let peer_ids: Vec<String> = {
-                        let devices = sync_state.server_state.paired_devices.lock().await;
-                        devices.keys().cloned().collect()
-                    };
-
-                    if peer_ids.is_empty() {
-                        eprintln!("[background-sync] No paired devices, skipping round");
-                        continue;
-                    }
-
-                    eprintln!(
-                        "[background-sync] Starting sync round with {} device(s) (version {})",
-                        peer_ids.len(),
-                        current_version
-                    );
-
-                    for peer_id in &peer_ids {
-                        let result = initiate_sync(app_clone.clone(), peer_id.clone()).await;
-                        match result {
-                            Ok(_) => {
-                                eprintln!("[background-sync] Completed sync with {peer_id}");
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "[background-sync] Sync with {peer_id} failed: {e}"
-                                );
-                            }
-                        }
-                    }
-
-                    // Mark this version as synced so we don't repeat.
-                    last_synced_version = current_version;
-                    eprintln!("[background-sync] Sync round complete");
+                _ = timer.tick() => {}
+                _ = wake.notified() => {
+                    eprintln!("[background-sync] Woken by JS mutation trigger");
                 }
                 _ = cancel_rx.changed() => {
                     if *cancel_rx.borrow() {
@@ -1600,6 +1584,53 @@ pub async fn start_background_sync(
                     }
                 }
             }
+
+            let bg = app_clone.state::<BackgroundSyncHandle>();
+            let current_version = bg.data_version.load(Ordering::SeqCst);
+
+            // Skip if data hasn't changed since last sync round.
+            if current_version == last_synced_version {
+                continue;
+            }
+
+            let sync_state = match get_sync_state(&app_clone) {
+                Ok(s) => s,
+                Err(_) => {
+                    eprintln!("[background-sync] Sync not initialized, skipping round");
+                    continue;
+                }
+            };
+
+            let peer_ids: Vec<String> = {
+                let devices = sync_state.server_state.paired_devices.lock().await;
+                devices.keys().cloned().collect()
+            };
+
+            if peer_ids.is_empty() {
+                eprintln!("[background-sync] No paired devices, skipping round");
+                continue;
+            }
+
+            eprintln!(
+                "[background-sync] Starting sync round with {} device(s) (version {})",
+                peer_ids.len(),
+                current_version
+            );
+
+            for peer_id in &peer_ids {
+                let result = initiate_sync(app_clone.clone(), peer_id.clone()).await;
+                match result {
+                    Ok(_) => {
+                        eprintln!("[background-sync] Completed sync with {peer_id}");
+                    }
+                    Err(e) => {
+                        eprintln!("[background-sync] Sync with {peer_id} failed: {e}");
+                    }
+                }
+            }
+
+            last_synced_version = current_version;
+            eprintln!("[background-sync] Sync round complete");
         }
 
         // Reset running flag on exit.
@@ -1635,6 +1666,9 @@ pub async fn stop_background_sync(app: tauri::AppHandle) -> Result<(), String> {
 /// Wake the background sync loop so it syncs immediately
 /// instead of waiting for the next timer tick.
 /// Called from the JS side after data mutations.
+///
+/// Bumps the data version so the loop has something to sync,
+/// then sends a notify to wake the loop from its select! sleep.
 #[tauri::command]
 pub async fn wake_background_sync(app: tauri::AppHandle) -> Result<(), String> {
     let bg_handle = app.state::<BackgroundSyncHandle>();
@@ -1642,5 +1676,6 @@ pub async fn wake_background_sync(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
     bg_handle.data_version.fetch_add(1, Ordering::SeqCst);
+    bg_handle.wake.notify_one();
     Ok(())
 }
