@@ -863,7 +863,8 @@ fn apply_linux_webkit_workarounds() {
 // Linux: spd-say CLI. macOS: say command. Windows: PowerShell SAPI. Android: plugin.
 
 #[tauri::command]
-fn tts_speak(_app: tauri::AppHandle, text: String, _voice: String) -> Result<(), String> {
+#[allow(unused_variables, unreachable_code)]
+fn tts_speak(app: tauri::AppHandle, text: String, voice: String) -> Result<(), String> {
     #[cfg(target_os = "android")]
     return tauri_plugin_android_tts_audio::tts_speak(&app, text, voice);
     #[cfg(target_os = "linux")]
@@ -891,7 +892,8 @@ fn tts_speak(_app: tauri::AppHandle, text: String, _voice: String) -> Result<(),
 }
 
 #[tauri::command]
-fn tts_stop(_app: tauri::AppHandle) -> Result<(), String> {
+#[allow(unused_variables, unreachable_code)]
+fn tts_stop(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
     return tauri_plugin_android_tts_audio::tts_stop(&app);
     #[cfg(target_os = "linux")]
