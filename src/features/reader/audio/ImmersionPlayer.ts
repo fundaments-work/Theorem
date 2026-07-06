@@ -22,11 +22,16 @@ export interface PlaybackCallbacks {
     onComplete?: () => void;
 }
 
+/** Rough chars-per-second at 150 words/min, ~5 chars/word. */
+const CHARS_PER_SEC = (150 * 5) / 60; // 12.5
+
 export class ImmersionPlayer {
     private callbacks: PlaybackCallbacks = {};
     private _state: PlaybackState = 'idle';
-    private pausedText: string | null = null;
-    private pausedVoice: string | null = null;
+    private fullText: string = '';
+    private voice: string | null = null;
+    private startTime: number = 0;
+    private charsSpoken: number = 0;
     private completeTimer: ReturnType<typeof setTimeout> | null = null;
 
     get state(): PlaybackState {
@@ -43,48 +48,54 @@ export class ImmersionPlayer {
         this.callbacks = callbacks;
     }
 
-    async speak(text: string, voice: string | null, _rate: number = 1) {
+    async speak(text: string, voiceParam: string | null, _rate: number = 1) {
         await this._stop();
         if (!text.trim()) return;
+
+        this.fullText = text;
+        this.voice = voiceParam;
+        this.charsSpoken = 0;
+        this.startTime = performance.now();
         this.setState('loading');
 
-        this.pausedText = text;
-        this.pausedVoice = voice;
-
         try {
-            await invoke("tts_speak", { text, voice: voice || "" });
+            await invoke("tts_speak", { text, voice: voiceParam || "" });
             this.setState('playing');
 
-            const estimatedMs = Math.max(1000, (text.length / 11.25) * 1000);
+            const estimatedMs = Math.max(1000, (text.length / CHARS_PER_SEC) * 1000);
             this.completeTimer = setTimeout(() => {
                 this.completeTimer = null;
-                this.pausedText = null;
-                this.setState('idle');
-                this.callbacks.onComplete?.();
+                this._onDone();
             }, estimatedMs);
         } catch (err: unknown) {
-            this.setState('idle');
+            this._onDone();
             this.callbacks.onError?.(err instanceof Error ? err.message : String(err));
         }
     }
 
     async pause() {
         if (this._state !== 'playing') return;
-        // Kill the completion timer so onComplete doesn't fire (no auto-advance).
+        // Record how many chars were spoken before stopping.
+        const elapsed = (performance.now() - this.startTime) / 1000;
+        this.charsSpoken += Math.floor(elapsed * CHARS_PER_SEC);
+        // Kill completion timer so onComplete doesn't fire.
         if (this.completeTimer) {
             clearTimeout(this.completeTimer);
             this.completeTimer = null;
         }
-        // Stop the audio but keep the text so we can resume.
         await this._stop();
         this.setState('paused');
     }
 
     async resume() {
         if (this._state !== 'paused') return;
-        if (!this.pausedText) return;
-        // Re-speak the current section from the beginning.
-        await this.speak(this.pausedText, this.pausedVoice);
+        // Speak only the remaining portion of the text.
+        const remaining = this.fullText.slice(this.charsSpoken).trim();
+        if (!remaining) {
+            this._onDone();
+            return;
+        }
+        await this.speak(remaining, this.voice);
     }
 
     async stop() {
@@ -92,10 +103,19 @@ export class ImmersionPlayer {
             clearTimeout(this.completeTimer);
             this.completeTimer = null;
         }
-        this.pausedText = null;
-        this.pausedVoice = null;
+        this.fullText = '';
+        this.voice = null;
+        this.charsSpoken = 0;
         await this._stop();
         this.setState('idle');
+    }
+
+    private _onDone() {
+        this.fullText = '';
+        this.voice = null;
+        this.charsSpoken = 0;
+        this.setState('idle');
+        this.callbacks.onComplete?.();
     }
 
     private async _stop() {
@@ -112,7 +132,7 @@ export class ImmersionPlayer {
                     return voices.map(v => ({ name: v.name, lang: v.locale }));
                 }
             } catch {
-                // fall through to Web Speech API
+                // fall through
             }
         }
         if (typeof window !== "undefined" && window.speechSynthesis) {
