@@ -3,8 +3,7 @@
  * View and manage all highlights and notes across books
  */
 
-import { useState, useMemo, useCallback } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useState, useMemo } from "react";
 import { cn } from "../../core/lib/utils";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "../../core/store";
@@ -284,13 +283,6 @@ export function AnnotationsPage() {
         return filtered;
     }, [annotations, activeFilter, currentBookId, searchQuery, sortBy, bookTitleLookup]);
 
-    const rowVirtualizer = useVirtualizer({
-        count: filteredAnnotations.length,
-        getScrollElement: useCallback(() => document.getElementById('app-main'), []),
-        estimateSize: useCallback(() => 160, []),
-        overscan: 3,
-    });
-
     const handleDelete = (id: string) => {
         if (confirm("Are you sure you want to delete this annotation?")) {
             removeAnnotation(id);
@@ -416,31 +408,20 @@ export function AnnotationsPage() {
                     </p>
                 </div>
             ) : (
-                <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
-                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                        const annotation = filteredAnnotations[virtualRow.index];
-                        return (
-                            <div
-                                key={annotation.id}
-                                data-index={virtualRow.index}
-                                className="absolute top-0 left-0 w-full"
-                                style={{ transform: `translateY(${virtualRow.start}px)` }}
-                            >
-                                <div className="mb-4">
-                                        <AnnotationCard
-                                            annotation={annotation}
-                                            book={getBookInfo(annotation.bookId)}
-                                            shareId={sharingId}
-                                            onDelete={handleDelete}
-                                            onEdit={handleEdit}
-                                            onGoToBook={handleGoToBook}
-                                            onShare={handleShare}
-                                        />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                <div className="grid gap-4">
+                    {filteredAnnotations.map((annotation) => (
+                        <AnnotationCard
+                            key={annotation.id}
+                            annotation={annotation}
+                            book={getBookInfo(annotation.bookId)}
+                            shareId={sharingId}
+                            onDelete={handleDelete}
+                            onEdit={handleEdit}
+                            onGoToBook={handleGoToBook}
+                            onShare={handleShare}
+                        />
+                    ))}
+                </div>
             )}
         </div>
     );

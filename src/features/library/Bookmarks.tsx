@@ -3,8 +3,7 @@
  * View and manage all bookmarks across books
  */
 
-import { useState, useMemo, useCallback } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useState, useMemo } from "react";
 import { cn } from "../../core/lib/utils";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "../../core/store";
@@ -271,13 +270,6 @@ export function BookmarksPage() {
         return filtered;
     }, [bookmarks, searchQuery, sortBy, bookLookup]);
 
-    const rowVirtualizer = useVirtualizer({
-        count: filteredBookmarks.length,
-        getScrollElement: useCallback(() => document.getElementById('app-main'), []),
-        estimateSize: useCallback(() => viewMode === "grid" ? 220 : 80, [viewMode]),
-        overscan: 3,
-    });
-
     const handleDelete = async (id: string) => {
         const confirmed = await confirmDeleteBookmark();
         if (confirmed) {
@@ -365,42 +357,32 @@ export function BookmarksPage() {
                         No bookmarks found{searchQuery ? " matching your search" : ""}.
                     </p>
                 </div>
+            ) : viewMode === "grid" ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {filteredBookmarks.map((bookmark) => (
+                        <BookmarkCard
+                            key={bookmark.id}
+                            bookmark={bookmark}
+                            book={getBookInfo(bookmark.bookId)}
+                            viewMode={viewMode}
+                            onDelete={handleDelete}
+                            onGoToBookmark={handleGoToBookmark}
+                        />
+                    ))}
+                </div>
             ) : (
-                <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
-                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                            const bookmark = filteredBookmarks[virtualRow.index];
-                            return (
-                                <div
-                                    key={bookmark.id}
-                                    data-index={virtualRow.index}
-                                    className="absolute top-0 left-0 w-full"
-                                    style={{ transform: `translateY(${virtualRow.start}px)` }}
-                                >
-                                    {viewMode === "grid" ? (
-                                        <div className="mb-6">
-                                            <BookmarkCard
-                                                bookmark={bookmark}
-                                                book={getBookInfo(bookmark.bookId)}
-                                                viewMode={viewMode}
-                                                onDelete={handleDelete}
-                                                onGoToBookmark={handleGoToBookmark}
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div className="mb-3">
-                                            <BookmarkCard
-                                                bookmark={bookmark}
-                                                book={getBookInfo(bookmark.bookId)}
-                                                viewMode={viewMode}
-                                                onDelete={handleDelete}
-                                                onGoToBookmark={handleGoToBookmark}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                <div className="space-y-3">
+                    {filteredBookmarks.map((bookmark) => (
+                        <BookmarkCard
+                            key={bookmark.id}
+                            bookmark={bookmark}
+                            book={getBookInfo(bookmark.bookId)}
+                            viewMode={viewMode}
+                            onDelete={handleDelete}
+                            onGoToBookmark={handleGoToBookmark}
+                        />
+                    ))}
+                </div>
             )}
         </div>
     );
