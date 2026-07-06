@@ -338,11 +338,56 @@ fn read_pdf_range(path: String, offset: u64, length: u64) -> Result<Response, St
  */
 #[tauri::command]
 fn get_pdf_metadata(path: String) -> Result<PdfMetadata, String> {
-    let bytes =
-        fs::read(&path).map_err(|e| format!("Failed to read PDF file '{}': {}", path, e))?;
+    let metadata = fs::metadata(&path)
+        .map_err(|e| format!("Failed to read PDF file metadata '{}': {}", path, e))?;
+    let file_size = metadata.len();
 
-    // Basic PDF metadata extraction by parsing the header and info dictionary
-    let metadata = extract_pdf_metadata(&bytes);
+    const HEAD_SIZE: u64 = 65536; // 64KB for header + Info dict
+    let first_chunk_size = HEAD_SIZE.min(file_size);
+
+    let mut file =
+        fs::File::open(&path).map_err(|e| format!("Failed to open PDF file '{}': {}", path, e))?;
+
+    let mut first_bytes = vec![0_u8; first_chunk_size as usize];
+    file.read_exact(&mut first_bytes)
+        .map_err(|e| format!("Failed to read PDF header from '{}': {}", path, e))?;
+
+    let metadata = extract_pdf_metadata(&first_bytes);
+
+    // If no title found in the first 64KB, the Info dict might be near the end.
+    // Try the last 64KB as a fallback.
+    if metadata.title.is_none() && file_size > HEAD_SIZE {
+        let tail_size = HEAD_SIZE.min(file_size);
+        let tail_offset = file_size.saturating_sub(tail_size);
+
+        file.seek(SeekFrom::Start(tail_offset))
+            .map_err(|e| format!("Failed to seek PDF tail '{}': {}", path, e))?;
+
+        let mut tail_bytes = vec![0_u8; tail_size as usize];
+        file.read_exact(&mut tail_bytes)
+            .map_err(|e| format!("Failed to read PDF tail from '{}': {}", path, e))?;
+
+        let tail_metadata = extract_pdf_metadata(&tail_bytes);
+
+        let title = metadata.title.or(tail_metadata.title);
+        let author = metadata.author.or(tail_metadata.author);
+        let creator = metadata.creator.or(tail_metadata.creator);
+        let producer = metadata.producer.or(tail_metadata.producer);
+        let creation_date = metadata.creation_date.or(tail_metadata.creation_date);
+        let modification_date = metadata
+            .modification_date
+            .or(tail_metadata.modification_date);
+
+        return Ok(PdfMetadata {
+            title,
+            author,
+            pages: metadata.pages,
+            creator,
+            producer,
+            creation_date,
+            modification_date,
+        });
+    }
 
     Ok(metadata)
 }

@@ -817,6 +817,8 @@ const PageCanvas = memo(function PageCanvas({
     const inactiveReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastCanvasRenderKeyRef = useRef<string>("");
     const hasRenderedCanvasRef = useRef(false);
+    const cachedBitmapRef = useRef<ImageBitmap | null>(null);
+    const lastSizingRef = useRef<CanvasSizing | null>(null);
     const [isNearViewport, setIsNearViewport] = useState(page.pageNumber <= 3);
     const shouldRenderAnnotationLayer = annotationMode !== "none" || annotations.length > 0;
     const shouldRender = isNearViewport || isRenderActive || forceRenderActive;
@@ -853,7 +855,28 @@ const PageCanvas = memo(function PageCanvas({
         container.style.setProperty("--total-scale-factor", `${viewport.scale}`);
         canvas.style.width = `${cssWidth}px`;
         canvas.style.height = `${cssHeight}px`;
-    }, [page, scale, rotation, enableTextLayer, snapCssToPixels]);
+
+        // GPU-rescale cached bitmap for instant zoom feedback while re-render runs in background
+        const bitmap = cachedBitmapRef.current;
+        if (bitmap && hasRenderedCanvasRef.current) {
+            const outputScale = getCanvasPixelRatio(cssWidth, cssHeight, preferSharpCanvas, scale, reduceRenderQuality);
+            const sizing = getCanvasSizing(cssWidth, cssHeight, outputScale);
+            if (sizing.canvasWidth > 1 && sizing.canvasHeight > 1) {
+                const tempCanvas = document.createElement("canvas");
+                tempCanvas.width = sizing.canvasWidth;
+                tempCanvas.height = sizing.canvasHeight;
+                const tempCtx = tempCanvas.getContext("2d", { alpha: false });
+                if (tempCtx) {
+                    tempCtx.drawImage(bitmap, 0, 0, sizing.canvasWidth, sizing.canvasHeight);
+                    canvas.width = sizing.canvasWidth;
+                    canvas.height = sizing.canvasHeight;
+                    const mainCtx = canvas.getContext("2d", { alpha: false });
+                    if (mainCtx) mainCtx.drawImage(tempCanvas, 0, 0);
+                    lastSizingRef.current = sizing;
+                }
+            }
+        }
+    }, [page, scale, rotation, enableTextLayer, snapCssToPixels, preferSharpCanvas, reduceRenderQuality]);
 
     // Intersection observer for deferred rendering
     useEffect(() => {
@@ -907,6 +930,10 @@ const PageCanvas = memo(function PageCanvas({
         if (inactiveReleaseTimeoutRef.current) {
             clearTimeout(inactiveReleaseTimeoutRef.current);
             inactiveReleaseTimeoutRef.current = null;
+        }
+        if (cachedBitmapRef.current) {
+            cachedBitmapRef.current.close();
+            cachedBitmapRef.current = null;
         }
     }, []);
 
@@ -975,6 +1002,22 @@ const PageCanvas = memo(function PageCanvas({
                     lastCanvasRenderKeyRef.current = canvasRenderKey;
                     releaseRenderSlot();
                     releaseRenderSlot = null;
+
+                    // Cache rendered canvas for GPU-rescaling on zoom
+                    try {
+                        if (typeof createImageBitmap === "function") {
+                            const newBitmap = await createImageBitmap(canvas);
+                            if (!cancelled) {
+                                if (cachedBitmapRef.current) cachedBitmapRef.current.close();
+                                cachedBitmapRef.current = newBitmap;
+                                lastSizingRef.current = sizing;
+                            } else {
+                                newBitmap.close();
+                            }
+                        }
+                    } catch {
+                        cachedBitmapRef.current = null;
+                    }
                 }
 
                 if (enableTextLayer && textLayerDiv) {
@@ -1164,6 +1207,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             ? Math.max(WEBKIT_TEXT_LAYER_PAGE_WINDOW, canvasRenderWindow)
             : Math.max(1, canvasRenderWindow);
         const enableTextLayer = true;
+        const domRenderWindow = canvasRenderWindow + 4;
         const useStreamTextLayer = !isDesktopWebKit;
 
         const callbacksRef = useRef({ onLoad, onError, onPageChange, onZoomModeChange });
@@ -2051,8 +2095,25 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         {pages.map((page) => {
                             const pageDistanceFromCurrent = Math.abs(page.pageNumber - currentPage);
                             const pageIsInCanvasRenderWindow = pageDistanceFromCurrent <= canvasRenderWindow;
+                            const pageIsInDOMWindow = pageDistanceFromCurrent <= domRenderWindow;
                             const pageTextLayerEnabled = enableTextLayer && pageDistanceFromCurrent <= textLayerPageWindow;
                             const pageUseStreamTextLayer = isDesktopWebKit ? page.pageNumber !== currentPage : useStreamTextLayer;
+
+                            if (!pageIsInDOMWindow) {
+                                const viewport = page.getViewport({ scale: scale * PDF_TO_CSS_UNITS, rotation });
+                                return (
+                                    <div
+                                        key={`page-${page.pageNumber}`}
+                                        className="pdf-page-wrapper"
+                                        data-page-number={page.pageNumber}
+                                        style={{
+                                            width: `${getCssDimension(viewport.width, isDesktopWebKit)}px`,
+                                            height: `${getCssDimension(viewport.height, isDesktopWebKit)}px`,
+                                        }}
+                                    />
+                                );
+                            }
+
                             return (
                                 <div key={`page-${page.pageNumber}`} className="pdf-page-wrapper" data-page-number={page.pageNumber}>
                                     <PageCanvas
