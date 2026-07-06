@@ -5,19 +5,13 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { cn } from "../../core/lib/utils";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "../../core/store";
 import { confirmDeleteBookmark } from "../../core/lib/dialogs";
 import { Dropdown } from "../../ui";
 import {
     Bookmark,
-    Trash2,
-    BookOpen,
-    Clock,
-    ExternalLink,
-    LayoutGrid,
-    List,
+    MoreVertical,
 } from "lucide-react";
 
 // Empty state component
@@ -52,148 +46,69 @@ interface BookmarkCardProps {
         author: string;
         coverPath?: string;
     } | undefined;
-    viewMode: "grid" | "list";
     onDelete: (id: string) => Promise<void>;
     onGoToBookmark: (bookId: string, location: string) => void;
 }
 
-function BookmarkCard({ bookmark, book, viewMode, onDelete, onGoToBookmark }: BookmarkCardProps) {
-    if (viewMode === "list") {
-        return (
-            <div 
-                onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
-                className="group flex items-center gap-4 p-4 border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-text-muted)] transition-colors cursor-pointer"
-            >
-                {/* Cover */}
-                <div className="flex-shrink-0">
-                    {book?.coverPath ? (
-                        <img
-                            src={book.coverPath}
-                            alt={book.title}
-                            className="w-10 h-14 object-cover shadow-sm"
-                            loading="lazy"
-                        />
-                    ) : (
-                        <div className="w-10 h-14 bg-[var(--color-surface-muted)] flex items-center justify-center">
-                            <BookOpen className="w-4 h-4 text-[color:var(--color-text-muted)]" />
-                        </div>
-                    )}
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] truncate hover:text-[color:var(--color-accent)] transition-colors">
-                        {book?.title || "Unknown Book"}
-                    </h3>
-                    <p className="text-xs text-[color:var(--color-text-secondary)] truncate">
-                        {book?.author || "Unknown Author"}
-                    </p>
-                </div>
-
-                {/* Date */}
-                <div className="hidden sm:flex items-center gap-1.5 text-xs text-[color:var(--color-text-muted)]">
-                    <Clock className="w-3.5 h-3.5" />
-                    {new Date(bookmark.createdAt).toLocaleDateString()}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            book && onGoToBookmark(bookmark.bookId, bookmark.location);
-                        }}
-                        className="p-2 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
-                        title="Go to bookmark"
-                    >
-                        <ExternalLink className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={async (e) => {
-                            e.stopPropagation();
-                            await onDelete(bookmark.id);
-                        }}
-                        className="p-2 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-error)]"
-                        title="Delete bookmark"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-        );
-    }
+function BookmarkCard({ bookmark, book, onDelete, onGoToBookmark }: BookmarkCardProps) {
+    const [showMenu, setShowMenu] = useState(false);
 
     return (
-        <div className="group border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
-            {/* Book Cover Section */}
-            <div
-                onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
-                className="block w-full aspect-[3/2] bg-[var(--color-surface-muted)] relative overflow-hidden cursor-pointer"
-            >
-                {book?.coverPath ? (
-                    <>
-                        <img
-                            src={book.coverPath}
-                            alt={book.title}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-overlay-strong)] to-transparent" />
-                        <div className="absolute bottom-3 left-3 right-3">
-                            <h3 className="font-medium text-sm text-[color:var(--color-text-inverse)] line-clamp-1">
-                                {book?.title || "Unknown Book"}
-                            </h3>
-                            <p className="text-xs text-[color:var(--color-text-inverse)] opacity-80 line-clamp-1">
-                                {book?.author || "Unknown Author"}
-                            </p>
-                        </div>
-                    </>
-                ) : (
-                    <div className="flex flex-col items-center justify-center h-full p-4">
-                        <BookOpen className="w-10 h-10 text-[color:var(--color-text-muted)] mb-2" />
-                        <span className="text-sm text-[color:var(--color-text-secondary)] text-center line-clamp-2">
-                            {book?.title || "Unknown Book"}
+        <div className="group border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-black">
+            <div className="flex items-start justify-between mb-4">
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                        <span className="font-sans text-[11px] font-semibold text-[color:var(--color-text-secondary)]">
+                            BOOKMARK
+                        </span>
+                        <span className="font-sans text-[11px] text-[color:var(--color-text-secondary)]">
+                            {new Date(bookmark.createdAt).toISOString().slice(0, 10)}
                         </span>
                     </div>
-                )}
-
-                {/* Bookmark Icon */}
-                <div className="absolute top-3 right-3">
-                    <div className="w-8 h-8 bg-[var(--color-accent)] flex items-center justify-center">
-                        <Bookmark className="w-4 h-4 text-[color:var(--color-text-inverse)] fill-[var(--color-text-inverse)]" />
+                    <div className="mt-2 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
+                        {book?.title || "Unknown source"} | {book?.author || "Unknown author"}
                     </div>
+                </div>
+                <div className="relative">
+                    <button
+                        onClick={() => setShowMenu(!showMenu)}
+                        className="border border-[var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] transition-opacity hover:text-[color:var(--color-text-primary)]"
+                    >
+                        <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {showMenu && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                            <div className="absolute right-0 top-full z-20 mt-1 w-40 border border-[var(--color-border)] bg-[var(--color-surface)] py-1">
+                                <button
+                                    onClick={() => { book && onGoToBookmark(bookmark.bookId, bookmark.location); setShowMenu(false); }}
+                                    className="w-full whitespace-nowrap px-3 py-2 text-left font-sans text-[11px] font-medium text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]"
+                                >
+                                    Go to bookmark
+                                </button>
+                                <button
+                                    onClick={async () => { await onDelete(bookmark.id); setShowMenu(false); }}
+                                    className="w-full whitespace-nowrap px-3 py-2 text-left font-sans text-[11px] font-medium text-[color:var(--color-error)] hover:bg-[var(--color-surface-muted)]"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
-            {/* Content */}
-            <div className="p-4">
+            <div className="space-y-3">
                 {bookmark.selectedText && (
-                    <blockquote className="text-sm text-[color:var(--color-text-secondary)] border-l-2 border-[var(--color-border)] pl-3 italic line-clamp-2 mb-3">
-                        "{bookmark.selectedText}"
+                    <blockquote className="border-l-2 border-black pl-3 font-serif text-[17px] leading-relaxed text-[color:var(--color-text-primary)]">
+                        {bookmark.selectedText}
                     </blockquote>
                 )}
-
-                <div className="flex items-center justify-between">
-                    <span className="text-xs text-[color:var(--color-text-muted)]">
-                        {new Date(bookmark.createdAt).toLocaleDateString()}
-                    </span>
-                <div className="flex items-center gap-1 transition-opacity">
-                        <button
-                            onClick={() => book && onGoToBookmark(bookmark.bookId, bookmark.location)}
-                            className="p-1.5 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"
-                            title="Go to bookmark"
-                        >
-                            <ExternalLink className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={async () => await onDelete(bookmark.id)}
-                            className="p-1.5 text-[color:var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-error)]"
-                            title="Delete bookmark"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
+                {bookmark.noteContent && (
+                    <p className="font-serif text-[16px] leading-relaxed text-[color:var(--color-text-primary)] whitespace-pre-wrap">
+                        {bookmark.noteContent}
+                    </p>
+                )}
             </div>
         </div>
     );
@@ -206,7 +121,6 @@ export function BookmarksPage() {
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
     const setRoute = useUIStore((state) => state.setRoute);
     const searchQuery = useUIStore((state) => state.searchQuery);
-    const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
     const bookLookup = useMemo(
         () => new Map(books.map((book) => [book.id, book])),
@@ -274,7 +188,7 @@ export function BookmarksPage() {
     const bookmarksVirtualizer = useVirtualizer({
         count: filteredBookmarks.length,
         getScrollElement: useCallback(() => document.getElementById('app-main'), []),
-        estimateSize: useCallback(() => viewMode === "grid" ? 220 : 80, [viewMode]),
+        estimateSize: useCallback(() => 100, []),
         overscan: 3,
         measureElement: (el) => el.getBoundingClientRect().height,
     });
@@ -319,7 +233,6 @@ export function BookmarksPage() {
 
             {/* Toolbar */}
             <div className="flex items-center justify-between gap-4 mb-8">
-                {/* Sort Dropdown */}
                 <Dropdown
                     value={sortBy}
                     onChange={(value) => setSortBy(value as typeof sortBy)}
@@ -329,34 +242,6 @@ export function BookmarksPage() {
                         { value: "book", label: "By Book" },
                     ]}
                 />
-
-                {/* View Mode Toggle */}
-                <div className="flex items-center bg-[var(--color-surface-muted)] p-1">
-                    <button
-                        onClick={() => setViewMode("grid")}
-                        className={cn(
-                            "p-2 transition-colors",
-                            viewMode === "grid"
-                                ? "bg-[var(--color-surface)] text-[color:var(--color-text-primary)] shadow-sm"
-                                : "text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
-                        )}
-                        title="Grid view"
-                    >
-                        <LayoutGrid className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => setViewMode("list")}
-                        className={cn(
-                            "p-2 transition-colors",
-                            viewMode === "list"
-                                ? "bg-[var(--color-surface)] text-[color:var(--color-text-primary)] shadow-sm"
-                                : "text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
-                        )}
-                        title="List view"
-                    >
-                        <List className="w-4 h-4" />
-                    </button>
-                </div>
             </div>
 
             {/* Bookmarks Display */}
@@ -370,11 +255,10 @@ export function BookmarksPage() {
                 <div style={{ height: `${bookmarksVirtualizer.getTotalSize()}px`, position: "relative" }}>
                     <div style={{ paddingTop: `${bookmarksVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>
                         {bookmarksVirtualizer.getVirtualItems().map((virtualRow) => (
-                            <div key={virtualRow.key} data-index={virtualRow.index} ref={bookmarksVirtualizer.measureElement} className={viewMode === "grid" ? "pb-6" : "pb-3"}>
+                            <div key={virtualRow.key} data-index={virtualRow.index} ref={bookmarksVirtualizer.measureElement} className="pb-4">
                                 <BookmarkCard
                                     bookmark={filteredBookmarks[virtualRow.index]}
                                     book={getBookInfo(filteredBookmarks[virtualRow.index].bookId)}
-                                    viewMode={viewMode}
                                     onDelete={handleDelete}
                                     onGoToBookmark={handleGoToBookmark}
                                 />
