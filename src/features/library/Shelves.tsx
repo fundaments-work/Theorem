@@ -3,7 +3,8 @@
  * Organize books into collections/shelves
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core/lib/utils";
 import { getShelfColor, getShelfInitials } from "../../core/lib/design-tokens";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
@@ -287,6 +288,61 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
         });
     }, [shelf.bookIds, books, debouncedSearchQuery, settings.librarySortBy, settings.librarySortOrder]);
 
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const isListView = viewMode === "list";
+    const isCompactView = viewMode === "compact";
+
+    const [cols, setCols] = useState(4);
+
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const compute = () => {
+            const w = el.clientWidth;
+            if (isListView) return 1;
+            if (isCompactView) {
+                if (w >= 1280) return 8;
+                if (w >= 1024) return 6;
+                if (w >= 768) return 5;
+                if (w >= 640) return 4;
+                return 3;
+            }
+            if (w >= 1280) return 6;
+            if (w >= 1024) return 5;
+            if (w >= 768) return 4;
+            if (w >= 640) return 3;
+            return 2;
+        };
+        setCols(compute());
+        const observer = new ResizeObserver(() => setCols(compute()));
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [isListView, isCompactView]);
+
+    const effectiveCols = isListView ? 1 : cols;
+
+    const rowCount = isListView
+        ? shelfBooks.length
+        : Math.ceil(shelfBooks.length / Math.max(effectiveCols, 1));
+
+    const getEstimateSize = useCallback(() => {
+        if (isListView) return 70;
+        const el = scrollRef.current;
+        if (!el) return 300;
+        const gap = isCompactView ? 12 : 24;
+        const cardW = Math.max(1, (el.clientWidth - (effectiveCols - 1) * gap) / Math.max(effectiveCols, 1));
+        const textH = isCompactView ? 0 : 72;
+        return Math.round(cardW * 1.5 + textH + gap);
+    }, [isListView, isCompactView, effectiveCols]);
+
+    const rowVirtualizer = useVirtualizer({
+        count: rowCount,
+        getScrollElement: useCallback(() => scrollRef.current, []),
+        estimateSize: getEstimateSize,
+        overscan: 3,
+        measureElement: (el) => el.getBoundingClientRect().height,
+    });
+
     // Unused remove handler removed
     const handleOpenBook = (book: Book) => {
         if (book.syncedWithoutFile) {
@@ -364,72 +420,61 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             </div>
 
             {/* Books Display */}
-            {viewMode === "grid" && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
-                    {shelfBooks.map((book) => (
-                        <MemoizedBookCard
-                            key={book.id}
-                            book={book}
-                            viewMode={viewMode}
-                            onOpenBook={handleOpenBook}
-                            onToggleFavorite={toggleFavorite}
-                            onDeleteBook={(id) => {
-                                confirmDeleteBook(book.title).then((confirmed) => {
-                                    if (confirmed) removeBook(id);
-                                });
-                            }}
-                            onShowInfo={(b) => { setInfoModalBook(b); setIsInfoModalOpen(true); }}
-                            onAddToShelf={(id) => { setAddToShelfBookId(id); setIsAddToShelfModalOpen(true); }}
-                            onMarkAsRead={markBookCompleted}
-                            onMarkAsUnread={markBookUnread}
-                        />
-                    ))}
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" style={{ height: "calc(100vh - 12rem)" }}>
+                <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
+                    <div style={{ paddingTop: `${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>
+                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                            const rowStart = virtualRow.index * (isListView ? 1 : effectiveCols);
+                            const itemsInRow = isListView
+                                ? 1
+                                : Math.min(effectiveCols, shelfBooks.length - rowStart);
+                            const rowItems = isListView
+                                ? [shelfBooks[virtualRow.index]]
+                                : shelfBooks.slice(rowStart, rowStart + itemsInRow);
+
+                            const cardProps = {
+                                onOpenBook: handleOpenBook,
+                                onToggleFavorite: toggleFavorite,
+                                onDeleteBook: (id: string) => {
+                                    const book = shelfBooks.find(b => b.id === id);
+                                    if (book) confirmDeleteBook(book.title).then((c) => { if (c) removeBook(id); });
+                                },
+                                onShowInfo: (b: Book) => { setInfoModalBook(b); setIsInfoModalOpen(true); },
+                                onAddToShelf: (id: string) => { setAddToShelfBookId(id); setIsAddToShelfModalOpen(true); },
+                                onMarkAsRead: markBookCompleted,
+                                onMarkAsUnread: markBookUnread,
+                            };
+
+                            return (
+                                <div key={virtualRow.key} data-index={virtualRow.index} ref={rowVirtualizer.measureElement}>
+                                    {isListView ? (
+                                        <div className="pb-2">
+                                            <MemoizedBookCard
+                                                key={rowItems[0].id} book={rowItems[0]} viewMode={viewMode}
+                                                isSelecting={false} isSelected={false} onToggleSelect={() => {}}
+                                                {...cardProps}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className={isCompactView
+                                            ? "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 pb-3"
+                                            : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10 pb-10"
+                                        }>
+                                            {rowItems.map((book) => (
+                                                <MemoizedBookCard
+                                                    key={book.id} book={book} viewMode={viewMode}
+                                                    isSelecting={false} isSelected={false} onToggleSelect={() => {}}
+                                                    {...cardProps}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
-            )}
-            {viewMode === "list" && (
-                <div className="space-y-2">
-                    {shelfBooks.map((book) => (
-                        <MemoizedBookCard
-                            key={book.id}
-                            book={book}
-                            viewMode={viewMode}
-                            onOpenBook={handleOpenBook}
-                            onToggleFavorite={toggleFavorite}
-                            onDeleteBook={(id) => {
-                                confirmDeleteBook(book.title).then((confirmed) => {
-                                    if (confirmed) removeBook(id);
-                                });
-                            }}
-                            onShowInfo={(b) => { setInfoModalBook(b); setIsInfoModalOpen(true); }}
-                            onAddToShelf={(id) => { setAddToShelfBookId(id); setIsAddToShelfModalOpen(true); }}
-                            onMarkAsRead={markBookCompleted}
-                            onMarkAsUnread={markBookUnread}
-                        />
-                    ))}
-                </div>
-            )}
-            {viewMode === "compact" && (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-                    {shelfBooks.map((book) => (
-                        <MemoizedBookCard
-                            key={book.id}
-                            book={book}
-                            viewMode={viewMode}
-                            onOpenBook={handleOpenBook}
-                            onToggleFavorite={toggleFavorite}
-                            onDeleteBook={(id) => {
-                                confirmDeleteBook(book.title).then((confirmed) => {
-                                    if (confirmed) removeBook(id);
-                                });
-                            }}
-                            onShowInfo={(b) => { setInfoModalBook(b); setIsInfoModalOpen(true); }}
-                            onAddToShelf={(id) => { setAddToShelfBookId(id); setIsAddToShelfModalOpen(true); }}
-                            onMarkAsRead={markBookCompleted}
-                            onMarkAsUnread={markBookUnread}
-                        />
-                    ))}
-                </div>
-            )}
+            </div>
             <BookInfoModal
                 book={infoModalBook}
                 isOpen={isInfoModalOpen}

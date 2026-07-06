@@ -1,4 +1,5 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     BookOpenText,
     Trash2,
@@ -46,6 +47,15 @@ export function VocabularyPage() {
                 return a.term.localeCompare(b.term);
             });
     }, [searchQuery, vocabularyTerms]);
+
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    const termsVirtualizer = useVirtualizer({
+        count: filteredTerms.length,
+        getScrollElement: useCallback(() => scrollRef.current, []),
+        estimateSize: useCallback(() => 48, []),
+        overscan: 5,
+    });
 
     const selectedTerm = useMemo(() => (
         selectedTermId ? filteredTerms.find((t) => t.id === selectedTermId) || null : null
@@ -105,40 +115,41 @@ export function VocabularyPage() {
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto px-4 pb-12">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-12">
                     {filteredTerms.length > 0 ? (
-                        <div className="space-y-0.5">
-                            {filteredTerms.map((term) => {
-                                const isSelected = selectedTermId === term.id;
-                                return (
-                                    <button
-                                        key={term.id}
-                                        onClick={() => {
-                                            setSelectedTermId(isSelected ? null : term.id);
-                                            setShowMobileList(false);
-                                        }}
-                                        className={cn(
-                                            "w-full px-3 py-3 text-left transition-colors border-l-2",
-                                            isSelected
-                                                ? "border-l-[var(--color-accent)] bg-[var(--color-surface-elevated)]"
-                                                : "border-l-transparent hover:bg-[var(--color-surface-muted)]",
-                                        )}
-                                    >
-                                        <p className={cn(
-                                            "text-sm font-medium truncate",
-                                            isSelected ? "text-[color:var(--color-accent)]" : "text-[color:var(--color-text-primary)]",
-                                        )}>
-                                            {term.term}
-                                        </p>
-                                        <p className="mt-0.5 truncate text-[11px] text-[color:var(--color-text-muted)] leading-snug">
-                                            {(() => {
-                                                const def = getTermPrimaryDefinition(term);
-                                                return isHtml(def) ? (term.meanings[0]?.partOfSpeech || "Definition") : def;
-                                            })()}
-                                        </p>
-                                    </button>
-                                );
-                            })}
+                        <div style={{ height: `${termsVirtualizer.getTotalSize()}px`, position: "relative" }}>
+                            <div style={{ paddingTop: `${termsVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>
+                                {termsVirtualizer.getVirtualItems().map((virtualRow) => {
+                                    const term = filteredTerms[virtualRow.index];
+                                    const isSelected = selectedTermId === term.id;
+                                    return (
+                                        <button
+                                            key={term.id}
+                                            data-index={virtualRow.index}
+                                            onClick={() => {
+                                                setSelectedTermId(isSelected ? null : term.id);
+                                                setShowMobileList(false);
+                                            }}
+                                            className={cn(
+                                                "w-full px-3 py-3 text-left transition-colors border-l-2",
+                                                isSelected
+                                                    ? "border-l-[var(--color-accent)] bg-[var(--color-surface-elevated)]"
+                                                    : "border-l-transparent hover:bg-[var(--color-surface-muted)]",
+                                            )}
+                                        >
+                                            <p className={cn("text-sm font-medium truncate",
+                                                isSelected ? "text-[color:var(--color-accent)]" : "text-[color:var(--color-text-primary)]",
+                                            )}>{term.term}</p>
+                                            <p className="mt-0.5 truncate text-[11px] text-[color:var(--color-text-muted)] leading-snug">
+                                                {(() => {
+                                                    const def = getTermPrimaryDefinition(term);
+                                                    return isHtml(def) ? (term.meanings[0]?.partOfSpeech || "Definition") : def;
+                                                })()}
+                                            </p>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-20 text-center opacity-60">

@@ -3,7 +3,8 @@
  * View and manage all highlights and notes across books
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core/lib/utils";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "../../core/store";
@@ -283,6 +284,14 @@ export function AnnotationsPage() {
         return filtered;
     }, [annotations, activeFilter, currentBookId, searchQuery, sortBy, bookTitleLookup]);
 
+    const annotationsVirtualizer = useVirtualizer({
+        count: filteredAnnotations.length,
+        getScrollElement: useCallback(() => document.getElementById('app-main'), []),
+        estimateSize: useCallback(() => 160, []),
+        overscan: 3,
+        measureElement: (el) => el.getBoundingClientRect().height,
+    });
+
     const handleDelete = (id: string) => {
         if (confirm("Are you sure you want to delete this annotation?")) {
             removeAnnotation(id);
@@ -408,19 +417,22 @@ export function AnnotationsPage() {
                     </p>
                 </div>
             ) : (
-                <div className="grid gap-4">
-                    {filteredAnnotations.map((annotation) => (
-                        <AnnotationCard
-                            key={annotation.id}
-                            annotation={annotation}
-                            book={getBookInfo(annotation.bookId)}
-                            shareId={sharingId}
-                            onDelete={handleDelete}
-                            onEdit={handleEdit}
-                            onGoToBook={handleGoToBook}
-                            onShare={handleShare}
-                        />
-                    ))}
+                <div style={{ height: `${annotationsVirtualizer.getTotalSize()}px`, position: "relative" }}>
+                    <div style={{ paddingTop: `${annotationsVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>
+                        {annotationsVirtualizer.getVirtualItems().map((virtualRow) => (
+                            <div key={virtualRow.key} data-index={virtualRow.index} ref={annotationsVirtualizer.measureElement} className="pb-4">
+                                <AnnotationCard
+                                    annotation={filteredAnnotations[virtualRow.index]}
+                                    book={getBookInfo(filteredAnnotations[virtualRow.index].bookId)}
+                                    shareId={sharingId}
+                                    onDelete={handleDelete}
+                                    onEdit={handleEdit}
+                                    onGoToBook={handleGoToBook}
+                                    onShare={handleShare}
+                                />
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
         </div>

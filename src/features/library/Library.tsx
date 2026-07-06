@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo, memo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn, normalizeFilePath, normalizeAuthor, formatProgress, formatFileSize, formatRelativeDate } from "../../core/lib/utils";
 import { saveCoverImage, getBookData } from "../../core/lib/storage";
 import { buildFallbackCoverSvg, shouldUseExtractedTitle, shouldUseExtractedAuthor } from "../../core/lib/cover-extractor";
@@ -1056,6 +1057,62 @@ export function LibraryPage() {
         showFavoritesOnly,
     ]);
 
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    const isListView = settings.libraryViewMode === "list";
+    const isCompactView = settings.libraryViewMode === "compact";
+
+    const [observedCols, setObservedCols] = useState(4);
+
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const compute = () => {
+            const w = el.clientWidth;
+            if (isListView) return 1;
+            if (isCompactView) {
+                if (w >= 1280) return 6;
+                if (w >= 1024) return 5;
+                if (w >= 640) return 4;
+                return 3;
+            }
+            if (w >= 1536) return 8;
+            if (w >= 1280) return 7;
+            if (w >= 1024) return 5;
+            if (w >= 768) return 4;
+            if (w >= 640) return 3;
+            return 2;
+        };
+        setObservedCols(compute());
+        const observer = new ResizeObserver(() => setObservedCols(compute()));
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [isListView, isCompactView]);
+
+    const effectiveCols = isListView ? 1 : observedCols;
+
+    const rowCount = isListView
+        ? sortedBooks.length
+        : Math.ceil(sortedBooks.length / Math.max(effectiveCols, 1));
+
+    const getEstimateSize = useCallback(() => {
+        if (isListView) return 70;
+        const el = scrollRef.current;
+        if (!el) return 300;
+        const gap = isCompactView ? 8 : 20;
+        const cardW = Math.max(1, (el.clientWidth - (effectiveCols - 1) * gap) / Math.max(effectiveCols, 1));
+        const textH = isCompactView ? 0 : 72;
+        return Math.round(cardW * 1.5 + textH + gap);
+    }, [isListView, isCompactView, effectiveCols]);
+
+    const rowVirtualizer = useVirtualizer({
+        count: rowCount,
+        getScrollElement: useCallback(() => scrollRef.current, []),
+        estimateSize: getEstimateSize,
+        overscan: 3,
+        measureElement: (el) => el.getBoundingClientRect().height,
+    });
+
     // Lightweight fallback cover generation for books that need covers.
     // Real cover/metadata extraction happens when books are opened in the reader.
     useEffect(() => {
@@ -1638,80 +1695,72 @@ export function LibraryPage() {
                     </div>
 
                     {/* Books Grid/List/Compact */}
-                    <section className="flex-1 min-h-0 overflow-y-auto">
+                    <section ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
                         {sortedBooks.length === 0 ? (
                             <div className="text-center py-16 border-2 border-dashed border-[var(--color-border)]">
-                                <p className="text-[color:var(--color-text-muted)] font-bold uppercase text-xs tracking-widest">
-                                    No documents match criteria
-                                </p>
+                                <p className="text-[color:var(--color-text-muted)] font-bold uppercase text-xs tracking-widest">No documents match criteria</p>
                                 {searchQuery && (
-                                    <button
-                                        onClick={() => useUIStore.getState().setSearchQuery("")}
-                                        className="mt-4 text-[10px] font-black uppercase text-[color:var(--color-accent)] hover:underline tracking-tighter"
-                                    >
+                                    <button onClick={() => useUIStore.getState().setSearchQuery("")} className="mt-4 text-[10px] font-black uppercase text-[color:var(--color-accent)] hover:underline tracking-tighter">
                                         [ RESET SEARCH ]
                                     </button>
                                 )}
                             </div>
-                        ) : settings.libraryViewMode === "list" ? (
-                            <div className="space-y-1 pb-8">
-                                {sortedBooks.map((book) => (
-                                    <MemoizedBookCard
-                                        key={book.id}
-                                        book={book}
-                                        viewMode={settings.libraryViewMode}
-                                        onOpenBook={handleOpenBook}
-                                        onToggleFavorite={handleToggleFavorite}
-                                        onDeleteBook={handleDeleteBook}
-                                        onShowInfo={handleShowInfo}
-                                        onAddToShelf={handleAddToShelf}
-                                        onMarkAsRead={handleMarkAsRead}
-                                        onMarkAsUnread={handleMarkAsUnread}
-                                        isSelecting={isSelecting}
-                                        isSelected={selectedBooks.includes(book.id)}
-                                        onToggleSelect={toggleBookSelection}
-                                    />
-                                ))}
-                            </div>
-                        ) : settings.libraryViewMode === "compact" ? (
-                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 pb-8">
-                                {sortedBooks.map((book) => (
-                                    <MemoizedBookCard
-                                        key={book.id}
-                                        book={book}
-                                        viewMode={settings.libraryViewMode}
-                                        onOpenBook={handleOpenBook}
-                                        onToggleFavorite={handleToggleFavorite}
-                                        onDeleteBook={handleDeleteBook}
-                                        onShowInfo={handleShowInfo}
-                                        onAddToShelf={handleAddToShelf}
-                                        onMarkAsRead={handleMarkAsRead}
-                                        onMarkAsUnread={handleMarkAsUnread}
-                                        isSelecting={isSelecting}
-                                        isSelected={selectedBooks.includes(book.id)}
-                                        onToggleSelect={toggleBookSelection}
-                                    />
-                                ))}
-                            </div>
                         ) : (
-                            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 pb-8">
-                                {sortedBooks.map((book) => (
-                                    <MemoizedBookCard
-                                        key={book.id}
-                                        book={book}
-                                        viewMode={settings.libraryViewMode}
-                                        onOpenBook={handleOpenBook}
-                                        onToggleFavorite={handleToggleFavorite}
-                                        onDeleteBook={handleDeleteBook}
-                                        onShowInfo={handleShowInfo}
-                                        onAddToShelf={handleAddToShelf}
-                                        onMarkAsRead={handleMarkAsRead}
-                                        onMarkAsUnread={handleMarkAsUnread}
-                                        isSelecting={isSelecting}
-                                        isSelected={selectedBooks.includes(book.id)}
-                                        onToggleSelect={toggleBookSelection}
-                                    />
-                                ))}
+                            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
+                                <div style={{ paddingTop: `${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>
+                                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                        const rowStart = virtualRow.index * (isListView ? 1 : effectiveCols);
+                                        const itemsInRow = isListView
+                                            ? 1
+                                            : Math.min(effectiveCols, sortedBooks.length - rowStart);
+                                        const rowItems = isListView
+                                            ? [sortedBooks[virtualRow.index]]
+                                            : sortedBooks.slice(rowStart, rowStart + itemsInRow);
+
+                                        const cardProps = {
+                                            onOpenBook: handleOpenBook,
+                                            onToggleFavorite: handleToggleFavorite,
+                                            onDeleteBook: handleDeleteBook,
+                                            onShowInfo: handleShowInfo,
+                                            onAddToShelf: handleAddToShelf,
+                                            onMarkAsRead: handleMarkAsRead,
+                                            onMarkAsUnread: handleMarkAsUnread,
+                                            isSelecting,
+                                            onToggleSelect: toggleBookSelection,
+                                        };
+
+                                        return (
+                                            <div key={virtualRow.key} data-index={virtualRow.index} ref={rowVirtualizer.measureElement}>
+                                                {isListView ? (
+                                                    <div className="pb-1">
+                                                        <MemoizedBookCard
+                                                            key={rowItems[0].id}
+                                                            book={rowItems[0]}
+                                                            viewMode={settings.libraryViewMode}
+                                                            isSelected={selectedBooks.includes(rowItems[0].id)}
+                                                            {...cardProps}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className={isCompactView
+                                                        ? "grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 pb-2"
+                                                        : "grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 pb-5"
+                                                    }>
+                                                        {rowItems.map((book) => (
+                                                            <MemoizedBookCard
+                                                                key={book.id}
+                                                                book={book}
+                                                                viewMode={settings.libraryViewMode}
+                                                                isSelected={selectedBooks.includes(book.id)}
+                                                                {...cardProps}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
                     </section>
