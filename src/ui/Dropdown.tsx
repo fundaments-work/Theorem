@@ -20,6 +20,7 @@ export interface DropdownProps<T = string> {
     className?: string;
     dropdownClassName?: string;
     align?: "left" | "right";
+    openUp?: boolean;
     showCheckmark?: boolean;
 }
 
@@ -51,6 +52,7 @@ export function Dropdown<T extends string = string>({
     className,
     dropdownClassName,
     align = "left",
+    openUp = false,
     showCheckmark = true,
 }: DropdownProps<T>) {
     const [isOpen, setIsOpen] = useState(false);
@@ -146,9 +148,10 @@ export function Dropdown<T extends string = string>({
                     {/* Menu */}
                     <div
                         className={cn(
-                            "absolute z-[calc(var(--z-dropdown)+1)] mt-1 min-w-full w-max",
+                            "absolute z-[calc(var(--z-dropdown)+1)] min-w-full w-max",
                             "border border-[var(--color-border)] bg-[var(--color-surface)]",
                             "py-1 max-h-60 overflow-y-auto",
+                            openUp ? "bottom-full mb-1" : "top-full mt-1",
                             align === "right" ? "right-0" : "left-0",
                             dropdownClassName
                         )}

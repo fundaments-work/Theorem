@@ -2332,14 +2332,12 @@ function BookReaderPage() {
                     onClose={() => setActivePanel(null)}
                     zoom={pdfZoom}
                     zoomMode={pdfZoomMode}
-                    presentationMode={pdfPresentationMode}
                     onZoomIn={handlePdfZoomIn}
                     onZoomOut={handlePdfZoomOut}
                     onZoomReset={handlePdfZoomReset}
                     onFitPage={handlePdfZoomFitPage}
                     onFitWidth={handlePdfZoomFitWidth}
                     onRotate={() => pdfReaderRef.current?.rotateClockwise()}
-                    onPresentationModeChange={handlePdfPresentationModeChange}
                 />
             ) : (
                 <ReaderSettings

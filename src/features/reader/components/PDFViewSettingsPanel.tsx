@@ -1,4 +1,4 @@
-import { Maximize2, RotateCw, SlidersHorizontal, X, ZoomIn, ZoomOut, ScrollText, PanelBottomOpen } from "lucide-react";
+import { Maximize2, RotateCw, SlidersHorizontal, X, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "../../../core/lib/utils";
 import type { PdfZoomMode } from "../../../core/types";
 import { Backdrop, FloatingPanel } from "../../../ui";
@@ -7,7 +7,6 @@ interface PDFViewSettingsPanelProps {
     visible: boolean;
     zoom: number;
     zoomMode: PdfZoomMode;
-    presentationMode?: 'scroll' | 'paged';
     onClose: () => void;
     onZoomIn: () => void;
     onZoomOut: () => void;
@@ -15,7 +14,6 @@ interface PDFViewSettingsPanelProps {
     onFitPage?: () => void;
     onFitWidth?: () => void;
     onRotate: () => void;
-    onPresentationModeChange?: (mode: 'scroll' | 'paged') => void;
     className?: string;
 }
 
@@ -33,7 +31,6 @@ export function PDFViewSettingsPanel({
     visible,
     zoom,
     zoomMode,
-    presentationMode = 'scroll',
     onClose,
     onZoomIn,
     onZoomOut,
@@ -41,7 +38,6 @@ export function PDFViewSettingsPanel({
     onFitPage,
     onFitWidth,
     onRotate,
-    onPresentationModeChange,
     className,
 }: PDFViewSettingsPanelProps) {
     const zoomLabel = formatZoomModeLabel(zoomMode, zoom);
@@ -143,30 +139,6 @@ export function PDFViewSettingsPanel({
                                 <span>Rotate Clockwise</span>
                             </span>
                         </button>
-                        {onPresentationModeChange && (
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    onClick={() => onPresentationModeChange('scroll')}
-                                    className="ui-chip-btn"
-                                    data-active={presentationMode === 'scroll'}
-                                >
-                                    <span className="inline-flex items-center justify-center gap-1.5">
-                                        <ScrollText className="w-4 h-4" />
-                                        <span>Scroll</span>
-                                    </span>
-                                </button>
-                                <button
-                                    onClick={() => onPresentationModeChange('paged')}
-                                    className="ui-chip-btn"
-                                    data-active={presentationMode === 'paged'}
-                                >
-                                    <span className="inline-flex items-center justify-center gap-1.5">
-                                        <PanelBottomOpen className="w-4 h-4" />
-                                        <span>Paged</span>
-                                    </span>
-                                </button>
-                            </div>
-                        )}
                     </section>
                 </div>
             </FloatingPanel>

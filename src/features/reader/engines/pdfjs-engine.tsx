@@ -2185,42 +2185,29 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                         <span className="text-[color:var(--color-text-muted)]">/</span>
                         <span className="tabular-nums">{totalPages}</span>
                         <span className="mx-0.5 w-px h-3 bg-[var(--color-border)]" />
-                        <div className="relative flex items-center gap-1">
-                            <button
-                                type="button"
-                                className="tabular-nums text-[10px] font-medium text-[color:var(--color-text-primary)] opacity-80 hover:opacity-100 transition-opacity"
-                                title="Fit width"
-                                onClick={() => {
-                                    if (containerRef.current && firstLoadedPage) {
-                                        applyZoom(getFitWidthScale(containerRef.current, firstLoadedPage), { mode: "width-fit", preserveMode: true });
-                                    }
-                                }}
-                            >
-                                {Math.round(scale * 100)}%
-                            </button>
-                            <Dropdown
-                                options={[
-                                    { value: 'fitW', label: 'Fit Width' },
-                                    { value: 'fitP', label: 'Fit Page' },
-                                    { value: '100', label: '100%' },
-                                ]}
-                                onChange={(v) => {
-                                    if (v === 'fitW' && containerRef.current && firstLoadedPage) {
-                                        applyZoom(getFitWidthScale(containerRef.current, firstLoadedPage), { mode: "width-fit", preserveMode: true });
-                                    } else if (v === 'fitP' && containerRef.current && firstLoadedPage) {
-                                        applyZoom(getFitPageScale(containerRef.current, firstLoadedPage), { mode: "page-fit", preserveMode: true });
-                                    } else if (v === '100') {
-                                        applyZoom(DEFAULT_SCALE, { mode: "custom" });
-                                    }
-                                }}
-                                size="sm"
-                                variant="default"
-                                align="right"
-                                showCheckmark={false}
-                                placeholder=""
-                                className="[&_button]:w-auto [&_button]:px-1 [&_button]:py-0.5 [&_button]:text-[10px] [&_span]:hidden"
-                            />
-                        </div>
+                        <Dropdown
+                            options={[
+                                { value: 'fitW', label: 'Fit Width' },
+                                { value: 'fitP', label: 'Fit Page' },
+                                { value: '100', label: '100%' },
+                            ]}
+                            onChange={(v) => {
+                                if (v === 'fitW' && containerRef.current && firstLoadedPage) {
+                                    applyZoom(getFitWidthScale(containerRef.current, firstLoadedPage), { mode: "width-fit", preserveMode: true });
+                                } else if (v === 'fitP' && containerRef.current && firstLoadedPage) {
+                                    applyZoom(getFitPageScale(containerRef.current, firstLoadedPage), { mode: "page-fit", preserveMode: true });
+                                } else if (v === '100') {
+                                    applyZoom(DEFAULT_SCALE, { mode: "custom" });
+                                }
+                            }}
+                            placeholder={`${Math.round(scale * 100)}%`}
+                            size="sm"
+                            variant="default"
+                            align="right"
+                            openUp
+                            showCheckmark={false}
+                            className="min-w-[4rem]"
+                        />
                     </div>
                 )}
             </div>
