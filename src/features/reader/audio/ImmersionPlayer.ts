@@ -179,7 +179,12 @@ export class ImmersionPlayer {
 
     async pause() {
         if (this._state !== 'playing') return;
-        if (isAndroid() || isDesktopTauri()) {
+        if (isDesktopTauri()) {
+            // Desktop TTS can't pause — stop instead (same as reset).
+            await this.stop();
+            return;
+        }
+        if (isAndroid()) {
             await this._pauseAndroid();
         } else if (synthAvailable()) {
             window.speechSynthesis.pause();
@@ -190,7 +195,8 @@ export class ImmersionPlayer {
 
     async resume() {
         if (this._state !== 'paused') return;
-        if (isAndroid() || isDesktopTauri()) {
+        if (isDesktopTauri()) return; // desktop: stopped, can't resume
+        if (isAndroid()) {
             await this._resumeAndroid();
         } else if (synthAvailable()) {
             window.speechSynthesis.resume();
