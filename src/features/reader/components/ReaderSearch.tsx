@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Search, X, Loader2, ChevronRight } from 'lucide-react';
 import { cn } from "../../../core/lib/utils";
 import { Backdrop, FloatingPanel } from "../../../ui";
@@ -20,6 +21,7 @@ export interface ReaderSearchProgress {
 export type ReaderSearchEvent = ReaderSearchMatch | ReaderSearchProgress | 'done';
 
 const LIVE_SEARCH_DEBOUNCE_MS = 220;
+const MAX_SEARCH_RESULTS = 200;
 
 function escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -116,7 +118,7 @@ export function ReaderSearch({
                 } else if (typeof result === 'object' && result !== null && 'progress' in result) {
                     setProgress(Math.round(result.progress * 100));
                 } else if (typeof result === 'object' && result !== null && 'cfi' in result) {
-                    setResults(prev => [...prev, result]);
+                    setResults(prev => prev.length >= MAX_SEARCH_RESULTS ? prev : [...prev, result]);
                 }
             }
         } catch (err) {
@@ -187,6 +189,15 @@ export function ReaderSearch({
         return clearLiveSearchTimer;
     }, [clearLiveSearchTimer]);
 
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    const resultVirtualizer = useVirtualizer({
+        count: results.length,
+        getScrollElement: useCallback(() => scrollRef.current, []),
+        estimateSize: useCallback(() => 72, []),
+        overscan: 5,
+    });
+
     return (
         <>
             <Backdrop visible={visible} onClick={onClose} />
@@ -237,7 +248,7 @@ export function ReaderSearch({
                 )}
 
                 {/* Content */}
-                <div className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 custom-scrollbar">
+                <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 custom-scrollbar">
                     {!query && !isSearching && results.length === 0 && (
                         <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center opacity-50">
                             <Search className="w-8 h-8 mb-3" />
@@ -259,25 +270,30 @@ export function ReaderSearch({
                         </div>
                     )}
 
-                    <div className="space-y-1">
-                        {results.map((result, index) => (
-                            <button
-                                key={index}
-                                onClick={() => handleNavigate(result.cfi)}
-                                className="w-full flex flex-col gap-1 p-3 hover:bg-[var(--color-background)] transition-colors text-left group"
-                            >
-                                <p
-                                    className="text-[var(--font-size-caption)] text-[color:var(--color-text-secondary)] line-clamp-3 leading-relaxed"
-                                    dangerouslySetInnerHTML={{
-                                        __html: highlightExcerpt(result.excerpt, query),
-                                    }}
-                                />
-                                <div className="flex items-center gap-1.5 text-[var(--font-size-3xs)] text-[color:var(--color-accent)] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <span>Jump to match</span>
-                                    <ChevronRight className="w-3 h-3" />
-                                </div>
-                            </button>
-                        ))}
+                    <div style={{ height: resultVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+                        {resultVirtualizer.getVirtualItems().map((virtualRow) => {
+                            const result = results[virtualRow.index];
+                            return (
+                                <button
+                                    key={virtualRow.key}
+                                    data-index={virtualRow.index}
+                                    onClick={() => handleNavigate(result.cfi)}
+                                    className="w-full flex flex-col gap-1 p-3 hover:bg-[var(--color-background)] transition-colors text-left group absolute top-0 left-0"
+                                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                                >
+                                    <p
+                                        className="text-[var(--font-size-caption)] text-[color:var(--color-text-secondary)] line-clamp-3 leading-relaxed"
+                                        dangerouslySetInnerHTML={{
+                                            __html: highlightExcerpt(result.excerpt, query),
+                                        }}
+                                    />
+                                    <div className="flex items-center gap-1.5 text-[var(--font-size-3xs)] text-[color:var(--color-accent)] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <span>Jump to match</span>
+                                        <ChevronRight className="w-3 h-3" />
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 

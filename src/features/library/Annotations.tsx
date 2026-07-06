@@ -3,7 +3,8 @@
  * View and manage all highlights and notes across books
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core/lib/utils";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "../../core/store";
@@ -283,6 +284,15 @@ export function AnnotationsPage() {
         return filtered;
     }, [annotations, activeFilter, currentBookId, searchQuery, sortBy, bookTitleLookup]);
 
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    const rowVirtualizer = useVirtualizer({
+        count: filteredAnnotations.length,
+        getScrollElement: useCallback(() => scrollRef.current, []),
+        estimateSize: useCallback(() => 160, []),
+        overscan: 3,
+    });
+
     const handleDelete = (id: string) => {
         if (confirm("Are you sure you want to delete this annotation?")) {
             removeAnnotation(id);
@@ -324,9 +334,9 @@ export function AnnotationsPage() {
     }
 
     return (
-        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
+        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in flex flex-col">
             {/* Header */}
-            <div className="mb-8 flex items-start justify-between">
+            <div className="mb-8 flex items-start justify-between shrink-0">
                 <div>
                     <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         Workbench
@@ -408,19 +418,32 @@ export function AnnotationsPage() {
                     </p>
                 </div>
             ) : (
-                <div className="grid gap-4">
-                    {filteredAnnotations.map((annotation) => (
-                        <AnnotationCard
-                            key={annotation.id}
-                            annotation={annotation}
-                            book={getBookInfo(annotation.bookId)}
-                            shareId={sharingId}
-                            onDelete={handleDelete}
-                            onEdit={handleEdit}
-                            onGoToBook={handleGoToBook}
-                            onShare={handleShare}
-                        />
-                    ))}
+                <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" style={{ height: "calc(100vh - 18rem)" }}>
+                    <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                            const annotation = filteredAnnotations[virtualRow.index];
+                            return (
+                                <div
+                                    key={annotation.id}
+                                    data-index={virtualRow.index}
+                                    className="absolute top-0 left-0 w-full"
+                                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                                >
+                                    <div className="mb-4">
+                                        <AnnotationCard
+                                            annotation={annotation}
+                                            book={getBookInfo(annotation.bookId)}
+                                            shareId={sharingId}
+                                            onDelete={handleDelete}
+                                            onEdit={handleEdit}
+                                            onGoToBook={handleGoToBook}
+                                            onShare={handleShare}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
         </div>

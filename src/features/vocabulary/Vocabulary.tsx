@@ -1,4 +1,5 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     BookOpenText,
     Trash2,
@@ -46,6 +47,15 @@ export function VocabularyPage() {
                 return a.term.localeCompare(b.term);
             });
     }, [searchQuery, vocabularyTerms]);
+
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    const rowVirtualizer = useVirtualizer({
+        count: filteredTerms.length,
+        getScrollElement: useCallback(() => scrollRef.current, []),
+        estimateSize: useCallback(() => 48, []),
+        overscan: 5,
+    });
 
     const selectedTerm = useMemo(() => (
         selectedTermId ? filteredTerms.find((t) => t.id === selectedTermId) || null : null
@@ -105,24 +115,28 @@ export function VocabularyPage() {
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto px-4 pb-12">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-12">
                     {filteredTerms.length > 0 ? (
-                        <div className="space-y-0.5">
-                            {filteredTerms.map((term) => {
+                        <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+                            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                const term = filteredTerms[virtualRow.index];
                                 const isSelected = selectedTermId === term.id;
                                 return (
                                     <button
                                         key={term.id}
+                                        data-index={virtualRow.index}
                                         onClick={() => {
                                             setSelectedTermId(isSelected ? null : term.id);
                                             setShowMobileList(false);
                                         }}
                                         className={cn(
                                             "w-full px-3 py-3 text-left transition-colors border-l-2",
+                                            "absolute top-0 left-0 w-full",
                                             isSelected
                                                 ? "border-l-[var(--color-accent)] bg-[var(--color-surface-elevated)]"
                                                 : "border-l-transparent hover:bg-[var(--color-surface-muted)]",
                                         )}
+                                        style={{ transform: `translateY(${virtualRow.start}px)` }}
                                     >
                                         <p className={cn(
                                             "text-sm font-medium truncate",

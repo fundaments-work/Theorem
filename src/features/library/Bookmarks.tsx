@@ -3,7 +3,8 @@
  * View and manage all bookmarks across books
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core/lib/utils";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "../../core/store";
@@ -270,6 +271,15 @@ export function BookmarksPage() {
         return filtered;
     }, [bookmarks, searchQuery, sortBy, bookLookup]);
 
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    const rowVirtualizer = useVirtualizer({
+        count: filteredBookmarks.length,
+        getScrollElement: useCallback(() => scrollRef.current, []),
+        estimateSize: useCallback(() => viewMode === "grid" ? 220 : 80, [viewMode]),
+        overscan: 3,
+    });
+
     const handleDelete = async (id: string) => {
         const confirmed = await confirmDeleteBookmark();
         if (confirmed) {
@@ -294,9 +304,9 @@ export function BookmarksPage() {
     }
 
     return (
-        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
+        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in flex flex-col">
             {/* Header */}
-            <div className="flex items-start justify-between mb-10">
+            <div className="flex items-start justify-between mb-10 shrink-0">
                 <div>
                     <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
                         Bookmarks
@@ -357,31 +367,43 @@ export function BookmarksPage() {
                         No bookmarks found{searchQuery ? " matching your search" : ""}.
                     </p>
                 </div>
-            ) : viewMode === "grid" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredBookmarks.map((bookmark) => (
-                        <BookmarkCard
-                            key={bookmark.id}
-                            bookmark={bookmark}
-                            book={getBookInfo(bookmark.bookId)}
-                            viewMode={viewMode}
-                            onDelete={handleDelete}
-                            onGoToBookmark={handleGoToBookmark}
-                        />
-                    ))}
-                </div>
             ) : (
-                <div className="space-y-3">
-                    {filteredBookmarks.map((bookmark) => (
-                        <BookmarkCard
-                            key={bookmark.id}
-                            bookmark={bookmark}
-                            book={getBookInfo(bookmark.bookId)}
-                            viewMode={viewMode}
-                            onDelete={handleDelete}
-                            onGoToBookmark={handleGoToBookmark}
-                        />
-                    ))}
+                <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" style={{ height: "calc(100vh - 16rem)" }}>
+                    <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                            const bookmark = filteredBookmarks[virtualRow.index];
+                            return (
+                                <div
+                                    key={bookmark.id}
+                                    data-index={virtualRow.index}
+                                    className="absolute top-0 left-0 w-full"
+                                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                                >
+                                    {viewMode === "grid" ? (
+                                        <div className="mb-6">
+                                            <BookmarkCard
+                                                bookmark={bookmark}
+                                                book={getBookInfo(bookmark.bookId)}
+                                                viewMode={viewMode}
+                                                onDelete={handleDelete}
+                                                onGoToBookmark={handleGoToBookmark}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="mb-3">
+                                            <BookmarkCard
+                                                bookmark={bookmark}
+                                                book={getBookInfo(bookmark.bookId)}
+                                                viewMode={viewMode}
+                                                onDelete={handleDelete}
+                                                onGoToBookmark={handleGoToBookmark}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
         </div>
