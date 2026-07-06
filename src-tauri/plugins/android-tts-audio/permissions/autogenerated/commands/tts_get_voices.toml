@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-tts-get-voices"
+description = "Enables the tts_get_voices command without any pre-configured scope."
+commands.allow = ["tts_get_voices"]
+
+[[permission]]
+identifier = "deny-tts-get-voices"
+description = "Denies the tts_get_voices command without any pre-configured scope."
+commands.deny = ["tts_get_voices"]

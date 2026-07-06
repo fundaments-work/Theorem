@@ -355,19 +355,12 @@ export function SettingsPage() {
     const [dictionaryRemovedName, setDictionaryRemovedName] = useState<string | null>(null);
 
     // ── TTS system voices ──
-    const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+    const [availableVoices, setAvailableVoices] = useState<Array<{ name: string; lang: string }>>([]);
 
     useEffect(() => {
-        if (typeof window === "undefined" || !window.speechSynthesis) return;
-        const loadVoices = () => {
-            const voices = window.speechSynthesis.getVoices();
-            if (voices.length > 0) {
-                setAvailableVoices(voices);
-            }
-        };
-        loadVoices();
-        window.speechSynthesis.onvoiceschanged = loadVoices;
-        return () => { window.speechSynthesis.onvoiceschanged = null; };
+        import("../../features/reader/audio/ImmersionPlayer").then(({ ImmersionPlayer }) => {
+            ImmersionPlayer.loadVoices().then(setAvailableVoices);
+        });
     }, []);
 
     useEffect(() => {

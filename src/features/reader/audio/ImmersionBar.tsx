@@ -4,6 +4,11 @@ import { cn } from '../../../core/lib/utils';
 import { useSettingsStore } from '../../../core/store';
 import { immersionPlayer, ImmersionPlayer, type PlaybackState } from '../audio/ImmersionPlayer';
 
+interface VoiceInfo {
+    name: string;
+    lang: string;
+}
+
 interface ImmersionBarProps {
     sectionText: string;
     className?: string;
@@ -19,7 +24,7 @@ export function ImmersionBar({
 }: ImmersionBarProps) {
     const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
     const [hasError, setHasError] = useState(false);
-    const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+    const [voices, setVoices] = useState<VoiceInfo[]>([]);
     const errorTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const initializedRef = useRef(false);
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
@@ -79,8 +84,7 @@ export function ImmersionBar({
 
         if (playbackState === 'loading') return;
 
-        const rate = 1.0;
-        immersionPlayer.speak(text, ttsVoice, rate);
+        immersionPlayer.speak(text, ttsVoice);
     }, [sectionText, playbackState, ttsVoice]);
 
     const handlePause = useCallback(() => {
@@ -92,9 +96,7 @@ export function ImmersionBar({
     }, []);
 
     const handleTestVoice = useCallback((voiceName: string) => {
-        immersionPlayer.stop();
-        const sample = "Hello, this is a voice sample.";
-        immersionPlayer.speak(sample, voiceName, 1.0);
+        immersionPlayer.speak("Hello, this is a voice sample.", voiceName);
     }, []);
 
     const cycleVoice = useCallback(() => {

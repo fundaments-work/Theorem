@@ -19,7 +19,7 @@ fn get_audio_state<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<tauri::State<'_, TtsAudioPluginState<R>>, String> {
     app.try_state::<TtsAudioPluginState<R>>()
-        .ok_or_else(|| "Android TTS audio plugin is not initialized.".to_string())
+        .ok_or_else(|| "Android TTS plugin is not initialized.".to_string())
 }
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
@@ -39,107 +39,61 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .build()
 }
 
-/// Prepare (create) the AudioTrack for the given sample rate.
-/// Must be called before the first write_audio.
+/// Speak text using the Android TTS engine.
 #[cfg(target_os = "android")]
-pub fn prepare_audio<R: Runtime>(app: &AppHandle<R>, sample_rate: u32) -> Result<(), String> {
-    let state = get_audio_state(app)?;
-    state
-        .handle
-        .run_mobile_plugin::<serde_json::Value>(
-            "prepareAudio",
-            serde_json::json!({ "sampleRate": sample_rate }),
-        )
-        .map_err(|error| error.to_string())?;
-    Ok(())
-}
-
-#[cfg(not(target_os = "android"))]
-pub fn prepare_audio<R: Runtime>(_app: &AppHandle<R>, _sample_rate: u32) -> Result<(), String> {
-    Ok(())
-}
-
-/// Write a chunk of audio samples to the AudioTrack for playback.
-/// On non-Android platforms this is a no-op.
-#[cfg(target_os = "android")]
-pub fn write_audio<R: Runtime>(
+pub fn tts_speak<R: Runtime>(
     app: &AppHandle<R>,
-    samples: Vec<f32>,
-    sample_rate: u32,
-    generation_id: u64,
-    chunk_index: u32,
+    text: String,
+    voice: String,
 ) -> Result<(), String> {
     let state = get_audio_state(app)?;
     state
         .handle
         .run_mobile_plugin::<serde_json::Value>(
-            "writeAudio",
-            serde_json::json!({
-                "samples": samples,
-                "sampleRate": sample_rate,
-                "generationId": generation_id,
-                "chunkIndex": chunk_index,
-            }),
+            "speak",
+            serde_json::json!({ "text": text, "voice": voice }),
         )
         .map_err(|error| error.to_string())?;
     Ok(())
 }
 
 #[cfg(not(target_os = "android"))]
-pub fn write_audio<R: Runtime>(
+pub fn tts_speak<R: Runtime>(
     _app: &AppHandle<R>,
-    _samples: Vec<f32>,
-    _sample_rate: u32,
-    _generation_id: u64,
-    _chunk_index: u32,
+    _text: String,
+    _voice: String,
 ) -> Result<(), String> {
     Ok(())
 }
 
-/// Stop audio playback and release the AudioTrack.
+/// Stop current TTS playback.
 #[cfg(target_os = "android")]
-pub fn stop_audio<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+pub fn tts_stop<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = get_audio_state(app)?;
     state
         .handle
-        .run_mobile_plugin::<serde_json::Value>("stopAudio", serde_json::json!({}))
+        .run_mobile_plugin::<serde_json::Value>("stop", serde_json::json!({}))
         .map_err(|error| error.to_string())?;
     Ok(())
 }
 
 #[cfg(not(target_os = "android"))]
-pub fn stop_audio<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
+pub fn tts_stop<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
     Ok(())
 }
 
-/// Pause (suspend) audio playback.
+/// Get available TTS voices.
 #[cfg(target_os = "android")]
-pub fn pause_audio<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+pub fn tts_get_voices<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<serde_json::Value>, String> {
     let state = get_audio_state(app)?;
-    state
+    let result = state
         .handle
-        .run_mobile_plugin::<serde_json::Value>("pauseAudio", serde_json::json!({}))
+        .run_mobile_plugin::<Vec<serde_json::Value>>("getVoices", serde_json::json!({}))
         .map_err(|error| error.to_string())?;
-    Ok(())
+    Ok(result)
 }
 
 #[cfg(not(target_os = "android"))]
-pub fn pause_audio<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
-    Ok(())
-}
-
-/// Resume (un-pause) audio playback.
-#[cfg(target_os = "android")]
-pub fn resume_audio<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    let state = get_audio_state(app)?;
-    state
-        .handle
-        .run_mobile_plugin::<serde_json::Value>("resumeAudio", serde_json::json!({}))
-        .map_err(|error| error.to_string())?;
-    Ok(())
-}
-
-#[cfg(not(target_os = "android"))]
-pub fn resume_audio<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
-    Ok(())
+pub fn tts_get_voices<R: Runtime>(_app: &AppHandle<R>) -> Result<Vec<serde_json::Value>, String> {
+    Ok(Vec::new())
 }

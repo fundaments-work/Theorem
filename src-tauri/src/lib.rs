@@ -858,6 +858,133 @@ fn apply_linux_webkit_workarounds() {
     }
 }
 
+// ─── TTS Commands (native per platform, no external crates) ───
+//
+// Desktop: uses platform shell commands (espeak-ng/spd-say on Linux,
+// say on macOS, PowerShell SAPI on Windows).
+// Android: uses android.speech.tts.TextToSpeech via plugin.
+
+#[tauri::command]
+fn tts_speak(app: tauri::AppHandle, text: String, voice: String) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        return tauri_plugin_android_tts_audio::tts_speak(&app, text, voice);
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        use std::process::Command;
+        let _ = app;
+        let _ = voice;
+
+        #[cfg(target_os = "macos")]
+        {
+            let mut cmd = Command::new("say");
+            if !voice.is_empty() {
+                cmd.arg("-v").arg(&voice);
+            }
+            cmd.arg(&text);
+            cmd.spawn().map_err(|e| format!("Failed to run say: {e}"))?;
+            return Ok(());
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // Try spd-say first (speech-dispatcher), fall back to espeak-ng
+            // spd-say uses the same voices as Orca/speech-dispatcher
+            let result = Command::new("spd-say").arg("--wait").arg(&text).spawn();
+            if result.is_ok() {
+                return Ok(());
+            }
+            Command::new("espeak-ng")
+                .arg(&text)
+                .spawn()
+                .map_err(|e| format!("TTS failed (espeak-ng not found): {e}"))?;
+            Ok(())
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            // PowerShell Add-Type -AssemblyName System.Speech
+            let escaped = text.replace('"', "'");
+            Command::new("powershell")
+                .args([
+                    "-NoProfile", "-Command",
+                    &format!(
+                        "Add-Type -AssemblyName System.Speech; $s=New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak('{}')",
+                        escaped
+                    ),
+                ])
+                .spawn()
+                .map_err(|e| format!("TTS failed: {e}"))?;
+            return Ok(());
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+        {
+            Err("TTS not supported on this platform".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+fn tts_stop(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        return tauri_plugin_android_tts_audio::tts_stop(&app);
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("killall")
+                .arg("say")
+                .spawn()
+                .map_err(|e| format!("Failed to stop say: {e}"))?;
+            return Ok(());
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let _ = std::process::Command::new("pkill")
+                .args(["-f", "spd-say|espeak"])
+                .spawn();
+            Ok(())
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("taskkill")
+                .args(["/F", "/IM", "powershell.exe"])
+                .spawn()
+                .map_err(|e| format!("Failed to stop TTS: {e}"))?;
+            return Ok(());
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+        {
+            Ok(())
+        }
+    }
+}
+
+#[tauri::command]
+fn tts_get_voices(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    #[cfg(target_os = "android")]
+    {
+        return tauri_plugin_android_tts_audio::tts_get_voices(&app);
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        // Desktop voice discovery is handled by the JS frontend via
+        // window.speechSynthesis (read-only query of system voices).
+        // Actual playback uses the platform shell commands above.
+        Ok(Vec::new())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
@@ -879,7 +1006,8 @@ pub fn run() {
         .plugin(tauri_plugin_app::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_mobile_folder_scan::init())
-        .plugin(tauri_plugin_android_sync_worker::init());
+        .plugin(tauri_plugin_android_sync_worker::init())
+        .plugin(tauri_plugin_android_tts_audio::init());
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
@@ -1019,6 +1147,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            tts_speak,
+            tts_stop,
+            tts_get_voices,
             epub_parser::prefetch_zip_metadata,
             read_file,
             read_cbr_as_cbz,

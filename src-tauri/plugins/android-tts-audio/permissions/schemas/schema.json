@@ -343,6 +343,42 @@
           "markdownDescription": "Denies the stop_audio command without any pre-configured scope."
         },
         {
+          "description": "Enables the tts_get_voices command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-tts-get-voices",
+          "markdownDescription": "Enables the tts_get_voices command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the tts_get_voices command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-tts-get-voices",
+          "markdownDescription": "Denies the tts_get_voices command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the tts_speak command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-tts-speak",
+          "markdownDescription": "Enables the tts_speak command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the tts_speak command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-tts-speak",
+          "markdownDescription": "Denies the tts_speak command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the tts_stop command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-tts-stop",
+          "markdownDescription": "Enables the tts_stop command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the tts_stop command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-tts-stop",
+          "markdownDescription": "Denies the tts_stop command without any pre-configured scope."
+        },
+        {
           "description": "Enables the write_audio command without any pre-configured scope.",
           "type": "string",
           "const": "allow-write-audio",

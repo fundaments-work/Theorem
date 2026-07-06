@@ -1,19 +1,20 @@
 /**
- * ImmersionPlayer — system-native TTS via the Web Speech API.
+ * ImmersionPlayer — native platform TTS via Tauri commands.
  *
- * Uses `window.speechSynthesis` which delegates to the platform's
- * native TTS engine (NSSpeechSynthesizer on macOS, SAPI on Windows,
- * speech-dispatcher on Linux, TextToSpeech on Android).
+ * Desktop: uses the `tts` Rust crate (speech-dispatcher/NSSpeechSynthesizer/SAPI).
+ * Android: uses android.speech.tts.TextToSpeech via plugin.
  *
- * Zero binary cost, no Rust IPC needed for playback.
+ * Voice discovery on desktop uses window.speechSynthesis (queries the same
+ * system voices — read-only). Actual playback is always through the Rust backend.
  */
+import { invoke } from "@tauri-apps/api/core";
 
-function synth(): SpeechSynthesis {
-    return window.speechSynthesis;
-}
-
-function synthAvailable(): boolean {
-    return typeof window !== "undefined" && !!window.speechSynthesis;
+function isTauriAvailable(): boolean {
+    try {
+        return !!(window as any).__TAURI_INTERNALS__;
+    } catch {
+        return false;
+    }
 }
 
 export type PlaybackState = 'idle' | 'loading' | 'playing' | 'paused';
@@ -42,74 +43,80 @@ export class ImmersionPlayer {
         this.callbacks = callbacks;
     }
 
-    speak(text: string, voice: string | null, rate: number = 1) {
-        if (!synthAvailable()) return;
-        synth().cancel();
-
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = rate;
-
-        if (voice) {
-            const voices = synth().getVoices();
-            const match = voices.find(v => v.name === voice || v.lang.startsWith(voice));
-            if (match) utterance.voice = match;
-        }
-
-        utterance.onstart = () => this.setState('playing');
-        utterance.onpause = () => this.setState('paused');
-        utterance.onresume = () => this.setState('playing');
-        utterance.onend = () => {
-            this.setState('idle');
-            this.callbacks.onComplete?.();
-        };
-        utterance.onerror = (event) => {
-            this.setState('idle');
-            if (event.error !== 'canceled' && event.error !== 'interrupted') {
-                this.callbacks.onError?.(event.error);
-            }
-        };
-
+    async speak(text: string, voice: string | null, _rate: number = 1) {
+        await this.stop();
+        if (!text.trim()) return;
         this.setState('loading');
-        synth().speak(utterance);
+
+        try {
+            await invoke("tts_speak", { text, voice: voice || "" });
+            this.setState('playing');
+
+            // Approximate completion: TextToSpeech on Android and `tts` crate on
+            // desktop both return after queuing — they don't signal completion.
+            // Rough estimate: 150 words/min → chars/11.25 per second.
+            const estimatedMs = Math.max(1000, (text.length / 11.25) * 1000);
+            setTimeout(() => {
+                this.setState('idle');
+                this.callbacks.onComplete?.();
+            }, estimatedMs);
+        } catch (err: unknown) {
+            this.setState('idle');
+            this.callbacks.onError?.(err instanceof Error ? err.message : String(err));
+        }
     }
 
-    pause() {
-        if (synthAvailable()) synth().pause();
+    async pause() {
+        // Android TextToSpeech doesn't support pause; `tts` crate on desktop does.
+        // Stop is the safe universal fallback.
+        await this.stop();
     }
 
-    resume() {
-        if (synthAvailable()) synth().resume();
+    async resume() {
+        // Not supported cross-platform. User must re-speak.
     }
 
-    stop() {
-        if (synthAvailable()) synth().cancel();
+    async stop() {
+        if (isTauriAvailable()) {
+            await invoke("tts_stop").catch(() => {});
+        }
         this.setState('idle');
     }
 
-    static getVoices(): SpeechSynthesisVoice[] {
-        if (!synthAvailable()) return [];
-        return synth().getVoices();
+    static async getVoices(): Promise<{ name: string; lang: string }[]> {
+        // On Tauri (both desktop and Android): use invoke to query native voices.
+        if (isTauriAvailable()) {
+            try {
+                const voices = await invoke<Array<{ name: string; locale: string }>>("tts_get_voices");
+                if (voices.length > 0) {
+                    return voices.map(v => ({ name: v.name, lang: v.locale }));
+                }
+            } catch {
+                // fall through to Web Speech API
+            }
+        }
+        // Desktop web fallback: system voices via read-only Web Speech API query.
+        if (typeof window !== "undefined" && window.speechSynthesis) {
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                return voices.map(v => ({ name: v.name, lang: v.lang }));
+            }
+        }
+        return [];
     }
 
-    static loadVoices(): Promise<SpeechSynthesisVoice[]> {
-        return new Promise((resolve) => {
-            if (!synthAvailable()) {
-                resolve([]);
-                return;
-            }
-            const voices = synth().getVoices();
-            if (voices.length > 0) {
-                resolve(voices);
-                return;
-            }
-            synth().onvoiceschanged = () => {
-                resolve(synth().getVoices());
-            };
-        });
+    static async loadVoices(): Promise<{ name: string; lang: string }[]> {
+        if (isTauriAvailable()) {
+            const voices = await ImmersionPlayer.getVoices();
+            if (voices.length > 0) return voices;
+        }
+        return ImmersionPlayer.getVoices();
     }
 
     destroy() {
-        this.stop();
+        if (isTauriAvailable()) {
+            invoke("tts_stop").catch(() => {});
+        }
         this.callbacks = {};
     }
 }

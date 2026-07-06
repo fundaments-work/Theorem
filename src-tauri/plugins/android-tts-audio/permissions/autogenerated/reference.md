@@ -114,6 +114,84 @@ Denies the stop_audio command without any pre-configured scope.
 <tr>
 <td>
 
+`android-tts-audio:allow-tts-get-voices`
+
+</td>
+<td>
+
+Enables the tts_get_voices command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-tts-audio:deny-tts-get-voices`
+
+</td>
+<td>
+
+Denies the tts_get_voices command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-tts-audio:allow-tts-speak`
+
+</td>
+<td>
+
+Enables the tts_speak command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-tts-audio:deny-tts-speak`
+
+</td>
+<td>
+
+Denies the tts_speak command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-tts-audio:allow-tts-stop`
+
+</td>
+<td>
+
+Enables the tts_stop command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-tts-audio:deny-tts-stop`
+
+</td>
+<td>
+
+Denies the tts_stop command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `android-tts-audio:allow-write-audio`
 
 </td>
