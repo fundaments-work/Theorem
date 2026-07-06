@@ -7,18 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] — v1.0.6
 
+### Added
+
+- **Keyboard shortcuts** (global + reader-scoped) — `Ctrl+1`–`7` navigate between pages, `Ctrl+,` for Settings, `Ctrl+F` for search, `Ctrl+B` for sidebar toggle, `?` for shortcuts help. Reader shortcuts: `Ctrl+D` bookmark, `Ctrl+T` TOC, `Ctrl+S` settings, `Ctrl+A` annotations, `F11` fullscreen. Shortcuts reference available in Settings → Shortcuts tab.
+- **Auto-advance immersion reading** — When TTS finishes reading a page in immersion mode, it automatically turns to the next page and starts speaking. Chains continuously until the book ends or the user stops playback.
+- **Bookmarks page redesign** — Bookmarks now match the AnnotationCard design language with proper borders, MoreVertical dropdown menu, and serif blockquote styling.
+- **PDF paged navigation mode** — Scroll-snap based paged mode for PDFs (engine support maintained, UI toggle deferred).
+
+### Changed
+
+- **TTS: removed Kokoro/ONNX neural engine** (~52 MB binary saved) — Replaced with native OS speech: `android.speech.tts.TextToSpeech` on Android, `say`/NSSpeechSynthesizer on macOS, `spd-say`/`espeak-ng` on Linux, PowerShell/SAPI on Windows. Zero Rust dependencies, zero model download. Audio now starts instantly — no model warmup delay.
+- **TTS: real pause/resume** — Pause now stops at the estimated word position (158 wpm audiobook rate, self-calibrating). Resume continues from where speech was paused, not the beginning of the section.
+- **TTS: disabled on web** — Web Speech API support was janky. TTS is now Tauri-only (Android + desktop). Settings show "Not available in web browser" on web.
+- **Sync: event-driven, not timer-based** — Sync now uses dirty-tracking across all three layers (JS orchestrator, Rust background loop, sync daemon). Mutation-triggered sync fires within seconds; periodic syncs become no-ops when nothing changed. The Rust 5-minute loop checks a data version counter and only initiates sync when data actually changed.
+- **Sync: autoSyncEnabled toggle respected** — The Rust background sync loop now stops when auto-sync is turned off. Previously it ran regardless of the toggle setting.
+- **Sync: Android WorkManager data loss fixed** — The JNI standalone sync round (WorkManager) now persists incoming peer data to `sync-incoming-cache.json` before its ephemeral runtime exits. On next app boot, `get_incoming_sync_data` loads and merges this cache.
+- **Bookmarks page** redesigned to match AnnotationCard design language.
+
 ### Fixed
 
-- **RSS duplicate subscriptions** — `useRssStore.addFeed` and `refreshFeed` now normalize feed and article URLs (lowercase + trailing-slash strip) before comparison. Subscribing to `https://Example.com/feed/` and `https://example.com/feed` no longer creates two separate feeds or duplicate articles.
-- **RSS remove feed UX** — Replaced the dropdown action menu in `FeedListItem` with a direct hover-triggered trash button. Eliminates the stacking-context overlap that caused the dropdown to appear behind adjacent feed rows in the virtualized list.
-- **Shelf search and context menus** — `ShelfDetail` now uses the shared `MemoizedBookCard`, `BookInfoModal`, and `AddToShelfModal` from `Library.tsx`. Books inside a shelf now have the same right-click context menu as the main library (Open, Info, Add to Shelf, Remove from shelf, Rename, Delete).
-- **Bulk "Add to Shelf" broken** — Removed incorrect `if (bookId)` guard in `AddToShelfModal` that short-circuited the shelf assignment when `bookId` was null (bulk path). Multi-select → Add to Shelf now works correctly.
+- **RSS duplicate subscriptions** — `useRssStore.addFeed` and `refreshFeed` now normalize feed and article URLs (lowercase + trailing-slash strip) before comparison.
+- **RSS remove feed UX** — Replaced dropdown action menu with direct hover-triggered trash button.
+- **RSS duplicate images** — Article card summaries now hide inline `<img>` and `<figure>` elements to prevent duplicate image display.
+- **Shelf search and context menus** — ShelfDetail uses shared `MemoizedBookCard`, `BookInfoModal`, and context menu. Bulk "Add to Shelf" fixed.
+- **Android TTS crash** — `TextToSpeech` constructor must run on UI thread. All TTS operations now go through `Handler(Looper.getMainLooper()).post()`.
+- **TTS reads wrong page** — `getVisibleTextForTts()` was returning entire section text instead of visible portion. Fixed to use `visibleRange.cloneContents()`.
+- **Settings page re-render** — Extracted `StorageTab` as memo component, removed heavy subscriptions from parent.
+- **Reader remount on navigation** — Removed `key={currentRoute}` from `RouteErrorBoundary` that forced full remount on every route change.
 
 ### Performance
 
-- **Shared context menu portal** — Replaced per-card `ContextMenu` portals with a single global `ContextMenuRoot` mounted once in `App.tsx`. `ContextMenu` wrapper components now call `useContextMenuStore.open(x, y, items)` instead of creating their own portal and state. Reduces portal overhead from O(n) (one per visible card) to O(1).
-- **Fuse index caching** — `getFilteredAndSortedBooks` in `filtering.ts` caches the `Fuse` instance in a `WeakMap<Book[], Fuse>`. The index is rebuilt only when the `books` array reference changes (on import or delete), not on every search call. Previously a new `new Fuse(items, options)` was constructed on every keystroke.
-- **Debounced search (250ms)** — `useDebounce` hook added (`src/core/lib/useDebounce.ts`). Both `Library.tsx` and `Shelves.tsx` now debounce `searchQuery` before passing it to `getFilteredAndSortedBooks`. Eliminates the per-keystroke filter + sort pipeline re-run while keeping the text input instant.
+- **Binary size: ~83 MB → ~28 MB** — Removed Kokoro/ONNX TTS stack (52 MB). Added `panic = "abort"`, `strip = "symbols"`. Removed 12 TTS crates, 3 Rust source files.
+- **Event-driven sync** — All three sync layers use dirty-tracking. No more wasted manifest builds + SHA-256 hashing + HTTP round-trips when data unchanged. Mutation-triggered sync debounces to 5 seconds.
+- **Virtual scrolling** (all list pages) — Library, Shelves, Annotations, Bookmarks, Vocabulary now use `@tanstack/react-virtual` with padding-based approach. DOM node count reduced by 85-98% for large collections. Overscan: 3 rows.
+- **Background cover hydration** — `coversHydrated=true` set immediately on rehydrate. Covers hydrate incrementally in batches of 48, unblocking the UI.
+- **WebP cover downsampling** — Covers resized to 200px, saved as WebP (quality 0.75), decoded asynchronously.
+- **LRU-capped caches** — coverCache=100, thumbnailCache=200, materializedPathCache=500, blobCache=3. Persist storage skips values >500KB.
+- **PDF zoom rescaling** — ImageBitmap cache for GPU-scaled instant zoom feedback. DOM window = canvas window + 4 pages. Search capped at 500 pages.
+- **Barrel import elimination** — All imports now use direct module paths instead of `src/core/index.ts`, enabling tree-shaking.
+- **Zustand selector anti-patterns** — Individual selectors instead of destructuring in ContextMenu, ReaderBookmarks, and other hot-path components.
+- **Shared context menu portal** — Single global `ContextMenuRoot` replaces per-card portals.
+- **Fuse index caching** — `WeakMap<Book[], Fuse>` caches search index. Debounced search (250ms).
+- **Navigation fix** — Removed `key={currentRoute}` from RouteErrorBoundary (prevented full remount on route change).
+- **DailyActivity pruning** — Capped to 365 days on rehydrate (was unbounded).
+- **DeletionTombstone GC** — Garbage-collected on store rehydrate (was only during sync).
 
 ## [1.0.5] - 2026-07-03
 
