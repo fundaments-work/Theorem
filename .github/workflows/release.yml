@@ -413,12 +413,14 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_WIX_TOOLS_PATH: ${{ runner.temp }}\wix
         with:
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: "Theorem ${{ env.RELEASE_TAG }}"
           releaseDraft: true
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           retryAttempts: 2
+          args: --bundles nsis,msi
 
   build-android:
     name: Build Android
