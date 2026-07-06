@@ -1020,7 +1020,9 @@ function BookReaderPage() {
         const newData = readerRef.current?.getVisibleTextForTts?.();
         if (!newData?.text) return;
         setTtsData(newData);
-    }, [isPdfFormat, ttsEnabled, immersionMode]);
+        // Auto-speak the next page in immersion mode.
+        immersionPlayer.speak(newData.text, settings.tts.voice);
+    }, [isPdfFormat, ttsEnabled, immersionMode, settings.tts.voice]);
 
     useEffect(() => {
         if (!isPdfFormat || !currentBookId || pdfTotalPages <= 0) {
