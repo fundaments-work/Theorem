@@ -1,11 +1,8 @@
 /**
  * ImmersionPlayer — native platform TTS via Tauri commands.
  *
- * Desktop: uses the `tts` Rust crate (speech-dispatcher/NSSpeechSynthesizer/SAPI).
- * Android: uses android.speech.tts.TextToSpeech via plugin.
- *
- * Voice discovery on desktop uses window.speechSynthesis (queries the same
- * system voices — read-only). Actual playback is always through the Rust backend.
+ * Desktop: platform shell commands (say/spd-say/espeak-ng/PowerShell).
+ * Android: android.speech.tts.TextToSpeech via plugin.
  */
 import { invoke } from "@tauri-apps/api/core";
 
@@ -28,6 +25,9 @@ export interface PlaybackCallbacks {
 export class ImmersionPlayer {
     private callbacks: PlaybackCallbacks = {};
     private _state: PlaybackState = 'idle';
+    private pausedText: string | null = null;
+    private pausedVoice: string | null = null;
+    private completeTimer: ReturnType<typeof setTimeout> | null = null;
 
     get state(): PlaybackState {
         return this._state;
@@ -44,19 +44,21 @@ export class ImmersionPlayer {
     }
 
     async speak(text: string, voice: string | null, _rate: number = 1) {
-        await this.stop();
+        await this._stop();
         if (!text.trim()) return;
         this.setState('loading');
+
+        this.pausedText = text;
+        this.pausedVoice = voice;
 
         try {
             await invoke("tts_speak", { text, voice: voice || "" });
             this.setState('playing');
 
-            // Approximate completion: TextToSpeech on Android and `tts` crate on
-            // desktop both return after queuing — they don't signal completion.
-            // Rough estimate: 150 words/min → chars/11.25 per second.
             const estimatedMs = Math.max(1000, (text.length / 11.25) * 1000);
-            setTimeout(() => {
+            this.completeTimer = setTimeout(() => {
+                this.completeTimer = null;
+                this.pausedText = null;
                 this.setState('idle');
                 this.callbacks.onComplete?.();
             }, estimatedMs);
@@ -67,24 +69,42 @@ export class ImmersionPlayer {
     }
 
     async pause() {
-        // Android TextToSpeech doesn't support pause; `tts` crate on desktop does.
-        // Stop is the safe universal fallback.
-        await this.stop();
+        if (this._state !== 'playing') return;
+        // Kill the completion timer so onComplete doesn't fire (no auto-advance).
+        if (this.completeTimer) {
+            clearTimeout(this.completeTimer);
+            this.completeTimer = null;
+        }
+        // Stop the audio but keep the text so we can resume.
+        await this._stop();
+        this.setState('paused');
     }
 
     async resume() {
-        // Not supported cross-platform. User must re-speak.
+        if (this._state !== 'paused') return;
+        if (!this.pausedText) return;
+        // Re-speak the current section from the beginning.
+        await this.speak(this.pausedText, this.pausedVoice);
     }
 
     async stop() {
-        if (isTauriAvailable()) {
-            await invoke("tts_stop").catch(() => {});
+        if (this.completeTimer) {
+            clearTimeout(this.completeTimer);
+            this.completeTimer = null;
         }
+        this.pausedText = null;
+        this.pausedVoice = null;
+        await this._stop();
         this.setState('idle');
     }
 
+    private async _stop() {
+        if (isTauriAvailable()) {
+            await invoke("tts_stop").catch(() => {});
+        }
+    }
+
     static async getVoices(): Promise<{ name: string; lang: string }[]> {
-        // On Tauri (both desktop and Android): use invoke to query native voices.
         if (isTauriAvailable()) {
             try {
                 const voices = await invoke<Array<{ name: string; locale: string }>>("tts_get_voices");
@@ -95,7 +115,6 @@ export class ImmersionPlayer {
                 // fall through to Web Speech API
             }
         }
-        // Desktop web fallback: system voices via read-only Web Speech API query.
         if (typeof window !== "undefined" && window.speechSynthesis) {
             const voices = window.speechSynthesis.getVoices();
             if (voices.length > 0) {
@@ -106,14 +125,14 @@ export class ImmersionPlayer {
     }
 
     static async loadVoices(): Promise<{ name: string; lang: string }[]> {
-        if (isTauriAvailable()) {
-            const voices = await ImmersionPlayer.getVoices();
-            if (voices.length > 0) return voices;
-        }
         return ImmersionPlayer.getVoices();
     }
 
     destroy() {
+        if (this.completeTimer) {
+            clearTimeout(this.completeTimer);
+            this.completeTimer = null;
+        }
         if (isTauriAvailable()) {
             invoke("tts_stop").catch(() => {});
         }
