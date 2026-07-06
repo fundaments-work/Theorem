@@ -1,6 +1,7 @@
 mod database;
 mod epub_parser;
 mod sync_commands;
+#[cfg(target_os = "linux")]
 mod tts_linux;
 
 use reqwest::blocking::Client;
@@ -930,6 +931,7 @@ fn tts_resume(_app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+#[allow(unused_variables, unreachable_code)]
 fn tts_get_voices(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
     #[cfg(target_os = "android")]
     return tauri_plugin_android_tts_audio::tts_get_voices(&app);
@@ -937,6 +939,7 @@ fn tts_get_voices(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, Strin
     Ok(Vec::new())
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
     apply_linux_webkit_workarounds();
