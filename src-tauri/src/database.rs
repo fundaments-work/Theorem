@@ -79,6 +79,11 @@ where
             PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
             PRAGMA foreign_keys = ON;
+            PRAGMA busy_timeout = 5000;
+            PRAGMA cache_size = -8000;
+            PRAGMA mmap_size = 268435456;
+            PRAGMA temp_store = MEMORY;
+            PRAGMA journal_size_limit = 67108864;
 
             CREATE TABLE IF NOT EXISTS books (
                 id TEXT PRIMARY KEY,

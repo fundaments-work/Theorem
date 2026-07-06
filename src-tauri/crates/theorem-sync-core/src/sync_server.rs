@@ -446,7 +446,7 @@ async fn handle_pair(
         device_id: state.identity.device_id.clone(),
         device_name: state.device_name.clone(),
         encrypted_ack: BASE64.encode(ack_json.as_bytes()),
-        fingerprint: state.identity.fingerprint.clone(),
+        fingerprint: state.identity.effective_fingerprint(),
     }))
 }
 

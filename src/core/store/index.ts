@@ -791,8 +791,30 @@ export const useLibraryStore = create<LibraryStore>()(
                 let booksChanged = false;
                 let cacheChanged = false;
 
+                // Pre-build lookup maps for O(1) duplicate detection.
+                const contentHashToIndex = new Map<string, number>();
+                const storagePathToIndex = new Map<string, number>();
+                const fileKeyToIndex = new Map<string, number>();
+
+                for (let i = 0; i < nextBooks.length; i++) {
+                    const book = nextBooks[i];
+                    const hash = normalizeContentHash(book.contentHash);
+                    if (hash) contentHashToIndex.set(hash, i);
+                    if (book.storagePath) storagePathToIndex.set(book.storagePath, i);
+                    fileKeyToIndex.set(`${book.filePath}:${book.format}:${book.fileSize}`, i);
+                }
+
+                const findDuplicate = (incoming: Book): number => {
+                    const hash = normalizeContentHash(incoming.contentHash);
+                    if (hash && contentHashToIndex.has(hash)) return contentHashToIndex.get(hash)!;
+                    if (incoming.storagePath && storagePathToIndex.has(incoming.storagePath)) return storagePathToIndex.get(incoming.storagePath)!;
+                    const fileKey = `${incoming.filePath}:${incoming.format}:${incoming.fileSize}`;
+                    if (fileKeyToIndex.has(fileKey)) return fileKeyToIndex.get(fileKey)!;
+                    return -1;
+                };
+
                 for (const incomingBook of incomingBooks) {
-                    const duplicateIndex = findDuplicateBookIndex(nextBooks, incomingBook);
+                    const duplicateIndex = findDuplicate(incomingBook);
 
                     if (duplicateIndex === -1) {
                         if (!booksChanged) {
@@ -800,6 +822,12 @@ export const useLibraryStore = create<LibraryStore>()(
                             booksChanged = true;
                         }
                         nextBooks.push(incomingBook);
+                        // Update lookup maps for intra-batch dedup.
+                        const idx = nextBooks.length - 1;
+                        const hash = normalizeContentHash(incomingBook.contentHash);
+                        if (hash) contentHashToIndex.set(hash, idx);
+                        if (incomingBook.storagePath) storagePathToIndex.set(incomingBook.storagePath, idx);
+                        fileKeyToIndex.set(`${incomingBook.filePath}:${incomingBook.format}:${incomingBook.fileSize}`, idx);
                         continue;
                     }
 
@@ -1215,6 +1243,15 @@ export const useLibraryStore = create<LibraryStore>()(
                             : c
                     ),
                 }));
+                // Create a tombstone so peer devices also remove this book from the collection.
+                const tombstone: DeletionTombstone = {
+                    entityId: `${collectionId}:${bookId}`,
+                    entityType: "collection_book",
+                    deletedAt: new Date().toISOString(),
+                };
+                useLibraryStore.setState((s) => ({
+                    deletionTombstones: [...s.deletionTombstones, tombstone],
+                }));
                 scheduleMutationSync();
             },
 
@@ -1452,8 +1489,8 @@ export const useLibraryStore = create<LibraryStore>()(
                 } as PersistedLibraryState;
             },
             partialize: (state): PersistedLibraryState => ({
-                // Strip coverPath from books to reduce storage size (covers are in IDB)
-                books: state.books.map(({ coverPath: _, ...book }) => book) as Book[],
+                // Strip coverPath and locations from books to reduce storage size (covers are in IDB, locations in SQLite BLOB)
+                books: state.books.map(({ coverPath: _, locations: __, ...book }) => book) as Book[],
                 collections: state.collections,
                 annotations: state.annotations,
                 deletionTombstones: state.deletionTombstones,
@@ -1490,6 +1527,7 @@ export const useLibraryStore = create<LibraryStore>()(
 
                 void (async () => {
                     try {
+                        const allCovers = new Map<string, string>();
                         for (let i = 0; i < bookIdsMissingCoverPath.length; i += COVER_RESTORE_BATCH_SIZE) {
                             const batchIds = bookIdsMissingCoverPath.slice(i, i + COVER_RESTORE_BATCH_SIZE);
                             const batchEntries = await Promise.all(
@@ -1499,35 +1537,34 @@ export const useLibraryStore = create<LibraryStore>()(
                                 }),
                             );
 
-                            const batchLookup = new Map<string, string>();
                             for (const [bookId, coverPath] of batchEntries) {
                                 if (coverPath) {
-                                    batchLookup.set(bookId, coverPath);
+                                    allCovers.set(bookId, coverPath);
                                 }
                             }
-
-                            if (batchLookup.size === 0) continue;
-
-                            useLibraryStore.setState((currentState) => {
-                                const books = applyCoverLookupToBooks(currentState.books, batchLookup);
-                                const recentBooksCache = applyCoverLookupToRecentCache(
-                                    currentState.recentBooksCache,
-                                    batchLookup,
-                                );
-
-                                if (
-                                    books === currentState.books
-                                    && recentBooksCache === currentState.recentBooksCache
-                                ) {
-                                    return currentState;
-                                }
-
-                                return {
-                                    books,
-                                    recentBooksCache,
-                                };
-                            });
                         }
+
+                        if (allCovers.size === 0) return;
+
+                        useLibraryStore.setState((currentState) => {
+                            const books = applyCoverLookupToBooks(currentState.books, allCovers);
+                            const recentBooksCache = applyCoverLookupToRecentCache(
+                                currentState.recentBooksCache,
+                                allCovers,
+                            );
+
+                            if (
+                                books === currentState.books
+                                && recentBooksCache === currentState.recentBooksCache
+                            ) {
+                                return currentState;
+                            }
+
+                            return {
+                                books,
+                                recentBooksCache,
+                            };
+                        });
                     } catch {
                         // Silently fail — covers will be generated lazily on library view
                     }
@@ -1953,6 +1990,15 @@ export const useVocabularyStore = create<VocabularyStore>()(
             deleteVocabularyTerm: (termId) => {
                 set((state) => ({
                     vocabularyTerms: state.vocabularyTerms.filter((term) => term.id !== termId),
+                }));
+                // Create a deletion tombstone so peer devices remove this term.
+                const tombstone: DeletionTombstone = {
+                    entityId: termId,
+                    entityType: "vocabulary",
+                    deletedAt: new Date().toISOString(),
+                };
+                useLibraryStore.setState((s) => ({
+                    deletionTombstones: [...s.deletionTombstones, tombstone],
                 }));
                 scheduleMutationSync();
             },

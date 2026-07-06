@@ -156,7 +156,7 @@ pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData,
         device_id: sync_state.server_state.identity.device_id.clone(),
         device_name: sync_state.server_state.device_name.clone(),
         nonce: hex::encode(nonce),
-        fingerprint: sync_state.server_state.identity.fingerprint.clone(),
+        fingerprint: sync_state.server_state.identity.effective_fingerprint(),
     };
 
     let payload_json = serde_json::to_string(&qr_payload)
@@ -237,7 +237,7 @@ pub async fn submit_pairing_code(
         device_id: sync_state.server_state.identity.device_id.clone(),
         device_name: sync_state.server_state.device_name.clone(),
         encrypted_proof: BASE64.encode(proof_json.as_bytes()),
-        fingerprint: sync_state.server_state.identity.fingerprint.clone(),
+        fingerprint: sync_state.server_state.identity.effective_fingerprint(),
     };
 
     // Send pairing request to host.

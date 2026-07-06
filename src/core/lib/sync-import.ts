@@ -283,6 +283,17 @@ export function mergeCollections(
     const deletedCollectionIds = tombstoneIdSet(tombstones, "collection");
     const deletedBookIds = tombstoneIdSet(tombstones, "book");
 
+    // Collect tombstoned collection:book pairs (from "collection_book" tombstones).
+    const removedCollectionBookPairs = new Set<string>();
+    for (const t of tombstones) {
+        if (t.entityType === "collection_book") {
+            removedCollectionBookPairs.add(t.entityId); // format: "collectionId:bookId"
+        }
+    }
+
+    const isBookRemovedFromCollection = (collectionId: string, bookId: string) =>
+        removedCollectionBookPairs.has(`${collectionId}:${bookId}`);
+
     const byId = new Map<string, Collection>();
 
     for (const col of existing) {
@@ -310,9 +321,10 @@ export function mergeCollections(
                 incTs > matchTs
                     ? inc.description ?? match.description
                     : match.description ?? inc.description,
-            // bookIds: grow-only set union, then strip tombstoned book IDs.
+            // bookIds: grow-only set union, then strip tombstoned book IDs and
+            // collection_book tombstone pairs.
             bookIds: [...new Set([...match.bookIds, ...inc.bookIds])].filter(
-                (id) => !deletedBookIds.has(id),
+                (id) => !deletedBookIds.has(id) && !isBookRemovedFromCollection(match.id, id),
             ),
             // Keep the latest updatedAt from either side.
             updatedAt:
@@ -322,11 +334,13 @@ export function mergeCollections(
         byId.set(match.id, merged);
     }
 
-    // Also strip tombstoned book IDs from collections that weren't touched
-    // by the incoming set (i.e. local-only collections).
-    if (deletedBookIds.size > 0) {
+    // Also strip tombstoned book IDs and collection_book pairs
+    // from collections that weren't touched by the incoming set.
+    if (deletedBookIds.size > 0 || removedCollectionBookPairs.size > 0) {
         for (const [id, col] of byId) {
-            const filtered = col.bookIds.filter((bId) => !deletedBookIds.has(bId));
+            const filtered = col.bookIds.filter((bId) =>
+                !deletedBookIds.has(bId) && !isBookRemovedFromCollection(id, bId)
+            );
             if (filtered.length !== col.bookIds.length) {
                 byId.set(id, { ...col, bookIds: filtered });
             }
@@ -346,16 +360,20 @@ export function mergeCollections(
 export function mergeVocabulary(
     incoming: VocabularyTerm[],
     existing: VocabularyTerm[],
+    tombstones: DeletionTombstone[] = [],
 ): VocabularyTerm[] {
+    const deletedTermIds = tombstoneIdSet(tombstones, "vocabulary");
     const byKey = new Map<string, VocabularyTerm>();
 
     const key = (t: VocabularyTerm) => `${t.normalizedTerm}::${t.language}`;
 
     for (const term of existing) {
+        if (deletedTermIds.has(term.id)) continue;
         byKey.set(key(term), term);
     }
 
     for (const inc of incoming) {
+        if (deletedTermIds.has(inc.id)) continue;
         const k = key(inc);
         const match = byKey.get(k);
         if (!match) {
@@ -539,27 +557,25 @@ export function mergeSettings(
     const remoteTs = toEpoch(incomingUpdatedAt);
     const localTs = toEpoch(localUpdatedAt);
 
-    // If remote is strictly newer, take remote settings (except device-specific).
-    // If equal or local is newer, keep local.
+    // Device-specific settings are NEVER overwritten by the peer.
+    const deviceSync = existing.deviceSync;
+
+    // If remote is strictly newer, take remote values at field level
+    // (preserving local device-specific settings).
     if (remoteTs > localTs) {
         return {
+            ...existing,
             ...incoming,
-            // Always preserve local device sync settings — they're device-specific.
-            deviceSync: existing.deviceSync,
+            deviceSync,
         };
     }
 
+    // Local is newer or equal: keep local values, fill in any gaps from remote
+    // where the local value is missing or default.
     return {
+        ...incoming,
         ...existing,
-        // If both have same timestamp or local is newer, keep local.
-        // But still merge in any vault/vocabulary fields that are empty locally
-        // but populated remotely (fill gaps, don't overwrite).
-        vault: {
-            ...incoming.vault,
-            ...existing.vault,
-            // Keep local paths always.
-            vaultPath: existing.vault.vaultPath,
-        },
+        deviceSync,
     };
 }
 

@@ -134,7 +134,24 @@ async function buildDomainsAndManifest() {
         settings: JSON.stringify(settingsPayload),
         reading_stats: JSON.stringify(settingsStore.stats),
         rss_feeds: JSON.stringify(rss.feeds),
-        rss_articles: JSON.stringify(rss.articles),
+        rss_articles: JSON.stringify((() => {
+            const MAX_ARTICLES = 500;
+            const MAX_ARTICLE_AGE_DAYS = 30;
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - MAX_ARTICLE_AGE_DAYS);
+            const filtered = rss.articles
+                .filter(article => {
+                    const articleDate = article.publishedAt || article.fetchedAt;
+                    return new Date(articleDate) >= cutoffDate;
+                })
+                .slice(0, MAX_ARTICLES);
+            return filtered.map(article => ({
+                ...article,
+                content: article.content.length > 50000
+                    ? article.content.slice(0, 50000) + '... [truncated]'
+                    : article.content,
+            }));
+        })()),
     };
 
     // Compute SHA-256 content hashes for each domain in parallel.
@@ -339,7 +356,7 @@ async function mergeIncomingData(
         try {
             const incoming = JSON.parse(incomingMap["vocabulary"]);
             if (Array.isArray(incoming)) {
-                const merged = mergeVocabulary(incoming, useVocabularyStore.getState().vocabularyTerms);
+                const merged = mergeVocabulary(incoming, useVocabularyStore.getState().vocabularyTerms, allTombstones);
                 useVocabularyStore.setState({ vocabularyTerms: merged });
                 markUpdated("vocabulary");
             }
@@ -594,6 +611,10 @@ export async function runDeviceSync(
     peerDeviceId: string,
     onProgress?: (msg: string) => void,
 ): Promise<SyncResult> {
+    if (_isMerging) {
+        return { success: false, domainsUpdated: [], error: "Sync already in progress" };
+    }
+    _isMerging = true;
     const log = (msg: string) => {
         onProgress?.(msg);
     };
@@ -685,6 +706,8 @@ export async function runDeviceSync(
         log(`Sync failed: ${errMsg}`);
         setStatus("error", errMsg);
         return { success: false, domainsUpdated: [], error: errMsg };
+    } finally {
+        _isMerging = false;
     }
 }
 

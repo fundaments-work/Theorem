@@ -315,7 +315,7 @@ const StorageTab = memo(function StorageTab({ onClearData, onExportData }: { onC
 });
 
 // Main page component
-export function SettingsPage() {
+export const SettingsPage = memo(function SettingsPage() {
     const settings = useSettingsStore((state) => state.settings);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const updateVocabularySettings = useSettingsStore((state) => state.updateVocabularySettings);
@@ -648,13 +648,13 @@ export function SettingsPage() {
             {/* Tabs */}
             <div className="mb-8 space-y-3">
                 <div className="sm:hidden -mx-1 px-1">
-                    <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory">
+                    <div className="flex gap-2 overflow-x-auto pb-1">
                         {tabButtons.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={cn(
-                                    "snap-start flex min-w-[10rem] items-center justify-center border border-[var(--color-border)] px-3 py-2.5 font-sans text-[11px] font-medium transition-colors",
+                                    "flex min-w-[10rem] items-center justify-center border border-[var(--color-border)] px-3 py-2.5 font-sans text-[11px] font-medium transition-colors",
                                     activeTab === tab.id
                                         ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                                         : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)]"
@@ -685,8 +685,7 @@ export function SettingsPage() {
             </div>
 
             {/* General Settings */}
-            {activeTab === "general" && (
-                <div className="space-y-8">
+            <div className={activeTab === "general" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Library"
                         description="Library display and organization preferences"
@@ -841,7 +840,7 @@ export function SettingsPage() {
                             </div>
                             <div className="mt-2 h-2 bg-[var(--color-surface-muted)] overflow-hidden">
                                 <div
-                                    className="h-full bg-[var(--color-accent)] transition-all duration-500"
+                                    className="h-full bg-[var(--color-accent)] transition-[width] duration-500"
                                     style={{ width: `${Math.min(100, (stats.booksReadThisYear / Math.max(1, stats.yearlyBookGoal)) * 100)}%` }}
                                 />
                             </div>
@@ -966,11 +965,9 @@ export function SettingsPage() {
                         </button>
                     </div>
                 </div>
-            )}
 
             {/* Dictionary Settings */}
-            {activeTab === "dictionary" && (
-                <div className="space-y-8">
+            <div className={activeTab === "dictionary" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Dictionary"
                         description="Install and manage offline dictionaries"
@@ -1064,12 +1061,10 @@ export function SettingsPage() {
                         </SettingRow>
                     </Section>
                 </div>
-            )}
 
 
             {/* Integrations Settings */}
-            {activeTab === "integrations" && (
-                <div className="space-y-8">
+            <div className={activeTab === "integrations" ? "space-y-8" : "hidden"}>
                     <div ref={deviceSyncSectionRef}>
                         <DeviceSyncSection />
                     </div>
@@ -1208,13 +1203,13 @@ export function SettingsPage() {
                         </Section>
                     </div>
                 </div>
-            )}
 
             {/* Storage Settings */}
-            {activeTab === "storage" && <StorageTab onClearData={handleClearData} onExportData={handleExportData} />}
+            <div className={activeTab === "storage" ? "" : "hidden"}>
+                <StorageTab onClearData={handleClearData} onExportData={handleExportData} />
+            </div>
 
-            {activeTab === "shortcuts" && (
-                <div className="space-y-8">
+            <div className={activeTab === "shortcuts" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Keyboard Shortcuts"
                         description="Available shortcuts throughout the app"
@@ -1241,10 +1236,8 @@ export function SettingsPage() {
                         </div>
                     </Section>
                 </div>
-            )}
 
-            {activeTab === "about" && (
-                <div className="space-y-8">
+            <div className={activeTab === "about" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Theorem"
                         description="Local-first reader for PDFs, EPUBs, and RSS"
@@ -1308,7 +1301,6 @@ export function SettingsPage() {
                         </div>
                     </Section>
                 </div>
-            )}
         </div>
 
         <DictionaryDownloadModal
@@ -1317,4 +1309,4 @@ export function SettingsPage() {
         />
         </>
     );
-}
+});

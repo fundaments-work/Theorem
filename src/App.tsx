@@ -75,6 +75,11 @@ function App() {
 
     useKeyboardShortcuts(currentRoute);
 
+    useEffect(() => {
+        if (!isTauri()) return;
+        void getCurrentWebviewWindow().show();
+    }, []);
+
     // Register app-level keyboard shortcuts
     useEffect(() => {
         return registerShortcuts("app", [

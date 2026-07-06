@@ -103,6 +103,7 @@ src-tauri/
   src/
     lib.rs                      # Tauri commands + runtime bootstrap
     main.rs                     # Entry point (calls theorem_lib::run())
+    database.rs                 # SQLite persistence (books, covers, kv_store, blob_store)
     epub_parser.rs              # Native EPUB pre-parser (prefetch_zip_metadata command)
     tts.rs                      # TTS orchestration
     sync_commands.rs          # All sync Tauri commands
@@ -110,6 +111,9 @@ src-tauri/
     theorem-sync-core/          # Shared sync library (crypto, protocol, embedded HTTP server)
     sync-daemon/                # Standalone background sync daemon (sidecar)
   tauri.conf.json               # Window config, CSP, bundling resources
+docs/
+  PERFORMANCE_SYNC_AUDIT.md     # Full performance + sync audit with scale analysis + fixes
+  NEW_FEATURES_ARCHITECTURE.md  # Newsletter, accent color, file sync, Cloudflare sync design
 ```
 
 ## Required Commands
@@ -317,3 +321,38 @@ Notes:
 - Do not commit code that fails `pnpm typecheck`, `cargo fmt`, `cargo clippy`, or `cargo check`.
 - Do not leave clippy warnings unfixed — clean them up as part of the same commit.
 - **Do not add `awaitSettledLayout()` / double-RAF delays after navigation.** The paginator's container dimensions are determined by CSS grid track sizing, not by iframe content — they're correct immediately.
+- **Do not use `transition-all`** — always specify the exact property (e.g., `transition-[width]`, `transition-colors`).
+- **Do not use `snap-x snap-mandatory` on scroll containers** — kills mobile scroll performance.
+- **Do not store large unbounded fields in Zustand** — `book.locations` (foliate-js position data) must live in SQLite BLOB, never in persisted Zustand state.
+- **Do not open raw `Connection::open()` without PRAGMAs** — sync paths currently skip WAL mode. All connections must go through `r2d2` pool or `with_connection()`.
+- **Do not write `with_connection()` inside loops** — batch queries with `IN (...)` clauses or use a shared connection.
+- **Do not use `Array.find()` / `Array.some()` on books array** — use `getBook(bookId)` or `getBookLookup().get(bookId)` for O(1) lookup.
+- **Do not use `Array.includes()` on potentially large arrays in render** — convert to `Set` first.
+- **Do not call `setState` in batches that trigger re-renders** — accumulate all mutations and call `setState` once.
+- **Do not store book covers as base64 TEXT** in SQLite — use BLOB columns.
+- **Do not serialize binary file data through JSON** in sync — use binary content-type (no base64 bloat).
+
+## CSS Performance Rules
+- Always use `content-visibility: auto` on scrollable content containers (off-screen not rendered).
+- Always use `-webkit-overflow-scrolling: touch` + `overscroll-behavior: contain` on scroll containers.
+- Never use `transition-all` — list the specific properties being transitioned.
+- Never use `snap-x snap-mandatory` inside a parent `overflow-y-auto` (double scroll container).
+- Guard heavy animations (`animate-fade-in`) behind `@media (prefers-reduced-motion: no-preference)`.
+- Minimize `color-mix(in srgb, ...)` in inline styles — compute at token level once.
+
+## Scale Rules (5000+ Books)
+- `book.locations` MUST NOT be stored in the Zustand Book object. Store in SQLite BLOB, read on book open, write on book close. This field can reach 50-100MB across 1000 opened books.
+- Books `partialize` must NOT `JSON.stringify` more than 1MB. At 5000 books, split metadata (title, author, cover hash) from runtime state (progress, location) and store runtime state in SQLite tables, not in a single JSON blob.
+- `addBooks()` must use a pre-built lookup Map for dedup, not N serial `findIndex()` calls.
+- Cover restore on rehydrate must batch all `setState` updates into ONE final call, not trigger 105 individual re-renders.
+- Annotation selectors must use per-book queries, not subscribe to the full global annotations array.
+- For search/sort/filter at 10K+ items: prefer SQLite queries over JavaScript `Array.filter().sort()`.
+
+## Sync Architecture Direction
+- Sync is the flagship feature. No other reading app provides resilient P2P sync. Every change must prioritize sync reliability.
+- The long-term direction is Yjs CRDT (`yjs` JS + `yrs` Rust) replacing the custom LWW merge protocol. Yjs provides conflict-free merging, delta-based sync (not full snapshots), offline queue, and binary encoding. See `docs/PERFORMANCE_SYNC_AUDIT.md` section 6.
+- The three-tier network architecture is: LAN (mDNS) → Internet P2P (Iroh QUIC) → Cloud relay (Durable Objects). See `docs/PERFORMANCE_SYNC_AUDIT.md` section 12.
+- When adding sync-related code: prefer existing libraries over custom protocol. `yrs` (Rust CRDT), `mdns-sd` (service discovery), `iroh` (P2P QUIC), `postal-mime` (email parsing), `colord` (color manipulation).
+- The sync daemon and Android worker lifecycle must be tied to `autoSyncEnabled`. When OFF: stop daemon, cancel WorkManager, clear JS timers. When ON: restart all.
+- Device identity dedup requires `effective_fingerprint()` everywhere — `sync_server.rs:449`, `sync_commands.rs:159,240`, and QR generation.
+- Sync payloads must apply the same truncation caps as the persistence layer (RSS: 50KB content, 500 articles, 30-day age).
