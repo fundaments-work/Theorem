@@ -13,6 +13,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use theorem_sync_core::sync_crypto;
 use theorem_sync_core::sync_protocol::*;
@@ -27,6 +28,7 @@ struct DaemonState {
     data_cache_path: PathBuf,
     auto_sync_enabled: Mutex<bool>,
     sync_trigger: Notify,
+    data_dirty: AtomicBool,
 }
 
 // ─── Control API Types ───
@@ -126,6 +128,7 @@ async fn main() {
         data_cache_path,
         auto_sync_enabled: tokio::sync::Mutex::new(true),
         sync_trigger: Notify::new(),
+        data_dirty: AtomicBool::new(false),
     });
 
     // ─── Control API Server (port 43936) ───
@@ -144,6 +147,10 @@ async fn main() {
     }
 
     // ─── Auto-Sync Scheduler ───
+    // Mark data as dirty on startup so the first sync round always runs
+    // (we may have missed peer changes while the daemon was stopped).
+    daemon_state.data_dirty.store(true, Ordering::SeqCst);
+
     let auto_sync_handle = {
         let daemon = daemon_state.clone();
         tokio::spawn(async move {
@@ -250,6 +257,9 @@ async fn handle_set_sync_data(
         });
     }
 
+    // Mark data as dirty so the auto-sync loop picks up the change.
+    state.data_dirty.store(true, Ordering::SeqCst);
+
     save_sync_data_cache(&state.data_cache_path, &state.server_state.sync_data);
     ok_response("Sync data updated".to_string())
 }
@@ -295,6 +305,11 @@ async fn auto_sync_loop(state: Arc<DaemonState>) {
 
         let enabled = *state.auto_sync_enabled.lock().await;
         if !enabled {
+            continue;
+        }
+
+        // Skip if no new data has been pushed since last sync.
+        if !state.data_dirty.swap(false, Ordering::SeqCst) {
             continue;
         }
 

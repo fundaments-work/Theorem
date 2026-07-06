@@ -669,6 +669,7 @@ export async function runDeviceSync(
 
         log(`Sync complete. ${summary}`);
         setStatus("synced", summary);
+        _dataDirty = false; // successfully synced, reset dirty flag
 
         // Re-provision so the server has up-to-date data for subsequent syncs
         // (e.g. if this device is also a responder for another peer).
@@ -786,6 +787,7 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
         }
 
         setStatus("synced", summary);
+        _dataDirty = false; // synced by peer, reset dirty flag
 
         // Re-provision so the server has updated data for the next sync.
         await provisionSyncData();
@@ -870,14 +872,18 @@ let _autoSyncTimer: ReturnType<typeof setInterval> | null = null;
 let _mutationSyncTimer: ReturnType<typeof setTimeout> | null = null;
 let _autoSyncCleanups: Array<() => void> = [];
 let _isAutoSyncing = false;
+let _dataDirty = false;
 
 /**
  * Run a sync round with all paired peers.
  * Syncs with the first available peer (the most recently synced one).
- * Silently skips if no peers are reachable — no error surface.
+ * Silently skips if no peers are reachable.
+ *
+ * @param force - If true, runs even if `_dataDirty` is false (for startup, visibility change, tray).
  */
-async function autoSyncRound(): Promise<void> {
+async function autoSyncRound(force = false): Promise<void> {
     if (!isTauri() || _isAutoSyncing) return;
+    if (!force && !_dataDirty) return; // nothing changed, skip unless forced
 
     const { settings } = useSettingsStore.getState();
     if (!settings.deviceSync?.autoSyncEnabled) return;
@@ -885,7 +891,6 @@ async function autoSyncRound(): Promise<void> {
     const devices = await getPairedDevices().catch(() => []);
     if (devices.length === 0) return;
 
-    // Pick the most recently synced peer, or the first one
     let target = devices[0];
     for (const d of devices) {
         if (d.lastSyncAt && (!target.lastSyncAt || d.lastSyncAt > target.lastSyncAt)) {
@@ -896,6 +901,7 @@ async function autoSyncRound(): Promise<void> {
     _isAutoSyncing = true;
     try {
         await runDeviceSync(target.deviceId);
+        _dataDirty = false; // synced successfully, clear dirty
     } catch {
         // Silent — peer might be offline; retry next cycle
     } finally {
@@ -910,10 +916,15 @@ async function autoSyncRound(): Promise<void> {
  *
  * If the sync daemon is running, pushes latest data to it.
  * Falls back to JS-based auto-sync round.
+ *
+ * Also wakes the Rust background sync loop so it can sync
+ * immediately instead of waiting for the next timer tick.
  */
 export function scheduleMutationSync(): void {
     const { settings } = useSettingsStore.getState();
     if (!settings.deviceSync?.autoSyncEnabled) return;
+
+    _dataDirty = true;
 
     if (_mutationSyncTimer) {
         clearTimeout(_mutationSyncTimer);
@@ -931,6 +942,13 @@ export function scheduleMutationSync(): void {
 
         void autoSyncRound();
     }, MUTATION_SYNC_DEBOUNCE_MS);
+
+    // Wake Rust background sync immediately so it picks up changes.
+    if (isTauri()) {
+        import("./device-sync").then((mod) => {
+            mod.wakeBackgroundSync().catch(() => {});
+        });
+    }
 }
 
 /**
@@ -990,15 +1008,20 @@ export async function startAutoSync(): Promise<() => void> {
     // Fallback: JS-based auto-sync (same as before).
     const cleanups: Array<() => void> = [];
 
-    // 1. Startup sync — delay to let the app fully initialize
+    // 1. Startup sync — delay to let the app fully initialize.
+    //    Force-run: we may have missed peer changes while offline.
     const startupTimer = setTimeout(() => {
-        void autoSyncRound();
+        void autoSyncRound(true);
     }, STARTUP_SYNC_DELAY_MS);
     cleanups.push(() => clearTimeout(startupTimer));
 
-    // 2. Periodic background sync
+    // 2. Periodic background sync — only runs if data changed.
+    //    Also performs a full-force sync every ~10 min as a safety net
+    //    (in case the peer has changes we missed via dirty-detection).
+    let tickCount = 0;
     _autoSyncTimer = setInterval(() => {
-        void autoSyncRound();
+        tickCount++;
+        void autoSyncRound(tickCount % 5 === 0); // force every 5th tick (10 min)
     }, AUTO_SYNC_INTERVAL_MS);
     cleanups.push(() => {
         if (_autoSyncTimer) {
@@ -1007,10 +1030,10 @@ export async function startAutoSync(): Promise<() => void> {
         }
     });
 
-    // 3. Visibility change (tab/window focus)
+    // 3. Visibility change (tab/window focus) — force: peer may have changed.
     const onVisibilityChange = () => {
         if (document.visibilityState === "visible") {
-            void autoSyncRound();
+            void autoSyncRound(true);
         }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -1021,7 +1044,7 @@ export async function startAutoSync(): Promise<() => void> {
         try {
             const { listen } = await import("@tauri-apps/api/event");
             const unlisten = await listen("tray-sync-now", () => {
-                void autoSyncRound();
+                void autoSyncRound(true); // force: explicit user action
             });
             cleanups.push(unlisten);
         } catch {
@@ -1049,4 +1072,5 @@ export function stopAutoSync(): void {
         clearTimeout(_mutationSyncTimer);
         _mutationSyncTimer = null;
     }
+    _dataDirty = false;
 }

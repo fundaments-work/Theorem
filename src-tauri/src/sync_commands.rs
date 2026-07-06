@@ -28,6 +28,7 @@ pub struct SyncAppState {
 pub struct BackgroundSyncHandle {
     pub cancel: Arc<Mutex<Option<tokio::sync::watch::Sender<bool>>>>,
     pub running: Arc<AtomicBool>,
+    pub data_version: Arc<AtomicU64>,
 }
 
 /// Initialize the sync subsystem. Call this once during app startup.
@@ -374,6 +375,9 @@ pub async fn set_sync_data(
         domains: domains_map,
         manifest: manifest_map,
     });
+
+    let bg = app.state::<BackgroundSyncHandle>();
+    bg.data_version.fetch_add(1, Ordering::SeqCst);
 
     Ok(())
 }
@@ -1503,6 +1507,10 @@ async fn pull_single_cover(
 /// Start the background sync loop. Runs periodically (default every 5 min)
 /// and initiates sync with all paired devices.
 ///
+/// Uses a data version counter: only syncs when local data has changed
+/// since the last sync round. The interval acts as a maximum latency
+/// bound, not a forced sync trigger.
+///
 /// On Android, pair this with the ForegroundService to keep the process alive.
 /// On desktop, this is a convenience for periodic sync without JS timers.
 #[tauri::command]
@@ -1529,10 +1537,19 @@ pub async fn start_background_sync(
     let app_clone = app.clone();
     tokio::spawn(async move {
         let mut timer = tokio::time::interval(Duration::from_secs(interval));
+        let mut last_synced_version: u64 = 0;
 
         loop {
             tokio::select! {
                 _ = timer.tick() => {
+                    let bg = app_clone.state::<BackgroundSyncHandle>();
+                    let current_version = bg.data_version.load(Ordering::SeqCst);
+
+                    // Skip if data hasn't changed since last sync round.
+                    if current_version == last_synced_version {
+                        continue;
+                    }
+
                     let sync_state = match get_sync_state(&app_clone) {
                         Ok(s) => s,
                         Err(_) => {
@@ -1553,8 +1570,9 @@ pub async fn start_background_sync(
                     }
 
                     eprintln!(
-                        "[background-sync] Starting sync round with {} device(s)",
-                        peer_ids.len()
+                        "[background-sync] Starting sync round with {} device(s) (version {})",
+                        peer_ids.len(),
+                        current_version
                     );
 
                     for peer_id in &peer_ids {
@@ -1571,6 +1589,8 @@ pub async fn start_background_sync(
                         }
                     }
 
+                    // Mark this version as synced so we don't repeat.
+                    last_synced_version = current_version;
                     eprintln!("[background-sync] Sync round complete");
                 }
                 _ = cancel_rx.changed() => {
@@ -1609,5 +1629,18 @@ pub async fn stop_background_sync(app: tauri::AppHandle) -> Result<(), String> {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     eprintln!("[background-sync] Stopped");
+    Ok(())
+}
+
+/// Wake the background sync loop so it syncs immediately
+/// instead of waiting for the next timer tick.
+/// Called from the JS side after data mutations.
+#[tauri::command]
+pub async fn wake_background_sync(app: tauri::AppHandle) -> Result<(), String> {
+    let bg_handle = app.state::<BackgroundSyncHandle>();
+    if !bg_handle.running.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    bg_handle.data_version.fetch_add(1, Ordering::SeqCst);
     Ok(())
 }

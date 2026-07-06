@@ -975,6 +975,7 @@ pub fn run() {
             app.manage(BackgroundSyncHandle {
                 cancel: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
                 running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                data_version: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
             });
 
             // Collect any file association / CLI open targets at startup so the frontend can
@@ -1123,6 +1124,7 @@ pub fn run() {
             sync_commands::pull_book_covers,
             sync_commands::start_background_sync,
             sync_commands::stop_background_sync,
+            sync_commands::wake_background_sync,
             set_android_fingerprint,
             start_android_sync_worker,
             stop_android_sync_worker,

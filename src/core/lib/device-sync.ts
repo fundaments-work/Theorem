@@ -318,3 +318,14 @@ export async function cancelPeriodicSyncWork(): Promise<void> {
     }
 }
 
+/**
+ * Wake the Rust background sync loop so it syncs immediately
+ * instead of waiting for the next timer tick.
+ * Called after data mutations so the backend picks up changes
+ * without the full interval delay.
+ */
+export async function wakeBackgroundSync(): Promise<void> {
+    requireTauri("wakeBackgroundSync");
+    return invoke("wake_background_sync");
+}
+

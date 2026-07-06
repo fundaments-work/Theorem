@@ -1561,11 +1561,13 @@ export const useSettingsStore = create<SettingsStore>()(
             stats: defaultReadingStats,
             settingsLastModifiedAt: new Date(0).toISOString(),
 
-            updateSettings: (updates) =>
+            updateSettings: (updates) => {
                 set((state) => ({
                     settings: { ...state.settings, ...updates },
                     settingsLastModifiedAt: new Date().toISOString(),
-                })),
+                }));
+                scheduleMutationSync();
+            },
 
             updateReaderSettings: (updates) => {
                 const newSettings = { ...get().settings.readerSettings, ...updates };
@@ -1583,7 +1585,7 @@ export const useSettingsStore = create<SettingsStore>()(
                 }));
             },
 
-            updateVocabularySettings: (updates) =>
+            updateVocabularySettings: (updates) => {
                 set((state) => ({
                     settings: {
                         ...state.settings,
@@ -1593,7 +1595,9 @@ export const useSettingsStore = create<SettingsStore>()(
                         },
                     },
                     settingsLastModifiedAt: new Date().toISOString(),
-                })),
+                }));
+                scheduleMutationSync();
+            },
 
             updateTtsSettings: (updates) =>
                 set((state) => ({
@@ -1612,11 +1616,13 @@ export const useSettingsStore = create<SettingsStore>()(
                     stats: { ...state.stats, ...updates },
                 })),
 
-            resetSettings: () =>
+            resetSettings: () => {
                 set({
                     settings: defaultAppSettings,
                     settingsLastModifiedAt: new Date().toISOString(),
-                }),
+                });
+                scheduleMutationSync();
+            },
 
             resetReaderSettings: () => {
                 // Apply default styles immediately
@@ -1629,6 +1635,7 @@ export const useSettingsStore = create<SettingsStore>()(
                     },
                     settingsLastModifiedAt: new Date().toISOString(),
                 }));
+                scheduleMutationSync();
             },
         }),
         {
@@ -1879,6 +1886,7 @@ export const useVocabularyStore = create<VocabularyStore>()(
                     set((state) => ({
                         vocabularyTerms: [...state.vocabularyTerms, termToSave],
                     }));
+                    scheduleMutationSync();
                     return termToSave;
                 }
 
@@ -1918,6 +1926,7 @@ export const useVocabularyStore = create<VocabularyStore>()(
                         term.id === existing.id ? mergedTerm : term
                     )),
                 }));
+                scheduleMutationSync();
                 return mergedTerm;
             },
 
@@ -1925,6 +1934,7 @@ export const useVocabularyStore = create<VocabularyStore>()(
                 set((state) => ({
                     vocabularyTerms: state.vocabularyTerms.filter((term) => term.id !== termId),
                 }));
+                scheduleMutationSync();
             },
 
             lookupTerm: async (term, language = "en") => {
@@ -2203,6 +2213,7 @@ export const useRssStore = create<RssStore>()(
                             isLoading: false,
                         };
                     });
+                    scheduleMutationSync();
                     return feed;
                 } catch (err) {
                     const message = err instanceof Error ? err.message : 'Failed to add feed';
@@ -2225,6 +2236,7 @@ export const useRssStore = create<RssStore>()(
                         { entityId: feedId, entityType: "feed", deletedAt: now },
                     ],
                 }));
+                scheduleMutationSync();
             },
 
             deleteArticle: (articleId: string) => {
@@ -2238,6 +2250,7 @@ export const useRssStore = create<RssStore>()(
                         { entityId: articleId, entityType: "rss_article", deletedAt: now },
                     ],
                 }));
+                scheduleMutationSync();
             },
 
             refreshFeed: async (feedId: string) => {
@@ -2284,6 +2297,7 @@ export const useRssStore = create<RssStore>()(
                             ),
                         };
                     });
+                    scheduleMutationSync();
                 } catch (err) {
                     const message = err instanceof Error ? err.message : 'Refresh failed';
                     set(state => ({
@@ -2346,6 +2360,7 @@ export const useRssStore = create<RssStore>()(
                         a.id === articleId ? { ...a, isFavorite: !a.isFavorite } : a,
                     ),
                 }));
+                scheduleMutationSync();
             },
 
             getArticlesForFeed: (feedId: string) => {
