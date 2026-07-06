@@ -858,11 +858,14 @@ fn apply_linux_webkit_workarounds() {
     }
 }
 
-// ─── TTS Commands (native per platform, no external crates) ───
+// ─── TTS Commands ───
 //
-// Desktop: uses platform shell commands (espeak-ng/spd-say on Linux,
-// say on macOS, PowerShell SAPI on Windows).
-// Android: uses android.speech.tts.TextToSpeech via plugin.
+// Desktop: platform shell commands (zero deps, use system speech APIs).
+//   macOS: 'say' command → NSSpeechSynthesizer
+//   Linux: 'spd-say' (speech-dispatcher), fallback to espeak-ng
+//   Windows: PowerShell System.Speech.Synthesis → SAPI
+//
+// Android: android.speech.tts.TextToSpeech via plugin (runs on UI thread).
 
 #[tauri::command]
 fn tts_speak(app: tauri::AppHandle, text: String, voice: String) -> Result<(), String> {
@@ -883,46 +886,31 @@ fn tts_speak(app: tauri::AppHandle, text: String, voice: String) -> Result<(), S
                 cmd.arg("-v").arg(&voice);
             }
             cmd.arg(&text);
-            cmd.spawn().map_err(|e| format!("Failed to run say: {e}"))?;
-            return Ok(());
+            cmd.spawn().map_err(|e| format!("say: {e}"))?;
         }
-
         #[cfg(target_os = "linux")]
         {
-            // Try spd-say first (speech-dispatcher), fall back to espeak-ng
-            // spd-say uses the same voices as Orca/speech-dispatcher
-            let result = Command::new("spd-say").arg("--wait").arg(&text).spawn();
-            if result.is_ok() {
-                return Ok(());
+            let result = Command::new("spd-say").arg(&text).spawn();
+            if result.is_err() {
+                Command::new("espeak-ng")
+                    .arg(&text)
+                    .spawn()
+                    .map_err(|e| format!("espeak-ng: {e}"))?;
             }
-            Command::new("espeak-ng")
-                .arg(&text)
-                .spawn()
-                .map_err(|e| format!("TTS failed (espeak-ng not found): {e}"))?;
-            Ok(())
         }
-
         #[cfg(target_os = "windows")]
         {
-            // PowerShell Add-Type -AssemblyName System.Speech
             let escaped = text.replace('"', "'");
-            Command::new("powershell")
-                .args([
-                    "-NoProfile", "-Command",
-                    &format!(
-                        "Add-Type -AssemblyName System.Speech; $s=New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak('{}')",
-                        escaped
-                    ),
-                ])
-                .spawn()
-                .map_err(|e| format!("TTS failed: {e}"))?;
-            return Ok(());
+            Command::new("powershell").args([
+                "-NoProfile", "-Command",
+                &format!("Add-Type -AssemblyName System.Speech; $s=New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak('{}')", escaped),
+            ]).spawn().map_err(|e| format!("TTS: {e}"))?;
         }
-
         #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
         {
-            Err("TTS not supported on this platform".to_string())
+            return Err("TTS not supported".into());
         }
+        Ok(())
     }
 }
 
@@ -935,37 +923,28 @@ fn tts_stop(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(not(target_os = "android"))]
     {
         let _ = app;
-
         #[cfg(target_os = "macos")]
         {
             std::process::Command::new("killall")
                 .arg("say")
                 .spawn()
-                .map_err(|e| format!("Failed to stop say: {e}"))?;
-            return Ok(());
+                .ok();
         }
-
         #[cfg(target_os = "linux")]
         {
-            let _ = std::process::Command::new("pkill")
+            std::process::Command::new("pkill")
                 .args(["-f", "spd-say|espeak"])
-                .spawn();
-            Ok(())
+                .spawn()
+                .ok();
         }
-
         #[cfg(target_os = "windows")]
         {
             std::process::Command::new("taskkill")
                 .args(["/F", "/IM", "powershell.exe"])
                 .spawn()
-                .map_err(|e| format!("Failed to stop TTS: {e}"))?;
-            return Ok(());
+                .ok();
         }
-
-        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-        {
-            Ok(())
-        }
+        Ok(())
     }
 }
 
@@ -978,9 +957,8 @@ fn tts_get_voices(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, Strin
     #[cfg(not(target_os = "android"))]
     {
         let _ = app;
-        // Desktop voice discovery is handled by the JS frontend via
-        // window.speechSynthesis (read-only query of system voices).
-        // Actual playback uses the platform shell commands above.
+        // Desktop: JS queries system voices via window.speechSynthesis
+        // (read-only). Actual playback uses shell commands above.
         Ok(Vec::new())
     }
 }

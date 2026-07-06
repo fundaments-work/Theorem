@@ -90,7 +90,8 @@ pub fn tts_get_voices<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<serde_json::
         .handle
         .run_mobile_plugin("getVoices", serde_json::json!({}))
         .map_err(|error| error.to_string())?;
-    Ok(result["voices"].as_array().cloned().unwrap_or_default())
+    let voices_json = result["voicesJson"].as_str().unwrap_or("[]");
+    serde_json::from_str(voices_json).map_err(|e| format!("Failed to parse voices: {e}"))
 }
 
 #[cfg(not(target_os = "android"))]

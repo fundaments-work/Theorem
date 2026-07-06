@@ -1,15 +1,19 @@
 package work.fundamentals.theorem.ttsaudio
 
 import android.app.Activity
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import android.speech.tts.Voice
 import android.util.Log
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
+import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.Locale
 
 @InvokeArg
@@ -28,72 +32,78 @@ class TtsAudioPlugin(private val activity: Activity) : Plugin(activity) {
 
     @Volatile
     private var tts: TextToSpeech? = null
+    @Volatile
     private var isInitialized = false
-    private var pendingSpeakText: String? = null
-    private var pendingSpeakVoice: String? = null
 
-    private val initListener = TextToSpeech.OnInitListener { status ->
-        if (status == TextToSpeech.SUCCESS) {
-            isInitialized = true
-            Log.i(TAG, "TextToSpeech initialized successfully")
-            pendingSpeakText?.let { text ->
-                val voice = pendingSpeakVoice
-                pendingSpeakText = null
-                pendingSpeakVoice = null
-                doSpeak(text, voice ?: "")
-            }
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun runOnUiThread(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            block()
         } else {
-            Log.e(TAG, "TextToSpeech initialization failed: status=$status")
-            isInitialized = false
+            mainHandler.post(block)
         }
     }
 
-    private fun getTts(): TextToSpeech {
-        var instance = tts
-        if (instance == null || !isInitialized) {
-            instance = TextToSpeech(activity, initListener)
-            instance.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {
-                    Log.d(TAG, "onStart: $utteranceId")
+    private fun initTts(callback: (Boolean) -> Unit) {
+        runOnUiThread {
+            try {
+                tts = TextToSpeech(activity) { status ->
+                    isInitialized = status == TextToSpeech.SUCCESS
+                    Log.i(TAG, "TextToSpeech init: status=$status")
+                    if (isInitialized) {
+                        tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                            override fun onStart(id: String?) {}
+                            override fun onDone(id: String?) {
+                                Log.d(TAG, "utterance done: $id")
+                            }
+                            override fun onError(id: String?) {
+                                Log.e(TAG, "utterance error: $id")
+                            }
+                            @Deprecated("Deprecated in Java")
+                            override fun onError(id: String?, code: Int) {}
+                        })
+                        tts?.language = Locale.getDefault()
+                    }
+                    callback(isInitialized)
                 }
-                override fun onDone(utteranceId: String?) {
-                    Log.d(TAG, "onDone: $utteranceId")
-                }
-                override fun onError(utteranceId: String?) {
-                    Log.e(TAG, "onError: $utteranceId")
-                }
-                @Deprecated("Deprecated in Java")
-                override fun onError(utteranceId: String?, errorCode: Int) {
-                    Log.e(TAG, "onError: $utteranceId, code=$errorCode")
-                }
-            })
-            tts = instance
+            } catch (e: Exception) {
+                Log.e(TAG, "TTS init failed: ${e.message}", e)
+                isInitialized = false
+                callback(false)
+            }
         }
-        return instance
     }
 
-    private fun doSpeak(text: String, voiceName: String) {
-        val tts = getTts()
-        if (!isInitialized) {
-            pendingSpeakText = text
-            pendingSpeakVoice = voiceName
+    private fun doSpeak(text: String, voiceName: String, callback: (Boolean) -> Unit) {
+        val currentTts = tts
+        if (currentTts == null || !isInitialized) {
+            initTts { ok ->
+                if (ok) {
+                    doSpeak(text, voiceName, callback)
+                } else {
+                    callback(false)
+                }
+            }
             return
         }
 
-        if (voiceName.isNotEmpty()) {
-            for (voice in tts.voices) {
-                if (voice.name == voiceName) {
-                    tts.voice = voice
-                    break
+        runOnUiThread {
+            try {
+                if (voiceName.isNotEmpty()) {
+                    for (voice in currentTts.voices) {
+                        if (voice.name == voiceName) {
+                            currentTts.voice = voice
+                            break
+                        }
+                    }
                 }
+                val result = currentTts.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
+                callback(result == TextToSpeech.SUCCESS)
+            } catch (e: Exception) {
+                Log.e(TAG, "speak failed: ${e.message}", e)
+                callback(false)
             }
-        }
-
-        val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
-        if (result == TextToSpeech.SUCCESS) {
-            Log.i(TAG, "speak success: ${text.take(50)}...")
-        } else {
-            Log.e(TAG, "speak failed: result=$result")
         }
     }
 
@@ -105,12 +115,11 @@ class TtsAudioPlugin(private val activity: Activity) : Plugin(activity) {
                 invoke.resolve()
                 return
             }
-            // Stop any current speech first
-            tts?.stop()
-            doSpeak(args.text, args.voice)
-            invoke.resolve()
+            doSpeak(args.text, args.voice) { ok ->
+                if (ok) invoke.resolve() else invoke.reject("TTS speak failed")
+            }
         } catch (error: Exception) {
-            Log.e(TAG, "speak failed: ${error.message}")
+            Log.e(TAG, "speak: ${error.message}")
             invoke.reject(error.message ?: "Failed to speak")
         }
     }
@@ -118,7 +127,9 @@ class TtsAudioPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun stop(invoke: Invoke) {
         try {
-            tts?.stop()
+            runOnUiThread {
+                tts?.stop()
+            }
             invoke.resolve()
         } catch (error: Exception) {
             invoke.reject(error.message ?: "Failed to stop")
@@ -128,31 +139,46 @@ class TtsAudioPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun getVoices(invoke: Invoke) {
         try {
-            val tts = getTts()
-            if (!isInitialized) {
-                val empty = JSObject()
-                empty.put("voices", emptyList<Map<String, String>>())
-                invoke.resolve(empty)
+            val currentTts = tts
+            if (currentTts == null || !isInitialized) {
+                initTts { ok ->
+                    if (ok) getVoices(invoke) else {
+                        val result = JSObject()
+                        result.put("voicesJson", "[]")
+                        invoke.resolve(result)
+                    }
+                }
                 return
             }
-            val voices = tts.voices.map { v ->
-                mapOf(
-                    "name" to v.name,
-                    "locale" to (v.locale?.toLanguageTag() ?: ""),
-                    "quality" to v.quality.toString(),
-                )
+
+            runOnUiThread {
+                try {
+                    val jsonArray = JSONArray()
+                    for (v in currentTts.voices) {
+                        val obj = JSONObject()
+                        obj.put("name", v.name)
+                        obj.put("locale", v.locale?.toLanguageTag() ?: "")
+                        jsonArray.put(obj)
+                    }
+                    val result = JSObject()
+                    result.put("voicesJson", jsonArray.toString())
+                    invoke.resolve(result)
+                } catch (e: Exception) {
+                    val result = JSObject()
+                    result.put("voicesJson", "[]")
+                    invoke.resolve(result)
+                }
             }
-            val result = JSObject()
-            result.put("voices", voices)
-            invoke.resolve(result)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "Failed to get voices")
         }
     }
 
     override fun onDestroy() {
-        tts?.stop()
-        tts?.shutdown()
+        runOnUiThread {
+            tts?.stop()
+            tts?.shutdown()
+        }
         tts = null
         isInitialized = false
         super.onDestroy()
