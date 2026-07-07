@@ -981,7 +981,7 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            // Initialize LAN sync subsystem.
+            // Initialize iroh P2P sync subsystem.
             // On Android, app_data_dir can fail to resolve, so we try
             // multiple fallback paths before giving up.
             let app_data_dir = app
@@ -1002,9 +1002,6 @@ pub fn run() {
                 }
                 Err(e) => {
                     eprintln!("[theorem] Warning: Failed to initialize sync: {}", e);
-                    // Sync features will be unavailable but the app won't crash
-                    // — sync commands use get_sync_state() which returns a
-                    // clean error instead of panicking.
                 }
             }
 
@@ -1158,26 +1155,26 @@ pub fn run() {
             database::sqlite_get_book_annotations,
             // Android auto-sync flag
             set_auto_sync_flag,
-            // iroh P2P sync (replaces LAN HTTP server + custom pairing)
-            iroh_start,
-            iroh_stop,
-            iroh_pair,
-            // LAN sync commands
-            sync_commands::start_sync_server,
-            sync_commands::stop_sync_server,
+            // iroh P2P sync commands
+            sync_commands::iroh_start,
+            sync_commands::iroh_stop,
+            sync_commands::iroh_pair,
+            // Pairing + device management
             sync_commands::generate_pairing_qr,
             sync_commands::submit_pairing_code,
             sync_commands::get_device_identity,
             sync_commands::set_device_fingerprint,
             sync_commands::get_paired_devices,
             sync_commands::unpair_device,
+            // Sync data provisioning
             sync_commands::set_sync_data,
             sync_commands::get_incoming_sync_data,
             sync_commands::update_peer_address,
-            sync_commands::discover_peer,
+            // iroh-based sync + file transfer
             sync_commands::initiate_sync,
             sync_commands::pull_book_files,
             sync_commands::pull_book_covers,
+            // Background sync
             sync_commands::start_background_sync,
             sync_commands::stop_background_sync,
             sync_commands::wake_background_sync,
@@ -1284,85 +1281,6 @@ async fn set_auto_sync_flag(app: tauri::AppHandle, enabled: bool) -> Result<(), 
     } else {
         let _ = std::fs::write(&flag, "1");
     }
-    Ok(())
-}
-
-// ─── iroh P2P sync commands ───
-
-static IROH_ENDPOINT: std::sync::OnceLock<std::sync::Arc<iroh_sync::IrohSyncEndpoint>> =
-    std::sync::OnceLock::new();
-
-async fn get_or_init_iroh(
-    app: &tauri::AppHandle,
-) -> Result<std::sync::Arc<iroh_sync::IrohSyncEndpoint>, String> {
-    if let Some(ep) = IROH_ENDPOINT.get() {
-        return Ok(ep.clone());
-    }
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {e}"))?;
-    let key_path = data_dir.join("iroh-key");
-    let sync_state = app
-        .try_state::<sync_commands::SyncAppState>()
-        .ok_or("Sync subsystem not initialized")?;
-    let identity = &sync_state.server_state.identity;
-    let ep = std::sync::Arc::new(
-        iroh_sync::IrohSyncEndpoint::new(
-            &key_path,
-            identity.device_id.clone(),
-            sync_state.server_state.device_name.clone(),
-            identity.effective_fingerprint(),
-        )
-        .await?,
-    );
-    let _ = IROH_ENDPOINT.set(ep.clone());
-    Ok(ep)
-}
-
-#[derive(serde::Serialize)]
-struct IrohNodeIdResponse {
-    node_id: String,
-    device_id: String,
-    fingerprint: String,
-}
-
-#[tauri::command]
-async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, String> {
-    let ep = get_or_init_iroh(&app).await?;
-    Ok(IrohNodeIdResponse {
-        node_id: ep.public_key_string(),
-        device_id: ep.peer_info.device_id.clone(),
-        fingerprint: ep.peer_info.fingerprint.clone(),
-    })
-}
-
-#[tauri::command]
-async fn iroh_stop() -> Result<(), String> {
-    if let Some(ep) = IROH_ENDPOINT.get() {
-        ep.close().await;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-async fn iroh_pair(
-    app: tauri::AppHandle,
-    peer_device_id: String,
-    peer_node_id: String,
-    peer_device_name: String,
-    peer_fingerprint: String,
-) -> Result<(), String> {
-    let ep = get_or_init_iroh(&app).await?;
-    let peer = iroh_sync::IrohPeerInfo {
-        public_key: peer_node_id
-            .parse()
-            .map_err(|e| format!("invalid public key: {e}"))?,
-        device_id: peer_device_id,
-        device_name: peer_device_name,
-        fingerprint: peer_fingerprint,
-    };
-    ep.add_peer(peer).await;
     Ok(())
 }
 

@@ -30,8 +30,8 @@ pub struct DeviceIdentity {
 
 /// Serializable form of device identity for disk storage.
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct StoredIdentity {
+    #[serde(alias = "secretBytes")]
     secret_bytes: Vec<u8>,
     /// Stable device fingerprint — optional for backward compatibility
     /// with identity files created before this field was added.

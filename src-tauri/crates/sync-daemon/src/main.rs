@@ -16,12 +16,29 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use theorem_sync_core::sync_crypto;
+use theorem_sync_core::sync_persistence;
 use theorem_sync_core::sync_protocol::*;
-use theorem_sync_core::sync_server::{self, SyncDataSnapshot, SyncServerState};
 use tokio::sync::{Mutex, Notify};
 use tokio::time::{interval, Duration};
 
 // ─── Daemon State ───
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+struct SyncDataSnapshot {
+    domains: HashMap<String, String>,
+    manifest: HashMap<String, DomainVersion>,
+}
+
+struct SyncServerState {
+    identity: theorem_sync_core::sync_crypto::DeviceIdentity,
+    device_name: String,
+    app_data_dir: PathBuf,
+    paired_devices: Mutex<HashMap<String, PairedDevice>>,
+    sync_data: Mutex<Option<SyncDataSnapshot>>,
+}
+
+const SYNC_PORT: u16 = 43935;
 
 struct DaemonState {
     server_state: Arc<SyncServerState>,
@@ -93,7 +110,7 @@ async fn main() {
     eprintln!("[sync-daemon] Device ID: {}", identity.device_id);
     eprintln!("[sync-daemon] Device name: {device_name}");
 
-    let paired_devices = sync_server::load_paired_devices(&config_dir);
+    let paired_devices = sync_persistence::load_paired_devices(&config_dir);
     eprintln!("[sync-daemon] Paired devices: {}", paired_devices.len());
 
     let data_cache_path = config_dir.join("sync-data-cache.json");
@@ -104,24 +121,8 @@ async fn main() {
         device_name: device_name.clone(),
         paired_devices: tokio::sync::Mutex::new(paired_devices),
         app_data_dir: config_dir.clone(),
-        pending_pairing: tokio::sync::Mutex::new(None),
         sync_data: tokio::sync::Mutex::new(cached_data),
-        event_emitter: None,
     });
-
-    let server_handle = match sync_server::start_server(server_state.clone()).await {
-        Ok(handle) => {
-            eprintln!(
-                "[sync-daemon] Sync server listening on port {}",
-                handle.addr.port()
-            );
-            handle
-        }
-        Err(e) => {
-            eprintln!("[sync-daemon] Failed to start sync server: {e}");
-            return;
-        }
-    };
 
     let daemon_state = Arc::new(DaemonState {
         server_state: server_state.clone(),
@@ -185,7 +186,6 @@ async fn main() {
     }
 
     auto_sync_handle.abort();
-    server_handle.shutdown_notify.notify_one();
     eprintln!("[sync-daemon] Shutdown complete");
 }
 
@@ -231,7 +231,7 @@ async fn handle_status(
         running: true,
         device_id: state.server_state.identity.device_id.clone(),
         device_name: state.server_state.device_name.clone(),
-        server_port: sync_server::SYNC_PORT,
+        server_port: SYNC_PORT,
         paired_devices: paired,
         auto_sync_enabled: auto_sync,
         last_sync_at,
@@ -317,7 +317,7 @@ async fn auto_sync_loop(state: Arc<DaemonState>) {
         // picks up devices paired by the main Tauri app while the daemon
         // was already running.
         {
-            let fresh = sync_server::load_paired_devices(&state.server_state.app_data_dir);
+            let fresh = sync_persistence::load_paired_devices(&state.server_state.app_data_dir);
             let mut devices = state.server_state.paired_devices.lock().await;
             *devices = fresh;
         }
@@ -545,7 +545,7 @@ async fn run_sync_round(
         if let Some(device) = devices.get_mut(peer_device_id) {
             device.last_sync_at = Some(sync_crypto::now_iso8601());
         }
-        let _ = sync_server::save_paired_devices(&server_state.app_data_dir, &devices);
+        let _ = sync_persistence::save_paired_devices(&server_state.app_data_dir, &devices);
     }
 
     Ok(incoming_count)

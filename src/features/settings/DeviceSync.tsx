@@ -35,7 +35,7 @@ import {
 import type { DaemonStatus } from "../../core/lib/device-sync-daemon";
 import { Modal, ModalBody, ModalHeader } from "../../ui";
 import {
-    startSyncServer,
+    irohStart,
     generatePairingQr,
     submitPairingCode,
     getDeviceIdentity,
@@ -48,10 +48,10 @@ import {
     ensureResponderSyncReady,
 } from "../../core/lib/sync-orchestrator";
 import { useUIStore, useSettingsStore } from "../../core/store";
+import type { IrohNodeIdResponse } from "../../core/lib/device-sync";
 import type {
     PairedDevice,
     DeviceIdentityInfo,
-    SyncServerInfo,
     PairingQrData,
 } from "../../core/types";
 
@@ -173,11 +173,11 @@ function ReceiverDot({ active }: { active: boolean }) {
 
 export function DeviceSyncSection() {
     const [identity, setIdentity] = useState<DeviceIdentityInfo | null>(null);
-    const [serverInfo, setServerInfo] = useState<SyncServerInfo | null>(null);
+    const [nodeInfo, setNodeInfo] = useState<IrohNodeIdResponse | null>(null);
     const [qrData, setQrData] = useState<PairingQrData | null>(null);
     const [pairedDevices, setPairedDevices] = useState<PairedDevice[]>([]);
     const [pairingCode, setPairingCode] = useState("");
-    const [isServerRunning, setIsServerRunning] = useState(false);
+    const [isIrohRunning, setIsIrohRunning] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isPairing, setIsPairing] = useState(false);
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
@@ -265,10 +265,10 @@ export function DeviceSyncSection() {
         const ensureReceiverReady = async () => {
             try {
                 await ensureResponderSyncReady();
-                const info = await startSyncServer();
+                const info = await irohStart();
                 if (!cancelled) {
-                    setServerInfo(info);
-                    setIsServerRunning(true);
+                    setNodeInfo(info);
+                    setIsIrohRunning(true);
                 }
             } catch (e) {
                 if (!cancelled) {
@@ -301,17 +301,17 @@ export function DeviceSyncSection() {
             const data = await generatePairingQr();
             setQrData(data);
             setIsQrModalOpen(true);
-            setIsServerRunning(true);
+            setIsIrohRunning(true);
             setDeviceSyncStatus("hosting");
-            // Provision data after QR generation starts server
+            // Provision data after QR generation starts iroh
             try {
                 await provisionSyncData();
             } catch (e) {
             }
             try {
                 await ensureResponderSyncReady();
-                const info = await startSyncServer();
-                setServerInfo(info);
+                const info = await irohStart();
+                setNodeInfo(info);
             } catch (e) {
             }
         } catch (e: any) {
@@ -551,15 +551,15 @@ export function DeviceSyncSection() {
 
                     {/* Receiver status row */}
                     <div className="flex items-center gap-3 pt-3 border-t border-[var(--color-border)]">
-                        <ReceiverDot active={isServerRunning} />
+                        <ReceiverDot active={isIrohRunning} />
                         <div className="flex-1 min-w-0">
                             <p className="text-xs text-[color:var(--color-text-secondary)]">
-                                {isServerRunning ? (
+                                {isIrohRunning ? (
                                     <>
                                         Receiver active
-                                        {serverInfo && (
-                                            <span className="ml-1.5 font-mono text-[color:var(--color-accent)]">
-                                                {serverInfo.ip}:{serverInfo.port}
+                                        {nodeInfo && (
+                                            <span className="ml-1.5 font-mono text-[10px] text-[color:var(--color-accent)]">
+                                                {nodeInfo.nodeId.slice(0, 12)}...
                                             </span>
                                         )}
                                     </>
@@ -570,7 +570,7 @@ export function DeviceSyncSection() {
                                 )}
                             </p>
                         </div>
-                        {isServerRunning ? (
+                        {isIrohRunning ? (
                             <Wifi className="w-4 h-4 text-[color:var(--color-accent)] shrink-0" />
                         ) : (
                             <WifiOff className="w-4 h-4 text-[color:var(--color-text-muted)] shrink-0 opacity-40" />

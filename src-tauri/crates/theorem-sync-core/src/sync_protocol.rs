@@ -28,9 +28,13 @@ pub struct DeviceIdentityInfo {
 pub struct PairingQrPayload {
     /// Protocol version (for forward compatibility).
     pub version: u8,
-    /// Host device LAN IP address.
+    /// Host's iroh node ID (public key string) for QUIC connectivity.
+    pub node_id: String,
+    /// Host device LAN IP address (for HTTP fallback / daemon).
+    #[serde(default)]
     pub ip: String,
-    /// Host device sync server port.
+    /// Host device sync server port (for HTTP fallback / daemon).
+    #[serde(default)]
     pub port: u16,
     /// Host's ephemeral X25519 public key (hex-encoded, 64 chars).
     pub ephemeral_public_key: String,
@@ -98,6 +102,9 @@ pub struct PairedDevice {
     pub device_id: String,
     /// Peer's human-readable device name.
     pub device_name: String,
+    /// Peer's iroh node ID (public key string) for QUIC connectivity.
+    #[serde(default)]
+    pub iroh_node_id: String,
     /// Base64-encoded symmetric key derived during pairing (32 bytes).
     /// Used for all subsequent encrypted communication with this peer.
     pub symmetric_key_b64: String,
@@ -375,30 +382,6 @@ pub struct CoverPullResponse {
     /// The cover data URL (e.g. "data:image/jpeg;base64,...").
     /// Present only when available=true.
     pub data_url: Option<String>,
-}
-
-// ─── Server Info ───
-
-/// Information about the running sync server, returned to the frontend.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct SyncServerInfo {
-    /// The LAN IP address the server is bound to.
-    pub ip: String,
-    /// The port the server is listening on.
-    pub port: u16,
-    /// Whether the server is currently running.
-    pub running: bool,
-}
-
-/// Health check response.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct HealthResponse {
-    pub status: String,
-    pub device_id: String,
-    pub device_name: String,
-    pub version: String,
 }
 
 // ─── Well-Known Sync Domains ───

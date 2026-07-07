@@ -1,7 +1,7 @@
 /**
  * Theorem – Device Sync Frontend Module
  *
- * Wraps all Tauri IPC commands for the LAN device sync feature.
+ * Wraps all Tauri IPC commands for the iroh P2P device sync feature.
  * This is the single point of interaction between the React UI
  * and the Rust sync backend.
  */
@@ -11,7 +11,6 @@ import { isTauri, isMobile } from "./env";
 import type {
     PairedDevice,
     DeviceIdentityInfo,
-    SyncServerInfo,
     PairingQrData,
 } from "../types";
 
@@ -23,18 +22,40 @@ function requireTauri(label: string): void {
     }
 }
 
-// ─── Server Lifecycle ───
+// ─── Iroh P2P Lifecycle ───
 
-/** Start the embedded sync server. Returns the server's LAN IP and port. */
-export async function startSyncServer(): Promise<SyncServerInfo> {
-    requireTauri("startSyncServer");
-    return invoke<SyncServerInfo>("start_sync_server");
+export interface IrohNodeIdResponse {
+    nodeId: string;
+    deviceId: string;
+    fingerprint: string;
 }
 
-/** Stop the sync server. */
-export async function stopSyncServer(): Promise<void> {
-    requireTauri("stopSyncServer");
-    return invoke("stop_sync_server");
+/** Start the iroh P2P endpoint and accept loop. Returns node identity. */
+export async function irohStart(): Promise<IrohNodeIdResponse> {
+    requireTauri("irohStart");
+    return invoke<IrohNodeIdResponse>("iroh_start");
+}
+
+/** Stop the iroh endpoint and accept loop. */
+export async function irohStop(): Promise<void> {
+    requireTauri("irohStop");
+    return invoke("iroh_stop");
+}
+
+/** Register a peer's iroh node ID for outbound connections. */
+export async function irohPair(
+    peerDeviceId: string,
+    peerNodeId: string,
+    peerDeviceName: string,
+    peerFingerprint: string,
+): Promise<void> {
+    requireTauri("irohPair");
+    return invoke("iroh_pair", {
+        peerDeviceId,
+        peerNodeId,
+        peerDeviceName,
+        peerFingerprint,
+    });
 }
 
 // ─── Pairing ───
@@ -147,20 +168,6 @@ export async function updatePeerAddress(
     return invoke("update_peer_address", { deviceId, ip, port });
 }
 
-/**
- * Discover a paired peer's current address on the LAN.
- *
- * Probes the peer's last-known IP on a range of candidate ports.
- * On success, updates the stored address and returns [ip, port].
- * On failure, throws with a descriptive error message.
- */
-export async function discoverPeer(
-    peerDeviceId: string,
-): Promise<[string, number]> {
-    requireTauri("discoverPeer");
-    return invoke<[string, number]>("discover_peer", { peerDeviceId });
-}
-
 // ─── File Transfer ───
 
 /** Result from the Rust pull_book_files command. */
@@ -174,13 +181,7 @@ export interface FileTransferResult {
 }
 
 /**
- * Pull book binary files from a paired peer device.
- *
- * Checks which of the given book IDs have files on the peer,
- * then transfers each file via chunked encrypted HTTP, verifies
- * integrity (SHA-256), and saves to the local book-cache.
- *
- * Emits `sync-file-progress` events that can be listened to for UI updates.
+ * Pull book binary files from a paired peer device over iroh P2P.
  */
 export async function pullBookFiles(
     peerDeviceId: string,

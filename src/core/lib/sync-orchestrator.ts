@@ -14,11 +14,10 @@
 import {
     setSyncData,
     initiateSync,
-    startSyncServer,
+    irohStart,
     getIncomingSyncData,
     pullBookFiles,
     pullBookCovers,
-    discoverPeer,
     getPairedDevices,
     updateSyncNotification,
     setAutoSyncFlag,
@@ -134,11 +133,13 @@ async function buildDomainsAndManifest() {
     await ensureYjsLoaded();
 
     const domains: Record<string, string> = {
-        books: JSON.stringify(library.books.map(({ filePath: _f, storagePath: _s, coverPath, ...book }) => ({
+        books: JSON.stringify(library.books.map(({ filePath: _f, storagePath: _s, coverPath, locations: _l, ...book }) => ({
             ...book,
             // Strip data URL covers — they are base64-encoded images that can
             // be 100+ KB each, blowing up the JSON payload to hundreds of MB.
             // The peer pulls covers on-demand via the dedicated cover pull endpoint.
+            // Strip locations (foliate-js pagination data) — stored in SQLite BLOB,
+            // never needed for sync; can be 50-100MB across opened books.
             ...(coverPath && !coverPath.startsWith("data:") ? { coverPath } : {}),
         }))),
         annotations: JSON.stringify(library.annotations),
@@ -630,10 +631,8 @@ export async function ensureResponderSyncReady(): Promise<void> {
 
     responderReadyPromise = (async () => {
         // Provision data FIRST so the server never starts without data.
-        // If startSyncServer runs first, a peer could get 503 before
-        // provisionSyncData completes.
         await provisionSyncData();
-        await startSyncServer();
+        await irohStart();
 
         if (!responderEventUnlisten) {
             responderEventUnlisten = await initSyncEventListener();
@@ -677,20 +676,6 @@ export async function runDeviceSync(
 
         log("Sending data snapshot to backend...");
         await setSyncData(domains, manifest);
-
-        // Discover the peer's current address before connecting.
-        // The persistent port feature means the stored port is usually correct,
-        // but this handles the case where it changed (e.g. port was unavailable).
-        log("Discovering peer on network...");
-        try {
-            const [peerIp, peerPort] = await discoverPeer(peerDeviceId);
-            log(`Peer found at ${peerIp}:${peerPort}`);
-        } catch (discoveryErr) {
-            const errMsg = discoveryErr instanceof Error ? discoveryErr.message : String(discoveryErr);
-            log(`Peer discovery failed (${errMsg}), trying stored address...`);
-            // Fall through — initiateSync will use whatever address is stored.
-            // If the stored address is also stale, initiateSync will fail with a clear error.
-        }
 
         log("Initiating sync with peer...");
         setStatus("syncing", "Exchanging data with peer...");
@@ -801,11 +786,6 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
         if (domainCount === 0) {
             if (peerDeviceId) {
                 const responderLog = (_msg: string) => {};
-                try {
-                    await discoverPeer(peerDeviceId);
-                } catch {
-                    // Non-fatal: address may already be correct from SyncCompleteMessage.
-                }
                 const needFilesIds = useLibraryStore.getState().books
                     .filter((b) => b.syncedWithoutFile)
                     .map((b) => b.id);
@@ -847,12 +827,6 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
             } catch (_err) {}
             
             const responderLog = (_msg: string) => {};
-            try {
-                await discoverPeer(peerDeviceId);
-            } catch {
-                // Discovery failed — peer may have gone offline. pullMissingBookFilesAndCovers
-                // will fail gracefully (non-fatal) if the address is stale.
-            }
             await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, responderLog);
         }
 

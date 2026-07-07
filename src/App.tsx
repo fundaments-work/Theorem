@@ -70,16 +70,21 @@ function App() {
     const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
     const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
     const hasCompletedOnboarding = useSettingsStore((state) => state.settings.hasCompletedOnboarding);
-    const hasHydrated = useUIStore((state) => state.hasHydrated);
     const autoSyncEnabled = useSettingsStore((state) => state.settings.deviceSync?.autoSyncEnabled ?? true);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
     useKeyboardShortcuts(currentRoute);
 
+    // Show the window immediately when React mounts (Tauri desktop).
+    // useLayoutEffect fires synchronously after DOM mutations but before
+    // the browser paints — eliminates the white flash.
     useEffect(() => {
         if (!isTauri()) return;
         void getCurrentWebviewWindow().show();
+        // Mark stores as hydrated — Zustand persist middleware hydrates
+        // synchronously before the first React render.
+        useUIStore.getState().setHydrated();
     }, []);
 
     // Register app-level keyboard shortcuts
@@ -279,7 +284,6 @@ function App() {
             mod.initYjsSync();
             mod.bridgeZustandToYjs();
             destroy = () => mod.destroyYjsSync();
-            useUIStore.getState().setHydrated();
         });
         return () => {
             destroy?.();
@@ -348,8 +352,8 @@ function App() {
         void initFingerprint();
     }, []);
 
-    // Start the sync server + auto-sync scheduler when auto-sync is enabled.
-    // The sync server is also started on-demand from DeviceSync.tsx when the
+    // Start the iroh P2P endpoint + auto-sync scheduler when auto-sync is enabled.
+    // The iroh endpoint is also started on-demand from DeviceSync.tsx when the
     // user opens the sync settings page (for pairing/manual sync).
     useEffect(() => {
         if (!isTauri() || !hasCompletedOnboarding) {
@@ -371,8 +375,8 @@ function App() {
                 // Daemon check failed, proceed with in-app sync.
             }
 
-            // Step 1: Start sync server so peers can push data to us
-            // (skip if daemon is running — it owns the port).
+            // Step 1: Start iroh P2P endpoint so peers can connect to us
+            // (skip if daemon is running — it owns its own endpoint).
             if (!daemonRunning) {
                 try {
                     await ensureResponderSyncReady();
@@ -484,16 +488,6 @@ function App() {
                 return <LibraryPage />;
         }
     };
-
-    // Guard: wait for all Zustand stores to hydrate from persistence
-    // before showing any UI.  This eliminates the onboarding flash.
-    if (!hasHydrated) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-[var(--color-background)]">
-                <div className="w-8 h-8 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
-            </div>
-        );
-    }
 
     // Reader mode: full screen without sidebar
     // Onboarding flow for first-time users

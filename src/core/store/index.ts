@@ -173,7 +173,7 @@ export const useUIStore = create<UIStore>()(
             deviceSyncStatus: "idle",
             deviceSyncMessage: undefined,
             deviceSyncAt: undefined,
-            hasHydrated: false,
+            hasHydrated: true,
 
             setRoute: (route, bookId, pushHistory = true) => {
                 if (pushHistory && typeof window !== "undefined") {

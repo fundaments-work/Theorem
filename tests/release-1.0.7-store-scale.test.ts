@@ -172,13 +172,9 @@ describe("P0-6: Locations stripped from Zustand persist", () => {
 // ─── P3-28: hasHydrated Flag ───
 
 describe("P3-28: hasHydrated flag", () => {
-    it("setHydrated changes hasHydrated to true", async () => {
+    it("hasHydrated defaults to true for immediate render", async () => {
         const { useUIStore } = await import("../src/core/store");
-        const initial = useUIStore.getState().hasHydrated;
-        // Default is false on fresh store
-        expect(initial).toBe(false);
-
-        useUIStore.getState().setHydrated();
+        // Default is true — app renders immediately, no blocking gate
         expect(useUIStore.getState().hasHydrated).toBe(true);
     });
 });
