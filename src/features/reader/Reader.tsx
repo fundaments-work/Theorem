@@ -13,6 +13,9 @@ import {
     saveCoverImage,
 } from "../../core/lib/storage";
 import {
+    loadBookLocations,
+} from "../../core/lib/book-locations";
+import {
     extractMetadata,
     shouldUseExtractedTitle,
     shouldUseExtractedAuthor,
@@ -486,6 +489,14 @@ function BookReaderPage() {
                 setLoadError('Book not found in library');
                 return;
             }
+
+            // Restore locations from SQLite BLOB (stripped from Zustand persist).
+            loadBookLocations(currentBookId).then((loadedLocations) => {
+                if (loadedLocations && loadedLocations !== book.locations) {
+                    updateBook(currentBookId, { locations: loadedLocations });
+                }
+            });
+
             if (book.syncedWithoutFile) {
                 setLoadError('This book was synced from another device but the file has not been transferred yet. Sync again or re-import the book to read it.');
                 loadedBookIdRef.current = null;

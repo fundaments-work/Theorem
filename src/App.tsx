@@ -13,7 +13,7 @@ import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-sho
 import { initI18n } from "./core/lib/i18n";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 import { prewarmFoliateRuntime } from "./core/lib/foliate-runtime";
-import { initYjsSync, bridgeZustandToYjs } from "./core/lib/yjs-sync";
+import { initYjsSync, bridgeZustandToYjs, destroyYjsSync } from "./core/lib/yjs-sync";
 import { OnboardingFlow } from "./features/onboarding";
 
 const LibraryPage = lazy(() =>
@@ -71,6 +71,7 @@ function App() {
     const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
     const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
     const hasCompletedOnboarding = useSettingsStore((state) => state.settings.hasCompletedOnboarding);
+    const hasHydrated = useUIStore((state) => state.hasHydrated);
     const autoSyncEnabled = useSettingsStore((state) => state.settings.deviceSync?.autoSyncEnabled ?? true);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -276,10 +277,9 @@ function App() {
     useEffect(() => {
         initYjsSync();
         bridgeZustandToYjs();
-        // Mark app as fully hydrated — all stores loaded, Yjs bridge active.
         useUIStore.getState().setHydrated();
         return () => {
-            // Cleanup handled by yjs-sync destroyYjsSync on explicit call.
+            destroyYjsSync();
         };
     }, []);
 
@@ -481,6 +481,16 @@ function App() {
                 return <LibraryPage />;
         }
     };
+
+    // Guard: wait for all Zustand stores to hydrate from persistence
+    // before showing any UI.  This eliminates the onboarding flash.
+    if (!hasHydrated) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-[var(--color-background)]">
+                <div className="w-8 h-8 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
+            </div>
+        );
+    }
 
     // Reader mode: full screen without sidebar
     // Onboarding flow for first-time users

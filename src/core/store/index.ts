@@ -16,6 +16,7 @@ import {
 import { scheduleMutationSync } from "../lib/sync-orchestrator";
 import { deleteBookStorage } from "../lib/storage-manager";
 import { getCoverImage } from "../lib/storage";
+import { persistBookLocations } from "../lib/book-locations";
 import type {
     Annotation,
     AppRoute,
@@ -1059,16 +1060,14 @@ export const useLibraryStore = create<LibraryStore>()(
                         : { books, recentBooksCache };
                 }),
 
-            saveBookLocations: (bookId, locations) =>
-                set((state) => {
+            saveBookLocations: (bookId, locations) => {
+                persistBookLocations(bookId, locations);
+                return set((state) => {
                     const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
                         ...book,
                         locations,
                     }));
-                    if (!updatedBook) {
-                        return { books };
-                    }
-
+                    if (!updatedBook) return { books };
                     const recentBooksCache = syncRecentBooksCacheWithBook(
                         state.recentBooksCache,
                         updatedBook,
@@ -1076,7 +1075,8 @@ export const useLibraryStore = create<LibraryStore>()(
                     return recentBooksCache === state.recentBooksCache
                         ? { books }
                         : { books, recentBooksCache };
-                }),
+                });
+            },
 
             // Reading time tracking
             addReadingTime: (bookId, minutes) =>

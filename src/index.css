@@ -39,10 +39,17 @@ body {
 #app-main {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    content-visibility: auto;
 }
 
-/* Settings page content: render off-screen tabs with content-visibility */
-[data-settings-content] {
+/* Off-screen scroll containers: skip rendering until in viewport. */
+.sidebar,
+[data-virtualized],
+#library-grid,
+.feeds-list,
+.vocabulary-list,
+[data-reader-panel],
+#app-main {
     content-visibility: auto;
 }
 

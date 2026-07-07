@@ -18,6 +18,25 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use futures::stream::{self, StreamExt};
 use rusqlite::{params, Connection, OptionalExtension};
+
+const DB_PERF_PRAGMAS: &str = r#"
+    PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA foreign_keys = ON;
+    PRAGMA busy_timeout = 5000;
+    PRAGMA cache_size = -8000;
+    PRAGMA mmap_size = 268435456;
+    PRAGMA temp_store = MEMORY;
+    PRAGMA journal_size_limit = 67108864;
+"#;
+
+fn open_db_with_pragmas(db_path: &Path) -> Result<Connection, String> {
+    let conn = Connection::open(db_path)
+        .map_err(|error| format!("Failed to open SQLite database '{db_path:?}': {error}"))?;
+    conn.execute_batch(DB_PERF_PRAGMAS)
+        .map_err(|error| format!("Failed to apply SQLite PRAGMAs: {error}"))?;
+    Ok(conn)
+}
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::Sha256;
@@ -837,8 +856,7 @@ fn resolve_book_file_for_transfer(
         return Ok(None);
     }
 
-    let connection = Connection::open(&db_path)
-        .map_err(|error| format!("Failed to open SQLite database '{db_path:?}': {error}"))?;
+    let connection = open_db_with_pragmas(&db_path)?;
 
     let blob = connection
         .query_row(
@@ -1151,7 +1169,7 @@ async fn handle_ws_upgrade(
 async fn handle_ws_socket(socket: WebSocket, state: Arc<SyncServerState>) {
     use futures::SinkExt;
 
-    let room = state.identity.device_id.clone();
+    let room = "theorem-sync".to_string();
 
     let (mut ws_sink, mut ws_stream) = socket.split();
 

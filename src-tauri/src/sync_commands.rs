@@ -1506,6 +1506,15 @@ async fn pull_single_cover(
         let connection = rusqlite::Connection::open(&db_path)
             .map_err(|e| format!("Failed to open SQLite for cover save: {e}"))?;
 
+        connection
+            .execute_batch(
+                "PRAGMA journal_mode = WAL;
+                 PRAGMA synchronous = NORMAL;
+                 PRAGMA foreign_keys = ON;
+                 PRAGMA busy_timeout = 5000;",
+            )
+            .map_err(|e| format!("Failed to set PRAGMAs: {e}"))?;
+
         // Ensure covers table exists.
         connection
             .execute_batch(
