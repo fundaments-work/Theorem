@@ -1151,6 +1151,10 @@ pub fn run() {
             database::sqlite_index_book_fts,
             database::sqlite_index_books_fts_batch,
             database::sqlite_search_books,
+            database::sqlite_save_book_metadata,
+            database::sqlite_get_book_metadata,
+            database::sqlite_save_book_annotations,
+            database::sqlite_get_book_annotations,
             // LAN sync commands
             sync_commands::start_sync_server,
             sync_commands::stop_sync_server,

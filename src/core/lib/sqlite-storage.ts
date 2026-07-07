@@ -175,3 +175,25 @@ export async function sqliteIndexBooksFtsBatch(entries: Array<[string, string, s
     const invoke = await getInvoke();
     await invoke('sqlite_index_books_fts_batch', { entries });
 }
+
+// ─── Book Metadata + Annotations (SQLite tables) ───
+
+export async function sqliteSaveBookMetadata(bookId: string, metadataJson: string): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_save_book_metadata', { bookId, metadataJson });
+}
+
+export async function sqliteGetBookMetadata(bookId: string): Promise<string | null> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_get_book_metadata', { bookId }) as Promise<string | null>;
+}
+
+export async function sqliteSaveBookAnnotations(bookId: string, annotationsJson: string[]): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_save_book_annotations', { bookId, annotationsJson });
+}
+
+export async function sqliteGetBookAnnotations(bookId: string): Promise<string[]> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_get_book_annotations', { bookId }) as Promise<string[]>;
+}

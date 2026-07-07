@@ -145,6 +145,23 @@ const DB_SCHEMA_PERSISTENT_PRAGMAS: &str = r#"
         title,
         author
     );
+
+    CREATE TABLE IF NOT EXISTS book_metadata (
+        book_id TEXT PRIMARY KEY,
+        metadata_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS book_annotations (
+        id TEXT PRIMARY KEY,
+        book_id TEXT NOT NULL,
+        annotation_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_annotations_book_id
+        ON book_annotations(book_id);
 "#;
 
 const DB_PER_CONNECTION_PRAGMAS: &str = r#"
@@ -662,6 +679,60 @@ pub fn sqlite_search_books(
                 title: row.get(1)?,
             })
         })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+    })
+}
+
+// ─── Book Metadata (SQLite table) ───
+
+#[tauri::command]
+pub fn sqlite_save_book_metadata(app: AppHandle, book_id: String, metadata_json: String) -> Result<(), String> {
+    with_connection(&app, |connection| {
+        connection.execute(
+            "INSERT INTO book_metadata(book_id, metadata_json, updated_at) VALUES(?1, ?2, unixepoch())
+             ON CONFLICT(book_id) DO UPDATE SET metadata_json = ?2, updated_at = unixepoch()",
+            params![book_id, metadata_json],
+        )?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_get_book_metadata(app: AppHandle, book_id: String) -> Result<Option<String>, String> {
+    with_connection(&app, |connection| {
+        connection.query_row(
+            "SELECT metadata_json FROM book_metadata WHERE book_id = ?1",
+            params![book_id],
+            |row| row.get(0),
+        ).optional()
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_save_book_annotations(app: AppHandle, book_id: String, annotations_json: Vec<String>) -> Result<(), String> {
+    with_connection(&app, |connection| {
+        connection.execute("DELETE FROM book_annotations WHERE book_id = ?1", params![book_id])?;
+        for (i, ann_json) in annotations_json.iter().enumerate() {
+            let id: String = serde_json::from_str::<serde_json::Value>(ann_json)
+                .ok()
+                .and_then(|v| v.get("id").and_then(|id_val| id_val.as_str()).map(String::from))
+                .unwrap_or_else(|| format!("auto:{}:{}", book_id, i));
+            connection.execute(
+                "INSERT INTO book_annotations(id, book_id, annotation_json, updated_at) VALUES(?1, ?2, ?3, unixepoch())",
+                params![id, book_id, ann_json],
+            )?;
+        }
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_get_book_annotations(app: AppHandle, book_id: String) -> Result<Vec<String>, String> {
+    with_connection(&app, |connection| {
+        let mut stmt = connection.prepare(
+            "SELECT annotation_json FROM book_annotations WHERE book_id = ?1 ORDER BY updated_at",
+        )?;
+        let rows = stmt.query_map(params![book_id], |row| row.get::<_, String>(0))?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
     })
 }
