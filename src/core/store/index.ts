@@ -133,6 +133,7 @@ interface UIStore extends UIState {
     clearSelection: () => void;
     setLoading: (loading: boolean, message?: string) => void;
     setError: (error?: string) => void;
+    setHydrated: () => void;
     setVaultSyncStatus: (
         status: UIState["vaultSyncStatus"],
         message?: string,
@@ -153,7 +154,7 @@ export const useUIStore = create<UIStore>()(
         (set) => ({
             currentRoute: "library",
             currentBookId: undefined,
-            sidebarOpen: !isMobile(), // Closed by default on mobile, open on desktop
+            sidebarOpen: !isMobile(),
             readerToolbarVisible: true,
             searchQuery: "",
             searchCommittedQuery: "",
@@ -167,6 +168,7 @@ export const useUIStore = create<UIStore>()(
             deviceSyncStatus: "idle",
             deviceSyncMessage: undefined,
             deviceSyncAt: undefined,
+            hasHydrated: false,
 
             setRoute: (route, bookId, pushHistory = true) => {
                 if (pushHistory && typeof window !== "undefined") {
@@ -210,6 +212,8 @@ export const useUIStore = create<UIStore>()(
                 set({ vaultSyncStatus, vaultSyncMessage, vaultSyncAt }),
             setDeviceSyncStatus: (deviceSyncStatus, deviceSyncMessage, deviceSyncAt) =>
                 set({ deviceSyncStatus, deviceSyncMessage, deviceSyncAt }),
+
+            setHydrated: () => set({ hasHydrated: true }),
 
             // Reader toolbar
             setReaderToolbarVisible: (visible) => set({ readerToolbarVisible: visible }),

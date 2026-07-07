@@ -1125,4 +1125,6 @@ export function stopAutoSync(): void {
         _mutationSyncTimer = null;
     }
     _dataDirty = false;
+    // Notify the daemon to stop auto-sync as well.
+    configureDaemon({ auto_sync_enabled: false }).catch(() => {});
 }

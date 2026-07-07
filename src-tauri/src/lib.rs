@@ -1024,28 +1024,33 @@ pub fn run() {
             enqueue_open_paths(app.handle(), open_paths, false);
 
             // ── Launch sync-daemon (Linux only) ──
-            // The daemon runs the sync HTTP server and periodic auto-sync
-            // independently of the GUI. It's installed by the install script
-            // at ~/.local/lib/theorem/sync-daemon and managed by systemd.
-            // If the binary is not found, this is a no-op — the in-app
-            // sync server takes over.
             #[cfg(target_os = "linux")]
             {
+                use std::sync::Mutex;
                 let daemon_data_dir = daemon_data_dir.clone();
+                let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     let daemon_path = std::env::var("HOME")
                         .map(|h| std::path::PathBuf::from(h).join(".local/lib/theorem/sync-daemon"))
                         .ok();
                     let daemon_path = match daemon_path {
                         Some(p) if p.exists() => p,
-                        _ => return, // daemon not installed, no-op
+                        _ => return,
                     };
                     match tokio::process::Command::new(&daemon_path)
                         .arg(daemon_data_dir.to_string_lossy().as_ref())
+                        .kill_on_drop(true)
                         .spawn()
                     {
                         Ok(child) => {
                             eprintln!("[sync-daemon] launched (pid={})", child.id().unwrap_or(0));
+                            #[allow(dead_code)]
+                            struct DaemonChild {
+                                inner: Mutex<Option<tokio::process::Child>>,
+                            }
+                            handle.manage(DaemonChild {
+                                inner: Mutex::new(Some(child)),
+                            });
                         }
                         Err(e) => {
                             eprintln!("[sync-daemon] spawn failed: {e}");

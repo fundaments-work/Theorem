@@ -611,67 +611,71 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 
 ---
 
-## 11. Recommended Fixes
+## 11. Recommended Fixes — Implementation Status (v1.0.7)
+
+✅ = done  |  🔶 = partial  |  ❌ = not started
 
 ### P0 — Immediate
 
-| # | Fix | Effort | Impact |
-|---|-----|--------|--------|
-| 1 | `tauri.conf.json`: `visible: false` + `window.show()` after React render | 1 line + 1 hook | Kills white flash |
-| 2 | `index.html`: Add inline spinner inside `<div id="root">` | 5 lines | Kills blank screen |
-| 3 | Remove `snap-x snap-mandatory snap-start` from settings tab bar | 3 classes | Fixes 80% mobile scroll lag |
-| 4 | Replace `transition-all` with `transition-[width]` on progress bar | 1 class | Clean compositor |
-| 5 | Batch 5 `sqlite_get_kv` into 1 `sqlite_batch_get_kv` on startup | ~30 lines Rust + TS | 5 IPCs → 1 |
-| 6 | Strip `locations` from book persistence (store in SQLite BLOB) | ~30 lines | Prevents 50-100MB JSON catastrophe |
-| 7 | Add `PRAGMA busy_timeout = 5000` | 1 line | No transient SQLITE_BUSY crashes |
+| # | Fix | Status |
+|---|------|--------|
+| 1 | `tauri.conf.json`: `visible: false` + `window.show()` after React render | ✅ |
+| 2 | `index.html`: Add inline spinner inside `<div id="root">` | ✅ |
+| 3 | Remove `snap-x snap-mandatory snap-start` from settings tab bar | ✅ |
+| 4 | Replace `transition-all` with `transition-[width]` on progress bar | ✅ |
+| 5 | Batch 5 `sqlite_get_kv` → `sqlite_batch_get_kv` + `PRAGMA busy_timeout` | ✅ |
+| 6 | Strip `locations` from book persistence (Zustand partialize) | ✅ |
+| 7 | Add `PRAGMA busy_timeout = 5000` + perf PRAGMAs | ✅ |
 
 ### P1 — Sync Correctness
 
-| # | Fix | Effort | Impact |
-|---|-----|--------|--------|
-| 8 | Use `effective_fingerprint()` in `/pair`, QR gen, `submit_pairing_code` | 3 line changes | Fixes device duplicates |
-| 9 | Add `_isMerging` guard to `runDeviceSync` | 3 lines | Fixes concurrent merge corruption |
-| 10 | Add `"vocabulary"` to `TombstoneEntity`, tombstone in `deleteVocabularyTerm`, filter in `mergeVocabulary` | ~20 lines | Fixes deleted terms resurrecting |
-| 11 | Per-key merge for settings | ~40 lines | Fixes settings overwrite |
-| 12 | Add collection_book tombstones | ~15 lines | Fixes collection removal sync |
-| 13 | Apply 50KB truncation to RSS articles in sync path | ~5 lines | Fixes raw HTML synced to peers |
+| # | Fix | Status |
+|---|------|--------|
+| 8 | Use `effective_fingerprint()` in `/pair`, QR gen, `submit_pairing_code` | ✅ |
+| 9 | Add `_isMerging` guard to `runDeviceSync` | ✅ |
+| 10 | Add `"vocabulary"` to `TombstoneEntity`, tombstone in `deleteVocabularyTerm`, filter in `mergeVocabulary` | ✅ |
+| 11 | Per-key merge for settings | ✅ |
+| 12 | Add `collection_book` tombstones | ✅ |
+| 13 | Apply 50KB truncation to RSS articles in sync path | ✅ |
 
 ### P2 — Performance
 
-| # | Fix | Effort | Impact |
-|---|-----|--------|--------|
-| 14 | Guard `animate-fade-in` behind `prefers-reduced-motion` | 1 media query | GPU layer savings |
-| 15 | Use `hidden` CSS class for settings tab switching | ~10 lines | No DOM teardown on tab switch |
-| 16 | `content-visibility: auto` on scroll containers | 1 CSS property | Off-screen not rendered |
-| 17 | `-webkit-overflow-scrolling: touch` + `overscroll-behavior: contain` on main scroll | 2 properties | Native momentum scroll |
-| 18 | `React.memo` on SettingsPage, ArticleViewer, BookReaderPage | 3 exports | No full re-renders |
-| 19 | `ReaderAnnotationsPanel`: use per-book annotation selector | 2 lines | No re-render on unrelated highlight |
-| 20 | Batch cover restore into single `setState` | ~15 lines | No 105-re-render cascade |
-| 21 | Build lookup Map before `addBooks()` loop for O(1) dedup | ~10 lines | No 12.5M comparisons on import |
-| 22 | Route all `Connection::open()` through `r2d2` pool | ~30 lines | Consistent PRAGMAs, no per-query overhead |
-| 23 | Add performance PRAGMAs (mmap, cache_size, temp_store, journal_size_limit) | 4 lines | 4× cache, mmap reads |
+| # | Fix | Status |
+|---|------|--------|
+| 14 | Guard `animate-fade-in` behind `prefers-reduced-motion` | ✅ |
+| 15 | Use `hidden` CSS class for settings tab switching | ✅ |
+| 16 | `content-visibility: auto` on scroll containers | ✅ |
+| 17 | `-webkit-overflow-scrolling: touch` + `overscroll-behavior: contain` on main scroll | ✅ |
+| 18 | `React.memo` on SettingsPage + ArticleViewer (BookReaderPage has no props — not applicable) | ✅ |
+| 19 | `ReaderAnnotationsPanel` already uses `getBookAnnotations(bookId)`; `ArticleViewer` fixed from full `annotations` array to per-book selector | ✅ |
+| 20 | Batch cover restore into single `setState` | ✅ |
+| 21 | Build lookup Map before `addBooks()` loop for O(1) dedup | ✅ |
+| 22 | Route all `Connection::open()` through `r2d2` pool (4 connections, `CustomizeConnection` pragmas) | ✅ |
+| 23 | Add performance PRAGMAs (mmap, cache_size, temp_store, journal_size_limit) | ✅ |
 
 ### P3 — Architecture
 
-| # | Fix | Effort | Impact |
-|---|-----|--------|--------|
-| 24 | Kill daemon on Tauri exit | 1 line | No orphan daemon |
-| 25 | Single sync mechanism when daemon running | ~10 lines | No triple-sync |
-| 26 | Android worker: add outbound sync + foreground notification | ~30 lines | Worker actually syncs |
-| 27 | `stopAutoSync()` → `configureDaemon({ auto_sync_enabled: false })` | 2 lines | Daemon respects toggle |
-| 28 | Track explicit `useHasHydrated` state | ~15 lines | Clean startup UX |
-| 29 | Add zod schemas for all 9 sync domains | ~200 lines | Safe peer data validation |
+| # | Fix | Status |
+|---|------|--------|
+| 24 | Kill daemon on Tauri exit | ❌ |
+| 25 | Single sync mechanism when daemon running | ❌ |
+| 26 | Android worker: add outbound sync + foreground notification | ❌ |
+| 27 | `stopAutoSync()` → `configureDaemon({ auto_sync_enabled: false })` | ❌ |
+| 28 | Track explicit `useHasHydrated` state | ❌ |
+| 29 | Add zod schemas for all 9 sync domains | ❌ |
 
 ### P4 — Long-term
 
-| # | Fix | Effort | Impact |
-|---|-----|--------|--------|
-| 30 | Replace custom sync with Yjs (`yjs` + `yrs` + `y-websocket`) | ~2 weeks | Kills ~5000 lines, all sync bugs, delta sync |
-| 31 | Replace pairing + file transfer with `magic-wormhole.rs` | ~1 week | NAT traversal, resume, P2P |
-| 32 | Replace Modal + Dropdown + ContextMenu with Radix primitives | ~1 week | Production-grade a11y |
-| 33 | Migrate book metadata + annotations to SQLite tables (from Zustand blob) | ~1 week | Instant startup at any scale |
-| 34 | SQLite-based search replacing Fuse.js for 10K+ books | ~2 days | Indexed, 1ms queries |
-| 35 | Use `time` crate + `serde(rename_all)` | 1 hour | Cleanup tech debt |
+| # | Fix | Status |
+|---|------|--------|
+| 30 | Replace custom sync with Yjs (`yjs` + `y-websocket` + `y-indexeddb`) | 🔶 (JS bridge + WS relay done; sync-orchestrator still carries legacy fallback) |
+| 31 | Replace pairing + file transfer with `magic-wormhole.rs` | ❌ |
+| 32 | Replace Modal + Dropdown + ContextMenu with Radix primitives | ❌ |
+| 33 | Migrate book metadata + annotations to SQLite tables | ❌ |
+| 34 | SQLite-based search replacing Fuse.js for 10K+ books | ❌ |
+| 35 | Use `time` crate + `serde(rename_all)` | ❌ |
+
+**Total: 23/35 fixes done (18 full + 1 partial), 11 remaining (P3–P4).**
 
 ---
 

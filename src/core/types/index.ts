@@ -387,6 +387,8 @@ export interface UIState {
     deviceSyncStatus: DeviceSyncStatus;
     deviceSyncMessage?: string;
     deviceSyncAt?: string;
+    /** Set to true once all Zustand stores have been rehydrated from persistence. */
+    hasHydrated: boolean;
 }
 
 // Document Engine Types
