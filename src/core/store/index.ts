@@ -17,6 +17,10 @@ import { scheduleMutationSync } from "../lib/sync-orchestrator";
 import { deleteBookStorage } from "../lib/storage-manager";
 import { getCoverImage } from "../lib/storage";
 import { persistBookLocations } from "../lib/book-locations";
+import {
+    sqliteSaveBookMetadata,
+    sqliteSaveBookAnnotations,
+} from "../lib/sqlite-storage";
 import type {
     Annotation,
     AppRoute,
@@ -872,6 +876,10 @@ export const useLibraryStore = create<LibraryStore>()(
                         : { books: nextBooks },
                 );
                 scheduleMutationSync();
+                // Sync metadata to SQLite tables (fire-and-forget).
+                for (const book of nextBooks) {
+                    sqliteSaveBookMetadata(book.id, JSON.stringify(book)).catch(() => {});
+                }
             },
 
             removeBook: async (bookId) => {
@@ -1264,6 +1272,11 @@ export const useLibraryStore = create<LibraryStore>()(
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
                 queueVaultSync(annotation);
                 scheduleMutationSync();
+                // Sync to SQLite book_annotations table (fire-and-forget).
+                sqliteSaveBookAnnotations(
+                    annotation.bookId,
+                    get().annotations.filter(a => a.bookId === annotation.bookId).map(a => JSON.stringify(a))
+                ).catch(() => {});
             },
 
             addHighlightWithNote: (cfi, text, color, note) => {
