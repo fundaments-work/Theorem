@@ -669,13 +669,19 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 | # | Fix | Status |
 |---|------|--------|
 | 30 | Replace custom sync with Yjs (`yjs` + `y-websocket` + `y-indexeddb`) | 🔶 (JS bridge + WS relay done) |
-| 31 | Replace pairing + file transfer with `magic-wormhole.rs` | ❌ |
+| 31 | Replace pairing + file transfer with `magic-wormhole.rs` | ✅ |
 | 32 | Replace Modal + Dropdown + ContextMenu with Radix primitives | ✅ |
 | 33 | Migrate book metadata + annotations to SQLite tables | ❌ |
-| 34 | SQLite-based search replacing Fuse.js for 10K+ books | ❌ |
+| 34 | SQLite-based search replacing Fuse.js for 10K+ books | ✅ |
 | 35 | Use `time` crate + `serde(rename_all)` | ✅ |
 
-**Total: 28/35 fixes done (27 full + 1 partial), 7 remaining.**
+**Total: 33/36 fixes done (32 full + 1 partial), 3 remaining.**
+
+| Item | Status |
+|------|--------|
+| P3-26: Android worker outbound sync + foreground notification | ⚠ (foreground notification via tauri_plugin_android_sync_worker exists; outbound sync handled by Rust background_sync loop) |
+| P4-33: SQLite book metadata + annotations migration | ❌ (major schema change, 1.0.8+) |
+| Chunk size: index at 549KB | ⚠ (non-blocking; store chunk back to 183KB via dynamic imports) |
 
 ---
 
