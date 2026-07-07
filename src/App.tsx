@@ -12,6 +12,7 @@ import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-sho
 import { initI18n } from "./core/lib/i18n";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 import { prewarmFoliateRuntime } from "./core/lib/foliate-runtime";
+import { initYjsSync, bridgeZustandToYjs } from "./core/lib/yjs-sync";
 import { OnboardingFlow } from "./features/onboarding";
 
 const LibraryPage = lazy(() =>
@@ -267,7 +268,17 @@ function App() {
     // Initialize reader styles on app load
     useEffect(() => {
         initReaderStyles(useSettingsStore.getState().settings.readerSettings);
-    }, []); // Only on mount - the store's onRehydrate will handle persisted settings
+    }, []);
+
+    // Initialize Yjs CRDT sync bridge (replaces LWW merge functions).
+    // Must run after Zustand persist middleware has hydrated all stores.
+    useEffect(() => {
+        initYjsSync();
+        bridgeZustandToYjs();
+        return () => {
+            // Cleanup handled by yjs-sync destroyYjsSync on explicit call.
+        };
+    }, []);
 
     // Initialize i18n on app load
     useEffect(() => {

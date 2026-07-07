@@ -49,6 +49,7 @@ import {
 } from "./sync-import";
 import { isTauri } from "./env";
 import { saveCoverImage } from "./storage";
+import { encodeYjsSyncState, applyYjsSyncUpdate } from "./yjs-sync";
 
 // ─── Helpers ───
 
@@ -152,6 +153,10 @@ async function buildDomainsAndManifest() {
                     : article.content,
             }));
         })()),
+        yjs_update: (() => {
+            const update = encodeYjsSyncState();
+            return update.length > 0 ? btoa(String.fromCharCode(...update)) : "";
+        })(),
     };
 
     // Compute SHA-256 content hashes for each domain in parallel.
@@ -237,6 +242,19 @@ async function mergeIncomingData(
             domainsUpdated.push(domain);
         }
     };
+
+    // ── Apply Yjs CRDT update FIRST (replaces LWW merge for all domains) ──
+    if (incomingMap["yjs_update"]) {
+        try {
+            const binary = Uint8Array.from(atob(incomingMap["yjs_update"]), (c) => c.charCodeAt(0));
+            applyYjsSyncUpdate(binary);
+            markUpdated("yjs_update");
+            // Yjs CRDT merge handles all domains — no need for per-domain LWW merges.
+            return { domainsUpdated };
+        } catch {
+            // Fall through to legacy LWW merge if Yjs decode fails.
+        }
+    }
 
     // ── Merge tombstones FIRST so books/annotations/collections can respect them ──
     let allTombstones = useLibraryStore.getState().deletionTombstones;

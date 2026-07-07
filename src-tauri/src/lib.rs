@@ -1299,6 +1299,7 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
             pending_pairing: tokio::sync::Mutex::new(None),
             sync_data: tokio::sync::Mutex::new(None),
             event_emitter: None,
+            ws_rooms: tokio::sync::Mutex::new(std::collections::HashMap::new()),
         });
 
         let handle = match theorem_sync_core::sync_server::start_server(server_state.clone()).await

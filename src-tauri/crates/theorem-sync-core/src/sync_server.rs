@@ -6,7 +6,10 @@ use crate::sync_crypto::{self, DeviceIdentity, EncryptedPayload};
 use crate::sync_protocol::*;
 
 use axum::{
-    extract::{ConnectInfo, State},
+    extract::{
+        ws::{Message, WebSocket},
+        ConnectInfo, State, WebSocketUpgrade,
+    },
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -23,7 +26,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::{broadcast, Mutex, Notify};
 
 // ─── Event Emitter ───
 
@@ -51,6 +54,10 @@ pub struct SyncServerState {
     /// Optional event emitter for notifying the frontend about incoming sync data.
     /// Injected from the Tauri command layer which has access to AppHandle.
     pub event_emitter: Option<EventEmitter>,
+    /// WebSocket relay rooms for Yjs sync transport.
+    /// Maps room name → broadcast sender for relaying binary messages between
+    /// all WebSocket clients in the same room.
+    pub ws_rooms: Mutex<HashMap<String, broadcast::Sender<Vec<u8>>>>,
 }
 
 /// Ephemeral state for an in-progress pairing handshake.
@@ -147,6 +154,7 @@ pub async fn start_server(state: Arc<SyncServerState>) -> Result<SyncServerHandl
         .route("/sync/file/availability", post(handle_file_availability))
         .route("/sync/file/pull", post(handle_file_pull))
         .route("/sync/file/cover", post(handle_cover_pull))
+        .route("/sync/ws", get(handle_ws_upgrade))
         .layer(DefaultBodyLimit::max(SYNC_BODY_LIMIT))
         .layer(CompressionLayer::new())
         .layer(middleware::from_fn(request_logger))
@@ -1126,4 +1134,62 @@ async fn handle_cover_pull(
         data_url: cover_data_url,
     };
     encrypt_response(&sym_key, &response)
+}
+
+// ─── Yjs WebSocket relay ───
+
+/// Handles WebSocket upgrade requests for Yjs sync transport.
+/// Clients connect here and the server relays binary messages between
+/// all clients in the same room (room name = device pairing identity).
+async fn handle_ws_upgrade(
+    State(state): State<Arc<SyncServerState>>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_ws_socket(socket, state))
+}
+
+async fn handle_ws_socket(socket: WebSocket, state: Arc<SyncServerState>) {
+    use futures::SinkExt;
+
+    let room = state.identity.device_id.clone();
+
+    let (mut ws_sink, mut ws_stream) = socket.split();
+
+    let rx = {
+        let mut rooms = state.ws_rooms.lock().await;
+        let sender = rooms
+            .entry(room.clone())
+            .or_insert_with(|| broadcast::channel(64).0);
+        sender.subscribe()
+    };
+
+    let send_task = {
+        let mut rx = rx;
+        tokio::spawn(async move {
+            while let Ok(msg) = rx.recv().await {
+                if ws_sink.send(Message::Binary(msg)).await.is_err() {
+                    break;
+                }
+            }
+        })
+    };
+
+    let sender = {
+        let rooms = state.ws_rooms.lock().await;
+        rooms.get(&room).cloned()
+    };
+
+    if let Some(tx) = sender {
+        while let Some(Ok(msg)) = StreamExt::next(&mut ws_stream).await {
+            match msg {
+                Message::Binary(data) => {
+                    let _ = tx.send(data.to_vec());
+                }
+                Message::Close(_) => break,
+                _ => {}
+            }
+        }
+    }
+
+    send_task.abort();
 }

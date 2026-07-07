@@ -66,6 +66,7 @@ pub fn init_sync(
         pending_pairing: Mutex::new(None),
         sync_data: Mutex::new(None),
         event_emitter: Some(emitter),
+        ws_rooms: Mutex::new(HashMap::new()),
     });
 
     Ok(SyncAppState {

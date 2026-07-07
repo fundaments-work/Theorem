@@ -91,6 +91,9 @@
         "soundtouchjs": "^0.3.0",
         "tailwind-merge": "^3.6.0",
         "uuid": "^14.0.1",
+        "y-indexeddb": "^9.0.12",
+        "y-websocket": "^3.0.0",
+        "yjs": "^13.6.31",
         "zustand": "^5.0.14"
     },
     "devDependencies": {
