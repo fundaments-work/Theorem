@@ -56,7 +56,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
                 className={cn(
                     // Swiss design: clear grid, minimal decoration
                     "relative flex cursor-pointer items-center py-3 px-4",
-                    "transition-all duration-200 ease-out",
+                    "transition-colors duration-200 ease-out",
                     "hover:bg-[var(--color-surface-muted)]",
                     isActive && "bg-[var(--color-accent-light)]"
                 )}
@@ -66,7 +66,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
                 {/* Active indicator - geometric, left-aligned */}
                 <div
                     className={cn(
-                        "absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-200",
+                        "absolute left-0 top-0 bottom-0 w-0.5 transition-colors duration-200",
                         isActive 
                             ? "bg-[var(--color-accent)]" 
                             : "bg-transparent group-hover/item:bg-[var(--color-border)]"
@@ -96,7 +96,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
                     <div className="shrink-0 mr-3 w-6 flex items-center justify-center">
                         <div
                             className={cn(
-                                "w-1.5 h-1.5 transition-all duration-200",
+                                "w-1.5 h-1.5 transition-colors duration-200",
                                 isActive 
                                     ? "bg-[var(--color-accent)] scale-125" 
                                     : "bg-[var(--color-text-muted)] opacity-40 group-hover/item:opacity-70"
@@ -225,7 +225,7 @@ export function TableOfContents({
                                 "flex h-10 w-10 items-center justify-center",
                                 "border border-[var(--color-border)]",
                                 "text-[var(--color-text-secondary)]",
-                                "transition-all duration-200",
+                                "transition-colors duration-200",
                                 "hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]",
                                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2"
                             )}

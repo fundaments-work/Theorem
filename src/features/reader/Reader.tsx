@@ -2256,7 +2256,7 @@ function BookReaderPage() {
                         className={cn(
                             "fixed bottom-6 z-[100]",
                             isMobileViewport ? "left-4" : "left-8",
-                            "flex items-center justify-center w-12 h-12 shadow-xl transition-all duration-300",
+                            "flex items-center justify-center w-12 h-12 shadow-xl transition-colors duration-300",
                             "bg-[var(--color-surface)]/90 backdrop-blur-xl text-[var(--color-text-primary)] border border-[var(--color-border)]",
                             "hover:scale-105 active:scale-95 hover:bg-[var(--color-surface)]",
                             (shouldShowReaderChrome || pdfAnnotationMode !== 'none') ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0 pointer-events-none"
@@ -2275,7 +2275,7 @@ function BookReaderPage() {
                         onPenColorChange={setPdfBrushColor}
                         onPenWidthChange={setPdfBrushWidth}
                         className={cn(
-                            "bottom-6 transition-all duration-300",
+                            "bottom-6 transition-colors duration-300",
                             isMobileViewport ? "right-4" : "right-8",
                             (shouldShowReaderChrome || pdfAnnotationMode !== 'none') ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0 pointer-events-none"
                         )}
@@ -2291,7 +2291,7 @@ function BookReaderPage() {
                         autoplay when the user hasn't enabled TTS. */}
                     {immersionMode && (
                         <div className={cn(
-                            "fixed left-0 right-0 z-50 flex justify-center pointer-events-none transition-all duration-300",
+                            "fixed left-0 right-0 z-50 flex justify-center pointer-events-none transition-colors duration-300",
                             "bottom-0"
                         )}>
                             <div className={cn(

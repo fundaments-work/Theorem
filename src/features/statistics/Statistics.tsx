@@ -72,7 +72,7 @@ function ProgressBar({
             </div>
             <div className="h-2 bg-[var(--color-surface-muted)] overflow-hidden">
                 <div
-                    className="h-full bg-[var(--color-accent)] transition-all duration-500"
+                    className="h-full bg-[var(--color-accent)] transition-colors duration-500"
                     style={{ width: `${percentage}%` }}
                 />
             </div>
@@ -306,7 +306,7 @@ export function StatisticsPage() {
                 </div>
                 <button
                     onClick={() => setShowShareModal(true)}
-                    className="ui-btn flex items-center justify-center gap-2 text-xs font-semibold px-3.5 py-2 w-full sm:w-auto hover:bg-[color:var(--color-surface-muted)] active:scale-95 transition-all"
+                    className="ui-btn flex items-center justify-center gap-2 text-xs font-semibold px-3.5 py-2 w-full sm:w-auto hover:bg-[color:var(--color-surface-muted)] active:scale-95 transition-colors"
                 >
                     <Share2 className="w-3.5 h-3.5 text-[color:var(--color-text-secondary)]" />
                     <span>Share Stats</span>

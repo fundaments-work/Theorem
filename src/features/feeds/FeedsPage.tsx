@@ -240,7 +240,7 @@ function ArticleCard({
             <div
                 onClick={onRead}
                 className={cn(
-                    "group p-4 sm:p-5 border transition-all duration-200 cursor-pointer",
+                    "group p-4 sm:p-5 border transition-colors duration-200 cursor-pointer",
                     article.isRead
                         ? "border-transparent bg-[var(--color-surface-muted)]/30 opacity-70 hover:opacity-100"
                         : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]/30 hover:shadow-sm",
@@ -560,7 +560,7 @@ export function FeedsPage() {
             {/* Functional check: show if desktop OR (mobile and showMobileList is true) */}
             <div className={cn(
                 "flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]/50",
-                "h-full flex-shrink-0 transition-all duration-300",
+                "h-full flex-shrink-0 transition-colors duration-300",
                 // Mobile: full width if visible, else hidden
                 showMobileList ? "flex w-full" : "hidden",
                 // Desktop: always flex, fixed width
@@ -644,7 +644,7 @@ export function FeedsPage() {
             {/* Functional check: show if desktop OR (mobile and showMobileList is false) */}
             <div className={cn(
                 "flex-col min-w-0 bg-[var(--color-background)]",
-                "h-full flex-1 transition-all duration-300",
+                "h-full flex-1 transition-colors duration-300",
                 // Mobile: full width if visible, else hidden
                 !showMobileList ? "flex" : "hidden",
                 // Desktop: always flex

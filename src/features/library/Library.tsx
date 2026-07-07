@@ -222,7 +222,7 @@ export function BookCard({
                         className={cn(
                             "relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden",
                             "border border-[var(--color-border)]",
-                            "transition-all duration-300 group-hover:shadow-lg group-hover:-translate-y-1 cursor-pointer"
+                            "transition-colors duration-300 group-hover:shadow-lg group-hover:-translate-y-1 cursor-pointer"
                         )}
                     >
                         {book.coverPath ? (
@@ -242,7 +242,7 @@ export function BookCard({
                         {/* Selection Checkbox */}
                         {isSelecting && (
                             <div className={cn(
-                                "absolute top-2 left-2 w-6 h-6 flex items-center justify-center transition-all duration-200 z-10",
+                                "absolute top-2 left-2 w-6 h-6 flex items-center justify-center transition-colors duration-200 z-10",
                                 isSelected
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] scale-100"
                                     : "bg-white/80 text-[color:var(--color-text-secondary)] scale-100 border border-[var(--color-border)]"
@@ -255,7 +255,7 @@ export function BookCard({
                         {book.progress > 0 && (
                             <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
                                 <div
-                                    className="h-full bg-[var(--color-accent)] transition-all duration-500"
+                                    className="h-full bg-[var(--color-accent)] transition-colors duration-500"
                                     style={{ width: `${book.progress * 100}%` }}
                                 />
                             </div>
@@ -264,7 +264,7 @@ export function BookCard({
                         {/* Favorite Badge */}
                         <div
                             className={cn(
-                                "absolute top-2 right-2 w-6 h-6 flex items-center justify-center transition-all duration-300 pointer-events-none",
+                                "absolute top-2 right-2 w-6 h-6 flex items-center justify-center transition-colors duration-300 pointer-events-none",
                                 book.isFavorite
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] scale-100"
                                     : "bg-white/90 text-[color:var(--color-text-secondary)] scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100"
@@ -391,7 +391,7 @@ export function BookCard({
         <ContextMenu items={contextMenuItems}>
             <div
                 onClick={handleCardClick}
-                className="group relative aspect-[2/3] bg-[var(--color-surface-muted)] overflow-hidden border border-[var(--color-border)] hover:shadow-lg transition-all duration-200 w-full cursor-pointer select-none"
+                className="group relative aspect-[2/3] bg-[var(--color-surface-muted)] overflow-hidden border border-[var(--color-border)] hover:shadow-lg transition-colors duration-200 w-full cursor-pointer select-none"
                 role="button"
                 tabIndex={0}
                 aria-label={`Open ${book.title}`}
@@ -1623,7 +1623,7 @@ export function LibraryPage() {
                     <button
                         onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                         className={cn(
-                            "ui-btn h-10 px-3 sm:px-5 transition-all duration-200 border-2",
+                            "ui-btn h-10 px-3 sm:px-5 transition-colors duration-200 border-2",
                             showFilterDropdown
                                 ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
                                 : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-[var(--color-border)] hover:border-[var(--color-text-primary)]"
@@ -1640,7 +1640,7 @@ export function LibraryPage() {
                 <div className="flex-1 w-full">
                     {/* Mobile Only: Inline Filter Drawer */}
                     <div className={cn(
-                        "md:hidden overflow-hidden transition-all duration-300",
+                        "md:hidden overflow-hidden transition-colors duration-300",
                         showFilterDropdown ? "max-h-[800px] mb-8 opacity-100" : "max-h-0 opacity-0 mb-0"
                     )}>
                         <div className="w-full border-t-2 border-b-2 border-[var(--color-border)] bg-[var(--color-surface-muted)]">
@@ -1659,7 +1659,7 @@ export function LibraryPage() {
                                                 key={option.id}
                                                 onClick={() => updateSettings({ librarySortBy: option.id as LibrarySortBy })}
                                                 className={cn(
-                                                    "flex items-center justify-between px-3 py-2 text-xs font-bold transition-all border",
+                                                    "flex items-center justify-between px-3 py-2 text-xs font-bold transition-colors border",
                                                     settings.librarySortBy === option.id
                                                         ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
                                                         : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-surface)]"
@@ -1682,7 +1682,7 @@ export function LibraryPage() {
                                                     key={id}
                                                     onClick={() => updateSettings({ librarySortOrder: id as LibrarySortOrder })}
                                                     className={cn(
-                                                        "px-3 py-2 text-[10px] font-bold border transition-all",
+                                                        "px-3 py-2 text-[10px] font-bold border transition-colors",
                                                         settings.librarySortOrder === id ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
                                                     )}
                                                 >
@@ -1697,7 +1697,7 @@ export function LibraryPage() {
                                             <button
                                                 onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
                                                 className={cn(
-                                                    "px-3 py-2 text-[10px] font-bold border transition-all",
+                                                    "px-3 py-2 text-[10px] font-bold border transition-colors",
                                                     showFavoritesOnly ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
                                                 )}
                                             >
@@ -1802,7 +1802,7 @@ export function LibraryPage() {
                                             key={option.id}
                                             onClick={() => updateSettings({ librarySortBy: option.id as LibrarySortBy })}
                                             className={cn(
-                                                "flex items-center justify-between px-4 py-2.5 text-xs font-bold border-2 transition-all",
+                                                "flex items-center justify-between px-4 py-2.5 text-xs font-bold border-2 transition-colors",
                                                 settings.librarySortBy === option.id
                                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
                                                     : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
@@ -1827,7 +1827,7 @@ export function LibraryPage() {
                                             key={option.id}
                                             onClick={() => updateSettings({ librarySortOrder: option.id as LibrarySortOrder })}
                                             className={cn(
-                                                "py-2 text-[10px] font-black border-2 transition-all",
+                                                "py-2 text-[10px] font-black border-2 transition-colors",
                                                 settings.librarySortOrder === option.id
                                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
                                                     : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
@@ -1845,7 +1845,7 @@ export function LibraryPage() {
                                 <button
                                     onClick={() => setShowFavoritesOnly((previous) => !previous)}
                                     className={cn(
-                                        "w-full py-2 text-[10px] font-black border-2 transition-all",
+                                        "w-full py-2 text-[10px] font-black border-2 transition-colors",
                                         showFavoritesOnly
                                             ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
                                             : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
@@ -1865,7 +1865,7 @@ export function LibraryPage() {
                                     <button
                                         onClick={() => setSelectedShelfId(null)}
                                         className={cn(
-                                            "flex items-center gap-3 px-4 py-2.5 text-xs font-bold border-2 transition-all",
+                                            "flex items-center gap-3 px-4 py-2.5 text-xs font-bold border-2 transition-colors",
                                             !selectedShelfId ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
                                         )}
                                     >
@@ -1877,7 +1877,7 @@ export function LibraryPage() {
                                             key={shelf.id}
                                             onClick={() => setSelectedShelfId(shelf.id)}
                                             className={cn(
-                                                "flex items-center justify-between px-4 py-2.5 text-xs font-bold border-2 transition-all",
+                                                "flex items-center justify-between px-4 py-2.5 text-xs font-bold border-2 transition-colors",
                                                 selectedShelfId === shelf.id ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
                                             )}
                                         >

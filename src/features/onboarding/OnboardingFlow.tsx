@@ -405,7 +405,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                                 onClick={() => setCurrentStep(index)}
                                 aria-label={`Go to step ${index + 1}`}
                                 className={cn(
-                                    "h-[3px] transition-all duration-[var(--duration-normal)]",
+                                    "h-[3px] transition-colors duration-[var(--duration-normal)]",
                                     index === currentStep
                                         ? "w-8 bg-[var(--color-text-primary)]"
                                         : "w-3 bg-[var(--color-border)] hover:bg-[var(--color-text-muted)]",

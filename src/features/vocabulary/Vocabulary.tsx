@@ -102,7 +102,7 @@ export function VocabularyPage() {
             {/* ── Left sidebar: Term list ── */}
             <div className={cn(
                 "flex-col bg-[var(--color-background)]",
-                "h-full flex-shrink-0 transition-all duration-300",
+                "h-full flex-shrink-0 transition-colors duration-300",
                 showMobileList ? "flex w-full" : "hidden",
                 "md:flex md:w-64 md:border-r md:border-[var(--color-border-subtle)]",
             )}>
@@ -166,7 +166,7 @@ export function VocabularyPage() {
             {/* ── Right content: detail or empty ── */}
             <div className={cn(
                 "flex-col min-w-0 bg-[var(--color-background)]",
-                "h-full flex-1 transition-all duration-300",
+                "h-full flex-1 transition-colors duration-300",
                 !showMobileList ? "flex" : "hidden",
                 "md:flex",
             )}>

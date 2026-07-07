@@ -124,7 +124,7 @@ export function ImmersionBar({
                     'bg-[var(--color-surface)]/95 backdrop-blur-xl',
                     'border border-[var(--color-border)]',
                     'shadow-[0_8px_32px_rgba(0,0,0,0.18)]',
-                    'transition-all duration-300',
+                    'transition-colors duration-300',
                     !visible && 'opacity-0 pointer-events-none translate-y-4',
                     className,
                 )}
@@ -188,7 +188,7 @@ export function ImmersionBar({
                             onClick={handlePlay}
                             disabled={playbackState === 'loading' || !sectionText.trim()}
                             className={cn(
-                                'flex items-center justify-center w-10 sm:w-8 h-10 sm:h-8 rounded-full transition-all duration-150',
+                                'flex items-center justify-center w-10 sm:w-8 h-10 sm:h-8 rounded-full transition-colors duration-150',
                                 'bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]',
                                 'hover:bg-[var(--color-accent-hover)] active:scale-90',
                                 'disabled:opacity-40 disabled:cursor-not-allowed',
@@ -204,7 +204,7 @@ export function ImmersionBar({
                                 id="tts-pause-btn"
                                 onClick={playbackState === 'playing' ? handlePause : handlePlay}
                                 className={cn(
-                                    'flex items-center justify-center w-10 sm:w-8 h-10 sm:h-8 rounded-full transition-all duration-150',
+                                    'flex items-center justify-center w-10 sm:w-8 h-10 sm:h-8 rounded-full transition-colors duration-150',
                                     'bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]',
                                     'hover:bg-[var(--color-overlay-subtle)] active:scale-90',
                                 )}
@@ -221,7 +221,7 @@ export function ImmersionBar({
                                 id="tts-stop-btn"
                                 onClick={handleStop}
                                 className={cn(
-                                    'flex items-center justify-center w-10 sm:w-8 h-10 sm:h-8 rounded-full transition-all duration-150',
+                                    'flex items-center justify-center w-10 sm:w-8 h-10 sm:h-8 rounded-full transition-colors duration-150',
                                     'bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]',
                                     'hover:bg-[var(--color-overlay-subtle)] hover:text-[color:var(--color-error)] active:scale-90',
                                 )}

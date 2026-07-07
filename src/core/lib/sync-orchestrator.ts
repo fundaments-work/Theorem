@@ -256,17 +256,26 @@ async function mergeIncomingData(
         }
     };
 
-    // Validate incoming payloads against zod schemas (lazy-loaded to
-    // keep the store chunk lean — zod.js is ~15KB).
-    import("./sync-schemas").then(({ validateSyncPayloads }) => {
-        validateSyncPayloads(incomingMap);
-    });
+    // Validate incoming payloads against zod schemas. Invalid domains
+    // are dropped from payloads before any merge logic runs.
+    let safeMap = incomingMap;
+    try {
+        const { validateSyncPayloads } = await import("./sync-schemas");
+        const validated = validateSyncPayloads(incomingMap);
+        // Reconstruct string map from validated objects (except yjs_update which stays raw).
+        safeMap = {};
+        for (const [domain, data] of Object.entries(validated)) {
+            safeMap[domain] = domain === "yjs_update" ? String(data) : JSON.stringify(data);
+        }
+    } catch {
+        // If validation fails entirely, fall through with raw incomingMap.
+    }
 
     // ── Apply Yjs CRDT update FIRST (replaces LWW merge for all domains) ──
-    if (incomingMap["yjs_update"]) {
+    if (safeMap["yjs_update"]) {
         try {
             await ensureYjsLoaded();
-            const binary = Uint8Array.from(atob(incomingMap["yjs_update"]), (c) => c.charCodeAt(0));
+            const binary = Uint8Array.from(atob(safeMap["yjs_update"]), (c) => c.charCodeAt(0));
             _yjsApply!(binary);
             markUpdated("yjs_update");
             // Yjs CRDT merge handles all domains — no need for per-domain LWW merges.
@@ -285,9 +294,9 @@ async function mergeIncomingData(
         Object.assign(libraryPatch, patch);
     };
 
-    if (incomingMap["deletion_tombstones"]) {
+    if (safeMap["deletion_tombstones"]) {
         try {
-            const incoming = JSON.parse(incomingMap["deletion_tombstones"]);
+            const incoming = JSON.parse(safeMap["deletion_tombstones"]);
             if (Array.isArray(incoming)) {
                 allTombstones = mergeTombstones(incoming, allTombstones);
                 applyLibraryPatch({ deletionTombstones: allTombstones });
@@ -300,7 +309,7 @@ async function mergeIncomingData(
     // Tombstones can arrive without the books/annotations/collections domains.
     // In that case, we still must prune local entities immediately so deletions
     // propagate correctly cross-device.
-    if (incomingMap["deletion_tombstones"]) {
+    if (safeMap["deletion_tombstones"]) {
         const libraryState = useLibraryStore.getState();
         const prunedBooks = mergeBooks([], libraryState.books, allTombstones);
         const prunedAnnotations = mergeAnnotations([], libraryState.annotations, allTombstones);
@@ -335,9 +344,9 @@ async function mergeIncomingData(
         currentLibState = { ...currentLibState, ...libraryPatch };
     }
 
-    if (incomingMap["books"]) {
+    if (safeMap["books"]) {
         try {
-            const incoming = JSON.parse(incomingMap["books"]);
+            const incoming = JSON.parse(safeMap["books"]);
             if (Array.isArray(incoming)) {
                 const merged = mergeBooks(incoming, currentLibState.books, allTombstones);
                 applyLibraryPatch({ books: merged });
@@ -359,9 +368,9 @@ async function mergeIncomingData(
         }
     }
 
-    if (incomingMap["annotations"]) {
+    if (safeMap["annotations"]) {
         try {
-            const incoming = JSON.parse(incomingMap["annotations"]);
+            const incoming = JSON.parse(safeMap["annotations"]);
             if (Array.isArray(incoming)) {
                 const merged = mergeAnnotations(incoming, currentLibState.annotations, allTombstones);
                 applyLibraryPatch({ annotations: merged });
@@ -372,9 +381,9 @@ async function mergeIncomingData(
         }
     }
 
-    if (incomingMap["collections"]) {
+    if (safeMap["collections"]) {
         try {
-            const incoming = JSON.parse(incomingMap["collections"]);
+            const incoming = JSON.parse(safeMap["collections"]);
             if (Array.isArray(incoming)) {
                 const merged = mergeCollections(incoming, currentLibState.collections, allTombstones);
                 applyLibraryPatch({ collections: merged });
@@ -390,9 +399,9 @@ async function mergeIncomingData(
         useLibraryStore.setState(libraryPatch as Parameters<typeof useLibraryStore.setState>[0]);
     }
 
-    if (incomingMap["vocabulary"]) {
+    if (safeMap["vocabulary"]) {
         try {
-            const incoming = JSON.parse(incomingMap["vocabulary"]);
+            const incoming = JSON.parse(safeMap["vocabulary"]);
             if (Array.isArray(incoming)) {
                 const merged = mergeVocabulary(incoming, useVocabularyStore.getState().vocabularyTerms, allTombstones);
                 useVocabularyStore.setState({ vocabularyTerms: merged });
@@ -402,9 +411,9 @@ async function mergeIncomingData(
         }
     }
 
-    if (incomingMap["settings"]) {
+    if (safeMap["settings"]) {
         try {
-            const raw = JSON.parse(incomingMap["settings"]);
+            const raw = JSON.parse(safeMap["settings"]);
             const settingsStore = useSettingsStore.getState();
             // Extract the embedded timestamp, then reconstruct as AppSettings.
             const remoteUpdatedAt: string | undefined = raw._settingsUpdatedAt;
@@ -426,9 +435,9 @@ async function mergeIncomingData(
         }
     }
 
-    if (incomingMap["reading_stats"]) {
+    if (safeMap["reading_stats"]) {
         try {
-            const incoming = JSON.parse(incomingMap["reading_stats"]);
+            const incoming = JSON.parse(safeMap["reading_stats"]);
             if (incoming && typeof incoming === "object") {
                 const merged = mergeReadingStats(incoming, useSettingsStore.getState().stats);
                 useSettingsStore.setState({ stats: merged });
@@ -441,9 +450,9 @@ async function mergeIncomingData(
     // Track feedIdMap from mergeRssFeeds so we can remap article feedId references.
     let feedIdMap: Map<string, string> | undefined;
 
-    if (incomingMap["rss_feeds"]) {
+    if (safeMap["rss_feeds"]) {
         try {
-            const incoming = JSON.parse(incomingMap["rss_feeds"]);
+            const incoming = JSON.parse(safeMap["rss_feeds"]);
             if (Array.isArray(incoming)) {
                 const result = mergeRssFeeds(incoming, useRssStore.getState().feeds, allTombstones);
                 useRssStore.setState({ feeds: result.feeds });
@@ -454,9 +463,9 @@ async function mergeIncomingData(
         }
     }
 
-    if (incomingMap["rss_articles"]) {
+    if (safeMap["rss_articles"]) {
         try {
-            const incoming = JSON.parse(incomingMap["rss_articles"]);
+            const incoming = JSON.parse(safeMap["rss_articles"]);
             if (Array.isArray(incoming)) {
                 const merged = mergeRssArticles(incoming, useRssStore.getState().articles, feedIdMap, allTombstones);
                 useRssStore.setState({ articles: merged });

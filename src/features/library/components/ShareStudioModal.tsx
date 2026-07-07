@@ -110,7 +110,7 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
                         <img 
                             src={previewUrl} 
                             alt="Share Preview" 
-                            className="max-h-[50vh] object-contain shadow-md transition-all duration-300"
+                            className="max-h-[50vh] object-contain shadow-md transition-colors duration-300"
                         />
                     ) : (
                         <div className="w-full h-full bg-[var(--color-border-subtle)] animate-pulse" />

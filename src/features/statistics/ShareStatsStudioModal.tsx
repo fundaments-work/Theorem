@@ -108,7 +108,7 @@ export function ShareStatsStudioModal({ statsData, onClose }: ShareStatsStudioMo
                         <img 
                             src={previewUrl} 
                             alt="Share Stats Preview" 
-                            className="max-h-[50vh] object-contain shadow-md transition-all duration-300"
+                            className="max-h-[50vh] object-contain shadow-md transition-colors duration-300"
                         />
                     ) : (
                         <div className="w-full h-full bg-[var(--color-border-subtle)] animate-pulse" />
