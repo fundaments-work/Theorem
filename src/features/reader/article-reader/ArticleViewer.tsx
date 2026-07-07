@@ -1,4 +1,5 @@
 import {
+    memo,
     useCallback,
     useEffect,
     useMemo,
@@ -9,6 +10,7 @@ import { cn } from "../../../core/lib/utils";
 import { HIGHLIGHT_COLOR_TOKENS } from "../../../core/lib/design-tokens";
 import { vocabularyTermFromLookup, type DictionaryLookupResult } from "../../../core/services/DictionaryService";
 import { useVocabularyStore, useLibraryStore, useSettingsStore } from "../../../core/store";
+import { useShallow } from "zustand/shallow";
 import type { Annotation, DocLocation, DocMetadata, HighlightColor, RssArticle, TocItem, ReaderSettings as ReaderSettingsState } from "../../../core/types";
 import { Backdrop } from "../../../ui";
 import {
@@ -472,18 +474,21 @@ function applyHighlightToRange(
     }
 }
 
-export function ArticleViewer({
+export const ArticleViewer = memo(function ArticleViewer({
     article,
     feedTitle,
     isOpen,
     onClose,
 }: ArticleViewerProps) {
+    const articleAnnotationBookId = article ? `rss:${article.id}` : "";
     const globalReaderSettings = useSettingsStore((state) => state.settings.readerSettings);
     const updateReaderSettings = useSettingsStore((state) => state.updateReaderSettings);
     const learningSettings = useSettingsStore((state) => state.settings.vocabulary);
     const lookupTerm = useVocabularyStore((state) => state.lookupTerm);
     const saveVocabularyTerm = useVocabularyStore((state) => state.saveVocabularyTerm);
-    const articleAnnotations = useLibraryStore((state) => state.annotations);
+    const annotations = useLibraryStore(useShallow(
+        (state) => state.getBookAnnotations(articleAnnotationBookId),
+    ));
     const addAnnotation = useLibraryStore((state) => state.addAnnotation);
     const updateAnnotation = useLibraryStore((state) => state.updateAnnotation);
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
@@ -524,11 +529,6 @@ export function ArticleViewer({
     // Tracks which annotation IDs have already been backfilled with offset
     // data so the backfill effect doesn't re-trigger itself via store updates.
     const backfilledIdsRef = useRef<Set<string>>(new Set());
-    const articleAnnotationBookId = article ? `rss:${article.id}` : "";
-    const annotations = useMemo(
-        () => articleAnnotations.filter((entry) => entry.bookId === articleAnnotationBookId),
-        [articleAnnotationBookId, articleAnnotations],
-    );
     const bookmarkAnnotations = useMemo(
         () => annotations.filter((entry) => entry.type === "bookmark"),
         [annotations],
@@ -1580,4 +1580,4 @@ export function ArticleViewer({
             />
         </div>
     );
-}
+});
