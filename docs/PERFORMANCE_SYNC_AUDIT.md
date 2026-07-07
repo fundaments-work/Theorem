@@ -657,25 +657,25 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 
 | # | Fix | Status |
 |---|------|--------|
-| 24 | Kill daemon on Tauri exit | ❌ |
-| 25 | Single sync mechanism when daemon running | ❌ |
+| 24 | Kill daemon on Tauri exit | ✅ |
+| 25 | Single sync mechanism when daemon running | ✅ |
 | 26 | Android worker: add outbound sync + foreground notification | ❌ |
-| 27 | `stopAutoSync()` → `configureDaemon({ auto_sync_enabled: false })` | ❌ |
-| 28 | Track explicit `useHasHydrated` state | ❌ |
-| 29 | Add zod schemas for all 9 sync domains | ❌ |
+| 27 | `stopAutoSync()` → `configureDaemon({ auto_sync_enabled: false })` | ✅ |
+| 28 | Track explicit `useHasHydrated` state | ✅ |
+| 29 | Add zod schemas for all 9 sync domains | ✅ |
 
 ### P4 — Long-term
 
 | # | Fix | Status |
 |---|------|--------|
-| 30 | Replace custom sync with Yjs (`yjs` + `y-websocket` + `y-indexeddb`) | 🔶 (JS bridge + WS relay done; sync-orchestrator still carries legacy fallback) |
+| 30 | Replace custom sync with Yjs (`yjs` + `y-websocket` + `y-indexeddb`) | 🔶 (JS bridge + WS relay done) |
 | 31 | Replace pairing + file transfer with `magic-wormhole.rs` | ❌ |
-| 32 | Replace Modal + Dropdown + ContextMenu with Radix primitives | ❌ |
+| 32 | Replace Modal + Dropdown + ContextMenu with Radix primitives | ✅ |
 | 33 | Migrate book metadata + annotations to SQLite tables | ❌ |
 | 34 | SQLite-based search replacing Fuse.js for 10K+ books | ❌ |
-| 35 | Use `time` crate + `serde(rename_all)` | ❌ |
+| 35 | Use `time` crate + `serde(rename_all)` | ✅ |
 
-**Total: 23/35 fixes done (18 full + 1 partial), 11 remaining (P3–P4).**
+**Total: 28/35 fixes done (27 full + 1 partial), 7 remaining.**
 
 ---
 
