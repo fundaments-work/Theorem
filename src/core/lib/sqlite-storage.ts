@@ -153,3 +153,25 @@ export async function sqliteGetBlobStats(prefix?: string): Promise<SqliteBlobSta
         prefix: prefix ?? null,
     }) as Promise<SqliteBlobStats>;
 }
+
+// ─── FTS5 Search ───
+
+export interface SqliteBookSearchResult {
+    book_id: string;
+    title: string;
+}
+
+export async function sqliteSearchBooks(query: string, limit: number = 20): Promise<SqliteBookSearchResult[]> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_search_books', { query, limit }) as Promise<SqliteBookSearchResult[]>;
+}
+
+export async function sqliteIndexBookFts(bookId: string, title: string, author: string): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_index_book_fts', { bookId, title, author });
+}
+
+export async function sqliteIndexBooksFtsBatch(entries: Array<[string, string, string]>): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_index_books_fts_batch', { entries });
+}

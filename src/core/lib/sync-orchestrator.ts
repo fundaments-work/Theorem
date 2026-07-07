@@ -49,8 +49,17 @@ import {
 } from "./sync-import";
 import { isTauri } from "./env";
 import { saveCoverImage } from "./storage";
-import { encodeYjsSyncState, applyYjsSyncUpdate } from "./yjs-sync";
-import { validateSyncPayloads } from "./sync-schemas";
+
+// Lazy yjs imports to keep the store chunk lean (yjs + websocket + idb ≈ 150KB).
+let _yjsEncode: (() => Uint8Array) | null = null;
+let _yjsApply: ((update: Uint8Array) => void) | null = null;
+
+async function ensureYjsLoaded() {
+    if (_yjsEncode) return;
+    const mod = await import("./yjs-sync");
+    _yjsEncode = mod.encodeYjsSyncState;
+    _yjsApply = mod.applyYjsSyncUpdate;
+}
 
 // ─── Helpers ───
 
@@ -121,6 +130,8 @@ async function buildDomainsAndManifest() {
         _settingsUpdatedAt: settingsUpdatedAt,
     };
 
+    await ensureYjsLoaded();
+
     const domains: Record<string, string> = {
         books: JSON.stringify(library.books.map(({ filePath: _f, storagePath: _s, coverPath, ...book }) => ({
             ...book,
@@ -155,7 +166,7 @@ async function buildDomainsAndManifest() {
             }));
         })()),
         yjs_update: (() => {
-            const update = encodeYjsSyncState();
+            const update = _yjsEncode!();
             return update.length > 0 ? btoa(String.fromCharCode(...update)) : "";
         })(),
     };
@@ -244,16 +255,18 @@ async function mergeIncomingData(
         }
     };
 
-    // Validate all incoming payloads against zod schemas.
-    // Invalid entries are silently discarded — downstream JSON.parse calls
-    // also have try/catch guards as defense-in-depth.
-    validateSyncPayloads(incomingMap);
+    // Validate incoming payloads against zod schemas (lazy-loaded to
+    // keep the store chunk lean — zod.js is ~15KB).
+    import("./sync-schemas").then(({ validateSyncPayloads }) => {
+        validateSyncPayloads(incomingMap);
+    });
 
     // ── Apply Yjs CRDT update FIRST (replaces LWW merge for all domains) ──
     if (incomingMap["yjs_update"]) {
         try {
+            await ensureYjsLoaded();
             const binary = Uint8Array.from(atob(incomingMap["yjs_update"]), (c) => c.charCodeAt(0));
-            applyYjsSyncUpdate(binary);
+            _yjsApply!(binary);
             markUpdated("yjs_update");
             // Yjs CRDT merge handles all domains — no need for per-domain LWW merges.
             return { domainsUpdated };

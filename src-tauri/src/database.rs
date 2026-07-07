@@ -139,6 +139,12 @@ const DB_SCHEMA_PERSISTENT_PRAGMAS: &str = r#"
         materialized_at INTEGER NOT NULL DEFAULT (unixepoch()),
         FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
     );
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS books_fts USING fts5(
+        id UNINDEXED,
+        title,
+        author
+    );
 "#;
 
 const DB_PER_CONNECTION_PRAGMAS: &str = r#"
@@ -592,5 +598,70 @@ pub fn sqlite_get_blob_stats(
         };
 
         Ok(SqliteBlobStats { count, total_size })
+    })
+}
+
+// ─── FTS5 Search ───
+
+#[derive(Serialize)]
+pub struct SqliteBookSearchResult {
+    pub book_id: String,
+    pub title: String,
+}
+
+#[tauri::command]
+pub fn sqlite_index_book_fts(
+    app: AppHandle,
+    book_id: String,
+    title: String,
+    author: String,
+) -> Result<(), String> {
+    with_connection(&app, |connection| {
+        connection.execute(
+            "INSERT INTO books_fts(id, title, author) VALUES(?1, ?2, ?3)
+             ON CONFLICT(id) DO UPDATE SET title = ?2, author = ?3",
+            params![book_id, title, author],
+        )?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_index_books_fts_batch(
+    app: AppHandle,
+    entries: Vec<(String, String, String)>,
+) -> Result<(), String> {
+    with_connection(&app, |connection| {
+        for (id, title, author) in &entries {
+            connection.execute(
+                "INSERT INTO books_fts(id, title, author) VALUES(?1, ?2, ?3)
+                 ON CONFLICT(id) DO UPDATE SET title = ?2, author = ?3",
+                params![id, title, author],
+            )?;
+        }
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_search_books(
+    app: AppHandle,
+    query: String,
+    limit: u32,
+) -> Result<Vec<SqliteBookSearchResult>, String> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    with_connection(&app, |connection| {
+        let mut stmt = connection.prepare(
+            "SELECT id, title FROM books_fts WHERE books_fts MATCH ?1 ORDER BY rank LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![query, limit], |row| {
+            Ok(SqliteBookSearchResult {
+                book_id: row.get(0)?,
+                title: row.get(1)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
     })
 }

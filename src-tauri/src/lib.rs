@@ -1148,6 +1148,9 @@ pub fn run() {
             database::sqlite_delete_blob,
             database::sqlite_delete_blobs_by_prefix,
             database::sqlite_get_blob_stats,
+            database::sqlite_index_book_fts,
+            database::sqlite_index_books_fts_batch,
+            database::sqlite_search_books,
             // LAN sync commands
             sync_commands::start_sync_server,
             sync_commands::stop_sync_server,

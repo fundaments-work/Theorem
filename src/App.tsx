@@ -13,7 +13,6 @@ import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-sho
 import { initI18n } from "./core/lib/i18n";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 import { prewarmFoliateRuntime } from "./core/lib/foliate-runtime";
-import { initYjsSync, bridgeZustandToYjs, destroyYjsSync } from "./core/lib/yjs-sync";
 import { OnboardingFlow } from "./features/onboarding";
 
 const LibraryPage = lazy(() =>
@@ -273,13 +272,17 @@ function App() {
     }, []);
 
     // Initialize Yjs CRDT sync bridge (replaces LWW merge functions).
-    // Must run after Zustand persist middleware has hydrated all stores.
+    // Dynamically imported to avoid bloating the entry chunk (yjs + ws + idb).
     useEffect(() => {
-        initYjsSync();
-        bridgeZustandToYjs();
-        useUIStore.getState().setHydrated();
+        let destroy: (() => void) | undefined;
+        import("./core/lib/yjs-sync").then((mod) => {
+            mod.initYjsSync();
+            mod.bridgeZustandToYjs();
+            destroy = () => mod.destroyYjsSync();
+            useUIStore.getState().setHydrated();
+        });
         return () => {
-            destroyYjsSync();
+            destroy?.();
         };
     }, []);
 
