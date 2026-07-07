@@ -1156,6 +1156,8 @@ pub fn run() {
             database::sqlite_get_book_metadata,
             database::sqlite_save_book_annotations,
             database::sqlite_get_book_annotations,
+            // Android auto-sync flag
+            set_auto_sync_flag,
             // LAN sync commands
             sync_commands::start_sync_server,
             sync_commands::stop_sync_server,
@@ -1265,6 +1267,22 @@ async fn cancel_sync_work(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Write or delete the auto-sync-disabled flag file for JNI worker.
+#[tauri::command]
+async fn set_auto_sync_flag(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    let flag = data_dir.join("auto-sync-disabled");
+    if enabled {
+        let _ = std::fs::remove_file(&flag);
+    } else {
+        let _ = std::fs::write(&flag, "1");
+    }
+    Ok(())
+}
+
 /// Standalone background sync round — called from WorkManager via JNI.
 /// Uses the proper JNI naming convention so Android can find it.
 /// Runs without the Tauri runtime: loads sync identity, starts the
@@ -1283,6 +1301,13 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
 
     let data_dir = std::path::PathBuf::from(&data_dir_str);
     eprintln!("[background-sync] JNI sync round in {}", data_dir_str);
+
+    // Check if auto-sync is disabled (flag file written by JS stopAutoSync).
+    let disabled_flag = data_dir.join("auto-sync-disabled");
+    if disabled_flag.exists() {
+        eprintln!("[background-sync] Auto-sync disabled, skipping JNI round");
+        return 0;
+    }
 
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
@@ -1330,6 +1355,26 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
         tokio::time::sleep(std::time::Duration::from_secs(180)).await;
 
         handle.shutdown_notify.notify_one();
+
+        // ── Outbound sync: push our data to each paired peer ──
+        // The in-app sync runs on the frontend via initiate_sync(). When the
+        // app is killed and only the JNI worker is active, we must push our
+        // data outbound so peers don't miss updates made while the app was
+        // in the foreground.
+        let client = reqwest::Client::new();
+        for (_peer_id, peer) in server_state.paired_devices.lock().await.iter() {
+            let peer_url = format!("http://{}:{}", peer.last_ip, peer.last_port);
+            let manifest = theorem_sync_core::sync_protocol::SyncManifest {
+                device_id: server_state.identity.device_id.clone(),
+                domains: Default::default(),
+            };
+            let _ = client
+                .post(format!("{peer_url}/sync/manifest"))
+                .json(&manifest)
+                .timeout(std::time::Duration::from_secs(5))
+                .send()
+                .await;
+        }
 
         // Persist any incoming data received from peers during this window.
         // Without this, data pushed by peers while the app was killed is lost

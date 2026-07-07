@@ -21,6 +21,7 @@ import {
     discoverPeer,
     getPairedDevices,
     updateSyncNotification,
+    setAutoSyncFlag,
 } from "./device-sync";
 import {
     isDaemonRunning,
@@ -1039,6 +1040,7 @@ export function scheduleMutationSync(): void {
  */
 export async function startAutoSync(): Promise<() => void> {
     stopAutoSync();
+    setAutoSyncFlag(true).catch(() => {});
 
     if (!isTauri()) {
         return () => {};
@@ -1144,6 +1146,7 @@ export function stopAutoSync(): void {
         _mutationSyncTimer = null;
     }
     _dataDirty = false;
+    setAutoSyncFlag(false).catch(() => {});
     // Notify the daemon to stop auto-sync as well.
     configureDaemon({ auto_sync_enabled: false }).catch(() => {});
 }

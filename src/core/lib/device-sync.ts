@@ -296,3 +296,13 @@ export async function wakeBackgroundSync(): Promise<void> {
     return invoke("wake_background_sync");
 }
 
+/** Update the auto-sync-disabled flag file for Android JNI worker. */
+export async function setAutoSyncFlag(enabled: boolean): Promise<void> {
+    if (!isTauri()) return;
+    try {
+        await invoke("set_auto_sync_flag", { enabled });
+    } catch {
+        // Flag file operation failed — non-critical.
+    }
+}
+
