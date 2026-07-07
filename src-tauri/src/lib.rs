@@ -1133,6 +1133,7 @@ pub fn run() {
             database::sqlite_cleanup_orphaned_storage,
             database::sqlite_clear_all_storage,
             database::sqlite_get_kv,
+            database::sqlite_batch_get_kv,
             database::sqlite_set_kv,
             database::sqlite_delete_kv,
             database::sqlite_count_kv_by_prefix,

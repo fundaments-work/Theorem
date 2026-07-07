@@ -2,8 +2,16 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
+
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+
+type DbPool = Pool<SqliteConnectionManager>;
+
+static DB_POOL: OnceLock<DbPool> = OnceLock::new();
 
 const DB_FILE_NAME: &str = "theorem.db";
 const MATERIALIZED_BOOK_CACHE_DIR: &str = "book-cache";
@@ -65,60 +73,100 @@ fn remove_materialized_cache_file(app: &AppHandle, book_id: &str) {
     }
 }
 
+fn init_db_pool(db_path: &Path) -> Result<&DbPool, String> {
+    if let Some(pool) = DB_POOL.get() {
+        return Ok(pool);
+    }
+
+    // Run the schema migration on a standalone connection first, then
+    // create the pool.  PRAGMAs that persist in the database file
+    // (journal_mode, synchronous, foreign_keys) are set once here;
+    // per-connection PRAGMAs (busy_timeout, cache_size, mmap_size,
+    // temp_store, journal_size_limit) are applied on every connection
+    // acquired from the pool so they survive connection recycling.
+    let conn = Connection::open(db_path)
+        .map_err(|error| format!("Failed to open SQLite database '{db_path:?}': {error}"))?;
+
+    conn.execute_batch(DB_SCHEMA_PERSISTENT_PRAGMAS)
+        .map_err(|error| format!("Failed to initialize SQLite schema: {error}"))?;
+
+    let manager = SqliteConnectionManager::file(db_path);
+    let pool = Pool::builder()
+        .max_size(4)
+        .connection_customizer(Box::new(SqlitePerConnectionPragmas))
+        .build(manager)
+        .map_err(|error| format!("Failed to create SQLite connection pool: {error}"))?;
+
+    DB_POOL.set(pool).ok();
+    DB_POOL
+        .get()
+        .ok_or_else(|| "Failed to initialize database pool".into())
+}
+
+const DB_SCHEMA_PERSISTENT_PRAGMAS: &str = r#"
+    PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA foreign_keys = ON;
+
+    CREATE TABLE IF NOT EXISTS books (
+        id TEXT PRIMARY KEY,
+        data BLOB NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS covers (
+        book_id TEXT PRIMARY KEY,
+        data_url TEXT NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS kv_store (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS blob_store (
+        key TEXT PRIMARY KEY,
+        data BLOB NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS materialized_books (
+        book_id TEXT PRIMARY KEY,
+        source_updated_at INTEGER NOT NULL,
+        materialized_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
+    );
+"#;
+
+const DB_PER_CONNECTION_PRAGMAS: &str = r#"
+    PRAGMA busy_timeout = 5000;
+    PRAGMA cache_size = -8000;
+    PRAGMA mmap_size = 268435456;
+    PRAGMA temp_store = MEMORY;
+    PRAGMA journal_size_limit = 67108864;
+"#;
+
+#[derive(Debug)]
+struct SqlitePerConnectionPragmas;
+
+impl r2d2::CustomizeConnection<Connection, rusqlite::Error> for SqlitePerConnectionPragmas {
+    fn on_acquire(&self, conn: &mut Connection) -> Result<(), rusqlite::Error> {
+        conn.execute_batch(DB_PER_CONNECTION_PRAGMAS)
+    }
+}
+
 pub fn with_connection<T, F>(app: &AppHandle, operation: F) -> Result<T, String>
 where
     F: FnOnce(&Connection) -> rusqlite::Result<T>,
 {
     let db_path = database_path(app)?;
-    let connection = Connection::open(&db_path)
-        .map_err(|error| format!("Failed to open SQLite database '{db_path:?}': {error}"))?;
-
-    connection
-        .execute_batch(
-            r#"
-            PRAGMA journal_mode = WAL;
-            PRAGMA synchronous = NORMAL;
-            PRAGMA foreign_keys = ON;
-            PRAGMA busy_timeout = 5000;
-            PRAGMA cache_size = -8000;
-            PRAGMA mmap_size = 268435456;
-            PRAGMA temp_store = MEMORY;
-            PRAGMA journal_size_limit = 67108864;
-
-            CREATE TABLE IF NOT EXISTS books (
-                id TEXT PRIMARY KEY,
-                data BLOB NOT NULL,
-                updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-            );
-
-            CREATE TABLE IF NOT EXISTS covers (
-                book_id TEXT PRIMARY KEY,
-                data_url TEXT NOT NULL,
-                updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-                FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS kv_store (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-            );
-
-            CREATE TABLE IF NOT EXISTS blob_store (
-                key TEXT PRIMARY KEY,
-                data BLOB NOT NULL,
-                updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-            );
-
-            CREATE TABLE IF NOT EXISTS materialized_books (
-                book_id TEXT PRIMARY KEY,
-                source_updated_at INTEGER NOT NULL,
-                materialized_at INTEGER NOT NULL DEFAULT (unixepoch()),
-                FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
-            );
-            "#,
-        )
-        .map_err(|error| format!("Failed to initialize SQLite schema: {error}"))?;
+    let pool = init_db_pool(&db_path)?;
+    let connection = pool
+        .get()
+        .map_err(|error| format!("Failed to acquire SQLite connection from pool: {error}"))?;
 
     operation(&connection).map_err(|error| format!("SQLite operation failed: {error}"))
 }
@@ -395,6 +443,35 @@ pub fn sqlite_get_kv(app: AppHandle, key: String) -> Result<Option<String>, Stri
                 |row| row.get(0),
             )
             .optional()
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_batch_get_kv(
+    app: AppHandle,
+    keys: Vec<String>,
+) -> Result<Vec<(String, String)>, String> {
+    if keys.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let placeholders: Vec<String> = keys
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect();
+    let sql = format!(
+        "SELECT key, value FROM kv_store WHERE key IN ({})",
+        placeholders.join(", ")
+    );
+
+    with_connection(&app, |connection| {
+        let mut stmt = connection.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(keys.iter()), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        rows.collect::<rusqlite::Result<Vec<(String, String)>>>()
     })
 }
 

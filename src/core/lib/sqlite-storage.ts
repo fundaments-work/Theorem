@@ -98,6 +98,11 @@ export async function sqliteGetKv(key: string): Promise<string | null> {
     return invoke('sqlite_get_kv', { key }) as Promise<string | null>;
 }
 
+export async function sqliteBatchGetKv(keys: string[]): Promise<Array<[string, string]>> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_batch_get_kv', { keys }) as Promise<Array<[string, string]>>;
+}
+
 export async function sqliteSetKv(key: string, value: string): Promise<void> {
     const invoke = await getInvoke();
     await invoke('sqlite_set_kv', { key, value });
