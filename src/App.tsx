@@ -76,17 +76,6 @@ function App() {
 
     useKeyboardShortcuts(currentRoute);
 
-    // Show the window immediately when React mounts (Tauri desktop).
-    // useLayoutEffect fires synchronously after DOM mutations but before
-    // the browser paints — eliminates the white flash.
-    useEffect(() => {
-        if (!isTauri()) return;
-        void getCurrentWebviewWindow().show();
-        // Mark stores as hydrated — Zustand persist middleware hydrates
-        // synchronously before the first React render.
-        useUIStore.getState().setHydrated();
-    }, []);
-
     // Register app-level keyboard shortcuts
     useEffect(() => {
         return registerShortcuts("app", [
