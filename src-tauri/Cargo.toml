@@ -69,9 +69,6 @@ tar = "0.4"
 zip = "0.6"
 walkdir = "2"
 
-# P2P pairing + file transfer (replaces custom X25519 + HKDF protocol)
-magic-wormhole = "0.7"
-
 # EPUB pre-parser: streaming XML (replaces regex) + percent-encoded path fallback
 quick-xml = "0.36"
 percent-encoding = "2"

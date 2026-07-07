@@ -1,9 +1,9 @@
 mod database;
 mod epub_parser;
+mod iroh_sync;
 mod sync_commands;
 #[cfg(target_os = "linux")]
 mod tts_linux;
-mod wormhole;
 
 use reqwest::blocking::Client;
 use serde::Serialize;
@@ -1158,9 +1158,10 @@ pub fn run() {
             database::sqlite_get_book_annotations,
             // Android auto-sync flag
             set_auto_sync_flag,
-            // magic-wormhole pairing (replaces custom X25519 + HKDF)
-            wormhole_pair_create,
-            wormhole_pair_join,
+            // iroh P2P sync (replaces LAN HTTP server + custom pairing)
+            iroh_start,
+            iroh_stop,
+            iroh_pair,
             // LAN sync commands
             sync_commands::start_sync_server,
             sync_commands::stop_sync_server,
@@ -1286,61 +1287,83 @@ async fn set_auto_sync_flag(app: tauri::AppHandle, enabled: bool) -> Result<(), 
     Ok(())
 }
 
-// ─── magic-wormhole pairing commands ───
+// ─── iroh P2P sync commands ───
 
-#[derive(serde::Serialize, serde::Deserialize)]
-struct WormholePairResult {
-    code: String,
+static IROH_ENDPOINT: std::sync::OnceLock<std::sync::Arc<iroh_sync::IrohSyncEndpoint>> =
+    std::sync::OnceLock::new();
+
+async fn get_or_init_iroh(
+    app: &tauri::AppHandle,
+) -> Result<std::sync::Arc<iroh_sync::IrohSyncEndpoint>, String> {
+    if let Some(ep) = IROH_ENDPOINT.get() {
+        return Ok(ep.clone());
+    }
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    let key_path = data_dir.join("iroh-key");
+    let sync_state = app
+        .try_state::<sync_commands::SyncAppState>()
+        .ok_or("Sync subsystem not initialized")?;
+    let identity = &sync_state.server_state.identity;
+    let ep = std::sync::Arc::new(
+        iroh_sync::IrohSyncEndpoint::new(
+            &key_path,
+            identity.device_id.clone(),
+            sync_state.server_state.device_name.clone(),
+            identity.effective_fingerprint(),
+        )
+        .await?,
+    );
+    let _ = IROH_ENDPOINT.set(ep.clone());
+    Ok(ep)
+}
+
+#[derive(serde::Serialize)]
+struct IrohNodeIdResponse {
+    node_id: String,
+    device_id: String,
+    fingerprint: String,
+}
+
+#[tauri::command]
+async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, String> {
+    let ep = get_or_init_iroh(&app).await?;
+    Ok(IrohNodeIdResponse {
+        node_id: ep.public_key_string(),
+        device_id: ep.peer_info.device_id.clone(),
+        fingerprint: ep.peer_info.fingerprint.clone(),
+    })
+}
+
+#[tauri::command]
+async fn iroh_stop() -> Result<(), String> {
+    if let Some(ep) = IROH_ENDPOINT.get() {
+        ep.close().await;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn iroh_pair(
+    app: tauri::AppHandle,
     peer_device_id: String,
+    peer_node_id: String,
     peer_device_name: String,
     peer_fingerprint: String,
-}
-
-#[tauri::command]
-async fn wormhole_pair_create(app: tauri::AppHandle) -> Result<WormholePairResult, String> {
-    let sync_state = app
-        .try_state::<sync_commands::SyncAppState>()
-        .ok_or("Sync subsystem not initialized")?;
-    let identity = &sync_state.server_state.identity;
-    let my_info = wormhole::WormholeDeviceInfo {
-        device_id: identity.device_id.clone(),
-        device_name: sync_state.server_state.device_name.clone(),
-        public_key_hex: hex::encode(identity.public_key_bytes()),
-        fingerprint: identity.effective_fingerprint(),
+) -> Result<(), String> {
+    let ep = get_or_init_iroh(&app).await?;
+    let peer = iroh_sync::IrohPeerInfo {
+        public_key: peer_node_id
+            .parse()
+            .map_err(|e| format!("invalid public key: {e}"))?,
+        device_id: peer_device_id,
+        device_name: peer_device_name,
+        fingerprint: peer_fingerprint,
     };
-
-    let (code, peer) = wormhole::pair_create(my_info).await?;
-    Ok(WormholePairResult {
-        code,
-        peer_device_id: peer.device_id,
-        peer_device_name: peer.device_name,
-        peer_fingerprint: peer.fingerprint,
-    })
-}
-
-#[tauri::command]
-async fn wormhole_pair_join(
-    app: tauri::AppHandle,
-    code: String,
-) -> Result<WormholePairResult, String> {
-    let sync_state = app
-        .try_state::<sync_commands::SyncAppState>()
-        .ok_or("Sync subsystem not initialized")?;
-    let identity = &sync_state.server_state.identity;
-    let my_info = wormhole::WormholeDeviceInfo {
-        device_id: identity.device_id.clone(),
-        device_name: sync_state.server_state.device_name.clone(),
-        public_key_hex: hex::encode(identity.public_key_bytes()),
-        fingerprint: identity.effective_fingerprint(),
-    };
-
-    let peer = wormhole::pair_join(&code, my_info).await?;
-    Ok(WormholePairResult {
-        code,
-        peer_device_id: peer.device_id,
-        peer_device_name: peer.device_name,
-        peer_fingerprint: peer.fingerprint,
-    })
+    ep.add_peer(peer).await;
+    Ok(())
 }
 
 /// Standalone background sync round — called from WorkManager via JNI.
