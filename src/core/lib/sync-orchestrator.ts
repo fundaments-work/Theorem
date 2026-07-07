@@ -50,6 +50,7 @@ import {
 import { isTauri } from "./env";
 import { saveCoverImage } from "./storage";
 import { encodeYjsSyncState, applyYjsSyncUpdate } from "./yjs-sync";
+import { validateSyncPayloads } from "./sync-schemas";
 
 // ─── Helpers ───
 
@@ -242,6 +243,11 @@ async function mergeIncomingData(
             domainsUpdated.push(domain);
         }
     };
+
+    // Validate all incoming payloads against zod schemas.
+    // Invalid entries are silently discarded — downstream JSON.parse calls
+    // also have try/catch guards as defense-in-depth.
+    validateSyncPayloads(incomingMap);
 
     // ── Apply Yjs CRDT update FIRST (replaces LWW merge for all domains) ──
     if (incomingMap["yjs_update"]) {

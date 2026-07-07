@@ -58,6 +58,9 @@
     },
     "dependencies": {
         "@mozilla/readability": "^0.6.0",
+        "@radix-ui/react-context-menu": "^2.3.3",
+        "@radix-ui/react-dialog": "^1.1.19",
+        "@radix-ui/react-dropdown-menu": "^2.1.20",
         "@sentry/react": "^10.59.0",
         "@tanstack/react-virtual": "^3.14.3",
         "@tauri-apps/api": "^2.11.1",
@@ -94,6 +97,7 @@
         "y-indexeddb": "^9.0.12",
         "y-websocket": "^3.0.0",
         "yjs": "^13.6.31",
+        "zod": "^4.4.3",
         "zustand": "^5.0.14"
     },
     "devDependencies": {
