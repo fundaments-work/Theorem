@@ -1158,6 +1158,9 @@ pub fn run() {
             database::sqlite_get_book_annotations,
             // Android auto-sync flag
             set_auto_sync_flag,
+            // magic-wormhole pairing (replaces custom X25519 + HKDF)
+            wormhole_pair_create,
+            wormhole_pair_join,
             // LAN sync commands
             sync_commands::start_sync_server,
             sync_commands::stop_sync_server,
@@ -1281,6 +1284,63 @@ async fn set_auto_sync_flag(app: tauri::AppHandle, enabled: bool) -> Result<(), 
         let _ = std::fs::write(&flag, "1");
     }
     Ok(())
+}
+
+// ─── magic-wormhole pairing commands ───
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct WormholePairResult {
+    code: String,
+    peer_device_id: String,
+    peer_device_name: String,
+    peer_fingerprint: String,
+}
+
+#[tauri::command]
+async fn wormhole_pair_create(app: tauri::AppHandle) -> Result<WormholePairResult, String> {
+    let sync_state = app
+        .try_state::<sync_commands::SyncAppState>()
+        .ok_or("Sync subsystem not initialized")?;
+    let identity = &sync_state.server_state.identity;
+    let my_info = wormhole::WormholeDeviceInfo {
+        device_id: identity.device_id.clone(),
+        device_name: sync_state.server_state.device_name.clone(),
+        public_key_hex: hex::encode(identity.public_key_bytes()),
+        fingerprint: identity.effective_fingerprint(),
+    };
+
+    let (code, peer) = wormhole::pair_create(my_info).await?;
+    Ok(WormholePairResult {
+        code,
+        peer_device_id: peer.device_id,
+        peer_device_name: peer.device_name,
+        peer_fingerprint: peer.fingerprint,
+    })
+}
+
+#[tauri::command]
+async fn wormhole_pair_join(
+    app: tauri::AppHandle,
+    code: String,
+) -> Result<WormholePairResult, String> {
+    let sync_state = app
+        .try_state::<sync_commands::SyncAppState>()
+        .ok_or("Sync subsystem not initialized")?;
+    let identity = &sync_state.server_state.identity;
+    let my_info = wormhole::WormholeDeviceInfo {
+        device_id: identity.device_id.clone(),
+        device_name: sync_state.server_state.device_name.clone(),
+        public_key_hex: hex::encode(identity.public_key_bytes()),
+        fingerprint: identity.effective_fingerprint(),
+    };
+
+    let peer = wormhole::pair_join(&code, my_info).await?;
+    Ok(WormholePairResult {
+        code,
+        peer_device_id: peer.device_id,
+        peer_device_name: peer.device_name,
+        peer_fingerprint: peer.fingerprint,
+    })
 }
 
 /// Standalone background sync round — called from WorkManager via JNI.

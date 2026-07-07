@@ -25,6 +25,7 @@ import type { ContextMenuItem } from "../../ui";
 import { Modal, ModalBody, ModalFooter } from "../../ui";
 import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
+import { sqliteSearchBooks } from "../../core/lib/sqlite-storage";
 
 // View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
@@ -1039,6 +1040,20 @@ export function LibraryPage() {
 
     const debouncedSearchQuery = useDebounce(searchQuery, 250);
 
+    // FTS5 search results from SQLite (Tauri only). Falls back to Fuse.js.
+    const [ftsSearchIds, setFtsSearchIds] = useState<string[] | undefined>(undefined);
+    useEffect(() => {
+        if (!isTauri() || !debouncedSearchQuery.trim()) {
+            setFtsSearchIds(undefined);
+            return;
+        }
+        let cancelled = false;
+        sqliteSearchBooks(debouncedSearchQuery.trim(), 200).then((results) => {
+            if (!cancelled) setFtsSearchIds(results.map((r) => r.book_id));
+        });
+        return () => { cancelled = true; };
+    }, [debouncedSearchQuery]);
+
     const sortedBooks = useMemo(() => {
         return getFilteredAndSortedBooks({
             books,
@@ -1047,6 +1062,7 @@ export function LibraryPage() {
             showFavoritesOnly,
             sortBy: settings.librarySortBy,
             sortOrder: settings.librarySortOrder,
+            ftsSearchIds,
         });
     }, [
         books,

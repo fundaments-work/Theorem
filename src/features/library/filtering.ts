@@ -10,6 +10,8 @@ export interface LibraryFilterOptions {
     showFavoritesOnly: boolean;
     sortBy: LibrarySortBy;
     sortOrder: LibrarySortOrder;
+    /** Pre-filtered book IDs from SQLite FTS5 search (Tauri only). */
+    ftsSearchIds?: string[];
 }
 
 import Fuse from "fuse.js";
@@ -23,40 +25,47 @@ export function getFilteredAndSortedBooks({
     showFavoritesOnly,
     sortBy,
     sortOrder,
+    ftsSearchIds,
 }: LibraryFilterOptions): Book[] {
     let searchResults = books;
     const trimmedQuery = searchQuery.trim();
 
-    // 1. Search (using cached Fuse instance over ALL books to prevent redundant index building)
+    // 1. Search — prefer SQLite FTS5 results when available (Tauri),
+    //    fall back to Fuse.js (web / no FTS results yet).
     if (trimmedQuery) {
-        let fuse = booksFuseCache.get(books);
-        if (!fuse) {
-            const searchableItems = books.map((book) => ({
-                book,
-                title: book.title,
-                author: normalizeAuthor(book.author),
-                tags: book.tags.join(" "),
-                format: `${FORMAT_DISPLAY_NAMES[book.format]} ${book.format}`,
-            }));
-            
-            fuse = new Fuse(searchableItems, {
-                keys: [
-                    { name: "title", weight: 0.45 },
-                    { name: "author", weight: 0.3 },
-                    { name: "tags", weight: 0.15 },
-                    { name: "format", weight: 0.1 },
-                ],
-                threshold: 0.34,
-                ignoreLocation: true,
-                includeScore: true,
-                shouldSort: true,
-                minMatchCharLength: 2,
-            });
-            booksFuseCache.set(books, fuse);
+        if (ftsSearchIds) {
+            const idSet = new Set(ftsSearchIds);
+            searchResults = books.filter((b) => idSet.has(b.id));
+        } else {
+            let fuse = booksFuseCache.get(books);
+            if (!fuse) {
+                const searchableItems = books.map((book) => ({
+                    book,
+                    title: book.title,
+                    author: normalizeAuthor(book.author),
+                    tags: book.tags.join(" "),
+                    format: `${FORMAT_DISPLAY_NAMES[book.format]} ${book.format}`,
+                }));
+
+                fuse = new Fuse(searchableItems, {
+                    keys: [
+                        { name: "title", weight: 0.45 },
+                        { name: "author", weight: 0.3 },
+                        { name: "tags", weight: 0.15 },
+                        { name: "format", weight: 0.1 },
+                    ],
+                    threshold: 0.34,
+                    ignoreLocation: true,
+                    includeScore: true,
+                    shouldSort: true,
+                    minMatchCharLength: 2,
+                });
+                booksFuseCache.set(books, fuse);
+            }
+
+            const rawResults = fuse.search(trimmedQuery);
+            searchResults = rawResults.map((r) => r.item.book);
         }
-        
-        const rawResults = fuse.search(trimmedQuery);
-        searchResults = rawResults.map((r) => r.item.book);
     }
 
     // 2. Filter

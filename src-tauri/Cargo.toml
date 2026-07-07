@@ -75,6 +75,7 @@ magic-wormhole = "0.7"
 # EPUB pre-parser: streaming XML (replaces regex) + percent-encoded path fallback
 quick-xml = "0.36"
 percent-encoding = "2"
+iroh = "1.0.2"
 
 # Platform-specific
 [target.'cfg(not(target_os = "android"))'.dependencies]

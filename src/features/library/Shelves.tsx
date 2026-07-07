@@ -14,6 +14,8 @@ import { ShelfModal } from "./components/modals/ShelfModal";
 import { MemoizedBookCard, BookInfoModal, AddToShelfModal } from "./Library";
 import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
+import { sqliteSearchBooks } from "../../core/lib/sqlite-storage";
+import { isTauri } from "../../core/lib/env";
 import {
     FolderOpen,
     Plus,
@@ -276,6 +278,19 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     // Get actual books that exist in the library, filtered and sorted
     const debouncedSearchQuery = useDebounce(searchQuery, 250);
 
+    const [ftsSearchIds, setFtsSearchIds] = useState<string[] | undefined>(undefined);
+    useEffect(() => {
+        if (!isTauri() || !debouncedSearchQuery.trim()) {
+            setFtsSearchIds(undefined);
+            return;
+        }
+        let cancelled = false;
+        sqliteSearchBooks(debouncedSearchQuery.trim(), 200).then((results) => {
+            if (!cancelled) setFtsSearchIds(results.map((r) => r.book_id));
+        });
+        return () => { cancelled = true; };
+    }, [debouncedSearchQuery]);
+
     const shelfBooks = useMemo(() => {
         const shelfBookIdsSet = new Set(shelf.bookIds);
         return getFilteredAndSortedBooks({
@@ -285,6 +300,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             showFavoritesOnly: false,
             sortBy: settings.librarySortBy,
             sortOrder: settings.librarySortOrder,
+            ftsSearchIds,
         });
     }, [shelf.bookIds, books, debouncedSearchQuery, settings.librarySortBy, settings.librarySortOrder]);
 
