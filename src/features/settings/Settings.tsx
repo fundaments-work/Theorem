@@ -3,7 +3,7 @@
  * App configuration and preferences
  */
 
-import { useRef, useState, useEffect, memo, type ChangeEvent } from "react";
+import { useRef, useState, useEffect, memo, lazy, Suspense, type ChangeEvent } from "react";
 import { cn, normalizeFilePath, formatFileSize } from "../../core/lib/utils";
 import { isMobile, isTauri, isTauriDesktop } from "../../core/lib/env";
 import { getAllShortcuts, formatShortcutKeys } from "../../core/lib/keyboard-shortcuts";
@@ -24,7 +24,7 @@ import {
     useUIStore,
 } from "../../core/store";
 import { clearAllApplicationStorage, getRssStorageStats } from "../../core/lib/storage-manager";
-import { DeviceSyncSection } from "./DeviceSync";
+const DeviceSyncSection = lazy(() => import("./DeviceSync").then(m => ({ default: m.DeviceSyncSection })));
 import { DictionaryDownloadModal } from "./DictionaryDownloadModal";
 import { Dropdown } from "../../ui";
 import {
@@ -343,12 +343,22 @@ export const SettingsPage = memo(function SettingsPage() {
             persisted === "dictionary" ||
             persisted === "integrations" ||
             persisted === "storage" ||
+            persisted === "shortcuts" ||
             persisted === "about"
         ) {
             return persisted;
         }
         return "general";
     });
+
+    // Track which tabs have been visited — unvisited tabs don't render at all
+    // (fast initial mount); visited tabs stay in DOM with CSS hidden (instant switch).
+    const [visitedTabs, setVisitedTabs] = useState<Set<SettingsTab>>(
+        () => new Set([activeTab]),
+    );
+    useEffect(() => {
+        setVisitedTabs((prev) => (prev.has(activeTab) ? prev : new Set([...prev, activeTab])));
+    }, [activeTab]);
 
     const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
     const [showDictDownloadModal, setShowDictDownloadModal] = useState(false);
@@ -358,7 +368,7 @@ export const SettingsPage = memo(function SettingsPage() {
     const [availableVoices, setAvailableVoices] = useState<Array<{ name: string; lang: string }>>([]);
 
     useEffect(() => {
-        import("../../features/reader/audio/ImmersionPlayer").then(({ ImmersionPlayer }) => {
+        import("../reader/audio/ImmersionPlayer").then(({ ImmersionPlayer }) => {
             ImmersionPlayer.loadVoices().then(setAvailableVoices);
         });
     }, []);
@@ -685,7 +695,7 @@ export const SettingsPage = memo(function SettingsPage() {
             </div>
 
             {/* General Settings */}
-            <div className={activeTab === "general" ? "space-y-8" : "hidden"}>
+            {(activeTab === "general" || visitedTabs.has("general")) && <div className={activeTab === "general" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Library"
                         description="Library display and organization preferences"
@@ -964,10 +974,10 @@ export const SettingsPage = memo(function SettingsPage() {
                             Reset to Defaults
                         </button>
                     </div>
-                </div>
+                </div>}
 
             {/* Dictionary Settings */}
-            <div className={activeTab === "dictionary" ? "space-y-8" : "hidden"}>
+            {(activeTab === "dictionary" || visitedTabs.has("dictionary")) && <div className={activeTab === "dictionary" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Dictionary"
                         description="Install and manage offline dictionaries"
@@ -1060,13 +1070,15 @@ export const SettingsPage = memo(function SettingsPage() {
                             </span>
                         </SettingRow>
                     </Section>
-                </div>
+                </div>}
 
 
             {/* Integrations Settings */}
-            <div className={activeTab === "integrations" ? "space-y-8" : "hidden"}>
+            {(activeTab === "integrations" || visitedTabs.has("integrations")) && <div className={activeTab === "integrations" ? "space-y-8" : "hidden"}>
                     <div ref={deviceSyncSectionRef}>
-                        <DeviceSyncSection />
+                        <Suspense fallback={null}>
+                            <DeviceSyncSection />
+                        </Suspense>
                     </div>
 
                     <div ref={markdownExportSectionRef}>
@@ -1202,14 +1214,14 @@ export const SettingsPage = memo(function SettingsPage() {
                             </details>
                         </Section>
                     </div>
-                </div>
+                </div>}
 
             {/* Storage Settings */}
-            <div className={activeTab === "storage" ? "" : "hidden"}>
+            {(activeTab === "storage" || visitedTabs.has("storage")) && <div className={activeTab === "storage" ? "" : "hidden"}>
                 <StorageTab onClearData={handleClearData} onExportData={handleExportData} />
-            </div>
+            </div>}
 
-            <div className={activeTab === "shortcuts" ? "space-y-8" : "hidden"}>
+            {(activeTab === "shortcuts" || visitedTabs.has("shortcuts")) && <div className={activeTab === "shortcuts" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Keyboard Shortcuts"
                         description="Available shortcuts throughout the app"
@@ -1235,9 +1247,9 @@ export const SettingsPage = memo(function SettingsPage() {
                             })()}
                         </div>
                     </Section>
-                </div>
+                </div>}
 
-            <div className={activeTab === "about" ? "space-y-8" : "hidden"}>
+            {(activeTab === "about" || visitedTabs.has("about")) && <div className={activeTab === "about" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Theorem"
                         description="Local-first reader for PDFs, EPUBs, and RSS"
@@ -1300,7 +1312,7 @@ export const SettingsPage = memo(function SettingsPage() {
                             </a>
                         </div>
                     </Section>
-                </div>
+                </div>}
         </div>
 
         <DictionaryDownloadModal

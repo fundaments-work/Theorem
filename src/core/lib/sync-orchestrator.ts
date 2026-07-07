@@ -184,60 +184,60 @@ async function buildDomainsAndManifest() {
         contentHashes[domainNames[i]] = hashResults[i];
     }
 
-    const manifest: Record<string, { version: number; item_count: number; last_modified_at: string; content_hash: string }> = {
+    const manifest: Record<string, { version: number; itemCount: number; lastModifiedAt: string; contentHash: string }> = {
         books: {
             version: library.books.length,
-            item_count: library.books.length,
-            last_modified_at: computeLatestDate(library.books, b => b.lastReadAt || b.addedAt),
-            content_hash: contentHashes["books"],
+            itemCount: library.books.length,
+            lastModifiedAt: computeLatestDate(library.books, b => b.lastReadAt || b.addedAt),
+            contentHash: contentHashes["books"],
         },
         annotations: {
             version: library.annotations.length,
-            item_count: library.annotations.length,
-            last_modified_at: computeLatestDate(library.annotations, a => a.updatedAt || a.createdAt),
-            content_hash: contentHashes["annotations"],
+            itemCount: library.annotations.length,
+            lastModifiedAt: computeLatestDate(library.annotations, a => a.updatedAt || a.createdAt),
+            contentHash: contentHashes["annotations"],
         },
         collections: {
             version: library.collections.length,
-            item_count: library.collections.length,
-            last_modified_at: computeLatestDate(library.collections, c => c.createdAt),
-            content_hash: contentHashes["collections"],
+            itemCount: library.collections.length,
+            lastModifiedAt: computeLatestDate(library.collections, c => c.createdAt),
+            contentHash: contentHashes["collections"],
         },
         deletion_tombstones: {
             version: gcTombstones.length,
-            item_count: gcTombstones.length,
-            last_modified_at: computeLatestDate(gcTombstones, t => t.deletedAt),
-            content_hash: contentHashes["deletion_tombstones"],
+            itemCount: gcTombstones.length,
+            lastModifiedAt: computeLatestDate(gcTombstones, t => t.deletedAt),
+            contentHash: contentHashes["deletion_tombstones"],
         },
         vocabulary: {
             version: vocabulary.vocabularyTerms.length,
-            item_count: vocabulary.vocabularyTerms.length,
-            last_modified_at: computeLatestDate(vocabulary.vocabularyTerms, v => v.updatedAt || v.createdAt),
-            content_hash: contentHashes["vocabulary"],
+            itemCount: vocabulary.vocabularyTerms.length,
+            lastModifiedAt: computeLatestDate(vocabulary.vocabularyTerms, v => v.updatedAt || v.createdAt),
+            contentHash: contentHashes["vocabulary"],
         },
         settings: {
             version: 1, // Settings is a single object, always version 1.
-            item_count: 1,
-            last_modified_at: settingsUpdatedAt,
-            content_hash: contentHashes["settings"],
+            itemCount: 1,
+            lastModifiedAt: settingsUpdatedAt,
+            contentHash: contentHashes["settings"],
         },
         reading_stats: {
             version: 1,
-            item_count: 1,
-            last_modified_at: settingsStore.stats.lastReadDate ?? new Date(0).toISOString(),
-            content_hash: contentHashes["reading_stats"],
+            itemCount: 1,
+            lastModifiedAt: settingsStore.stats.lastReadDate ?? new Date(0).toISOString(),
+            contentHash: contentHashes["reading_stats"],
         },
         rss_feeds: {
             version: rss.feeds.length,
-            item_count: rss.feeds.length,
-            last_modified_at: computeLatestDate(rss.feeds, f => f.lastFetched || f.addedAt),
-            content_hash: contentHashes["rss_feeds"],
+            itemCount: rss.feeds.length,
+            lastModifiedAt: computeLatestDate(rss.feeds, f => f.lastFetched || f.addedAt),
+            contentHash: contentHashes["rss_feeds"],
         },
         rss_articles: {
             version: rss.articles.length,
-            item_count: rss.articles.length,
-            last_modified_at: computeLatestDate(rss.articles, a => a.fetchedAt),
-            content_hash: contentHashes["rss_articles"],
+            itemCount: rss.articles.length,
+            lastModifiedAt: computeLatestDate(rss.articles, a => a.fetchedAt),
+            contentHash: contentHashes["rss_articles"],
         },
     };
 

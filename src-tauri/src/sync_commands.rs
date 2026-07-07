@@ -16,6 +16,19 @@ use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 
+fn get_local_ip() -> String {
+    if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:0") {
+        if socket.connect("1.1.1.1:80").is_ok() {
+            if let Ok(addr) = socket.local_addr() {
+                return addr.ip().to_string();
+            }
+        }
+    }
+    local_ip_address::local_ip()
+        .map(|ip| ip.to_string())
+        .unwrap_or_default()
+}
+
 // ─── Global iroh endpoint ───
 
 static IROH_ENDPOINT: std::sync::OnceLock<Arc<IrohSyncEndpoint>> = std::sync::OnceLock::new();
@@ -187,11 +200,19 @@ pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData,
     let public = x25519_dalek::PublicKey::from(&secret);
     let nonce = sync_crypto::generate_nonce();
 
+    let ip = get_local_ip();
+    let port = ep
+        .endpoint
+        .bound_sockets()
+        .first()
+        .map(|s| s.port())
+        .unwrap_or(0);
+
     let qr_payload = PairingQrPayload {
         version: 1,
         node_id: ep.public_key_string(),
-        ip: String::new(),
-        port: 0,
+        ip,
+        port,
         ephemeral_public_key: hex::encode(public.as_bytes()),
         device_id: sync_state.transport_state.identity.device_id.clone(),
         device_name: sync_state.transport_state.device_name.clone(),
@@ -257,25 +278,40 @@ pub async fn submit_pairing_code(
     let proof_json =
         serde_json::to_string(&proof).map_err(|e| format!("Failed to serialize proof: {e}"))?;
 
+    let scanner_ip = get_local_ip();
+    let scanner_port = ep
+        .endpoint
+        .bound_sockets()
+        .first()
+        .map(|s| s.port())
+        .unwrap_or(0);
+
     let pairing_request = PairingRequest {
         ephemeral_public_key: hex::encode(ephemeral_public.as_bytes()),
         device_id: sync_state.transport_state.identity.device_id.clone(),
         device_name: sync_state.transport_state.device_name.clone(),
         encrypted_proof: BASE64.encode(proof_json.as_bytes()),
         fingerprint: sync_state.transport_state.identity.effective_fingerprint(),
+        node_id: ep.public_key.to_string(),
+        ip: scanner_ip,
+        port: scanner_port,
     };
 
-    // Connect to host via iroh and send pairing request
+    // Connect to host via iroh — use the QR payload's IP/port as a direct hint.
     let peer_pk: iroh::PublicKey = qr_payload
         .node_id
         .parse()
         .map_err(|e| format!("Invalid host node_id: {e}"))?;
+    let mut host_addr = iroh::EndpointAddr::new(peer_pk);
+    if let Ok(ip_addr) = qr_payload.ip.parse::<std::net::IpAddr>() {
+        if qr_payload.port > 0 {
+            host_addr = host_addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, qr_payload.port));
+        }
+    }
+
     let conn = ep
         .endpoint
-        .connect(
-            iroh::EndpointAddr::new(peer_pk),
-            crate::iroh_sync::ALPN_BYTES,
-        )
+        .connect(host_addr, crate::iroh_sync::ALPN_BYTES)
         .await
         .map_err(|e| format!("Connect to host failed: {e}"))?;
 
@@ -307,6 +343,16 @@ pub async fn submit_pairing_code(
 
     let pairing_response = iroh_sync::send_pair_request(&conn, &pairing_request).await?;
 
+    // Capture the host's relay URL from this connection for future reconnections.
+    let host_relay_url = conn
+        .paths()
+        .iter()
+        .find_map(|p| match p.remote_addr() {
+            iroh::TransportAddr::Relay(url) => Some(url.to_string()),
+            _ => None,
+        })
+        .unwrap_or_default();
+
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -322,6 +368,7 @@ pub async fn submit_pairing_code(
         paired_at: format!("{}Z", now),
         last_sync_at: None,
         fingerprint: pairing_response.fingerprint.clone(),
+        peer_relay_url: host_relay_url,
     };
 
     let paired_info = PairedDeviceInfo::from(&paired_device);
@@ -481,13 +528,84 @@ pub async fn update_peer_address(
 
 // ─── Sync Orchestrator (Client Side) ───
 
+/// Extract peer addressing info from a connection and save it for reconnection.
+async fn save_peer_addrs_from_conn(
+    app: &tauri::AppHandle,
+    device_id: &str,
+    conn: &iroh::endpoint::Connection,
+) {
+    let relay_url = conn.paths().iter().find_map(|p| match p.remote_addr() {
+        iroh::TransportAddr::Relay(url) => Some(url.to_string()),
+        _ => None,
+    });
+    let direct_addr = conn.paths().iter().find_map(|p| match p.remote_addr() {
+        iroh::TransportAddr::Ip(addr) => Some(*addr),
+        _ => None,
+    });
+
+    let sync_state = match app.try_state::<SyncState>() {
+        Some(s) => s,
+        None => return,
+    };
+    let mut devices = sync_state.transport_state.paired_devices.lock().await;
+    if let Some(device) = devices.get_mut(device_id) {
+        if let Some(url) = &relay_url {
+            device.peer_relay_url = url.clone();
+        }
+        if let Some(addr) = direct_addr {
+            device.last_ip = addr.ip().to_string();
+            device.last_port = addr.port();
+        }
+        let _ = iroh_sync::save_paired_devices_to_disk(
+            &sync_state.transport_state.app_data_dir,
+            &devices,
+        );
+    }
+}
+
+/// Connect to a peer via iroh, using stored IP/port and relay URL as address hints.
+/// After a successful connection, captures the peer's relay URL and direct address
+/// from the connection paths so they can be used on future reconnections after restarts.
+async fn connect_to_peer(
+    app: &tauri::AppHandle,
+    peer: &PairedDevice,
+) -> Result<(iroh::endpoint::Connection, iroh::PublicKey), String> {
+    let ep = get_or_init_iroh(app).await?;
+    let peer_pk: iroh::PublicKey = peer
+        .iroh_node_id
+        .parse()
+        .map_err(|e| format!("Invalid peer node_id: {e}"))?;
+
+    let mut addr = iroh::EndpointAddr::new(peer_pk);
+    // Use stored relay URL as the primary addressing hint — iroh will route
+    // through the relay server to reach the peer even if direct IP has changed.
+    if !peer.peer_relay_url.is_empty() {
+        if let Ok(relay_url) = peer.peer_relay_url.parse::<iroh::RelayUrl>() {
+            addr = addr.with_relay_url(relay_url);
+        }
+    }
+    // Also try the stored IP/port as a direct address hint for holepunching.
+    if let Ok(ip_addr) = peer.last_ip.parse::<std::net::IpAddr>() {
+        if peer.last_port > 0 {
+            addr = addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, peer.last_port));
+        }
+    }
+
+    let conn = ep
+        .endpoint
+        .connect(addr, crate::iroh_sync::ALPN_BYTES)
+        .await
+        .map_err(|e| format!("Connect to peer failed: {e}"))?;
+
+    Ok((conn, ep.public_key))
+}
+
 #[tauri::command]
 pub async fn initiate_sync(
     app: tauri::AppHandle,
     peer_device_id: String,
 ) -> Result<String, String> {
     let sync_state = get_sync_state(&app)?;
-    let ep = get_or_init_iroh(&app).await?;
 
     let devices = sync_state.transport_state.paired_devices.lock().await;
     let peer = devices
@@ -516,23 +634,15 @@ pub async fn initiate_sync(
         domains: data.manifest.clone(),
     };
 
-    // Connect via iroh
-    let peer_pk: iroh::PublicKey = peer
-        .iroh_node_id
-        .parse()
-        .map_err(|e| format!("Invalid peer node_id: {e}"))?;
-    let conn = ep
-        .endpoint
-        .connect(
-            iroh::EndpointAddr::new(peer_pk),
-            crate::iroh_sync::ALPN_BYTES,
-        )
-        .await
-        .map_err(|e| format!("Connect to peer failed: {e}"))?;
+    // Connect via iroh — uses stored relay URL + IP/port as address hints.
+    let (conn, my_public_key) = connect_to_peer(&app, &peer).await?;
+    // Capture the peer's actual relay URL and direct address from this connection
+    // so future reconnections (after restarts) can use them as address hints.
+    save_peer_addrs_from_conn(&app, &peer_device_id, &conn).await;
 
     // Perform handshake
     let my_info = iroh_sync::IrohPeerInfo {
-        public_key: ep.public_key,
+        public_key: my_public_key,
         device_id: my_device_id.clone(),
         device_name: sync_state.transport_state.device_name.clone(),
         fingerprint: sync_state.transport_state.identity.effective_fingerprint(),
@@ -600,7 +710,6 @@ pub async fn pull_book_files(
     book_ids: Vec<String>,
 ) -> Result<FileTransferResult, String> {
     let sync_state = get_sync_state(&app)?;
-    let ep = get_or_init_iroh(&app).await?;
 
     let devices = sync_state.transport_state.paired_devices.lock().await;
     let peer = devices
@@ -618,18 +727,8 @@ pub async fn pull_book_files(
     let cache_dir = sync_state.transport_state.app_data_dir.join("book-cache");
     std::fs::create_dir_all(&cache_dir).ok();
 
-    let peer_pk: iroh::PublicKey = peer
-        .iroh_node_id
-        .parse()
-        .map_err(|e| format!("Invalid peer node_id: {e}"))?;
-    let conn = ep
-        .endpoint
-        .connect(
-            iroh::EndpointAddr::new(peer_pk),
-            crate::iroh_sync::ALPN_BYTES,
-        )
-        .await
-        .map_err(|e| format!("Connect to peer: {e}"))?;
+    let (conn, _) = connect_to_peer(&app, &peer).await?;
+    save_peer_addrs_from_conn(&app, &peer_device_id, &conn).await;
 
     let result =
         iroh_sync::pull_files_via_iroh(&conn, &sym_key, &my_id, &book_ids, &cache_dir).await?;
@@ -655,7 +754,6 @@ pub async fn pull_book_covers(
     book_ids: Vec<String>,
 ) -> Result<CoverTransferResult, String> {
     let sync_state = get_sync_state(&app)?;
-    let ep = get_or_init_iroh(&app).await?;
 
     let devices = sync_state.transport_state.paired_devices.lock().await;
     let peer = devices
@@ -670,18 +768,8 @@ pub async fn pull_book_covers(
     let sym_key: [u8; 32] = sym_key_vec.try_into().map_err(|_| "Key length invalid")?;
     let my_id = sync_state.transport_state.identity.device_id.clone();
 
-    let peer_pk: iroh::PublicKey = peer
-        .iroh_node_id
-        .parse()
-        .map_err(|e| format!("Invalid peer node_id: {e}"))?;
-    let conn = ep
-        .endpoint
-        .connect(
-            iroh::EndpointAddr::new(peer_pk),
-            crate::iroh_sync::ALPN_BYTES,
-        )
-        .await
-        .map_err(|e| format!("Connect to peer: {e}"))?;
+    let (conn, _) = connect_to_peer(&app, &peer).await?;
+    save_peer_addrs_from_conn(&app, &peer_device_id, &conn).await;
 
     let result = iroh_sync::pull_covers_via_iroh(&conn, &sym_key, &my_id, &book_ids).await?;
 

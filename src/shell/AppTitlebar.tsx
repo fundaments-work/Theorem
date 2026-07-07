@@ -192,14 +192,6 @@ export const AppTitlebar = memo(function AppTitlebar({
         }
     };
 
-    const openDeviceSyncSettings = () => {
-        if (typeof window !== "undefined") {
-            window.sessionStorage.setItem("theorem-settings:active-tab", "integrations");
-            window.sessionStorage.setItem("theorem-settings:focus-section", "device-sync");
-        }
-        setRoute("settings");
-    };
-
     const handleQuickSync = async () => {
         if (isQuickSyncing || deviceSyncStatus === "syncing") {
             return;
@@ -216,14 +208,12 @@ export const AppTitlebar = memo(function AppTitlebar({
             const pairedDevices = await getPairedDevices();
 
             if (pairedDevices.length === 0) {
-                setDeviceSyncStatus("idle", "No paired devices yet. Pair one in Settings > Device Sync.");
-                openDeviceSyncSettings();
+                setDeviceSyncStatus("idle", "No paired devices. Open Settings > Integrations to pair.");
                 return;
             }
 
             if (pairedDevices.length > 1) {
-                setDeviceSyncStatus("idle", "Multiple devices found. Choose one in Settings > Device Sync.");
-                openDeviceSyncSettings();
+                setDeviceSyncStatus("idle", "Multiple paired devices. Choose one in Settings > Integrations.");
                 return;
             }
 

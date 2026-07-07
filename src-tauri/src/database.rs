@@ -92,7 +92,7 @@ fn init_db_pool(db_path: &Path) -> Result<&DbPool, String> {
 
     let manager = SqliteConnectionManager::file(db_path);
     let pool = Pool::builder()
-        .max_size(4)
+        .max_size(1)
         .connection_customizer(Box::new(SqlitePerConnectionPragmas))
         .build(manager)
         .map_err(|error| format!("Failed to create SQLite connection pool: {error}"))?;

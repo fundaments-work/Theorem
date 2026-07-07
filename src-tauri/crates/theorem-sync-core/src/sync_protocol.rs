@@ -75,6 +75,15 @@ pub struct PairingRequest {
     /// Scanner's stable device fingerprint for deduplication.
     #[serde(default)]
     pub fingerprint: String,
+    /// Scanner's iroh node ID (public key string) so the host can connect back.
+    #[serde(default)]
+    pub node_id: String,
+    /// Scanner's LAN IP address.
+    #[serde(default)]
+    pub ip: String,
+    /// Scanner's sync server port.
+    #[serde(default)]
+    pub port: u16,
 }
 
 /// Response sent by the host back to the scanner after successful pairing.
@@ -119,6 +128,9 @@ pub struct PairedDevice {
     /// Peer's stable device fingerprint for deduplication.
     #[serde(default)]
     pub fingerprint: String,
+    /// Peer's iroh relay URL for reconnection across restarts.
+    #[serde(default)]
+    pub peer_relay_url: String,
 }
 
 /// Frontend-safe view of a paired device (no symmetric key exposed).
@@ -134,6 +146,9 @@ pub struct PairedDeviceInfo {
     /// Peer's stable device fingerprint for deduplication.
     #[serde(default)]
     pub fingerprint: String,
+    /// Peer's iroh relay URL for reconnection.
+    #[serde(default)]
+    pub peer_relay_url: String,
 }
 
 impl From<&PairedDevice> for PairedDeviceInfo {
@@ -146,6 +161,7 @@ impl From<&PairedDevice> for PairedDeviceInfo {
             paired_at: device.paired_at.clone(),
             last_sync_at: device.last_sync_at.clone(),
             fingerprint: device.fingerprint.clone(),
+            peer_relay_url: device.peer_relay_url.clone(),
         }
     }
 }

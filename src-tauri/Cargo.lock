@@ -6997,6 +6997,7 @@ dependencies = [
  "iroh",
  "jni 0.21.1",
  "local-ip-address",
+ "ndk-context",
  "percent-encoding",
  "qrcode",
  "quick-xml 0.36.2",
@@ -7005,6 +7006,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.11.27",
  "rusqlite",
+ "rustls 0.23.41",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -8849,7 +8851,7 @@ dependencies = [
  "log",
  "serde",
  "thiserror 2.0.18",
- "windows 0.61.3",
+ "windows 0.62.2",
  "windows-core 0.62.2",
 ]
 

@@ -11,8 +11,6 @@ import { importBooksIncremental, getBookFormat, isImportFormatSupported } from "
 import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
 import { initI18n } from "./core/lib/i18n";
-import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
-import { prewarmFoliateRuntime } from "./core/lib/foliate-runtime";
 import { OnboardingFlow } from "./features/onboarding";
 
 const LibraryPage = lazy(() =>
@@ -48,8 +46,8 @@ const DESKTOP_STARTUP_MIN_HEIGHT = 720;
 
 function PageFallback() {
     return (
-        <div className="flex h-full w-full items-center justify-center text-[color:var(--color-text-secondary)]">
-            Loading...
+        <div className="flex h-full w-full items-center justify-center">
+            <div className="w-8 h-8 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
         </div>
     );
 }
@@ -69,10 +67,47 @@ function App() {
     const mainScrollRef = useRef<HTMLElement>(null);
     const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
     const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
-    const hasCompletedOnboarding = useSettingsStore((state) => state.settings.hasCompletedOnboarding);
     const autoSyncEnabled = useSettingsStore((state) => state.settings.deviceSync?.autoSyncEnabled ?? true);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+
+    // Wait for settings store to hydrate from SQLite (max 3s) before
+    // deciding whether to show onboarding. Falls through so the app
+    // never gets stuck — if hydration doesn't complete in time, the
+    // default hasCompletedOnboarding:true kicks in.
+    const [storesHydrated, setStoresHydrated] = useState(() =>
+        useSettingsStore.persist.hasHydrated(),
+    );
+
+    useEffect(() => {
+        if (storesHydrated) return;
+        let cancelled = false;
+        const done = () => { if (!cancelled) setStoresHydrated(true); };
+        const timeout = setTimeout(done, 3000);
+        const unsub = useSettingsStore.subscribe(() => {
+            if (cancelled) return;
+            if (useSettingsStore.persist.hasHydrated()) {
+                clearTimeout(timeout);
+                done();
+            }
+        });
+        return () => {
+            cancelled = true;
+            clearTimeout(timeout);
+            unsub();
+        };
+    }, [storesHydrated]);
+
+    const hasCompletedOnboardingStore = useSettingsStore(
+        (state) => state.settings.hasCompletedOnboarding,
+    );
+    // localStorage is synchronous — instant check prevents the onboarding
+    // flash while SQLite hydration is still in progress.
+    const hasCompletedOnboarding =
+        typeof localStorage !== "undefined" &&
+        localStorage.getItem("theorem-onboarding-complete") === "true"
+            ? true
+            : hasCompletedOnboardingStore;
 
     useKeyboardShortcuts(currentRoute);
 
@@ -117,6 +152,9 @@ function App() {
 
     const handleOnboardingComplete = useCallback(() => {
         updateSettings({ hasCompletedOnboarding: true });
+        if (typeof localStorage !== "undefined") {
+            localStorage.setItem("theorem-onboarding-complete", "true");
+        }
     }, [updateSettings]);
 
     useEffect(() => {
@@ -265,67 +303,17 @@ function App() {
         initReaderStyles(useSettingsStore.getState().settings.readerSettings);
     }, []);
 
-    // Initialize Yjs CRDT sync bridge (replaces LWW merge functions).
-    // Dynamically imported to avoid bloating the entry chunk (yjs + ws + idb).
-    useEffect(() => {
-        let destroy: (() => void) | undefined;
-        import("./core/lib/yjs-sync").then((mod) => {
-            mod.initYjsSync();
-            mod.bridgeZustandToYjs();
-            destroy = () => mod.destroyYjsSync();
-        });
-        return () => {
-            destroy?.();
-        };
-    }, []);
+    // Yjs CRDT bridge is NOT initialized at startup — it doubles memory by
+    // copying all Zustand state into Y.Map + IndexeddbPersistence. It should
+    // only be initialized during active sync sessions (via sync-orchestrator).
+
+    // Reader runtime prewarming removed — PDF.js + Foliate + ReaderPage are
+    // heavy libraries (~100-200MB). For low-resource environments, they load
+    // on-demand when the user opens a book, not at app startup.
 
     // Initialize i18n on app load
     useEffect(() => {
         void initI18n();
-    }, []);
-
-    useEffect(() => {
-        if (typeof window === "undefined") {
-            return;
-        }
-
-        type IdleCapableWindow = Window & typeof globalThis & {
-            requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
-            cancelIdleCallback?: (handle: number) => void;
-        };
-
-        const idleWindow = window as IdleCapableWindow;
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
-        let idleHandle: number | null = null;
-        let cancelled = false;
-
-        const warmPdfRuntime = () => {
-            if (cancelled) {
-                return;
-            }
-            void prewarmPdfJsRuntime();
-            void prewarmFoliateRuntime();
-            void loadReaderPage();
-        };
-
-        if (idleWindow.requestIdleCallback) {
-            idleHandle = idleWindow.requestIdleCallback(
-                () => warmPdfRuntime(),
-                { timeout: 1800 },
-            );
-        } else {
-            timeoutId = setTimeout(warmPdfRuntime, 900);
-        }
-
-        return () => {
-            cancelled = true;
-            if (idleHandle !== null && idleWindow.cancelIdleCallback) {
-                idleWindow.cancelIdleCallback(idleHandle);
-            }
-            if (timeoutId !== null) {
-                clearTimeout(timeoutId);
-            }
-        };
     }, []);
 
     // On Android, initialize the device fingerprint (ANDROID_ID) for stable
@@ -477,6 +465,13 @@ function App() {
                 return <LibraryPage />;
         }
     };
+
+    // Show loading state until persisted stores have rehydrated from SQLite.
+    // This prevents the default hasCompletedOnboarding:false from flashing
+    // the OnboardingFlow before the persisted true value is loaded.
+    if (!storesHydrated) {
+        return <PageFallback />;
+    }
 
     // Reader mode: full screen without sidebar
     // Onboarding flow for first-time users

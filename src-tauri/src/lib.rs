@@ -945,6 +945,11 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     apply_linux_webkit_workarounds();
 
+    // Install the default crypto provider for rustls (used by reqwest v0.13 via iroh).
+    // iroh's reqwest dependency uses `rustls-no-provider`, so no provider is set by
+    // default — without this, any reqwest TLS connection will panic with "No provider set".
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let builder = tauri::Builder::default()
         .manage(PendingOpenFiles::default())
         .on_window_event(|window, event| {
@@ -1328,46 +1333,21 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
                 }
             };
 
-        let paired_devices = theorem_sync_core::sync_server::load_paired_devices(&data_dir);
+        let paired_devices = theorem_sync_core::sync_persistence::load_paired_devices(&data_dir);
 
-        let server_state = std::sync::Arc::new(theorem_sync_core::sync_server::SyncServerState {
-            identity,
-            device_name: "Theorem Device".to_string(),
-            paired_devices: tokio::sync::Mutex::new(paired_devices),
-            app_data_dir: data_dir,
-            pending_pairing: tokio::sync::Mutex::new(None),
-            sync_data: tokio::sync::Mutex::new(None),
-            event_emitter: None,
-            ws_rooms: tokio::sync::Mutex::new(std::collections::HashMap::new()),
-        });
-
-        let handle = match theorem_sync_core::sync_server::start_server(server_state.clone()).await
-        {
-            Ok(h) => {
-                eprintln!("[background-sync] Server listening on {}", h.addr);
-                h
-            }
-            Err(e) => {
-                eprintln!("[background-sync] Failed to start server: {}", e);
-                return false;
-            }
-        };
-
-        tokio::time::sleep(std::time::Duration::from_secs(180)).await;
-
-        handle.shutdown_notify.notify_one();
+        let device_id = identity.device_id.clone();
+        let paired_devices = tokio::sync::Mutex::new(paired_devices);
+        let sync_data: tokio::sync::Mutex<Option<serde_json::Value>> =
+            tokio::sync::Mutex::new(None);
 
         // ── Outbound sync: push our data to each paired peer ──
-        // The in-app sync runs on the frontend via initiate_sync(). When the
-        // app is killed and only the JNI worker is active, we must push our
-        // data outbound so peers don't miss updates made while the app was
-        // in the foreground.
         let client = reqwest::Client::new();
-        for (_peer_id, peer) in server_state.paired_devices.lock().await.iter() {
+        for (_peer_id, peer) in paired_devices.lock().await.iter() {
             let peer_url = format!("http://{}:{}", peer.last_ip, peer.last_port);
             let manifest = theorem_sync_core::sync_protocol::SyncManifest {
-                device_id: server_state.identity.device_id.clone(),
+                device_id: device_id.clone(),
                 domains: Default::default(),
+                last_sync_at: None,
             };
             let _ = client
                 .post(format!("{peer_url}/sync/manifest"))
@@ -1378,17 +1358,18 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
         }
 
         // Persist any incoming data received from peers during this window.
-        // Without this, data pushed by peers while the app was killed is lost
-        // when the ephemeral tokio runtime is dropped.
-        let incoming_cache_path = server_state.app_data_dir.join("sync-incoming-cache.json");
-        let sync_data = server_state.sync_data.lock().await;
-        if let Some(ref snapshot) = *sync_data {
+        let incoming_cache_path = data_dir.join("sync-incoming-cache.json");
+        let sync_data_guard = sync_data.lock().await;
+        if let Some(ref snapshot) = *sync_data_guard {
             let incoming: std::collections::HashMap<String, String> = snapshot
-                .domains
-                .iter()
-                .filter(|(k, _)| k.starts_with("incoming_"))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
+                .as_object()
+                .map(|obj| {
+                    obj.iter()
+                        .filter(|(k, _)| k.starts_with("incoming_"))
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                        .collect()
+                })
+                .unwrap_or_default();
             if !incoming.is_empty() {
                 if let Ok(json) = serde_json::to_string_pretty(&incoming) {
                     if let Err(e) = std::fs::write(&incoming_cache_path, &json) {
@@ -1403,7 +1384,7 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
                 }
             }
         }
-        drop(sync_data);
+        drop(sync_data_guard);
 
         eprintln!("[background-sync] JNI sync round complete");
         true
@@ -1420,6 +1401,56 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
 #[no_mangle]
 pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgroundSync() -> u8 {
     0
+}
+
+/// Initialize the ndk-context global so hickory-resolver (used by iroh DNS)
+/// can access the Android JVM and application context on tokio worker threads.
+/// Called from MainActivity.onCreate() before the Tauri setup callback fires.
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "C" fn Java_work_fundamentals_theorem_MainActivity_initNdkContext(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+) {
+    let jvm = match env.get_java_vm() {
+        Ok(vm) => vm,
+        Err(e) => {
+            eprintln!("[ndk-context] Failed to get JavaVM: {e}");
+            return;
+        }
+    };
+    let jvm_ptr = jvm.get_java_vm_pointer() as *mut std::ffi::c_void;
+
+    let context = match get_application_context(&mut env) {
+        Some(ctx) => ctx,
+        None => {
+            eprintln!("[ndk-context] Failed to get application context");
+            return;
+        }
+    };
+
+    unsafe {
+        ndk_context::initialize_android_context(jvm_ptr, context);
+    }
+    eprintln!("[ndk-context] Initialized via JNI");
+}
+
+#[cfg(target_os = "android")]
+fn get_application_context(env: &mut jni::JNIEnv) -> Option<*mut std::ffi::c_void> {
+    let activity_thread = env.find_class("android/app/ActivityThread").ok()?;
+    let current_app = env
+        .call_static_method(
+            activity_thread,
+            "currentApplication",
+            "()Landroid/app/Application;",
+            &[],
+        )
+        .ok()?;
+    let app_obj = current_app.l().ok()?;
+    let global_ref = env.new_global_ref(app_obj).ok()?;
+    let raw_ptr = global_ref.as_raw() as *mut std::ffi::c_void;
+    std::mem::forget(global_ref);
+    Some(raw_ptr)
 }
 
 /// Hide the main window to the system tray.

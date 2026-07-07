@@ -557,7 +557,7 @@ export function DeviceSyncSection() {
                                 {isIrohRunning ? (
                                     <>
                                         Receiver active
-                                        {nodeInfo && (
+                                        {nodeInfo?.nodeId && (
                                             <span className="ml-1.5 font-mono text-[10px] text-[color:var(--color-accent)]">
                                                 {nodeInfo.nodeId.slice(0, 12)}...
                                             </span>

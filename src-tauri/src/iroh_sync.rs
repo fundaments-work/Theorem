@@ -539,6 +539,19 @@ async fn handle_peer_connection(
         // Pairing messages are handled without a symmetric key
         if env.msg_type == "pair" {
             let resp = handle_pair_req(&state, &peer_info, &env.data).await;
+            // Capture the scanner's relay URL from this connection and persist it
+            // for future reconnections (survives app restarts).
+            if let Some(url) = conn.paths().iter().find_map(|p| match p.remote_addr() {
+                iroh::TransportAddr::Relay(url) => Some(url.to_string()),
+                _ => None,
+            }) {
+                let mut devices = state.paired_devices.lock().await;
+                if let Some(device) = devices.get_mut(&peer_device_id) {
+                    device.peer_relay_url = url;
+                    let _ = save_paired_devices_to_disk(&state.app_data_dir, &devices);
+                }
+                drop(devices);
+            }
             let resp_env = IrohEnvelope {
                 msg_type: "pair_resp".to_string(),
                 data: resp,
@@ -652,7 +665,11 @@ async fn decrypt_envelope<T: serde::de::DeserializeOwned>(
     sym_key: &[u8; 32],
     data: &serde_json::Value,
 ) -> Result<(String, T), serde_json::Value> {
-    let enc: EncryptedPayload = match serde_json::from_value(data.clone()) {
+    // Data may be wrapped in AuthenticatedRequest { deviceId, payload }.
+    // Extract the inner payload if present.
+    let payload_data = data.get("payload").cloned().unwrap_or_else(|| data.clone());
+
+    let enc: EncryptedPayload = match serde_json::from_value(payload_data) {
         Ok(e) => e,
         Err(e) => return Err(serde_json::json!({"error": format!("parse enc: {e}")})),
     };
@@ -719,16 +736,18 @@ async fn handle_manifest_req(
                         remote_version: r.version,
                     }
                 } else if r.version > l.version {
+                    // Remote (initiator) has newer data → initiator should push to us
                     SyncAction {
                         domain: domain.to_string(),
-                        direction: SyncDirection::Pull,
+                        direction: SyncDirection::Push,
                         local_version: l.version,
                         remote_version: r.version,
                     }
                 } else if l.version > r.version {
+                    // Local (responder) has newer data → initiator should pull from us
                     SyncAction {
                         domain: domain.to_string(),
-                        direction: SyncDirection::Push,
+                        direction: SyncDirection::Pull,
                         local_version: l.version,
                         remote_version: r.version,
                     }
@@ -1049,16 +1068,30 @@ async fn handle_pair_req(
         .unwrap_or_default()
         .as_secs();
 
+    // Use scanner's self-reported address from the pairing request
+    // (the QR payload has the HOST's address, so we must use the scanner's own).
+    let scanner_node_id = if !pairing_req.node_id.is_empty() {
+        pairing_req.node_id.clone()
+    } else {
+        peer_info.public_key.to_string()
+    };
+    let scanner_ip = if !pairing_req.ip.is_empty() {
+        pairing_req.ip.clone()
+    } else {
+        String::new()
+    };
+
     let paired = PairedDevice {
         device_id: pairing_req.device_id.clone(),
         device_name: pairing_req.device_name.clone(),
-        iroh_node_id: peer_info.public_key.to_string(),
+        iroh_node_id: scanner_node_id,
         symmetric_key_b64: BASE64.encode(sym_key),
-        last_ip: String::new(),
-        last_port: 0,
+        last_ip: scanner_ip,
+        last_port: pairing_req.port,
         paired_at: format!("{}Z", now),
         last_sync_at: None,
         fingerprint: pairing_req.fingerprint.clone(),
+        peer_relay_url: String::new(),
     };
 
     let mut devices = state.paired_devices.lock().await;

@@ -36,23 +36,6 @@ body {
     flex-direction: column;
 }
 
-#app-main {
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-    content-visibility: auto;
-}
-
-/* Off-screen scroll containers: skip rendering until in viewport. */
-.sidebar,
-[data-virtualized],
-#library-grid,
-.feeds-list,
-.vocabulary-list,
-[data-reader-panel],
-#app-main {
-    content-visibility: auto;
-}
-
 body {
     background: var(--color-background);
     color: var(--color-text-primary);
@@ -219,6 +202,13 @@ button:disabled {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+
+    /* Spinners must keep spinning even with reduced motion */
+    .animate-spin,
+    #root:empty::after {
+        animation-duration: 0.8s !important;
+        animation-iteration-count: infinite !important;
     }
 }
 

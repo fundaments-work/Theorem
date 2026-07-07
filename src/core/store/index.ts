@@ -86,7 +86,7 @@ const defaultDeviceSyncSettings: AppSettings["deviceSync"] = {
     deviceName: "",
     pairedDevices: [],
     syncOnConnect: false,
-    autoSyncEnabled: true,
+    autoSyncEnabled: false,
 };
 
 const defaultTtsSettings: TtsSettings = {
@@ -1778,6 +1778,7 @@ export const useSettingsStore = create<SettingsStore>()(
                         deviceSync: {
                             ...defaultDeviceSyncSettings,
                             ...(state.settings.deviceSync || {}),
+                            autoSyncEnabled: false,
                         },
                     };
                 }

@@ -1,17 +1,16 @@
 /**
- * Theorem — Yjs CRDT Sync Bridge
+ * Theorem — Yjs CRDT Sync Bridge (v2 — Unidirectional)
  *
- * Replaces the custom LWW merge functions (sync-import.ts, 672 lines) with
- * conflict-free Yjs CRDT merging.  Each syncable domain lives in a Y.Map
- * keyed by entity ID.  Zustand is the canonical UI view; Yjs is the
- * canonical sync state.  Changes flow in both directions:
+ * Architecture:
+ *   Local edit → Zustand.setState → debounced sync → ydoc.transact(map.set, "local")
+ *   Remote update → ydoc.on("update") → if origin !== "local" → Zustand.setState
  *
- *   Zustand mutation  →  Y.Map.set()  →  CRDT broadcast
- *   Incoming update   →  Y.Map.apply()  →  Zustand.setState()
- *
- * Network transport (y-websocket) and persistence (y-indexeddb) are wired
- * in when the module is initialized.  When neither is available (e.g.
- * non-Tauri web) the bridge works stand-alone for local CRDT state.
+ * The v1 bridge had an infinite loop: Y.Map.observe → setState → subscribe →
+ * map.set → observe → ... consuming 22GB RAM. The fix is unidirectional flow:
+ * - Zustand→Yjs writes are debounced (500ms) and batched in a transaction
+ *   marked with origin "local"
+ * - Yjs→Zustand only fires for remote updates (origin !== "local")
+ * - No per-map observe() handlers — only ydoc.on("update") with origin check
  */
 
 import * as Y from "yjs";
@@ -41,10 +40,11 @@ let _ydoc: Y.Doc | null = null;
 let _provider: WebsocketProvider | null = null;
 let _idbPersistence: IndexeddbPersistence | null = null;
 
-/** Per-domain write guard — prevents observer → setState → observer loop. */
-const _writeGuard = new Set<string>();
+const LOCAL_ORIGIN = "theorem-local";
+const DEBOUNCE_MS = 500;
 
-// ─── Typed Y.Map helpers per domain ───
+/** Guard: prevents subscriber from scheduling a write-back during remote apply. */
+let _isApplyingRemote = false;
 
 interface YjsDomainMaps {
     books: Y.Map<Book>;
@@ -59,174 +59,169 @@ interface YjsDomainMaps {
 }
 
 let _maps: YjsDomainMaps | null = null;
+let _initialized = false;
 
-// ─── Bootstrap from existing Zustand state ───
+// Debounce timers per domain
+const _debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+// ─── Bootstrap: copy Zustand state → Yjs (one-time) ───
 
 function bootstrapDomain<T>(
     map: Y.Map<T>,
     items: T[],
     getId: (item: T) => string,
-    domain: string,
 ): void {
-    const snapshot = snapshotMap(map);
+    const existing = new Set<string>();
+    map.forEach((_, key) => existing.add(key));
     for (const item of items) {
         const id = getId(item);
-        if (!snapshot.has(id)) {
-            _writeGuard.add(domain);
-            map.set(id, item);
-            _writeGuard.delete(domain);
-        }
+        map.set(id, item);
     }
-    for (const [id] of snapshot) {
-        if (!items.some((i) => getId(i) === id)) {
-            _writeGuard.add(domain);
-            map.delete(id);
-            _writeGuard.delete(domain);
+    // Remove stale entries
+    for (const key of existing) {
+        if (!items.some((i) => getId(i) === key)) {
+            map.delete(key);
         }
     }
 }
 
-function snapshotMap<T>(map: Y.Map<T>): Map<string, T> {
-    const result = new Map<string, T>();
-    map.forEach((value, key) => result.set(key, value));
-    return result;
-}
+// ─── Zustand → Yjs (debounced, batched, marked "local") ───
 
-// ─── Yjs → Zustand observers ───
-
-function observeBooks(map: Y.Map<Book>): void {
-    map.observe(() => {
-        if (_writeGuard.has("books")) return;
-        const nextBooks: Book[] = [];
-        map.forEach((book) => nextBooks.push(book));
-        useLibraryStore.setState({ books: nextBooks });
-    });
-}
-
-function observeAnnotations(map: Y.Map<Annotation>): void {
-    map.observe(() => {
-        if (_writeGuard.has("annotations")) return;
-        const next: Annotation[] = [];
-        map.forEach((a) => next.push(a));
-        useLibraryStore.setState({ annotations: next });
-    });
-}
-
-function observeCollections(map: Y.Map<Collection>): void {
-    map.observe(() => {
-        if (_writeGuard.has("collections")) return;
-        const next: Collection[] = [];
-        map.forEach((c) => next.push(c));
-        useLibraryStore.setState({ collections: next });
-    });
-}
-
-function observeTombstones(map: Y.Map<DeletionTombstone>): void {
-    map.observe(() => {
-        if (_writeGuard.has("deletionTombstones")) return;
-        const next: DeletionTombstone[] = [];
-        map.forEach((t) => next.push(t));
-        useLibraryStore.setState({ deletionTombstones: next });
-    });
-}
-
-function observeVocabulary(map: Y.Map<VocabularyTerm>): void {
-    map.observe(() => {
-        if (_writeGuard.has("vocabulary")) return;
-        const next: VocabularyTerm[] = [];
-        map.forEach((t) => next.push(t));
-        useVocabularyStore.setState({ vocabularyTerms: next });
-    });
-}
-
-function observeRssFeeds(map: Y.Map<RssFeed>): void {
-    map.observe(() => {
-        if (_writeGuard.has("rssFeeds")) return;
-        const next: RssFeed[] = [];
-        map.forEach((f) => next.push(f));
-        useRssStore.setState({ feeds: next });
-    });
-}
-
-function observeRssArticles(map: Y.Map<RssArticle>): void {
-    map.observe(() => {
-        if (_writeGuard.has("rssArticles")) return;
-        const next: RssArticle[] = [];
-        map.forEach((a) => next.push(a));
-        useRssStore.setState({ articles: next });
-    });
-}
-
-function observeSettings(map: Y.Map<AppSettings>): void {
-    map.observe(() => {
-        if (_writeGuard.has("settings")) return;
-        const settings = map.get("app");
-        if (settings) {
-            useSettingsStore.setState({
-                settings,
-                settingsLastModifiedAt: new Date().toISOString(),
-            });
+function syncDomain<T>(
+    map: Y.Map<T>,
+    items: T[],
+    getId: (item: T) => string,
+): void {
+    _ydoc!.transact(() => {
+        const existing = new Set<string>();
+        map.forEach((_, key) => existing.add(key));
+        for (const item of items) {
+            map.set(getId(item), item);
         }
+        for (const key of existing) {
+            if (!items.some((i) => getId(i) === key)) {
+                map.delete(key);
+            }
+        }
+    }, LOCAL_ORIGIN);
+}
+
+function syncScalar<T>(
+    map: Y.Map<T>,
+    key: string,
+    value: T,
+): void {
+    _ydoc!.transact(() => {
+        map.set(key, value);
+    }, LOCAL_ORIGIN);
+}
+
+function scheduleSync(domain: string, fn: () => void): void {
+    const existing = _debounceTimers.get(domain);
+    if (existing) clearTimeout(existing);
+    _debounceTimers.set(domain, setTimeout(() => {
+        _debounceTimers.delete(domain);
+        fn();
+    }, DEBOUNCE_MS));
+}
+
+function syncLibraryToYjs(): void {
+    if (!_maps || !_ydoc) return;
+    const state = useLibraryStore.getState();
+    scheduleSync("library", () => {
+        syncDomain(_maps!.books, state.books, (b) => b.id);
+        syncDomain(_maps!.annotations, state.annotations, (a) => a.id);
+        syncDomain(_maps!.collections, state.collections, (c) => c.id);
+        syncDomain(_maps!.deletionTombstones, state.deletionTombstones, (t) => `${t.entityType}::${t.entityId}`);
     });
 }
 
-function observeReadingStats(map: Y.Map<ReadingStats>): void {
-    map.observe(() => {
-        if (_writeGuard.has("readingStats")) return;
-        const stats = map.get("app");
-        if (stats) {
-            useSettingsStore.setState({ stats });
-        }
+function syncVocabularyToYjs(): void {
+    if (!_maps || !_ydoc) return;
+    const state = useVocabularyStore.getState();
+    scheduleSync("vocabulary", () => {
+        syncDomain(_maps!.vocabulary, state.vocabularyTerms, (t) => t.id);
     });
 }
 
-// ─── Zustand → Yjs subscriber ───
+function syncRssToYjs(): void {
+    if (!_maps || !_ydoc) return;
+    const state = useRssStore.getState();
+    scheduleSync("rss", () => {
+        syncDomain(_maps!.rssFeeds, state.feeds, (f) => f.id);
+        syncDomain(_maps!.rssArticles, state.articles, (a) => a.id);
+    });
+}
 
-function subscribeBooks(store: ReturnType<typeof useLibraryStore.getState>): void {
-    const books = store.books;
-    const map = _maps!.books;
-    if (_writeGuard.has("books")) return;
-    _writeGuard.add("books");
-    // Diff current Zustand against Yjs, apply deltas.
-    const yjsBookIds = snapshotMap(map);
-    for (const book of books) {
-        const existing = map.get(book.id);
-        if (!existing || JSON.stringify(existing) !== JSON.stringify(book)) {
-            map.set(book.id, book);
-        }
+function syncSettingsToYjs(): void {
+    if (!_maps || !_ydoc) return;
+    const state = useSettingsStore.getState();
+    scheduleSync("settings", () => {
+        syncScalar(_maps!.settings, "app", state.settings);
+        syncScalar(_maps!.readingStats, "app", state.stats);
+    });
+}
+
+// ─── Yjs → Zustand (only for remote updates) ───
+
+function applyYjsToZustand(): void {
+    if (!_maps) return;
+    _isApplyingRemote = true;
+
+    // Books
+    const books: Book[] = [];
+    _maps.books.forEach((book) => books.push(book));
+    if (books.length > 0 || useLibraryStore.getState().books.length > 0) {
+        useLibraryStore.setState({ books });
     }
-    for (const id of yjsBookIds.keys()) {
-        if (!books.some((b) => b.id === id)) {
-            map.delete(id);
-        }
+
+    // Annotations
+    const annotations: Annotation[] = [];
+    _maps.annotations.forEach((a) => annotations.push(a));
+    useLibraryStore.setState({ annotations });
+
+    // Collections
+    const collections: Collection[] = [];
+    _maps.collections.forEach((c) => collections.push(c));
+    useLibraryStore.setState({ collections });
+
+    // Tombstones
+    const tombstones: DeletionTombstone[] = [];
+    _maps.deletionTombstones.forEach((t) => tombstones.push(t));
+    useLibraryStore.setState({ deletionTombstones: tombstones });
+
+    // Vocabulary
+    const terms: VocabularyTerm[] = [];
+    _maps.vocabulary.forEach((t) => terms.push(t));
+    useVocabularyStore.setState({ vocabularyTerms: terms });
+
+    // RSS
+    const feeds: RssFeed[] = [];
+    _maps.rssFeeds.forEach((f) => feeds.push(f));
+    const articles: RssArticle[] = [];
+    _maps.rssArticles.forEach((a) => articles.push(a));
+    useRssStore.setState({ feeds, articles });
+
+    // Settings
+    const settings = _maps.settings.get("app");
+    if (settings) {
+        useSettingsStore.setState({ settings });
     }
-    _writeGuard.delete("books");
-}
+    const stats = _maps.readingStats.get("app");
+    if (stats) {
+        useSettingsStore.setState({ stats });
+    }
 
-function subscribeSettings(store: ReturnType<typeof useSettingsStore.getState>): void {
-    if (_writeGuard.has("settings")) return;
-    _writeGuard.add("settings");
-    _maps!.settings.set("app", store.settings);
-    _writeGuard.delete("settings");
-}
-
-function subscribeStats(store: ReturnType<typeof useSettingsStore.getState>): void {
-    if (_writeGuard.has("readingStats")) return;
-    _writeGuard.add("readingStats");
-    _maps!.readingStats.set("app", store.stats);
-    _writeGuard.delete("readingStats");
+    _isApplyingRemote = false;
 }
 
 // ─── Init / Teardown ───
-
-let _initialized = false;
 
 export function initYjsSync(room?: string): void {
     if (_initialized) return;
     _initialized = true;
 
     _ydoc = new Y.Doc();
-
     const ydoc = _ydoc;
 
     _maps = {
@@ -241,42 +236,34 @@ export function initYjsSync(room?: string): void {
         readingStats: ydoc.getMap("readingStats"),
     };
 
-    // Wire Yjs → Zustand observers.
-    observeBooks(_maps.books);
-    observeAnnotations(_maps.annotations);
-    observeCollections(_maps.collections);
-    observeTombstones(_maps.deletionTombstones);
-    observeVocabulary(_maps.vocabulary);
-    observeRssFeeds(_maps.rssFeeds);
-    observeRssArticles(_maps.rssArticles);
-    observeSettings(_maps.settings);
-    observeReadingStats(_maps.readingStats);
+    // Bootstrap Yjs from current Zustand state (one-time, marked local).
+    ydoc.transact(() => {
+        const lib = useLibraryStore.getState();
+        const vocab = useVocabularyStore.getState();
+        const rss = useRssStore.getState();
+        const settings = useSettingsStore.getState();
 
-    // Bootstrap Yjs from current Zustand state (on first init).
-    const lib = useLibraryStore.getState();
-    const vocab = useVocabularyStore.getState();
-    const rss = useRssStore.getState();
-    const settings = useSettingsStore.getState();
+        bootstrapDomain(_maps!.books, lib.books, (b) => b.id);
+        bootstrapDomain(_maps!.annotations, lib.annotations, (a) => a.id);
+        bootstrapDomain(_maps!.collections, lib.collections, (c) => c.id);
+        bootstrapDomain(_maps!.deletionTombstones, lib.deletionTombstones, (t) => `${t.entityType}::${t.entityId}`);
+        bootstrapDomain(_maps!.vocabulary, vocab.vocabularyTerms, (t) => t.id);
+        bootstrapDomain(_maps!.rssFeeds, rss.feeds, (f) => f.id);
+        bootstrapDomain(_maps!.rssArticles, rss.articles, (a) => a.id);
+        _maps!.settings.set("app", settings.settings);
+        _maps!.readingStats.set("app", settings.stats);
+    }, LOCAL_ORIGIN);
 
-    bootstrapDomain(_maps.books, lib.books, (b) => b.id, "books");
-    bootstrapDomain(_maps.annotations, lib.annotations, (a) => a.id, "annotations");
-    bootstrapDomain(_maps.collections, lib.collections, (c) => c.id, "collections");
-    bootstrapDomain(
-        _maps.deletionTombstones as Y.Map<DeletionTombstone>,
-        lib.deletionTombstones,
-        (t) => `${t.entityType}::${t.entityId}`,
-        "deletionTombstones",
-    );
-    bootstrapDomain(_maps.vocabulary, vocab.vocabularyTerms, (t) => t.id, "vocabulary");
-    bootstrapDomain(_maps.rssFeeds, rss.feeds, (f) => f.id, "rssFeeds");
-    bootstrapDomain(_maps.rssArticles, rss.articles, (a) => a.id, "rssArticles");
-    _maps.settings.set("app", settings.settings);
-    _maps.readingStats.set("app", settings.stats);
+    // Yjs → Zustand: only for remote updates (not our own local writes).
+    ydoc.on("update", (_update: Uint8Array, origin: unknown) => {
+        if (origin === LOCAL_ORIGIN) return;
+        applyYjsToZustand();
+    });
 
     // Persist to IndexedDB so edits survive app restarts.
     _idbPersistence = new IndexeddbPersistence("theorem-yjs", ydoc);
 
-    // y-websocket provider — only initialised when Tauri sync server is running.
+    // y-websocket provider — only initialised when a room is provided.
     if (room) {
         _provider = new WebsocketProvider(
             `ws://127.0.0.1:43935`,
@@ -304,6 +291,12 @@ export function disconnectYjsSync(): void {
 }
 
 export function destroyYjsSync(): void {
+    // Clear all debounce timers
+    for (const timer of _debounceTimers.values()) {
+        clearTimeout(timer);
+    }
+    _debounceTimers.clear();
+
     disconnectYjsSync();
     if (_idbPersistence) {
         _idbPersistence.destroy();
@@ -317,144 +310,78 @@ export function destroyYjsSync(): void {
     _initialized = false;
 }
 
-/**
- * Encode the entire Y.Doc state as a binary update that can be sent
- * over any transport (HTTP, WebSocket, file, etc.).
- */
 export function encodeYjsSyncState(): Uint8Array {
     if (!_ydoc) return new Uint8Array(0);
     return Y.encodeStateAsUpdate(_ydoc);
 }
 
-/**
- * Apply an incoming Yjs update (from a peer) to the local Y.Doc.
- * Observers will automatically propagate changes to Zustand stores.
- */
 export function applyYjsSyncUpdate(update: Uint8Array): void {
     if (!_ydoc) return;
-    Y.applyUpdate(_ydoc, update);
+    // Remote updates are applied with a non-local origin so the
+    // ydoc.on("update") handler fires and pushes changes to Zustand.
+    Y.applyUpdate(_ydoc, update, "remote");
 }
 
 /**
- * Hook for watching Zustand stores and writing mutations back through Yjs.
- * Call this ONCE at app startup.  Each domain's Zustand store fires an
- * onChange callback via subscribe, and we diff against Yjs.
+ * Subscribe to Zustand stores and write mutations to Yjs (debounced).
+ * Call this ONCE at app startup.
  */
 export function bridgeZustandToYjs(): void {
-    // Books / annotations / collections / tombstones — all in LibraryStore.
-    let prevBooks: Book[] = [];
-    let prevAnnotations: Annotation[] = [];
-    let prevCollections: Collection[] = [];
-    let prevTombstones: DeletionTombstone[] = [];
+    // Library store: books, annotations, collections, tombstones
+    let prevBooks = useLibraryStore.getState().books;
+    let prevAnnotations = useLibraryStore.getState().annotations;
+    let prevCollections = useLibraryStore.getState().collections;
+    let prevTombstones = useLibraryStore.getState().deletionTombstones;
 
     useLibraryStore.subscribe((state) => {
-        if (!_maps) return;
-        if (state.books !== prevBooks) {
+        if (_isApplyingRemote) return;
+        if (state.books !== prevBooks ||
+            state.annotations !== prevAnnotations ||
+            state.collections !== prevCollections ||
+            state.deletionTombstones !== prevTombstones) {
             prevBooks = state.books;
-            subscribeBooks(state);
-        }
-        if (state.annotations !== prevAnnotations) {
             prevAnnotations = state.annotations;
-            _writeGuard.add("annotations");
-            const map = _maps!.annotations;
-            const yjsIds = snapshotMap(map);
-            for (const ann of state.annotations) map.set(ann.id, ann);
-            for (const id of yjsIds.keys()) {
-                if (!state.annotations.some((a) => a.id === id)) map.delete(id);
-            }
-            _writeGuard.delete("annotations");
-        }
-        if (state.collections !== prevCollections) {
             prevCollections = state.collections;
-            _writeGuard.add("collections");
-            const map = _maps!.collections;
-            const yjsIds = snapshotMap(map);
-            for (const col of state.collections) map.set(col.id, col);
-            for (const id of yjsIds.keys()) {
-                if (!state.collections.some((c) => c.id === id)) map.delete(id);
-            }
-            _writeGuard.delete("collections");
-        }
-        if (state.deletionTombstones !== prevTombstones) {
             prevTombstones = state.deletionTombstones;
-            _writeGuard.add("deletionTombstones");
-            const map = _maps!.deletionTombstones;
-            const key = (t: DeletionTombstone) => `${t.entityType}::${t.entityId}`;
-            const yjsKeys = snapshotMap(map);
-            for (const t of state.deletionTombstones) {
-                const tombstoneKey = key(t) as unknown as DeletionTombstone;
-                map.set(key(t), tombstoneKey);
-            }
-            for (const k of yjsKeys.keys()) {
-                if (!state.deletionTombstones.some((t) => key(t) === k)) map.delete(k);
-            }
-            _writeGuard.delete("deletionTombstones");
+            syncLibraryToYjs();
         }
     });
 
-    // Vocabulary store.
-    let prevVocab: VocabularyTerm[] = [];
+    // Vocabulary store
+    let prevVocab = useVocabularyStore.getState().vocabularyTerms;
     useVocabularyStore.subscribe((state) => {
-        if (!_maps || state.vocabularyTerms === prevVocab) return;
-        prevVocab = state.vocabularyTerms;
-        _writeGuard.add("vocabulary");
-        const map = _maps.vocabulary;
-        const yjsIds = snapshotMap(map);
-        for (const term of state.vocabularyTerms) map.set(term.id, term);
-        for (const id of yjsIds.keys()) {
-            if (!state.vocabularyTerms.some((t) => t.id === id)) map.delete(id);
+        if (_isApplyingRemote) return;
+        if (state.vocabularyTerms !== prevVocab) {
+            prevVocab = state.vocabularyTerms;
+            syncVocabularyToYjs();
         }
-        _writeGuard.delete("vocabulary");
     });
 
-    // RSS feeds.
-    let prevFeeds: RssFeed[] = [];
+    // RSS store
+    let prevFeeds = useRssStore.getState().feeds;
+    let prevArticles = useRssStore.getState().articles;
     useRssStore.subscribe((state) => {
-        if (!_maps || state.feeds === prevFeeds) return;
-        prevFeeds = state.feeds;
-        _writeGuard.add("rssFeeds");
-        const map = _maps.rssFeeds;
-        const yjsIds = snapshotMap(map);
-        for (const feed of state.feeds) map.set(feed.id, feed);
-        for (const id of yjsIds.keys()) {
-            if (!state.feeds.some((f) => f.id === id)) map.delete(id);
+        if (_isApplyingRemote) return;
+        if (state.feeds !== prevFeeds || state.articles !== prevArticles) {
+            prevFeeds = state.feeds;
+            prevArticles = state.articles;
+            syncRssToYjs();
         }
-        _writeGuard.delete("rssFeeds");
     });
 
-    // RSS articles.
-    let prevArticles: RssArticle[] = [];
-    useRssStore.subscribe((state) => {
-        if (!_maps || state.articles === prevArticles) return;
-        prevArticles = state.articles;
-        _writeGuard.add("rssArticles");
-        const map = _maps.rssArticles;
-        const yjsIds = snapshotMap(map);
-        for (const article of state.articles) map.set(article.id, article);
-        for (const id of yjsIds.keys()) {
-            if (!state.articles.some((a) => a.id === id)) map.delete(id);
+    // Settings store
+    let prevSettings = useSettingsStore.getState().settings;
+    let prevStats = useSettingsStore.getState().stats;
+    useSettingsStore.subscribe((state) => {
+        if (_isApplyingRemote) return;
+        if (state.settings !== prevSettings || state.stats !== prevStats) {
+            prevSettings = state.settings;
+            prevStats = state.stats;
+            syncSettingsToYjs();
         }
-        _writeGuard.delete("rssArticles");
-    });
-
-    // Settings.
-    let prevSettings: AppSettings | null = null;
-    useSettingsStore.subscribe((state) => {
-        if (!_maps || state.settings === prevSettings) return;
-        prevSettings = state.settings;
-        subscribeSettings(state);
-    });
-
-    // Reading stats.
-    let prevStats: ReadingStats | null = null;
-    useSettingsStore.subscribe((state) => {
-        if (!_maps || state.stats === prevStats) return;
-        prevStats = state.stats;
-        subscribeStats(state);
     });
 }
 
-/** Check if Yjs sync is initialised. */
 export function isYjsSyncInitialised(): boolean {
     return _initialized && _ydoc !== null;
 }

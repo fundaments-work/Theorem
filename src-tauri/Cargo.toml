@@ -69,6 +69,10 @@ tar = "0.4"
 zip = "0.6"
 walkdir = "2"
 
+# Crypto provider for rustls (iroh's reqwest v0.13 uses rustls-no-provider;
+# this installs the ring-based default provider so TLS doesn't panic).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+
 # EPUB pre-parser: streaming XML (replaces regex) + percent-encoded path fallback
 quick-xml = "0.36"
 percent-encoding = "2"
@@ -80,6 +84,7 @@ unrar-ng = "0.7.7"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
+ndk-context = "0.1"
 
 # Optimize for release (reduces binary size significantly)
 [profile.release]

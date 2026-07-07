@@ -13,21 +13,25 @@ describe("CSS: no snap-x snap-mandatory in our code", () => {
     });
 });
 
-describe("CSS: content-visibility on scroll containers", () => {
-    it("#app-main has content-visibility: auto", () => {
+describe("CSS: no GPU compositing layers on desktop", () => {
+    it("#app-main should NOT have content-visibility: auto (creates compositing layer, 500MB+ GPU memory on desktop)", () => {
         const indexCss = readFileSync(resolve("src/index.css"), "utf-8");
-        expect(indexCss).toContain("#app-main");
-        expect(indexCss).toContain("content-visibility: auto");
+        expect(indexCss).not.toContain("#app-main");
     });
 
-    it("#app-main has overscroll-behavior: contain", () => {
+    it("#app-main should NOT have overscroll-behavior: contain (creates containment boundary on desktop)", () => {
         const indexCss = readFileSync(resolve("src/index.css"), "utf-8");
-        expect(indexCss).toContain("overscroll-behavior: contain");
+        expect(indexCss).not.toContain("overscroll-behavior: contain");
     });
 
-    it("#app-main has -webkit-overflow-scrolling: touch", () => {
+    it("#app-main should NOT have -webkit-overflow-scrolling: touch (creates GPU compositing layer on desktop)", () => {
         const indexCss = readFileSync(resolve("src/index.css"), "utf-8");
-        expect(indexCss).toContain("-webkit-overflow-scrolling: touch");
+        expect(indexCss).not.toContain("-webkit-overflow-scrolling: touch");
+    });
+
+    it("content-visibility: auto should NOT be on scroll containers (creates compositing layers on desktop)", () => {
+        const indexCss = readFileSync(resolve("src/index.css"), "utf-8");
+        expect(indexCss).not.toContain("content-visibility: auto");
     });
 });
 
@@ -100,10 +104,10 @@ describe("Startup: loader HTML", () => {
     });
 });
 
-describe("Startup: tauri.conf.json visible: false", () => {
-    it("window config has visible: false", () => {
+describe("Startup: tauri.conf.json window visibility", () => {
+    it("window config does not have visible: false (reverted — show() failed silently)", () => {
         const conf = readFileSync(resolve("src-tauri/tauri.conf.json"), "utf-8");
-        expect(conf).toContain('"visible": false');
+        expect(conf).not.toContain('"visible": false');
     });
 });
 
