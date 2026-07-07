@@ -3,6 +3,7 @@ mod epub_parser;
 mod sync_commands;
 #[cfg(target_os = "linux")]
 mod tts_linux;
+mod wormhole;
 
 use reqwest::blocking::Client;
 use serde::Serialize;

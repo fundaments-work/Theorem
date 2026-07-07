@@ -686,7 +686,11 @@ pub fn sqlite_search_books(
 // ─── Book Metadata (SQLite table) ───
 
 #[tauri::command]
-pub fn sqlite_save_book_metadata(app: AppHandle, book_id: String, metadata_json: String) -> Result<(), String> {
+pub fn sqlite_save_book_metadata(
+    app: AppHandle,
+    book_id: String,
+    metadata_json: String,
+) -> Result<(), String> {
     with_connection(&app, |connection| {
         connection.execute(
             "INSERT INTO book_metadata(book_id, metadata_json, updated_at) VALUES(?1, ?2, unixepoch())
@@ -700,22 +704,35 @@ pub fn sqlite_save_book_metadata(app: AppHandle, book_id: String, metadata_json:
 #[tauri::command]
 pub fn sqlite_get_book_metadata(app: AppHandle, book_id: String) -> Result<Option<String>, String> {
     with_connection(&app, |connection| {
-        connection.query_row(
-            "SELECT metadata_json FROM book_metadata WHERE book_id = ?1",
-            params![book_id],
-            |row| row.get(0),
-        ).optional()
+        connection
+            .query_row(
+                "SELECT metadata_json FROM book_metadata WHERE book_id = ?1",
+                params![book_id],
+                |row| row.get(0),
+            )
+            .optional()
     })
 }
 
 #[tauri::command]
-pub fn sqlite_save_book_annotations(app: AppHandle, book_id: String, annotations_json: Vec<String>) -> Result<(), String> {
+pub fn sqlite_save_book_annotations(
+    app: AppHandle,
+    book_id: String,
+    annotations_json: Vec<String>,
+) -> Result<(), String> {
     with_connection(&app, |connection| {
-        connection.execute("DELETE FROM book_annotations WHERE book_id = ?1", params![book_id])?;
+        connection.execute(
+            "DELETE FROM book_annotations WHERE book_id = ?1",
+            params![book_id],
+        )?;
         for (i, ann_json) in annotations_json.iter().enumerate() {
             let id: String = serde_json::from_str::<serde_json::Value>(ann_json)
                 .ok()
-                .and_then(|v| v.get("id").and_then(|id_val| id_val.as_str()).map(String::from))
+                .and_then(|v| {
+                    v.get("id")
+                        .and_then(|id_val| id_val.as_str())
+                        .map(String::from)
+                })
                 .unwrap_or_else(|| format!("auto:{}:{}", book_id, i));
             connection.execute(
                 "INSERT INTO book_annotations(id, book_id, annotation_json, updated_at) VALUES(?1, ?2, ?3, unixepoch())",
