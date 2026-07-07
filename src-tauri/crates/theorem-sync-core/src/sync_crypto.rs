@@ -30,6 +30,7 @@ pub struct DeviceIdentity {
 
 /// Serializable form of device identity for disk storage.
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct StoredIdentity {
     secret_bytes: Vec<u8>,
     /// Stable device fingerprint — optional for backward compatibility
@@ -40,6 +41,7 @@ struct StoredIdentity {
 
 /// Result of encrypting a payload with ChaCha20-Poly1305.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct EncryptedPayload {
     /// Base64-encoded random 12-byte nonce used for this message.
     /// Each encryption MUST use a unique nonce with the same key.

@@ -240,9 +240,9 @@ export interface DeviceSyncSettings {
 }
 
 export interface DeviceIdentityInfo {
-    device_id: string;
-    device_name: string;
-    public_key_hex: string;
+    deviceId: string;
+    deviceName: string;
+    publicKeyHex: string;
 }
 
 export interface SyncServerInfo {
@@ -252,8 +252,8 @@ export interface SyncServerInfo {
 }
 
 export interface PairingQrData {
-    qr_svg: string;
-    pairing_code: string;
+    qrSvg: string;
+    pairingCode: string;
 }
 
 export type DeviceSyncStatus = "idle" | "hosting" | "pairing" | "connecting" | "syncing" | "synced" | "error";

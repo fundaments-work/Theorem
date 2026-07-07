@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 /// Lightweight device identity info returned to the frontend.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DeviceIdentityInfo {
     pub device_id: String,
     pub device_name: String,
@@ -23,6 +24,7 @@ pub struct DeviceIdentityInfo {
 /// Payload encoded into the QR code shown by the host device.
 /// The scanner decodes this to initiate the pairing handshake.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct PairingQrPayload {
     /// Protocol version (for forward compatibility).
     pub version: u8,
@@ -45,6 +47,7 @@ pub struct PairingQrPayload {
 
 /// Data returned to the frontend after generating a pairing QR code.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct PairingQrData {
     /// SVG string of the QR code.
     pub qr_svg: String,
@@ -54,6 +57,7 @@ pub struct PairingQrData {
 
 /// Request sent by the scanning device to the host's /pair endpoint.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct PairingRequest {
     /// Scanner's ephemeral X25519 public key (hex-encoded).
     pub ephemeral_public_key: String,
@@ -71,6 +75,7 @@ pub struct PairingRequest {
 
 /// Response sent by the host back to the scanner after successful pairing.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct PairingResponse {
     /// Host's persistent device ID.
     pub device_id: String,
@@ -87,6 +92,7 @@ pub struct PairingResponse {
 
 /// A paired peer device. Persisted to disk so pairing survives app restarts.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct PairedDevice {
     /// Peer's persistent device ID.
     pub device_id: String,
@@ -110,6 +116,7 @@ pub struct PairedDevice {
 
 /// Frontend-safe view of a paired device (no symmetric key exposed).
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct PairedDeviceInfo {
     pub device_id: String,
     pub device_name: String,
@@ -140,6 +147,7 @@ impl From<&PairedDevice> for PairedDeviceInfo {
 
 /// Version stamp for a single data domain.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct DomainVersion {
     /// Monotonic version counter or max timestamp for this domain.
     pub version: u64,
@@ -157,6 +165,7 @@ pub struct DomainVersion {
 /// A manifest describing the current state of all data domains on a device.
 /// Exchanged at the start of a sync to determine what needs to be transferred.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncManifest {
     /// Device ID of the manifest owner.
     pub device_id: String,
@@ -168,6 +177,7 @@ pub struct SyncManifest {
 
 /// The sync direction for a specific domain.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub enum SyncDirection {
     /// Initiator should push data to the responder.
     Push,
@@ -181,6 +191,7 @@ pub enum SyncDirection {
 
 /// Describes what action to take for a specific data domain during sync.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncAction {
     /// The data domain (e.g., "annotations", "vocabulary", "books").
     pub domain: String,
@@ -194,6 +205,7 @@ pub struct SyncAction {
 
 /// Response to a manifest exchange: the list of actions to perform.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncPlan {
     pub actions: Vec<SyncAction>,
 }
@@ -204,6 +216,7 @@ use crate::sync_crypto::EncryptedPayload;
 
 /// Wrapper for any encrypted sync request.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AuthenticatedRequest {
     pub device_id: String,
     pub payload: EncryptedPayload,
@@ -212,6 +225,7 @@ pub struct AuthenticatedRequest {
 /// Wrapper for domain data being pushed or pulled.
 /// The `data_json` is the serialized domain data (e.g., annotations array).
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncDomainPayload {
     /// The data domain name.
     pub domain: String,
@@ -225,6 +239,7 @@ pub struct SyncDomainPayload {
 
 /// Confirmation sent after all domains have been synced.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncCompleteMessage {
     /// Device ID of the sender.
     pub device_id: String,
@@ -242,6 +257,7 @@ pub struct SyncCompleteMessage {
 
 /// Batched push payload: all domains to push in a single request.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct BatchedDomainPayload {
     /// Device ID of the sender.
     pub sender_device_id: String,
@@ -251,6 +267,7 @@ pub struct BatchedDomainPayload {
 
 /// Batched pull request: list of domain names to pull.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct BatchedPullRequest {
     /// Domain names to pull.
     pub domains: Vec<String>,
@@ -258,6 +275,7 @@ pub struct BatchedPullRequest {
 
 /// Batched pull response: all requested domains in one response.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct BatchedPullResponse {
     /// Map of domain name → serialized JSON data.
     pub domains: HashMap<String, String>,
@@ -267,6 +285,7 @@ pub struct BatchedPullResponse {
 
 /// Request to pull a book file from a peer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct FilePullRequest {
     /// Book ID to pull.
     pub book_id: String,
@@ -274,6 +293,7 @@ pub struct FilePullRequest {
 
 /// Metadata about a file being transferred.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct FileTransferMeta {
     /// Book ID.
     pub book_id: String,
@@ -289,6 +309,7 @@ pub struct FileTransferMeta {
 
 /// A single chunk of encrypted file data.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct FileTransferChunk {
     /// Book ID this chunk belongs to.
     pub book_id: String,
@@ -302,6 +323,7 @@ pub struct FileTransferChunk {
 
 /// Response from the file pull endpoint — either metadata or "not found".
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct FilePullResponse {
     /// Whether the file was found and is available.
     pub available: bool,
@@ -314,6 +336,7 @@ pub struct FilePullResponse {
 
 /// Request to query which book files a peer has available for transfer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct FileAvailabilityRequest {
     /// Book IDs to check.
     pub book_ids: Vec<String>,
@@ -321,6 +344,7 @@ pub struct FileAvailabilityRequest {
 
 /// Response listing which books have files available.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct FileAvailabilityResponse {
     /// Book IDs that have files available for transfer.
     pub available_ids: Vec<String>,
@@ -336,6 +360,7 @@ pub struct FileAvailabilityResponse {
 
 /// Request to pull a book's cover image from a peer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CoverPullRequest {
     /// Book ID whose cover to pull.
     pub book_id: String,
@@ -343,6 +368,7 @@ pub struct CoverPullRequest {
 
 /// Response from the cover pull endpoint.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CoverPullResponse {
     /// Whether a cover was found.
     pub available: bool,
@@ -355,6 +381,7 @@ pub struct CoverPullResponse {
 
 /// Information about the running sync server, returned to the frontend.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncServerInfo {
     /// The LAN IP address the server is bound to.
     pub ip: String,
@@ -366,6 +393,7 @@ pub struct SyncServerInfo {
 
 /// Health check response.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct HealthResponse {
     pub status: String,
     pub device_id: String,

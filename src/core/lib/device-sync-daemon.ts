@@ -112,9 +112,9 @@ export async function getDaemonDeviceIdentity(): Promise<DeviceIdentityInfo | nu
     const status = await getDaemonStatus();
     if (!status) return null;
     return {
-        device_id: status.device_id,
-        device_name: status.device_name,
-        public_key_hex: "", // daemon doesn't expose public key directly via status
+        deviceId: status.device_id,
+        deviceName: status.device_name,
+        publicKeyHex: "",
     };
 }
 

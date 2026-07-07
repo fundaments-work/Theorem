@@ -455,19 +455,19 @@ export function DeviceSyncSection() {
     );
 
     const handleCopyCode = useCallback(() => {
-        if (qrData?.pairing_code) {
-            navigator.clipboard.writeText(qrData.pairing_code);
+        if (qrData?.pairingCode) {
+            navigator.clipboard.writeText(qrData.pairingCode);
             setCopiedCode(true);
             setTimeout(() => setCopiedCode(false), 2000);
         }
     }, [qrData]);
 
     const qrSvgDataUri = useMemo(() => {
-        if (!qrData?.qr_svg) {
+        if (!qrData?.qrSvg) {
             return "";
         }
-        return `data:image/svg+xml;utf8,${encodeURIComponent(qrData.qr_svg)}`;
-    }, [qrData?.qr_svg]);
+        return `data:image/svg+xml;utf8,${encodeURIComponent(qrData.qrSvg)}`;
+    }, [qrData?.qrSvg]);
 
     // ─── Not available in browser ───
     if (!available) {
@@ -540,10 +540,10 @@ export function DeviceSyncSection() {
                             <Monitor className="w-5 h-5 text-[color:var(--color-text-muted)] shrink-0" />
                             <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm text-[color:var(--color-text-primary)] truncate">
-                                    {identity.device_name || "This Device"}
+                                    {identity.deviceName || "This Device"}
                                 </p>
                                 <p className="text-[11px] text-[color:var(--color-text-muted)] font-mono truncate">
-                                    {identity.device_id}
+                                    {identity.deviceId}
                                 </p>
                             </div>
                         </div>

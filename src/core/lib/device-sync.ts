@@ -58,24 +58,8 @@ export async function submitPairingCode(
     pairingCode: string,
 ): Promise<PairedDevice> {
     requireTauri("submitPairingCode");
-    const raw = await invoke<{
-        device_id: string;
-        device_name: string;
-        last_ip: string;
-        last_port: number;
-        paired_at: string;
-        last_sync_at?: string;
-    }>("submit_pairing_code", { pairingCode });
-
-    // Map snake_case (Rust) to camelCase (TypeScript).
-    return {
-        deviceId: raw.device_id,
-        deviceName: raw.device_name,
-        lastIp: raw.last_ip,
-        lastPort: raw.last_port,
-        pairedAt: raw.paired_at,
-        lastSyncAt: raw.last_sync_at,
-    };
+    const raw = await invoke<PairedDevice>("submit_pairing_code", { pairingCode });
+    return raw;
 }
 
 // ─── Device Identity ───
@@ -102,25 +86,8 @@ export async function setDeviceFingerprint(
 /** Get all paired devices. */
 export async function getPairedDevices(): Promise<PairedDevice[]> {
     requireTauri("getPairedDevices");
-    const raw = await invoke<
-        Array<{
-            device_id: string;
-            device_name: string;
-            last_ip: string;
-            last_port: number;
-            paired_at: string;
-            last_sync_at?: string;
-        }>
-    >("get_paired_devices");
-
-    return raw.map((d) => ({
-        deviceId: d.device_id,
-        deviceName: d.device_name,
-        lastIp: d.last_ip,
-        lastPort: d.last_port,
-        pairedAt: d.paired_at,
-        lastSyncAt: d.last_sync_at,
-    }));
+    const raw = await invoke<PairedDevice[]>("get_paired_devices");
+    return raw;
 }
 
 /** Remove a paired device. */

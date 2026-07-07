@@ -92,6 +92,7 @@ pub struct PendingPairing {
 /// Snapshot of app data provided by the frontend for sync operations.
 /// This is set before a sync and read by the server handlers.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncDataSnapshot {
     /// JSON-serialized data per domain.
     pub domains: HashMap<String, String>,
