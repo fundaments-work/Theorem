@@ -11,6 +11,7 @@ use std::sync::Arc;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use futures::StreamExt;
 use iroh::endpoint::{self, presets::N0, RelayMode};
+use iroh::protocol::{ProtocolHandler, Router};
 use iroh::{PublicKey, SecretKey};
 use tauri::Emitter;
 use tokio::sync::Mutex;
@@ -592,45 +593,49 @@ pub async fn pull_covers_via_iroh(
     Ok(result)
 }
 
-// ─── Server-Side Accept Loop ───
+// ─── Router-based Accept Loop ───
 
-/// Start the iroh accept loop. Spawns a background task that accepts incoming
-/// connections, performs a pairing handshake, and dispatches protocol messages.
+/// Protocol handler that wraps our sync protocol dispatch.
+/// Registered on iroh Router ALPN for incoming theorem connections.
+#[derive(Clone)]
+pub struct TheoremProtocolHandler {
+    pub state: Arc<SyncTransportState>,
+}
+
+impl std::fmt::Debug for TheoremProtocolHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TheoremProtocolHandler").finish()
+    }
+}
+
+impl ProtocolHandler for TheoremProtocolHandler {
+    async fn accept(&self, conn: endpoint::Connection) -> Result<(), iroh::protocol::AcceptError> {
+        if let Err(e) = handle_peer_connection(conn, self.state.clone()).await {
+            eprintln!("[iroh-sync] Peer connection error: {e}");
+        }
+        Ok(())
+    }
+}
+
+/// Start iroh Router for ALPN-based accept dispatch.
+/// Returns a cancel sender — sending `true` shuts down the Router.
 pub fn start_accept_loop(
     endpoint: Arc<IrohSyncEndpoint>,
     state: Arc<SyncTransportState>,
 ) -> tokio::sync::watch::Sender<bool> {
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
 
+    let router_endpoint = endpoint.endpoint.clone();
+    let handler = TheoremProtocolHandler { state };
+
     tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                biased;
-                _ = cancel_rx.changed() => {
-                    eprintln!("[iroh-sync] Accept loop cancelled");
-                    break;
-                }
-                result = endpoint.endpoint.accept() => {
-                    let Some(connecting) = result else {
-                        eprintln!("[iroh-sync] Endpoint closed — accept loop exiting");
-                        break;
-                    };
-                    let conn = match connecting.await {
-                        Ok(c) => c,
-                        Err(e) => {
-                            eprintln!("[iroh-sync] Connection accept error: {e}");
-                            continue;
-                        }
-                    };
-                    let state = state.clone();
-                    tokio::spawn(async move {
-                        if let Err(e) = handle_peer_connection(conn, state).await {
-                            eprintln!("[iroh-sync] Peer connection error: {e}");
-                        }
-                    });
-                }
-            }
-        }
+        let router = Router::builder(router_endpoint)
+            .accept(ALPN, handler)
+            .spawn();
+
+        let _ = cancel_rx.changed().await;
+        eprintln!("[iroh-sync] Router shutdown requested");
+        let _ = router.shutdown().await;
     });
 
     cancel_tx
