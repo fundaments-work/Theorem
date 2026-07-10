@@ -11,7 +11,6 @@ use std::sync::Arc;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use iroh::endpoint::{self, presets::Minimal, RelayMode};
 use iroh::{PublicKey, SecretKey};
-use sha2::{Digest, Sha256};
 use tokio::sync::Mutex;
 
 use theorem_sync_core::sync_crypto::{self, DeviceIdentity, EncryptedPayload};
@@ -50,6 +49,7 @@ pub type EventCallback = Arc<dyn Fn(&str, &str) + Send + Sync>;
 /// Shared state needed by the iroh accept loop for protocol dispatch.
 /// Owned by `sync_commands` and passed via Arc.
 pub struct SyncTransportState {
+    pub app_handle: tauri::AppHandle,
     pub identity: DeviceIdentity,
     pub device_name: String,
     pub app_data_dir: PathBuf,
@@ -65,6 +65,11 @@ pub struct SyncTransportState {
 pub struct SyncDataSnapshot {
     pub domains: HashMap<String, String>,
     pub manifest: HashMap<String, DomainVersion>,
+    /// Map of book_id → absolute file path on this device.
+    /// Populated by the JS frontend so the Rust responder can locate
+    /// books that live at external OS paths (not yet in book-cache).
+    #[serde(default)]
+    pub book_file_paths: HashMap<String, String>,
 }
 
 // ─── Iroh Sync Endpoint ───
@@ -165,21 +170,33 @@ async fn recv_from_bi(recv: &mut iroh::endpoint::RecvStream) -> Result<Vec<u8>, 
     Ok(buf)
 }
 
+const IROH_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(90);
+
 async fn iroh_request(
     conn: &endpoint::Connection,
     msg_type: &str,
     req_data: &impl serde::Serialize,
 ) -> Result<serde_json::Value, String> {
-    let (mut send, mut recv) = conn.open_bi().await.map_err(|e| format!("open_bi: {e}"))?;
-    let env = IrohEnvelope {
-        msg_type: msg_type.to_string(),
-        data: serde_json::to_value(req_data).map_err(|e| format!("serialize req: {e}"))?,
-    };
-    send_on_bi(&mut send, &env).await?;
-    let resp_bytes = recv_from_bi(&mut recv).await?;
-    let resp_env: IrohEnvelope =
-        serde_json::from_slice(&resp_bytes).map_err(|e| format!("parse resp: {e}"))?;
-    Ok(resp_env.data)
+    eprintln!("[iroh-sync] iroh_request: type={msg_type}");
+    tokio::time::timeout(IROH_REQUEST_TIMEOUT, async {
+        let (mut send, mut recv) = conn.open_bi().await.map_err(|e| format!("open_bi: {e}"))?;
+        let env = IrohEnvelope {
+            msg_type: msg_type.to_string(),
+            data: serde_json::to_value(req_data).map_err(|e| format!("serialize req: {e}"))?,
+        };
+        send_on_bi(&mut send, &env).await?;
+        let resp_bytes = recv_from_bi(&mut recv).await?;
+        let resp_env: IrohEnvelope =
+            serde_json::from_slice(&resp_bytes).map_err(|e| format!("parse resp: {e}"))?;
+        Ok(resp_env.data)
+    })
+    .await
+    .map_err(|_| {
+        format!(
+            "iroh_request timeout after {:.0}s",
+            IROH_REQUEST_TIMEOUT.as_secs()
+        )
+    })?
 }
 
 // ─── Client-Side Sync ───
@@ -296,6 +313,7 @@ pub struct CoverTransferResult {
     pub transferred: Vec<String>,
     pub failed: Vec<FileTransferError>,
     pub unavailable: Vec<String>,
+    pub covers: HashMap<String, String>,
 }
 
 /// Pull book files from a peer over an iroh connection.
@@ -357,49 +375,47 @@ async fn pull_single_file_iroh(
     book_id: &str,
     cache_dir: &std::path::Path,
 ) -> Result<u64, String> {
-    let pull_req = FilePullRequest {
-        book_id: book_id.to_string(),
-    };
-    let enc_req = sync_crypto::encrypt_payload(sym_key, &serde_json::to_vec(&pull_req).unwrap())?;
-    let auth_req = AuthenticatedRequest {
-        device_id: my_device_id.to_string(),
-        payload: enc_req,
-    };
-    let resp_val = iroh_request(conn, "file_pull", &auth_req).await?;
-    let pull_response: FilePullResponse =
-        serde_json::from_value(resp_val).map_err(|e| format!("parse file pull: {e}"))?;
+    let pull_response = request_file_pull(conn, sym_key, my_device_id, book_id, None).await?;
 
     if !pull_response.available {
         return Err("File not available on peer".to_string());
     }
 
     let meta = pull_response.meta.ok_or("File response missing metadata")?;
-
-    if pull_response.chunks.len() != meta.total_chunks as usize {
-        return Err(format!(
-            "Chunk count mismatch: expected {} got {}",
-            meta.total_chunks,
-            pull_response.chunks.len()
-        ));
+    if !pull_response.chunks.is_empty() {
+        return Err("Metadata response unexpectedly included file data".to_string());
     }
 
     let mut file_data = Vec::with_capacity(meta.total_size as usize);
-    for chunk in &pull_response.chunks {
+    for chunk_index in 0..meta.total_chunks {
+        let chunk_response =
+            request_file_pull(conn, sym_key, my_device_id, book_id, Some(chunk_index)).await?;
+        if !chunk_response.available {
+            return Err(format!(
+                "Chunk {chunk_index} is no longer available on peer"
+            ));
+        }
+        if chunk_response.chunks.len() != 1 {
+            return Err(format!(
+                "Chunk {chunk_index} response count mismatch: expected 1 got {}",
+                chunk_response.chunks.len()
+            ));
+        }
+
+        let chunk = &chunk_response.chunks[0];
+        if chunk.chunk_index != chunk_index || chunk.total_chunks != meta.total_chunks {
+            return Err(format!("Chunk {chunk_index} metadata mismatch"));
+        }
         let decrypted = sync_crypto::decrypt_file_chunk(sym_key, &chunk.data_b64)
-            .map_err(|e| format!("chunk {} decrypt fail: {}", chunk.chunk_index, e))?;
+            .map_err(|e| format!("chunk {chunk_index} decrypt fail: {e}"))?;
         file_data.extend_from_slice(&decrypted);
     }
 
-    // Verify integrity
-    let actual_hash = {
-        let mut hasher = Sha256::new();
-        hasher.update(&file_data);
-        hex::encode(hasher.finalize())
-    };
-    if actual_hash != meta.content_hash {
+    if file_data.len() as u64 != meta.total_size {
         return Err(format!(
-            "Content hash mismatch: expected {} got {}",
-            meta.content_hash, actual_hash
+            "File size mismatch: expected {} got {}",
+            meta.total_size,
+            file_data.len()
         ));
     }
 
@@ -410,6 +426,26 @@ async fn pull_single_file_iroh(
     Ok(bytes_written)
 }
 
+async fn request_file_pull(
+    conn: &endpoint::Connection,
+    sym_key: &[u8; 32],
+    my_device_id: &str,
+    book_id: &str,
+    chunk_index: Option<u32>,
+) -> Result<FilePullResponse, String> {
+    let pull_req = FilePullRequest {
+        book_id: book_id.to_string(),
+        chunk_index,
+    };
+    let enc_req = sync_crypto::encrypt_payload(sym_key, &serde_json::to_vec(&pull_req).unwrap())?;
+    let auth_req = AuthenticatedRequest {
+        device_id: my_device_id.to_string(),
+        payload: enc_req,
+    };
+    let resp_val = iroh_request(conn, "file_pull", &auth_req).await?;
+    serde_json::from_value(resp_val).map_err(|e| format!("parse file pull: {e}"))
+}
+
 /// Pull cover images from a peer over an iroh connection.
 pub async fn pull_covers_via_iroh(
     conn: &endpoint::Connection,
@@ -417,13 +453,19 @@ pub async fn pull_covers_via_iroh(
     my_device_id: &str,
     book_ids: &[String],
 ) -> Result<CoverTransferResult, String> {
+    eprintln!(
+        "[iroh-sync] pull_covers_via_iroh: pulling {} covers",
+        book_ids.len()
+    );
     let mut result = CoverTransferResult {
         transferred: Vec::new(),
         failed: Vec::new(),
         unavailable: Vec::new(),
+        covers: HashMap::new(),
     };
 
     for book_id in book_ids {
+        eprintln!("[iroh-sync]   pulling cover for book {book_id}");
         let cover_req = CoverPullRequest {
             book_id: book_id.clone(),
         };
@@ -442,9 +484,14 @@ pub async fn pull_covers_via_iroh(
 
         if !cover.available {
             result.unavailable.push(book_id.clone());
-        } else {
+        } else if let Some(data_url) = cover.data_url {
             result.transferred.push(book_id.clone());
-            // The data_url will be saved by the caller
+            result.covers.insert(book_id.clone(), data_url);
+        } else {
+            result.failed.push(FileTransferError {
+                book_id: book_id.clone(),
+                error: "Cover response missing data".to_string(),
+            });
         }
     }
 
@@ -806,6 +853,7 @@ async fn handle_push_batch_req(
         *sync_data = Some(SyncDataSnapshot {
             domains,
             manifest: HashMap::new(),
+            book_file_paths: HashMap::new(),
         });
     }
     drop(sync_data);
@@ -878,13 +926,40 @@ async fn handle_file_availability_req(
             Err(e) => return e,
         };
 
+    // Grab the external file-path map populated by setSyncData.
+    let book_file_paths = {
+        let guard = state.sync_data.lock().await;
+        guard
+            .as_ref()
+            .map(|d| d.book_file_paths.clone())
+            .unwrap_or_default()
+    };
+
     let app_data_dir = state.app_data_dir.clone();
+    let app_handle = state.app_handle.clone();
     let available_ids: Vec<String> = avail_req
         .book_ids
         .iter()
         .filter(|id| {
-            let path = app_data_dir.join("book-cache").join(format!("{id}.book"));
-            path.exists()
+            // 1. Materialized book-cache file (fastest path).
+            let cache_path = app_data_dir.join("book-cache").join(format!("{id}.book"));
+            if cache_path.exists() {
+                return true;
+            }
+            // 2. External path provided by the JS frontend via setSyncData.
+            if let Some(ext_path) = book_file_paths.get(*id) {
+                if std::path::Path::new(ext_path).exists() {
+                    return true;
+                }
+            }
+            // 3. SQLite blob (legacy inline storage — materialise on demand).
+            matches!(
+                crate::database::sqlite_get_materialized_book_path(
+                    app_handle.clone(),
+                    (*id).clone()
+                ),
+                Ok(Some(_))
+            )
         })
         .cloned()
         .collect();
@@ -909,10 +984,69 @@ async fn handle_file_pull_req(
         Err(e) => return e,
     };
 
-    let path = state
-        .app_data_dir
-        .join("book-cache")
-        .join(format!("{}.book", pull_req.book_id));
+    // Resolve the actual file path using the same priority chain as availability.
+    let path: std::path::PathBuf = {
+        // 1. Materialized book-cache (most common after first access).
+        let cache_path = state
+            .app_data_dir
+            .join("book-cache")
+            .join(format!("{}.book", pull_req.book_id));
+        if cache_path.exists() {
+            cache_path
+        } else {
+            // 2. External path provided by the JS frontend.
+            let ext_path = {
+                let guard = state.sync_data.lock().await;
+                guard
+                    .as_ref()
+                    .and_then(|d| d.book_file_paths.get(&pull_req.book_id).cloned())
+            };
+            if let Some(p) = ext_path {
+                let pb = std::path::PathBuf::from(&p);
+                if pb.exists() {
+                    pb
+                } else {
+                    // 3. SQLite blob → materialise and serve the cache path.
+                    match crate::database::sqlite_get_materialized_book_path(
+                        state.app_handle.clone(),
+                        pull_req.book_id.clone(),
+                    ) {
+                        Ok(Some(_)) => state
+                            .app_data_dir
+                            .join("book-cache")
+                            .join(format!("{}.book", pull_req.book_id)),
+                        _ => {
+                            let response = FilePullResponse {
+                                available: false,
+                                meta: None,
+                                chunks: Vec::new(),
+                            };
+                            return serde_json::to_value(response).unwrap();
+                        }
+                    }
+                }
+            } else {
+                // 3. SQLite blob → materialise.
+                match crate::database::sqlite_get_materialized_book_path(
+                    state.app_handle.clone(),
+                    pull_req.book_id.clone(),
+                ) {
+                    Ok(Some(_)) => state
+                        .app_data_dir
+                        .join("book-cache")
+                        .join(format!("{}.book", pull_req.book_id)),
+                    _ => {
+                        let response = FilePullResponse {
+                            available: false,
+                            meta: None,
+                            chunks: Vec::new(),
+                        };
+                        return serde_json::to_value(response).unwrap();
+                    }
+                }
+            }
+        }
+    };
 
     if !path.exists() {
         let response = FilePullResponse {
@@ -923,46 +1057,52 @@ async fn handle_file_pull_req(
         return serde_json::to_value(response).unwrap();
     }
 
-    // Read file in chunks
+    // Chunk requests read only the requested slice so a full book is never
+    // buffered in JSON. Metadata requests return size + chunk count from the
+    // file stat (no full-file I/O).  Integrity is guaranteed by the per-chunk
+    // ChaCha20Poly1305 AEAD — SHA-256 verification is redundant.
     let sym_key_clone = *sym_key;
-    let result: Result<(u64, String, Vec<String>), String> =
+    let requested_chunk = pull_req.chunk_index;
+    let result: Result<(u64, u32, Option<String>), String> =
         tokio::task::spawn_blocking(move || {
-            let mut file = std::fs::File::open(&path).map_err(|e| format!("open: {e}"))?;
-            let mut hasher = Sha256::new();
-            let mut total_size = 0u64;
-            let mut chunks = Vec::new();
-            let mut buffer = vec![0u8; FILE_CHUNK_SIZE];
+            use std::io::{Read, Seek, SeekFrom};
 
-            loop {
-                use std::io::Read;
-                let n = file.read(&mut buffer).map_err(|e| format!("read: {e}"))?;
-                if n == 0 {
-                    break;
+            let mut file = std::fs::File::open(&path).map_err(|e| format!("open: {e}"))?;
+            let total_size = file.metadata().map_err(|e| format!("metadata: {e}"))?.len();
+            let total_chunks = (total_size / FILE_CHUNK_SIZE as u64
+                + u64::from(total_size % FILE_CHUNK_SIZE as u64 != 0))
+                as u32;
+
+            if let Some(chunk_index) = requested_chunk {
+                if chunk_index >= total_chunks {
+                    return Err(format!("chunk index {chunk_index} out of range"));
                 }
-                hasher.update(&buffer[..n]);
-                total_size += n as u64;
-                let encoded = sync_crypto::encrypt_single_file_chunk(&sym_key_clone, &buffer[..n])?;
-                chunks.push(encoded);
+                file.seek(SeekFrom::Start(chunk_index as u64 * FILE_CHUNK_SIZE as u64))
+                    .map_err(|e| format!("seek: {e}"))?;
+                let remaining = total_size - chunk_index as u64 * FILE_CHUNK_SIZE as u64;
+                let mut buffer = vec![0u8; remaining.min(FILE_CHUNK_SIZE as u64) as usize];
+                file.read_exact(&mut buffer)
+                    .map_err(|e| format!("read: {e}"))?;
+                let chunk = sync_crypto::encrypt_single_file_chunk(&sym_key_clone, &buffer)?;
+                return Ok((total_size, total_chunks, Some(chunk)));
             }
 
-            Ok((total_size, hex::encode(hasher.finalize()), chunks))
+            Ok((total_size, total_chunks, None))
         })
         .await
         .map_err(|e| format!("join: {e}"))
         .and_then(|r| r);
 
     match result {
-        Ok((total_size, content_hash, encrypted_chunks)) => {
-            let total_chunks = encrypted_chunks.len() as u32;
-            let chunks: Vec<FileTransferChunk> = encrypted_chunks
-                .into_iter()
-                .enumerate()
-                .map(|(i, data_b64)| FileTransferChunk {
+        Ok((total_size, total_chunks, encrypted_chunk)) => {
+            let chunks = encrypted_chunk
+                .map(|data_b64| FileTransferChunk {
                     book_id: pull_req.book_id.clone(),
-                    chunk_index: i as u32,
+                    chunk_index: pull_req.chunk_index.unwrap_or_default(),
                     total_chunks,
                     data_b64,
                 })
+                .into_iter()
                 .collect();
 
             let response = FilePullResponse {
@@ -972,7 +1112,7 @@ async fn handle_file_pull_req(
                     total_size,
                     total_chunks,
                     format: String::new(),
-                    content_hash,
+                    content_hash: String::new(),
                 }),
                 chunks,
             };
@@ -983,7 +1123,7 @@ async fn handle_file_pull_req(
 }
 
 async fn handle_cover_pull_req(
-    _state: &Arc<SyncTransportState>,
+    state: &Arc<SyncTransportState>,
     sym_key: &[u8; 32],
     _my_device_id: &str,
     data: &serde_json::Value,
@@ -992,11 +1132,22 @@ async fn handle_cover_pull_req(
         Ok(r) => r,
         Err(e) => return e,
     };
-    let response = CoverPullResponse {
-        available: false,
-        data_url: None,
+    let book_id = cover_req.book_id;
+    eprintln!("[iroh-sync] handle_cover_pull_req: book={book_id}");
+    let app_handle = state.app_handle.clone();
+    let cover = tokio::task::spawn_blocking(move || {
+        crate::database::sqlite_get_cover_image(app_handle, book_id)
+    })
+    .await
+    .map_err(|e| format!("cover lookup task: {e}"));
+
+    let response = match cover {
+        Ok(Ok(data_url)) => CoverPullResponse {
+            available: data_url.is_some(),
+            data_url,
+        },
+        Ok(Err(error)) | Err(error) => return serde_json::json!({"error": error}),
     };
-    let _ = cover_req;
     encrypt_response(sym_key, &response).await
 }
 

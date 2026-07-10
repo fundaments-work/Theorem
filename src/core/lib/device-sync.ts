@@ -122,13 +122,16 @@ export async function unpairDevice(deviceId: string): Promise<void> {
 /**
  * Supply the current app data snapshot to the Rust sync server.
  * Must be called before the server can respond to sync requests.
+ * @param bookFilePaths Optional map of bookId → absolute file path for books
+ *   that live outside the app's book-cache (e.g. imported from disk).
  */
 export async function setSyncData(
     domainsMap: Record<string, string>,
     manifestMap: Record<string, any>,
+    bookFilePaths?: Record<string, string>,
 ): Promise<void> {
     requireTauri("setSyncData");
-    return invoke("set_sync_data", { domainsMap, manifestMap });
+    return invoke("set_sync_data", { domainsMap, manifestMap, bookFilePaths: bookFilePaths ?? null });
 }
 
 // ─── Sync Trigger ───
@@ -141,6 +144,15 @@ export async function initiateSync(peerDeviceId: string): Promise<Record<string,
     requireTauri("initiateSync");
     const incomingMapJson = await invoke<string>("initiate_sync", { peerDeviceId });
     return JSON.parse(incomingMapJson);
+}
+
+/**
+ * Immediately sync with every paired peer. Incoming domains are queued for
+ * the existing frontend merge flow, including file and cover transfers.
+ */
+export async function syncNow(): Promise<void> {
+    requireTauri("syncNow");
+    return invoke("sync_now");
 }
 
 // ─── Responder Mode ───
@@ -195,6 +207,7 @@ export interface CoverTransferResult {
     transferred: string[];
     failed: Array<{ book_id: string; error: string }>;
     unavailable: string[];
+    covers: Record<string, string>;
 }
 
 /**
@@ -306,4 +319,3 @@ export async function setAutoSyncFlag(enabled: boolean): Promise<void> {
         // Flag file operation failed — non-critical.
     }
 }
-

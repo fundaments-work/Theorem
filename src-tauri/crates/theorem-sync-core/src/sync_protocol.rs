@@ -312,6 +312,10 @@ pub struct BatchedPullResponse {
 pub struct FilePullRequest {
     /// Book ID to pull.
     pub book_id: String,
+    /// Optional zero-based chunk index. When omitted, the peer returns only
+    /// transfer metadata; when present, it returns that one encrypted chunk.
+    #[serde(default)]
+    pub chunk_index: Option<u32>,
 }
 
 /// Metadata about a file being transferred.
@@ -352,8 +356,7 @@ pub struct FilePullResponse {
     pub available: bool,
     /// File metadata (present only when available=true).
     pub meta: Option<FileTransferMeta>,
-    /// All chunks of the file, each individually encrypted.
-    /// For small files this is a single chunk; for large files multiple chunks.
+    /// The requested encrypted chunk. Metadata requests return an empty list.
     pub chunks: Vec<FileTransferChunk>,
 }
 

@@ -129,7 +129,27 @@ function syncLibraryToYjs(): void {
     if (!_maps || !_ydoc) return;
     const state = useLibraryStore.getState();
     scheduleSync("library", () => {
-        syncDomain(_maps!.books, state.books, (b) => b.id);
+        _ydoc!.transact(() => {
+            const map = _maps!.books;
+            const existing = new Set<string>();
+            map.forEach((_, key) => existing.add(key));
+            for (const book of state.books) {
+                // Strip device-local fields before syncing to Yjs
+                const { filePath, storagePath, coverPath, syncedWithoutFile, ...syncableBook } = book;
+                const coverToKeep = (typeof coverPath === "string" && coverPath.startsWith("data:")) ? coverPath : undefined;
+                const yBook = {
+                    ...syncableBook,
+                    ...(coverToKeep ? { coverPath: coverToKeep } : {})
+                };
+                map.set(book.id, yBook as Book);
+            }
+            for (const key of existing) {
+                if (!state.books.some((i) => i.id === key)) {
+                    map.delete(key);
+                }
+            }
+        }, LOCAL_ORIGIN);
+        
         syncDomain(_maps!.annotations, state.annotations, (a) => a.id);
         syncDomain(_maps!.collections, state.collections, (c) => c.id);
         syncDomain(_maps!.deletionTombstones, state.deletionTombstones, (t) => `${t.entityType}::${t.entityId}`);
@@ -149,7 +169,27 @@ function syncRssToYjs(): void {
     const state = useRssStore.getState();
     scheduleSync("rss", () => {
         syncDomain(_maps!.rssFeeds, state.feeds, (f) => f.id);
-        syncDomain(_maps!.rssArticles, state.articles, (a) => a.id);
+        
+        const MAX_ARTICLES = 500;
+        const MAX_ARTICLE_AGE_DAYS = 30;
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - MAX_ARTICLE_AGE_DAYS);
+
+        const filtered = state.articles
+            .filter(article => {
+                const articleDate = article.publishedAt || article.fetchedAt;
+                return new Date(articleDate) >= cutoffDate;
+            })
+            .slice(0, MAX_ARTICLES);
+
+        const truncatedArticles = filtered.map(article => ({
+            ...article,
+            content: article.content && article.content.length > 50000
+                ? article.content.slice(0, 50000) + '... [truncated]'
+                : article.content,
+        }));
+        
+        syncDomain(_maps!.rssArticles, truncatedArticles, (a) => a.id);
     });
 }
 
@@ -169,8 +209,38 @@ function applyYjsToZustand(): void {
     _isApplyingRemote = true;
 
     // Books
+    const currentBooks = useLibraryStore.getState().books;
+    const currentBooksById = new Map(currentBooks.map(b => [b.id, b]));
+    
     const books: Book[] = [];
-    _maps.books.forEach((book) => books.push(book));
+    _maps.books.forEach((yBook) => {
+        const localBook = currentBooksById.get(yBook.id);
+        if (localBook) {
+            const syncedVal = localBook.syncedWithoutFile;
+            books.push({
+                ...yBook,
+                filePath: localBook.filePath,
+                storagePath: localBook.storagePath,
+                syncedWithoutFile: syncedVal,
+                coverPath: localBook.coverPath || (typeof yBook.coverPath === "string" && yBook.coverPath.startsWith("data:") ? yBook.coverPath : undefined),
+            } as Book);
+            if (syncedVal === true && books.length <= 3) {
+                console.log(`[sync] Yjs apply: existing book ${yBook.id} syncedWithoutFile=${syncedVal}`);
+            }
+        } else {
+            books.push({
+                ...yBook,
+                filePath: `sqlite://${yBook.id}`,
+                storagePath: `sqlite://${yBook.id}`,
+                syncedWithoutFile: true,
+                coverExtractionDone: Boolean(yBook.coverPath && typeof yBook.coverPath === "string" && yBook.coverPath.startsWith("data:")),
+                coverPath: (typeof yBook.coverPath === "string" && yBook.coverPath.startsWith("data:")) ? yBook.coverPath : undefined,
+            } as Book);
+            if (books.length <= 3) {
+                console.log(`[sync] Yjs apply: NEW book ${yBook.id} syncedWithoutFile=true`);
+            }
+        }
+    });
     if (books.length > 0 || useLibraryStore.getState().books.length > 0) {
         useLibraryStore.setState({ books });
     }

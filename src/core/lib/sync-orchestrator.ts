@@ -186,7 +186,10 @@ async function buildDomainsAndManifest() {
 
     const manifest: Record<string, { version: number; itemCount: number; lastModifiedAt: string; contentHash: string }> = {
         books: {
-            version: library.books.length,
+            version: library.books.reduce((sum, b) => {
+                const t = new Date(b.lastReadAt || b.addedAt || 0).getTime();
+                return sum + Math.floor(t / 1000);
+            }, 0),
             itemCount: library.books.length,
             lastModifiedAt: computeLatestDate(library.books, b => b.lastReadAt || b.addedAt),
             contentHash: contentHashes["books"],
@@ -521,6 +524,7 @@ async function pullMissingBookFilesAndCovers(
     
     // 1. Files
     const needFiles = books.filter((b) => b.syncedWithoutFile === true);
+    console.log(`[sync] needFiles: ${needFiles.length} / ${books.length} books syncedWithoutFile=true`, needFiles.length > 0 ? `first: ${needFiles[0].id}` : '');
     let unlisten: (() => void) | null = null;
     
     if (needFiles.length > 0) {
@@ -580,17 +584,23 @@ async function pullMissingBookFilesAndCovers(
     // We attempt to pull covers for all books that were part of this sync round,
     // plus any books that have syncedWithoutFile=true (since their cover extraction
     // will be blocked until the file is pulled).
-    if (syncedBookIds.length > 0) {
-        setStatus("syncing", "Fletching cover images...");
+    const booksMissingCover = syncedBookIds.filter(id => !books.find(b => b.id === id)?.coverPath);
+    if (booksMissingCover.length > 0) {
+        setStatus("syncing", `Fletching ${booksMissingCover.length} cover images...`);
         try {
-            const result = await pullBookCovers(peerDeviceId, syncedBookIds);
-            
-            // For books whose covers transferred successfully, trigger a re-render 
-            // by bumping a superficial value or relying on the storage cache updating.
-            // Since the covers are saved to SQLite, the components will load them
-            // via the custom protocol automatically.
+            const result = await pullBookCovers(peerDeviceId, booksMissingCover);
+            for (const [bookId, dataUrl] of Object.entries(result.covers)) {
+                try {
+                    const blob = await (await fetch(dataUrl)).blob();
+                    const coverPath = await saveCoverImage(bookId, blob);
+                    useLibraryStore.getState().updateBook(bookId, { coverPath });
+                } catch {
+                }
+            }
+
             const parts: string[] = [];
-            if (result.transferred.length > 0) parts.push(`${result.transferred.length} covers transferred`);
+            const coverCount = Object.keys(result.covers).length;
+            if (coverCount > 0) parts.push(`${coverCount} covers transferred`);
             if (result.unavailable.length > 0) parts.push(`${result.unavailable.length} no cover available`);
             if (result.failed.length > 0) parts.push(`${result.failed.length} covers failed`);
             
@@ -675,7 +685,7 @@ export async function runDeviceSync(
         await ensureResponderSyncReady();
 
         log("Sending data snapshot to backend...");
-        await setSyncData(domains, manifest);
+        await setSyncData(domains, manifest, buildBookFilePaths());
 
         log("Initiating sync with peer...");
         setStatus("syncing", "Exchanging data with peer...");
@@ -710,6 +720,10 @@ export async function runDeviceSync(
                 }
             }
         } catch (_err) {}
+
+        // Debug: check actual store state
+        const storeState = useLibraryStore.getState();
+        console.log(`[sync] store books count: ${storeState.books?.length ?? 0}, merged returned: ${domainsUpdated.includes('books')}`);
 
         // Pull any missing book files on every sync pass.
         // Also fetches cover images for ALL books synchronized in this cycle
@@ -749,9 +763,33 @@ export async function runDeviceSync(
  * Call this when starting the server so it can respond to sync requests
  * from any paired peer (passive sync / responder mode).
  */
+/**
+ * Build a map of bookId → absolute file path for all books on this device
+ * that have a real, resolvable path (i.e. not a placeholder like sqlite:// or idb://).
+ * This lets the Rust responder serve books stored at external OS paths.
+ */
+function buildBookFilePaths(): Record<string, string> {
+    const books = useLibraryStore.getState().books;
+    const paths: Record<string, string> = {};
+    for (const book of books) {
+        const p = book.filePath || book.storagePath;
+        if (
+            p &&
+            !p.startsWith("sqlite://") &&
+            !p.startsWith("idb://") &&
+            !p.startsWith("browser://") &&
+            !p.startsWith("data:")
+        ) {
+            paths[book.id] = p;
+        }
+    }
+    return paths;
+}
+
 export async function provisionSyncData(): Promise<void> {
     const { domains, manifest } = await buildDomainsAndManifest();
-    await setSyncData(domains, manifest);
+    const bookFilePaths = buildBookFilePaths();
+    await setSyncData(domains, manifest, bookFilePaths);
 }
 
 // ─── Responder-side event listener ───
@@ -920,7 +958,7 @@ let _dataDirty = false;
 
 /**
  * Run a sync round with all paired peers.
- * Syncs with the first available peer (the most recently synced one).
+ * Syncs with every paired peer.
  * Silently skips if no peers are reachable.
  *
  * @param force - If true, runs even if `_dataDirty` is false (for startup, visibility change, tray).
@@ -935,17 +973,16 @@ async function autoSyncRound(force = false): Promise<void> {
     const devices = await getPairedDevices().catch(() => []);
     if (devices.length === 0) return;
 
-    let target = devices[0];
-    for (const d of devices) {
-        if (d.lastSyncAt && (!target.lastSyncAt || d.lastSyncAt > target.lastSyncAt)) {
-            target = d;
-        }
-    }
-
     _isAutoSyncing = true;
     try {
-        await runDeviceSync(target.deviceId);
-        _dataDirty = false; // synced successfully, clear dirty
+        let allPeersSynced = true;
+        for (const device of devices) {
+            const result = await runDeviceSync(device.deviceId);
+            if (!result.success) {
+                allPeersSynced = false;
+            }
+        }
+        _dataDirty = !allPeersSynced;
     } catch {
         // Silent — peer might be offline; retry next cycle
     } finally {
@@ -979,7 +1016,15 @@ export function scheduleMutationSync(): void {
         // If daemon is available, push data to it and let it handle sync.
         if (await isDaemonRunning().catch(() => false)) {
             const built = await buildDomainsAndManifest();
-            await pushSyncDataToDaemon(built.domains, built.manifest);
+            const bfp = buildBookFilePaths();
+            await pushSyncDataToDaemon(built.domains, built.manifest, bfp);
+            // Also provision the main process so file-transfer responders
+            // have up-to-date book_file_paths for serving book files.
+            try {
+                await setSyncData(built.domains, built.manifest, bfp);
+            } catch {
+                // Non-critical — daemon handles sync rounds.
+            }
             await triggerDaemonSync().catch(() => {});
             return;
         }
@@ -1034,9 +1079,15 @@ export async function startAutoSync(): Promise<() => void> {
     if (daemonAvailable) {
         const cleanups: Array<() => void> = [];
 
-        // Push initial data snapshot to daemon.
+        // Push initial data snapshot to daemon and main process.
         const built = await buildDomainsAndManifest();
-        await pushSyncDataToDaemon(built.domains, built.manifest);
+        const bfp = buildBookFilePaths();
+        await pushSyncDataToDaemon(built.domains, built.manifest, bfp);
+        try {
+            await setSyncData(built.domains, built.manifest, bfp);
+        } catch {
+            // Non-critical.
+        }
 
         // Configure daemon with our auto-sync preference.
         const { settings } = useSettingsStore.getState();

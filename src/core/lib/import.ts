@@ -18,7 +18,6 @@ let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
 const DEFAULT_IMPORT_CONCURRENCY = 4;
 const MAX_IMPORT_CONCURRENCY = 8;
 const INSTANT_IMPORT_MODE = true;
-const CONTENT_HASH_MAX_BYTES = 4 * 1024 * 1024;
 const CONTENT_URI_READ_TIMEOUT_MS = 20000;
 const IMPORT_ENTRY_TIMEOUT_MS = 90000;
 const SUPPORTED_IMPORT_EXTENSIONS = ['epub', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'fb2.zip', 'cbz', 'cbr', 'pdf'];
@@ -70,10 +69,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 }
 
 async function computeContentHash(buffer: ArrayBuffer): Promise<string | undefined> {
-    if (buffer.byteLength > CONTENT_HASH_MAX_BYTES) {
-        return undefined;
-    }
-
     const subtle = globalThis.crypto?.subtle;
     if (!subtle) {
         return undefined;

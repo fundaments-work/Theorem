@@ -28,6 +28,8 @@ use tokio::time::{interval, Duration};
 struct SyncDataSnapshot {
     domains: HashMap<String, String>,
     manifest: HashMap<String, DomainVersion>,
+    #[serde(default)]
+    book_file_paths: HashMap<String, String>,
 }
 
 struct SyncServerState {
@@ -65,6 +67,8 @@ struct DaemonStatus {
 struct SetSyncDataRequest {
     domains: HashMap<String, String>,
     manifest: HashMap<String, DomainVersion>,
+    #[serde(default)]
+    book_file_paths: HashMap<String, String>,
 }
 
 #[derive(Serialize)]
@@ -254,6 +258,7 @@ async fn handle_set_sync_data(
         *sync_data = Some(SyncDataSnapshot {
             domains: req.domains,
             manifest: req.manifest,
+            book_file_paths: req.book_file_paths,
         });
     }
 

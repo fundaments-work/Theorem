@@ -1177,6 +1177,7 @@ pub fn run() {
             sync_commands::update_peer_address,
             // iroh-based sync + file transfer
             sync_commands::initiate_sync,
+            sync_commands::sync_now,
             sync_commands::pull_book_files,
             sync_commands::pull_book_covers,
             // Background sync

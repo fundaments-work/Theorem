@@ -256,8 +256,11 @@ export function DeviceSyncSection() {
     }, [available, desktopPlatform]);
 
     // Auto-manage incoming sync receiver once at least one device is paired.
+    // Only runs once when the first device is paired — avoids re-syncing on
+    // every poll interval (pairedDevices is a new array reference each time).
+    const hasPairedDevices = pairedDevices.length > 0;
     useEffect(() => {
-        if (!available || pairedDevices.length === 0) {
+        if (!available || !hasPairedDevices) {
             return;
         }
 
@@ -270,6 +273,11 @@ export function DeviceSyncSection() {
                     setNodeInfo(info);
                     setIsIrohRunning(true);
                 }
+                await provisionSyncData();
+                const devices = await getPairedDevices();
+                for (const device of devices) {
+                    await runDeviceSync(device.deviceId);
+                }
             } catch (e) {
                 if (!cancelled) {
                 }
@@ -280,7 +288,7 @@ export function DeviceSyncSection() {
         return () => {
             cancelled = true;
         };
-    }, [available, pairedDevices.length]);
+    }, [available, hasPairedDevices]);
 
     // Auto-clear success message.
     useEffect(() => {

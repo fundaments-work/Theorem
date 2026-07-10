@@ -19,7 +19,7 @@ export const BookSchema = z.object({
     id: z.string().min(1),
     title: z.string(),
     author: z.string(),
-    filePath: z.string(),
+    filePath: z.string().optional(),
     storagePath: z.string().optional(),
     format: z.enum(["epub", "mobi", "azw", "azw3", "fb2", "cbz", "cbr", "pdf"]),
     contentHash: z.string().optional(),

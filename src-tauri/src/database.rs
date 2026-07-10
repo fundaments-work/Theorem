@@ -202,15 +202,17 @@ pub fn sqlite_save_book_data(app: AppHandle, id: String, data: Vec<u8>) -> Resul
     })?;
 
     with_connection(&app, |connection| {
+        // Keep the data in SQLite as a fallback — if the book-cache file is
+        // deleted (e.g. Android cache clear), the blob can be re-materialized.
         connection.execute(
             r#"
             INSERT INTO books (id, data, updated_at)
-            VALUES (?1, X'', unixepoch())
+            VALUES (?1, ?2, unixepoch())
             ON CONFLICT(id) DO UPDATE SET
-                data = X'',
+                data = ?2,
                 updated_at = unixepoch()
             "#,
-            params![id],
+            params![id, data],
         )?;
 
         connection.execute(

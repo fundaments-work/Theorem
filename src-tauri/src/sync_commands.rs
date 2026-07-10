@@ -2,7 +2,7 @@
 ///
 /// Bridges the iroh P2P sync transport with the Tauri frontend via IPC commands.
 use crate::iroh_sync::{
-    self, EventCallback, IrohSyncEndpoint, SyncDataSnapshot, SyncTransportState,
+    self, EventCallback, IrohPeerInfo, IrohSyncEndpoint, SyncDataSnapshot, SyncTransportState,
 };
 use theorem_sync_core::sync_crypto::{self, DeviceIdentity};
 use theorem_sync_core::sync_protocol::*;
@@ -71,6 +71,7 @@ pub fn init_sync(
     };
 
     let transport_state = Arc::new(SyncTransportState {
+        app_handle: app_handle.clone(),
         identity,
         device_name,
         app_data_dir,
@@ -132,11 +133,19 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
     let ep = get_or_init_iroh(&app).await?;
     let sync_state = get_sync_state(&app)?;
 
-    // Start accept loop
-    let transport = sync_state.transport_state.clone();
-    let ep_clone = ep.clone();
-    let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
-    *sync_state.accept_cancel.lock().await = Some(cancel);
+    // Only start the accept loop if one isn't already running.
+    // Previously, every call replaced accept_cancel, dropping the old Sender,
+    // which caused cancel_rx.changed() to resolve (closed channel) and killed
+    // the running loop — breaking in-flight file transfers.
+    {
+        let mut cancel_guard = sync_state.accept_cancel.lock().await;
+        if cancel_guard.is_none() {
+            let transport = sync_state.transport_state.clone();
+            let ep_clone = ep.clone();
+            let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
+            *cancel_guard = Some(cancel);
+        }
+    }
 
     Ok(IrohNodeIdResponse {
         node_id: ep.public_key_string(),
@@ -452,12 +461,14 @@ pub async fn set_sync_data(
     app: tauri::AppHandle,
     domains_map: HashMap<String, String>,
     manifest_map: HashMap<String, DomainVersion>,
+    book_file_paths: Option<HashMap<String, String>>,
 ) -> Result<(), String> {
     let sync_state = get_sync_state(&app)?;
     let mut sync_data = sync_state.transport_state.sync_data.lock().await;
     *sync_data = Some(SyncDataSnapshot {
         domains: domains_map,
         manifest: manifest_map,
+        book_file_paths: book_file_paths.unwrap_or_default(),
     });
     let bg = app.state::<BackgroundSyncHandle>();
     bg.data_version.fetch_add(1, Ordering::SeqCst);
@@ -507,6 +518,35 @@ pub async fn get_incoming_sync_data(app: tauri::AppHandle) -> Result<String, Str
     serde_json::to_string(&incoming).map_err(|e| format!("Serialize incoming data failed: {e}"))
 }
 
+async fn queue_incoming_sync_result(
+    app: &tauri::AppHandle,
+    peer_device_id: &str,
+    incoming_json: &str,
+) -> Result<(), String> {
+    let incoming: HashMap<String, String> = serde_json::from_str(incoming_json)
+        .map_err(|e| format!("Parse incoming sync data: {e}"))?;
+    let sync_state = get_sync_state(app)?;
+    let mut sync_data = sync_state.transport_state.sync_data.lock().await;
+
+    if sync_data.is_none() {
+        *sync_data = Some(SyncDataSnapshot::default());
+    }
+    if let Some(data) = sync_data.as_mut() {
+        for (domain, payload) in incoming {
+            data.domains.insert(format!("incoming_{domain}"), payload);
+        }
+    }
+    drop(sync_data);
+
+    if let Some(emitter) = &sync_state.transport_state.event_emitter {
+        emitter(
+            "sync-incoming-complete",
+            &serde_json::json!({ "peerDeviceId": peer_device_id }).to_string(),
+        );
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn update_peer_address(
     app: tauri::AppHandle,
@@ -523,6 +563,37 @@ pub async fn update_peer_address(
         Ok(())
     } else {
         Err(format!("Device {} not paired", device_id))
+    }
+}
+
+#[tauri::command]
+pub async fn sync_now(app: tauri::AppHandle) -> Result<(), String> {
+    let peer_ids: Vec<String> = {
+        let sync_state = get_sync_state(&app)?;
+        let devices = sync_state.transport_state.paired_devices.lock().await;
+        devices.keys().cloned().collect()
+    };
+
+    if peer_ids.is_empty() {
+        return Ok(());
+    }
+
+    let mut failures = Vec::new();
+    for peer_id in peer_ids {
+        match initiate_sync(app.clone(), peer_id.clone()).await {
+            Ok(incoming) => {
+                if let Err(error) = queue_incoming_sync_result(&app, &peer_id, &incoming).await {
+                    failures.push(format!("{peer_id}: {error}"));
+                }
+            }
+            Err(error) => failures.push(format!("{peer_id}: {error}")),
+        }
+    }
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("Sync failed: {}", failures.join("; ")))
     }
 }
 
@@ -591,13 +662,63 @@ async fn connect_to_peer(
         }
     }
 
-    let conn = ep
-        .endpoint
-        .connect(addr, crate::iroh_sync::ALPN_BYTES)
-        .await
-        .map_err(|e| format!("Connect to peer failed: {e}"))?;
+    eprintln!("[sync] Connecting to peer {}...", peer.device_name);
+    let conn = tokio::time::timeout(std::time::Duration::from_secs(60), async {
+        ep.endpoint
+            .connect(addr, crate::iroh_sync::ALPN_BYTES)
+            .await
+    })
+    .await
+    .map_err(|_| "Connect to peer timed out after 60s".to_string())?
+    .map_err(|e| format!("Connect to peer failed: {e}"))?;
+    eprintln!("[sync] Connected to peer {}", peer.device_name);
 
     Ok((conn, ep.public_key))
+}
+
+/// Perform the iroh peer info handshake on a newly established connection.
+/// Both sides exchange their `IrohPeerInfo` so the acceptor can identify the peer.
+/// After this, the connection is ready for protocol requests via `iroh_request`.
+async fn perform_handshake(
+    conn: &iroh::endpoint::Connection,
+    public_key: iroh::PublicKey,
+    device_id: &str,
+    device_name: &str,
+    fingerprint: &str,
+) -> Result<(), String> {
+    eprintln!("[sync] Performing handshake with {device_name}...");
+    let h = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        let my_info = IrohPeerInfo {
+            public_key,
+            device_id: device_id.to_string(),
+            device_name: device_name.to_string(),
+            fingerprint: fingerprint.to_string(),
+        };
+        let (mut send, mut recv) = conn.open_bi().await.map_err(|e| format!("open_bi: {e}"))?;
+        let json = serde_json::to_vec(&my_info).map_err(|e| format!("serialize: {e}"))?;
+        let len = (json.len() as u32).to_be_bytes();
+        send.write_all(&len)
+            .await
+            .map_err(|e| format!("write: {e}"))?;
+        send.write_all(&json)
+            .await
+            .map_err(|e| format!("write: {e}"))?;
+        send.finish().map_err(|e| format!("finish: {e}"))?;
+        let mut lb = [0u8; 4];
+        recv.read_exact(&mut lb)
+            .await
+            .map_err(|e| format!("read: {e}"))?;
+        let _ = u32::from_be_bytes(lb);
+        Ok::<(), String>(())
+    })
+    .await;
+    match h {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => return Err(e),
+        Err(_) => return Err("Handshake timeout (30s)".to_string()),
+    }
+    eprintln!("[sync] Handshake complete with {device_name}");
+    Ok(())
 }
 
 #[tauri::command]
@@ -641,29 +762,14 @@ pub async fn initiate_sync(
     save_peer_addrs_from_conn(&app, &peer_device_id, &conn).await;
 
     // Perform handshake
-    let my_info = iroh_sync::IrohPeerInfo {
-        public_key: my_public_key,
-        device_id: my_device_id.clone(),
-        device_name: sync_state.transport_state.device_name.clone(),
-        fingerprint: sync_state.transport_state.identity.effective_fingerprint(),
-    };
-    {
-        let (mut send, mut recv) = conn.open_bi().await.map_err(|e| format!("open_bi: {e}"))?;
-        let json = serde_json::to_vec(&my_info).map_err(|e| format!("serialize: {e}"))?;
-        let len = (json.len() as u32).to_be_bytes();
-        send.write_all(&len)
-            .await
-            .map_err(|e| format!("write: {e}"))?;
-        send.write_all(&json)
-            .await
-            .map_err(|e| format!("write: {e}"))?;
-        send.finish().map_err(|e| format!("finish: {e}"))?;
-        let mut lb = [0u8; 4];
-        recv.read_exact(&mut lb)
-            .await
-            .map_err(|e| format!("read: {e}"))?;
-        let _ = u32::from_be_bytes(lb);
-    }
+    perform_handshake(
+        &conn,
+        my_public_key,
+        &my_device_id,
+        &sync_state.transport_state.device_name,
+        &sync_state.transport_state.identity.effective_fingerprint(),
+    )
+    .await?;
 
     let incoming =
         iroh_sync::sync_with_peer(&conn, &sym_key, &my_device_id, &manifest, &data.domains)
@@ -701,6 +807,7 @@ pub struct CoverTransferResult {
     pub transferred: Vec<String>,
     pub failed: Vec<FileTransferErrorItem>,
     pub unavailable: Vec<String>,
+    pub covers: HashMap<String, String>,
 }
 
 #[tauri::command]
@@ -709,6 +816,11 @@ pub async fn pull_book_files(
     peer_device_id: String,
     book_ids: Vec<String>,
 ) -> Result<FileTransferResult, String> {
+    eprintln!(
+        "[sync] pull_book_files: peer={}, {} files",
+        peer_device_id,
+        book_ids.len()
+    );
     let sync_state = get_sync_state(&app)?;
 
     let devices = sync_state.transport_state.paired_devices.lock().await;
@@ -727,8 +839,18 @@ pub async fn pull_book_files(
     let cache_dir = sync_state.transport_state.app_data_dir.join("book-cache");
     std::fs::create_dir_all(&cache_dir).ok();
 
-    let (conn, _) = connect_to_peer(&app, &peer).await?;
+    let (conn, my_pk) = connect_to_peer(&app, &peer).await?;
     save_peer_addrs_from_conn(&app, &peer_device_id, &conn).await;
+
+    // Must perform handshake so the server can identify this connection.
+    perform_handshake(
+        &conn,
+        my_pk,
+        &my_id,
+        &sync_state.transport_state.device_name,
+        &sync_state.transport_state.identity.effective_fingerprint(),
+    )
+    .await?;
 
     let result =
         iroh_sync::pull_files_via_iroh(&conn, &sym_key, &my_id, &book_ids, &cache_dir).await?;
@@ -753,6 +875,11 @@ pub async fn pull_book_covers(
     peer_device_id: String,
     book_ids: Vec<String>,
 ) -> Result<CoverTransferResult, String> {
+    eprintln!(
+        "[sync] pull_book_covers: peer={}, {} books",
+        peer_device_id,
+        book_ids.len()
+    );
     let sync_state = get_sync_state(&app)?;
 
     let devices = sync_state.transport_state.paired_devices.lock().await;
@@ -768,8 +895,18 @@ pub async fn pull_book_covers(
     let sym_key: [u8; 32] = sym_key_vec.try_into().map_err(|_| "Key length invalid")?;
     let my_id = sync_state.transport_state.identity.device_id.clone();
 
-    let (conn, _) = connect_to_peer(&app, &peer).await?;
+    let (conn, my_pk) = connect_to_peer(&app, &peer).await?;
     save_peer_addrs_from_conn(&app, &peer_device_id, &conn).await;
+
+    // Must perform handshake so the server can identify this connection.
+    perform_handshake(
+        &conn,
+        my_pk,
+        &my_id,
+        &sync_state.transport_state.device_name,
+        &sync_state.transport_state.identity.effective_fingerprint(),
+    )
+    .await?;
 
     let result = iroh_sync::pull_covers_via_iroh(&conn, &sym_key, &my_id, &book_ids).await?;
 
@@ -784,6 +921,7 @@ pub async fn pull_book_covers(
             })
             .collect(),
         unavailable: result.unavailable,
+        covers: result.covers,
     })
 }
 
@@ -849,7 +987,14 @@ pub async fn start_background_sync(
 
             for peer_id in &peer_ids {
                 match initiate_sync(app_clone.clone(), peer_id.clone()).await {
-                    Ok(_) => eprintln!("[background-sync] Completed sync with {peer_id}"),
+                    Ok(incoming) => {
+                        match queue_incoming_sync_result(&app_clone, peer_id, &incoming).await {
+                            Ok(()) => eprintln!("[background-sync] Completed sync with {peer_id}"),
+                            Err(e) => eprintln!(
+                                "[background-sync] Failed to queue sync data from {peer_id}: {e}"
+                            ),
+                        }
+                    }
                     Err(e) => eprintln!("[background-sync] Sync with {peer_id} failed: {e}"),
                 }
             }

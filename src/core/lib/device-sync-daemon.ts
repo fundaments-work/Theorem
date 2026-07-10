@@ -62,12 +62,13 @@ export async function getDaemonStatus(): Promise<DaemonStatus | null> {
 export async function pushSyncDataToDaemon(
     domains: Record<string, string>,
     manifest: Record<string, any>,
+    bookFilePaths?: Record<string, string>,
 ): Promise<boolean> {
     try {
         const res = await fetch(`${DAEMON_BASE}/daemon/set-sync-data`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ domains, manifest }),
+            body: JSON.stringify({ domains, manifest, bookFilePaths: bookFilePaths ?? {} }),
             signal: timeoutSignal(5000),
         });
         return res.ok;
