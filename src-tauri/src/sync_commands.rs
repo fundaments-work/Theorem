@@ -1124,3 +1124,30 @@ pub async fn docs_import_sync_doc(
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn docs_set_entry(
+    app: tauri::AppHandle,
+    key: String,
+    value: String,
+) -> Result<(), String> {
+    let api = get_docs_api(&app)?;
+    let author = get_docs_author(&app)?;
+    let sync_state = get_sync_state(&app)?;
+    let devices = sync_state.transport_state.paired_devices.lock().await;
+    for (_, device) in devices.iter() {
+        if device.sync_doc_id.is_empty() {
+            continue;
+        }
+        let doc_id: iroh_docs::NamespaceId = device
+            .sync_doc_id
+            .parse()
+            .map_err(|e| format!("parse doc id: {e}"))?;
+        if let Ok(Some(doc)) = api.open(doc_id).await {
+            let _ = doc
+                .set_bytes(author, key.clone().into_bytes(), value.clone().into_bytes())
+                .await;
+        }
+    }
+    Ok(())
+}

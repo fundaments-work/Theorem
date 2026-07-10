@@ -1150,6 +1150,36 @@ export function stopAutoSync(): void {
     }
     _dataDirty = false;
     setAutoSyncFlag(false).catch(() => {});
-    // Notify the daemon to stop auto-sync as well.
     configureDaemon({ auto_sync_enabled: false }).catch(() => {});
+}
+
+// ─── iroh-docs CRDT Sync (replaces legacy LWW merge) ───
+
+/** Invoke the iroh-docs Tauri command to create a shared document for a peer. */
+export async function docsCreateSyncDoc(peerDeviceId: string): Promise<string | null> {
+    try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return await invoke<string>("docs_create_sync_doc", { peerDeviceId });
+    } catch { return null; }
+}
+
+/** Invoke the iroh-docs Tauri command to import a shared document from a ticket. */
+export async function docsImportSyncDoc(
+    peerDeviceId: string,
+    ticket: string,
+): Promise<boolean> {
+    try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("docs_import_sync_doc", { peerDeviceId, ticketStr: ticket });
+        return true;
+    } catch { return false; }
+}
+
+/** Invoke the iroh-docs Tauri command to write a key-value entry to the sync doc. */
+export async function docsSetEntry(key: string, value: string): Promise<boolean> {
+    try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("docs_set_entry", { key, value });
+        return true;
+    } catch { return false; }
 }

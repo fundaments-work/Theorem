@@ -1183,6 +1183,7 @@ pub fn run() {
             // iroh-docs CRDT sync
             sync_commands::docs_create_sync_doc,
             sync_commands::docs_import_sync_doc,
+            sync_commands::docs_set_entry,
             // Background sync
             sync_commands::start_background_sync,
             sync_commands::stop_background_sync,
