@@ -37,15 +37,7 @@ import {
 } from "../store";
 import type { DeviceSyncStatus } from "../types";
 import {
-    mergeBooks,
-    mergeAnnotations,
-    mergeCollections,
     mergeTombstones,
-    mergeVocabulary,
-    mergeRssFeeds,
-    mergeRssArticles,
-    mergeSettings,
-    mergeReadingStats,
 } from "./sync-import";
 import { isTauri } from "./env";
 import { saveCoverImage } from "./storage";
@@ -251,7 +243,6 @@ async function buildDomainsAndManifest() {
 
 async function mergeIncomingData(
     incomingMap: Record<string, string>,
-    localSettingsUpdatedAt?: string,
 ): Promise<{ domainsUpdated: string[] }> {
     const domainsUpdated: string[] = [];
     const markUpdated = (domain: string) => {
@@ -275,228 +266,18 @@ async function mergeIncomingData(
         // If validation fails entirely, fall through with raw incomingMap.
     }
 
-    // ── Apply Yjs CRDT update FIRST (replaces LWW merge for all domains) ──
+    // ── Apply Yjs CRDT update (handles all 9 domains) ──
     if (safeMap["yjs_update"]) {
         try {
             await ensureYjsLoaded();
             const binary = Uint8Array.from(atob(safeMap["yjs_update"]), (c) => c.charCodeAt(0));
             _yjsApply!(binary);
             markUpdated("yjs_update");
-            // Yjs CRDT merge handles all domains — no need for per-domain LWW merges.
             return { domainsUpdated };
         } catch {
-            // Fall through to legacy LWW merge if Yjs decode fails.
-        }
-    }
-
-    // ── Merge tombstones FIRST so books/annotations/collections can respect them ──
-    let allTombstones = useLibraryStore.getState().deletionTombstones;
-
-    // Collect library store changes in a single batch to avoid cascading subscriber re-renders.
-    const libraryPatch: Partial<ReturnType<typeof useLibraryStore.getState>> = {};
-    const applyLibraryPatch = (patch: Partial<ReturnType<typeof useLibraryStore.getState>>) => {
-        Object.assign(libraryPatch, patch);
-    };
-
-    if (safeMap["deletion_tombstones"]) {
-        try {
-            const incoming = JSON.parse(safeMap["deletion_tombstones"]);
-            if (Array.isArray(incoming)) {
-                allTombstones = mergeTombstones(incoming, allTombstones);
-                applyLibraryPatch({ deletionTombstones: allTombstones });
-                markUpdated("deletion_tombstones");
-            }
-        } catch (e) {
-        }
-    }
-
-    // Tombstones can arrive without the books/annotations/collections domains.
-    // In that case, we still must prune local entities immediately so deletions
-    // propagate correctly cross-device.
-    if (safeMap["deletion_tombstones"]) {
-        const libraryState = useLibraryStore.getState();
-        const prunedBooks = mergeBooks([], libraryState.books, allTombstones);
-        const prunedAnnotations = mergeAnnotations([], libraryState.annotations, allTombstones);
-        const prunedCollections = mergeCollections([], libraryState.collections, allTombstones);
-
-        applyLibraryPatch({
-            books: prunedBooks,
-            annotations: prunedAnnotations,
-            collections: prunedCollections,
-        });
-
-        if (prunedBooks.length !== libraryState.books.length) markUpdated("books");
-        if (prunedAnnotations.length !== libraryState.annotations.length) markUpdated("annotations");
-        if (prunedCollections.length !== libraryState.collections.length) markUpdated("collections");
-
-        // Same pruning for RSS feeds and articles — tombstoned feeds must be
-        // removed even when no rss_feeds/rss_articles domain arrives.
-        const rssState = useRssStore.getState();
-        const prunedFeeds = mergeRssFeeds([], rssState.feeds, allTombstones);
-        const prunedArticles = mergeRssArticles([], rssState.articles, undefined, allTombstones);
-
-        useRssStore.setState({ feeds: prunedFeeds.feeds, articles: prunedArticles });
-
-        if (prunedFeeds.feeds.length !== rssState.feeds.length) markUpdated("rss_feeds");
-        if (prunedArticles.length !== rssState.articles.length) markUpdated("rss_articles");
-    }
-
-    // Read a snapshot of current state for merges that depends on it.
-    let currentLibState = useLibraryStore.getState();
-    // Apply pending patches so subsequent domain merges work on the pruned state.
-    if (Object.keys(libraryPatch).length > 0) {
-        currentLibState = { ...currentLibState, ...libraryPatch };
-    }
-
-    if (safeMap["books"]) {
-        try {
-            const incoming = JSON.parse(safeMap["books"]);
-            if (Array.isArray(incoming)) {
-                const merged = mergeBooks(incoming, currentLibState.books, allTombstones);
-                applyLibraryPatch({ books: merged });
-                markUpdated("books");
-
-                const incomingWithCovers = (incoming as { id: string; coverPath?: string }[])
-                    .filter((b) => b.coverPath && b.coverPath.startsWith("data:"));
-
-                await Promise.allSettled(incomingWithCovers.map(async (inc) => {
-                    try {
-                        const response = await fetch(inc.coverPath!);
-                        const blob = await response.blob();
-                        if (blob.size > 0) await saveCoverImage(inc.id, blob);
-                    } catch {}
-                }));
-                currentLibState = { ...currentLibState, books: merged };
-            }
-        } catch (e) {
-        }
-    }
-
-    if (safeMap["annotations"]) {
-        try {
-            const incoming = JSON.parse(safeMap["annotations"]);
-            if (Array.isArray(incoming)) {
-                const merged = mergeAnnotations(incoming, currentLibState.annotations, allTombstones);
-                applyLibraryPatch({ annotations: merged });
-                markUpdated("annotations");
-                currentLibState = { ...currentLibState, annotations: merged };
-            }
-        } catch (e) {
-        }
-    }
-
-    if (safeMap["collections"]) {
-        try {
-            const incoming = JSON.parse(safeMap["collections"]);
-            if (Array.isArray(incoming)) {
-                const merged = mergeCollections(incoming, currentLibState.collections, allTombstones);
-                applyLibraryPatch({ collections: merged });
-                markUpdated("collections");
-                currentLibState = { ...currentLibState, collections: merged };
-            }
-        } catch (e) {
-        }
-    }
-
-    // Flush all library store changes in a single setState call.
-    if (Object.keys(libraryPatch).length > 0) {
-        useLibraryStore.setState(libraryPatch as Parameters<typeof useLibraryStore.setState>[0]);
-    }
-
-    if (safeMap["vocabulary"]) {
-        try {
-            const incoming = JSON.parse(safeMap["vocabulary"]);
-            if (Array.isArray(incoming)) {
-                const merged = mergeVocabulary(incoming, useVocabularyStore.getState().vocabularyTerms, allTombstones);
-                useVocabularyStore.setState({ vocabularyTerms: merged });
-                markUpdated("vocabulary");
-            }
-        } catch (e) {
-        }
-    }
-
-    if (safeMap["settings"]) {
-        try {
-            const raw = JSON.parse(safeMap["settings"]);
-            const settingsStore = useSettingsStore.getState();
-            // Extract the embedded timestamp, then reconstruct as AppSettings.
-            const remoteUpdatedAt: string | undefined = raw._settingsUpdatedAt;
-            const { _settingsUpdatedAt: _, ...remoteSettings } = raw;
-            // Inject the local deviceSync back so mergeSettings receives a full AppSettings.
-            const remoteAsAppSettings = {
-                ...remoteSettings,
-                deviceSync: settingsStore.settings.deviceSync,
-            };
-            const merged = mergeSettings(
-                remoteAsAppSettings,
-                settingsStore.settings,
-                remoteUpdatedAt,
-                localSettingsUpdatedAt,
-            );
-            useSettingsStore.setState({ settings: merged });
-            markUpdated("settings");
-        } catch (e) {
-        }
-    }
-
-    if (safeMap["reading_stats"]) {
-        try {
-            const incoming = JSON.parse(safeMap["reading_stats"]);
-            if (incoming && typeof incoming === "object") {
-                const merged = mergeReadingStats(incoming, useSettingsStore.getState().stats);
-                useSettingsStore.setState({ stats: merged });
-                markUpdated("reading_stats");
-            }
-        } catch (e) {
-        }
-    }
-
-    // Track feedIdMap from mergeRssFeeds so we can remap article feedId references.
-    let feedIdMap: Map<string, string> | undefined;
-
-    if (safeMap["rss_feeds"]) {
-        try {
-            const incoming = JSON.parse(safeMap["rss_feeds"]);
-            if (Array.isArray(incoming)) {
-                const result = mergeRssFeeds(incoming, useRssStore.getState().feeds, allTombstones);
-                useRssStore.setState({ feeds: result.feeds });
-                feedIdMap = result.feedIdMap;
-                markUpdated("rss_feeds");
-            }
-        } catch (e) {
-        }
-    }
-
-    if (safeMap["rss_articles"]) {
-        try {
-            const incoming = JSON.parse(safeMap["rss_articles"]);
-            if (Array.isArray(incoming)) {
-                const merged = mergeRssArticles(incoming, useRssStore.getState().articles, feedIdMap, allTombstones);
-                useRssStore.setState({ articles: merged });
-                markUpdated("rss_articles");
-            }
-        } catch (e) {
-        }
-    }
-
-    // Recalculate feed unreadCounts after merging both feeds and articles,
-    // since article read states may have changed via OR merge semantics.
-    if (domainsUpdated.includes("rss_feeds") || domainsUpdated.includes("rss_articles")) {
-        try {
-            const currentRss = useRssStore.getState();
-            // Pre-compute unread counts in O(A) instead of O(F * A)
-            const unreadByFeed = new Map<string, number>();
-            for (const a of currentRss.articles) {
-                if (!a.isRead && a.feedId) {
-                    unreadByFeed.set(a.feedId, (unreadByFeed.get(a.feedId) ?? 0) + 1);
-                }
-            }
-            const updatedFeeds = currentRss.feeds.map((feed) => ({
-                ...feed,
-                unreadCount: unreadByFeed.get(feed.id) ?? 0,
-            }));
-            useRssStore.setState({ feeds: updatedFeeds });
-        } catch (e) {
+            // Yjs decode/apply failed. This should not happen when both
+            // devices have Yjs activated. No legacy fallback — data from
+            // this peer is dropped to prevent partial/corrupt merge.
         }
     }
 
@@ -679,7 +460,7 @@ export async function runDeviceSync(
         setStatus("syncing", "Preparing data...");
         log("Gathering local data snapshot...");
 
-        const { domains, manifest, settingsUpdatedAt } = await buildDomainsAndManifest();
+        const { domains, manifest } = await buildDomainsAndManifest();
 
         log("Ensuring sync responder is ready...");
         await ensureResponderSyncReady();
@@ -707,7 +488,7 @@ export async function runDeviceSync(
         setStatus("syncing", "Merging data...");
 
         const { domainsUpdated } = await mergeIncomingData(
-            incomingMap, settingsUpdatedAt,
+            incomingMap,
         );
 
         // Parse incomingMap books to get all book IDs part of this sync exchange.
@@ -838,11 +619,8 @@ async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
         // mergeIncomingData reads fresh state internally, so no need to snapshot here.
         // Use the persisted settingsLastModifiedAt for LWW comparison (same as initiator path)
         // instead of generating "now" which biases the responder to always win.
-        const localSettingsUpdatedAt = useSettingsStore.getState().settingsLastModifiedAt || new Date(0).toISOString();
-
         const { domainsUpdated } = await mergeIncomingData(
             incomingMap,
-            localSettingsUpdatedAt,
         );
 
         const summary = domainsUpdated.length > 0
