@@ -1258,3 +1258,70 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
 
     Ok(())
 }
+
+// ─── iroh-blobs File/Cover Transfer ───
+
+#[tauri::command]
+pub async fn blobs_add_bytes(app: tauri::AppHandle, data: Vec<u8>) -> Result<String, String> {
+    let sync_state = get_sync_state(&app)?;
+    let guard = sync_state
+        .transport_state
+        .docs_api
+        .try_lock()
+        .map_err(|_| "docs api busy".to_string())?;
+    let snapshot = guard
+        .as_ref()
+        .ok_or("iroh-docs not initialized".to_string())?;
+    snapshot
+        .blobs
+        .blobs()
+        .add_slice(data)
+        .await
+        .map(|tag| tag.hash.to_string())
+        .map_err(|e| format!("blobs add: {e}"))
+}
+
+#[tauri::command]
+pub async fn blobs_download_bytes(
+    app: tauri::AppHandle,
+    peer_device_id: String,
+    hash_str: String,
+) -> Result<Vec<u8>, String> {
+    let ep = get_or_init_iroh(&app).await?;
+    let sync_state = get_sync_state(&app)?;
+
+    let peer_pk: iroh::PublicKey = {
+        let devices = sync_state.transport_state.paired_devices.lock().await;
+        let peer = devices
+            .get(&peer_device_id)
+            .ok_or("peer not found".to_string())?;
+        peer.iroh_node_id
+            .parse()
+            .map_err(|e| format!("parse peer key: {e}"))?
+    };
+
+    let hash: iroh_blobs::Hash = hash_str.parse().map_err(|e| format!("parse hash: {e}"))?;
+
+    let guard = sync_state
+        .transport_state
+        .docs_api
+        .try_lock()
+        .map_err(|_| "docs api busy".to_string())?;
+    let snapshot = guard
+        .as_ref()
+        .ok_or("iroh-docs not initialized".to_string())?;
+
+    let downloader = snapshot.blobs.downloader(&ep.endpoint);
+    downloader
+        .download(hash, Some(peer_pk))
+        .await
+        .map_err(|e| format!("download: {e}"))?;
+
+    snapshot
+        .blobs
+        .blobs()
+        .get_bytes(hash)
+        .await
+        .map(|b| b.to_vec())
+        .map_err(|e| format!("get bytes: {e}"))
+}

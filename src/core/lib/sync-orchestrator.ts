@@ -1320,3 +1320,28 @@ export async function hydrateFromIrohDocs(): Promise<string[]> {
 
     return domainsUpdated;
 }
+
+// ─── iroh-blobs File/Cover Transfer ───
+
+/** Add bytes to the iroh-blobs store (for covers, small files). Returns BLAKE3 hash. */
+export async function blobsAddBytes(data: Uint8Array): Promise<string | null> {
+    try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return await invoke<string>("blobs_add_bytes", { data: Array.from(data) });
+    } catch { return null; }
+}
+
+/** Download bytes from a peer's iroh-blobs store. */
+export async function blobsDownloadBytes(
+    peerDeviceId: string,
+    hash: string,
+): Promise<Uint8Array | null> {
+    try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const result = await invoke<number[]>("blobs_download_bytes", {
+            peerDeviceId,
+            hashStr: hash,
+        });
+        return new Uint8Array(result);
+    } catch { return null; }
+}
