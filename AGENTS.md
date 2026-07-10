@@ -17,11 +17,14 @@ Operational guide for AI coding agents working in this repository.
 | Step | Command | Must Pass? |
 |------|---------|------------|
 | TypeScript typecheck | `pnpm typecheck` | Zero errors |
+| JavaScript/TS linter | `pnpm lint` | Zero errors |
 | Rust format | `cd src-tauri && cargo fmt` | No diff |
 | Rust clippy | `cd src-tauri && cargo clippy` | Zero warnings |
 | Rust typecheck | `cd src-tauri && cargo check` | Zero errors |
 
-Rule: **Never commit or push code that fails any of these.** If you touch only `.ts`/`.tsx` files, at minimum run `pnpm typecheck`. If you touch any `.rs` file, run all four. If clippy emits warnings, fix them before committing — do not leave them for later.
+Rule: **Never commit or push code that fails any of these.** If you touch only `.ts`/`.tsx` files, run `pnpm typecheck` and `pnpm lint`. The linter uses Biome (Rust-based, fast) — it catches unused imports, `console.log` in production, missing error handling, and code style issues. If you touch any `.rs` file, run all four Rust gates.
+
+Biome linter is check-only (no auto-fix). Detected issues must be fixed manually.
 
 Additional validation per scope:
 
@@ -41,10 +44,11 @@ cd src-tauri && cargo fmt && cd ..
 # 2. Rust clippy (must be zero warnings)
 cd src-tauri && cargo clippy && cd ..
 
-# 3. TypeScript typecheck
+# 3. TypeScript typecheck + linter
 pnpm typecheck
+pnpm lint
 
-# 4. If typecheck/clippy pass, commit
+# 4. If typecheck/clippy/lint pass, commit
 git add -A
 git commit -m "..."
 
@@ -121,6 +125,7 @@ docs/
 - Web dev: `pnpm dev`
 - Desktop dev: `pnpm dev:tauri` or `pnpm tauri dev`
 - Typecheck: `pnpm typecheck`
+- Lint: `pnpm lint`
 - Build: `pnpm build`
 - Preview: `pnpm preview`
 - Rust-only build: `cd src-tauri && cargo build --release`
@@ -349,10 +354,16 @@ Notes:
 - For search/sort/filter at 10K+ items: prefer SQLite queries over JavaScript `Array.filter().sort()`.
 
 ## Sync Architecture Direction
-- Sync is the flagship feature. No other reading app provides resilient P2P sync. Every change must prioritize sync reliability.
-- The long-term direction is Yjs CRDT (`yjs` JS + `yrs` Rust) replacing the custom LWW merge protocol. Yjs provides conflict-free merging, delta-based sync (not full snapshots), offline queue, and binary encoding. See `docs/PERFORMANCE_SYNC_AUDIT.md` section 6.
-- The three-tier network architecture is: LAN (mDNS) → Internet P2P (Iroh QUIC) → Cloud relay (Durable Objects). See `docs/PERFORMANCE_SYNC_AUDIT.md` section 12.
-- When adding sync-related code: prefer existing libraries over custom protocol. `yrs` (Rust CRDT), `mdns-sd` (service discovery), `iroh` (P2P QUIC), `postal-mime` (email parsing), `colord` (color manipulation).
-- The sync daemon and Android worker lifecycle must be tied to `autoSyncEnabled`. When OFF: stop daemon, cancel WorkManager, clear JS timers. When ON: restart all.
-- Device identity dedup requires `effective_fingerprint()` everywhere — `sync_server.rs:449`, `sync_commands.rs:159,240`, and QR generation.
-- Sync payloads must apply the same truncation caps as the persistence layer (RSS: 50KB content, 500 articles, 30-day age).
+- Sync is the flagship feature. No other reading app provides resilient P2P sync.
+- Metadata sync uses **iroh-docs** CRDT (range-based set reconciliation). Files use
+  **iroh-blobs** (BLAKE3 verified streaming over QUIC). Live notifications use
+  **iroh-gossip**. See `docs/PERFORMANCE_SYNC_AUDIT.md`.
+- The three-tier network is: iroh N0 DNS/Pkarr (Internet P2P) → iroh relay (fallback)
+  → Cloudflare Durable Object (future). See `docs/PERFORMANCE_SYNC_AUDIT.md` section 12.
+- When adding sync code: prefer iroh-native protocols over custom implementations.
+- The sync daemon and Android worker lifecycle must be tied to `autoSyncEnabled`.
+  See `docs/DAEMON_IROH_MIGRATION.md` for the migration plan.
+- Device identity dedup requires `effective_fingerprint()` everywhere.
+- RSS: 50KB content cap, 500 articles max, 30-day age limit in sync payloads.
+- File transfer uses iroh-blobs FsStore for persistent on-disk blob storage.
+  Covers use `blobs_add_bytes` / `blobs_download_bytes`.
