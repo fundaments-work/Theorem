@@ -64,6 +64,12 @@ let _initialized = false;
 // Debounce timers per domain
 const _debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+// Zustand unsubscribe functions — cleaned up in destroyYjsSync()
+let _unsubLibrary: (() => void) | null = null;
+let _unsubVocab: (() => void) | null = null;
+let _unsubRss: (() => void) | null = null;
+let _unsubSettings: (() => void) | null = null;
+
 // ─── Bootstrap: copy Zustand state → Yjs (one-time) ───
 
 function bootstrapDomain<T>(
@@ -361,6 +367,12 @@ export function disconnectYjsSync(): void {
 }
 
 export function destroyYjsSync(): void {
+    // Unsubscribe Zustand store listeners to prevent subscriber leaks on hot reload
+    if (_unsubLibrary) { _unsubLibrary(); _unsubLibrary = null; }
+    if (_unsubVocab) { _unsubVocab(); _unsubVocab = null; }
+    if (_unsubRss) { _unsubRss(); _unsubRss = null; }
+    if (_unsubSettings) { _unsubSettings(); _unsubSettings = null; }
+
     // Clear all debounce timers
     for (const timer of _debounceTimers.values()) {
         clearTimeout(timer);
@@ -397,13 +409,19 @@ export function applyYjsSyncUpdate(update: Uint8Array): void {
  * Call this ONCE at app startup.
  */
 export function bridgeZustandToYjs(): void {
+    // Unsubscribe previous subscribers (in case bridge was called before).
+    if (_unsubLibrary) _unsubLibrary();
+    if (_unsubVocab) _unsubVocab();
+    if (_unsubRss) _unsubRss();
+    if (_unsubSettings) _unsubSettings();
+
     // Library store: books, annotations, collections, tombstones
     let prevBooks = useLibraryStore.getState().books;
     let prevAnnotations = useLibraryStore.getState().annotations;
     let prevCollections = useLibraryStore.getState().collections;
     let prevTombstones = useLibraryStore.getState().deletionTombstones;
 
-    useLibraryStore.subscribe((state) => {
+    _unsubLibrary = useLibraryStore.subscribe((state) => {
         if (_isApplyingRemote) return;
         if (state.books !== prevBooks ||
             state.annotations !== prevAnnotations ||
@@ -419,7 +437,7 @@ export function bridgeZustandToYjs(): void {
 
     // Vocabulary store
     let prevVocab = useVocabularyStore.getState().vocabularyTerms;
-    useVocabularyStore.subscribe((state) => {
+    _unsubVocab = useVocabularyStore.subscribe((state) => {
         if (_isApplyingRemote) return;
         if (state.vocabularyTerms !== prevVocab) {
             prevVocab = state.vocabularyTerms;
@@ -430,7 +448,7 @@ export function bridgeZustandToYjs(): void {
     // RSS store
     let prevFeeds = useRssStore.getState().feeds;
     let prevArticles = useRssStore.getState().articles;
-    useRssStore.subscribe((state) => {
+    _unsubRss = useRssStore.subscribe((state) => {
         if (_isApplyingRemote) return;
         if (state.feeds !== prevFeeds || state.articles !== prevArticles) {
             prevFeeds = state.feeds;
@@ -442,7 +460,7 @@ export function bridgeZustandToYjs(): void {
     // Settings store
     let prevSettings = useSettingsStore.getState().settings;
     let prevStats = useSettingsStore.getState().stats;
-    useSettingsStore.subscribe((state) => {
+    _unsubSettings = useSettingsStore.subscribe((state) => {
         if (_isApplyingRemote) return;
         if (state.settings !== prevSettings || state.stats !== prevStats) {
             prevSettings = state.settings;
