@@ -131,6 +131,9 @@ pub struct PairedDevice {
     /// Peer's iroh relay URL for reconnection across restarts.
     #[serde(default)]
     pub peer_relay_url: String,
+    /// iroh-docs NamespaceId for the shared sync document (base64 string).
+    #[serde(default)]
+    pub sync_doc_id: String,
 }
 
 /// Frontend-safe view of a paired device (no symmetric key exposed).
@@ -149,6 +152,9 @@ pub struct PairedDeviceInfo {
     /// Peer's iroh relay URL for reconnection.
     #[serde(default)]
     pub peer_relay_url: String,
+    /// iroh-docs NamespaceId for the shared sync document (base64 string).
+    #[serde(default)]
+    pub sync_doc_id: String,
 }
 
 impl From<&PairedDevice> for PairedDeviceInfo {
@@ -162,6 +168,7 @@ impl From<&PairedDevice> for PairedDeviceInfo {
             last_sync_at: device.last_sync_at.clone(),
             fingerprint: device.fingerprint.clone(),
             peer_relay_url: device.peer_relay_url.clone(),
+            sync_doc_id: device.sync_doc_id.clone(),
         }
     }
 }

@@ -1406,6 +1406,7 @@ async fn handle_pair_req(
         last_sync_at: None,
         fingerprint: pairing_req.fingerprint.clone(),
         peer_relay_url: String::new(),
+        sync_doc_id: String::new(),
     };
 
     let mut devices = state.paired_devices.lock().await;

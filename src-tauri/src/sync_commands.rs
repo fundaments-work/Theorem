@@ -379,6 +379,7 @@ pub async fn submit_pairing_code(
         last_sync_at: None,
         fingerprint: pairing_response.fingerprint.clone(),
         peer_relay_url: host_relay_url,
+        sync_doc_id: String::new(),
     };
 
     let paired_info = PairedDeviceInfo::from(&paired_device);
@@ -1034,5 +1035,92 @@ pub async fn wake_background_sync(app: tauri::AppHandle) -> Result<(), String> {
     }
     bg_handle.data_version.fetch_add(1, Ordering::SeqCst);
     bg_handle.wake.notify_one();
+    Ok(())
+}
+
+// ─── iroh-docs Commands (CRDT metadata sync) ───
+
+fn get_docs_api(app: &tauri::AppHandle) -> Result<iroh_docs::api::DocsApi, String> {
+    let sync_state = get_sync_state(app)?;
+    let guard = sync_state
+        .transport_state
+        .docs_api
+        .try_lock()
+        .map_err(|_| "docs api busy".to_string())?;
+    guard
+        .as_ref()
+        .map(|s| s.api.clone())
+        .ok_or_else(|| "iroh-docs not initialized".to_string())
+}
+
+fn get_docs_author(app: &tauri::AppHandle) -> Result<iroh_docs::AuthorId, String> {
+    let sync_state = get_sync_state(app)?;
+    let guard = sync_state
+        .transport_state
+        .docs_api
+        .try_lock()
+        .map_err(|_| "docs api busy".to_string())?;
+    guard
+        .as_ref()
+        .map(|s| s.author)
+        .ok_or_else(|| "iroh-docs not initialized".to_string())
+}
+
+#[tauri::command]
+pub async fn docs_create_sync_doc(
+    app: tauri::AppHandle,
+    peer_device_id: String,
+) -> Result<String, String> {
+    let api = get_docs_api(&app)?;
+    let _author = get_docs_author(&app)?;
+    let doc = api.create().await.map_err(|e| format!("create doc: {e}"))?;
+    let doc_id = doc.id();
+    let ticket = doc
+        .share(
+            iroh_docs::api::protocol::ShareMode::Write,
+            Default::default(),
+        )
+        .await
+        .map_err(|e| format!("share doc: {e}"))?;
+
+    let sync_state = get_sync_state(&app)?;
+    let mut devices = sync_state.transport_state.paired_devices.lock().await;
+    if let Some(device) = devices.get_mut(&peer_device_id) {
+        device.sync_doc_id = doc_id.to_string();
+        let _ = iroh_sync::save_paired_devices_to_disk(
+            &sync_state.transport_state.app_data_dir,
+            &devices,
+        );
+    }
+
+    Ok(ticket.to_string())
+}
+
+#[tauri::command]
+pub async fn docs_import_sync_doc(
+    app: tauri::AppHandle,
+    peer_device_id: String,
+    ticket_str: String,
+) -> Result<(), String> {
+    let api = get_docs_api(&app)?;
+    let ticket: iroh_docs::DocTicket = ticket_str
+        .parse()
+        .map_err(|e| format!("parse ticket: {e}"))?;
+    let doc = api
+        .import(ticket)
+        .await
+        .map_err(|e| format!("import doc: {e}"))?;
+    let doc_id = doc.id();
+
+    let sync_state = get_sync_state(&app)?;
+    let mut devices = sync_state.transport_state.paired_devices.lock().await;
+    if let Some(device) = devices.get_mut(&peer_device_id) {
+        device.sync_doc_id = doc_id.to_string();
+        let _ = iroh_sync::save_paired_devices_to_disk(
+            &sync_state.transport_state.app_data_dir,
+            &devices,
+        );
+    }
+
     Ok(())
 }
