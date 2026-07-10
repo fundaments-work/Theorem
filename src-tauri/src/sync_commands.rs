@@ -15,19 +15,6 @@ use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 
-fn get_local_ip() -> String {
-    if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:0") {
-        if socket.connect("1.1.1.1:80").is_ok() {
-            if let Ok(addr) = socket.local_addr() {
-                return addr.ip().to_string();
-            }
-        }
-    }
-    local_ip_address::local_ip()
-        .map(|ip| ip.to_string())
-        .unwrap_or_default()
-}
-
 // ─── Global iroh endpoint ───
 
 static IROH_ENDPOINT: std::sync::OnceLock<Arc<IrohSyncEndpoint>> = std::sync::OnceLock::new();
