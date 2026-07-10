@@ -69,7 +69,7 @@ pub struct SyncTransportState {
 pub struct DocsApiSnapshot {
     pub api: iroh_docs::api::DocsApi,
     pub author: iroh_docs::AuthorId,
-    pub sync_doc: iroh_docs::NamespaceId,
+    pub blobs: iroh_blobs::api::Store,
 }
 
 /// Snapshot of app data provided by the frontend for sync operations.
@@ -653,6 +653,7 @@ pub fn start_accept_loop(
         let docs_path = data_dir.join("iroh-docs");
         let _ = std::fs::create_dir_all(&docs_path);
         let blobs_store: iroh_blobs::api::Store = blobs.into();
+        let blobs_for_cmds = blobs_store.clone();
         let docs_handler = match iroh_docs::protocol::Docs::persistent(docs_path)
             .spawn(router_endpoint.clone(), blobs_store, gossip.clone())
             .await
@@ -682,7 +683,7 @@ pub fn start_accept_loop(
         *docs_api_state = Some(DocsApiSnapshot {
             api,
             author,
-            sync_doc: iroh_docs::NamespaceId::from([0u8; 32]), // placeholder
+            blobs: blobs_for_cmds,
         });
         drop(docs_api_state);
 

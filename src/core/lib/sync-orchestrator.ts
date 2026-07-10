@@ -1183,3 +1183,141 @@ export async function docsSetEntry(key: string, value: string): Promise<boolean>
         return true;
     } catch { return false; }
 }
+
+/** Invoke the iroh-docs Tauri command to read all entries from the sync doc. */
+export async function docsGetAllEntries(): Promise<Record<string, string> | null> {
+    try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return await invoke<Record<string, string>>("docs_get_all_entries");
+    } catch { return null; }
+}
+
+// ─── iroh-docs ↔ Zustand bridge ───
+
+/**
+ * Provision all Zustand state to iroh-docs entries.
+ * Replaces buildDomainsAndManifest(). Each domain becomes a key-value entry.
+ */
+export async function provisionToIrohDocs(): Promise<boolean> {
+    try {
+        const lib = useLibraryStore.getState();
+        const vocab = useVocabularyStore.getState();
+        const rss = useRssStore.getState();
+        const settings = useSettingsStore.getState();
+
+        await docsSetEntry("books", JSON.stringify(lib.books.map(
+            ({ filePath: _f, storagePath: _s, coverPath, locations: _l, ...book }) => ({
+                ...book,
+                ...(coverPath && !coverPath.startsWith("data:") ? { coverPath } : {}),
+            })
+        )));
+        await docsSetEntry("annotations", JSON.stringify(lib.annotations));
+        await docsSetEntry("collections", JSON.stringify(lib.collections));
+        await docsSetEntry("deletion_tombstones", JSON.stringify(lib.deletionTombstones));
+        await docsSetEntry("vocabulary", JSON.stringify(vocab.vocabularyTerms));
+        await docsSetEntry("settings", JSON.stringify(settings.settings));
+        await docsSetEntry("reading_stats", JSON.stringify(settings.stats));
+        await docsSetEntry("rss_feeds", JSON.stringify(rss.feeds));
+        await docsSetEntry("rss_articles", JSON.stringify(rss.articles));
+
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Hydrate Zustand from iroh-docs entries.
+ * Replaces mergeIncomingData(). Reads all entries and applies to stores.
+ */
+export async function hydrateFromIrohDocs(): Promise<string[]> {
+    const domainsUpdated: string[] = [];
+    try {
+        const entries = await docsGetAllEntries();
+        if (!entries) return domainsUpdated;
+
+        if (entries["books"]) {
+            try {
+                const books = JSON.parse(entries["books"]);
+                if (Array.isArray(books)) {
+                    useLibraryStore.setState({ books });
+                    domainsUpdated.push("books");
+                }
+            } catch {}
+        }
+        if (entries["annotations"]) {
+            try {
+                const annotations = JSON.parse(entries["annotations"]);
+                if (Array.isArray(annotations)) {
+                    useLibraryStore.setState({ annotations });
+                    domainsUpdated.push("annotations");
+                }
+            } catch {}
+        }
+        if (entries["collections"]) {
+            try {
+                const collections = JSON.parse(entries["collections"]);
+                if (Array.isArray(collections)) {
+                    useLibraryStore.setState({ collections });
+                    domainsUpdated.push("collections");
+                }
+            } catch {}
+        }
+        if (entries["deletion_tombstones"]) {
+            try {
+                const tombstones = JSON.parse(entries["deletion_tombstones"]);
+                if (Array.isArray(tombstones)) {
+                    useLibraryStore.setState({ deletionTombstones: tombstones });
+                    domainsUpdated.push("deletion_tombstones");
+                }
+            } catch {}
+        }
+        if (entries["vocabulary"]) {
+            try {
+                const terms = JSON.parse(entries["vocabulary"]);
+                if (Array.isArray(terms)) {
+                    useVocabularyStore.setState({ vocabularyTerms: terms });
+                    domainsUpdated.push("vocabulary");
+                }
+            } catch {}
+        }
+        if (entries["settings"]) {
+            try {
+                const settings = JSON.parse(entries["settings"]);
+                if (settings) {
+                    useSettingsStore.setState({ settings });
+                    domainsUpdated.push("settings");
+                }
+            } catch {}
+        }
+        if (entries["reading_stats"]) {
+            try {
+                const stats = JSON.parse(entries["reading_stats"]);
+                if (stats) {
+                    useSettingsStore.setState({ stats });
+                    domainsUpdated.push("reading_stats");
+                }
+            } catch {}
+        }
+        if (entries["rss_feeds"]) {
+            try {
+                const feeds = JSON.parse(entries["rss_feeds"]);
+                if (Array.isArray(feeds)) {
+                    useRssStore.setState({ feeds });
+                    domainsUpdated.push("rss_feeds");
+                }
+            } catch {}
+        }
+        if (entries["rss_articles"]) {
+            try {
+                const articles = JSON.parse(entries["rss_articles"]);
+                if (Array.isArray(articles)) {
+                    useRssStore.setState({ articles });
+                    domainsUpdated.push("rss_articles");
+                }
+            } catch {}
+        }
+    } catch {}
+
+    return domainsUpdated;
+}

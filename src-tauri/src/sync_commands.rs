@@ -1151,3 +1151,54 @@ pub async fn docs_set_entry(
     }
     Ok(())
 }
+
+#[tauri::command]
+pub async fn docs_get_all_entries(
+    app: tauri::AppHandle,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    use futures::pin_mut;
+    use futures::StreamExt;
+    let api = get_docs_api(&app)?;
+    let sync_state = get_sync_state(&app)?;
+    let (blobs, devices) = {
+        let guard = sync_state
+            .transport_state
+            .docs_api
+            .try_lock()
+            .map_err(|_| "docs api busy".to_string())?;
+        let snapshot = guard
+            .as_ref()
+            .ok_or_else(|| "iroh-docs not initialized".to_string())?;
+        let devices = sync_state.transport_state.paired_devices.lock().await;
+        (snapshot.blobs.clone(), devices)
+    };
+    let mut results = std::collections::HashMap::new();
+
+    for (_, device) in devices.iter() {
+        if device.sync_doc_id.is_empty() {
+            continue;
+        }
+        let doc_id: iroh_docs::NamespaceId = device
+            .sync_doc_id
+            .parse()
+            .map_err(|e| format!("parse doc id: {e}"))?;
+        if let Ok(Some(doc)) = api.open(doc_id).await {
+            if let Ok(stream) = doc.get_many(iroh_docs::store::Query::all().build()).await {
+                pin_mut!(stream);
+                while let Some(entry_res) = stream.next().await {
+                    if let Ok(entry) = entry_res {
+                        let key = String::from_utf8_lossy(entry.key()).to_string();
+                        let hash = entry.content_hash();
+                        if let Ok(content) = blobs.blobs().get_bytes(hash).await {
+                            if let Ok(value) = String::from_utf8(content.to_vec()) {
+                                results.insert(key, value);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(results)
+}
