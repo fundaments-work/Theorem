@@ -404,8 +404,34 @@ pub async fn submit_pairing_code(
             .unwrap_or_else(|e| eprintln!("[sync] Failed to save paired devices: {e}"));
     }
 
+    // Ensure the iroh Router + docs are initialized before importing the ticket.
+    {
+        let mut cancel_guard = sync_state.accept_cancel.lock().await;
+        if cancel_guard.is_none() {
+            let transport = sync_state.transport_state.clone();
+            let ep_clone = ep.clone();
+            let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
+            *cancel_guard = Some(cancel);
+        }
+    }
+
+    // Wait for iroh-docs to be available (up to 5s after Router starts).
+    let docs_ready = {
+        let mut waited = 0;
+        loop {
+            if sync_state.transport_state.docs_api.try_lock()
+                .map(|g| g.is_some()).unwrap_or(false)
+            {
+                break true;
+            }
+            waited += 1;
+            if waited > 50 { break false; }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    };
+
     // Import the shared iroh-docs sync document from the host's ticket.
-    if !pairing_response.sync_doc_ticket.is_empty() {
+    if docs_ready && !pairing_response.sync_doc_ticket.is_empty() {
         let api = get_docs_api(&app)?;
         match pairing_response
             .sync_doc_ticket

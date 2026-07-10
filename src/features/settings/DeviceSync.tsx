@@ -274,10 +274,6 @@ export function DeviceSyncSection() {
                     setIsIrohRunning(true);
                 }
                 await provisionSyncData();
-                const devices = await getPairedDevices();
-                for (const device of devices) {
-                    await runDeviceSync(device.deviceId);
-                }
             } catch (e) {
                 if (!cancelled) {
                 }
@@ -427,7 +423,7 @@ export function DeviceSyncSection() {
 
     const handleSyncNow = useCallback(
         async (deviceId: string) => {
-            if (syncingDeviceId) return; // Already syncing
+            if (syncingDeviceId) return;
             setError(null);
             setSyncingDeviceId(deviceId);
             setSyncProgress("Starting...");
@@ -446,7 +442,6 @@ export function DeviceSyncSection() {
                             ? `Synced ${result.domainsUpdated.length} domain(s)`
                             : "Already in sync — no changes needed",
                     );
-                    // Refresh paired devices to get updated lastSyncAt
                     const devices = await getPairedDevices();
                     setPairedDevices(devices);
                 } else {
