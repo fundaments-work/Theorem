@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use futures::StreamExt;
-use iroh::endpoint::{self, presets::Minimal, RelayMode};
+use iroh::endpoint::{self, presets::N0, RelayMode};
 use iroh::{PublicKey, SecretKey};
 use tauri::Emitter;
 use tokio::sync::Mutex;
@@ -92,7 +92,7 @@ impl IrohSyncEndpoint {
     ) -> Result<Self, String> {
         let secret_key = load_or_create_key(key_path)?;
         let public_key = secret_key.public();
-        let endpoint = iroh::endpoint::Endpoint::builder(Minimal)
+        let endpoint = iroh::endpoint::Endpoint::builder(N0)
             .secret_key(secret_key)
             .alpns(vec![ALPN.to_vec()])
             .relay_mode(RelayMode::Default)

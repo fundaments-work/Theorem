@@ -634,9 +634,9 @@ async fn save_peer_addrs_from_conn(
     }
 }
 
-/// Connect to a peer via iroh, using stored IP/port and relay URL as address hints.
-/// After a successful connection, captures the peer's relay URL and direct address
-/// from the connection paths so they can be used on future reconnections after restarts.
+/// Connect to a peer via iroh. With the N0 preset, the endpoint publishes its own
+/// relay URL to DNS (dns.iroh.link) so peers can resolve by PublicKey alone, even
+/// after restarts. Stored relay URL and IP are used as speed hints but are optional.
 async fn connect_to_peer(
     app: &tauri::AppHandle,
     peer: &PairedDevice,
@@ -647,15 +647,13 @@ async fn connect_to_peer(
         .parse()
         .map_err(|e| format!("Invalid peer node_id: {e}"))?;
 
+    // Build address with stored hints (optional — N0 DNS lookup resolves without them).
     let mut addr = iroh::EndpointAddr::new(peer_pk);
-    // Use stored relay URL as the primary addressing hint — iroh will route
-    // through the relay server to reach the peer even if direct IP has changed.
     if !peer.peer_relay_url.is_empty() {
         if let Ok(relay_url) = peer.peer_relay_url.parse::<iroh::RelayUrl>() {
             addr = addr.with_relay_url(relay_url);
         }
     }
-    // Also try the stored IP/port as a direct address hint for holepunching.
     if let Ok(ip_addr) = peer.last_ip.parse::<std::net::IpAddr>() {
         if peer.last_port > 0 {
             addr = addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, peer.last_port));
