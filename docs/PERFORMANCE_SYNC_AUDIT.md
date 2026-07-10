@@ -451,51 +451,56 @@ function addBook(book) {
 
 ---
 
-## 8. Remaining Gaps After Yjs (Removed — Replaced by iroh-docs)
+## 8. iroh-Native Sync Status
 
-Yjs was removed in v1.0.7. iroh-docs now handles CRDT metadata sync natively
-in the iroh stack. The following components use iroh-native protocols:
+All metadata sync now flows through iroh-docs + iroh-blobs + iroh-gossip on the
+iroh Router. The legacy custom protocol has been removed.
 
-### 8.1 Pairing & Device Identity
+### 8.1 Pairing
 
-**Current**: Custom X25519 + HKDF + QR code + encrypted proof/ack challenge-response,
-followed by DocTicket exchange for iroh-docs document sharing.
+**Current**: QR encodes `{ device_name, iroh_node_id, fingerprint }` only.
+X25519+HKDF+ChaCha20 proof exchange REMOVED — iroh QUIC TLS handles authentication.
+DocTicket exchange embedded in `PairingResponse.sync_doc_ticket`.
 
-**Library**: iroh PublicKey for identity, custom X25519+HKDF for pairing code exchange.
-The pairing flow now includes creating a shared iroh-docs document and exchanging
-the DocTicket via the `PairingResponse.sync_doc_ticket` field.
+| Step | What happens | Library |
+|------|-------------|---------|
+| 1 | Host generates QR with PublicKey + device info | `qrcode` crate |
+| 2 | Scanner connects via iroh QUIC | `iroh::Endpoint` |
+| 3 | Host creates iroh-docs doc, generates DocTicket | `iroh-docs` |
+| 4 | Scanner imports DocTicket, stores doc_id | `iroh-docs` |
 
-| Step | What happens |
-|------|-------------|
-| 1 | Host generates QR with `{ device_name, public_key, ip, port, fingerprint }` |
-| 2 | Scanner scans QR, connects via iroh QUIC |
-| 3 | X25519+HKDF key exchange (for legacy encrypted protocol) |
-| 4 | Host creates iroh-docs document, generates DocTicket |
-| 5 | Host stores doc_id on PairedDevice, includes ticket in PairingResponse |
-| 6 | Scanner imports ticket via `docs_import_sync_doc`, stores doc_id |
+**Status**: ✅ Fully implemented. ~200 lines custom crypto removed.
 
-### 8.2 File Transfer (Large Books)
+### 8.2 File Transfer
 
-**Current**: Custom 1 MiB chunked transfer over iroh QUIC streams.
-Per-chunk ChaCha20-Poly1305 AEAD, base64-encoded in JSON envelopes.
-~210 lines in `iroh_sync.rs`.
+**Current**: Both small (covers) and large (books) files flow through iroh-blobs:
+- `FsStore` for persistent on-disk blob storage
+- `blobs_add_file(path)` → BLAKE3 hash (adds to store)
+- `blobs_download_file(peer, hash, dest)` → downloads via `Downloader::download` + `export`
+- Covers: `blobs_add_bytes` / `blobs_download_bytes`
 
-**Library**: [`iroh-blobs`](https://crates.io/crates/iroh-blobs) v0.103.0 provides
-BLAKE3 content-addressed blob transfer with verified streaming, range requests,
-and progress events. The `blobs_add_bytes` and `blobs_download_bytes` Tauri
-commands use `iroh_blobs::api::Store` with `MemStore` backing.
-`Downloader::download()` connects to peer via iroh QUIC, streams blob over
-BlobsProtocol ALPN on Router.
-
-**Status**: Implemented for small blobs (covers, config). Large book files still
-use custom chunked transfer (MemStore is in-memory — FsStore needed for large files).
-
-| Blob size | Mechanism | Library |
-|-----------|-----------|---------|
-| Small (<10MB, covers) | `blobs_add_bytes` / `blobs_download_bytes` | iroh-blobs MemStore |
-| Large (books, >10MB) | `pull_book_files` custom chunked | custom (until iroh-blobs FsStore) |
+**Status**: ✅ Fully implemented. Custom chunked RPC removed (FsStore + Downloader).
 
 ### 8.3 Background Scheduling
+
+iroh-docs blob transfers use the iroh QUIC connection (TLS-encrypted). No custom
+per-chunk encryption needed. Verified streaming via BLAKE3 tree hashing.
+
+| Platform | Mechanism | Status |
+|----------|-----------|--------|
+| Desktop daemon | Runs iroh Router (docs+blobs+gossip) | ⬜ Daemon migration planned |
+| Android worker | JNI keepalive task | ⬜ Worker migration planned |
+| All | Live events via `doc.subscribe()` | ✅ Zustand updates in real-time |
+
+### 8.4 Store Bridge (Zustand ↔ iroh-docs)
+
+```ts
+// subscribeZustandToIrohDocs() in sync-orchestrator.ts
+// Subscribes to all 4 Zustand stores, writes mutations to iroh-docs
+// docs-entry-changed Tauri events → JS listener → Zustand update
+```
+
+**Status**: ✅ Fully implemented. Replaces old Yjs bridge (457 lines → ~60 lines).
 
 The iroh endpoint maintains persistent QUIC connections to relays. No custom
 keep-alive is needed — iroh handles reconnection automatically via relay fallback.
@@ -631,43 +636,34 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 
 | Priority | Custom Code (was) | Lines | Replaced With | Status |
 |----------|-------------------|-------|---------------|--------|
-| **HIGH** | Entire custom sync orchestration | ~1200 | `iroh-docs` + `iroh-blobs` | ✅ Docs CRDT + blobs xfer + Router |
-| **HIGH** | Accept loop + envelope protocol | ~100 | `iroh::Router` + `ProtocolHandler` | ✅ Router dispatches by ALPN |
-| **HIGH** | Metadata merge (LWW) | ~688 | `iroh-docs` CRDT + Zustand bridge | ✅ provisionToIrohDocs/hydrateFromIrohDocs |
-| **HIGH** | Yjs bridge (Zustand ↔ Yjs) | ~475 | `iroh-docs` native CRDT (removed Yjs) | ✅ Removed -603 lines |
-| **HIGH** | File/chunk transfer (partial) | ~210 | `iroh-blobs` | ✅ blobs_add_bytes / blobs_download_bytes |
-| **HIGH** | Pairing doc exchange | — | DocTicket in PairingResponse | ✅ handled during pairing handshake |
-| **HIGH** | No schema validation | ~500 (guards) | `zod` or `valibot` | ✅ Zod schemas for all 9 domains |
-| **HIGH** | Manual snake_case remap | ~50 | `serde(rename_all="camelCase")` | ✅ All protocol structs use it |
-| **HIGH** | Manual ISO 8601 | ~57 | `time` crate | ✅ `time::OffsetDateTime::format(Rfc3339)` |
+| **HIGH** | Custom sync orchestration | ~1200 | `iroh-docs` + `iroh-blobs` + Router | ✅ |
+| **HIGH** | Accept loop + envelope protocol | ~100 | `iroh::Router` + `ProtocolHandler` | ✅ |
+| **HIGH** | Metadata merge (LWW, 688 lines) | ~688 | `iroh-docs` CRDT + Zustand bridge | ✅ |
+| **HIGH** | Yjs bridge (Zustand ↔ Yjs) | ~475 | Removed — iroh-docs native CRDT | ✅ Deleted |
+| **HIGH** | File/cover transfer (custom chunked) | ~210 | `iroh-blobs` FsStore + Downloader | ✅ |
+| **HIGH** | Pairing X25519+HKDF+proof | ~200 | PublicKey QR + iroh QUIC TLS | ✅ Removed |
+| **HIGH** | Pairing doc exchange | — | DocTicket in PairingResponse | ✅ |
+| **HIGH** | Schema validation | ~500 (guards) | `zod` schemas for all 9 domains | ✅ |
+| **HIGH** | Snake_case remap | ~50 | `serde(rename_all="camelCase")` | ✅ |
+| **HIGH** | Manual ISO 8601 | ~57 | `time` crate `Rfc3339` | ✅ |
+| **MED** | ContextMenu | 236 | `@radix-ui/react-context-menu` | ✅ |
+| **MED** | Dropdown | 194 | `@radix-ui/react-select` | ✅ |
+| **MED** | Modal | 238 | `@radix-ui/react-dialog` | ✅ |
+| **MED** | Keyboard shortcuts | 183 | `react-hotkeys-hook` | ✅ |
+| **MED** | TokenBucket | 35 | `p-limit` | ✅ |
+| **LOW** | Response cache | ~40 | `lru-cache` | ✅ |
 
-### Still Custom (justified)
+### Still Custom (justified or in progress)
 
-| Custom Code | Lines | Why |
-|-------------|-------|-----|
-| X25519+HKDF pairing | ~200 | iroh has no pairing protocol. QR + PublicKey exchange needed. |
-| Large file chunked transfer | ~210 | iroh-blobs MemStore insufficient for >10MB files. FsStore API private. |
-| Legacy daemon + Android worker | ~500 | App lifecycle management. iroh Router should run in daemon instead. |
-| Rust EPUB pre-parser | 332 | Intentional performance optimization. Uses `quick-xml`. |
-| Custom persistence adapter | 188 | No Zustand adapter for Tauri SQLite + localStorage fallback. |
-| StarDict parser | 589 | No mature JS library for this niche format. |
-| **MED** | ContextMenu | 236 | `@radix-ui/react-context-menu` | 22k | Full a11y, keyboard nav |
-| **MED** | Dropdown | 194 | `@radix-ui/react-select` | 22k | Arrow keys, type-to-select |
-| **MED** | Modal | 238 | `@radix-ui/react-dialog` | 22k | Edge case a11y |
-| **MED** | Keyboard shortcuts | 183 | `react-hotkeys-hook` | 5.6k | Scope management |
-| **MED** | TokenBucket | 35 | `p-limit` | 8.2k | Standard rate limiter |
-| **LOW** | Custom response cache | ~40 | `lru-cache` | 5.5k | TTL-aware caching |
-
-### Should Keep (Justified Custom Code)
-
-| Code | Why |
-|------|-----|
-| Rust EPUB pre-parser (332 lines) | Intentional performance optimization. Uses `quick-xml`. Parallel fast path over zip.js. |
-| Custom persistence adapter (188 lines) | No Zustand adapter for Tauri SQLite + localStorage fallback. |
-| `useDebounce` (17 lines) | Too small to justify dependency. |
-| StarDict parser (589 lines) | No mature JS library for this niche format. |
-| RSS feed extraction layer | Uses `fast-xml-parser`. Custom extraction handles real-world edge cases. |
-| PDF metadata parser (145 lines) | Lightweight byte-scanning. Full `lopdf` would add significant compile time for simple metadata. |
+| Custom Code | Lines | Why | Status |
+|-------------|-------|-----|--------|
+| Legacy daemon (HTTP sync) | ~500 | iroh Router not yet running in daemon | ⬜ Planned |
+| Android worker (JNI HTTP) | ~200 | iroh keepalive not yet implemented | ⬜ Planned |
+| `axum` in sync-daemon | — | Control API (port 43936) — legitimate | ✅ Legitimate |
+| Rust EPUB pre-parser | 332 | Performance optimization. Uses `quick-xml`. | ✅ Keep |
+| Custom persistence adapter | 188 | No Zustand adapter for Tauri SQLite | ✅ Keep |
+| StarDict parser | 589 | No mature JS library | ✅ Keep |
+| Stale: `axum`, `tower-http`, `local-ip-address` in main crate | — | Removed from main Cargo.toml | ✅ Removed |
 
 ### Dependencies Already Used Correctly
 
@@ -744,13 +740,20 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 | # | Fix | Status |
 |---|------|--------|
 | 36 | Pairing DocTicket exchange | ✅ |
-| 37 | iroh-docs ↔ Zustand bridge (provision + hydrate) | ✅ |
-| 38 | iroh-blobs file/cover transfer commands | ✅ |
-| 39 | Live event subscription (doc.subscribe) | ❌ (2s polling timer) |
-| 40 | Daemon migration from HTTP to iroh Router | ❌ |
-| 41 | N0 preset for DNS peer discovery | ✅ |
+| 37 | iroh-docs ↔ Zustand bridge (subscribeZustandToIrohDocs) | ✅ |
+| 38 | iroh-blobs file/cover transfer (FsStore + blobs_add_file) | ✅ |
+| 39 | Live event subscription (doc.subscribe → Tauri events → Zustand) | ✅ |
+| 40 | Legacy protocol removal (initiateSync, push/pull/complete, file_pull) | ✅ ~1240 lines removed |
+| 41 | Pairing crypto removed (X25519+HKDF+ChaCha20) | ✅ ~200 lines removed |
+| 42 | FsStore enabled (fs-store feature, persistent on-disk) | ✅ |
+| 43 | Stale deps removed (axum, tower-http, local-ip-address) | ✅ |
+| 44 | N0 preset for DNS peer discovery | ✅ |
+| 45 | Daemon migration from HTTP to iroh Router | ⬜ Planned (see DAEMON_IROH_MIGRATION.md) |
+| 46 | Android worker migration to iroh keepalive | ⬜ Planned |
+| 47 | COMPREHENSIVE_AUDIT.md added | ✅ |
+| 48 | DAEMON_IROH_MIGRATION.md added | ✅ |
 
-**Total: 38/41 fixes implemented.**
+**Total: 44/48 fixes implemented.** 2 planned (daemon + worker), 2 docs added.
 
 ### Files Created (1.0.7)
 
@@ -810,7 +813,7 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 | `transition-all` usage | 48 instances | 0 instances |
 | Settings mobile scroll | `snap-x snap-mandatory` nested scroll | Smooth `overflow-x-auto` flex row |
 | Zod peer data validation | None (silent JSON.parse errors) | All 9 domains validated, invalid data dropped |
-| Yjs CRDT sync (removed) | Custom LWW (672 lines, 6 bugs) | iroh-docs CRDT + Router (library) |
+| Yjs CRDT sync (removed) | Custom LWW (672 lines, 6 bugs) | iroh-docs CRDT + Router (library, zero conflicts) |
 | Radial UI a11y | Custom Modal/Dropdown/ContextMenu (668 lines) | Radix primitives (288 lines, full a11y) |
 
 ---
@@ -846,19 +849,19 @@ With iroh-docs:
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Tier 1: LAN (zero config, always works on same network) │
-│  mdns-sd announces _theorem-sync._tcp service            │
-│  yrs over direct WebSocket (tokio-tungstenite + yrs-axum)│
-│  Pairing via QR code (keep existing X25519 + HKDF)       │
+│  iroh N0 preset + DNS/Pkarr address lookup               │
+│  Direct QUIC connections via public key                   │
+│  Pairing via QR code (PublicKey + DocTicket exchange)    │
 │  No relay needed, sub-millisecond latency                │
 ├─────────────────────────────────────────────────────────┤
 │ Tier 2: Internet P2P (automatic fallback)                │
 │  iroh QUIC by ed25519 public key                         │
-│  STUN (stun.l.google.com:19302) for NAT traversal        │
-│  Self-hosted coturn for TURN relay (~10% of symmetric NAT)│
+│  N0 DNS/Pkarr address lookup                             │
+│  Relay fallback when direct P2P fails                    │
 │  Works across any network, no port forwarding needed     │
 ├─────────────────────────────────────────────────────────┤
 │ Tier 3: Cloud Relay (always available, future)           │
-│  Cloudflare Durable Object holds canonical Y.Doc         │
+│  Cloudflare Durable Object holds canonical iroh-docs doc │
 │  Devices sync through DO when P2P unreachable            │
 │  DO auth via device public key signature                 │
 │  See NEW_FEATURES_ARCHITECTURE.md for full design        │
@@ -891,48 +894,32 @@ With iroh-docs:
 
 ---
 
-## Appendix A: Sync Architecture Comparison
+## Appendix A: Sync Architecture (Current)
 
 ```
-CURRENT (3 redundant loops, broken):
-┌─────────────┐   ┌──────────────┐   ┌──────────────┐
-│  Daemon     │   │  Rust Loop   │   │  JS Timer    │
-│  (120s)     │   │  (300s)      │   │  (120s)      │
-│  Port 43935 │   │  In-process  │   │  setInterval │
-└──────┬──────┘   └──────┬───────┘   └──────┬───────┘
-       │                 │                   │
-       └─── ALL THREE calling initiate_sync() ───┘
-                  to SAME peer
-       Full 9-domain snapshot (50-125MB) each time
-       SHA-256 × 9 every provision
-       Base64 bloat on all encrypted payloads
-
-PROPOSED (Yjs + iroh):
-┌──────────────────────────────────────────┐
-│  Yjs CRDT Engine (in-app process)        │
-│  ┌────────┐  ┌──────────┐  ┌─────────┐  │
-│  │ Y.Map  │  │ Y.Map    │  │ Y.Map   │  │
-│  │ books  │  │ annotat. │  │ settings│  │
-│  └────────┘  └──────────┘  └─────────┘  │
-│          WebSocket/WebRTC Provider       │
-└──────────────────┬───────────────────────┘
-                   │
-      Delta sync (only changes, not full snapshots)
-      Binary encoding (no base64, no JSON)
-      CRDT merge (no conflicts, no data loss)
-      Offline queue auto-replays on reconnect
-      Single sync mechanism
+CURRENT (iroh-native — single mechanism):
+┌──────────────────────────────────────────────────┐
+│  iroh Router (in-app process)                    │
+│  ┌────────────┐  ┌──────────┐  ┌──────────────┐ │
+│  │ iroh-docs  │  │ iroh-    │  │ iroh-gossip  │ │
+│  │ (CRDT KV)  │  │ blobs    │  │ (live notif) │ │
+│  └────────────┘  └──────────┘  └──────────────┘ │
+│          │             │              │           │
+│          └─── Router dispatches by ALPN ───┘      │
+│                   (one endpoint)                   │
+└──────────────────────────────────────────────────┘
+     Metadata: docs range-based reconciliation
+     Files:    blobs BLAKE3 verified streaming
+     Covers:   blobs add_bytes / download_bytes
+     Events:   gossip → doc.subscribe() → Zustand
 ```
 
-## Appendix B: What Yjs Does NOT Replace
+## Appendix B: What iroh-docs Does NOT Replace
 
-Yjs handles CRDT merge + delta sync perfectly. But it doesn't replace:
-
-| Area | Why | Library |
+| Area | Why | Solution |
 |------|-----|---------|
-| Device pairing identity | Yjs doesn't prescribe identity/auth | Keep current or use iroh |
-| Large file transfer (>10MB) | Yjs docs state "document-sized data only" | iroh or custom HTTP streaming |
-| Background scheduling | Yjs provider manages connections, not OS scheduling | Android WorkManager, systemd for desktop |
-| Zustand → Yjs bridge | App-specific glue code | ~50 lines of custom adapter |
-| Peer discovery on LAN | Yjs provider connects, doesn't discover | mDNS / SSDP or iroh discovery |
-| Persistent CRDT storage | Yjs needs a storage adapter | `y-indexeddb` (browser) or `yrs-kvstore` (Rust) |
+| Device pairing identity | iroh has no pairing protocol | QR encodes PublicKey — iroh TLS handles auth |
+| Large file transfer | iroh-docs stores hashes, not file data | iroh-blobs FsStore + Downloader |
+| Background scheduling | iroh endpoint lives in-app | Daemon runs iroh Router; Android WorkManager keepalive |
+| Zustand ↔ iroh-docs bridge | App-specific glue code | `subscribeZustandToIrohDocs()` (60 lines) |
+| Peer discovery on LAN | iroh N0 uses DNS by default | mdns-sd for LAN (future) |
