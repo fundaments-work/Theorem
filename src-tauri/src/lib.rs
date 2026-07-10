@@ -1189,6 +1189,8 @@ pub fn run() {
             // iroh-blobs file/cove r transfer
             sync_commands::blobs_add_bytes,
             sync_commands::blobs_download_bytes,
+            sync_commands::blobs_add_file,
+            sync_commands::blobs_download_file,
             // Background sync
             sync_commands::start_background_sync,
             sync_commands::stop_background_sync,

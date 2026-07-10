@@ -1394,3 +1394,69 @@ pub async fn blobs_download_bytes(
         .map(|b| b.to_vec())
         .map_err(|e| format!("get bytes: {e}"))
 }
+
+#[tauri::command]
+pub async fn blobs_add_file(app: tauri::AppHandle, file_path: String) -> Result<String, String> {
+    let sync_state = get_sync_state(&app)?;
+    let guard = sync_state
+        .transport_state
+        .docs_api
+        .try_lock()
+        .map_err(|_| "docs api busy".to_string())?;
+    let snapshot = guard
+        .as_ref()
+        .ok_or("iroh-docs not initialized".to_string())?;
+    snapshot
+        .blobs
+        .blobs()
+        .add_path(&file_path)
+        .await
+        .map(|tag| tag.hash.to_string())
+        .map_err(|e| format!("blobs add file: {e}"))
+}
+
+#[tauri::command]
+pub async fn blobs_download_file(
+    app: tauri::AppHandle,
+    peer_device_id: String,
+    hash_str: String,
+    dest_path: String,
+) -> Result<(), String> {
+    let ep = get_or_init_iroh(&app).await?;
+    let sync_state = get_sync_state(&app)?;
+
+    let peer_pk: iroh::PublicKey = {
+        let devices = sync_state.transport_state.paired_devices.lock().await;
+        let peer = devices
+            .get(&peer_device_id)
+            .ok_or("peer not found".to_string())?;
+        peer.iroh_node_id
+            .parse()
+            .map_err(|e| format!("parse peer key: {e}"))?
+    };
+
+    let hash: iroh_blobs::Hash = hash_str.parse().map_err(|e| format!("parse hash: {e}"))?;
+
+    let guard = sync_state
+        .transport_state
+        .docs_api
+        .try_lock()
+        .map_err(|_| "docs api busy".to_string())?;
+    let snapshot = guard
+        .as_ref()
+        .ok_or("iroh-docs not initialized".to_string())?;
+
+    let downloader = snapshot.blobs.downloader(&ep.endpoint);
+    downloader
+        .download(hash, Some(peer_pk))
+        .await
+        .map_err(|e| format!("download: {e}"))?;
+
+    snapshot
+        .blobs
+        .blobs()
+        .export(hash, &dest_path)
+        .await
+        .map(|_bytes| ())
+        .map_err(|e| format!("export blob: {e}"))
+}

@@ -627,22 +627,19 @@ pub fn subscribe_doc_events(
         };
         use futures::StreamExt;
         while let Some(event) = stream.next().await {
-            match event {
-                Ok(iroh_docs::engine::LiveEvent::InsertRemote { entry, .. }) => {
-                    let key = String::from_utf8_lossy(entry.key()).to_string();
-                    if let Ok(content) = blobs.blobs().get_bytes(entry.content_hash()).await {
-                        if let Ok(value) = String::from_utf8(content.to_vec()) {
-                            #[derive(serde::Serialize, Clone)]
-                            struct EntryPayload {
-                                key: String,
-                                value: String,
-                            }
-                            app.emit("docs-entry-changed", EntryPayload { key, value })
-                                .ok();
+            if let Ok(iroh_docs::engine::LiveEvent::InsertRemote { entry, .. }) = event {
+                let key = String::from_utf8_lossy(entry.key()).to_string();
+                if let Ok(content) = blobs.blobs().get_bytes(entry.content_hash()).await {
+                    if let Ok(value) = String::from_utf8(content.to_vec()) {
+                        #[derive(serde::Serialize, Clone)]
+                        struct EntryPayload {
+                            key: String,
+                            value: String,
                         }
+                        app.emit("docs-entry-changed", EntryPayload { key, value })
+                            .ok();
                     }
                 }
-                _ => {}
             }
         }
     });
@@ -685,8 +682,16 @@ pub fn start_accept_loop(
     let data_dir = state.app_data_dir.clone();
 
     tokio::spawn(async move {
-        // ── iroh-blobs: in-memory store for docs content + BlobsProtocol ──
-        let blobs = iroh_blobs::store::mem::MemStore::default();
+        // ── iroh-blobs: persistent file-backed store ──
+        let blobs_path = data_dir.join("iroh-blobs");
+        let _ = std::fs::create_dir_all(&blobs_path);
+        let blobs = match iroh_blobs::store::fs::FsStore::load(&blobs_path).await {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[iroh-sync] Failed to load blobs store: {e}");
+                return;
+            }
+        };
         let blobs_handler = iroh_blobs::BlobsProtocol::new(&blobs, None);
 
         // ── iroh-gossip: P2P messaging ──

@@ -1383,6 +1383,27 @@ function scheduleDocsWrite(domain: string, fn: () => void): void {
     }, DOCS_DEBOUNCE_MS));
 }
 
+/** Add a file to iroh-blobs store by path. Returns BLAKE3 hash. */
+export async function blobsAddFile(filePath: string): Promise<string | null> {
+    try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return await invoke<string>("blobs_add_file", { filePath });
+    } catch { return null; }
+}
+
+/** Download a blob from a peer and export it to a file path. */
+export async function blobsDownloadFile(
+    peerDeviceId: string,
+    hash: string,
+    destPath: string,
+): Promise<boolean> {
+    try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("blobs_download_file", { peerDeviceId, hashStr: hash, destPath });
+        return true;
+    } catch { return false; }
+}
+
 /**
  * Subscribe to all Zustand stores and write mutations to iroh-docs.
  * Call ONCE at app startup after docs API is available.
