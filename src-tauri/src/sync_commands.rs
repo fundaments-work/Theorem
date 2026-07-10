@@ -79,6 +79,7 @@ pub fn init_sync(
         sync_data: Mutex::new(None),
         pending_pairing: Mutex::new(None),
         event_emitter: Some(emitter),
+        docs_api: Mutex::new(None),
     });
 
     // Don't start iroh accept loop here — it's started on-demand by the frontend.

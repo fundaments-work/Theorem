@@ -60,6 +60,16 @@ pub struct SyncTransportState {
     pub sync_data: Mutex<Option<SyncDataSnapshot>>,
     pub pending_pairing: Mutex<Option<PendingPairing>>,
     pub event_emitter: Option<EventCallback>,
+    pub docs_api: Mutex<Option<DocsApiSnapshot>>,
+}
+
+/// Snapshot of the iroh-docs API client + author, stored after Router startup.
+/// Tauri commands access this to read/write sync entries.
+#[derive(Clone)]
+pub struct DocsApiSnapshot {
+    pub api: iroh_docs::api::DocsApi,
+    pub author: iroh_docs::AuthorId,
+    pub sync_doc: iroh_docs::NamespaceId,
 }
 
 /// Snapshot of app data provided by the frontend for sync operations.
@@ -593,7 +603,7 @@ pub async fn pull_covers_via_iroh(
     Ok(result)
 }
 
-// ─── Router-based Accept Loop ───
+// ─── Full iroh Stack: Docs + Blobs + Gossip + Router ───
 
 /// Protocol handler that wraps our sync protocol dispatch.
 /// Registered on iroh Router ALPN for incoming theorem connections.
@@ -617,8 +627,10 @@ impl ProtocolHandler for TheoremProtocolHandler {
     }
 }
 
-/// Start iroh Router for ALPN-based accept dispatch.
-/// Returns a cancel sender — sending `true` shuts down the Router.
+/// Start the iroh Router with Docs (metadata CRDT), Blobs (file transfer),
+/// Gossip (live notifications), and our custom sync protocol handler.
+/// Stores the DocsApi in the transport state for Tauri command access.
+/// Returns a cancel sender — drop or send `true` to shut down.
 pub fn start_accept_loop(
     endpoint: Arc<IrohSyncEndpoint>,
     state: Arc<SyncTransportState>,
@@ -626,11 +638,63 @@ pub fn start_accept_loop(
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
 
     let router_endpoint = endpoint.endpoint.clone();
-    let handler = TheoremProtocolHandler { state };
+    let state_clone = state.clone();
+    let data_dir = state.app_data_dir.clone();
 
     tokio::spawn(async move {
+        // ── iroh-blobs: in-memory store for docs content + BlobsProtocol ──
+        let blobs = iroh_blobs::store::mem::MemStore::default();
+        let blobs_handler = iroh_blobs::BlobsProtocol::new(&blobs, None);
+
+        // ── iroh-gossip: P2P messaging ──
+        let gossip = iroh_gossip::net::Gossip::builder().spawn(router_endpoint.clone());
+
+        // ── iroh-docs: CRDT metadata sync ──
+        let docs_path = data_dir.join("iroh-docs");
+        let _ = std::fs::create_dir_all(&docs_path);
+        let blobs_store: iroh_blobs::api::Store = blobs.into();
+        let docs_handler = match iroh_docs::protocol::Docs::persistent(docs_path)
+            .spawn(router_endpoint.clone(), blobs_store, gossip.clone())
+            .await
+        {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("[iroh-sync] Failed to spawn iroh-docs: {e}");
+                return;
+            }
+        };
+
+        // Store the DocsApi so Tauri commands can read/write entries
+        let api = docs_handler.api().clone();
+        let author = match api.author_default().await {
+            Ok(a) => a,
+            Err(_) => match api.author_create().await {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("[iroh-sync] Failed to create docs author: {e}");
+                    return;
+                }
+            },
+        };
+
+        // Create or open the sync document (shared with paired peers)
+        let mut docs_api_state = state_clone.docs_api.lock().await;
+        *docs_api_state = Some(DocsApiSnapshot {
+            api,
+            author,
+            sync_doc: iroh_docs::NamespaceId::from([0u8; 32]), // placeholder
+        });
+        drop(docs_api_state);
+
+        // Our custom sync protocol handler
+        let theorem_handler = TheoremProtocolHandler { state: state_clone };
+
+        // ── Router: dispatch by ALPN ──
         let router = Router::builder(router_endpoint)
-            .accept(ALPN, handler)
+            .accept(iroh_blobs::ALPN, blobs_handler)
+            .accept(iroh_gossip::ALPN, gossip)
+            .accept(iroh_docs::ALPN, docs_handler)
+            .accept(ALPN, theorem_handler)
             .spawn();
 
         let _ = cancel_rx.changed().await;
