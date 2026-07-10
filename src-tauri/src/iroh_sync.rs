@@ -610,6 +610,44 @@ pub async fn pull_covers_via_iroh(
 
 // ─── Full iroh Stack: Docs + Blobs + Gossip + Router ───
 
+/// Subscribe to iroh-docs live events for a document and emit Tauri events
+/// to the frontend when entries change. Enables real-time Zustand updates.
+pub fn subscribe_doc_events(
+    app: tauri::AppHandle,
+    doc: iroh_docs::api::Doc,
+    blobs: iroh_blobs::api::Store,
+) {
+    tokio::spawn(async move {
+        let mut stream = match doc.subscribe().await {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[iroh-sync] Failed to subscribe to doc events: {e}");
+                return;
+            }
+        };
+        use futures::StreamExt;
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(iroh_docs::engine::LiveEvent::InsertRemote { entry, .. }) => {
+                    let key = String::from_utf8_lossy(entry.key()).to_string();
+                    if let Ok(content) = blobs.blobs().get_bytes(entry.content_hash()).await {
+                        if let Ok(value) = String::from_utf8(content.to_vec()) {
+                            #[derive(serde::Serialize, Clone)]
+                            struct EntryPayload {
+                                key: String,
+                                value: String,
+                            }
+                            app.emit("docs-entry-changed", EntryPayload { key, value })
+                                .ok();
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+}
+
 /// Protocol handler that wraps our sync protocol dispatch.
 /// Registered on iroh Router ALPN for incoming theorem connections.
 #[derive(Clone)]
@@ -1445,6 +1483,12 @@ async fn handle_pair_req(
                             .await
                             .map(|t| t.to_string())
                             .unwrap_or_default();
+                        // Subscribe to live events for this document
+                        subscribe_doc_events(
+                            state.app_handle.clone(),
+                            doc.clone(),
+                            snapshot.blobs.clone(),
+                        );
                         // Store the doc_id on the paired device
                         let mut devices = state.paired_devices.lock().await;
                         if let Some(device) = devices.get_mut(&pairing_req.device_id) {

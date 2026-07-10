@@ -419,13 +419,19 @@ pub async fn submit_pairing_code(
     let docs_ready = {
         let mut waited = 0;
         loop {
-            if sync_state.transport_state.docs_api.try_lock()
-                .map(|g| g.is_some()).unwrap_or(false)
+            if sync_state
+                .transport_state
+                .docs_api
+                .try_lock()
+                .map(|g| g.is_some())
+                .unwrap_or(false)
             {
                 break true;
             }
             waited += 1;
-            if waited > 50 { break false; }
+            if waited > 50 {
+                break false;
+            }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     };
@@ -440,6 +446,10 @@ pub async fn submit_pairing_code(
             Ok(ticket) => match api.import(ticket).await {
                 Ok(doc) => {
                     let doc_id = doc.id().to_string();
+                    // Subscribe to live events
+                    if let Ok(blobs) = get_blobs_store(&app) {
+                        iroh_sync::subscribe_doc_events(app.clone(), doc, blobs);
+                    }
                     let sync_state = get_sync_state(&app)?;
                     let mut devices = sync_state.transport_state.paired_devices.lock().await;
                     if let Some(device) = devices.get_mut(&pairing_response.device_id) {
@@ -1119,6 +1129,19 @@ fn get_docs_author(app: &tauri::AppHandle) -> Result<iroh_docs::AuthorId, String
         .ok_or_else(|| "iroh-docs not initialized".to_string())
 }
 
+fn get_blobs_store(app: &tauri::AppHandle) -> Result<iroh_blobs::api::Store, String> {
+    let sync_state = get_sync_state(app)?;
+    let guard = sync_state
+        .transport_state
+        .docs_api
+        .try_lock()
+        .map_err(|_| "docs api busy".to_string())?;
+    guard
+        .as_ref()
+        .map(|s| s.blobs.clone())
+        .ok_or_else(|| "iroh-docs not initialized".to_string())
+}
+
 #[tauri::command]
 pub async fn docs_create_sync_doc(
     app: tauri::AppHandle,
@@ -1135,6 +1158,11 @@ pub async fn docs_create_sync_doc(
         )
         .await
         .map_err(|e| format!("share doc: {e}"))?;
+
+    // Subscribe to live events for this document
+    if let Ok(blobs) = get_blobs_store(&app) {
+        iroh_sync::subscribe_doc_events(app.clone(), doc, blobs);
+    }
 
     let sync_state = get_sync_state(&app)?;
     let mut devices = sync_state.transport_state.paired_devices.lock().await;
@@ -1164,6 +1192,11 @@ pub async fn docs_import_sync_doc(
         .await
         .map_err(|e| format!("import doc: {e}"))?;
     let doc_id = doc.id();
+
+    // Subscribe to live events for this document
+    if let Ok(blobs) = get_blobs_store(&app) {
+        iroh_sync::subscribe_doc_events(app.clone(), doc, blobs);
+    }
 
     let sync_state = get_sync_state(&app)?;
     let mut devices = sync_state.transport_state.paired_devices.lock().await;

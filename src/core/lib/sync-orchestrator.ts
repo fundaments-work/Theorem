@@ -648,6 +648,11 @@ export async function runDeviceSync(
         setStatus("syncing", "Preparing data...");
         log("Gathering local data snapshot...");
 
+        // 1. Provision local state to iroh-docs for live sync
+        await provisionToIrohDocs();
+        await docsSyncNow(peerDeviceId);
+
+        // 2. Legacy metadata sync (initiateSync → mergeIncomingData)
         const { domains, manifest, settingsUpdatedAt } = await buildDomainsAndManifest();
 
         log("Ensuring sync responder is ready...");
@@ -1121,6 +1126,41 @@ export async function startAutoSync(): Promise<() => void> {
         }
     }
 
+    // 5. iroh-docs live event listener — real-time Zustand updates from peers
+    if (isTauri()) {
+        try {
+            const { listen } = await import("@tauri-apps/api/event");
+            const unlisten = await listen<{ key: string; value: string }>("docs-entry-changed", (event) => {
+                const { key, value } = event.payload;
+                try {
+                    const parsed = JSON.parse(value);
+                    if (key === "books" && Array.isArray(parsed)) {
+                        useLibraryStore.setState({ books: parsed });
+                    } else if (key === "annotations" && Array.isArray(parsed)) {
+                        useLibraryStore.setState({ annotations: parsed });
+                    } else if (key === "collections" && Array.isArray(parsed)) {
+                        useLibraryStore.setState({ collections: parsed });
+                    } else if (key === "deletion_tombstones" && Array.isArray(parsed)) {
+                        useLibraryStore.setState({ deletionTombstones: parsed });
+                    } else if (key === "vocabulary" && Array.isArray(parsed)) {
+                        useVocabularyStore.setState({ vocabularyTerms: parsed });
+                    } else if (key === "settings" && typeof parsed === "object") {
+                        useSettingsStore.setState({ settings: parsed });
+                    } else if (key === "reading_stats" && typeof parsed === "object") {
+                        useSettingsStore.setState({ stats: parsed });
+                    } else if (key === "rss_feeds" && Array.isArray(parsed)) {
+                        useRssStore.setState({ feeds: parsed });
+                    } else if (key === "rss_articles" && Array.isArray(parsed)) {
+                        useRssStore.setState({ articles: parsed });
+                    }
+                } catch {}
+            });
+            cleanups.push(unlisten);
+        } catch {
+            // iroh-docs event not available
+        }
+    }
+
     _autoSyncCleanups = cleanups;
     return () => stopAutoSync();
 }
@@ -1347,4 +1387,102 @@ export async function blobsDownloadBytes(
         });
         return new Uint8Array(result);
     } catch { return null; }
+}
+
+// ─── Zustand → iroh-docs Bridge (real-time mutation sync) ───
+
+const _docsDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const DOCS_DEBOUNCE_MS = 500;
+
+function scheduleDocsWrite(domain: string, fn: () => void): void {
+    const existing = _docsDebounceTimers.get(domain);
+    if (existing) clearTimeout(existing);
+    _docsDebounceTimers.set(domain, setTimeout(() => {
+        _docsDebounceTimers.delete(domain);
+        fn();
+    }, DOCS_DEBOUNCE_MS));
+}
+
+/**
+ * Subscribe to all Zustand stores and write mutations to iroh-docs.
+ * Call ONCE at app startup after docs API is available.
+ * Returns a cleanup function to unsubscribe all listeners.
+ */
+export function subscribeZustandToIrohDocs(): () => void {
+    const unsubs: (() => void)[] = [];
+
+    // Library store: books, annotations, collections, tombstones
+    let prevBooks = useLibraryStore.getState().books;
+    let prevAnnotations = useLibraryStore.getState().annotations;
+    let prevCollections = useLibraryStore.getState().collections;
+    let prevTombstones = useLibraryStore.getState().deletionTombstones;
+
+    unsubs.push(useLibraryStore.subscribe((state) => {
+        if (state.books !== prevBooks) {
+            prevBooks = state.books;
+            scheduleDocsWrite("books", () => {
+                docsSetEntry("books", JSON.stringify(state.books.map(
+                    ({ filePath: _f, storagePath: _s, coverPath, locations: _l, ...book }) => ({
+                        ...book,
+                        ...(coverPath && !coverPath.startsWith("data:") ? { coverPath } : {}),
+                    })
+                )));
+            });
+        }
+        if (state.annotations !== prevAnnotations) {
+            prevAnnotations = state.annotations;
+            scheduleDocsWrite("annotations", () => docsSetEntry("annotations", JSON.stringify(state.annotations)));
+        }
+        if (state.collections !== prevCollections) {
+            prevCollections = state.collections;
+            scheduleDocsWrite("collections", () => docsSetEntry("collections", JSON.stringify(state.collections)));
+        }
+        if (state.deletionTombstones !== prevTombstones) {
+            prevTombstones = state.deletionTombstones;
+            scheduleDocsWrite("deletion_tombstones", () => docsSetEntry("deletion_tombstones", JSON.stringify(state.deletionTombstones)));
+        }
+    }));
+
+    // Vocabulary store
+    let prevVocab = useVocabularyStore.getState().vocabularyTerms;
+    unsubs.push(useVocabularyStore.subscribe((state) => {
+        if (state.vocabularyTerms !== prevVocab) {
+            prevVocab = state.vocabularyTerms;
+            scheduleDocsWrite("vocabulary", () => docsSetEntry("vocabulary", JSON.stringify(state.vocabularyTerms)));
+        }
+    }));
+
+    // RSS store
+    let prevFeeds = useRssStore.getState().feeds;
+    let prevArticles = useRssStore.getState().articles;
+    unsubs.push(useRssStore.subscribe((state) => {
+        if (state.feeds !== prevFeeds) {
+            prevFeeds = state.feeds;
+            scheduleDocsWrite("rss_feeds", () => docsSetEntry("rss_feeds", JSON.stringify(state.feeds)));
+        }
+        if (state.articles !== prevArticles) {
+            prevArticles = state.articles;
+            scheduleDocsWrite("rss_articles", () => docsSetEntry("rss_articles", JSON.stringify(state.articles)));
+        }
+    }));
+
+    // Settings store
+    let prevSettings = useSettingsStore.getState().settings;
+    let prevStats = useSettingsStore.getState().stats;
+    unsubs.push(useSettingsStore.subscribe((state) => {
+        if (state.settings !== prevSettings) {
+            prevSettings = state.settings;
+            scheduleDocsWrite("settings", () => docsSetEntry("settings", JSON.stringify(state.settings)));
+        }
+        if (state.stats !== prevStats) {
+            prevStats = state.stats;
+            scheduleDocsWrite("reading_stats", () => docsSetEntry("reading_stats", JSON.stringify(state.stats)));
+        }
+    }));
+
+    return () => {
+        for (const unsub of unsubs) unsub();
+        for (const t of _docsDebounceTimers.values()) clearTimeout(t);
+        _docsDebounceTimers.clear();
+    };
 }

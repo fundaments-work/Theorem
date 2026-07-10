@@ -334,6 +334,7 @@ function App() {
         }
 
         let cancelled = false;
+        let bridgeCleanup: (() => void) | null = null;
         const bootstrap = async () => {
             if (cancelled || !autoSyncEnabled) {
                 return;
@@ -359,7 +360,16 @@ function App() {
             }
             if (cancelled) return;
 
-            // Step 2: Start JS-based auto-sync scheduler
+            // Step 2: Subscribe Zustand stores to iroh-docs for real-time sync
+            // of all user interactions (likes, highlights, shelves, etc.)
+            try {
+                const { subscribeZustandToIrohDocs } = await import("./core/lib/sync-orchestrator");
+                bridgeCleanup = subscribeZustandToIrohDocs();
+            } catch {
+                // Bridge initialization not available.
+            }
+
+            // Step 3: Start JS-based auto-sync scheduler
             // (startAutoSync detects daemon and delegates if available).
             try {
                 await startAutoSync();
@@ -386,6 +396,7 @@ function App() {
         return () => {
             cancelled = true;
             clearTimeout(timer);
+            bridgeCleanup?.();
             stopAutoSync();
             import("./core/lib/device-sync").then((mod) => {
                 mod.stopBackgroundSync().catch(() => {});
