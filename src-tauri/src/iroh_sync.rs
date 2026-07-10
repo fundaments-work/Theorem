@@ -105,7 +105,12 @@ impl IrohSyncEndpoint {
         let public_key = secret_key.public();
         let endpoint = iroh::endpoint::Endpoint::builder(N0)
             .secret_key(secret_key)
-            .alpns(vec![ALPN.to_vec()])
+            .alpns(vec![
+                ALPN.to_vec(),
+                iroh_blobs::ALPN.to_vec(),
+                iroh_docs::ALPN.to_vec(),
+                iroh_gossip::ALPN.to_vec(),
+            ])
             .relay_mode(RelayMode::Default)
             .bind()
             .await
@@ -1424,11 +1429,45 @@ async fn handle_pair_req(
     let _ = save_paired_devices_to_disk(&state.app_data_dir, &devices);
     drop(devices);
 
+    // Create a shared iroh-docs sync document and generate a DocTicket
+    // for the scanner to import.
+    let sync_doc_ticket = {
+        if let Ok(guard) = state.docs_api.try_lock() {
+            if let Some(snapshot) = guard.as_ref() {
+                match snapshot.api.create().await {
+                    Ok(doc) => {
+                        let doc_id = doc.id();
+                        let ticket = doc
+                            .share(
+                                iroh_docs::api::protocol::ShareMode::Write,
+                                Default::default(),
+                            )
+                            .await
+                            .map(|t| t.to_string())
+                            .unwrap_or_default();
+                        // Store the doc_id on the paired device
+                        let mut devices = state.paired_devices.lock().await;
+                        if let Some(device) = devices.get_mut(&pairing_req.device_id) {
+                            device.sync_doc_id = doc_id.to_string();
+                        }
+                        ticket
+                    }
+                    Err(_) => String::new(),
+                }
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        }
+    };
+
     let response = PairingResponse {
         device_id: state.identity.device_id.clone(),
         device_name: state.device_name.clone(),
         encrypted_ack: String::new(),
         fingerprint: state.identity.effective_fingerprint(),
+        sync_doc_ticket,
     };
 
     serde_json::to_value(response).unwrap()

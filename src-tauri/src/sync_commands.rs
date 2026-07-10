@@ -404,6 +404,33 @@ pub async fn submit_pairing_code(
             .unwrap_or_else(|e| eprintln!("[sync] Failed to save paired devices: {e}"));
     }
 
+    // Import the shared iroh-docs sync document from the host's ticket.
+    if !pairing_response.sync_doc_ticket.is_empty() {
+        let api = get_docs_api(&app)?;
+        match pairing_response
+            .sync_doc_ticket
+            .parse::<iroh_docs::DocTicket>()
+        {
+            Ok(ticket) => match api.import(ticket).await {
+                Ok(doc) => {
+                    let doc_id = doc.id().to_string();
+                    let sync_state = get_sync_state(&app)?;
+                    let mut devices = sync_state.transport_state.paired_devices.lock().await;
+                    if let Some(device) = devices.get_mut(&pairing_response.device_id) {
+                        device.sync_doc_id = doc_id;
+                        iroh_sync::save_paired_devices_to_disk(
+                            &sync_state.transport_state.app_data_dir,
+                            &devices,
+                        )
+                        .unwrap_or_else(|e| eprintln!("[sync] Failed to save paired devices: {e}"));
+                    }
+                }
+                Err(e) => eprintln!("[sync] Failed to import docs doc: {e}"),
+            },
+            Err(e) => eprintln!("[sync] Failed to parse docs ticket: {e}"),
+        }
+    }
+
     // Also register with iroh endpoint
     let peer_info = iroh_sync::IrohPeerInfo {
         public_key: peer_pk,
@@ -1201,4 +1228,33 @@ pub async fn docs_get_all_entries(
     }
 
     Ok(results)
+}
+
+#[tauri::command]
+pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Result<(), String> {
+    let api = get_docs_api(&app)?;
+    let sync_state = get_sync_state(&app)?;
+    let doc_id: iroh_docs::NamespaceId = {
+        let devices = sync_state.transport_state.paired_devices.lock().await;
+        devices
+            .get(&peer_device_id)
+            .and_then(|d| {
+                if d.sync_doc_id.is_empty() {
+                    None
+                } else {
+                    d.sync_doc_id.parse().ok()
+                }
+            })
+            .ok_or_else(|| "No sync doc for this peer".to_string())?
+    };
+
+    if let Ok(Some(doc)) = api.open(doc_id).await {
+        let ep = get_or_init_iroh(&app).await?;
+        let addr = ep.endpoint.addr();
+        doc.start_sync(vec![addr])
+            .await
+            .map_err(|e| format!("start_sync: {e}"))?;
+    }
+
+    Ok(())
 }

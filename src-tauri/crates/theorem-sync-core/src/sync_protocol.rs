@@ -90,15 +90,15 @@ pub struct PairingRequest {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingResponse {
-    /// Host's persistent device ID.
     pub device_id: String,
-    /// Host's human-readable device name.
     pub device_name: String,
-    /// Encrypted acknowledgment (proves the host also has the shared secret).
     pub encrypted_ack: String,
-    /// Host's stable device fingerprint for deduplication.
     #[serde(default)]
     pub fingerprint: String,
+    /// iroh-docs DocTicket for the shared sync document (base32 string).
+    /// The host includes this so the scanner can import the shared CRDT doc.
+    #[serde(default)]
+    pub sync_doc_ticket: String,
 }
 
 // ─── Paired Device (persisted) ───
