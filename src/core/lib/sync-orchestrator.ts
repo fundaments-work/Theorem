@@ -13,7 +13,6 @@
 
 import {
     setSyncData,
-    initiateSync,
     irohStart,
     getIncomingSyncData,
     pullBookFiles,
@@ -648,58 +647,39 @@ export async function runDeviceSync(
         setStatus("syncing", "Preparing data...");
         log("Gathering local data snapshot...");
 
-        // 1. Provision local state to iroh-docs for live sync
+        // 1. Provision local state to iroh-docs — live events handle incoming data
         await provisionToIrohDocs();
         await docsSyncNow(peerDeviceId);
 
-        // 2. Legacy metadata sync (initiateSync → mergeIncomingData)
-        const { domains, manifest, settingsUpdatedAt } = await buildDomainsAndManifest();
-
+        // 2. Ensure the Rust responder is ready for incoming connections
         log("Ensuring sync responder is ready...");
         await ensureResponderSyncReady();
 
-        log("Sending data snapshot to backend...");
-        await setSyncData(domains, manifest, buildBookFilePaths());
-
-        log("Initiating sync with peer...");
-        setStatus("syncing", "Exchanging data with peer...");
-        const incomingMap = await initiateSync(peerDeviceId);
-
-        const incomingDomainCount = Object.keys(incomingMap).length;
-        if (incomingDomainCount === 0) {
-            log("No domain updates from peer. Checking for missing book files...");
-            const needFilesIds = useLibraryStore.getState().books
-                .filter((b) => b.syncedWithoutFile)
-                .map((b) => b.id);
-            await pullMissingBookFilesAndCovers(peerDeviceId, needFilesIds, log);
-            setStatus("synced", "Already in sync");
-            return { success: true, domainsUpdated: [] };
+        // 3. Re-provision for responder mode
+        try {
+            const { domains, manifest } = await buildDomainsAndManifest();
+            await setSyncData(domains, manifest, buildBookFilePaths());
+        } catch {
+            // Non-critical — will be re-provisioned on next sync.
         }
 
-        log(`Received updates for ${incomingDomainCount} domain(s). Merging...`);
-        setStatus("syncing", "Merging data...");
+        // 4. Wait briefly for live events to arrive from the peer
+        await new Promise(r => setTimeout(r, 3000));
 
-        const { domainsUpdated } = await mergeIncomingData(
-            incomingMap, settingsUpdatedAt,
-        );
-
-        // Parse incomingMap books to get all book IDs part of this sync exchange.
-        let syncedBookIds: string[] = [];
-        try {
-            if (incomingMap["books"]) {
-                const books = JSON.parse(incomingMap["books"]);
-                if (Array.isArray(books)) {
-                    syncedBookIds = books.map((b) => b.id);
-                }
-            }
-        } catch (_err) {}
-
-        // Pull any missing book files on every sync pass.
+        // 5. Pull missing book files from peer
+        // Books are already populated in Zustand via live events (docs-entry-changed).
+        // If not (first sync), attempt hydration from docs as fallback.
+        const currentBooks = useLibraryStore.getState().books;
+        if (currentBooks.length === 0) {
+            await hydrateFromIrohDocs();
+        }
+        const syncedBookIds = useLibraryStore.getState().books.map(b => b.id);
         await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, log);
 
-        const summary = domainsUpdated.length > 0
-            ? `Updated: ${domainsUpdated.join(", ")}`
-            : "No changes after merge";
+        const bookCount = useLibraryStore.getState().books.length;
+        const summary = bookCount > 0
+            ? `Synced ${bookCount} books`
+            : "Sync complete — no changes yet";
 
         log(`Sync complete. ${summary}`);
         setStatus("synced", summary);
@@ -713,7 +693,7 @@ export async function runDeviceSync(
             // Non-critical — will be re-provisioned on next sync or server start.
         }
 
-        return { success: true, domainsUpdated };
+        return { success: true, domainsUpdated: [] };
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : String(error);
         log(`Sync failed: ${errMsg}`);
