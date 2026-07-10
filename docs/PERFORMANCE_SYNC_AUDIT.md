@@ -459,27 +459,31 @@ Yjs handles merge + sync + conflict resolution. These pieces remain custom:
 
 **Current**: Custom X25519 + HKDF + QR code + encrypted proof/ack challenge-response.
 
-**Library**: [**iroh.rs**](https://github.com/iroh/iroh.rs) (1k stars, mature)
+**Notes**: iroh provides no pairing protocol. The standard iroh pattern is sharing the
+`EndpointId` (PublicKey) + `RelayUrl` via QR, then connecting over iroh's TLS-authenticated
+QUIC (no additional key exchange needed). Our custom X25519+HKDF layer is redundant — the
+iroh connection is already end-to-end encrypted by the PublicKey.
 
-- Same "speak a code / scan a QR" pairing pattern
-- Built-in: NAT traversal, direct P2P connections, file transfer, port forwarding
-- Replaces: X25519 key exchange, HKDF derivation, encrypted proof/ack, QR encoding
-- Used by: Warp (GNOME file transfer), Wyrmhole (Tauri GUI), Wormhole File Transfer (Android/Flutter)
-- **Impact**: Eliminates pairing protocol (~300 lines) + file transfer chunking (~140 lines)
+**Optimization**: Replace custom X25519+HKDF+ChaCha20 proof with a QR that just encodes
+`{ device_name, public_key, relay_url }`. iroh's TLS handles encryption. Eliminates
+~200 lines of custom crypto.
 
 ### 8.2 File Transfer (Large Books)
 
-**Current**: Custom 4 MiB chunked transfer with per-chunk ChaCha20-Poly1305 AEAD + SHA-256 verification + base64 encoding. ~140 lines in `sync_server.rs`, ~210 lines in `sync_commands.rs`.
+**Current**: Custom 1 MiB chunked transfer over iroh QUIC streams (not 4 MiB as previously
+documented). Per-chunk ChaCha20-Poly1305 AEAD (no SHA-256 — AEAD makes it redundant).
+Base64-encoded in JSON envelopes. ~210 lines in `iroh_sync.rs`.
 
-**Library**: **iroh.rs** has built-in file transfer with:
-- Streaming, resume, integrity verification
-- NAT traversal (works across routers without port forwarding)
-- Direct P2P connections (no relay server needed)
+**Library**: [`iroh-blobs`](https://crates.io/crates/iroh-blobs) (separate crate v0.103.0).
+Provides BLAKE3 content-addressed blob transfer with verified streaming, range requests,
+resumable downloads, and progress events (`DownloadProgress`). Uses FsStore for on-disk
+persistence. `BlobTicket` packages blob hash + endpoint info.
 
-**Alternative**: Keep the custom transfer but:
-- Switch to binary encoding (no base64, save 33% bandwidth)
-- Use `r2d2` pool for SQLite writes during file receive
-- Add resume support for interrupted transfers
+**Impact**: Replaces custom chunking, per-chunk encryption, base64 encoding, chunk
+negotiation, and the `FileTransferMeta`/`FilePullRequest`/`FilePullResponse` structs.
+Eliminates ~210 lines from `iroh_sync.rs` + protocol structs from `sync_protocol.rs`.
+
+**Status**: Not yet implemented. Depends on adding `iroh-blobs` to Cargo.toml.
 
 ### 8.3 Background Scheduling
 
@@ -582,8 +586,8 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 
 | Priority | Custom Code | Lines | Replace With | Stars | Benefit |
 |----------|-------------|-------|-------------|-------|---------|
-| **HIGH** | Entire custom sync | ~5000 | Yjs + `yrs` | 17.8k | CRDT merge, delta sync, binary encoding, all bugs fixed |
-| **HIGH** | Pairing + file transfer | ~500 | `iroh.rs` | 1k | NAT traversal, resume, P2P file transfer |
+| **HIGH** | Metadata sync | ~1500 (now dead) | `iroh-docs` + `iroh-blobs` | — | CRDT key-value + blob store, unified iroh stack |
+| **HIGH** | Pairing + file transfer | ~500 | `iroh-blobs` + simplify pairing | — | BLAKE3 streaming, verified integrity, progress events |
 | **HIGH** | No schema validation | ~500 (guards) | `zod` or `valibot` | 33k / 12k | Runtime validation of peer data, auto types |
 | **HIGH** | Manual snake_case remap | ~50 | `serde(rename_all="camelCase")` | built-in | Zero TS remapping code |
 | **HIGH** | Manual ISO 8601 | ~57 | `time` crate | 5.7k | 2-line replacement |
@@ -668,14 +672,16 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 
 | # | Fix | Status |
 |---|------|--------|
-| 30 | Replace custom sync with Yjs (`yjs` + `y-websocket` + `y-indexeddb`) | ✅ |
-| 31 | Replace pairing + file transfer with `iroh.rs` | ✅ |
+| 30 | Replace custom sync with Yjs (`yjs` + `y-websocket` + `y-indexeddb`) | ✅ (activated in v1.0.7) |
+| 31 | Replace file transfer with `iroh-blobs` | ❌ still custom chunked RPC |
 | 32 | Replace Modal + Dropdown + ContextMenu with Radix primitives | ✅ |
 | 33 | Migrate book metadata + annotations to SQLite tables | ✅ |
 | 34 | SQLite-based search replacing Fuse.js for 10K+ books | ✅ |
 | 35 | Use `time` crate + `serde(rename_all)` | ✅ |
 
-**Total: 35/35 fixes implemented.** Verified with 193 passing tests.
+**Total: 33/35 fixes implemented.** Verified with 193 passing tests.
+Items 30 (Yjs) was dead code at time of audit, activated in v1.0.7.
+Item 31 requires adding `iroh-blobs` crate — iroh v1.0.2 has no built-in blob transfer.
 
 ### Files Created (1.0.7)
 
@@ -684,7 +690,6 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 | `src/core/lib/yjs-sync.ts` | 460 | Yjs CRDT bridge: Y.Map per domain, Zustand ↔ Yjs bidirectional sync, IndexedDB persistence, WebSocket provider |
 | `src/core/lib/sync-schemas.ts` | 354 | Zod schemas for all 9 sync domains with `validateSyncPayloads()` batch validator |
 | `src/core/lib/book-locations.ts` | 41 | SQLite BLOB persistence for foliate-js positions (stripped from Zustand persist) |
-| `src-tauri/src/wormhole.rs` | 27 | iroh.rs stub for future pairing + file transfer migration |
 | `tests/release-1.0.7-sync-correctness.test.ts` | 254 | 16 tests: tombstones, vocabulary deletion, collection book removal, settings merge, annotation tiebreaker, RSS truncation |
 | `tests/release-1.0.7-store-scale.test.ts` | 167 | 12 tests: O(1) addBooks dedup (5000-book scale at 81ms), locations stripping, hasHydrated, book lookup performance |
 | `tests/release-1.0.7-zod-schemas.test.ts` | 290 | 21 tests: all 9 domain schemas, edge cases, batch validation, invalid payload handling |
@@ -695,9 +700,8 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 | File | Changes |
 |------|---------|
 | `src-tauri/src/database.rs` | r2d2 pool (4 conn), `CustomizeConnection` PRAGMAs, `sqlite_batch_get_kv`, FTS5 tables, book_metadata/annotations tables |
-| `src-tauri/src/lib.rs` | `visible: false`, daemon `kill_on_drop`, Android outbound sync, `set_auto_sync_flag`, wormhole module, sync command registrations |
-| `src-tauri/src/sync_commands.rs` | `effective_fingerprint()` in QR + pairing, cover save PRAGMAs |
-| `src-tauri/crates/theorem-sync-core/src/sync_server.rs` | `/sync/ws` WebSocket relay, `open_db_with_pragmas()`, `effective_fingerprint()` |
+| `src-tauri/src/lib.rs` | `visible: false`, daemon `kill_on_drop`, Android outbound sync, `set_auto_sync_flag`, sync command registrations |
+| `src-tauri/src/sync_commands.rs` | `effective_fingerprint()` in QR + pairing, cover save PRAGMAs, N0 preset fix |
 | `src-tauri/crates/theorem-sync-core/src/sync_crypto.rs` | `time` crate replacement (57→5 lines) |
 | `src/core/store/index.ts` | Locations stripping, O(1) `addBooks`, batch cover restore, vocabulary tombstones, collection_book tombstones, SQLite metadata sync |
 | `src/core/lib/sync-orchestrator.ts` | `_isMerging` guard, RSS truncation, zod validation (properly awaited), `stopAutoSync` daemon notify |
