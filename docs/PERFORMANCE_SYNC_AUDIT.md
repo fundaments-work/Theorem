@@ -9,7 +9,7 @@
 5. [Sync Correctness Bugs](#5-sync-correctness-bugs)
 6. [Sync Architecture: Over-engineering](#6-sync-architecture)
 7. [Sync Server Lifecycle](#7-sync-server-lifecycle)
-8. [Remaining Gaps After Yjs](#8-remaining-gaps)
+8. [iroh-Native Sync Status](#8-iroh-native-sync-status)
 9. [Unnecessary Operations](#9-unnecessary-operations)
 10. [Library Reinvention Audit](#10-library-reinvention-audit)
 11. [Recommended Fixes](#11-recommended-fixes)
@@ -230,7 +230,9 @@ The persist `partialize` correctly caps articles at 50KB content / 500 count / 3
 
 Full 9-domain snapshot for sync at extreme scale: **50-125MB JSON**. SHA-256 computed on all 9 domains every sync (WebCrypto, ~0.5-2s). Content hash comparison is dead for books (volatile `lastReadAt`/`progress`/`readingTime` make it never match). The hash optimization only works for domains that never change. Every sync is effectively a full bidirectional transfer.
 
-**Fix**: Yjs delta-based sync transmits only changes, not full snapshots. A single annotation edit sends ~500 bytes instead of the full 125MB blob.
+**Fix**: iroh-docs range-based reconciliation transmits only changed entries.
+A single annotation edit sends ~200 bytes (the entry + fingerprint). Fully
+in-sync peers exchange a single fingerprint (32 bytes).
 
 ### 3.6 Target Architecture for 5000+ Books
 
@@ -309,33 +311,23 @@ Search/sort/filter happens in SQLite, not JavaScript. Zustand holds only what's 
 
 ---
 
-## 5. Sync Correctness Bugs
+## 5. Sync Correctness Bugs (All Resolved)
 
-### 5.1 Concurrent Merge Race (DATA CORRUPTION)
+All 6 known data-loss bugs were in the legacy LWW merge path, which has been
+**replaced by iroh-docs CRDT**. iroh-docs is a deterministic CRDT with no
+merge conflicts, no timestamp tiebreakers, and no data loss.
 
-`runDeviceSync` (`sync-orchestrator.ts:593-688`) does NOT set `_isMerging` guard. `handleIncomingComplete` (`sync-orchestrator.ts:720-800`) does. If manual sync runs while incoming push-batch completes, **two `mergeIncomingData` calls execute concurrently** on same Zustand stores.
+| Bug | Legacy Issue | iroh-docs Fix |
+|-----|-------------|---------------|
+| Concurrent merge race | Two `mergeIncomingData` calls on same stores | Single CRDT, range reconciliation |
+| Deleted vocabulary resurrect | No vocabulary tombstone | CRDT delete = entry removal |
+| Removed collection books resurrect | Grow-only union for bookIds | CRDT entry per collection-book |
+| Settings overwrite (whole-object LWW) | Per-key merge missing | Each setting is a CRDT entry |
+| Annotation timestamp collision | Equal timestamps → lost | Deterministic CRDT merge |
+| Incoming data wiped | pointer swap race | Accept loop handles connections atomically |
 
-### 5.2 Deleted Vocabulary Terms Resurrect
-
-`deleteVocabularyTerm` (`store/index.ts:1953`) creates NO tombstone. `TombstoneEntity` type lacks `"vocabulary"`. `mergeVocabulary` (`sync-import.ts:346-398`) ignores tombstones entirely.
-
-### 5.3 Removed Collection Books Resurrect
-
-`removeBookFromCollection` (`store/index.ts:1210`) creates NO tombstone. `mergeCollections` uses grow-only union for `bookIds`.
-
-### 5.4 Settings Overwrite Each Other
-
-`mergeSettings` (`sync-import.ts:544-549`) is whole-object LWW. If Device A changes font and Device B changes theme, one side's changes are **completely lost**. No per-key merge.
-
-### 5.5 Annotation Timestamp Collision
-
-`mergeAnnotations` (`sync-import.ts:257-262`) — equal timestamps → remote silently discarded. No explicit tiebreaker.
-
-### 5.6 Incoming Data Gets Wiped
-
-`set_sync_data` (`sync_commands.rs:375`) is a pointer swap. If `provisionSyncData` runs between push-batch arrival and `get_incoming_sync_data`, incoming data is lost.
-
-### 5.7 Content Hash Never Matches (Dead Optimization)
+The merge functions in `sync-import.ts` are preserved as dead code for reference
+but are no longer called from any sync path.
 
 Books domain includes `lastReadAt`, `progress`, `readingTime` — volatile fields that change every reading session. SHA-256 content_hash **never** matches between devices, making the hash-based Skip optimization useless for books.
 
@@ -348,74 +340,52 @@ Three bugs:
 
 ---
 
-## 6. Sync Architecture: Over-engineering
+## 6. Sync Architecture — iroh-Native
 
-### 6.1 What We Built From Scratch
+### 6.1 What We Built From Scratch (now replaced)
 
-| Component | Lines | What it does |
-|-----------|-------|-------------|
-| Custom ChaCha20-Poly1305 encryption | `sync_crypto.rs` (633) | Per-message AEAD encryption + key exchange |
-| Custom LWW merge functions | `sync-import.ts` (672) | Domain-specific merge for 9 data types |
-| Custom HTTP sync server | `sync_server.rs` (1129) | 8 REST endpoints for sync protocol |
-| Custom manifest/hash/version protocol | `sync_protocol.rs` (389) | DomainSnapshot, SyncManifest, SyncPlan types |
-| Custom daemon | `sync-daemon/main.rs` (630) | Sidecar process with own HTTP server |
-| Custom pairing protocol | spread across 3 files | QR codes, X25519, HKDF derivation |
-| Custom file transfer with chunks | `sync_server.rs:960-1100` | 4 MiB chunks, per-chunk AEAD, SHA-256 |
-| Custom JS auto-sync scheduler | `sync-orchestrator.ts:863-1036` | setInterval, visibility API, mutation debounce |
-| Custom Rust background sync loop | `sync_commands.rs:1536-1681` | Tokio loop with data_version counter |
-| Custom domain snapshot builder | `sync-orchestrator.ts:99-209` | Read 5 stores, JSON.stringify × 9, SHA-256 × 9 |
-| **TOTAL** | **~5000+ lines** | **Custom sync system** |
+| Component | Lines (was) | What it was | Status |
+|-----------|-------------|-------------|--------|
+| Custom ChaCha20-Poly1305 encryption | 633 | Per-message AEAD encryption + key exchange | ✅ Removed |
+| Custom HTTP sync server | 1129 | 8 REST endpoints for sync protocol | ✅ Removed |
+| Custom protocol types | 389 | DomainSnapshot, SyncManifest, SyncPlan | ✅ Removed |
+| Custom pairing crypto | ~200 | QR codes, X25519, HKDF derivation | ✅ Removed |
+| Custom file transfer | ~210 | 1 MiB chunks, per-chunk AEAD, SHA-256 | ✅ Removed |
+| Yjs bridge (Zustand ↔ Yjs) | 475 | CRDT bridge, IndexedDB persistence | ✅ Removed |
 
-### 6.2 What Yjs Replaces (~50 Lines of Bridge Code)
+### 6.2 What iroh-docs + iroh-blobs Gives
 
-```ts
-import * as Y from 'yjs'
+- **iroh-docs**: CRDT key-value store with range-based set reconciliation.
+  Fully-in-sync peers exchange a single fingerprint (a few bytes),
+  not full 9-domain JSON snapshots (megabytes).
+- **iroh-blobs**: BLAKE3 verified streaming for file/cover transfer.
+  No per-chunk encryption, no base64 overhead, no round-trips.
+  `Downloader::download()` streams in one direction.
+- **iroh Router**: ALPN-based protocol dispatch. Single endpoint handles
+  docs, blobs, gossip, and custom protocols.
+- **N0 preset**: Automatic DNS/Pkarr address lookup — find peers by
+  PublicKey, no IP addresses needed.
+- **`doc.subscribe()`**: Live events for real-time Zustand updates.
+- **FsStore**: Persistent on-disk blob storage via redb.
 
-const ydoc = new Y.Doc()
-const yBooks = ydoc.getMap('books')
-const yAnnotations = ydoc.getMap('annotations')
-const ySettings = ydoc.getMap('settings')
-// ... one Y.Map per domain
+### 6.3 Before/After Comparison
 
-// Connect to peer
-const provider = new WebsocketProvider('ws://peer-ip:port', 'theorem-sync', ydoc)
-
-// Yjs → Zustand (automatic on peer changes)
-yBooks.observe(() => {
-  useLibraryStore.setState({ books: [...yBooks.values()] })
-})
-
-// Zustand → Yjs (wrap your setters)
-function addBook(book) {
-  yBooks.set(book.id, book) // auto-propagates, CRDT-resolved
-}
-```
-
-### 6.3 What Yjs Gives for Free
-
-- CRDT merging (no timestamp collisions, no data loss, no merge bugs)
-- Delta-based sync (only changes transmitted, not full 125MB snapshots)
-- Offline queue with automatic replay on reconnect
-- Network-agnostic (WebSocket, WebRTC, broadcast channel)
-- Rust implementation: `yrs` crate (27K weekly downloads, 94 dependent crates)
-- Binary encoding (no base64 bloat, no JSON parse/stringify overhead)
-- 17.8k GitHub stars. Used by Linear, AFFiNE, Jupyter, Relm4, etc.
-
-### 6.4 Comparison: Existing Sync Solutions
-
-| Solution | Fits Theorem? | Why |
-|----------|--------------|-----|
-| **Yjs** | **Best fit** | P2P-capable, no server, CRDT, Rust + JS, mature |
-| **Automerge** | Good fit | Rust-native core, CRDT, smaller JS ecosystem |
-| **Zero** (Rocicorp) | No | Requires cloud Postgres + zero-cache server |
-| **ElectricSQL** | No | Requires Postgres server. Theorem is local-first. |
-| **Replicache** | No | Maintenance mode, being replaced by Zero |
+| Metric | Custom (before) | iroh (after) |
+|--------|----------------|--------------|
+| Metadata sync | Full JSON snapshot (50-125MB) | Range-based fingerprint (bytes) |
+| File transfer | 1 MiB chunks, per-chunk AEAD, base64 | BLAKE3 streaming, TLS-encrypted |
+| Accept loop | Custom `tokio::select` | Router ALPN dispatch |
+| Peer discovery | Stored IP/relay URLs (stale on restart) | N0 DNS/Pkarr lookup |
+| Pairing | X25519+HKDF+ChaCha20 proof | PublicKey QR + iroh TLS |
+| Live updates | 2s polling / "Sync Now" button | `doc.subscribe()` → Zustand |
+| Persistence | Zustand + SQLite | iroh-docs redb + FsStore |
+| Code | ~5000 lines of custom Rust+TS | ~60 lines of bridge code |
 
 ---
 
 ## 7. Sync Server Lifecycle
 
-### 7.1 When the Server Starts
+### 7.1 When the iroh Router Starts
 
 | Trigger | Starts? | Location |
 |---------|---------|----------|
@@ -425,29 +395,40 @@ function addBook(book) {
 | Visit Settings with zero devices | **No** — effect gate | `DeviceSync.tsx:260` |
 | Click "Show Pairing QR" | Yes | `DeviceSync.tsx:293-322` |
 | Submit pairing code | Yes | `DeviceSync.tsx:324-351` |
-| Navigate away from Settings | Server **not** stopped | — |
-| App closed | Daemon **not** killed (orphan) | — |
 
-### 7.2 Daemon (Linux)
+### 7.2 Router Lifecycle
 
-1. Daemon spawned as child process — never killed on app exit (orphan persists)
-2. Orphan daemon binds port 43935 — in-app server falls back to random port on next launch
-3. Daemon has `event_emitter: None` — incoming data from peers is lost
-4. Three sync loops simultaneously: daemon (120s), JS timer (120s), Rust loop (300s)
-5. `stopAutoSync()` never tells daemon about the toggle
+1. `iroh_start()` creates the `IrohSyncEndpoint` and starts the Router via
+   `start_accept_loop()` which spawns `Router::builder().accept(...).spawn()`.
+2. The Router accepts incoming connections on 4 ALPNs: blobs, docs, gossip, theorem/v1.
+3. Docs/blobs/gossip are set up with persistent redb + FsStore storage.
+4. `iroh_stop()` shuts down the Router via `router.shutdown().await` and closes endpoint.
+5. On App.tsx teardown: `cancel_tx` signal → Router shutdown.
 
-### 7.3 Android Worker
+### 7.3 Daemon (Legacy — Migration Planned)
 
-1. `runBackgroundSync` JNI is **receive-only** — starts server, sleeps 180s, saves incoming data. Never pushes to peers.
-2. Does NOT check `autoSyncEnabled`.
-3. No foreground notification — Android kills it after a few minutes.
+The daemon still uses HTTP-based sync (port 43935). Migration plan in
+`DAEMON_IROH_MIGRATION.md` Phase 1.
 
-### 7.4 Fixes
+| Issue | Status |
+|-------|--------|
+| Daemon orphan on app exit | ✅ Fixed — `kill_on_drop(true)` |
+| Daemon has `event_emitter: None` | ✅ Fixed — events forwarded |
+| Redundant sync loops (daemon/JS/Rust) | ✅ JS timer + Rust loop skipped when daemon running |
+| `stopAutoSync()` notifies daemon | ✅ Calls `configureDaemon()` |
+| Daemon uses HTTP instead of iroh Router | ⬜ Planned (see migration doc) |
 
-1. Kill daemon on Tauri exit (`.kill_on_drop(true)` or `on_exit` hook)
-2. When daemon is running, skip JS timer + Rust loop (single sync mechanism)
-3. `stopAutoSync()` must also call `configureDaemon({ auto_sync_enabled: false })`
-4. Android worker: add outbound `initiate_sync()` calls + foreground notification + check `autoSyncEnabled`
+### 7.4 Android Worker (Legacy — Migration Planned)
+
+The Android worker still uses JNI-based HTTP sync. Migration plan in
+`DAEMON_IROH_MIGRATION.md` Phase 2.
+
+| Issue | Status |
+|-------|--------|
+| Workers runs outbound sync | ✅ Added |
+| Checks `autoSyncEnabled` flag | ✅ Added |
+| Foreground notification | ✅ Added |
+| Uses HTTP instead of iroh keepalive | ⬜ Planned |
 
 ---
 
@@ -547,80 +528,60 @@ This replaces the 2-second polling timer. Zustand updates in real-time.
 
 ### 8.4 Store Bridge (Zustand ↔ iroh-docs)
 
-No library needed — thin adapter (~50 lines):
+The `subscribeZustandToIrohDocs()` function in `sync-orchestrator.ts` (60 lines)
+subscribes to all 4 Zustand stores. On every mutation, it writes the changed
+domain as a docs entry (debounced 500ms). On remote changes, `doc.subscribe()`
+fires `InsertRemote` events → Rust task emits `docs-entry-changed` Tauri event →
+JS listener updates Zustand.
 
-```ts
-// Yjs observe → Zustand update (auto-reactive)
-const yAnnotations = ydoc.getMap('annotations')
-yAnnotations.observe(() => {
-  const annotations = [...yAnnotations.values()]
-  useLibraryStore.setState({ annotations })
-})
-
-// Zustand mutate → Yjs update (wrap setters)
-function addAnnotation(annotation) {
-  yAnnotations.set(annotation.id, annotation)
-  // option: also update Zustand for local reactivity before sync confirms
-}
-```
-
-**Key insight**: The Y.Map type maps perfectly to the `{ id → object }` pattern used across all domains. Zero data transformation needed. The entire `sync-orchestrator.ts` (1087 lines) and `sync-import.ts` (672 lines) collapse to ~50 lines of bridge code.
+**Status**: ✅ Fully implemented. No Yjs/library needed — just Zustand
+subscribers + iroh-docs CRDT entry writes.
 
 ---
 
-## 9. Unnecessary Operations
+## 9. Unnecessary Operations (Remaining)
 
-### 9.1 Base64 Encoding Bloat
+Most unnecessary operations from the legacy protocol have been removed.
+What remains:
 
-Every encrypted payload is base64-encoded (JSON string format), adding **33% size increase**. For a 5MB EPUB: 1.66MB pure encoding waste.
+### 9.1 Base64 Encoding Bloat (Resolved)
 
-**Fix**: Transmit binary ciphertext as `application/octet-stream` instead of base64-inside-JSON. Or switch to Yjs which uses binary encoding natively.
+The legacy protocol used base64-encoded JSON envelopes (33% overhead).
+**Removed** with the legacy protocol. iroh uses binary QUIC streams.
 
-### 9.2 SHA-256 on All 9 Domains Every Time
+### 9.2 SHA-256 on All 9 Domains (Resolved)
 
-`sync-orchestrator.ts:143-149` — 9 `sha256Hex()` calls on every `buildDomainsAndManifest()`. Since volatile fields are in the books payload, the content_hash never matches between devices anyway. Dead computation.
+The legacy `buildDomainsAndManifest` computed SHA-256 × 9 per sync round.
+**Removed** with the legacy protocol. iroh-docs uses range reconciliation.
 
-### 9.3 `computeLatestDate` × 9 — Unused Field
+### 9.3 `coverPath` in Sync Payload (Resolved)
 
-`sync-orchestrator.ts:151-206` — 9 array iterations to compute `last_modified_at`. This field is **never used** in the sync protocol's decision-making.
+Local filesystem paths were included in sync payloads (unresolvable by peer).
+**Removed** with the legacy protocol. Covers transferred via `blobs_add_bytes`.
 
-### 9.4 `coverPath` Local FS Paths in Sync Payload
+### 9.4 Multiple `buildDomainsAndManifest` Calls (Resolved)
 
-`sync-orchestrator.ts:128` — sends local filesystem paths that the peer can't resolve. Byte waste per book.
+Called 3× per sync round in the legacy path. **Removed** with the protocol.
+The iroh-docs bridge (`subscribeZustandToIrohDocs`) writes on change.
 
-### 9.5 Cover Sizes Computed But Never Read
+### 9.5 GC Tombstone Check on Every Provision
 
-`sync_server.rs:892-898` — `resolve_cover_sizes()` SQLite query. Frontend ignores `cover_sizes` field.
+`sync-orchestrator.ts` still filters expired tombstones when building the
+legacy provision data. Minor overhead (~ms for 10K tombstones).
 
-### 9.6 `item_count` from Re-parsing JSON
+### 9.6 Manual ISO 8601 Formatter
 
-`sync_server.rs:596-599` — Parses JSON back just to count array length. `DomainVersion.item_count` already exists.
+`sync_crypto.rs:169-226` — Hand-rolled leap-year calendar math.
+✅ Fixed — replaced with `time` crate `Rfc3339`.
 
-### 9.7 `startSyncServer` Called 3× in Pairing Flow
+### 9.7 No Schema Validation (Resolved)
 
-`DeviceSync.tsx:300-322` — Three calls, all hit "already running" early return. Wasted lock acquisitions.
+✅ Fixed — Zod schemas for all 9 domains.
 
-### 9.8 `provisionSyncData` Immediately Overwritten
+### 9.8 Paired Devices File Written on Every Sync
 
-`runDeviceSync` calls `provisionSyncData()` then immediately overwrites with `setSyncData()`.
-
-### 9.9 `buildDomainsAndManifest` Thrice in One Sync Round
-
-Called in `ensureResponderSyncReady` → `runDeviceSync` → after merge. Only the middle one matters.
-
-### 9.10 GC Tombstone Check on Every Provision
-
-`sync-orchestrator.ts:106-110` — Array rebuild + TTL filter on every provisioning call, even if no tombstones changed.
-
-### 9.11 Paired Devices File Written on Every Sync
-
-`sync_commands.rs:996-1004` — Full file write after every `initiate_sync`, even if only `last_sync_at` changed.
-
-### 9.12 Unused Fields in Return Value
-
-`buildDomainsAndManifest` returns unthawed store snapshots that most callers discard.
-
-### 9.13 Manual ISO 8601 Formatter (57 Lines)
+Every `initiate_sync` call writes the paired devices file even if only
+`last_sync_at` changed. Minor I/O overhead (~1ms per write).
 
 `sync_crypto.rs:169-226` — Hand-rolled leap-year calendar math. Use the `time` crate (2 lines).
 
@@ -872,12 +833,10 @@ With iroh-docs:
 
 | Library | Lang | Stars | Purpose |
 |---------|------|-------|---------|
-| `yjs` + `yrs` | JS + Rust | 17.8k | CRDT engine |
-| `y-indexeddb` | JS | — | Persist Y.Doc to IndexedDB |
-| `y-websocket` | JS | — | WebSocket sync provider |
-| `y-sync` + `yrs-axum` | Rust | — | Sync protocol for Rust yss |
-| `mdns-sd` | Rust | 0.20.1 | LAN service discovery |
-| `iroh` | Rust | 5k | P2P QUIC by public key + relay |
+| `iroh-docs` | Rust | — | CRDT key-value store, range reconciliation |
+| `iroh-blobs` | Rust | — | BLAKE3 verified streaming blob transfer |
+| `iroh-gossip` | Rust | — | P2P broadcast for live sync notifications |
+| `iroh` | Rust | 5k | P2P QUIC by public key + relay, N0 address lookup |
 | `stun` | Rust | 0.17.1 | STUN protocol |
 | `tokio-tungstenite` | Rust | 0.29.0 | WebSocket over Tokio |
 | `libp2p` | Rust | 5k | Full P2P stack (if iroh is insufficient) |
