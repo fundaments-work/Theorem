@@ -50,17 +50,6 @@ import {
 import { isTauri } from "./env";
 import { saveCoverImage } from "./storage";
 
-// Lazy yjs imports to keep the store chunk lean (yjs + websocket + idb ≈ 150KB).
-let _yjsEncode: (() => Uint8Array) | null = null;
-let _yjsApply: ((update: Uint8Array) => void) | null = null;
-
-async function ensureYjsLoaded() {
-    if (_yjsEncode) return;
-    const mod = await import("./yjs-sync");
-    _yjsEncode = mod.encodeYjsSyncState;
-    _yjsApply = mod.applyYjsSyncUpdate;
-}
-
 // ─── Helpers ───
 
 /** Compute SHA-256 hex digest of a string using SubtleCrypto. */
@@ -130,8 +119,6 @@ async function buildDomainsAndManifest() {
         _settingsUpdatedAt: settingsUpdatedAt,
     };
 
-    await ensureYjsLoaded();
-
     const domains: Record<string, string> = {
         books: JSON.stringify(library.books.map(({ filePath: _f, storagePath: _s, coverPath, locations: _l, ...book }) => ({
             ...book,
@@ -167,10 +154,6 @@ async function buildDomainsAndManifest() {
                     : article.content,
             }));
         })()),
-        yjs_update: (() => {
-            const update = _yjsEncode!();
-            return update.length > 0 ? btoa(String.fromCharCode(...update)) : "";
-        })(),
     };
 
     // Compute SHA-256 content hashes for each domain in parallel.
@@ -266,27 +249,13 @@ async function mergeIncomingData(
     try {
         const { validateSyncPayloads } = await import("./sync-schemas");
         const validated = validateSyncPayloads(incomingMap);
-        // Reconstruct string map from validated objects (except yjs_update which stays raw).
+        // Reconstruct string map from validated objects.
         safeMap = {};
         for (const [domain, data] of Object.entries(validated)) {
-            safeMap[domain] = domain === "yjs_update" ? String(data) : JSON.stringify(data);
+            safeMap[domain] = JSON.stringify(data);
         }
     } catch {
         // If validation fails entirely, fall through with raw incomingMap.
-    }
-
-    // ── Apply Yjs CRDT update FIRST (replaces LWW merge for all domains) ──
-    if (safeMap["yjs_update"]) {
-        try {
-            await ensureYjsLoaded();
-            const binary = Uint8Array.from(atob(safeMap["yjs_update"]), (c) => c.charCodeAt(0));
-            _yjsApply!(binary);
-            markUpdated("yjs_update");
-            // Yjs CRDT merge handles all domains — no need for per-domain LWW merges.
-            return { domainsUpdated };
-        } catch {
-            // Fall through to legacy LWW merge if Yjs decode fails.
-        }
     }
 
     // ── Merge tombstones FIRST so books/annotations/collections can respect them ──

@@ -303,10 +303,6 @@ function App() {
         initReaderStyles(useSettingsStore.getState().settings.readerSettings);
     }, []);
 
-    // Yjs CRDT bridge — always initialized when sync is active.
-    // Bootstraps from current Zustand state into Y.Map for CRDT merge.
-    // Also persisted to IndexedDB so offline edits survive restarts.
-
     // Reader runtime prewarming removed — PDF.js + Foliate + ReaderPage are
     // heavy libraries (~100-200MB). For low-resource environments, they load
     // on-demand when the user opens a book, not at app startup.
@@ -363,20 +359,7 @@ function App() {
             }
             if (cancelled) return;
 
-            // Step 2: Initialize Yjs CRDT bridge — bootstraps from Zustand
-            // into Y.Map for conflict-free merge. Also persists to IndexedDB
-            // so offline edits survive restarts.
-            // Runs unconditionally (even when daemon is active) because the
-            // main process is still the responder for incoming iroh connections.
-            try {
-                const { initYjsSync, bridgeZustandToYjs } = await import("./core/lib/yjs-sync");
-                initYjsSync();
-                bridgeZustandToYjs();
-            } catch {
-                // Yjs initialization failed.
-            }
-
-            // Step 3: Start JS-based auto-sync scheduler
+            // Step 2: Start JS-based auto-sync scheduler
             // (startAutoSync detects daemon and delegates if available).
             try {
                 await startAutoSync();
@@ -384,7 +367,7 @@ function App() {
                 // Auto-sync scheduling unavailable.
             }
 
-            // Step 4: Start Rust background sync loop
+            // Step 3: Start Rust background sync loop
             // (skip if daemon is running — it has its own loop).
             if (!cancelled && !daemonRunning) {
                 try {
@@ -406,10 +389,6 @@ function App() {
             stopAutoSync();
             import("./core/lib/device-sync").then((mod) => {
                 mod.stopBackgroundSync().catch(() => {});
-            }).catch(() => {});
-            // Teardown Yjs — clear Yjs doc, subscribers, and IndexedDB persistence.
-            import("./core/lib/yjs-sync").then((mod) => {
-                mod.destroyYjsSync();
             }).catch(() => {});
             // Notify daemon to disable auto-sync if this device turns it off.
             configureDaemon({ auto_sync_enabled: false }).catch(() => {});

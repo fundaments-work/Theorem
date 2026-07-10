@@ -341,10 +341,6 @@ export function validateSyncPayloads(
 ): Record<string, unknown> {
     const valid: Record<string, unknown> = {};
     for (const [domain, json] of Object.entries(incomingMap)) {
-        if (domain === "yjs_update") {
-            valid[domain] = json; // Yjs binary updates skip JSON validation
-            continue;
-        }
         const data = validateSyncDomain(domain as keyof typeof DOMAIN_SCHEMAS, json);
         if (data !== null) {
             valid[domain] = data;
