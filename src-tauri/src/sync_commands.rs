@@ -1275,9 +1275,19 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
     };
 
     if let Ok(Some(doc)) = api.open(doc_id).await {
-        let ep = get_or_init_iroh(&app).await?;
-        let addr = ep.endpoint.addr();
-        doc.start_sync(vec![addr])
+        let sync_state = get_sync_state(&app)?;
+        let peer_pk: iroh::PublicKey = {
+            let devices = sync_state.transport_state.paired_devices.lock().await;
+            let device = devices
+                .get(&peer_device_id)
+                .ok_or_else(|| "Peer device not found".to_string())?;
+            device
+                .iroh_node_id
+                .parse()
+                .map_err(|e| format!("parse peer key: {e}"))?
+        };
+        let peer_addr = iroh::EndpointAddr::new(peer_pk);
+        doc.start_sync(vec![peer_addr])
             .await
             .map_err(|e| format!("start_sync: {e}"))?;
     }

@@ -648,45 +648,48 @@ export async function runDeviceSync(
         setStatus("syncing", "Preparing data...");
         log("Gathering local data snapshot...");
 
-        // ── iroh-docs CRDT metadata sync ──
-        // Provision all Zustand state to iroh-docs entries.
-        await provisionToIrohDocs();
+        const { domains, manifest, settingsUpdatedAt } = await buildDomainsAndManifest();
 
         log("Ensuring sync responder is ready...");
         await ensureResponderSyncReady();
 
-        // Also provision to the legacy protocol for responder mode
-        const { domains, manifest, settingsUpdatedAt } = await buildDomainsAndManifest();
+        log("Sending data snapshot to backend...");
         await setSyncData(domains, manifest, buildBookFilePaths());
 
-        // Trigger iroh-docs reconciliation with the peer
-        log("Syncing via iroh-docs...");
-        await docsSyncNow(peerDeviceId);
-
-        // Give iroh-docs a moment to reconcile over gossip
-        await new Promise(r => setTimeout(r, 2000));
-
-        // Hydrate merged state from iroh-docs back to Zustand
-        const domainsUpdated = await hydrateFromIrohDocs();
-
-        // Also run the legacy protocol as fallback
         log("Initiating sync with peer...");
+        setStatus("syncing", "Exchanging data with peer...");
+        const incomingMap = await initiateSync(peerDeviceId);
+
+        const incomingDomainCount = Object.keys(incomingMap).length;
+        if (incomingDomainCount === 0) {
+            log("No domain updates from peer. Checking for missing book files...");
+            const needFilesIds = useLibraryStore.getState().books
+                .filter((b) => b.syncedWithoutFile)
+                .map((b) => b.id);
+            await pullMissingBookFilesAndCovers(peerDeviceId, needFilesIds, log);
+            setStatus("synced", "Already in sync");
+            return { success: true, domainsUpdated: [] };
+        }
+
+        log(`Received updates for ${incomingDomainCount} domain(s). Merging...`);
+        setStatus("syncing", "Merging data...");
+
+        const { domainsUpdated } = await mergeIncomingData(
+            incomingMap, settingsUpdatedAt,
+        );
+
+        // Parse incomingMap books to get all book IDs part of this sync exchange.
+        let syncedBookIds: string[] = [];
         try {
-            const incomingMap = await initiateSync(peerDeviceId);
-            const incomingDomainCount = Object.keys(incomingMap).length;
-            if (incomingDomainCount > 0) {
-                const { domainsUpdated: legacyUpdated } = await mergeIncomingData(
-                    incomingMap, settingsUpdatedAt,
-                );
-                for (const d of legacyUpdated) {
-                    if (!domainsUpdated.includes(d)) domainsUpdated.push(d);
+            if (incomingMap["books"]) {
+                const books = JSON.parse(incomingMap["books"]);
+                if (Array.isArray(books)) {
+                    syncedBookIds = books.map((b) => b.id);
                 }
             }
-        } catch {}
-        // ── end metadata sync ──
+        } catch (_err) {}
 
-        // Pull missing book files and covers
-        const syncedBookIds = useLibraryStore.getState().books.map(b => b.id);
+        // Pull any missing book files on every sync pass.
         await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, log);
 
         const summary = domainsUpdated.length > 0
