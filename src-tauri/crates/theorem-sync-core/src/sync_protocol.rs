@@ -26,25 +26,10 @@ pub struct DeviceIdentityInfo {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingQrPayload {
-    /// Protocol version (for forward compatibility).
     pub version: u8,
-    /// Host's iroh node ID (public key string) for QUIC connectivity.
     pub node_id: String,
-    /// Host device LAN IP address (for HTTP fallback / daemon).
-    #[serde(default)]
-    pub ip: String,
-    /// Host device sync server port (for HTTP fallback / daemon).
-    #[serde(default)]
-    pub port: u16,
-    /// Host's ephemeral X25519 public key (hex-encoded, 64 chars).
-    pub ephemeral_public_key: String,
-    /// Host device ID (first 16 hex chars of SHA-256 of long-term public key).
     pub device_id: String,
-    /// Human-readable device name.
     pub device_name: String,
-    /// Random 32-byte nonce (hex-encoded), used as HKDF salt.
-    pub nonce: String,
-    /// Stable device fingerprint for deduplication.
     #[serde(default)]
     pub fingerprint: String,
 }
@@ -63,27 +48,12 @@ pub struct PairingQrData {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingRequest {
-    /// Scanner's ephemeral X25519 public key (hex-encoded).
-    pub ephemeral_public_key: String,
-    /// Scanner's persistent device ID.
     pub device_id: String,
-    /// Scanner's human-readable device name.
     pub device_name: String,
-    /// Encrypted proof: ChaCha20-Poly1305(derived_key, "THEOREM_PAIR_V1").
-    /// Proves the scanner has the correct shared secret.
-    pub encrypted_proof: String,
-    /// Scanner's stable device fingerprint for deduplication.
     #[serde(default)]
     pub fingerprint: String,
-    /// Scanner's iroh node ID (public key string) so the host can connect back.
     #[serde(default)]
     pub node_id: String,
-    /// Scanner's LAN IP address.
-    #[serde(default)]
-    pub ip: String,
-    /// Scanner's sync server port.
-    #[serde(default)]
-    pub port: u16,
 }
 
 /// Response sent by the host back to the scanner after successful pairing.
@@ -92,11 +62,8 @@ pub struct PairingRequest {
 pub struct PairingResponse {
     pub device_id: String,
     pub device_name: String,
-    pub encrypted_ack: String,
     #[serde(default)]
     pub fingerprint: String,
-    /// iroh-docs DocTicket for the shared sync document (base32 string).
-    /// The host includes this so the scanner can import the shared CRDT doc.
     #[serde(default)]
     pub sync_doc_ticket: String,
 }
@@ -114,10 +81,6 @@ pub struct PairedDevice {
     /// Peer's iroh node ID (public key string) for QUIC connectivity.
     #[serde(default)]
     pub iroh_node_id: String,
-    /// Base64-encoded symmetric key derived during pairing (32 bytes).
-    /// Used for all subsequent encrypted communication with this peer.
-    pub symmetric_key_b64: String,
-    /// Last known IP address of the peer.
     pub last_ip: String,
     /// Last known port of the peer's sync server.
     pub last_port: u16,

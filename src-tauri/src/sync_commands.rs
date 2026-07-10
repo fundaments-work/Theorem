@@ -7,7 +7,6 @@ use crate::iroh_sync::{
 use theorem_sync_core::sync_crypto::{self, DeviceIdentity};
 use theorem_sync_core::sync_protocol::*;
 
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -206,40 +205,17 @@ pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData,
         }
     }
 
-    let secret = x25519_dalek::StaticSecret::random_from_rng(rand::rngs::OsRng);
-    let public = x25519_dalek::PublicKey::from(&secret);
-    let nonce = sync_crypto::generate_nonce();
-
-    let ip = get_local_ip();
-    let port = ep
-        .endpoint
-        .bound_sockets()
-        .first()
-        .map(|s| s.port())
-        .unwrap_or(0);
-
     let qr_payload = PairingQrPayload {
         version: 1,
         node_id: ep.public_key_string(),
-        ip,
-        port,
-        ephemeral_public_key: hex::encode(public.as_bytes()),
         device_id: sync_state.transport_state.identity.device_id.clone(),
         device_name: sync_state.transport_state.device_name.clone(),
-        nonce: hex::encode(nonce),
         fingerprint: sync_state.transport_state.identity.effective_fingerprint(),
     };
 
     let payload_json = serde_json::to_string(&qr_payload)
         .map_err(|e| format!("Failed to serialize QR payload: {e}"))?;
     let qr_svg = sync_crypto::generate_qr_svg(&payload_json)?;
-
-    let mut pending = sync_state.transport_state.pending_pairing.lock().await;
-    *pending = Some(iroh_sync::PendingPairing {
-        host_secret_bytes: secret.to_bytes(),
-        nonce,
-        created_at: std::time::Instant::now(),
-    });
 
     Ok(PairingQrData {
         qr_svg,
@@ -265,59 +241,12 @@ pub async fn submit_pairing_code(
     let sync_state = get_sync_state(&app)?;
     let ep = get_or_init_iroh(&app).await?;
 
-    // Parse host's ephemeral key and nonce
-    let host_public_bytes: [u8; 32] = hex::decode(&qr_payload.ephemeral_public_key)
-        .map_err(|e| format!("Invalid host public key: {e}"))?
-        .try_into()
-        .map_err(|_| "Host public key must be 32 bytes".to_string())?;
-    let nonce_bytes: [u8; 32] = hex::decode(&qr_payload.nonce)
-        .map_err(|e| format!("Invalid nonce: {e}"))?
-        .try_into()
-        .map_err(|_| "Nonce must be 32 bytes".to_string())?;
-
-    let (ephemeral_secret, ephemeral_public) = sync_crypto::generate_ephemeral_keypair();
-    let host_public = x25519_dalek::PublicKey::from(host_public_bytes);
-    let shared_secret = ephemeral_secret.diffie_hellman(&host_public);
-    let symmetric_key = sync_crypto::derive_symmetric_key(
-        shared_secret.as_bytes(),
-        &nonce_bytes,
-        b"theorem-sync-v1",
-    )?;
-
-    let proof = sync_crypto::encrypt_payload(&symmetric_key, b"THEOREM_PAIR_V1")?;
-    let proof_json =
-        serde_json::to_string(&proof).map_err(|e| format!("Failed to serialize proof: {e}"))?;
-
-    let scanner_ip = get_local_ip();
-    let scanner_port = ep
-        .endpoint
-        .bound_sockets()
-        .first()
-        .map(|s| s.port())
-        .unwrap_or(0);
-
-    let pairing_request = PairingRequest {
-        ephemeral_public_key: hex::encode(ephemeral_public.as_bytes()),
-        device_id: sync_state.transport_state.identity.device_id.clone(),
-        device_name: sync_state.transport_state.device_name.clone(),
-        encrypted_proof: BASE64.encode(proof_json.as_bytes()),
-        fingerprint: sync_state.transport_state.identity.effective_fingerprint(),
-        node_id: ep.public_key.to_string(),
-        ip: scanner_ip,
-        port: scanner_port,
-    };
-
-    // Connect to host via iroh — use the QR payload's IP/port as a direct hint.
+    // Connect to host via iroh
     let peer_pk: iroh::PublicKey = qr_payload
         .node_id
         .parse()
         .map_err(|e| format!("Invalid host node_id: {e}"))?;
-    let mut host_addr = iroh::EndpointAddr::new(peer_pk);
-    if let Ok(ip_addr) = qr_payload.ip.parse::<std::net::IpAddr>() {
-        if qr_payload.port > 0 {
-            host_addr = host_addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, qr_payload.port));
-        }
-    }
+    let host_addr = iroh::EndpointAddr::new(peer_pk);
 
     let conn = ep
         .endpoint
@@ -351,6 +280,13 @@ pub async fn submit_pairing_code(
         // Receive host's info (we don't need it beyond verification)
     }
 
+    let pairing_request = PairingRequest {
+        device_id: sync_state.transport_state.identity.device_id.clone(),
+        device_name: sync_state.transport_state.device_name.clone(),
+        fingerprint: sync_state.transport_state.identity.effective_fingerprint(),
+        node_id: ep.public_key.to_string(),
+    };
+
     let pairing_response = iroh_sync::send_pair_request(&conn, &pairing_request).await?;
 
     // Capture the host's relay URL from this connection for future reconnections.
@@ -372,9 +308,9 @@ pub async fn submit_pairing_code(
         device_id: pairing_response.device_id.clone(),
         device_name: pairing_response.device_name.clone(),
         iroh_node_id: qr_payload.node_id.clone(),
-        symmetric_key_b64: BASE64.encode(symmetric_key),
-        last_ip: qr_payload.ip.clone(),
-        last_port: qr_payload.port,
+
+        last_ip: String::new(),
+        last_port: 0,
         paired_at: format!("{}Z", now),
         last_sync_at: None,
         fingerprint: pairing_response.fingerprint.clone(),
@@ -798,10 +734,7 @@ pub async fn initiate_sync(
         .ok_or("Peer not paired")?;
     drop(devices);
 
-    let sym_key_vec = BASE64
-        .decode(&peer.symmetric_key_b64)
-        .map_err(|e| format!("Decode key failed: {e}"))?;
-    let sym_key: [u8; 32] = sym_key_vec
+    let sym_key: [u8; 32] = vec![0u8; 32]
         .try_into()
         .map_err(|_| "Key length invalid".to_string())?;
     let my_device_id = sync_state.transport_state.identity.device_id.clone();
@@ -848,145 +781,6 @@ pub async fn initiate_sync(
     }
 
     serde_json::to_string(&incoming).map_err(|e| format!("Serialize incoming map: {e}"))
-}
-
-// ─── File Transfer ───
-
-#[derive(serde::Serialize)]
-pub struct FileTransferResult {
-    pub transferred: Vec<String>,
-    pub failed: Vec<FileTransferErrorItem>,
-    pub unavailable: Vec<String>,
-}
-
-#[derive(serde::Serialize)]
-pub struct FileTransferErrorItem {
-    pub book_id: String,
-    pub error: String,
-}
-
-#[derive(serde::Serialize)]
-pub struct CoverTransferResult {
-    pub transferred: Vec<String>,
-    pub failed: Vec<FileTransferErrorItem>,
-    pub unavailable: Vec<String>,
-    pub covers: HashMap<String, String>,
-}
-
-#[tauri::command]
-pub async fn pull_book_files(
-    app: tauri::AppHandle,
-    peer_device_id: String,
-    book_ids: Vec<String>,
-) -> Result<FileTransferResult, String> {
-    eprintln!(
-        "[sync] pull_book_files: peer={}, {} files",
-        peer_device_id,
-        book_ids.len()
-    );
-    let sync_state = get_sync_state(&app)?;
-
-    let devices = sync_state.transport_state.paired_devices.lock().await;
-    let peer = devices
-        .get(&peer_device_id)
-        .cloned()
-        .ok_or("Peer not paired")?;
-    drop(devices);
-
-    let sym_key_vec = BASE64
-        .decode(&peer.symmetric_key_b64)
-        .map_err(|e| format!("Decode key: {e}"))?;
-    let sym_key: [u8; 32] = sym_key_vec.try_into().map_err(|_| "Key length invalid")?;
-    let my_id = sync_state.transport_state.identity.device_id.clone();
-
-    let cache_dir = sync_state.transport_state.app_data_dir.join("book-cache");
-    std::fs::create_dir_all(&cache_dir).ok();
-
-    let (conn, my_pk) = connect_to_peer(&app, &peer).await?;
-    save_peer_addrs_from_conn(&app, &peer_device_id, &conn).await;
-
-    // Must perform handshake so the server can identify this connection.
-    perform_handshake(
-        &conn,
-        my_pk,
-        &my_id,
-        &sync_state.transport_state.device_name,
-        &sync_state.transport_state.identity.effective_fingerprint(),
-    )
-    .await?;
-
-    let result =
-        iroh_sync::pull_files_via_iroh(Some(&app), conn, sym_key, my_id, &book_ids, cache_dir)
-            .await?;
-
-    Ok(FileTransferResult {
-        transferred: result.transferred,
-        failed: result
-            .failed
-            .into_iter()
-            .map(|f| FileTransferErrorItem {
-                book_id: f.book_id,
-                error: f.error,
-            })
-            .collect(),
-        unavailable: result.unavailable,
-    })
-}
-
-#[tauri::command]
-pub async fn pull_book_covers(
-    app: tauri::AppHandle,
-    peer_device_id: String,
-    book_ids: Vec<String>,
-) -> Result<CoverTransferResult, String> {
-    eprintln!(
-        "[sync] pull_book_covers: peer={}, {} books",
-        peer_device_id,
-        book_ids.len()
-    );
-    let sync_state = get_sync_state(&app)?;
-
-    let devices = sync_state.transport_state.paired_devices.lock().await;
-    let peer = devices
-        .get(&peer_device_id)
-        .cloned()
-        .ok_or("Peer not paired")?;
-    drop(devices);
-
-    let sym_key_vec = BASE64
-        .decode(&peer.symmetric_key_b64)
-        .map_err(|e| format!("Decode key: {e}"))?;
-    let sym_key: [u8; 32] = sym_key_vec.try_into().map_err(|_| "Key length invalid")?;
-    let my_id = sync_state.transport_state.identity.device_id.clone();
-
-    let (conn, my_pk) = connect_to_peer(&app, &peer).await?;
-    save_peer_addrs_from_conn(&app, &peer_device_id, &conn).await;
-
-    // Must perform handshake so the server can identify this connection.
-    perform_handshake(
-        &conn,
-        my_pk,
-        &my_id,
-        &sync_state.transport_state.device_name,
-        &sync_state.transport_state.identity.effective_fingerprint(),
-    )
-    .await?;
-
-    let result = iroh_sync::pull_covers_via_iroh(conn, sym_key, my_id, &book_ids).await?;
-
-    Ok(CoverTransferResult {
-        transferred: result.transferred,
-        failed: result
-            .failed
-            .into_iter()
-            .map(|f| FileTransferErrorItem {
-                book_id: f.book_id,
-                error: f.error,
-            })
-            .collect(),
-        unavailable: result.unavailable,
-        covers: result.covers,
-    })
 }
 
 // ─── Background Sync ───

@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use futures::StreamExt;
 use iroh::endpoint::{self, presets::N0, RelayMode};
 use iroh::protocol::{ProtocolHandler, Router};
@@ -827,13 +826,7 @@ async fn handle_peer_connection(
         }
 
         // Look up symmetric key
-        let sym_key = {
-            let devices = state.paired_devices.lock().await;
-            devices
-                .get(&peer_device_id)
-                .and_then(|d| BASE64.decode(&d.symmetric_key_b64).ok())
-                .and_then(|v| <[u8; 32]>::try_from(v).ok())
-        };
+        let sym_key: Option<[u8; 32]> = None;
 
         let sym_key = match sym_key {
             Some(k) => k,
@@ -1365,10 +1358,10 @@ async fn handle_cover_pull_req(
 
 // ─── Pairing Handler ───
 
-/// Handle an incoming pairing request (no symmetric key needed).
+/// Handle an incoming pairing request.
 async fn handle_pair_req(
     state: &Arc<SyncTransportState>,
-    peer_info: &IrohPeerInfo,
+    _peer_info: &IrohPeerInfo,
     data: &serde_json::Value,
 ) -> serde_json::Value {
     let pairing_req: PairingRequest = match serde_json::from_value(data.clone()) {
@@ -1376,81 +1369,25 @@ async fn handle_pair_req(
         Err(e) => return serde_json::json!({"error": format!("parse pair req: {e}")}),
     };
 
-    let pending = state.pending_pairing.lock().await;
-    let pending = match pending.as_ref() {
-        Some(p) => p.clone(),
-        None => return serde_json::json!({"error": "no pending pairing session"}),
-    };
-
-    let host_secret = x25519_dalek::StaticSecret::from(pending.host_secret_bytes);
-
-    let scanner_public_bytes: [u8; 32] = match hex::decode(&pairing_req.ephemeral_public_key)
-        .map_err(|e| format!("hex decode: {e}"))
-        .and_then(|v| v.try_into().map_err(|_| "wrong len".to_string()))
-    {
-        Ok(b) => b,
-        Err(e) => return serde_json::json!({"error": format!("invalid public key: {e}")}),
-    };
-
-    let scanner_public = x25519_dalek::PublicKey::from(scanner_public_bytes);
-    let shared_secret = host_secret.diffie_hellman(&scanner_public);
-    let shared: [u8; 32] = *shared_secret.as_bytes();
-
-    let sym_key =
-        match sync_crypto::derive_symmetric_key(&shared, &pending.nonce, b"theorem-sync-v1") {
-            Ok(k) => k,
-            Err(e) => return serde_json::json!({"error": format!("derive key: {e}")}),
-        };
-
-    // Verify proof
-    let proof_bytes = match BASE64.decode(&pairing_req.encrypted_proof) {
-        Ok(b) => b,
-        Err(e) => return serde_json::json!({"error": format!("decode proof: {e}")}),
-    };
-    let proof_json_str = match String::from_utf8(proof_bytes) {
-        Ok(s) => s,
-        Err(e) => return serde_json::json!({"error": format!("utf8: {e}")}),
-    };
-    let proof_enc: EncryptedPayload = match serde_json::from_str(&proof_json_str) {
-        Ok(p) => p,
-        Err(e) => return serde_json::json!({"error": format!("parse proof: {e}")}),
-    };
-
-    let decrypted = match sync_crypto::decrypt_payload(&sym_key, &proof_enc) {
-        Ok(d) => d,
-        Err(e) => return serde_json::json!({"error": format!("decrypt proof: {e}")}),
-    };
-
-    if decrypted != b"THEOREM_PAIR_V1" {
-        return serde_json::json!({"error": "invalid proof"});
-    }
-
     // Save paired device
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
 
-    // Use scanner's self-reported address from the pairing request
-    // (the QR payload has the HOST's address, so we must use the scanner's own).
     let scanner_node_id = if !pairing_req.node_id.is_empty() {
         pairing_req.node_id.clone()
     } else {
-        peer_info.public_key.to_string()
-    };
-    let scanner_ip = if !pairing_req.ip.is_empty() {
-        pairing_req.ip.clone()
-    } else {
-        String::new()
+        _peer_info.public_key.to_string()
     };
 
     let paired = PairedDevice {
         device_id: pairing_req.device_id.clone(),
         device_name: pairing_req.device_name.clone(),
         iroh_node_id: scanner_node_id,
-        symmetric_key_b64: BASE64.encode(sym_key),
-        last_ip: scanner_ip,
-        last_port: pairing_req.port,
+
+        last_ip: String::new(),
+        last_port: 0,
         paired_at: format!("{}Z", now),
         last_sync_at: None,
         fingerprint: pairing_req.fingerprint.clone(),
@@ -1514,7 +1451,7 @@ async fn handle_pair_req(
     let response = PairingResponse {
         device_id: state.identity.device_id.clone(),
         device_name: state.device_name.clone(),
-        encrypted_ack: String::new(),
+
         fingerprint: state.identity.effective_fingerprint(),
         sync_doc_ticket,
     };

@@ -1178,8 +1178,6 @@ pub fn run() {
             // iroh-based sync + file transfer
             sync_commands::initiate_sync,
             sync_commands::sync_now,
-            sync_commands::pull_book_files,
-            sync_commands::pull_book_covers,
             // iroh-docs CRDT sync
             sync_commands::docs_create_sync_doc,
             sync_commands::docs_import_sync_doc,

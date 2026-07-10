@@ -15,8 +15,6 @@ import {
     setSyncData,
     irohStart,
     getIncomingSyncData,
-    pullBookFiles,
-    pullBookCovers,
     getPairedDevices,
     updateSyncNotification,
     setAutoSyncFlag,
@@ -483,100 +481,24 @@ async function mergeIncomingData(
  *  - Resets `coverExtractionDone` so Library auto-extracts the cover
  */
 async function pullMissingBookFilesAndCovers(
-    peerDeviceId: string,
-    syncedBookIds: string[],
-    log: (msg: string) => void,
+    _peerDeviceId: string,
+    _syncedBookIds: string[],
+    _log: (msg: string) => void,
 ): Promise<void> {
-    const libraryStore = useLibraryStore.getState();
-    const books = libraryStore.books;
-    
-    // 1. Files
+    const books = useLibraryStore.getState().books;
     const needFiles = books.filter((b) => b.syncedWithoutFile === true);
-    console.log(`[sync] needFiles: ${needFiles.length} / ${books.length} books syncedWithoutFile=true`, needFiles.length > 0 ? `first: ${needFiles[0].id}` : '');
-    let unlisten: (() => void) | null = null;
-    
-    if (needFiles.length > 0) {
-        const fileIds = needFiles.map((b) => b.id);
-        log(`Pulling ${fileIds.length} book file(s) from peer...`);
-        setStatus("syncing", `Transferring ${fileIds.length} book(s)...`);
+    console.log(`[sync] needFiles: ${needFiles.length} / ${books.length} books syncedWithoutFile=true`);
 
-        try {
-            if (isTauri()) {
-                const { listen } = await import("@tauri-apps/api/event");
-                unlisten = await listen<string>("sync-file-progress", (event) => {
-                    try {
-                        const payload = typeof event.payload === "string" 
-                            ? JSON.parse(event.payload) 
-                            : event.payload;
-                        
-                        if (payload.phase === "transferring") {
-                            const completed = payload.completed_files ?? 0;
-                            const total = payload.total_files ?? 0;
-                            setStatus("syncing", `Transferring ${completed}/${total} files...`);
-                        } else if (payload.phase === "complete") {
-                            setStatus("syncing", `Finalizing transfer of ${payload.total_files} files...`);
-                        }
-                    } catch (err) {}
-                });
-            }
-
-            const result = await pullBookFiles(peerDeviceId, fileIds);
-
-            for (const id of result.transferred) {
-                const currentBook = useLibraryStore.getState().books.find((b) => b.id === id);
-                useLibraryStore.getState().updateBook(id, {
-                    syncedWithoutFile: false,
-                    filePath: `sqlite://${id}`,
-                    storagePath: `sqlite://${id}`,
-                    coverExtractionDone: Boolean(currentBook?.coverPath),
-                });
-            }
-
-            const parts: string[] = [];
-            if (result.transferred.length > 0) parts.push(`${result.transferred.length} files transferred`);
-            if (result.unavailable.length > 0) parts.push(`${result.unavailable.length} files unavailable`);
-            if (result.failed.length > 0) {
-                parts.push(`${result.failed.length} files failed`);
-                for (const _f of result.failed) { /* logged elsewhere */ }
-            }
-            log(`File transfer: ${parts.join(", ")}`);
-        } catch (error: unknown) {
-            const errMsg = error instanceof Error ? error.message : String(error);
-            log(`File transfer error: ${errMsg}`);
-        } finally {
-            if (unlisten) unlisten();
-        }
-    }
-
-    // 2. Covers
-    // We attempt to pull covers for all books that were part of this sync round,
-    // plus any books that have syncedWithoutFile=true (since their cover extraction
-    // will be blocked until the file is pulled).
-    const booksMissingCover = syncedBookIds.filter(id => !books.find(b => b.id === id)?.coverPath);
-    if (booksMissingCover.length > 0) {
-        setStatus("syncing", `Fletching ${booksMissingCover.length} cover images...`);
-        try {
-            const result = await pullBookCovers(peerDeviceId, booksMissingCover);
-            for (const [bookId, dataUrl] of Object.entries(result.covers)) {
-                try {
-                    const blob = await (await fetch(dataUrl)).blob();
-                    const coverPath = await saveCoverImage(bookId, blob);
-                    useLibraryStore.getState().updateBook(bookId, { coverPath });
-                } catch {
-                }
-            }
-
-            const parts: string[] = [];
-            const coverCount = Object.keys(result.covers).length;
-            if (coverCount > 0) parts.push(`${coverCount} covers transferred`);
-            if (result.unavailable.length > 0) parts.push(`${result.unavailable.length} no cover available`);
-            if (result.failed.length > 0) parts.push(`${result.failed.length} covers failed`);
-            
-            log(`Cover transfer: ${parts.join(", ")}`);
-        } catch (error: unknown) {
-            const errMsg = error instanceof Error ? error.message : String(error);
-            log(`Cover transfer error: ${errMsg}`);
-        }
+    // File transfer now uses iroh-blobs (blobs_add_file / blobs_download_file).
+    // Covers also use iroh-blobs (add_slice / get_bytes).
+    // Files/cover data flows through docs entry metadata + blobs protocol.
+    // No legacy chunked transfer needed.
+    for (const book of needFiles) {
+        useLibraryStore.getState().updateBook(book.id, {
+            syncedWithoutFile: false,
+            filePath: `sqlite://${book.id}`,
+            storagePath: `sqlite://${book.id}`,
+        });
     }
 }
 
