@@ -9,8 +9,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use futures::StreamExt;
 use iroh::endpoint::{self, presets::Minimal, RelayMode};
 use iroh::{PublicKey, SecretKey};
+use tauri::Emitter;
 use tokio::sync::Mutex;
 
 use theorem_sync_core::sync_crypto::{self, DeviceIdentity, EncryptedPayload};
@@ -317,12 +319,15 @@ pub struct CoverTransferResult {
 }
 
 /// Pull book files from a peer over an iroh connection.
+/// Uses bounded concurrency to transfer files in parallel.
+/// Emits `sync-file-progress` Tauri events when `app` is provided.
 pub async fn pull_files_via_iroh(
-    conn: &endpoint::Connection,
-    sym_key: &[u8; 32],
-    my_device_id: &str,
+    app: Option<&tauri::AppHandle>,
+    conn: endpoint::Connection,
+    sym_key: [u8; 32],
+    my_device_id: String,
     book_ids: &[String],
-    cache_dir: &std::path::Path,
+    cache_dir: std::path::PathBuf,
 ) -> Result<FileTransferResult, String> {
     let mut result = FileTransferResult {
         transferred: Vec::new(),
@@ -334,15 +339,15 @@ pub async fn pull_files_via_iroh(
     let avail_req = FileAvailabilityRequest {
         book_ids: book_ids.to_vec(),
     };
-    let enc_req = sync_crypto::encrypt_payload(sym_key, &serde_json::to_vec(&avail_req).unwrap())?;
+    let enc_req = sync_crypto::encrypt_payload(&sym_key, &serde_json::to_vec(&avail_req).unwrap())?;
     let auth_req = AuthenticatedRequest {
-        device_id: my_device_id.to_string(),
+        device_id: my_device_id.clone(),
         payload: enc_req,
     };
-    let resp_val = iroh_request(conn, "file_availability", &auth_req).await?;
+    let resp_val = iroh_request(&conn, "file_availability", &auth_req).await?;
     let enc_resp: EncryptedPayload =
         serde_json::from_value(resp_val).map_err(|e| format!("parse avail enc: {e}"))?;
-    let resp_bytes = sync_crypto::decrypt_payload(sym_key, &enc_resp)?;
+    let resp_bytes = sync_crypto::decrypt_payload(&sym_key, &enc_resp)?;
     let avail: FileAvailabilityResponse =
         serde_json::from_slice(&resp_bytes).map_err(|e| format!("parse avail: {e}"))?;
 
@@ -354,15 +359,60 @@ pub async fn pull_files_via_iroh(
         }
     }
 
-    // Transfer each available file
-    for book_id in &avail.available_ids {
-        match pull_single_file_iroh(conn, sym_key, my_device_id, book_id, cache_dir).await {
-            Ok(_) => result.transferred.push(book_id.clone()),
-            Err(e) => result.failed.push(FileTransferError {
-                book_id: book_id.clone(),
-                error: e,
-            }),
+    let total_files = avail.available_ids.len();
+    if total_files == 0 {
+        return Ok(result);
+    }
+
+    // Bounded concurrency: 3 on mobile, 8 otherwise
+    let max_concurrent = if cfg!(target_os = "android") { 3 } else { 8 };
+
+    // Build download futures in a for-loop so each owns its captured values
+    type DownloadFut =
+        std::pin::Pin<Box<dyn std::future::Future<Output = (String, Result<u64, String>)> + Send>>;
+    let mut book_downloads: Vec<DownloadFut> = Vec::with_capacity(total_files);
+    for book_id in avail.available_ids {
+        let conn = conn.clone();
+        let my_device_id = my_device_id.clone();
+        let cache_dir = cache_dir.clone();
+        book_downloads.push(Box::pin(async move {
+            let size =
+                pull_single_file_iroh(&conn, &sym_key, &my_device_id, &book_id, &cache_dir).await;
+            (book_id, size)
+        }));
+    }
+
+    let mut stream = futures::stream::iter(book_downloads).buffer_unordered(max_concurrent);
+
+    while let Some((book_id, size_result)) = stream.next().await {
+        match size_result {
+            Ok(_size) => {
+                result.transferred.push(book_id);
+                // Emit per-file progress
+                if let Some(app) = app {
+                    app.emit(
+                        "sync-file-progress",
+                        serde_json::to_string(&serde_json::json!({"phase": "transferring", "total_files": total_files})).unwrap_or_default(),
+                    )
+                    .ok();
+                }
+            }
+            Err(e) => {
+                result.failed.push(FileTransferError { book_id, error: e });
+            }
         }
+    }
+
+    // Emit final completion event
+    if let Some(app) = app {
+        app.emit(
+            "sync-file-progress",
+            serde_json::to_string(
+                &serde_json::json!({"phase": "complete", "total_files": total_files}),
+            )
+            .unwrap_or_default(),
+        )
+        .ok();
     }
 
     Ok(result)
@@ -448,9 +498,9 @@ async fn request_file_pull(
 
 /// Pull cover images from a peer over an iroh connection.
 pub async fn pull_covers_via_iroh(
-    conn: &endpoint::Connection,
-    sym_key: &[u8; 32],
-    my_device_id: &str,
+    conn: endpoint::Connection,
+    sym_key: [u8; 32],
+    my_device_id: String,
     book_ids: &[String],
 ) -> Result<CoverTransferResult, String> {
     eprintln!(
@@ -464,34 +514,73 @@ pub async fn pull_covers_via_iroh(
         covers: HashMap::new(),
     };
 
-    for book_id in book_ids {
-        eprintln!("[iroh-sync]   pulling cover for book {book_id}");
-        let cover_req = CoverPullRequest {
-            book_id: book_id.clone(),
-        };
-        let enc_req =
-            sync_crypto::encrypt_payload(sym_key, &serde_json::to_vec(&cover_req).unwrap())?;
-        let auth_req = AuthenticatedRequest {
-            device_id: my_device_id.to_string(),
-            payload: enc_req,
-        };
-        let resp_val = iroh_request(conn, "cover_pull", &auth_req).await?;
-        let enc_resp: EncryptedPayload =
-            serde_json::from_value(resp_val).map_err(|e| format!("parse cover enc: {e}"))?;
-        let resp_bytes = sync_crypto::decrypt_payload(sym_key, &enc_resp)?;
-        let cover: CoverPullResponse =
-            serde_json::from_slice(&resp_bytes).map_err(|e| format!("parse cover: {e}"))?;
+    if book_ids.is_empty() {
+        return Ok(result);
+    }
 
-        if !cover.available {
-            result.unavailable.push(book_id.clone());
-        } else if let Some(data_url) = cover.data_url {
-            result.transferred.push(book_id.clone());
-            result.covers.insert(book_id.clone(), data_url);
-        } else {
-            result.failed.push(FileTransferError {
+    // Covers are small — fetch with higher concurrency
+    let max_concurrent = if cfg!(target_os = "android") { 8 } else { 16 };
+
+    // Build cover futures in a for-loop so each owns its captured values
+    type CoverFut = std::pin::Pin<
+        Box<dyn std::future::Future<Output = (String, Result<CoverPullResponse, String>)> + Send>,
+    >;
+    let mut cover_futures: Vec<CoverFut> = Vec::with_capacity(book_ids.len());
+    for book_id in book_ids.iter().cloned() {
+        let conn = conn.clone();
+        let my_device_id = my_device_id.clone();
+        cover_futures.push(Box::pin(async move {
+            let cover_req = CoverPullRequest {
                 book_id: book_id.clone(),
-                error: "Cover response missing data".to_string(),
-            });
+            };
+            let enc_req = match sync_crypto::encrypt_payload(
+                &sym_key,
+                &serde_json::to_vec(&cover_req).unwrap(),
+            ) {
+                Ok(v) => v,
+                Err(e) => return (book_id, Err(e)),
+            };
+            let auth_req = AuthenticatedRequest {
+                device_id: my_device_id,
+                payload: enc_req,
+            };
+            match iroh_request(&conn, "cover_pull", &auth_req).await {
+                Ok(resp_val) => match serde_json::from_value::<EncryptedPayload>(resp_val) {
+                    Ok(enc_resp) => match sync_crypto::decrypt_payload(&sym_key, &enc_resp) {
+                        Ok(resp_bytes) => {
+                            match serde_json::from_slice::<CoverPullResponse>(&resp_bytes) {
+                                Ok(cover) => (book_id, Ok(cover)),
+                                Err(e) => (book_id, Err(format!("parse cover: {e}"))),
+                            }
+                        }
+                        Err(e) => (book_id, Err(e)),
+                    },
+                    Err(e) => (book_id, Err(format!("parse cover enc: {e}"))),
+                },
+                Err(e) => (book_id, Err(e)),
+            }
+        }));
+    }
+
+    let mut stream = futures::stream::iter(cover_futures).buffer_unordered(max_concurrent);
+    while let Some((book_id, cover_res)) = stream.next().await {
+        match cover_res {
+            Ok(cover) => {
+                if !cover.available {
+                    result.unavailable.push(book_id);
+                } else if let Some(data_url) = cover.data_url {
+                    result.transferred.push(book_id.clone());
+                    result.covers.insert(book_id, data_url);
+                } else {
+                    result.failed.push(FileTransferError {
+                        book_id,
+                        error: "Cover response missing data".to_string(),
+                    });
+                }
+            }
+            Err(e) => {
+                eprintln!("[iroh-sync]   cover pull error: {e}");
+            }
         }
     }
 

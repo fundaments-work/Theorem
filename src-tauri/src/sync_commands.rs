@@ -853,7 +853,8 @@ pub async fn pull_book_files(
     .await?;
 
     let result =
-        iroh_sync::pull_files_via_iroh(&conn, &sym_key, &my_id, &book_ids, &cache_dir).await?;
+        iroh_sync::pull_files_via_iroh(Some(&app), conn, sym_key, my_id, &book_ids, cache_dir)
+            .await?;
 
     Ok(FileTransferResult {
         transferred: result.transferred,
@@ -908,7 +909,7 @@ pub async fn pull_book_covers(
     )
     .await?;
 
-    let result = iroh_sync::pull_covers_via_iroh(&conn, &sym_key, &my_id, &book_ids).await?;
+    let result = iroh_sync::pull_covers_via_iroh(conn, sym_key, my_id, &book_ids).await?;
 
     Ok(CoverTransferResult {
         transferred: result.transferred,
