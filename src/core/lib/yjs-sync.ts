@@ -127,8 +127,8 @@ function scheduleSync(domain: string, fn: () => void): void {
 
 function syncLibraryToYjs(): void {
     if (!_maps || !_ydoc) return;
-    const state = useLibraryStore.getState();
     scheduleSync("library", () => {
+        const state = useLibraryStore.getState();
         _ydoc!.transact(() => {
             const map = _maps!.books;
             const existing = new Set<string>();
@@ -158,16 +158,16 @@ function syncLibraryToYjs(): void {
 
 function syncVocabularyToYjs(): void {
     if (!_maps || !_ydoc) return;
-    const state = useVocabularyStore.getState();
     scheduleSync("vocabulary", () => {
+        const state = useVocabularyStore.getState();
         syncDomain(_maps!.vocabulary, state.vocabularyTerms, (t) => t.id);
     });
 }
 
 function syncRssToYjs(): void {
     if (!_maps || !_ydoc) return;
-    const state = useRssStore.getState();
     scheduleSync("rss", () => {
+        const state = useRssStore.getState();
         syncDomain(_maps!.rssFeeds, state.feeds, (f) => f.id);
         
         const MAX_ARTICLES = 500;
@@ -195,8 +195,8 @@ function syncRssToYjs(): void {
 
 function syncSettingsToYjs(): void {
     if (!_maps || !_ydoc) return;
-    const state = useSettingsStore.getState();
     scheduleSync("settings", () => {
+        const state = useSettingsStore.getState();
         syncScalar(_maps!.settings, "app", state.settings);
         syncScalar(_maps!.readingStats, "app", state.stats);
     });
