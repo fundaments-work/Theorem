@@ -542,9 +542,9 @@ async function pullMissingBookFilesAndCovers(
                             : event.payload;
                         
                         if (payload.phase === "transferring") {
-                            const mbDone = (payload.completed_bytes / 1024 / 1024).toFixed(1);
-                            const mbTotal = (payload.total_bytes / 1024 / 1024).toFixed(1);
-                            setStatus("syncing", `Transferring ${payload.completed_files}/${payload.total_files} files (${mbDone}/${mbTotal} MB)...`);
+                            const completed = payload.completed_files ?? 0;
+                            const total = payload.total_files ?? 0;
+                            setStatus("syncing", `Transferring ${completed}/${total} files...`);
                         } else if (payload.phase === "complete") {
                             setStatus("syncing", `Finalizing transfer of ${payload.total_files} files...`);
                         }

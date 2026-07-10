@@ -383,23 +383,28 @@ pub async fn pull_files_via_iroh(
     }
 
     let mut stream = futures::stream::iter(book_downloads).buffer_unordered(max_concurrent);
+    let mut completed_files: usize = 0;
 
     while let Some((book_id, size_result)) = stream.next().await {
+        completed_files += 1;
         match size_result {
             Ok(_size) => {
                 result.transferred.push(book_id);
-                // Emit per-file progress
-                if let Some(app) = app {
-                    app.emit(
-                        "sync-file-progress",
-                        serde_json::to_string(&serde_json::json!({"phase": "transferring", "total_files": total_files})).unwrap_or_default(),
-                    )
-                    .ok();
-                }
             }
             Err(e) => {
                 result.failed.push(FileTransferError { book_id, error: e });
             }
+        }
+        // Emit per-file progress (including failed ones so count is accurate)
+        if let Some(app) = app {
+            app.emit(
+                "sync-file-progress",
+                serde_json::to_string(
+                    &serde_json::json!({"phase": "transferring", "completed_files": completed_files, "total_files": total_files}),
+                )
+                .unwrap_or_default(),
+            )
+            .ok();
         }
     }
 
