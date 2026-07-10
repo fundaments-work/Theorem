@@ -451,51 +451,96 @@ function addBook(book) {
 
 ---
 
-## 8. Remaining Gaps After Yjs
+## 8. Remaining Gaps After Yjs (Removed — Replaced by iroh-docs)
 
-Yjs handles merge + sync + conflict resolution. These pieces remain custom:
+Yjs was removed in v1.0.7. iroh-docs now handles CRDT metadata sync natively
+in the iroh stack. The following components use iroh-native protocols:
 
 ### 8.1 Pairing & Device Identity
 
-**Current**: Custom X25519 + HKDF + QR code + encrypted proof/ack challenge-response.
+**Current**: Custom X25519 + HKDF + QR code + encrypted proof/ack challenge-response,
+followed by DocTicket exchange for iroh-docs document sharing.
 
-**Notes**: iroh provides no pairing protocol. The standard iroh pattern is sharing the
-`EndpointId` (PublicKey) + `RelayUrl` via QR, then connecting over iroh's TLS-authenticated
-QUIC (no additional key exchange needed). Our custom X25519+HKDF layer is redundant — the
-iroh connection is already end-to-end encrypted by the PublicKey.
+**Library**: iroh PublicKey for identity, custom X25519+HKDF for pairing code exchange.
+The pairing flow now includes creating a shared iroh-docs document and exchanging
+the DocTicket via the `PairingResponse.sync_doc_ticket` field.
 
-**Optimization**: Replace custom X25519+HKDF+ChaCha20 proof with a QR that just encodes
-`{ device_name, public_key, relay_url }`. iroh's TLS handles encryption. Eliminates
-~200 lines of custom crypto.
+| Step | What happens |
+|------|-------------|
+| 1 | Host generates QR with `{ device_name, public_key, ip, port, fingerprint }` |
+| 2 | Scanner scans QR, connects via iroh QUIC |
+| 3 | X25519+HKDF key exchange (for legacy encrypted protocol) |
+| 4 | Host creates iroh-docs document, generates DocTicket |
+| 5 | Host stores doc_id on PairedDevice, includes ticket in PairingResponse |
+| 6 | Scanner imports ticket via `docs_import_sync_doc`, stores doc_id |
 
 ### 8.2 File Transfer (Large Books)
 
-**Current**: Custom 1 MiB chunked transfer over iroh QUIC streams (not 4 MiB as previously
-documented). Per-chunk ChaCha20-Poly1305 AEAD (no SHA-256 — AEAD makes it redundant).
-Base64-encoded in JSON envelopes. ~210 lines in `iroh_sync.rs`.
+**Current**: Custom 1 MiB chunked transfer over iroh QUIC streams.
+Per-chunk ChaCha20-Poly1305 AEAD, base64-encoded in JSON envelopes.
+~210 lines in `iroh_sync.rs`.
 
-**Library**: [`iroh-blobs`](https://crates.io/crates/iroh-blobs) (separate crate v0.103.0).
-Provides BLAKE3 content-addressed blob transfer with verified streaming, range requests,
-resumable downloads, and progress events (`DownloadProgress`). Uses FsStore for on-disk
-persistence. `BlobTicket` packages blob hash + endpoint info.
+**Library**: [`iroh-blobs`](https://crates.io/crates/iroh-blobs) v0.103.0 provides
+BLAKE3 content-addressed blob transfer with verified streaming, range requests,
+and progress events. The `blobs_add_bytes` and `blobs_download_bytes` Tauri
+commands use `iroh_blobs::api::Store` with `MemStore` backing.
+`Downloader::download()` connects to peer via iroh QUIC, streams blob over
+BlobsProtocol ALPN on Router.
 
-**Impact**: Replaces custom chunking, per-chunk encryption, base64 encoding, chunk
-negotiation, and the `FileTransferMeta`/`FilePullRequest`/`FilePullResponse` structs.
-Eliminates ~210 lines from `iroh_sync.rs` + protocol structs from `sync_protocol.rs`.
+**Status**: Implemented for small blobs (covers, config). Large book files still
+use custom chunked transfer (MemStore is in-memory — FsStore needed for large files).
 
-**Status**: Not yet implemented. Depends on adding `iroh-blobs` to Cargo.toml.
+| Blob size | Mechanism | Library |
+|-----------|-----------|---------|
+| Small (<10MB, covers) | `blobs_add_bytes` / `blobs_download_bytes` | iroh-blobs MemStore |
+| Large (books, >10MB) | `pull_book_files` custom chunked | custom (until iroh-blobs FsStore) |
 
 ### 8.3 Background Scheduling
 
-| Platform | Recommendation |
-|----------|---------------|
-| **Linux desktop** | `systemd` user service (`~/.config/systemd/user/theorem-sync.service`). Proper lifecycle, auto-restart, logging. Or keep child process with `kill_on_drop(true)`. |
-| **macOS** | `launchd` plist in `~/Library/LaunchAgents` |
-| **Windows** | Keep custom child process |
-| **Android** | Keep WorkManager (it's the right choice). Fix: add foreground service notification, outbound sync, `autoSyncEnabled` check. |
-| **All platforms** | The sync "daemon" is unnecessary with Yjs — Yjs maintains its own WebSocket connections inside the app process. Background scheduling is only needed for the initial connection setup, not for the sync loop itself. |
+The iroh endpoint maintains persistent QUIC connections to relays. No custom
+keep-alive is needed — iroh handles reconnection automatically via relay fallback.
 
-### 8.4 Store Bridge (Zustand ↔ Yjs)
+**Key insight**: iroh-docs has live events via `doc.subscribe()`:
+
+```rust
+use iroh_docs::engine::LiveEvent;
+use n0_future::StreamExt;
+
+let mut events = doc.subscribe().await?;
+while let Some(event) = events.next().await {
+    match event? {
+        LiveEvent::InsertRemote { entry, .. } => {
+            // Update UI when peer inserts data
+        }
+        LiveEvent::ContentReady { hash } => {
+            // Content blob is available locally
+        }
+        _ => {}
+    }
+}
+```
+
+This replaces the 2-second polling timer. Zustand updates in real-time.
+
+**Background sync strategy:**
+
+| Platform | Mechanism | How |
+|----------|-----------|-----|
+| **Desktop** | Sync daemon running iroh Router | Daemon boots iroh endpoint + Router (docs+blobs+gossip). No HTTP sync server needed. The iroh endpoint connects to relays automatically, keeps connections alive, and docs reconcile via gossip. |
+| **Android** | WorkManager + foreground notification | WorkManager keeps the JNI iroh endpoint alive. `.watch_addr()` signals relay connectivity. `doc.subscribe()` handles live updates. Auto-disabled when `autoSyncEnabled` flag is off. |
+| **All** | iroh handles reconnection | FAQ: "Relays are stateless. Iroh immediately reacts to network changes and switches to the new best path — transparently, without dropping the connection." |
+
+**Current vs Future:**
+
+| Aspect | Current (legacy) | Future (iroh-native) |
+|--------|-----------------|---------------------|
+| Daemon protocol | HTTP sync (port 43935) | iroh Router (docs+blobs+gossip) |
+| Daemon lifecycle | Child process, `kill_on_drop(true)` | Systemd/launchd managing iroh Router process |
+| Android sync | JNI + WorkManager (HTTP-based) | WorkManager keeping iroh endpoint alive |
+| Live updates | 2-second polling timer | `doc.subscribe()` → `LiveEvent::InsertRemote` → Zustand |
+| Auto-discovery | Stored IP/relay URLs | N0 DNS lookup by PublicKey |
+
+### 8.4 Store Bridge (Zustand ↔ iroh-docs)
 
 No library needed — thin adapter (~50 lines):
 
@@ -582,15 +627,30 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 
 ## 10. Library Reinvention Audit
 
-### Should Replace
+### Replaced in v1.0.7
 
-| Priority | Custom Code | Lines | Replace With | Stars | Benefit |
-|----------|-------------|-------|-------------|-------|---------|
-| **HIGH** | Metadata sync | ~1500 (now dead) | `iroh-docs` + `iroh-blobs` | — | CRDT key-value + blob store, unified iroh stack |
-| **HIGH** | Pairing + file transfer | ~500 | `iroh-blobs` + simplify pairing | — | BLAKE3 streaming, verified integrity, progress events |
-| **HIGH** | No schema validation | ~500 (guards) | `zod` or `valibot` | 33k / 12k | Runtime validation of peer data, auto types |
-| **HIGH** | Manual snake_case remap | ~50 | `serde(rename_all="camelCase")` | built-in | Zero TS remapping code |
-| **HIGH** | Manual ISO 8601 | ~57 | `time` crate | 5.7k | 2-line replacement |
+| Priority | Custom Code (was) | Lines | Replaced With | Status |
+|----------|-------------------|-------|---------------|--------|
+| **HIGH** | Entire custom sync orchestration | ~1200 | `iroh-docs` + `iroh-blobs` | ✅ Docs CRDT + blobs xfer + Router |
+| **HIGH** | Accept loop + envelope protocol | ~100 | `iroh::Router` + `ProtocolHandler` | ✅ Router dispatches by ALPN |
+| **HIGH** | Metadata merge (LWW) | ~688 | `iroh-docs` CRDT + Zustand bridge | ✅ provisionToIrohDocs/hydrateFromIrohDocs |
+| **HIGH** | Yjs bridge (Zustand ↔ Yjs) | ~475 | `iroh-docs` native CRDT (removed Yjs) | ✅ Removed -603 lines |
+| **HIGH** | File/chunk transfer (partial) | ~210 | `iroh-blobs` | ✅ blobs_add_bytes / blobs_download_bytes |
+| **HIGH** | Pairing doc exchange | — | DocTicket in PairingResponse | ✅ handled during pairing handshake |
+| **HIGH** | No schema validation | ~500 (guards) | `zod` or `valibot` | ✅ Zod schemas for all 9 domains |
+| **HIGH** | Manual snake_case remap | ~50 | `serde(rename_all="camelCase")` | ✅ All protocol structs use it |
+| **HIGH** | Manual ISO 8601 | ~57 | `time` crate | ✅ `time::OffsetDateTime::format(Rfc3339)` |
+
+### Still Custom (justified)
+
+| Custom Code | Lines | Why |
+|-------------|-------|-----|
+| X25519+HKDF pairing | ~200 | iroh has no pairing protocol. QR + PublicKey exchange needed. |
+| Large file chunked transfer | ~210 | iroh-blobs MemStore insufficient for >10MB files. FsStore API private. |
+| Legacy daemon + Android worker | ~500 | App lifecycle management. iroh Router should run in daemon instead. |
+| Rust EPUB pre-parser | 332 | Intentional performance optimization. Uses `quick-xml`. |
+| Custom persistence adapter | 188 | No Zustand adapter for Tauri SQLite + localStorage fallback. |
+| StarDict parser | 589 | No mature JS library for this niche format. |
 | **MED** | ContextMenu | 236 | `@radix-ui/react-context-menu` | 22k | Full a11y, keyboard nav |
 | **MED** | Dropdown | 194 | `@radix-ui/react-select` | 22k | Arrow keys, type-to-select |
 | **MED** | Modal | 238 | `@radix-ui/react-dialog` | 22k | Edge case a11y |
@@ -672,22 +732,30 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 
 | # | Fix | Status |
 |---|------|--------|
-| 30 | Replace custom sync with Yjs (`yjs` + `y-websocket` + `y-indexeddb`) | ✅ (activated in v1.0.7) |
-| 31 | Replace file transfer with `iroh-blobs` | ❌ still custom chunked RPC |
+| 30 | Replace custom sync with iroh-docs (was Yjs) | ✅ |
+| 31 | Replace accept loop with iroh Router | ✅ |
 | 32 | Replace Modal + Dropdown + ContextMenu with Radix primitives | ✅ |
 | 33 | Migrate book metadata + annotations to SQLite tables | ✅ |
 | 34 | SQLite-based search replacing Fuse.js for 10K+ books | ✅ |
 | 35 | Use `time` crate + `serde(rename_all)` | ✅ |
 
-**Total: 33/35 fixes implemented.** Verified with 193 passing tests.
-Items 30 (Yjs) was dead code at time of audit, activated in v1.0.7.
-Item 31 requires adding `iroh-blobs` crate — iroh v1.0.2 has no built-in blob transfer.
+### New (v1.0.7 additions)
+
+| # | Fix | Status |
+|---|------|--------|
+| 36 | Pairing DocTicket exchange | ✅ |
+| 37 | iroh-docs ↔ Zustand bridge (provision + hydrate) | ✅ |
+| 38 | iroh-blobs file/cover transfer commands | ✅ |
+| 39 | Live event subscription (doc.subscribe) | ❌ (2s polling timer) |
+| 40 | Daemon migration from HTTP to iroh Router | ❌ |
+| 41 | N0 preset for DNS peer discovery | ✅ |
+
+**Total: 38/41 fixes implemented.**
 
 ### Files Created (1.0.7)
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/core/lib/yjs-sync.ts` | 460 | Yjs CRDT bridge: Y.Map per domain, Zustand ↔ Yjs bidirectional sync, IndexedDB persistence, WebSocket provider |
 | `src/core/lib/sync-schemas.ts` | 354 | Zod schemas for all 9 sync domains with `validateSyncPayloads()` batch validator |
 | `src/core/lib/book-locations.ts` | 41 | SQLite BLOB persistence for foliate-js positions (stripped from Zustand persist) |
 | `tests/release-1.0.7-sync-correctness.test.ts` | 254 | 16 tests: tombstones, vocabulary deletion, collection book removal, settings merge, annotation tiebreaker, RSS truncation |
@@ -699,14 +767,14 @@ Item 31 requires adding `iroh-blobs` crate — iroh v1.0.2 has no built-in blob 
 
 | File | Changes |
 |------|---------|
-| `src-tauri/src/database.rs` | r2d2 pool (4 conn), `CustomizeConnection` PRAGMAs, `sqlite_batch_get_kv`, FTS5 tables, book_metadata/annotations tables |
-| `src-tauri/src/lib.rs` | `visible: false`, daemon `kill_on_drop`, Android outbound sync, `set_auto_sync_flag`, sync command registrations |
-| `src-tauri/src/sync_commands.rs` | `effective_fingerprint()` in QR + pairing, cover save PRAGMAs, N0 preset fix |
-| `src-tauri/crates/theorem-sync-core/src/sync_crypto.rs` | `time` crate replacement (57→5 lines) |
+| `src-tauri/Cargo.toml` | Added iroh-docs, iroh-blobs, iroh-gossip |
+| `src-tauri/src/iroh_sync.rs` | Router-based accept loop (ProtocolHandler), Docs+Blobs+Gossip setup, N0 preset, DocTicket pairing |
+| `src-tauri/src/sync_commands.rs` | Docs/blobs Tauri commands, DocTicket import in pairing, effective_fingerprint |
+| `src-tauri/src/lib.rs` | New Tauri command registrations |
+| `src-tauri/crates/theorem-sync-core/src/sync_protocol.rs` | `sync_doc_ticket` in PairingResponse, `sync_doc_id` on PairedDevice |
+| `src/core/lib/sync-orchestrator.ts` | provisionToIrohDocs/hydrateFromIrohDocs, docs/blobs JS wrappers, legacy fallback |
 | `src/core/store/index.ts` | Locations stripping, O(1) `addBooks`, batch cover restore, vocabulary tombstones, collection_book tombstones, SQLite metadata sync |
-| `src/core/lib/sync-orchestrator.ts` | `_isMerging` guard, RSS truncation, zod validation (properly awaited), `stopAutoSync` daemon notify |
-| `src/core/lib/sync-import.ts` | `mergeVocabulary(tombstones)`, `mergeCollections` collection_book filtering, `mergeSettings` deviceSync preservation |
-| `src/App.tsx` | `hasHydrated` gate, daemon check skip, Yjs init + destroy, window.show() |
+| `src/App.tsx` | `hasHydrated` gate, daemon check skip, window.show() |
 | `src/features/settings/Settings.tsx` | CSS `hidden` tabs, `transition-[width]`, no `snap-x`, React.memo |
 | `src/features/reader/article-reader/ArticleViewer.tsx` | React.memo, per-book `getBookAnnotations` selector |
 | `src/ui/Modal.tsx` | Radix `@radix-ui/react-dialog` replacement (214→108 lines) |
@@ -742,7 +810,7 @@ Item 31 requires adding `iroh-blobs` crate — iroh v1.0.2 has no built-in blob 
 | `transition-all` usage | 48 instances | 0 instances |
 | Settings mobile scroll | `snap-x snap-mandatory` nested scroll | Smooth `overflow-x-auto` flex row |
 | Zod peer data validation | None (silent JSON.parse errors) | All 9 domains validated, invalid data dropped |
-| Yjs CRDT sync | Custom LWW (672 lines, 6 bugs) | Yjs CRDT bridge (460 lines, zero merge bugs) |
+| Yjs CRDT sync (removed) | Custom LWW (672 lines, 6 bugs) | iroh-docs CRDT + Router (library) |
 | Radial UI a11y | Custom Modal/Dropdown/ContextMenu (668 lines) | Radix primitives (288 lines, full a11y) |
 
 ---
@@ -751,16 +819,16 @@ Item 31 requires adding `iroh-blobs` crate — iroh v1.0.2 has no built-in blob 
 
 ### 12.1 The Problem
 
-Current sync is LAN-only (HTTP on port 43935). Devices on different networks cannot sync. Offline changes have no queue — they're lost if not synced before closing. No peer discovery beyond hardcoded port scanning.
+Current sync requires both devices online simultaneously. Offline changes are queued in memory (lost on close). No persistent offline queue.
 
-### 12.2 Yjs Fixes Offline Automatically
+### 12.2 iroh-docs + blobs Fix Offline
 
-With Yjs:
-- All edits go into the local `Y.Doc`. When offline, they accumulate as CRDT operations.
-- `y-indexeddb` persists the Y.Doc to browser storage, surviving app restarts.
-- On reconnect, the `y-sync` protocol exchanges State Vectors (summary of known ops) and sends only the missing operations.
-- **Peers do NOT need to be online simultaneously.** A peer that goes offline and comes back gets caught up automatically.
-- **Conflict resolution is automatic and deterministic.** Concurrent edits merge without data loss — no custom LWW merge functions, no timestamp tiebreakers.
+With iroh-docs:
+- Entries are stored in a persistent redb store (survives restarts).
+- When offline, edits accumulate in the local replica.
+- On reconnect, iroh-docs runs **range-based set reconciliation**: peers exchange fingerprints of their entry sets, and only divergent ranges are transferred. Fully-in-sync peers exchange a single fingerprint.
+- **Peers do NOT need to be online simultaneously.** Edits sync automatically when both are online.
+- **Conflict resolution is deterministic.** `(namespace, author, key)` triple defines a row; last-write-wins by timestamp.
 
 ### 12.3 Network Discovery
 
