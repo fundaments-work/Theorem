@@ -210,8 +210,10 @@ async function mergeIncomingData(
                 console.log(`[sync-merge] books: ${incoming.length} incoming (${domainBooks.length} domain + ${perEntityBooks.length} per-entity), ${currentLibState.books.length} existing`);
                 const merged = mergeBooks(incoming, currentLibState.books, allTombstones);
                 console.log(`[sync-merge] books: ${merged.length} after merge (lost ${incoming.length + currentLibState.books.length - merged.length})`);
-                applyLibraryPatch({ books: merged });
-                markUpdated("books");
+                if (merged !== currentLibState.books) {
+                    applyLibraryPatch({ books: merged });
+                    markUpdated("books");
+                }
 
                 const incomingWithCovers = (incoming as { id: string; coverPath?: string }[])
                     .filter((b) => b.coverPath && b.coverPath.startsWith("data:"));
@@ -237,8 +239,10 @@ async function mergeIncomingData(
             const incoming = [...domainAnns, ...perEntityAnnotations];
             if (incoming.length > 0) {
                 const merged = mergeAnnotations(incoming, currentLibState.annotations, allTombstones);
-                applyLibraryPatch({ annotations: merged });
-                markUpdated("annotations");
+                if (merged !== currentLibState.annotations) {
+                    applyLibraryPatch({ annotations: merged });
+                    markUpdated("annotations");
+                }
                 currentLibState = { ...currentLibState, annotations: merged };
             }
         } catch (e) {
@@ -253,8 +257,10 @@ async function mergeIncomingData(
             const incoming = [...domainCols, ...perEntityCollections];
             if (incoming.length > 0) {
                 const merged = mergeCollections(incoming, currentLibState.collections, allTombstones);
-                applyLibraryPatch({ collections: merged });
-                markUpdated("collections");
+                if (merged !== currentLibState.collections) {
+                    applyLibraryPatch({ collections: merged });
+                    markUpdated("collections");
+                }
                 currentLibState = { ...currentLibState, collections: merged };
             }
         } catch (e) {
@@ -270,9 +276,12 @@ async function mergeIncomingData(
         try {
             const incoming = JSON.parse(safeMap["vocabulary"]);
             if (Array.isArray(incoming)) {
-                const merged = mergeVocabulary(incoming, useVocabularyStore.getState().vocabularyTerms, allTombstones);
-                useVocabularyStore.setState({ vocabularyTerms: merged });
-                markUpdated("vocabulary");
+                const current = useVocabularyStore.getState().vocabularyTerms;
+                const merged = mergeVocabulary(incoming, current, allTombstones);
+                if (JSON.stringify(merged) !== JSON.stringify(current)) {
+                    useVocabularyStore.setState({ vocabularyTerms: merged });
+                    markUpdated("vocabulary");
+                }
             }
         } catch (e) {
         }
@@ -296,8 +305,10 @@ async function mergeIncomingData(
                 remoteUpdatedAt,
                 localSettingsUpdatedAt,
             );
-            useSettingsStore.setState({ settings: merged });
-            markUpdated("settings");
+            if (JSON.stringify(merged) !== JSON.stringify(settingsStore.settings)) {
+                useSettingsStore.setState({ settings: merged });
+                markUpdated("settings");
+            }
         } catch (e) {
         }
     }
@@ -306,9 +317,12 @@ async function mergeIncomingData(
         try {
             const incoming = JSON.parse(safeMap["reading_stats"]);
             if (incoming && typeof incoming === "object") {
-                const merged = mergeReadingStats(incoming, useSettingsStore.getState().stats);
-                useSettingsStore.setState({ stats: merged });
-                markUpdated("reading_stats");
+                const current = useSettingsStore.getState().stats;
+                const merged = mergeReadingStats(incoming, current);
+                if (JSON.stringify(merged) !== JSON.stringify(current)) {
+                    useSettingsStore.setState({ stats: merged });
+                    markUpdated("reading_stats");
+                }
             }
         } catch (e) {
         }
@@ -325,9 +339,11 @@ async function mergeIncomingData(
                 console.log(`[sync-merge] rss_feeds: ${incoming.length} incoming, ${currentFeeds.length} existing`);
                 const result = mergeRssFeeds(incoming, currentFeeds, allTombstones);
                 console.log(`[sync-merge] rss_feeds: ${result.feeds.length} after merge`);
-                useRssStore.setState({ feeds: result.feeds });
+                if (JSON.stringify(result.feeds) !== JSON.stringify(currentFeeds)) {
+                    useRssStore.setState({ feeds: result.feeds });
+                    markUpdated("rss_feeds");
+                }
                 feedIdMap = result.feedIdMap;
-                markUpdated("rss_feeds");
             }
         } catch (e) {
         }
@@ -341,8 +357,10 @@ async function mergeIncomingData(
                 console.log(`[sync-merge] rss_articles: ${incoming.length} incoming, ${currentArticles.length} existing`);
                 const merged = mergeRssArticles(incoming, currentArticles, feedIdMap, allTombstones);
                 console.log(`[sync-merge] rss_articles: ${merged.length} after merge`);
-                useRssStore.setState({ articles: merged });
-                markUpdated("rss_articles");
+                if (JSON.stringify(merged) !== JSON.stringify(currentArticles)) {
+                    useRssStore.setState({ articles: merged });
+                    markUpdated("rss_articles");
+                }
             }
         } catch (e) {
         }
@@ -587,6 +605,7 @@ export async function ensureResponderSyncReady(): Promise<void> {
     // all local data is written to the new doc. Provisioning is idempotent
     // so redundant calls are harmless.
     await provisionBookFileBlobs();
+    await provisionToIrohDocs();
 
     // Register the iroh-docs live event listener so real-time
     // CRDT updates from the peer are applied to Zustand stores.
