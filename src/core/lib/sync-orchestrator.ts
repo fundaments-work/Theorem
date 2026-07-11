@@ -1563,7 +1563,7 @@ export function scheduleMutationSync(): void {
             } catch {
                 // Non-critical — daemon handles sync rounds.
             }
-            await triggerDaemonSync().catch(() => {});
+            await triggerDaemonSync().catch(e => console.error("[catch]", e));
             return;
         }
 
@@ -1584,7 +1584,7 @@ export function scheduleMutationSync(): void {
     // and skip — but the next tick (after the debounce) will pick it up.
     if (isTauri()) {
         import("./device-sync").then((mod) => {
-            mod.wakeBackgroundSync().catch(() => {});
+            mod.wakeBackgroundSync().catch(e => console.error("[catch]", e));
         });
     }
 }
@@ -1606,7 +1606,7 @@ export function scheduleMutationSync(): void {
  */
 export async function startAutoSync(): Promise<() => void> {
     stopAutoSync();
-    setAutoSyncFlag(true).catch(() => {});
+    setAutoSyncFlag(true).catch(e => console.error("[catch]", e));
 
     if (!isTauri()) {
         return () => {};
@@ -1732,8 +1732,8 @@ export function stopAutoSync(): void {
         _mutationSyncTimer = null;
     }
     _dataDirty = false;
-    setAutoSyncFlag(false).catch(() => {});
-    configureDaemon({ auto_sync_enabled: false }).catch(() => {});
+    setAutoSyncFlag(false).catch(e => console.error("[catch]", e));
+    configureDaemon({ auto_sync_enabled: false }).catch(e => console.error("[catch]", e));
 }
 
 // ─── iroh-docs CRDT Sync (replaces legacy LWW merge) ───

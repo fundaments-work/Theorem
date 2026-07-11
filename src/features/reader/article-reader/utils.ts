@@ -1,5 +1,6 @@
 import type { RssArticle } from "../../../core/types";
 import MarkdownIt from "markdown-it";
+import { setElementHtml } from "../../../core/lib/sanitize";
 
 const md = new MarkdownIt({ html: true, linkify: true, breaks: true });
 
@@ -42,7 +43,7 @@ export function sanitizeArticleHtml(html: string): string {
     }
 
     const temp = document.createElement("div");
-    temp.innerHTML = processed;
+    setElementHtml(temp, processed);
 
     temp
         .querySelectorAll("script, style, link[rel='stylesheet'], iframe, object, embed, form")
@@ -83,7 +84,7 @@ export function sanitizeArticleHtml(html: string): string {
 
 export function stripHtml(value: string): string {
     const temp = document.createElement("div");
-    temp.innerHTML = value;
+    setElementHtml(temp, value);
     return temp.textContent || temp.innerText || "";
 }
 

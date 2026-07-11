@@ -76,7 +76,7 @@ export class ImmersionPlayer {
     async pause() {
         if (this._state !== 'playing') return;
         if (this.completeTimer) { clearTimeout(this.completeTimer); this.completeTimer = null; }
-        await invoke("tts_stop").catch(() => {});
+        await invoke("tts_stop").catch(e => console.error("[catch]", e));
         // Estimate position and truncate to word boundary.
         const elapsedSec = (performance.now() - this.startTime) / 1000;
         const charsSpoken = Math.floor(elapsedSec * BASE_CHARS_PER_SEC);
@@ -99,7 +99,7 @@ export class ImmersionPlayer {
 
     async stop() {
         this._clearPending();
-        if (isTauri()) await invoke("tts_stop").catch(() => {});
+        if (isTauri()) await invoke("tts_stop").catch(e => console.error("[catch]", e));
         this.fullText = ''; this.fullWords = []; this.voice = null;
         this.setState('idle');
     }
@@ -140,7 +140,7 @@ export class ImmersionPlayer {
 
     destroy() {
         this._clearPending();
-        if (isTauri()) invoke("tts_stop").catch(() => {});
+        if (isTauri()) invoke("tts_stop").catch(e => console.error("[catch]", e));
         this.callbacks = {};
     }
 }

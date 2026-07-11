@@ -226,8 +226,10 @@ pub async fn sync_with_peer(
     domains: &HashMap<String, String>,
 ) -> Result<HashMap<String, String>, String> {
     // 1. Manifest exchange
-    let enc_manifest =
-        sync_crypto::encrypt_payload(sym_key, &serde_json::to_vec(manifest).unwrap())?;
+    let enc_manifest = sync_crypto::encrypt_payload(
+        sym_key,
+        &serde_json::to_vec(manifest).map_err(|e| format!("serialize: {e}"))?,
+    )?;
     let auth_req = AuthenticatedRequest {
         device_id: my_device_id.to_string(),
         payload: enc_manifest,
@@ -262,8 +264,10 @@ pub async fn sync_with_peer(
             sender_device_id: my_device_id.to_string(),
             domains: push_domains,
         };
-        let enc_batch =
-            sync_crypto::encrypt_payload(sym_key, &serde_json::to_vec(&batched).unwrap())?;
+        let enc_batch = sync_crypto::encrypt_payload(
+            sym_key,
+            &serde_json::to_vec(&batched).map_err(|e| format!("serialize: {e}"))?,
+        )?;
         let auth_batch = AuthenticatedRequest {
             device_id: my_device_id.to_string(),
             payload: enc_batch,
@@ -276,8 +280,10 @@ pub async fn sync_with_peer(
         let pull_req = BatchedPullRequest {
             domains: pull_names,
         };
-        let enc_req =
-            sync_crypto::encrypt_payload(sym_key, &serde_json::to_vec(&pull_req).unwrap())?;
+        let enc_req = sync_crypto::encrypt_payload(
+            sym_key,
+            &serde_json::to_vec(&pull_req).map_err(|e| format!("serialize: {e}"))?,
+        )?;
         let auth_req = AuthenticatedRequest {
             device_id: my_device_id.to_string(),
             payload: enc_req,
@@ -300,8 +306,10 @@ pub async fn sync_with_peer(
         server_ip: String::new(),
         server_port: 0,
     };
-    let enc_complete =
-        sync_crypto::encrypt_payload(sym_key, &serde_json::to_vec(&complete_msg).unwrap())?;
+    let enc_complete = sync_crypto::encrypt_payload(
+        sym_key,
+        &serde_json::to_vec(&complete_msg).map_err(|e| format!("serialize: {e}"))?,
+    )?;
     let auth_complete = AuthenticatedRequest {
         device_id: my_device_id.to_string(),
         payload: enc_complete,
@@ -662,7 +670,8 @@ async fn handle_peer_connection(
 
 fn make_peer_info(state: &SyncTransportState) -> IrohPeerInfo {
     IrohPeerInfo {
-        public_key: PublicKey::from_bytes(&[0u8; 32]).unwrap(),
+        public_key: PublicKey::from_bytes(&[0u8; 32])
+            .expect("zero key array must be valid [u8; 32]"),
         device_id: state.identity.device_id.clone(),
         device_name: state.device_name.clone(),
         fingerprint: state.identity.fingerprint.clone(),
@@ -721,7 +730,7 @@ async fn encrypt_response(sym_key: &[u8; 32], data: &impl serde::Serialize) -> s
         Err(e) => return serde_json::json!({"error": format!("serialize: {e}")}),
     };
     match sync_crypto::encrypt_payload(sym_key, &json) {
-        Ok(enc) => serde_json::to_value(enc).unwrap(),
+        Ok(enc) => serde_json::to_value(enc).unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")})),
         Err(e) => serde_json::json!({"error": format!("encrypt: {e}")}),
     }
 }
@@ -791,10 +800,10 @@ async fn handle_manifest_req(
                     }
                 }
             }
-            (Some(_), None) => SyncAction {
+            (Some(lv), None) => SyncAction {
                 domain: domain.to_string(),
                 direction: SyncDirection::Push,
-                local_version: local.unwrap().version,
+                local_version: lv.version,
                 remote_version: 0,
             },
             (None, Some(r)) => SyncAction {
@@ -1005,7 +1014,8 @@ async fn handle_file_pull_req(
                                 meta: None,
                                 chunks: Vec::new(),
                             };
-                            return serde_json::to_value(response).unwrap();
+                            return serde_json::to_value(response)
+                                .unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}));
                         }
                     }
                 }
@@ -1025,7 +1035,8 @@ async fn handle_file_pull_req(
                             meta: None,
                             chunks: Vec::new(),
                         };
-                        return serde_json::to_value(response).unwrap();
+                        return serde_json::to_value(response)
+                            .unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}));
                     }
                 }
             }
@@ -1038,7 +1049,7 @@ async fn handle_file_pull_req(
             meta: None,
             chunks: Vec::new(),
         };
-        return serde_json::to_value(response).unwrap();
+        return serde_json::to_value(response).unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}));
     }
 
     // Chunk requests read only the requested slice so a full book is never
@@ -1100,7 +1111,7 @@ async fn handle_file_pull_req(
                 }),
                 chunks,
             };
-            serde_json::to_value(response).unwrap()
+            serde_json::to_value(response).unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}))
         }
         Err(e) => serde_json::json!({"error": e}),
     }
@@ -1235,7 +1246,7 @@ async fn handle_pair_req(
         sync_doc_ticket,
     };
 
-    serde_json::to_value(response).unwrap()
+    serde_json::to_value(response).unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}))
 }
 
 /// Send a pairing request to a peer over iroh.

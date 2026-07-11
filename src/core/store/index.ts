@@ -503,8 +503,7 @@ function cleanupDiscardedImportedBook(book: Book): void {
         return;
     }
 
-    deleteBookStorage(book.id).catch(() => {
-    });
+    deleteBookStorage(book.id).catch(e => console.error("[catch]", e));
 }
 
 function normalizePersistedBook(book: Book): Book {
@@ -876,7 +875,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 scheduleMutationSync();
                 // Sync metadata to SQLite tables (fire-and-forget).
                 for (const book of nextBooks) {
-                    sqliteSaveBookMetadata(book.id, JSON.stringify(book)).catch(() => {});
+                    sqliteSaveBookMetadata(book.id, JSON.stringify(book)).catch(e => console.error("[catch]", e));
                 }
             },
 
@@ -886,8 +885,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 // Clean up storage first (don't await to keep UI responsive).
                 // Skip for synced-without-file books — they have no local storage to delete.
                 if (book && !book.syncedWithoutFile) {
-                    deleteBookStorage(bookId).catch(() => {
-                    });
+                    deleteBookStorage(bookId).catch(e => console.error("[catch]", e));
                 }
 
                 const now = new Date().toISOString();
@@ -1273,7 +1271,7 @@ export const useLibraryStore = create<LibraryStore>()(
                 sqliteSaveBookAnnotations(
                     annotation.bookId,
                     get().annotations.filter(a => a.bookId === annotation.bookId).map(a => JSON.stringify(a))
-                ).catch(() => {});
+                ).catch(e => console.error("[catch]", e));
             },
 
             addHighlightWithNote: (cfi, text, color, note) => {

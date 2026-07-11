@@ -79,6 +79,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "date-fns": "^4.4.0",
+        "dompurify": "^3.4.11",
         "fast-xml-parser": "^5.9.3",
         "fflate": "^0.8.3",
         "fuse.js": "^7.4.2",
@@ -92,6 +93,7 @@
         "react": "^19.2.7",
         "react-dom": "^19.2.7",
         "react-i18next": "^17.0.8",
+        "sonner": "^2.0.7",
         "soundtouchjs": "^0.3.0",
         "tailwind-merge": "^3.6.0",
         "uuid": "^14.0.1",
@@ -101,6 +103,7 @@
     "devDependencies": {
         "@tailwindcss/vite": "^4.3.1",
         "@tauri-apps/cli": "^2.11.3",
+        "@types/dompurify": "^3.2.0",
         "@types/markdown-it": "^14.1.2",
         "@types/node": "^26.0.0",
         "@types/react": "^19.2.17",

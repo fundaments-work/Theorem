@@ -7,6 +7,7 @@ import {
     ChevronLeft,
 } from "lucide-react";
 import { cn } from "../../core/lib/utils";
+import { sanitizeHtmlForDisplay } from "../../core/lib/sanitize";
 import { useVocabularyStore, useUIStore } from "../../core/store";
 import type { VocabularyTerm } from "../../core/types";
 
@@ -223,7 +224,7 @@ export function VocabularyPage() {
                                                             {isHtml(def) ? (
                                                                 <div
                                                                     className="dict-definition min-w-0 break-words"
-                                                                    dangerouslySetInnerHTML={{ __html: def }}
+                                                                    dangerouslySetInnerHTML={sanitizeHtmlForDisplay(def)}
                                                                 />
                                                             ) : (
                                                                 <span className="min-w-0 break-words">{def}</span>

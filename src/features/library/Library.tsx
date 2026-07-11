@@ -65,7 +65,7 @@ function isBookMarkedRead(book: Book): boolean {
 }
 
 // Book Card Component with Context Menu
-export function BookCard({
+export const BookCard = memo(function BookCard({
     book,
     viewMode,
     onOpenBook,
@@ -447,7 +447,7 @@ export function BookCard({
             </div>
         </ContextMenu>
     );
-}
+});
 
 export const MemoizedBookCard = memo(BookCard, (prev, next) => {
     return prev.book.id === next.book.id &&
@@ -979,8 +979,7 @@ export function LibraryPage() {
             extractedBookIdsRef.current.add(nextBook.id);
 
             void performImportedBookMetadataExtraction(nextBook)
-                .catch(() => {
-                })
+                .catch(e => console.error("[catch]", e))
                 .finally(() => {
                     activeImportMetadataTasksRef.current = Math.max(0, activeImportMetadataTasksRef.current - 1);
                     extractedBookIdsRef.current.delete(nextBook.id);

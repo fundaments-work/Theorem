@@ -3,7 +3,7 @@
  * Full-screen reading experience with document viewer and controls
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense, memo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { cn } from "../../core/lib/utils";
 import {
@@ -637,8 +637,7 @@ function BookReaderPage() {
             }
 
             const storagePath = book.storagePath || book.filePath;
-            void getBookBlob(book.id, storagePath).catch(() => {
-            });
+            void getBookBlob(book.id, storagePath).catch(e => console.error("[catch]", e));
         }
     }, [currentBookId]);
 
@@ -1502,8 +1501,7 @@ function BookReaderPage() {
             }
             // Load annotations into viewport (with delay to ensure foliate is ready)
             const timer = setTimeout(() => {
-                readerRef.current?.loadAnnotations?.(bookAnnotations).catch(() => {
-                });
+                readerRef.current?.loadAnnotations?.(bookAnnotations).catch(e => console.error("[catch]", e));
             }, 500);
             return () => clearTimeout(timer);
         }
@@ -2475,7 +2473,7 @@ function BookReaderPage() {
     );
 }
 
-export function ReaderPage() {
+export const ReaderPage = memo(function ReaderPage() {
     const currentRoute = useUIStore((state) => state.currentRoute);
     const currentBookId = useUIStore((state) => state.currentBookId);
     const setRoute = useUIStore((state) => state.setRoute);
@@ -2512,4 +2510,4 @@ export function ReaderPage() {
     }
 
     return <BookReaderPage />;
-}
+});

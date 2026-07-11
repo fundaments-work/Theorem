@@ -12,6 +12,7 @@ import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
 import { initI18n } from "./core/lib/i18n";
 import { OnboardingFlow } from "./features/onboarding";
+import { Toaster } from "sonner";
 
 const LibraryPage = lazy(() =>
     import("./features/library").then((module) => ({ default: module.LibraryPage })),
@@ -320,7 +321,7 @@ function App() {
         }
         const initFingerprint = async () => {
             const { invoke } = await import("@tauri-apps/api/core");
-            await invoke("set_android_fingerprint").catch(() => {});
+            await invoke("set_android_fingerprint").catch(e => console.error("[catch]", e));
         };
         void initFingerprint();
     }, []);
@@ -399,10 +400,10 @@ function App() {
             bridgeCleanup?.();
             stopAutoSync();
             import("./core/lib/device-sync").then((mod) => {
-                mod.stopBackgroundSync().catch(() => {});
-            }).catch(() => {});
+                mod.stopBackgroundSync().catch(e => console.error("[catch]", e));
+            }).catch(e => console.error("[catch]", e));
             // Notify daemon to disable auto-sync if this device turns it off.
-            configureDaemon({ auto_sync_enabled: false }).catch(() => {});
+            configureDaemon({ auto_sync_enabled: false }).catch(e => console.error("[catch]", e));
         };
     }, [hasCompletedOnboarding, autoSyncEnabled]);
 
@@ -499,6 +500,7 @@ function App() {
     const isMobileDevice = isMobile();
 
     return (
+        <>
         <div className="flex h-screen min-h-[100dvh] bg-[var(--color-background)]">
             {/* Sidebar - Shows on md screens and up (tablets and laptops) */}
             <div className="hidden md:block">
@@ -529,6 +531,8 @@ function App() {
             
             <ContextMenuRoot />
         </div>
+            <Toaster position="bottom-right" />
+        </>
     );
 }
 

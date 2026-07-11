@@ -6,6 +6,7 @@ import type {
     RssArticle,
 } from "../../../core/types";
 import type { ArticleHeading } from "./types";
+import { setElementHtml } from "../../../core/lib/sanitize";
 import { formatArticleDate, sanitizeArticleHtml } from "./utils";
 
 interface ArticleReaderContentProps {
@@ -70,7 +71,7 @@ export function ArticleReaderContent({
     const contentHasImage = useMemo(() => {
         if (!article.imageUrl) return false;
         const temp = document.createElement("div");
-        temp.innerHTML = sanitizedContent;
+        setElementHtml(temp, sanitizedContent);
         const firstImg = temp.querySelector("img");
         if (!firstImg) return false;
         try {
@@ -98,7 +99,7 @@ export function ArticleReaderContent({
             return;
         }
 
-        contentElement.innerHTML = sanitizedContent;
+        setElementHtml(contentElement, sanitizedContent);
         appliedHtmlRef.current = sanitizedContent;
     }, [contentRef, sanitizedContent]);
 

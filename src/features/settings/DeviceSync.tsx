@@ -669,7 +669,7 @@ export function DeviceSyncSection() {
                                 // If daemon is running, sync the setting.
                                 if (daemonAvailable) {
                                     const { configureDaemon } = await import("../../core/lib/device-sync-daemon");
-                                    await configureDaemon({ auto_sync_enabled: newValue }).catch(() => {});
+                                    await configureDaemon({ auto_sync_enabled: newValue }).catch(e => console.error("[catch]", e));
                                 }
                             }}
                             className={cn(

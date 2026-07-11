@@ -19,6 +19,7 @@ import { AddFeedModal } from "./AddFeedModal";
 import { ContextMenu } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
 import { sanitizeArticleHtml } from "../reader/article-reader/utils";
+import { sanitizeHtmlForDisplay } from "../../core/lib/sanitize";
 
 // ── Helper ──
 
@@ -212,7 +213,7 @@ function ArticleCard({
             label: "Copy Link",
             icon: <Link2 className="w-4 h-4" />,
             onClick: () => {
-                navigator.clipboard.writeText(article.url || "").catch(() => {});
+                navigator.clipboard.writeText(article.url || "").catch(e => console.error("[catch]", e));
             },
         },
         ...(onToggleRead ? [{
@@ -281,7 +282,7 @@ function ArticleCard({
                         {summaryHtml && (
                             <div
                                 className="text-sm text-[color:var(--color-text-muted)] line-clamp-2 leading-relaxed [&_p]:inline [&_a]:text-[color:var(--color-accent)] [&_a]:underline [&_strong]:font-bold [&_em]:italic [&_img]:hidden [&_figure]:hidden"
-                                dangerouslySetInnerHTML={{ __html: summaryHtml }}
+                                dangerouslySetInnerHTML={sanitizeHtmlForDisplay(summaryHtml)}
                             />
                         )}
 

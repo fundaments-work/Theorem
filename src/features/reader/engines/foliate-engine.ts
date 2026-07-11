@@ -1515,7 +1515,7 @@ export class FoliateEngine {
         const deleteOps = Array.from(this.annotations.values())
             .map((annotation) =>
                 this.view?.deleteAnnotation?.({ value: annotation.location })
-                    ?.catch(() => {}) ?? Promise.resolve(),
+                    ?.catch((e: any) => console.error("[catch]", e)) ?? Promise.resolve(),
             );
         await Promise.all(deleteOps);
         this.annotations.clear();
@@ -1535,8 +1535,7 @@ export class FoliateEngine {
                 this.view?.addAnnotation?.({
                     value: annotation.location,
                     color: annotation.color,
-                })?.catch(() => {
-                }) ?? Promise.resolve(),
+                })?.catch((e: any) => console.error("[catch]", e)) ?? Promise.resolve(),
             ));
             // Yield to the renderer between batches
             if (i + BATCH_SIZE < toRender.length) {

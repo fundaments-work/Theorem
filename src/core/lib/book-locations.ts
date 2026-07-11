@@ -17,7 +17,7 @@ function locationsKey(bookId: string): string {
 export function persistBookLocations(bookId: string, locations: string): void {
     if (!isTauri() || !locations) return;
     const bytes = new TextEncoder().encode(locations);
-    sqliteSetBlob(locationsKey(bookId), bytes.buffer).catch(() => {});
+    sqliteSetBlob(locationsKey(bookId), bytes.buffer).catch(e => console.error("[catch]", e));
 }
 
 /** Load a book's locations from SQLite. Returns null if not in Tauri or not found. */
@@ -36,6 +36,6 @@ export async function loadBookLocations(bookId: string): Promise<string | null> 
 export function deleteBookLocations(bookId: string): void {
     if (!isTauri()) return;
     import("./sqlite-storage").then(({ sqliteDeleteBlob }) => {
-        sqliteDeleteBlob(locationsKey(bookId)).catch(() => {});
+        sqliteDeleteBlob(locationsKey(bookId)).catch(e => console.error("[catch]", e));
     });
 }
