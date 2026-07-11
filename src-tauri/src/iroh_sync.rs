@@ -104,7 +104,6 @@ impl IrohSyncEndpoint {
         let endpoint = iroh::endpoint::Endpoint::builder(N0)
             .secret_key(secret_key)
             .alpns(vec![
-                ALPN.to_vec(),
                 iroh_blobs::ALPN.to_vec(),
                 iroh_docs::ALPN.to_vec(),
                 iroh_gossip::ALPN.to_vec(),
@@ -439,6 +438,7 @@ pub fn subscribe_doc_events(
 /// Protocol handler that wraps our sync protocol dispatch.
 /// Registered on iroh Router ALPN for incoming theorem connections.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct TheoremProtocolHandler {
     pub state: Arc<SyncTransportState>,
 }
@@ -526,15 +526,11 @@ pub fn start_accept_loop(
         });
         drop(docs_api_state);
 
-        // Our custom sync protocol handler
-        let theorem_handler = TheoremProtocolHandler { state: state_clone };
-
         // ── Router: dispatch by ALPN ──
         let router = Router::builder(router_endpoint)
             .accept(iroh_blobs::ALPN, blobs_handler)
             .accept(iroh_gossip::ALPN, gossip)
             .accept(iroh_docs::ALPN, docs_handler)
-            .accept(ALPN, theorem_handler)
             .spawn();
 
         let _ = cancel_rx.changed().await;

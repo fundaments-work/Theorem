@@ -232,9 +232,6 @@ export const useUIStore = create<UIStore>()(
                 currentRoute: state.currentRoute,
                 currentBookId: state.currentBookId,
                 sidebarOpen: state.sidebarOpen,
-                deviceSyncStatus: state.deviceSyncStatus,
-                deviceSyncMessage: state.deviceSyncMessage,
-                deviceSyncAt: state.deviceSyncAt,
             }),
         }
     )
@@ -1778,7 +1775,6 @@ export const useSettingsStore = create<SettingsStore>()(
                         deviceSync: {
                             ...defaultDeviceSyncSettings,
                             ...(state.settings.deviceSync || {}),
-                            autoSyncEnabled: false,
                         },
                     };
                 }

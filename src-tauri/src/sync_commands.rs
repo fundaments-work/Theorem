@@ -1106,26 +1106,58 @@ pub async fn docs_get_all_entries(
     }
 
     // Merge values for each key: if multiple authors wrote to the same key,
-    // parse each value as a JSON array and concatenate them.
+    // merge them appropriately based on value type:
+    // - JSON arrays -> concatenate (dedup happens on the JS side via mergeBooks etc.)
+    // - JSON objects -> merge top-level keys (for settings, reading_stats)
+    // - Other types -> last writer wins
     let mut results = std::collections::HashMap::new();
     for (key, values) in per_key {
         if values.len() == 1 {
             results.insert(key, values.into_iter().next().unwrap());
         } else {
-            // Concatenate JSON arrays from all authors
-            let mut merged: Vec<serde_json::Value> = Vec::new();
-            for v in &values {
-                if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(v) {
-                    merged.extend(arr);
-                } else {
-                    // Not a JSON array — treat as opaque string
-                    merged.push(serde_json::Value::String(v.clone()));
+            // Check if all values are JSON objects (settings, reading_stats)
+            let parsed: Vec<serde_json::Value> = values
+                .iter()
+                .filter_map(|v| serde_json::from_str(v).ok())
+                .collect();
+
+            let all_objects = parsed.iter().all(|v| v.is_object());
+            let all_arrays = parsed.iter().all(|v| v.is_array());
+
+            if all_objects {
+                // JSON objects: deep-merge top-level keys. Later authors
+                // overwrite earlier authors for the same key. This is correct
+                // for settings and reading_stats — small objects where field-
+                // level LWW is acceptable.
+                let mut merged = serde_json::Map::new();
+                for v in &parsed {
+                    if let Some(obj) = v.as_object() {
+                        for (k, val) in obj {
+                            merged.insert(k.clone(), val.clone());
+                        }
+                    }
                 }
+                results.insert(
+                    key,
+                    serde_json::to_string(&merged).unwrap_or_else(|_| values.join("\n")),
+                );
+            } else if all_arrays {
+                // JSON arrays: concatenate. The JS mergeIncomingData handles
+                // dedup via mergeBooks/mergeAnnotations etc.
+                let mut merged: Vec<serde_json::Value> = Vec::new();
+                for v in &parsed {
+                    if let Some(arr) = v.as_array() {
+                        merged.extend(arr.iter().cloned());
+                    }
+                }
+                results.insert(
+                    key,
+                    serde_json::to_string(&merged).unwrap_or_else(|_| values.join("\n")),
+                );
+            } else {
+                // Mixed types or unknown — last writer wins
+                results.insert(key, values.into_iter().last().unwrap());
             }
-            results.insert(
-                key,
-                serde_json::to_string(&merged).unwrap_or_else(|_| values.join("\n")),
-            );
         }
     }
 

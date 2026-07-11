@@ -229,6 +229,12 @@ export interface PairedDevice {
     lastPort: number;
     pairedAt: string;
     lastSyncAt?: string;
+    /** Peer's stable device fingerprint for deduplication. */
+    fingerprint?: string;
+    /** Peer's iroh relay URL for reconnection across restarts. */
+    peerRelayUrl?: string;
+    /** iroh-docs NamespaceId for the shared sync document (base64 string). */
+    syncDocId?: string;
 }
 
 export interface DeviceSyncSettings {
@@ -248,6 +254,7 @@ export interface DeviceIdentityInfo {
     deviceId: string;
     deviceName: string;
     publicKeyHex: string;
+    fingerprint?: string;
 }
 
 export interface SyncServerInfo {

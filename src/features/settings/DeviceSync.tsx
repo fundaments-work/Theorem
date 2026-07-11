@@ -255,9 +255,11 @@ export function DeviceSyncSection() {
         };
     }, [available, desktopPlatform]);
 
-    // Auto-manage incoming sync receiver once at least one device is paired.
-    // Only runs once when the first device is paired — avoids re-syncing on
-    // every poll interval (pairedDevices is a new array reference each time).
+    // Ensure iroh endpoint is running for incoming peer connections.
+    // Does NOT call ensureResponderSyncReady() — that's called from App.tsx
+    // bootstrap and from runDeviceSync, and it re-provisions all data to
+    // the doc which triggers "Syncing..." status. On the settings page we
+    // only need the endpoint alive so the peer can initiate sync.
     const hasPairedDevices = pairedDevices.length > 0;
     useEffect(() => {
         if (!available || !hasPairedDevices) {
@@ -265,22 +267,20 @@ export function DeviceSyncSection() {
         }
 
         let cancelled = false;
-        const ensureReceiverReady = async () => {
+        const ensureEndpointRunning = async () => {
             try {
-                await ensureResponderSyncReady();
                 const info = await irohStart();
                 if (!cancelled) {
                     setNodeInfo(info);
                     setIsIrohRunning(true);
                 }
-                await provisionSyncData();
             } catch (e) {
                 if (!cancelled) {
                 }
             }
         };
 
-        void ensureReceiverReady();
+        void ensureEndpointRunning();
         return () => {
             cancelled = true;
         };
