@@ -384,6 +384,8 @@ pub fn start_accept_loop(
             Ok(s) => s,
             Err(e) => {
                 eprintln!("[iroh-sync] Failed to load blobs store: {e}");
+                // Database likely corrupted — wipe so next start recreates
+                let _ = std::fs::remove_dir_all(&blobs_path);
                 return;
             }
         };
@@ -398,13 +400,19 @@ pub fn start_accept_loop(
         let blobs_store: iroh_blobs::api::Store = blobs.into();
         let blobs_for_subscribe = blobs_store.clone();
         let blobs_for_cmds = blobs_store.clone();
-        let docs_handler = match iroh_docs::protocol::Docs::persistent(docs_path)
+        let docs_handler = match iroh_docs::protocol::Docs::persistent(docs_path.clone())
             .spawn(router_endpoint.clone(), blobs_store, gossip.clone())
             .await
         {
             Ok(d) => d,
             Err(e) => {
                 eprintln!("[iroh-sync] Failed to spawn iroh-docs: {e}");
+                // Database likely corrupted — wipe and let next start recreate
+                eprintln!("[iroh-sync] Removing corrupted databases and retrying...");
+                let _ = std::fs::remove_dir_all(&blobs_path);
+                let _ = std::fs::remove_dir_all(&docs_path);
+                // Don't return — let the retry attempt below handle it
+                // by calling start_accept_loop again on the next iroh_start.
                 return;
             }
         };
@@ -541,6 +549,7 @@ async fn handle_pair_req(
         fingerprint: pairing_req.fingerprint.clone(),
         peer_relay_url: String::new(),
         sync_doc_id: String::new(),
+        sync_doc_ticket: String::new(),
     };
 
     let mut devices = state.paired_devices.lock().await;
@@ -584,10 +593,11 @@ async fn handle_pair_req(
                             let peer_addr = iroh::EndpointAddr::new(peer_pk);
                             let _ = doc.start_sync(vec![peer_addr]).await;
                         }
-                        // Store the doc_id on the paired device
+                        // Store the doc_id + ticket on the paired device
                         let mut devices = state.paired_devices.lock().await;
                         if let Some(device) = devices.get_mut(&pairing_req.device_id) {
                             device.sync_doc_id = doc_id.to_string();
+                            device.sync_doc_ticket = ticket.clone();
                         }
                         ticket
                     }

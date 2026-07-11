@@ -631,14 +631,14 @@ export async function runDeviceSync(
     const _bookCountBeforeSync = useLibraryStore.getState().books.length;
 
     try {
-        setStatus("syncing", "Preparing...");
+        setStatus("syncing", "Starting sync...");
         log("Gathering local data snapshot...");
 
         // 1. Ensure the iroh Router + responder are ready FIRST so both sides
         //    can accept incoming iroh-docs sync connections. Starting the Router
         //    after docsSyncNow is backwards — the peer's connection attempt
         //    would fail because this device's Router isn't accepting yet.
-        log("Starting sync responder...");
+        log("Preparing sync connection...");
         await ensureResponderSyncReady();
 
         // 2. Before syncing, force-rehash any books that are missing blobHash.
@@ -667,8 +667,8 @@ export async function runDeviceSync(
         //    The PendingContentReady event fires when all content blobs from the
         //    last sync round are available locally. If we register AFTER sync,
         //    we may miss a fast-firing event and wait until the poll timeout.
-        log("Waiting for peer data via CRDT sync...");
-        setStatus("syncing", "Syncing...");
+        log("Requesting data from peer...");
+        setStatus("syncing", "Requesting data...");
 
         let syncResolve: (() => void) | null = null;
         const syncPromise = new Promise<void>((res) => { syncResolve = res; });
@@ -745,15 +745,17 @@ export async function runDeviceSync(
                 await hydrateFromIrohDocs();
                 const booksCount = useLibraryStore.getState().books.length;
                 const annCount = useLibraryStore.getState().annotations.length;
-                const currentDomainSet = `${booksCount}|${annCount}`;
+                const colCount = useLibraryStore.getState().collections.length;
+                const currentDomainSet = `${booksCount}|${annCount}|${colCount}`;
                 const elapsed = Date.now() - waitStart;
 
                 if (currentDomainSet !== prevDomainSet && elapsed >= MIN_ELAPSED_MS) {
                     stablePolls = 0;
                     prevDomainSet = currentDomainSet;
-                    if (booksCount > _bookCountBeforeSync) {
-                        setStatus("syncing", `Receiving ${booksCount} books`);
-                    }
+                    const parts: string[] = [];
+                    if (booksCount > _bookCountBeforeSync) parts.push(`${booksCount} books`);
+                    if (annCount > 0) parts.push(`${annCount} annotations`);
+                    setStatus("syncing", parts.length > 0 ? `Receiving ${parts.join(", ")}` : "Receiving data...");
                 } else {
                     // Only count as stable if we actually have data (books > 0)
                     // OR the device had books before sync (no new data expected).

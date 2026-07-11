@@ -1308,9 +1308,14 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
             }
         };
 
-        // ── Create docs + blobs stack using persistent stores shared with main process ──
-        let blobs_path = data_dir.join("iroh-blobs");
-        let docs_path = data_dir.join("iroh-docs");
+        // ── Create docs + blobs stack using DEDICATED stores ──
+        // IMPORTANT: Do NOT use the main app's iroh-blobs/iroh-docs directories.
+        // Redb has no multi-process locking — concurrent access from the main
+        // app and this background worker corrupts the database (assertion failed:
+        // storage.raw_file_len() >= header.layout().len()). Use worker-specific
+        // directories so the main app's databases stay intact.
+        let blobs_path = data_dir.join("iroh-blobs-worker");
+        let docs_path = data_dir.join("iroh-docs-worker");
         let _ = std::fs::create_dir_all(&blobs_path);
         let _ = std::fs::create_dir_all(&docs_path);
         let blobs = match iroh_blobs::store::fs::FsStore::load(&blobs_path).await {

@@ -229,7 +229,7 @@ function VaultIllustration() {
             <rect x="215" y="154" width="4" height="4" fill="var(--color-text-secondary)" />
             <rect x="224" y="155" width="44" height="2" fill="var(--color-text-muted)" />
 
-            {/* Obsidian / Logseq labels */}
+            {/* Export labels */}
             <text
                 x="252"
                 y="204"

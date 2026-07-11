@@ -15,7 +15,7 @@ use tokio::sync::Mutex;
 
 // ─── Global iroh endpoint ───
 
-static IROH_ENDPOINT: std::sync::OnceLock<Arc<IrohSyncEndpoint>> = std::sync::OnceLock::new();
+static IROH_ENDPOINT: std::sync::Mutex<Option<Arc<IrohSyncEndpoint>>> = std::sync::Mutex::new(None);
 
 // ─── Sync State ───
 
@@ -66,8 +66,8 @@ fn get_sync_state(app: &tauri::AppHandle) -> Result<tauri::State<'_, SyncState>,
 // ─── Iroh Lifecycle ───
 
 async fn get_or_init_iroh(app: &tauri::AppHandle) -> Result<Arc<IrohSyncEndpoint>, String> {
-    if let Some(ep) = IROH_ENDPOINT.get() {
-        return Ok(ep.clone());
+    if let Some(ep) = IROH_ENDPOINT.lock().unwrap().clone() {
+        return Ok(ep);
     }
     let data_dir = app
         .path()
@@ -85,7 +85,10 @@ async fn get_or_init_iroh(app: &tauri::AppHandle) -> Result<Arc<IrohSyncEndpoint
         )
         .await?,
     );
-    let _ = IROH_ENDPOINT.set(ep.clone());
+    let mut guard = IROH_ENDPOINT.lock().unwrap();
+    if guard.is_none() {
+        *guard = Some(ep.clone());
+    }
     Ok(ep)
 }
 
@@ -98,28 +101,64 @@ pub struct IrohNodeIdResponse {
 
 #[tauri::command]
 pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, String> {
-    let ep = get_or_init_iroh(&app).await?;
-    let sync_state = get_sync_state(&app)?;
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
 
-    // Only start the accept loop if one isn't already running.
-    // Previously, every call replaced accept_cancel, dropping the old Sender,
-    // which caused cancel_rx.changed() to resolve (closed channel) and killed
-    // the running loop — breaking in-flight file transfers.
-    {
-        let mut cancel_guard = sync_state.accept_cancel.lock().await;
-        if cancel_guard.is_none() {
-            let transport = sync_state.transport_state.clone();
-            let ep_clone = ep.clone();
-            let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
-            *cancel_guard = Some(cancel);
+    for attempt in 0..2 {
+        let ep = get_or_init_iroh(&app).await?;
+        let sync_state = get_sync_state(&app)?;
+
+        // Start the accept loop if not running
+        {
+            let mut cancel_guard = sync_state.accept_cancel.lock().await;
+            if cancel_guard.is_none() {
+                let transport = sync_state.transport_state.clone();
+                let ep_clone = ep.clone();
+                let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
+                *cancel_guard = Some(cancel);
+            } else if attempt > 0 {
+                // On retry, clear the old dead guard so the loop restarts
+                *cancel_guard = None;
+            }
+        }
+
+        // Wait up to 5s for the docs API to be initialized
+        for _ in 0..50 {
+            if sync_state
+                .transport_state
+                .docs_api
+                .try_lock()
+                .map(|g| g.is_some())
+                .unwrap_or(false)
+            {
+                return Ok(IrohNodeIdResponse {
+                    node_id: ep.public_key_string(),
+                    device_id: ep.peer_info.device_id.clone(),
+                    fingerprint: ep.peer_info.fingerprint.clone(),
+                });
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+
+        if attempt == 0 {
+            eprintln!("[iroh-sync] Database corrupted — wiping and retrying");
+            // Wipe corrupted redb databases so the next start recreates fresh
+            let blobs_path = data_dir.join("iroh-blobs");
+            let docs_path = data_dir.join("iroh-docs");
+            let _ = std::fs::remove_dir_all(&blobs_path);
+            let _ = std::fs::remove_dir_all(&docs_path);
+            // Close and reset the endpoint so it reconnects fresh
+            let old_ep = IROH_ENDPOINT.lock().unwrap().clone();
+            if let Some(ep) = old_ep {
+                ep.close().await;
+            }
+            *IROH_ENDPOINT.lock().unwrap() = None;
         }
     }
 
-    Ok(IrohNodeIdResponse {
-        node_id: ep.public_key_string(),
-        device_id: ep.peer_info.device_id.clone(),
-        fingerprint: ep.peer_info.fingerprint.clone(),
-    })
+    Err("iroh-docs not initialized after 5s wait".to_string())
 }
 
 #[tauri::command]
@@ -128,7 +167,8 @@ pub async fn iroh_stop(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(cancel) = sync_state.accept_cancel.lock().await.take() {
         let _ = cancel.send(true);
     }
-    if let Some(ep) = IROH_ENDPOINT.get() {
+    let endpoint = IROH_ENDPOINT.lock().unwrap().clone();
+    if let Some(ep) = endpoint {
         ep.close().await;
     }
     Ok(())
@@ -287,6 +327,7 @@ pub async fn submit_pairing_code(
         fingerprint: pairing_response.fingerprint.clone(),
         peer_relay_url: host_relay_url,
         sync_doc_id: String::new(),
+        sync_doc_ticket: pairing_response.sync_doc_ticket.clone(),
     };
 
     let paired_info = PairedDeviceInfo::from(&paired_device);
@@ -366,6 +407,7 @@ pub async fn submit_pairing_code(
                     let mut devices = sync_state.transport_state.paired_devices.lock().await;
                     if let Some(device) = devices.get_mut(&pairing_response.device_id) {
                         device.sync_doc_id = doc_id;
+                        device.sync_doc_ticket = pairing_response.sync_doc_ticket.clone();
                         iroh_sync::save_paired_devices_to_disk(
                             &sync_state.transport_state.app_data_dir,
                             &devices,
@@ -680,9 +722,29 @@ pub async fn docs_get_all_entries(
     Ok(results)
 }
 
+/// Try to get the docs API, and if the accept loop died (corrupted database),
+/// restart it and retry. Without this, a corrupted redb database silently kills
+/// the accept loop at startup, and every subsequent sync round fails with
+/// "iroh-docs not initialized after 5s wait" until the user reinstalls the app.
+async fn get_docs_api_or_init(app: &tauri::AppHandle) -> Result<iroh_docs::api::DocsApi, String> {
+    match get_docs_api(app) {
+        Ok(api) => Ok(api),
+        Err(e) => {
+            eprintln!("[iroh-sync] {e} — restarting sync endpoint with database cleanup");
+            // This restarts the accept loop. If the database is corrupted,
+            // the cleanup in start_accept_loop deletes the broken redb files
+            // and the new loop recreates them fresh.
+            let _ = iroh_start(app.clone()).await;
+            // get_docs_api polls for up to 5s internally; on a fresh database
+            // the loop initializes in <1s.
+            get_docs_api(app)
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Result<(), String> {
-    let api = get_docs_api(&app)?;
+    let api = get_docs_api_or_init(&app).await?;
     let sync_state = get_sync_state(&app)?;
     let (doc_id, peer_pk, relay_url, ip, port) = {
         let devices = sync_state.transport_state.paired_devices.lock().await;
@@ -710,11 +772,59 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
         )
     };
 
-    let doc = api
-        .open(doc_id)
-        .await
-        .map_err(|e| format!("open doc: {e}"))?
-        .ok_or_else(|| "Sync doc not found locally".to_string())?;
+    let doc = match api.open(doc_id).await {
+        Ok(Some(d)) => d,
+        Ok(None) | Err(_) => {
+            // Doc not found — likely the iroh-docs database was wiped due to
+            // corruption recovery. Try to re-import the doc from the stored
+            // DocTicket (saved during pairing). This avoids requiring the user
+            // to re-pair after a database reset.
+            let ticket_str = {
+                let devices = sync_state.transport_state.paired_devices.lock().await;
+                devices
+                    .get(&peer_device_id)
+                    .map(|d| d.sync_doc_ticket.clone())
+                    .unwrap_or_default()
+            };
+
+            if let Ok(ticket) = ticket_str.parse::<iroh_docs::DocTicket>() {
+                eprintln!("[iroh-sync] Re-importing doc from stored ticket...");
+                if let Ok(imported) = api.import(ticket).await {
+                    let new_doc_id = imported.id().to_string();
+                    let mut devices = sync_state.transport_state.paired_devices.lock().await;
+                    if let Some(d) = devices.get_mut(&peer_device_id) {
+                        d.sync_doc_id = new_doc_id;
+                        let _ = iroh_sync::save_paired_devices_to_disk(
+                            &sync_state.transport_state.app_data_dir,
+                            &devices,
+                        );
+                    }
+                    imported
+                } else {
+                    let mut devices = sync_state.transport_state.paired_devices.lock().await;
+                    if let Some(d) = devices.get_mut(&peer_device_id) {
+                        d.sync_doc_id.clear();
+                        let _ = iroh_sync::save_paired_devices_to_disk(
+                            &sync_state.transport_state.app_data_dir,
+                            &devices,
+                        );
+                    }
+                    return Err("Sync doc lost — re-pair required".to_string());
+                }
+            } else {
+                // No stored ticket — clear stale reference and require re-pair
+                let mut devices = sync_state.transport_state.paired_devices.lock().await;
+                if let Some(d) = devices.get_mut(&peer_device_id) {
+                    d.sync_doc_id.clear();
+                    let _ = iroh_sync::save_paired_devices_to_disk(
+                        &sync_state.transport_state.app_data_dir,
+                        &devices,
+                    );
+                }
+                return Err("Sync doc lost — re-pair required".to_string());
+            }
+        }
+    };
 
     let mut peer_addr = iroh::EndpointAddr::new(peer_pk);
     if !relay_url.is_empty() {

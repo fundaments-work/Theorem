@@ -40,7 +40,6 @@ import {
     Rss,
     Download,
     Globe,
-    RefreshCw,
     WifiOff,
     Sun,
     BookOpenCheck,
@@ -364,15 +363,6 @@ export const SettingsPage = memo(function SettingsPage() {
     const [showDictDownloadModal, setShowDictDownloadModal] = useState(false);
     const [dictionaryRemovedName, setDictionaryRemovedName] = useState<string | null>(null);
 
-    // ── TTS system voices ──
-    const [availableVoices, setAvailableVoices] = useState<Array<{ name: string; lang: string }>>([]);
-
-    useEffect(() => {
-        import("../reader/audio/ImmersionPlayer").then(({ ImmersionPlayer }) => {
-            ImmersionPlayer.loadVoices().then(setAvailableVoices);
-        });
-    }, []);
-
     useEffect(() => {
         if (!dictionaryRemovedName) return;
         const timer = setTimeout(() => setDictionaryRemovedName(null), 3000);
@@ -485,12 +475,12 @@ export const SettingsPage = memo(function SettingsPage() {
 
     const handlePickVaultDirectory = async () => {
         if (isMobilePlatform) {
-            alert("Folder selection is not supported on mobile. Configure the Obsidian vault folder on desktop.");
+            alert("Folder selection is not supported on mobile. Configure the export folder on desktop.");
             return;
         }
 
         const selectedPath = await showOpenDirectoryDialog({
-            title: "Choose Obsidian Vault Folder",
+            title: "Choose Export Folder",
             defaultPath: settings.vault.vaultPath || undefined,
         });
 
@@ -546,7 +536,7 @@ export const SettingsPage = memo(function SettingsPage() {
 
     const handleExportMarkdownNow = async () => {
         if (!settings.vault.vaultPath.trim()) {
-            setVaultSyncStatus("idle", "Pick an Obsidian vault folder first.");
+            setVaultSyncStatus("idle", "Set an export folder first.");
             return;
         }
 
@@ -905,58 +895,20 @@ export const SettingsPage = memo(function SettingsPage() {
                                 <span className="text-[11px] font-medium text-[color:var(--color-text-muted)]">Off</span>
                             )}
                         </SettingRow>
-
-                        {availableVoices.length > 0 && (
-                            <SettingRow
-                                label="Voice"
-                                description="Your system's text-to-speech voice"
-                            >
-                                <Dropdown
-                                    value={settings.tts.voice}
-                                    onChange={(v) => updateTtsSettings({ voice: v })}
-                                    options={availableVoices.map(v => ({ value: v.name, label: v.name }))}
-                                    variant="filled"
-                                    size="sm"
-                                />
-                            </SettingRow>
-                        )}
                     </Section>
 
                     <Section
-                        title="Vocabulary"
-                        description="Vocabulary capture controls"
+                            title="Vocabulary"
+                            description="Track words you look up"
                         icon={<BookOpenCheck className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="Enable Vocabulary Builder"
-                            description="Track words you look up while reading"
+                            label="Vocabulary Lookup"
+                            description="Save words you look up while reading"
                         >
                             <Toggle
                                 checked={settings.vocabulary.vocabularyEnabled}
                                 onChange={(checked) => updateVocabularySettings({ vocabularyEnabled: checked })}
-                            />
-                        </SettingRow>
-                    </Section>
-
-                    <Section
-                        title="Sync"
-                        description="Background device synchronization"
-                        icon={<RefreshCw className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Auto-sync"
-                            description="Periodically sync with paired devices in the background"
-                        >
-                            <Toggle
-                                checked={settings.deviceSync.autoSyncEnabled}
-                                onChange={(checked) =>
-                                    updateSettings({
-                                        deviceSync: {
-                                            ...settings.deviceSync,
-                                            autoSyncEnabled: checked,
-                                        },
-                                    })
-                                }
                             />
                         </SettingRow>
                     </Section>
@@ -996,12 +948,12 @@ export const SettingsPage = memo(function SettingsPage() {
 
                     <Section
                         title="Installed Dictionaries"
-                        description="StarDict dictionaries for offline word lookup"
+                        description="Offline dictionary files for word lookup"
                         icon={<WifiOff className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="Import StarDict"
-                            description="Select .ifo, .idx, and .dict.dz files"
+                            label="Import Dictionary"
+                            description="Add offline dictionary files"
                         >
                             <div className="flex flex-wrap items-center gap-2">
                                 <input
@@ -1022,7 +974,7 @@ export const SettingsPage = memo(function SettingsPage() {
                                     onClick={() => setShowDictDownloadModal(true)}
                                     className="ui-btn text-[11px] whitespace-nowrap"
                                 >
-                                    <Download className="w-4 h-4" /> Browse Dictionaries
+                                    <Download className="w-4 h-4" /> Download Dictionary
                                 </button>
                                 <span className="text-xs text-[color:var(--color-text-muted)]">
                                     {installedDictionaries.length} installed
@@ -1083,20 +1035,16 @@ export const SettingsPage = memo(function SettingsPage() {
 
                     <div ref={markdownExportSectionRef}>
                         <Section
-                            title="Obsidian Markdown Export"
-                            description="Writes markdown files for highlights and vocabulary. This does not sync app data between devices."
+                            title="Markdown Export"
+                            description="Export highlights and vocabulary as markdown files"
                             icon={<BookOpen className="w-5 h-5" />}
                         >
-                            <div className="mb-4 border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-xs text-[color:var(--color-text-secondary)]">
-                                Use Device Sync above for real device-to-device sync. Use this section only for Obsidian markdown export.
-                            </div>
-
                             <SettingRow
-                                label="Obsidian Vault Folder"
+                                label="Export Folder"
                                 description={
                                     isMobilePlatform
-                                        ? "Folder selection is unavailable on mobile. Configure vault folder on desktop."
-                                        : "Choose the Obsidian vault folder where markdown files will be exported"
+                                        ? "Folder selection is unavailable on mobile. Configure on desktop."
+                                        : "Choose a folder for your exported markdown files"
                                 }
                             >
                                 <div className="flex flex-wrap items-center gap-2">
@@ -1106,7 +1054,7 @@ export const SettingsPage = memo(function SettingsPage() {
                                         onChange={(e) => updateVaultSettings({
                                             vaultPath: e.target.value,
                                         })}
-                                        placeholder="/Users/you/Documents/ObsidianVault"
+                                        placeholder="/Users/you/Documents/MarkdownExport"
                                         className={cn(
                                             "ui-input",
                                             "min-w-[20rem] sm:w-[28rem]"
@@ -1158,10 +1106,10 @@ export const SettingsPage = memo(function SettingsPage() {
                                 description="Latest markdown export status"
                             >
                                 <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] font-medium text-[color:var(--color-text-primary)]">
-                                    {vaultSyncStatus === "synced" && "Status: Export complete"}
-                                    {vaultSyncStatus === "syncing" && "Status: Exporting markdown files"}
-                                    {vaultSyncStatus === "error" && "Status: Export error"}
-                                    {vaultSyncStatus === "idle" && "Status: Idle"}
+                                    {vaultSyncStatus === "synced" && "Export complete"}
+                                    {vaultSyncStatus === "syncing" && "Exporting..."}
+                                    {vaultSyncStatus === "error" && "Export error"}
+                                    {vaultSyncStatus === "idle" && "Ready"}
                                     {vaultSyncMessage ? ` | ${vaultSyncMessage}` : ""}
                                     {vaultSyncAt ? ` | ${new Date(vaultSyncAt).toLocaleTimeString()}` : ""}
                                 </div>
@@ -1169,16 +1117,13 @@ export const SettingsPage = memo(function SettingsPage() {
 
                             <details className="border border-[var(--color-border)] bg-[var(--color-surface-muted)]">
                                 <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-[color:var(--color-text-primary)]">
-                                    Advanced export file names
+                                    File names
                                 </summary>
                                 <div className="space-y-3 border-t border-[var(--color-border)] p-3">
                                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                                         <div>
                                             <p className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
-                                                Highlights folder name
-                                            </p>
-                                            <p className="mt-1 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
-                                                Base name for generated highlights pages (for example, `theorem-highlights-books`).
+                                                Highlights folder
                                             </p>
                                         </div>
                                         <input
@@ -1196,10 +1141,7 @@ export const SettingsPage = memo(function SettingsPage() {
                                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                                         <div>
                                             <p className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
-                                                Vocabulary file name
-                                            </p>
-                                            <p className="mt-1 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
-                                                Markdown file name for vocabulary export in your vault folder.
+                                                Vocabulary file
                                             </p>
                                         </div>
                                         <input

@@ -96,6 +96,9 @@ pub struct PairedDevice {
     /// iroh-docs NamespaceId for the shared sync document (base64 string).
     #[serde(default)]
     pub sync_doc_id: String,
+    /// DocTicket for re-importing the shared doc after database reset.
+    #[serde(default)]
+    pub sync_doc_ticket: String,
 }
 
 /// Frontend-safe view of a paired device (no symmetric key exposed).
@@ -117,6 +120,9 @@ pub struct PairedDeviceInfo {
     /// iroh-docs NamespaceId for the shared sync document (base64 string).
     #[serde(default)]
     pub sync_doc_id: String,
+    /// DocTicket for re-importing the shared doc after database reset.
+    #[serde(default)]
+    pub sync_doc_ticket: String,
 }
 
 impl From<&PairedDevice> for PairedDeviceInfo {
@@ -131,6 +137,7 @@ impl From<&PairedDevice> for PairedDeviceInfo {
             fingerprint: device.fingerprint.clone(),
             peer_relay_url: device.peer_relay_url.clone(),
             sync_doc_id: device.sync_doc_id.clone(),
+            sync_doc_ticket: device.sync_doc_ticket.clone(),
         }
     }
 }

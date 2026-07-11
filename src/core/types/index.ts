@@ -235,6 +235,8 @@ export interface PairedDevice {
     peerRelayUrl?: string;
     /** iroh-docs NamespaceId for the shared sync document (base64 string). */
     syncDocId?: string;
+    /** DocTicket for re-importing the shared doc after database reset. */
+    syncDocTicket?: string;
 }
 
 export interface DeviceSyncSettings {
