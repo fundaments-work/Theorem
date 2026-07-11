@@ -16,6 +16,10 @@ import {
     getPairedDevices,
     updateSyncNotification,
     setAutoSyncFlag,
+    startAndroidSyncWorker,
+    stopAndroidSyncWorker,
+    schedulePeriodicSyncWork,
+    cancelPeriodicSyncWork,
 } from "./device-sync";
 import {
     useLibraryStore,
@@ -36,7 +40,7 @@ import {
     mergeSettings,
     mergeReadingStats,
 } from "./sync-import";
-import { isTauri } from "./env";
+import { isMobile, isTauri } from "./env";
 import { saveCoverImage } from "./storage";
 
 // ─── Helpers ───
@@ -1192,6 +1196,12 @@ export function scheduleMutationSync(): void {
     _mutationSyncTimer = setTimeout(async () => {
         _mutationSyncTimer = null;
 
+        if (_isAutoSyncing) {
+            // A sync is already in progress — reschedule instead of dropping
+            _dataDirty = true;
+            scheduleMutationSync();
+            return;
+        }
         void autoSyncRound();
     }, MUTATION_SYNC_DEBOUNCE_MS);
 
@@ -1279,6 +1289,17 @@ export async function startAutoSync(): Promise<() => void> {
         }
     }
 
+    // 6. Android: start ForegroundService + schedule WorkManager
+    if (isMobile()) {
+        try {
+            await startAndroidSyncWorker();
+            await updateSyncNotification("Auto-sync enabled");
+            await schedulePeriodicSyncWork();
+        } catch {
+            // Android worker not available.
+        }
+    }
+
     _autoSyncCleanups = cleanups;
     return () => stopAutoSync();
 }
@@ -1301,6 +1322,12 @@ export function stopAutoSync(): void {
     }
     _dataDirty = false;
     setAutoSyncFlag(false).catch(e => console.error("[catch]", e));
+
+    // Android: stop ForegroundService + cancel WorkManager
+    if (isMobile()) {
+        stopAndroidSyncWorker().catch(e => console.error("[catch]", e));
+        cancelPeriodicSyncWork().catch(e => console.error("[catch]", e));
+    }
 }
 
 // ─── iroh-docs CRDT Sync (replaces legacy LWW merge) ───

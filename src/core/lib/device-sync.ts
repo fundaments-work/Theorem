@@ -117,6 +117,26 @@ export async function unpairDevice(deviceId: string): Promise<void> {
     return invoke("unpair_device", { deviceId });
 }
 
+/** Start the Android ForegroundService for persistent background sync. */
+export async function startAndroidSyncWorker(): Promise<void> {
+    if (!isMobile()) return;
+    try {
+        await invoke("start_android_sync_worker");
+    } catch {
+        // ForegroundService not available.
+    }
+}
+
+/** Stop the Android ForegroundService. */
+export async function stopAndroidSyncWorker(): Promise<void> {
+    if (!isMobile()) return;
+    try {
+        await invoke("stop_android_sync_worker");
+    } catch {
+        // ForegroundService not available.
+    }
+}
+
 /** Update the sync notification text on Android (shows what's being synced). */
 export async function updateSyncNotification(text: string): Promise<void> {
     if (!isMobile()) return;
