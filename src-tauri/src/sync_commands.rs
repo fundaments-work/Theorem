@@ -722,13 +722,22 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
             peer_addr = peer_addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, port));
         }
     }
+
+    // Check peer reachability BEFORE start_sync (which returns Ok immediately
+    // even if peer is offline — it registers for background sync).
+    let ep = get_or_init_iroh(&app).await?;
     tokio::time::timeout(
-        std::time::Duration::from_secs(20),
-        doc.start_sync(vec![peer_addr]),
+        std::time::Duration::from_secs(10),
+        ep.endpoint.connect(peer_addr.clone(), iroh_docs::ALPN),
     )
     .await
-    .map_err(|_| format!("Peer is offline or unreachable (timeout after 20s)"))?
-    .map_err(|e| format!("start_sync: {e}"))?;
+    .map_err(|_| format!("Peer is offline or unreachable (timeout after 10s)"))?
+    .map_err(|_| format!("Peer is offline or unreachable (connection rejected)"))?;
+
+    // Now start the actual CRDT sync
+    doc.start_sync(vec![peer_addr])
+        .await
+        .map_err(|e| format!("start_sync: {e}"))?;
 
     // Update last_sync_at so the peer list shows "Synced at ..." instead of "Never synced"
     {

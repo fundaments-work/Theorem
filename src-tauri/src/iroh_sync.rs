@@ -187,9 +187,7 @@ pub fn subscribe_doc_events(
             let mut stream = match doc.subscribe().await {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!(
-                        "[iroh-sync] Failed to subscribe to doc events: {e}, retrying in 1s"
-                    );
+                    eprintln!("[iroh-sync] Failed to subscribe to doc events: {e}, retrying in 1s");
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     continue;
                 }
@@ -291,9 +289,7 @@ pub fn subscribe_doc_events(
                     _ => {}
                 }
             }
-            eprintln!(
-                "[iroh-sync] doc event stream ended, re-subscribing in 1s..."
-            );
+            eprintln!("[iroh-sync] doc event stream ended, re-subscribing in 1s...");
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
     });
