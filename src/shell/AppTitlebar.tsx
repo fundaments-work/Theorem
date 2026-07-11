@@ -212,27 +212,9 @@ export const AppTitlebar = memo(function AppTitlebar({
                 return;
             }
 
-            if (pairedDevices.length > 1) {
-                setDeviceSyncStatus("idle", "Multiple paired devices. Choose one in Settings > Integrations.");
-                return;
+            for (const device of pairedDevices) {
+                await runDeviceSync(device.deviceId);
             }
-
-            const target = pairedDevices[0];
-            setDeviceSyncStatus(
-                "syncing",
-                `Syncing with ${target.deviceName || target.deviceId}...`,
-            );
-
-            const result = await runDeviceSync(target.deviceId);
-            if (result.success) {
-                const summary = result.domainsUpdated.length > 0
-                    ? `Updated ${result.domainsUpdated.length} domain(s)`
-                    : "Already in sync";
-                setDeviceSyncStatus("synced", summary);
-                return;
-            }
-
-            setDeviceSyncStatus("error", result.error || "Sync failed");
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             setDeviceSyncStatus("error", message);

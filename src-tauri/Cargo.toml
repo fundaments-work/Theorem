@@ -55,6 +55,7 @@ bzip2 = "0.4"
 tar = "0.4"
 zip = "2"
 walkdir = "2"
+tempfile = "3"
 
 # Crypto provider for rustls (iroh's reqwest v0.13 uses rustls-no-provider;
 # this installs the ring-based default provider so TLS doesn't panic).

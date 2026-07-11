@@ -7191,6 +7191,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-os",
  "tauri-plugin-single-instance",
+ "tempfile",
  "theorem-sync-core",
  "tokio",
  "unrar-ng",

@@ -701,6 +701,7 @@ export async function runDeviceSync(
 
         // 4. Trigger iroh-docs CRDT sync with the peer.
         log("Syncing with peer via iroh-docs...");
+        setStatus("syncing", "Connected, receiving data...");
         const docsSyncError = await docsSyncNow(peerDeviceId);
         if (docsSyncError) {
             log(`Warning: iroh-docs sync failed: ${docsSyncError}`);
@@ -726,6 +727,13 @@ export async function runDeviceSync(
 
         const waitStart = Date.now();
         let prevDomainSet = "";
+        let lastProgressMsg = "";
+        const updateProgress = (msg: string) => {
+            if (msg !== lastProgressMsg) {
+                lastProgressMsg = msg;
+                setStatus("syncing", msg);
+            }
+        };
         const pollLoop = async () => {
             while (!settled) {
                 if (_syncCancelled) {
@@ -739,29 +747,45 @@ export async function runDeviceSync(
                     settle();
                     break;
                 }
+                const elapsed = Date.now() - waitStart;
+
+                // Show a heartbeat message every 10s so the user knows sync
+                // is still active (especially on mobile where the notification
+                // is the only feedback).
+                if (elapsed < MIN_ELAPSED_MS) {
+                    updateProgress("Requesting data...");
+                } else if (elapsed < 15000) {
+                    updateProgress("Waiting for peer...");
+                } else if (elapsed < 30000) {
+                    updateProgress("Still waiting for peer...");
+                } else {
+                    updateProgress("Waiting (peer may be slow)...");
+                }
+
                 await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS - 500));
                 if (settled) break;
 
-                await hydrateFromIrohDocs();
-                const booksCount = useLibraryStore.getState().books.length;
-                const annCount = useLibraryStore.getState().annotations.length;
-                const colCount = useLibraryStore.getState().collections.length;
-                const currentDomainSet = `${booksCount}|${annCount}|${colCount}`;
-                const elapsed = Date.now() - waitStart;
+                const updated = await hydrateFromIrohDocs();
+                const currentDomainSet = updated.sort().join(",");
 
-                if (currentDomainSet !== prevDomainSet && elapsed >= MIN_ELAPSED_MS) {
+                if (currentDomainSet !== prevDomainSet && currentDomainSet !== "" && elapsed >= MIN_ELAPSED_MS) {
                     stablePolls = 0;
                     prevDomainSet = currentDomainSet;
-                    const parts: string[] = [];
-                    if (booksCount > _bookCountBeforeSync) parts.push(`${booksCount} books`);
-                    if (annCount > 0) parts.push(`${annCount} annotations`);
-                    setStatus("syncing", parts.length > 0 ? `Receiving ${parts.join(", ")}` : "Receiving data...");
+                    const domainLabels: Record<string, string> = {
+                        books: "Books", annotations: "Annotations", collections: "Collections",
+                        deletion_tombstones: "Deletions", vocabulary: "Vocabulary",
+                        rss_feeds: "Feeds", rss_articles: "Articles",
+                        settings: "Settings", reading_stats: "Stats",
+                    };
+                    const parts = updated.map(d => domainLabels[d] || d);
+                    updateProgress(`Received ${parts.join(", ")}`);
                 } else {
                     // Only count as stable if we actually have data (books > 0)
                     // OR the device had books before sync (no new data expected).
                     // On a fresh device (0 books before sync), never increment
                     // stability — wait for data or timeout.
-                    if (booksCount > 0 || _bookCountBeforeSync > 0) {
+                    const currentBooks = useLibraryStore.getState().books.length;
+                    if (currentBooks > 0 || _bookCountBeforeSync > 0) {
                         stablePolls++;
                     }
                 }
@@ -772,7 +796,7 @@ export async function runDeviceSync(
                     break;
                 }
                 if (elapsed >= MAX_WAIT_SECS * 1000) {
-                    console.log(`[sync] Max wait ${MAX_WAIT_SECS}s reached with ${booksCount} books — done`);
+                    console.log(`[sync] Max wait ${MAX_WAIT_SECS}s reached — done`);
                     settle();
                     break;
                 }
@@ -970,8 +994,7 @@ function _flushProgressiveBooks() {
 
     // Don't update status if sync was cancelled — cancelRunningSync set it to "idle"
     if (!_syncCancelled) {
-        const total = useLibraryStore.getState().books.length;
-        setStatus("syncing", `Syncing ${total} books`);
+        setStatus("syncing", `${batch.length} books received`);
     }
 
     // Enqueue file downloads for newly added books with blobHash
