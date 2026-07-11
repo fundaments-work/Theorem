@@ -31,6 +31,10 @@ pub struct PairingQrPayload {
     pub device_name: String,
     #[serde(default)]
     pub fingerprint: String,
+    /// Local IPv4/IPv6 addresses of the host for LAN-direct pairing
+    /// without requiring internet (N0 DNS/relay fallback).
+    #[serde(default)]
+    pub lan_addrs: Vec<String>,
 }
 
 /// Data returned to the frontend after generating a pairing QR code.

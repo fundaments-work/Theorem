@@ -64,7 +64,7 @@ export const BookSchema = z.object({
     syncedWithoutFile: z.boolean().optional(),
     blobHash: z.string().optional(),
     coverBlobHash: z.string().optional(),
-});
+}).passthrough();
 
 export const BooksArraySchema = z.array(BookSchema);
 
@@ -104,7 +104,7 @@ export const AnnotationSchema = z.object({
         )
         .optional(),
     strokeWidth: z.number().optional(),
-});
+}).passthrough();
 
 export const AnnotationsArraySchema = z.array(AnnotationSchema);
 
@@ -118,7 +118,7 @@ export const CollectionSchema = z.object({
     kind: z.enum(["general"]),
     createdAt: dateLike,
     updatedAt: dateLike,
-});
+}).passthrough();
 
 export const CollectionsArraySchema = z.array(CollectionSchema);
 
@@ -136,7 +136,7 @@ export const DeletionTombstoneSchema = z.object({
         "collection_book",
     ]),
     deletedAt: z.string().min(1),
-});
+}).passthrough();
 
 export const TombstonesArraySchema = z.array(DeletionTombstoneSchema);
 
@@ -165,7 +165,7 @@ export const VocabularyTermSchema = z.object({
     lookupCount: z.number().int().nonnegative().optional(),
     tags: z.array(z.string()).optional(),
     contexts: z.array(z.string()).optional(),
-});
+}).passthrough();
 
 export const VocabularyTermsArraySchema = z.array(VocabularyTermSchema);
 
@@ -182,7 +182,7 @@ export const RssFeedSchema = z.object({
     addedAt: dateLike,
     errorMessage: z.string().optional(),
     unreadCount: z.number().int().nonnegative(),
-});
+}).passthrough();
 
 export const RssFeedsArraySchema = z.array(RssFeedSchema);
 
@@ -201,7 +201,7 @@ export const RssArticleSchema = z.object({
     fetchedAt: dateLike,
     isRead: z.boolean(),
     isFavorite: z.boolean(),
-});
+}).passthrough();
 
 export const RssArticlesArraySchema = z.array(RssArticleSchema);
 
@@ -284,7 +284,7 @@ export const AppSettingsSchema = z.object({
     deviceSync: DeviceSyncSettingsSchema,
     hasCompletedOnboarding: z.boolean(),
     _settingsUpdatedAt: z.string().optional(),
-});
+}).passthrough();
 
 // ─── ReadingStats ───
 
@@ -305,7 +305,7 @@ export const ReadingStatsSchema = z.object({
     booksReadThisYear: z.number().int().nonnegative(),
     dailyActivity: z.array(DailyActivitySchema),
     lastReadDate: z.string().optional(),
-});
+}).passthrough();
 
 // ─── Domain map of all schemas ───
 

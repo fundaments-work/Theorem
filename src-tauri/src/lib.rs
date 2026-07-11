@@ -1149,6 +1149,8 @@ pub fn run() {
             sync_commands::blobs_download_bytes,
             sync_commands::blobs_add_file,
             sync_commands::blobs_download_file,
+            sync_commands::blobs_gc,
+            sync_commands::clear_sync_databases,
             set_android_fingerprint,
             start_android_sync_worker,
             stop_android_sync_worker,
@@ -1394,6 +1396,12 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
                     addr = addr.with_relay_url(url);
                 }
             }
+            // Include stored LAN address for direct reconnect (no internet needed)
+            if !peer.last_ip.is_empty() && peer.last_port > 0 {
+                if let Ok(ip) = peer.last_ip.parse::<std::net::IpAddr>() {
+                    addr = addr.with_ip_addr(std::net::SocketAddr::new(ip, peer.last_port));
+                }
+            }
             if let Ok(()) = doc.start_sync(vec![addr]).await {
                 eprintln!("[background-sync] Syncing with {}", peer.device_name);
                 any_synced = true;
@@ -1401,7 +1409,18 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
         }
 
         if any_synced {
-            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            // Poll for incoming data with 5s cycles, up to 120s total.
+            // The previous 30s blind sleep was insufficient for CRDT
+            // reconciliation + blob download on large libraries.
+            eprintln!("[background-sync] Waiting for sync data (up to 120s)...");
+            for _ in 0..24 {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                // Check if auto-sync was disabled mid-sync
+                if data_dir.join("auto-sync-disabled").exists() {
+                    eprintln!("[background-sync] Auto-sync disabled mid-sync, aborting");
+                    break;
+                }
+            }
         }
         let _ = router.shutdown().await;
         let _ = endpoint.close().await;

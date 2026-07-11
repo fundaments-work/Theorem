@@ -75,8 +75,34 @@ pub fn read_machine_fingerprint() -> String {
     }
     #[cfg(target_os = "windows")]
     {
-        // Windows: use a placeholder for now.
-        // Could use WMI or registry to read machine GUID.
+        // Read MachineGuid from the registry — the stable UUID assigned
+        // during Windows installation, survives reboots and reinstalls
+        // (unlike volume serial numbers or WMI UUIDs).
+        if let Ok(output) = std::process::Command::new("reg")
+            .args([
+                "query",
+                r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography",
+                "/v",
+                "MachineGuid",
+            ])
+            .output()
+        {
+            if let Ok(stdout) = String::from_utf8(output.stdout) {
+                for line in stdout.lines() {
+                    if line.contains("MachineGuid") {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if let Some(guid) = parts.last() {
+                            let trimmed = guid.trim();
+                            if !trimmed.is_empty() {
+                                use sha2::Digest;
+                                let hash = sha2::Sha256::digest(trimmed.as_bytes());
+                                return hex::encode(&hash[..8]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         String::new()
     }
     #[cfg(target_os = "android")]

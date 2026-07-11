@@ -38,6 +38,7 @@ import {
 import {
     runDeviceSync,
     ensureResponderSyncReady,
+    markProvisioningNeeded,
 } from "../../core/lib/sync-orchestrator";
 import { useUIStore, useSettingsStore } from "../../core/store";
 import type {
@@ -275,26 +276,67 @@ export function DeviceSyncSection() {
         }
     }, [qrData, setDeviceSyncStatus]);
 
+    // When hosting (showing QR), listen for devices that successfully pair.
+    // On `pairing-completed`, re-provision all local data into the new shared
+    // doc that was created by the pairing handler. Without this, the host's
+    // books never reach the scanner — _initialProvisionDone is true on the
+    // host so ensureResponderSyncReady skips provisionToIrohDocs.
+    useEffect(() => {
+        if (!available || !qrData) return;
+        let cancelled = false;
+        let unlisten: (() => void) | null = null;
+        import("@tauri-apps/api/event").then(({ listen }) => {
+            if (cancelled) return;
+            listen<{ device_id: string; device_name: string }>("pairing-completed", () => {
+                if (cancelled) return;
+                setDeviceSyncStatus("synced", "Device paired, sharing data...");
+                markProvisioningNeeded();
+                ensureResponderSyncReady().catch(() => {});
+            }).then((fn) => { unlisten = fn; });
+        }).catch(() => {});
+        return () => {
+            cancelled = true;
+            unlisten?.();
+        };
+    }, [available, qrData]);
+
     const submitPairingCodeValue = useCallback(
         async (code: string) => {
             const trimmedCode = code.trim();
             if (!trimmedCode) return;
             setError(null);
             setIsPairing(true);
-            setDeviceSyncStatus("pairing");
+            setDeviceSyncStatus("pairing", "Connecting to device...");
+
+            // Listen for step-by-step pairing progress from Rust
+            let pairUnlisten: (() => void) | null = null;
+            try {
+                const { listen } = await import("@tauri-apps/api/event");
+                pairUnlisten = await listen<{ step: string; message: string }>(
+                    "pairing-progress",
+                    (event) => {
+                        setDeviceSyncStatus("pairing", event.payload.message);
+                    },
+                );
+            } catch {}
+
             try {
                 const device = await submitPairingCode(trimmedCode);
+                pairUnlisten?.();
                 setPairedDevices((prev) => [...prev, device]);
                 setPairingCode("");
                 setSuccessMessage(
                     `Paired with ${device.deviceName || device.deviceId}`,
                 );
+                setDeviceSyncStatus("synced", "Setting up sync...");
                 try {
+                    markProvisioningNeeded();
                     await ensureResponderSyncReady();
                 } catch (e) {
                 }
                 setDeviceSyncStatus("idle");
             } catch (e: any) {
+                pairUnlisten?.();
                 setError(e?.message || String(e));
                 setDeviceSyncStatus("error", e?.message || String(e));
             } finally {

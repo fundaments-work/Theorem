@@ -10,6 +10,7 @@ use theorem_sync_core::sync_protocol::{
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use tauri::Emitter;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
@@ -106,6 +107,27 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {e}"))?;
 
+    // Periodic GC: check iroh-docs redb database size on startup.
+    // iroh-docs entries are immutable — writes accumulate forever.
+    // If the database grows beyond 100MB, wipe and recreate it.
+    // The re-import mechanism (iroh_sync.rs re-subscription loop)
+    // will restore sync docs from stored DocTickets.
+    let docs_db_path = data_dir.join("iroh-docs").join("docs.db");
+    if let Ok(meta) = std::fs::metadata(&docs_db_path) {
+        const MAX_DB_BYTES: u64 = 100 * 1024 * 1024; // 100 MB
+        if meta.len() > MAX_DB_BYTES {
+            eprintln!(
+                "[iroh-sync] redb database is {} MB — exceeding {} MB threshold. Wiping and recreating...",
+                meta.len() / (1024 * 1024),
+                MAX_DB_BYTES / (1024 * 1024)
+            );
+            let blobs_path = data_dir.join("iroh-blobs");
+            let docs_path = data_dir.join("iroh-docs");
+            let _ = std::fs::remove_dir_all(&blobs_path);
+            let _ = std::fs::remove_dir_all(&docs_path);
+        }
+    }
+
     for attempt in 0..2 {
         let ep = get_or_init_iroh(&app).await?;
         let sync_state = get_sync_state(&app)?;
@@ -171,6 +193,7 @@ pub async fn iroh_stop(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(ep) = endpoint {
         ep.close().await;
     }
+    *IROH_ENDPOINT.lock().unwrap() = None;
     Ok(())
 }
 
@@ -220,6 +243,12 @@ pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData,
         device_name: sync_state.transport_state.device_name.clone(),
         fingerprint: sync_crypto::get_frontend_fingerprint()
             .unwrap_or_else(|| sync_state.transport_state.fingerprint.clone()),
+        lan_addrs: ep
+            .endpoint
+            .bound_sockets()
+            .into_iter()
+            .map(|a| a.to_string())
+            .collect(),
     };
 
     let payload_json = serde_json::to_string(&qr_payload)
@@ -250,18 +279,36 @@ pub async fn submit_pairing_code(
     let sync_state = get_sync_state(&app)?;
     let ep = get_or_init_iroh(&app).await?;
 
-    // Connect to host via iroh
+    // ── Step 1: Connect to host device ──
+    let _ = app.emit(
+        "pairing-progress",
+        serde_json::json!({"step": "connecting", "message": "Connecting to device..."}),
+    );
+
+    // Connect to host via iroh. Include LAN addresses from the QR code
+    // as direct-connect hints so pairing works without internet (no N0 DNS
+    // or relay required when on the same local network).
     let peer_pk: iroh::PublicKey = qr_payload
         .node_id
         .parse()
         .map_err(|e| format!("Invalid host node_id: {e}"))?;
-    let host_addr = iroh::EndpointAddr::new(peer_pk);
+    let mut host_addr = iroh::EndpointAddr::new(peer_pk);
+    for addr_str in &qr_payload.lan_addrs {
+        if let Ok(socket) = addr_str.parse::<std::net::SocketAddr>() {
+            host_addr = host_addr.with_ip_addr(socket);
+        }
+    }
 
     let conn = ep
         .endpoint
         .connect(host_addr, crate::iroh_sync::ALPN_BYTES)
         .await
         .map_err(|e| format!("Connect to host failed: {e}"))?;
+
+    let _ = app.emit(
+        "pairing-progress",
+        serde_json::json!({"step": "handshake", "message": "Connected, exchanging keys..."}),
+    );
 
     // Send handshake first
     let my_info = iroh_sync::IrohPeerInfo {
@@ -300,32 +347,46 @@ pub async fn submit_pairing_code(
 
     let pairing_response = iroh_sync::send_pair_request(&conn, &pairing_request).await?;
 
-    // Capture the host's relay URL from this connection for future reconnections.
-    let host_relay_url = conn
-        .paths()
-        .iter()
-        .find_map(|p| match p.remote_addr() {
-            iroh::TransportAddr::Relay(url) => Some(url.to_string()),
-            _ => None,
-        })
-        .unwrap_or_default();
-
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
+
+    // Capture the peer's actual network address from the QUIC connection
+    // so blob downloads have direct-connect hints. Without this, iroh-blobs
+    // must resolve the peer via N0 DNS (which fails on many mobile networks).
+    let (connected_ip, connected_port, connected_relay) = {
+        let paths = conn.paths();
+        let mut direct = None;
+        let mut relay = None;
+        for p in paths.iter() {
+            match p.remote_addr() {
+                iroh::TransportAddr::Ip(addr) => {
+                    direct = Some((addr.ip().to_string(), addr.port()));
+                }
+                iroh::TransportAddr::Relay(url) => {
+                    relay = Some(url.to_string());
+                }
+                _ => {}
+            }
+        }
+        match direct {
+            Some((ip, port)) => (ip, port, relay.unwrap_or_default()),
+            None => (String::new(), 0u16, relay.unwrap_or_default()),
+        }
+    };
 
     let paired_device = PairedDevice {
         device_id: pairing_response.device_id.clone(),
         device_name: pairing_response.device_name.clone(),
         iroh_node_id: qr_payload.node_id.clone(),
 
-        last_ip: String::new(),
-        last_port: 0,
+        last_ip: connected_ip,
+        last_port: connected_port,
         paired_at: format!("{}Z", now),
         last_sync_at: None,
         fingerprint: pairing_response.fingerprint.clone(),
-        peer_relay_url: host_relay_url,
+        peer_relay_url: connected_relay,
         sync_doc_id: String::new(),
         sync_doc_ticket: pairing_response.sync_doc_ticket.clone(),
     };
@@ -364,6 +425,10 @@ pub async fn submit_pairing_code(
     }
 
     // Wait for iroh-docs to be available (up to 5s after Router starts).
+    let _ = app.emit(
+        "pairing-progress",
+        serde_json::json!({"step": "setup", "message": "Setting up sync engine..."}),
+    );
     let docs_ready = {
         let mut waited = 0;
         loop {
@@ -429,6 +494,11 @@ pub async fn submit_pairing_code(
         fingerprint: paired_info.fingerprint.clone(),
     };
     ep.add_peer(peer_info).await;
+
+    let _ = app.emit(
+        "pairing-progress",
+        serde_json::json!({"step": "complete", "message": "Device paired!"}),
+    );
 
     Ok(paired_info)
 }
@@ -652,7 +722,10 @@ pub async fn docs_get_all_entries(
             .parse()
             .map_err(|e| format!("parse doc id: {e}"))?;
         if let Ok(Some(doc)) = api.open(doc_id).await {
-            if let Ok(stream) = doc.get_many(iroh_docs::store::Query::all().build()).await {
+            if let Ok(stream) = doc
+                .get_many(iroh_docs::store::Query::single_latest_per_key().build())
+                .await
+            {
                 pin_mut!(stream);
                 while let Some(entry_res) = stream.next().await {
                     if let Ok(entry) = entry_res {
@@ -929,9 +1002,10 @@ pub async fn blobs_download_bytes(
 
     let snapshot = get_docs_snapshot(&app)?;
     let downloader = snapshot.blobs.downloader(&ep.endpoint);
-    downloader
-        .download(hash, Some(peer_pk))
+    let download_fut = downloader.download(hash, Some(peer_pk));
+    tokio::time::timeout(std::time::Duration::from_secs(30), download_fut)
         .await
+        .map_err(|_| "download: timeout after 30s".to_string())?
         .map_err(|e| format!("download: {e}"))?;
 
     snapshot
@@ -1005,10 +1079,19 @@ pub async fn blobs_download_file(
 
     let snapshot = get_docs_snapshot(&app)?;
     let downloader = snapshot.blobs.downloader(&ep.endpoint);
-    downloader
-        .download(hash, Some(peer_pk))
+    let download_fut = downloader.download(hash, Some(peer_pk));
+    // Timeout after 30s — without this, the download hangs forever if the
+    // peer is unreachable via iroh-blobs (common on mobile networks where
+    // N0 DNS or relay connectivity is intermittent).
+    tokio::time::timeout(std::time::Duration::from_secs(30), download_fut)
         .await
+        .map_err(|_| "download: timeout after 30s".to_string())?
         .map_err(|e| format!("download: {e}"))?;
+
+    // Ensure the parent directory exists before exporting the blob.
+    if let Some(parent) = std::path::Path::new(&dest_path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir parent: {e}"))?;
+    }
 
     snapshot
         .blobs
@@ -1017,4 +1100,81 @@ pub async fn blobs_download_file(
         .await
         .map(|_bytes| ())
         .map_err(|e| format!("export blob: {e}"))
+}
+
+// ─── Blobs Garbage Collection ───
+
+/// Collect unreferenced blobs from the FsStore and remove them.
+/// Accepts a list of BLAKE3 hashes to keep (from current book metadata).
+/// Walks the FsStore directory to find stored blob files, and deletes
+/// any file whose hash is not in the keep list.
+#[tauri::command]
+pub async fn blobs_gc(app: tauri::AppHandle, keep_hashes: Vec<String>) -> Result<usize, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    let blobs_path = data_dir.join("iroh-blobs");
+    let blobs_sub = blobs_path.join("blobs");
+
+    if !blobs_sub.exists() {
+        return Ok(0);
+    }
+
+    let keep: std::collections::HashSet<String> = keep_hashes.into_iter().collect();
+    let mut removed = 0usize;
+
+    // FsStore stores blobs as: blobs/<XX>/<64-char-hex-hash>
+    // where XX is the first 2 hex chars. Walk prefix dirs, then
+    // check each blob file.
+    if let Ok(prefix_entries) = std::fs::read_dir(&blobs_sub) {
+        for prefix_entry in prefix_entries.flatten() {
+            let prefix_path = prefix_entry.path();
+            if !prefix_path.is_dir() {
+                continue;
+            }
+            if let Ok(blob_entries) = std::fs::read_dir(&prefix_path) {
+                for blob_entry in blob_entries.flatten() {
+                    let blob_path = blob_entry.path();
+                    if !blob_path.is_file() {
+                        continue;
+                    }
+                    if let Some(name) = blob_path.file_name().and_then(|n| n.to_str()) {
+                        // The blob filename IS the BLAKE3 hex hash (64 chars)
+                        if name.len() == 64
+                            && name.chars().all(|c| c.is_ascii_hexdigit())
+                            && !keep.contains(name)
+                            && std::fs::remove_file(&blob_path).is_ok()
+                        {
+                            removed += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(removed)
+}
+
+/// Clear all sync databases (iroh-blobs FsStore + iroh-docs redb).
+/// Called from `clearAllApplicationStorage` so wiped-app-data re-syncs
+/// don't show stale old blob storage usage.
+#[tauri::command]
+pub async fn clear_sync_databases(app: tauri::AppHandle) -> Result<(), String> {
+    // First stop the iroh endpoint so databases aren't in use
+    iroh_stop(app.clone()).await?;
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+
+    let blobs_path = data_dir.join("iroh-blobs");
+    let docs_path = data_dir.join("iroh-docs");
+    let _ = std::fs::remove_dir_all(&blobs_path);
+    let _ = std::fs::remove_dir_all(&docs_path);
+
+    eprintln!("[iroh-sync] Cleared sync databases");
+    Ok(())
 }

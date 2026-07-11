@@ -183,15 +183,25 @@ pub fn subscribe_doc_events(
     blobs: iroh_blobs::api::Store,
 ) {
     tokio::spawn(async move {
+        let mut retries = 0;
+        const MAX_RETRIES: u32 = 3;
         loop {
             let mut stream = match doc.subscribe().await {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("[iroh-sync] Failed to subscribe to doc events: {e}, retrying in 1s");
+                    retries += 1;
+                    if retries > MAX_RETRIES {
+                        eprintln!("[iroh-sync] Failed to subscribe to doc events after {MAX_RETRIES} retries: {e}. Giving up.");
+                        break;
+                    }
+                    eprintln!(
+                        "[iroh-sync] Failed to subscribe to doc events: {e}, retrying in 1s..."
+                    );
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     continue;
                 }
             };
+            retries = 0; // reset on successful subscribe
             use futures::StreamExt;
             let mut pending: std::collections::HashMap<iroh_blobs::Hash, String> =
                 std::collections::HashMap::new();
@@ -283,6 +293,34 @@ pub fn subscribe_doc_events(
                             },
                         );
                     }
+                    Ok(LiveEvent::NeighborUp(peer)) => {
+                        #[derive(serde::Serialize, Clone)]
+                        struct PeerStatePayload {
+                            peer: String,
+                            online: bool,
+                        }
+                        let _ = app.emit(
+                            "docs-peer-online",
+                            PeerStatePayload {
+                                peer: peer.to_string(),
+                                online: true,
+                            },
+                        );
+                    }
+                    Ok(LiveEvent::NeighborDown(peer)) => {
+                        #[derive(serde::Serialize, Clone)]
+                        struct PeerStatePayload {
+                            peer: String,
+                            online: bool,
+                        }
+                        let _ = app.emit(
+                            "docs-peer-offline",
+                            PeerStatePayload {
+                                peer: peer.to_string(),
+                                online: false,
+                            },
+                        );
+                    }
                     Err(err) => {
                         eprintln!("[iroh-sync] doc event stream error: {err}");
                     }
@@ -291,6 +329,11 @@ pub fn subscribe_doc_events(
             }
             eprintln!("[iroh-sync] doc event stream ended, re-subscribing in 1s...");
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            retries += 1;
+            if retries > MAX_RETRIES {
+                eprintln!("[iroh-sync] doc event stream kept ending after {MAX_RETRIES} retries. Giving up.");
+                break;
+            }
         }
     });
 }
@@ -446,12 +489,13 @@ pub fn start_accept_loop(
         // and the frontend never learns about peer changes between sync rounds.
         {
             let paired = state_clone.paired_devices.lock().await;
-            let docs: Vec<(String, String, String, String, u16)> = paired
+            let docs: Vec<(String, String, String, String, String, u16)> = paired
                 .values()
                 .filter(|d| !d.sync_doc_id.is_empty())
                 .map(|d| {
                     (
                         d.sync_doc_id.clone(),
+                        d.sync_doc_ticket.clone(),
                         d.iroh_node_id.clone(),
                         d.peer_relay_url.clone(),
                         d.last_ip.clone(),
@@ -461,9 +505,48 @@ pub fn start_accept_loop(
                 .collect();
             drop(paired);
 
-            for (doc_id_str, node_id, relay_url, last_ip, last_port) in docs {
+            for (doc_id_str, ticket_str, node_id, relay_url, last_ip, last_port) in docs {
                 if let Ok(doc_id) = doc_id_str.parse::<iroh_docs::NamespaceId>() {
-                    if let Ok(Some(doc)) = api_for_subscribe.open(doc_id).await {
+                    let doc = match api_for_subscribe.open(doc_id).await {
+                        Ok(Some(doc)) => Some(doc),
+                        Err(e) => {
+                            eprintln!(
+                                "[iroh-sync] Failed to open sync doc for peer {node_id}: {e}. \
+                                 Trying re-import from stored ticket..."
+                            );
+                            None
+                        }
+                        Ok(None) => None,
+                    };
+                    let doc = match doc {
+                        Some(doc) => Some(doc),
+                        None if !ticket_str.is_empty() => {
+                            match ticket_str.parse::<iroh_docs::DocTicket>() {
+                                Ok(ticket) => match api_for_subscribe.import(ticket).await {
+                                    Ok(doc) => {
+                                        eprintln!(
+                                            "[iroh-sync] Re-imported sync doc from ticket for peer {node_id}"
+                                        );
+                                        Some(doc)
+                                    }
+                                    Err(e) => {
+                                        eprintln!(
+                                            "[iroh-sync] Failed to import sync doc ticket for peer {node_id}: {e}"
+                                        );
+                                        None
+                                    }
+                                },
+                                Err(e) => {
+                                    eprintln!(
+                                        "[iroh-sync] Invalid sync doc ticket for peer {node_id}: {e}"
+                                    );
+                                    None
+                                }
+                            }
+                        }
+                        None => None,
+                    };
+                    if let Some(doc) = doc {
                         subscribe_doc_events(
                             state_clone.app_handle.clone(),
                             doc.clone(),
@@ -610,6 +693,25 @@ async fn handle_pair_req(
             String::new()
         }
     };
+
+    // Notify the frontend that a new device paired, so it re-provisions
+    // all local data into the newly created shared doc. Without this,
+    // the host's 192 books never arrive on the scanner because the host's
+    // _initialProvisionDone flag causes provisionToIrohDocs to be skipped.
+    if !sync_doc_ticket.is_empty() {
+        #[derive(serde::Serialize, Clone)]
+        struct PairedPayload {
+            device_id: String,
+            device_name: String,
+        }
+        let _ = state.app_handle.emit(
+            "pairing-completed",
+            PairedPayload {
+                device_id: pairing_req.device_id.clone(),
+                device_name: pairing_req.device_name.clone(),
+            },
+        );
+    }
 
     let response = PairingResponse {
         device_id: state.device_id.clone(),

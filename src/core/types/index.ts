@@ -274,6 +274,16 @@ export interface PairingQrData {
 
 export type DeviceSyncStatus = "idle" | "hosting" | "pairing" | "connecting" | "syncing" | "synced" | "error";
 
+/** Recorded when two devices modified the same entity and one version was overwritten. */
+export interface SyncConflict {
+    entityType: string;
+    entityId: string;
+    /** Which side won: "local" or "remote" */
+    winner: "local" | "remote";
+    /** Human-readable label for the entity */
+    label?: string;
+}
+
 export type DictionaryProvider = "stardict";
 
 export interface VocabularySettings {

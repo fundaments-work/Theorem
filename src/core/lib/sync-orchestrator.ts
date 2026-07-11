@@ -28,7 +28,7 @@ import {
     useUIStore,
     useSettingsStore,
 } from "../store";
-import type { DeviceSyncStatus } from "../types";
+import type { DeviceSyncStatus, SyncConflict } from "../types";
 import {
     mergeBooks,
     mergeAnnotations,
@@ -65,8 +65,14 @@ let _docsLiveUnlisten: (() => void) | null = null;
 async function mergeIncomingData(
     incomingMap: Record<string, string>,
     localSettingsUpdatedAt?: string,
-): Promise<{ domainsUpdated: string[] }> {
+    onConflict?: (conflict: SyncConflict) => void,
+): Promise<{ domainsUpdated: string[]; conflicts: SyncConflict[] }> {
     const domainsUpdated: string[] = [];
+    const conflicts: SyncConflict[] = [];
+    const recordConflict = (entityType: string, entityId: string, winner: "local" | "remote", label?: string) => {
+        conflicts.push({ entityType, entityId, winner, label });
+        onConflict?.({ entityType, entityId, winner, label });
+    };
     const markUpdated = (domain: string) => {
         if (!domainsUpdated.includes(domain)) {
             domainsUpdated.push(domain);
@@ -208,11 +214,22 @@ async function mergeIncomingData(
             const incoming = [...domainBooks, ...perEntityBooks];
             if (incoming.length > 0) {
                 console.log(`[sync-merge] books: ${incoming.length} incoming (${domainBooks.length} domain + ${perEntityBooks.length} per-entity), ${currentLibState.books.length} existing`);
+                const beforeBookMap = new Map(currentLibState.books.map(b => [b.id, b]));
+                const incomingBookMap = new Map(incoming.map(b => [b.id, b]));
                 const merged = mergeBooks(incoming, currentLibState.books, allTombstones);
                 console.log(`[sync-merge] books: ${merged.length} after merge (lost ${incoming.length + currentLibState.books.length - merged.length})`);
                 if (merged !== currentLibState.books) {
                     applyLibraryPatch({ books: merged });
                     markUpdated("books");
+                    for (const book of merged) {
+                        if (beforeBookMap.has(book.id) && incomingBookMap.has(book.id)) {
+                            const before = beforeBookMap.get(book.id)!;
+                            if (before.progress !== book.progress || before.isFavorite !== book.isFavorite) {
+                                const remoteWon = incomingBookMap.get(book.id)!;
+                                recordConflict("book", book.id, remoteWon.progress === book.progress && remoteWon.lastReadAt === book.lastReadAt ? "remote" : "local", book.title);
+                            }
+                        }
+                    }
                 }
 
                 const incomingWithCovers = (incoming as { id: string; coverPath?: string }[])
@@ -238,10 +255,22 @@ async function mergeIncomingData(
                 : [];
             const incoming = [...domainAnns, ...perEntityAnnotations];
             if (incoming.length > 0) {
+                const beforeIds = new Set(currentLibState.annotations.map(a => a.id));
+                const beforeMap = new Map(currentLibState.annotations.map(a => [a.id, a]));
+                const incomingIds = new Set(incoming.map(a => a.id));
                 const merged = mergeAnnotations(incoming, currentLibState.annotations, allTombstones);
                 if (merged !== currentLibState.annotations) {
                     applyLibraryPatch({ annotations: merged });
                     markUpdated("annotations");
+                    for (const ann of merged) {
+                        if (beforeIds.has(ann.id) && incomingIds.has(ann.id)) {
+                            const before = beforeMap.get(ann.id);
+                            if (before && JSON.stringify(before) !== JSON.stringify(ann)) {
+                                const remoteWon = incoming.some(i => i.id === ann.id && JSON.stringify(i) === JSON.stringify(ann));
+                                recordConflict("annotation", ann.id, remoteWon ? "remote" : "local", ann.selectedText?.slice(0, 40));
+                            }
+                        }
+                    }
                 }
                 currentLibState = { ...currentLibState, annotations: merged };
             }
@@ -387,7 +416,7 @@ async function mergeIncomingData(
         }
     }
 
-    return { domainsUpdated };
+    return { domainsUpdated, conflicts };
 }
 
 // ─── File transfer after metadata merge ───
@@ -484,18 +513,21 @@ async function pullMissingBookFilesAndCovers(
     peerDeviceId: string,
     _syncedBookIds: string[],
     _log: (msg: string) => void,
-): Promise<void> {
-    if (!isTauri()) return;
+): Promise<{ completed: number; failed: number }> {
+    if (!isTauri()) return { completed: 0, failed: 0 };
     const books = useLibraryStore.getState().books;
     const needFiles = books.filter((b) => b.syncedWithoutFile === true && b.blobHash);
     const noBlobHash = books.filter((b) => b.syncedWithoutFile === true && !b.blobHash);
     console.log(`[sync] needFiles: ${needFiles.length} with blobHash, ${noBlobHash.length} without blobHash (${books.length} total)`);
+    if (needFiles.length > 0) {
+        console.log(`[sync] Books needing download:`, needFiles.map(b => `${b.title} (hash=${b.blobHash?.substring(0, 16)}...)`).join(", "));
+    }
 
     if (needFiles.length === 0) {
         if (noBlobHash.length > 0) {
-            console.log(`[sync] ${noBlobHash.length} books have no blobHash — source device must rebuild with blob provisioning`);
+            console.log(`[sync] ${noBlobHash.length} books have no blobHash — source device must rebuild with blob provisioning. Books:`, noBlobHash.map(b => b.title).join(", "));
         }
-        return;
+        return { completed: 0, failed: 0 };
     }
 
     let appDir = "";
@@ -504,7 +536,7 @@ async function pullMissingBookFilesAndCovers(
         appDir = await appDataDir();
     } catch {
         console.error("[sync] Failed to get app data dir");
-        return;
+        return { completed: 0, failed: needFiles.length };
     }
 
     // Parallel download with concurrency limit
@@ -518,9 +550,11 @@ async function pullMissingBookFilesAndCovers(
             const book = needFiles[index++];
             const destPath = `${appDir}/book-cache/${book.id}.book`;
             setStatus("syncing", `Downloading ${completed + 1}/${needFiles.length} books...`);
+            console.log(`[blob-download] Starting: ${book.title} (hash=${book.blobHash?.substring(0, 16)}...) to ${destPath}`);
             const success = await blobsDownloadFile(peerDeviceId, book.blobHash!, destPath);
             if (success) {
                 completed++;
+                console.log(`[blob-download] OK: ${book.title}`);
                 useLibraryStore.setState((state) => ({
                     books: state.books.map((b) =>
                         b.id === book.id
@@ -530,7 +564,7 @@ async function pullMissingBookFilesAndCovers(
                 }));
             } else {
                 failures++;
-                console.error(`[sync] Failed to download: ${book.title} (${book.id})`);
+                console.error(`[blob-download] FAIL: ${book.title} (${book.id}, hash=${book.blobHash?.substring(0, 16)}...)`);
             }
         }
     };
@@ -560,6 +594,7 @@ async function pullMissingBookFilesAndCovers(
             }
         }
     }
+    return { completed, failed: failures };
 }
 
 // ─── Public API ───
@@ -567,13 +602,29 @@ async function pullMissingBookFilesAndCovers(
 export interface SyncResult {
     success: boolean;
     domainsUpdated: string[];
+    conflicts?: SyncConflict[];
     error?: string;
+}
+
+/**
+ * Guard to avoid re-provisioning all Zustand data on every auto-sync cycle.
+ * Set to false after pairing a new device to force a full re-provision into
+ * the new shared doc. The incremental subscribeZustandToIrohDocs bridge
+ * handles day-to-day writes; a full re-provision is only needed at startup
+ * and after pairing.
+ */
+let _initialProvisionDone = false;
+
+/** Reset the provision flag — call after pairing a new device so the next
+ *  ensureResponderSyncReady() re-provisions data into the new shared doc. */
+export function markProvisioningNeeded(): void {
+    _initialProvisionDone = false;
 }
 
 /**
  * Ensure responder mode is ready in this runtime:
  * - server is running
- * - latest local snapshot is provisioned
+ * - latest local snapshot is provisioned (only on first call or after pairing)
  * - incoming sync-complete events are listened to exactly once
  *
  * This is called from global app bootstrap and before manual sync runs,
@@ -600,12 +651,19 @@ export async function ensureResponderSyncReady(): Promise<void> {
 
     await irohStart();
 
-    // Re-provision data to iroh-docs EVERY time this is called.
-    // This ensures that after pairing (when a new shared doc is created),
-    // all local data is written to the new doc. Provisioning is idempotent
-    // so redundant calls are harmless.
-    await provisionBookFileBlobs();
-    await provisionToIrohDocs();
+    // Full provisioning is only needed once at startup and after pairing
+    // a new device (which resets _initialProvisionDone). The incremental
+    // subscribeZustandToIrohDocs bridge handles all subsequent writes.
+    // Re-provisioning on every auto-sync cycle (every 2 min) was causing
+    // 5000+ docs_set_entry IPC calls per tick with large libraries.
+    if (!_initialProvisionDone) {
+        await provisionBookFileBlobs();
+        await provisionToIrohDocs();
+        _initialProvisionDone = true;
+        runBlobsGarbageCollection().then((removed) => {
+            if (removed > 0) console.log(`[blob-gc] Removed ${removed} orphaned blobs`);
+        }).catch(() => {});
+    }
 
     // Register the iroh-docs live event listener so real-time
     // CRDT updates from the peer are applied to Zustand stores.
@@ -644,14 +702,14 @@ export async function runDeviceSync(
     const _bookCountBeforeSync = useLibraryStore.getState().books.length;
 
     try {
-        setStatus("syncing", "Starting sync...");
-        log("Gathering local data snapshot...");
+        setStatus("syncing", "Preparing to sync...");
+        log("Connecting to peer...");
 
         // 1. Ensure the iroh Router + responder are ready FIRST so both sides
         //    can accept incoming iroh-docs sync connections. Starting the Router
         //    after docsSyncNow is backwards — the peer's connection attempt
         //    would fail because this device's Router isn't accepting yet.
-        log("Preparing sync connection...");
+        log("Starting P2P transport...");
         await ensureResponderSyncReady();
 
         // 2. Before syncing, force-rehash any books that are missing blobHash.
@@ -676,12 +734,8 @@ export async function runDeviceSync(
         }
 
         // 3. Set up iroh-docs completion listeners BEFORE triggering sync.
-        //    docsSyncNow → doc.start_sync() triggers reconciliation asynchronously.
-        //    The PendingContentReady event fires when all content blobs from the
-        //    last sync round are available locally. If we register AFTER sync,
-        //    we may miss a fast-firing event and wait until the poll timeout.
         log("Requesting data from peer...");
-        setStatus("syncing", "Requesting data...");
+        setStatus("syncing", "Connecting to peer...");
 
         let syncResolve: (() => void) | null = null;
         const syncPromise = new Promise<void>((res) => { syncResolve = res; });
@@ -730,10 +784,10 @@ export async function runDeviceSync(
         // On a fresh device (0 books before sync), don't settle until either
         // books arrive from the peer or the full timeout is reached.
         let stablePolls = 0;
-        const STABLE_THRESHOLD = 3;
-        const MAX_WAIT_SECS = 120;
-        const POLL_INTERVAL_MS = 3000;
-        const MIN_ELAPSED_MS = 5000;
+        const STABLE_THRESHOLD = 2;
+        const MAX_WAIT_SECS = 60;
+        const POLL_INTERVAL_MS = 1500;
+        const MIN_ELAPSED_MS = 2000;
 
         const waitStart = Date.now();
         let prevDomainSet = "";
@@ -751,24 +805,29 @@ export async function runDeviceSync(
                     settle();
                     break;
                 }
-                await new Promise<void>(r => setTimeout(r, 500));
-                if (_syncCancelled || settled) {
-                    if (_syncCancelled) console.log("[sync] Sync cancelled during poll (fast check)");
-                    settle();
-                    break;
-                }
                 const elapsed = Date.now() - waitStart;
 
                 // Show a simple status pulse so the notification keeps
                 // updating (Android kills stale notifications). CRDT sync
                 // typically takes 3-15s depending on network quality.
-                if (elapsed < 10000) {
-                    updateProgress("Syncing...");
+                // Show actual book count so user sees progress.
+                const currentBooks = useLibraryStore.getState().books.length;
+                if (currentBooks > 0) {
+                    const booksSynced = currentBooks - _bookCountBeforeSync;
+                    if (booksSynced > 0) {
+                        updateProgress(`Receiving: ${booksSynced} books received`);
+                    } else if (elapsed < 10000) {
+                        updateProgress("Syncing metadata...");
+                    } else {
+                        updateProgress("Receiving data...");
+                    }
+                } else if (elapsed < 10000) {
+                    updateProgress("Connecting to peer...");
                 } else {
-                    updateProgress("Receiving data...");
+                    updateProgress("Waiting for peer...");
                 }
 
-                await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS - 500));
+                await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS));
                 if (settled) break;
 
                 const updated = await hydrateFromIrohDocs();
@@ -783,8 +842,21 @@ export async function runDeviceSync(
                         rss_feeds: "Feeds", rss_articles: "Articles",
                         settings: "Settings", reading_stats: "Stats",
                     };
-                    const parts = updated.map(d => domainLabels[d] || d);
-                    updateProgress(`Received ${parts.join(", ")}`);
+                    const store = useLibraryStore.getState();
+                    const counts: Record<string, number> = {
+                        books: store.books.length,
+                        annotations: store.annotations.length,
+                        collections: store.collections.length,
+                        vocabulary: useVocabularyStore.getState().vocabularyTerms.length,
+                        rss_feeds: useRssStore.getState().feeds.length,
+                        rss_articles: useRssStore.getState().articles.length,
+                    };
+                    const detailParts = updated.map(d => {
+                        const label = domainLabels[d] || d;
+                        const count = counts[d];
+                        return count !== undefined ? `${label} (${count})` : label;
+                    });
+                    updateProgress(`Received: ${detailParts.join(", ")}`);
                 } else {
                     // Only count as stable if we actually have data (books > 0)
                     // OR the device had books before sync (no new data expected).
@@ -817,10 +889,8 @@ export async function runDeviceSync(
             pollLoop(),
             syncPromise,
         ]);
-        // Wait for the poll loop to actually finish its current iteration.
-        // At this point settled=true so the next poll iteration will break.
-        // Give it a couple seconds to exit cleanly.
-        await new Promise<void>(r => setTimeout(r, 1500));
+        // Wait for the poll loop to exit its current iteration.
+        await new Promise<void>(r => setTimeout(r, 200));
         contentReadyUnlisten?.();
         syncFinishedUnlisten?.();
 
@@ -831,6 +901,7 @@ export async function runDeviceSync(
         // Also force-drain any buffered live events that accumulated during
         // the sync (they were deferred while _isMerging was true).
         const changedDomains = new Set<string>();
+        const changedConflicts: SyncConflict[] = [];
 
         {
             const updated = await hydrateFromIrohDocs();
@@ -851,8 +922,9 @@ export async function runDeviceSync(
         }
         _pendingDocsEntries.clear();
         if (Object.keys(liveEntries).length > 0) {
-            const { domainsUpdated } = await mergeIncomingData(liveEntries);
+            const { domainsUpdated, conflicts } = await mergeIncomingData(liveEntries);
             for (const d of domainsUpdated) changedDomains.add(d);
+            changedConflicts.push(...conflicts);
         }
         // Flush any remaining progressive book batch
         if (_progressiveBookTimer) clearTimeout(_progressiveBookTimer);
@@ -872,11 +944,12 @@ export async function runDeviceSync(
         // 6. Pull missing book files from peer
         const syncedBookIds = useLibraryStore.getState().books.map(b => b.id);
         const needFileCount = useLibraryStore.getState().books.filter(b => b.syncedWithoutFile === true && b.blobHash).length;
+        let downloadStats = { completed: 0, failed: 0 };
         if (needFileCount > 0) {
             log(`Downloading ${needFileCount} book files...`);
-            setStatus("syncing", `Downloading ${needFileCount}...`);
+            setStatus("syncing", `Downloading 0/${needFileCount}...`);
         }
-        await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, log);
+        downloadStats = await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, log);
 
         // 7. After pulling files, re-add them to the local blobs store so
         //    blobHash is updated. We do NOT call provisionToIrohDocs() here —
@@ -912,12 +985,39 @@ export async function runDeviceSync(
 
         let summary: string;
         if (changedDomains.size > 0) {
-            const parts = [...changedDomains]
-                .map(d => domainLabels[d] || d)
+            const store = useLibraryStore.getState();
+            const counts: Record<string, number> = {
+                books: store.books.length,
+                annotations: store.annotations.length,
+                collections: store.collections.length,
+                vocabulary: useVocabularyStore.getState().vocabularyTerms.length,
+                rss_feeds: useRssStore.getState().feeds.length,
+                rss_articles: useRssStore.getState().articles.length,
+            };
+            // Filter out internal domains that confuse users
+            const visibleDomains = [...changedDomains].filter(d => d !== "deletion_tombstones");
+            const parts = visibleDomains
+                .map(d => {
+                    const label = domainLabels[d] || d;
+                    const count = counts[d];
+                    return count !== undefined ? `${count} ${label}` : label;
+                })
                 .join(", ");
             summary = `Synced: ${parts}`;
-        } else if (needFileCount > 0) {
-            summary = `Synced: ${needFileCount} book files`;
+            if (downloadStats.completed > 0) {
+                summary += ` · Downloaded ${downloadStats.completed} file(s)`;
+            }
+            if (downloadStats.failed > 0) {
+                summary += ` · ${downloadStats.failed} download(s) failed`;
+                setStatus("error", summary);
+            }
+            if (changedConflicts.length > 0) {
+                summary += ` · ${changedConflicts.length} conflict(s) resolved`;
+            }
+        } else if (downloadStats.completed > 0) {
+            summary = `Synced: ${downloadStats.completed} file(s)`;
+        } else if (downloadStats.failed > 0) {
+            summary = `Metadata synced, ${downloadStats.failed} download(s) failed`;
         } else if (!_syncActivityDetected) {
             // docsSyncNow succeeded (start_sync returned Ok) but NO sync
             // events (docs-pending-content-ready, docs-sync-finished) ever
@@ -937,7 +1037,7 @@ export async function runDeviceSync(
         }
         _dataDirty = false;
 
-        return { success: true, domainsUpdated: [...changedDomains] };
+        return { success: true, domainsUpdated: [...changedDomains], conflicts: changedConflicts.length > 0 ? changedConflicts : undefined };
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : String(error);
         log(`Sync failed: ${errMsg}`);
@@ -1013,7 +1113,10 @@ function _flushProgressiveBooks() {
     for (const book of batch) {
         const added = merged.find((b: any) => b.id === book.id);
         if (added?.syncedWithoutFile && added.blobHash && _currentSyncPeerId) {
+            console.log(`[blob-download] Enqueueing progressive: ${book.title || book.id} (hash=${added.blobHash.substring(0, 16)}...)`);
             _enqueueFileDownload(added.id, added.blobHash, added.coverBlobHash);
+        } else if (added && !added.blobHash) {
+            console.log(`[blob-download] No blobHash for: ${book.title || book.id} — peer hasn't provisioned this blob`);
         }
     }
 }
@@ -1097,7 +1200,7 @@ export async function initDocsLiveListener(): Promise<() => void> {
 
     const _processPendingDocs = async () => {
         if (_isMerging) {
-            _docsLiveTimer = setTimeout(_processPendingDocs, 2000);
+            _docsLiveTimer = setTimeout(_processPendingDocs, 500);
             return;
         }
         const entries: Record<string, string> = {};
@@ -1182,10 +1285,10 @@ export async function initDocsLiveListener(): Promise<() => void> {
 const AUTO_SYNC_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
 /** Delay before the first sync after app startup. */
-const STARTUP_SYNC_DELAY_MS = 15000;
+const STARTUP_SYNC_DELAY_MS = 5000;
 
 /** Debounce window for mutation-triggered sync. */
-const MUTATION_SYNC_DEBOUNCE_MS = 5000;
+const MUTATION_SYNC_DEBOUNCE_MS = 2000;
 
 let _autoSyncTimer: ReturnType<typeof setInterval> | null = null;
 let _mutationSyncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1581,6 +1684,28 @@ export async function blobsDownloadFile(
     } catch (e) {
         console.error(`[blob-download] blobs_download_file failed: hash=${hash.substring(0, 16)}... dest=${destPath.substring(destPath.lastIndexOf("/") + 1)} error=${e}`);
         return false;
+    }
+}
+
+// ─── Blobs Garbage Collection ───
+
+/** Remove orphaned blobs from the iroh-blobs FsStore. Collects all
+ *  blobHash/coverBlobHash values from current books, then tells the
+ *  Rust backend to delete any stored blob not in the keep list. */
+export async function runBlobsGarbageCollection(): Promise<number> {
+    if (!isTauri()) return 0;
+    const books = useLibraryStore.getState().books;
+    const keep = new Set<string>();
+    for (const b of books) {
+        if (b.blobHash) keep.add(b.blobHash);
+        if (b.coverBlobHash) keep.add(b.coverBlobHash);
+    }
+    if (keep.size === 0) return 0;
+    try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return await invoke<number>("blobs_gc", { keepHashes: Array.from(keep) });
+    } catch {
+        return 0;
     }
 }
 

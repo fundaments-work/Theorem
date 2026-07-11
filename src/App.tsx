@@ -6,6 +6,7 @@ import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
 import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
 import { initReaderStyles } from "./core/lib/design-tokens";
 import { ensureResponderSyncReady, startAutoSync, stopAutoSync } from "./core/lib/sync-orchestrator";
+import { irohStop } from "./core/lib/device-sync";
 import { importBooksIncremental, getBookFormat, isImportFormatSupported } from "./core/lib/import";
 import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
@@ -340,11 +341,15 @@ function App() {
                 return;
             }
 
-            // Always start the iroh responder + bridge so the device can
-            // receive incoming sync, and Zustand mutations are written to
-            // iroh-docs even when auto-sync is off. Without this, manual
-            // "Sync Now" would miss any changes made since the last sync
-            // because the bridge (subscribeZustandToIrohDocs) was never set up.
+            if (!autoSyncEnabled) {
+                // Ensure any stale workers/services from a previous
+                // session (before data clear / reinstall) are stopped.
+                // stopAutoSync cancels WorkManager and stops the
+                // Android ForegroundService even if auto-sync is off.
+                stopAutoSync();
+                return;
+            }
+
             try {
                 await ensureResponderSyncReady();
             } catch {
@@ -359,13 +364,10 @@ function App() {
                 // Bridge initialization not available.
             }
 
-            // Auto-sync (periodic background sync) only runs when enabled.
-            if (autoSyncEnabled) {
-                try {
-                    await startAutoSync();
-                } catch {
-                    // Auto-sync scheduling unavailable.
-                }
+            try {
+                await startAutoSync();
+            } catch {
+                // Auto-sync scheduling unavailable.
             }
         };
 
@@ -378,6 +380,7 @@ function App() {
             clearTimeout(timer);
             bridgeCleanup?.();
             stopAutoSync();
+            irohStop().catch(() => {});
         };
     }, [hasCompletedOnboarding, autoSyncEnabled]);
 
