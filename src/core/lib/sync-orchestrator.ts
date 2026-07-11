@@ -739,17 +739,13 @@ export async function runDeviceSync(
                 }
                 const elapsed = Date.now() - waitStart;
 
-                // Show a heartbeat message every 10s so the user knows sync
-                // is still active (especially on mobile where the notification
-                // is the only feedback).
-                if (elapsed < MIN_ELAPSED_MS) {
-                    updateProgress("Requesting data...");
-                } else if (elapsed < 15000) {
-                    updateProgress("Waiting for peer...");
-                } else if (elapsed < 30000) {
-                    updateProgress("Still waiting for peer...");
+                // Show a simple status pulse so the notification keeps
+                // updating (Android kills stale notifications). CRDT sync
+                // typically takes 3-15s depending on network quality.
+                if (elapsed < 10000) {
+                    updateProgress("Syncing...");
                 } else {
-                    updateProgress("Waiting (peer may be slow)...");
+                    updateProgress("Receiving data...");
                 }
 
                 await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS - 500));

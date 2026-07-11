@@ -34,6 +34,13 @@ struct StartWorkerPayload {
     sync_interval_secs: u64,
 }
 
+/// Response type for the Android sync worker plugin mobile IPC.
+#[cfg(target_os = "android")]
+#[derive(Deserialize)]
+struct WorkerStatusResponse {
+    running: bool,
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("android-sync-worker")
         .setup(|app, api| {
