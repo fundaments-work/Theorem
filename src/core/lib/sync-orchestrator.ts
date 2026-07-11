@@ -755,9 +755,9 @@ export async function runDeviceSync(
                 if (currentDomainSet !== prevDomainSet && elapsed >= MIN_ELAPSED_MS) {
                     stablePolls = 0;
                     prevDomainSet = currentDomainSet;
-                    setStatus("syncing", booksCount > 0 || annCount > 0
-                        ? `Syncing (${booksCount}b, ${annCount}a)`
-                        : "Syncing...");
+                    if (booksCount > _bookCountBeforeSync) {
+                        setStatus("syncing", `Receiving ${booksCount} books`);
+                    }
                 } else {
                     // Only count as stable if we actually have data (books > 0)
                     // OR the device had books before sync (no new data expected).
