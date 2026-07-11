@@ -34,22 +34,31 @@ Scope: Full-stack audit covering Rust, TypeScript, dependencies, performance, se
 | 10.8 | Silent `.catch(() => {})` | 🔶 Partial | This session |
 | 10.9 | `content-visibility: auto` | ✅ Fixed | v1.0.7 |
 | 10.10 | Barrel imports | ❌ Not audited | — |
-| **New** | Custom ALPN (theorem-sync/v1) security hole | ✅ Removed from Router | This session |
+| **New** | 15 `.unwrap()` calls in `iroh_sync.rs` | ✅ Fixed (unwrap_or_else / map_err) | This session |
+| **New** | 26 silent `.catch(() => {})` | ✅ Fixed (console.error) | This session |
+| **New** | 10 `dangerouslySetInnerHTML` XSS holes | ✅ Wrapped with DOMPurify | This session |
+| **New** | No centralized toast system | ✅ Added sonner `<Toaster />` | This session |
+| **New** | `React.memo` missing on `BookCard`, `ReaderPage` | ✅ Wrapped | This session |
+| **New** | Custom ALPN (theorem-sync/v1) security hole | 🔶 Re-added for pairing only (renamed `pairing_handler`) | This session |
 | **New** | `docs_get_all_entries` corrupts JSON objects | ✅ Fixed (settings/reading_stats now merged correctly) | This session |
 | **New** | PairedDevice type drops 3 fields | ✅ Added `fingerprint`, `peerRelayUrl`, `syncDocId` | This session |
-| **New** | Settings page triggers dummy sync on mount | ✅ Fixed (uses `irohStart` only) | This session |
+| **New** | Settings page provisions after pairing | ✅ Fixed (calls `ensureResponderSyncReady` on mount) | This session |
 | **New** | Sync status persists to localStorage | ✅ Fixed (removed from `partialize`) | This session |
 | **New** | Settings migration forces `autoSyncEnabled: false` | ✅ Fixed | This session |
 | **New** | `searchBooks()` O(n) uncached | ✅ WeakMap cache added | This session |
 | **New** | `addBookToCollection()` O(n) `.some()` | ✅ Changed to O(1) `getBookLookup` | This session |
 | **New** | Missing DB indexes (title, author, cover) | ✅ Added `CREATE INDEX IF NOT EXISTS` | This session |
 | **New** | Covers table `data_url` TEXT → `data BLOB` | ✅ Added column + safe migration | This session |
+| **New** | Database migration doesn't run on existing pools | ✅ `run_schema_migrations()` separated from pool init | This session |
 | **New** | Sync daemon blocks iroh-docs CRDT path | ✅ `isDaemonReady()` checks for paired peers | This session |
 | **New** | Live events dropped during `_isMerging` | ✅ Rescheduled (2s retry) | This session |
 | **New** | False "Synced" with 0 books on fresh device | ✅ Stability guard added | This session |
 | **New** | Concurrent sync loops race | ✅ Global `sync_lock` added | This session |
+| **New** | Stale ChaCha20 encryption UI claim | ✅ Removed from DeviceSync.tsx | This session |
+| **New** | Verification test suite created | ✅ 26 tests | This session |
+| **New** | Fix script created | ✅ `scripts/fix-audit-issues.sh` | This session |
 
-**Total: 22 new fixes in this session. 17 remaining from original audit.**
+**Total: 33 new fixes in this session. 6 remaining from original audit.**
 
 ---
 
@@ -418,21 +427,17 @@ This would:
 ### Critical (P0)
 | Issue | Location | Why it matters |
 |-------|----------|----------------|
-| `.unwrap()` in `iroh_sync.rs` (16 calls) | `iroh_sync.rs:232,268,282,306,357,510,558` | Any serialization failure panics the sync thread |
-| XSS via `dangerouslySetInnerHTML` | `FeedsPage.tsx:284`, `ArticleReaderContent.tsx:101`, `Vocabulary.tsx:226` | RSS/dictionary content can inject scripts |
-| Silent `.catch(() => {})` (19 remaining) | Various locations | Real errors in SQLite, TTS, sync invisible |
+| No TanStack Query for data fetching | RSS, reader, PDF | 87+ `useEffect` calls for data fetching, no dedup/retry/cache |
 
 ### High (P1)
 | Issue | Location | Why it matters |
 |-------|----------|----------------|
-| No TanStack Query for data fetching | RSS, reader, PDF | 87+ `useEffect` calls for data fetching, no dedup/retry/cache |
 | No Rust integration tests | All Tauri commands | Backend logic untested |
 | Reader.tsx 2515 lines | `Reader.tsx` | 30+ `useState`, 31 `useEffect` — unmaintainable |
 
 ### Medium (P2)
 | Issue | Location | Why it matters |
 |-------|----------|----------------|
-| No centralized toast system | 3 duplicate implementations | Inconsistent UX |
 | Zustand stores monolithic (2520 lines) | `store/index.ts` | Should use slices pattern |
 | `soundtouchjs` unmaintained since 2019 | `package.json` | Security risk |
 | Alpha Tauri plugins in production | `@tauri-apps/plugin-app/window` | API instability risk |
@@ -442,8 +447,9 @@ This would:
 |-------|----------|----------------|
 | `reqwest` 0.11 → 0.12 | `Cargo.toml` | API improvements |
 | `rand` 0.8 → 0.9 | `Cargo.toml` | Better API |
-| `zip` 0.6 → 2.x | `Cargo.toml` | Security fixes |
+| `zip` 0.6 → 2.x | `Cargo.toml` | Security fixes (API changed, needs migration) |
 | Barrel imports not audited | `src/core/index.ts` | Tree-shaking prevention |
+| `@types/uuid` in deps (should be devDeps) | `package.json` | Correct categorization |
 
 ### Planned (Not Started)
 | Issue | Status |

@@ -718,26 +718,39 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 
 | # | Fix | Status |
 |---|------|--------|
-| 49 | **Custom ALPN fully removed from Router** — `TheoremProtocolHandler` deregistered. Zero-key encryption protocol is unreachable. iroh-docs/blobs/gossip are the only accepted ALPNs. | ✅ |
-| 50 | **`PairedDevice` TS type** — added missing `fingerprint`, `peerRelayUrl`, `syncDocId` fields (were silently dropped on every Zustand save). | ✅ |
-| 51 | **`DeviceIdentityInfo` TS type** — added missing `fingerprint` field. | ✅ |
-| 52 | **`docs_get_all_entries` JSON object corruption** — settings and reading_stats (JSON objects) no longer wrapped as opaque array strings. Now merged top-level keys correctly. | ✅ |
-| 53 | **Settings page dummy sync** — `useEffect` no longer calls `ensureResponderSyncReady()` on mount (was re-provisioning all books to doc, showing fake "Syncing..." status). | ✅ |
-| 54 | **Ephemeral sync status persisted** — `deviceSyncStatus`, `deviceSyncMessage`, `deviceSyncAt` removed from `partialize` (was showing stale yesterday's status on launch). | ✅ |
-| 55 | **Settings migration `autoSyncEnabled: false`** — removed forced override. Users keep their preference after version upgrades. | ✅ |
-| 56 | **Progressive per-entity book writes** — `provisionToIrohDocs` writes individual `book:<id>` entries. `initDocsLiveListener` processes them immediately (200ms batch), not waiting for full sync. | ✅ |
-| 57 | **Parallel file downloads** — `pullMissingBookFilesAndCovers` and `_processDownloadQueue` use 4 concurrent workers. | ✅ |
-| 58 | **Cancel sync button** — with immediate feedback, cleared download queue, and proper state cleanup. | ✅ |
-| 59 | **Unpair confirmation** — `window.confirm()` before unpairing. | ✅ |
-| 60 | **SQLite `getBookData` fallback** — reads from `books.data` column when materialized cache file missing (fixed 11 stuck books). | ✅ |
-| 61 | **`isDaemonReady()`** — checks for paired peers before delegating to daemon. Stale daemon with 0 peers no longer blocks iroh-docs CRDT sync. | ✅ |
-| 62 | **Live event retry during `_isMerging`** — `_processPendingDocs` reschedules itself (2s) instead of dropping entries. | ✅ |
-| 63 | **`PendingContentReady`+`SyncFinished` events** — emitted from Rust `subscribe_doc_events`. Frontend uses `PendingContentReady` + stability detection instead of 30s arbitrary timeout. | ✅ |
-| 64 | **Stability detection won't settle with 0 books** — fresh devices wait the full 120s timeout for data to arrive. | ✅ |
-| 65 | **Global `sync_lock`** — prevents concurrent JS timer + Rust background loop from racing each other. | ✅ |
-| 66 | **Docs audit updated** — this table now reflects actual v1.0.7 state. | ✅ |
+| 49 | **Custom ALPN removed from Router** — custom `TheoremProtocolHandler` deregistered | 🔶 Re-added for pairing only (renamed `pairing_handler`) |
+| 50 | **`PairedDevice` TS type** — added missing `fingerprint`, `peerRelayUrl`, `syncDocId` fields | ✅ |
+| 51 | **`DeviceIdentityInfo` TS type** — added missing `fingerprint` field | ✅ |
+| 52 | **`docs_get_all_entries` JSON object corruption** — settings/reading_stats now merged correctly | ✅ |
+| 53 | **Settings page provisions data after pairing** — DeviceSync mount effect calls `ensureResponderSyncReady` | ✅ |
+| 54 | **Ephemeral sync status persisted** — removed from `partialize` | ✅ |
+| 55 | **Settings migration `autoSyncEnabled: false`** — removed forced override | ✅ |
+| 56 | **Progressive per-entity book writes** — `book:<id>` entries processed immediately (200ms batch) | ✅ |
+| 57 | **Parallel file downloads** — 4 concurrent workers | ✅ |
+| 58 | **Cancel sync button** — with immediate feedback and state cleanup | ✅ |
+| 59 | **Unpair confirmation** — `window.confirm()` before unpairing | ✅ |
+| 60 | **SQLite `getBookData` fallback** — reads from `books.data` column | ✅ |
+| 61 | **`isDaemonReady()`** — checks for paired peers before delegating to daemon | ✅ |
+| 62 | **Live event retry during `_isMerging`** — reschedules (2s) instead of dropping entries | ✅ |
+| 63 | **`PendingContentReady` + `SyncFinished` events** — emitted from Rust `subscribe_doc_events` | ✅ |
+| 64 | **Stability detection won't settle with 0 books** — fresh devices wait full 120s | ✅ |
+| 65 | **Global `sync_lock`** — prevents concurrent JS timer + Rust background loop races | ✅ |
+| 66 | **Docs audit updated** — this table now reflects actual v1.0.7 state | ✅ |
+| 67 | **Database migration runs on every startup** — `run_schema_migrations()` separated from pool init | ✅ |
+| 68 | **Stale ChaCha20 encryption text removed** — DeviceSync.tsx security footer corrected | ✅ |
+| 69 | **DOMPurify sanitization** — all 10 `dangerouslySetInnerHTML` uses wrapped | ✅ |
+| 70 | **26 silent `.catch(() => {})` fixed** — now log errors with `console.error` | ✅ |
+| 71 | **15 `.unwrap()` calls in `iroh_sync.rs`** — replaced with proper error handling | ✅ |
+| 72 | **`searchBooks()` WeakMap cache** — O(1) per-query lookups | ✅ |
+| 73 | **`addBookToCollection()` O(1) lookup** — `getBookLookup` instead of `.some()` | ✅ |
+| 74 | **Database indexes added** — `idx_books_title`, `idx_books_author`, `idx_covers_book_id` | ✅ |
+| 75 | **Covers table BLOB column** — `data BLOB` added with safe migration | ✅ |
+| 76 | **React.memo on `BookCard` + `ReaderPage`** | ✅ |
+| 77 | **sonner `<Toaster />` added** to `App.tsx` root | ✅ |
+| 78 | **Fix script created** — `scripts/fix-audit-issues.sh` | ✅ |
+| 79 | **Verification tests** — 26 tests in `tests/release-1.0.7-audit-verification.test.ts` | ✅ |
 
-**Total: 58/60 fixes implemented + 8 docs.** 2 planned (daemon + worker migration).
+**Total: 62/64 fixes implemented.** 2 planned (daemon + worker migration).
 
 ### Files Created (1.0.7)
 
