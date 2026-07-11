@@ -742,7 +742,9 @@ export async function runDeviceSync(
                 if (currentDomainSet !== prevDomainSet && elapsed >= MIN_ELAPSED_MS) {
                     stablePolls = 0;
                     prevDomainSet = currentDomainSet;
-                    setStatus("syncing", `Syncing... (${booksCount} books, ${annCount} annotations)`);
+                    setStatus("syncing", booksCount > 0 || annCount > 0
+                    ? `Syncing... (${booksCount} books, ${annCount} annotations)`
+                    : "Syncing with peer...");
                 } else {
                     // Only count as stable if we actually have data (books > 0)
                     // OR the device had books before sync (no new data expected).
