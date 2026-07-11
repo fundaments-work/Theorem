@@ -677,15 +677,11 @@ export async function runDeviceSync(
 
         let contentReadyUnlisten: (() => void) | null = null;
         let syncFinishedUnlisten: (() => void) | null = null;
+        let _syncActivityDetected = false;
         try {
             const { listen: evListen } = await import("@tauri-apps/api/event");
             contentReadyUnlisten = await evListen("docs-pending-content-ready", () => {
-                // Only settle when books have ACTUALLY arrived. The initial
-                // docs-pending-content-ready fires from the auto-import sync
-                // (before docsSyncNow even starts) with 0 data. Settling on
-                // that would return "Synced 0 books" before the real sync
-                // completes. This is the critical fix for the 0-books-after-
-                // re-pairing issue.
+                _syncActivityDetected = true;
                 const currentBooks = useLibraryStore.getState().books.length;
                 if (currentBooks > 0) {
                     console.log(`[sync] Received docs-pending-content-ready with ${currentBooks} books — settling`);
@@ -695,6 +691,7 @@ export async function runDeviceSync(
                 }
             });
             syncFinishedUnlisten = await evListen("docs-sync-finished", () => {
+                _syncActivityDetected = true;
                 console.log("[sync] Received docs-sync-finished — reconciliation complete");
             });
         } catch {}
@@ -910,14 +907,25 @@ export async function runDeviceSync(
                 .map(d => domainLabels[d] || d)
                 .join(", ");
             summary = `Synced: ${parts}`;
+        } else if (needFileCount > 0) {
+            summary = `Synced: ${needFileCount} book files`;
+        } else if (!_syncActivityDetected) {
+            // docsSyncNow succeeded (start_sync returned Ok) but NO sync
+            // events (docs-pending-content-ready, docs-sync-finished) ever
+            // fired. start_sync in iroh-docs is optimistic — it returns
+            // immediately without waiting for a connection. The peer was
+            // unreachable, so data never flowed either direction.
+            summary = "Peer offline";
         } else {
-            summary = needFileCount > 0
-                ? `Synced: ${needFileCount} book files`
-                : "Already in sync";
+            summary = "Already in sync";
         }
 
         log(`Sync complete. ${summary}`);
-        setStatus("synced", summary);
+        if (!_syncActivityDetected) {
+            setStatus("error", summary);
+        } else {
+            setStatus("synced", summary);
+        }
         _dataDirty = false;
 
         return { success: true, domainsUpdated: [...changedDomains] };
