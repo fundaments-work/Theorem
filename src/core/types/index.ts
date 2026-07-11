@@ -100,6 +100,11 @@ export interface Book {
     // Sync metadata: set when this book arrived from a peer device without a local file.
     // The book's filePath/storagePath point to the remote device's paths and are not usable locally.
     syncedWithoutFile?: boolean;
+    // iroh-blobs BLAKE3 hash of the book file, set after adding to blobs store.
+    // Used by paired peers to download the actual file content via iroh-blobs.
+    blobHash?: string;
+    // iroh-blobs BLAKE3 hash of the cover image, set after adding to blobs store.
+    coverBlobHash?: string;
 }
 
 // Reading Progress

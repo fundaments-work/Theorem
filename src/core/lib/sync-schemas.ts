@@ -62,6 +62,8 @@ export const BookSchema = z.object({
     readingTime: z.number().min(0),
     completedAt: dateLike,
     syncedWithoutFile: z.boolean().optional(),
+    blobHash: z.string().optional(),
+    coverBlobHash: z.string().optional(),
 });
 
 export const BooksArraySchema = z.array(BookSchema);
@@ -344,6 +346,19 @@ export function validateSyncPayloads(
         const data = validateSyncDomain(domain as keyof typeof DOMAIN_SCHEMAS, json);
         if (data !== null) {
             valid[domain] = data;
+        }
+    }
+    // Log domain item counts so we can see what passed/failed validation
+    for (const [domain, data] of Object.entries(valid)) {
+        if (Array.isArray(data)) {
+            const incomingCount = (() => {
+                try { return JSON.parse(incomingMap[domain] ?? "[]").length; } catch { return -1; }
+            })();
+            if (incomingCount !== data.length) {
+                console.warn(`[sync-validation] ${domain}: ${incomingCount} incoming, ${data.length} valid (${incomingCount - data.length} filtered)`);
+            } else {
+                console.log(`[sync-validation] ${domain}: ${data.length} items passed validation`);
+            }
         }
     }
     return valid;

@@ -328,16 +328,9 @@ async fn auto_sync_loop(state: Arc<DaemonState>) {
         }
 
         let devices = state.server_state.paired_devices.lock().await;
-        let peers: Vec<(String, String, u16, String)> = devices
+        let peers: Vec<(String, String, u16)> = devices
             .iter()
-            .map(|(id, d)| {
-                (
-                    id.clone(),
-                    d.last_ip.clone(),
-                    d.last_port,
-                    d.symmetric_key_b64.clone(),
-                )
-            })
+            .map(|(id, d)| (id.clone(), d.last_ip.clone(), d.last_port))
             .collect();
         drop(devices);
 
@@ -345,7 +338,7 @@ async fn auto_sync_loop(state: Arc<DaemonState>) {
             continue;
         }
 
-        for (peer_id, ip, port, sym_key_b64) in &peers {
+        for (peer_id, ip, port) in &peers {
             if ip.is_empty() || *port == 0 {
                 continue;
             }
@@ -354,7 +347,7 @@ async fn auto_sync_loop(state: Arc<DaemonState>) {
                 "[sync-daemon] Auto-sync: attempting sync with peer {peer_id} at {ip}:{port}"
             );
 
-            match run_sync_round(&state.server_state, peer_id, ip, *port, sym_key_b64).await {
+            match run_sync_round(&state.server_state, peer_id, ip, *port).await {
                 Ok(incoming_count) => {
                     if incoming_count > 0 {
                         eprintln!("[sync-daemon] Auto-sync: received {incoming_count} domain(s) from {peer_id}");
@@ -373,14 +366,11 @@ async fn run_sync_round(
     peer_device_id: &str,
     ip: &str,
     port: u16,
-    sym_key_b64: &str,
 ) -> Result<usize, String> {
-    let sym_key_vec = BASE64
-        .decode(sym_key_b64)
-        .map_err(|e| format!("Decode key failed: {e}"))?;
-    let sym_key: [u8; 32] = sym_key_vec
-        .try_into()
-        .map_err(|_| "Key length invalid".to_string())?;
+    // DEPRECATED: Legacy HTTP sync protocol uses a zero-key for ChaCha20-Poly1305.
+    // Real transport security is provided by iroh QUIC. The daemon will be
+    // migrated to iroh-native sync per DAEMON_IROH_MIGRATION.md.
+    let sym_key: [u8; 32] = [0u8; 32];
     let my_device_id = &server_state.identity.device_id;
 
     let client = reqwest::Client::builder()

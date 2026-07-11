@@ -2,7 +2,8 @@
 ///
 /// Bridges the iroh P2P sync transport with the Tauri frontend via IPC commands.
 use crate::iroh_sync::{
-    self, EventCallback, IrohPeerInfo, IrohSyncEndpoint, SyncDataSnapshot, SyncTransportState,
+    self, DocsApiSnapshot, EventCallback, IrohPeerInfo, IrohSyncEndpoint, SyncDataSnapshot,
+    SyncTransportState,
 };
 use theorem_sync_core::sync_crypto::{self, DeviceIdentity};
 use theorem_sync_core::sync_protocol::*;
@@ -32,6 +33,10 @@ pub struct BackgroundSyncHandle {
     pub running: Arc<AtomicBool>,
     pub data_version: Arc<AtomicU64>,
     pub wake: Arc<tokio::sync::Notify>,
+    /// Global sync lock — prevents concurrent initiate_sync calls from
+    /// the JS timer (2min), the Rust background loop (5min), or the
+    /// daemon auto-sync (2min) from racing each other.
+    pub sync_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 // ─── Init ───
@@ -63,7 +68,6 @@ pub fn init_sync(
         app_data_dir,
         paired_devices: Mutex::new(paired_devices),
         sync_data: Mutex::new(None),
-        pending_pairing: Mutex::new(None),
         event_emitter: Some(emitter),
         docs_api: Mutex::new(None),
     });
@@ -567,18 +571,31 @@ pub async fn sync_now(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     let mut failures = Vec::new();
-    for peer_id in peer_ids {
+    let mut successes = 0u32;
+    for peer_id in peer_ids.clone() {
         match initiate_sync(app.clone(), peer_id.clone()).await {
             Ok(incoming) => {
                 if let Err(error) = queue_incoming_sync_result(&app, &peer_id, &incoming).await {
                     failures.push(format!("{peer_id}: {error}"));
+                } else {
+                    successes += 1;
                 }
             }
             Err(error) => failures.push(format!("{peer_id}: {error}")),
         }
     }
 
-    if failures.is_empty() {
+    if successes > 0 {
+        // At least one peer synced — partial success.
+        if !failures.is_empty() {
+            eprintln!(
+                "[sync] sync_now: {successes} succeeded, {} failed: {}",
+                failures.len(),
+                failures.join("; ")
+            );
+        }
+        Ok(())
+    } else if failures.is_empty() {
         Ok(())
     } else {
         Err(format!("Sync failed: {}", failures.join("; ")))
@@ -712,6 +729,11 @@ pub async fn initiate_sync(
     app: tauri::AppHandle,
     peer_device_id: String,
 ) -> Result<String, String> {
+    let bg_handle = app.state::<BackgroundSyncHandle>();
+    // Acquire global sync lock to prevent concurrent sync operations
+    // from racing each other (JS timer, Rust background timer, daemon loop).
+    let _sync_guard = bg_handle.sync_lock.lock().await;
+
     let sync_state = get_sync_state(&app)?;
 
     let devices = sync_state.transport_state.paired_devices.lock().await;
@@ -721,9 +743,13 @@ pub async fn initiate_sync(
         .ok_or("Peer not paired")?;
     drop(devices);
 
-    let sym_key: [u8; 32] = vec![0u8; 32]
-        .try_into()
-        .map_err(|_| "Key length invalid".to_string())?;
+    // DEPRECATED: Legacy ChaCha20-Poly1305 encryption with zero key.
+    // This symmetric encryption was a placeholder — real transport security
+    // is provided by iroh QUIC. This code path will be removed when the
+    // legacy LWW sync protocol is fully replaced by iroh-docs CRDT.
+    // DO NOT use this key pattern for any new sensitive data.
+    #[allow(non_upper_case_globals)]
+    let sym_key: [u8; 32] = [0u8; 32];
     let my_device_id = sync_state.transport_state.identity.device_id.clone();
 
     let sync_data_guard = sync_state.transport_state.sync_data.lock().await;
@@ -830,21 +856,29 @@ pub async fn start_background_sync(
                 continue;
             }
 
+            let mut any_success = false;
             for peer_id in &peer_ids {
                 match initiate_sync(app_clone.clone(), peer_id.clone()).await {
                     Ok(incoming) => {
                         match queue_incoming_sync_result(&app_clone, peer_id, &incoming).await {
-                            Ok(()) => eprintln!("[background-sync] Completed sync with {peer_id}"),
+                            Ok(()) => {
+                                any_success = true;
+                                eprintln!("[background-sync] Completed sync with {peer_id}");
+                            }
                             Err(e) => eprintln!(
                                 "[background-sync] Failed to queue sync data from {peer_id}: {e}"
                             ),
                         }
                     }
-                    Err(e) => eprintln!("[background-sync] Sync with {peer_id} failed: {e}"),
+                    Err(e) => {
+                        eprintln!("[background-sync] Sync with {peer_id} failed: {e} (continuing)")
+                    }
                 }
             }
 
-            last_synced_version = current_version;
+            if any_success {
+                last_synced_version = current_version;
+            }
         }
 
         let bg = app_clone.state::<BackgroundSyncHandle>();
@@ -885,42 +919,41 @@ pub async fn wake_background_sync(app: tauri::AppHandle) -> Result<(), String> {
 // ─── iroh-docs Commands (CRDT metadata sync) ───
 
 fn get_docs_api(app: &tauri::AppHandle) -> Result<iroh_docs::api::DocsApi, String> {
-    let sync_state = get_sync_state(app)?;
-    let guard = sync_state
-        .transport_state
-        .docs_api
-        .try_lock()
-        .map_err(|_| "docs api busy".to_string())?;
-    guard
-        .as_ref()
-        .map(|s| s.api.clone())
-        .ok_or_else(|| "iroh-docs not initialized".to_string())
+    let snapshot = get_docs_snapshot(app)?;
+    Ok(snapshot.api.clone())
 }
 
 fn get_docs_author(app: &tauri::AppHandle) -> Result<iroh_docs::AuthorId, String> {
-    let sync_state = get_sync_state(app)?;
-    let guard = sync_state
-        .transport_state
-        .docs_api
-        .try_lock()
-        .map_err(|_| "docs api busy".to_string())?;
-    guard
-        .as_ref()
-        .map(|s| s.author)
-        .ok_or_else(|| "iroh-docs not initialized".to_string())
+    let snapshot = get_docs_snapshot(app)?;
+    Ok(snapshot.author)
 }
 
 fn get_blobs_store(app: &tauri::AppHandle) -> Result<iroh_blobs::api::Store, String> {
+    let snapshot = get_docs_snapshot(app)?;
+    Ok(snapshot.blobs.clone())
+}
+
+/// Wait up to 5 seconds for the iroh-docs API snapshot to be initialized.
+/// The DocsApi is stored by the start_accept_loop background task, which
+/// may take time to set up blobs store, gossip, and docs handler.
+fn get_docs_snapshot(app: &tauri::AppHandle) -> Result<DocsApiSnapshot, String> {
     let sync_state = get_sync_state(app)?;
-    let guard = sync_state
-        .transport_state
-        .docs_api
-        .try_lock()
-        .map_err(|_| "docs api busy".to_string())?;
-    guard
-        .as_ref()
-        .map(|s| s.blobs.clone())
-        .ok_or_else(|| "iroh-docs not initialized".to_string())
+    for i in 0..50 {
+        {
+            let guard = sync_state
+                .transport_state
+                .docs_api
+                .try_lock()
+                .map_err(|_| "docs api busy".to_string())?;
+            if let Some(ref snapshot) = *guard {
+                return Ok(snapshot.clone());
+            }
+        }
+        if i < 49 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+    Err("iroh-docs not initialized after 5s wait".to_string())
 }
 
 #[tauri::command]
@@ -1039,7 +1072,12 @@ pub async fn docs_get_all_entries(
         let devices = sync_state.transport_state.paired_devices.lock().await;
         (snapshot.blobs.clone(), devices)
     };
-    let mut results = std::collections::HashMap::new();
+    // Group all entries by key — multiple authors may have entries for the
+    // same key (e.g., "books"). We collect ALL values per key and merge them
+    // by concatenating JSON arrays. This way, data from all authors survives
+    // instead of only the last HashMap::insert winner.
+    let mut per_key: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
 
     for (_, device) in devices.iter() {
         if device.sync_doc_id.is_empty() {
@@ -1058,12 +1096,36 @@ pub async fn docs_get_all_entries(
                         let hash = entry.content_hash();
                         if let Ok(content) = blobs.blobs().get_bytes(hash).await {
                             if let Ok(value) = String::from_utf8(content.to_vec()) {
-                                results.insert(key, value);
+                                per_key.entry(key).or_default().push(value);
                             }
                         }
                     }
                 }
             }
+        }
+    }
+
+    // Merge values for each key: if multiple authors wrote to the same key,
+    // parse each value as a JSON array and concatenate them.
+    let mut results = std::collections::HashMap::new();
+    for (key, values) in per_key {
+        if values.len() == 1 {
+            results.insert(key, values.into_iter().next().unwrap());
+        } else {
+            // Concatenate JSON arrays from all authors
+            let mut merged: Vec<serde_json::Value> = Vec::new();
+            for v in &values {
+                if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(v) {
+                    merged.extend(arr);
+                } else {
+                    // Not a JSON array — treat as opaque string
+                    merged.push(serde_json::Value::String(v.clone()));
+                }
+            }
+            results.insert(
+                key,
+                serde_json::to_string(&merged).unwrap_or_else(|_| values.join("\n")),
+            );
         }
     }
 
@@ -1074,36 +1136,63 @@ pub async fn docs_get_all_entries(
 pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Result<(), String> {
     let api = get_docs_api(&app)?;
     let sync_state = get_sync_state(&app)?;
-    let doc_id: iroh_docs::NamespaceId = {
+    let (doc_id, peer_pk, relay_url, ip, port) = {
         let devices = sync_state.transport_state.paired_devices.lock().await;
-        devices
+        let device = devices
             .get(&peer_device_id)
-            .and_then(|d| {
-                if d.sync_doc_id.is_empty() {
-                    None
-                } else {
-                    d.sync_doc_id.parse().ok()
-                }
-            })
-            .ok_or_else(|| "No sync doc for this peer".to_string())?
+            .ok_or_else(|| "Peer not paired".to_string())?;
+        let doc_id: iroh_docs::NamespaceId = if device.sync_doc_id.is_empty() {
+            return Err("No sync doc for this peer".to_string());
+        } else {
+            device
+                .sync_doc_id
+                .parse()
+                .map_err(|e| format!("parse doc id: {e}"))?
+        };
+        let pk: iroh::PublicKey = device
+            .iroh_node_id
+            .parse()
+            .map_err(|e| format!("parse peer key: {e}"))?;
+        (
+            doc_id,
+            pk,
+            device.peer_relay_url.clone(),
+            device.last_ip.clone(),
+            device.last_port,
+        )
     };
 
-    if let Ok(Some(doc)) = api.open(doc_id).await {
-        let sync_state = get_sync_state(&app)?;
-        let peer_pk: iroh::PublicKey = {
-            let devices = sync_state.transport_state.paired_devices.lock().await;
-            let device = devices
-                .get(&peer_device_id)
-                .ok_or_else(|| "Peer device not found".to_string())?;
-            device
-                .iroh_node_id
-                .parse()
-                .map_err(|e| format!("parse peer key: {e}"))?
-        };
-        let peer_addr = iroh::EndpointAddr::new(peer_pk);
-        doc.start_sync(vec![peer_addr])
-            .await
-            .map_err(|e| format!("start_sync: {e}"))?;
+    let doc = api
+        .open(doc_id)
+        .await
+        .map_err(|e| format!("open doc: {e}"))?
+        .ok_or_else(|| "Sync doc not found locally".to_string())?;
+
+    let mut peer_addr = iroh::EndpointAddr::new(peer_pk);
+    if !relay_url.is_empty() {
+        if let Ok(url) = relay_url.parse::<iroh::RelayUrl>() {
+            peer_addr = peer_addr.with_relay_url(url);
+        }
+    }
+    if let Ok(ip_addr) = ip.parse::<std::net::IpAddr>() {
+        if port > 0 {
+            peer_addr = peer_addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, port));
+        }
+    }
+    doc.start_sync(vec![peer_addr])
+        .await
+        .map_err(|e| format!("start_sync: {e}"))?;
+
+    // Update last_sync_at so the peer list shows "Synced at ..." instead of "Never synced"
+    {
+        let mut devices = sync_state.transport_state.paired_devices.lock().await;
+        if let Some(d) = devices.get_mut(&peer_device_id) {
+            d.last_sync_at = Some(sync_crypto::now_iso8601());
+            let _ = iroh_sync::save_paired_devices_to_disk(
+                &sync_state.transport_state.app_data_dir,
+                &devices,
+            );
+        }
     }
 
     Ok(())
@@ -1113,15 +1202,7 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
 
 #[tauri::command]
 pub async fn blobs_add_bytes(app: tauri::AppHandle, data: Vec<u8>) -> Result<String, String> {
-    let sync_state = get_sync_state(&app)?;
-    let guard = sync_state
-        .transport_state
-        .docs_api
-        .try_lock()
-        .map_err(|_| "docs api busy".to_string())?;
-    let snapshot = guard
-        .as_ref()
-        .ok_or("iroh-docs not initialized".to_string())?;
+    let snapshot = get_docs_snapshot(&app)?;
     snapshot
         .blobs
         .blobs()
@@ -1140,27 +1221,40 @@ pub async fn blobs_download_bytes(
     let ep = get_or_init_iroh(&app).await?;
     let sync_state = get_sync_state(&app)?;
 
-    let peer_pk: iroh::PublicKey = {
+    let (peer_pk, relay_url, ip, port) = {
         let devices = sync_state.transport_state.paired_devices.lock().await;
         let peer = devices
             .get(&peer_device_id)
             .ok_or("peer not found".to_string())?;
-        peer.iroh_node_id
+        let pk: iroh::PublicKey = peer
+            .iroh_node_id
             .parse()
-            .map_err(|e| format!("parse peer key: {e}"))?
+            .map_err(|e| format!("parse peer key: {e}"))?;
+        (
+            pk,
+            peer.peer_relay_url.clone(),
+            peer.last_ip.clone(),
+            peer.last_port,
+        )
     };
 
     let hash: iroh_blobs::Hash = hash_str.parse().map_err(|e| format!("parse hash: {e}"))?;
 
-    let guard = sync_state
-        .transport_state
-        .docs_api
-        .try_lock()
-        .map_err(|_| "docs api busy".to_string())?;
-    let snapshot = guard
-        .as_ref()
-        .ok_or("iroh-docs not initialized".to_string())?;
+    // Warm up the connection pool with relay/IP hints (same as blobs_download_file).
+    let mut peer_addr = iroh::EndpointAddr::new(peer_pk);
+    if !relay_url.is_empty() {
+        if let Ok(url) = relay_url.parse::<iroh::RelayUrl>() {
+            peer_addr = peer_addr.with_relay_url(url);
+        }
+    }
+    if let Ok(ip_addr) = ip.parse::<std::net::IpAddr>() {
+        if port > 0 {
+            peer_addr = peer_addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, port));
+        }
+    }
+    let _ = ep.endpoint.connect(peer_addr, iroh_blobs::ALPN).await;
 
+    let snapshot = get_docs_snapshot(&app)?;
     let downloader = snapshot.blobs.downloader(&ep.endpoint);
     downloader
         .download(hash, Some(peer_pk))
@@ -1178,15 +1272,7 @@ pub async fn blobs_download_bytes(
 
 #[tauri::command]
 pub async fn blobs_add_file(app: tauri::AppHandle, file_path: String) -> Result<String, String> {
-    let sync_state = get_sync_state(&app)?;
-    let guard = sync_state
-        .transport_state
-        .docs_api
-        .try_lock()
-        .map_err(|_| "docs api busy".to_string())?;
-    let snapshot = guard
-        .as_ref()
-        .ok_or("iroh-docs not initialized".to_string())?;
+    let snapshot = get_docs_snapshot(&app)?;
     snapshot
         .blobs
         .blobs()
@@ -1206,27 +1292,45 @@ pub async fn blobs_download_file(
     let ep = get_or_init_iroh(&app).await?;
     let sync_state = get_sync_state(&app)?;
 
-    let peer_pk: iroh::PublicKey = {
+    let (peer_pk, relay_url, ip, port) = {
         let devices = sync_state.transport_state.paired_devices.lock().await;
         let peer = devices
             .get(&peer_device_id)
             .ok_or("peer not found".to_string())?;
-        peer.iroh_node_id
+        let pk: iroh::PublicKey = peer
+            .iroh_node_id
             .parse()
-            .map_err(|e| format!("parse peer key: {e}"))?
+            .map_err(|e| format!("parse peer key: {e}"))?;
+        (
+            pk,
+            peer.peer_relay_url.clone(),
+            peer.last_ip.clone(),
+            peer.last_port,
+        )
     };
 
     let hash: iroh_blobs::Hash = hash_str.parse().map_err(|e| format!("parse hash: {e}"))?;
 
-    let guard = sync_state
-        .transport_state
-        .docs_api
-        .try_lock()
-        .map_err(|_| "docs api busy".to_string())?;
-    let snapshot = guard
-        .as_ref()
-        .ok_or("iroh-docs not initialized".to_string())?;
+    // Establish a connection to the peer with relay/IP hints so the
+    // endpoint's connection pool caches it. The blobs downloader
+    // reuses this connection; without hints, it would need to resolve
+    // the peer via DNS (N0), which may fail on mobile networks.
+    let mut peer_addr = iroh::EndpointAddr::new(peer_pk);
+    if !relay_url.is_empty() {
+        if let Ok(url) = relay_url.parse::<iroh::RelayUrl>() {
+            peer_addr = peer_addr.with_relay_url(url);
+        }
+    }
+    if let Ok(ip_addr) = ip.parse::<std::net::IpAddr>() {
+        if port > 0 {
+            peer_addr = peer_addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, port));
+        }
+    }
+    // Connect to warm up the connection pool; ignore error (download
+    // will retry internally if this fails).
+    let _ = ep.endpoint.connect(peer_addr, iroh_blobs::ALPN).await;
 
+    let snapshot = get_docs_snapshot(&app)?;
     let downloader = snapshot.blobs.downloader(&ep.endpoint);
     downloader
         .download(hash, Some(peer_pk))

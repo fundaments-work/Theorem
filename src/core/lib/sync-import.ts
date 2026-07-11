@@ -151,6 +151,16 @@ export function mergeBooks(
         // locations, category, manualCompletionState, progressBeforeFinish,
         // completedAt, lastClickFraction, contentHash, etc.).
         // Then selectively override with richer/newer remote values.
+
+        // Determine which side has the most recent reading activity.
+        // All reading-related fields (progress, lastReadAt, currentLocation,
+        // readingTime) are tied together — if the remote has a more recent
+        // lastReadAt, use ALL of the remote's reading data. Otherwise keep
+        // all of the local's reading data. This prevents the inconsistency
+        // where progress = max(both) but lastReadAt = newer, producing a
+        // book that says "read last week" with "read 40%" but lastReadAt = today.
+        const remoteIsNewer = toEpoch(inc.lastReadAt) > toEpoch(match.lastReadAt);
+
         const merged: Book = {
             ...match,
             // Prefer richer title/author.
@@ -168,17 +178,15 @@ export function mergeBooks(
             isbn: match.isbn || inc.isbn,
             publishedDate: match.publishedDate || inc.publishedDate,
             category: match.category || inc.category,
-            // Keep higher progress.
-            progress: Math.max(match.progress ?? 0, inc.progress ?? 0),
-            // Keep later reading time.
-            lastReadAt:
-                toEpoch(inc.lastReadAt) > toEpoch(match.lastReadAt)
-                    ? inc.lastReadAt
-                    : match.lastReadAt,
-            currentLocation:
-                toEpoch(inc.lastReadAt) > toEpoch(match.lastReadAt)
-                    ? inc.currentLocation ?? match.currentLocation
-                    : match.currentLocation,
+            // Reading fields tied together: if remote read more recently,
+            // use all of its reading data; otherwise keep local.
+            progress: remoteIsNewer
+                ? (inc.progress ?? match.progress)
+                : Math.max(match.progress ?? 0, inc.progress ?? 0),
+            lastReadAt: remoteIsNewer ? inc.lastReadAt : match.lastReadAt,
+            currentLocation: remoteIsNewer
+                ? inc.currentLocation ?? match.currentLocation
+                : match.currentLocation,
             // Reading time: take max (idempotent, monotonic counter — see TS IMP 7).
             readingTime: Math.max(match.readingTime ?? 0, inc.readingTime ?? 0),
             // Keep favorite if either flagged.
@@ -205,6 +213,10 @@ export function mergeBooks(
             contentHash: match.contentHash || inc.contentHash,
             // If local has a file, keep current sync flag.
             syncedWithoutFile: match.syncedWithoutFile,
+            // Blob hashes come from the source device (where files exist).
+            // Prefer incoming so blob hashes propagate to the receiver.
+            blobHash: inc.blobHash || match.blobHash,
+            coverBlobHash: inc.coverBlobHash || match.coverBlobHash,
             // Completion state: adopt remote if local has no completion.
             completedAt: match.completedAt || inc.completedAt,
             manualCompletionState: match.manualCompletionState ?? inc.manualCompletionState,

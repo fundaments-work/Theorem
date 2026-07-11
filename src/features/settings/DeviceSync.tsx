@@ -410,7 +410,14 @@ export function DeviceSyncSection() {
     }, [available, mobilePlatform, submitPairingCodeValue]);
 
     const handleUnpair = useCallback(async (deviceId: string) => {
+        // Confirm before unpairing
+        if (!window.confirm("Are you sure you want to unpair this device? It will need to be paired again to sync.")) {
+            return;
+        }
         try {
+            const { cancelRunningSync } = await import("../../core/lib/sync-orchestrator");
+            cancelRunningSync();
+            useUIStore.getState().setDeviceSyncStatus("idle");
             await unpairDevice(deviceId);
             setPairedDevices((prev) =>
                 prev.filter((d) => d.deviceId !== deviceId),
@@ -444,11 +451,18 @@ export function DeviceSyncSection() {
                     );
                     const devices = await getPairedDevices();
                     setPairedDevices(devices);
+                } else if (result.error === "Sync cancelled") {
+                    setSuccessMessage("Sync cancelled");
                 } else {
                     setError(result.error || "Sync failed");
                 }
             } catch (e: any) {
-                setError(e?.message || String(e));
+                const msg = e?.message || String(e);
+                if (msg === "Sync cancelled") {
+                    setSuccessMessage("Sync cancelled");
+                } else {
+                    setError(msg);
+                }
             } finally {
                 setSyncingDeviceId(null);
                 setSyncProgress(null);
@@ -456,6 +470,12 @@ export function DeviceSyncSection() {
         },
         [syncingDeviceId],
     );
+
+    const handleCancelSync = useCallback(() => {
+        syncAbortRef.current = true;
+        setSyncProgress("Cancelling...");
+        import("../../core/lib/sync-orchestrator").then(m => m.cancelRunningSync());
+    }, []);
 
     const handleCopyCode = useCallback(() => {
         if (qrData?.pairingCode) {
@@ -884,6 +904,21 @@ export function DeviceSyncSection() {
                                                 </>
                                             )}
                                         </button>
+                                        {isSyncing && (
+                                            <button
+                                                onClick={handleCancelSync}
+                                                className={cn(
+                                                    "inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[2.75rem]",
+                                                    "border border-[var(--color-border)]",
+                                                    "text-sm font-medium text-[color:var(--color-text-secondary)]",
+                                                    "hover:text-[color:var(--color-error)] hover:border-[color:color-mix(in_srgb,var(--color-error)_40%,var(--color-border))]",
+                                                    "transition-colors",
+                                                    "sm:w-auto",
+                                                )}
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() =>
                                                 handleUnpair(device.deviceId)

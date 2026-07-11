@@ -233,11 +233,25 @@ pub fn sqlite_save_book_data(app: AppHandle, id: String, data: Vec<u8>) -> Resul
 
 #[tauri::command]
 pub fn sqlite_get_book_data(app: AppHandle, id: String) -> Result<Option<Vec<u8>>, String> {
+    // Check materialized path first (book-cache/{id}.book on disk).
     if let Ok(Some(path)) = sqlite_get_materialized_book_path(app.clone(), id.clone()) {
         let content = fs::read(&path).map_err(|e| format!("Failed to read book file: {}", e))?;
         return Ok(Some(content));
     }
-    Ok(None)
+    // Fallback: read from books table data column. sqlite_save_book_data stores
+    // the file bytes there as a persistent fallback even when the on-disk cache
+    // is deleted. Without this, books imported directly into SQLite (path:
+    // sqlite://uuid) can never be hashed into iroh-blobs, leaving peers unable
+    // to download them.
+    with_connection(&app, |connection| {
+        connection
+            .query_row(
+                "SELECT data FROM books WHERE id = ?1 AND data IS NOT NULL",
+                params![id],
+                |row| row.get::<_, Vec<u8>>(0),
+            )
+            .optional()
+    })
 }
 
 #[tauri::command]

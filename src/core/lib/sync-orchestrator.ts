@@ -24,6 +24,7 @@ import {
     pushSyncDataToDaemon,
     triggerDaemonSync,
     configureDaemon,
+    getDaemonStatus,
 } from "./device-sync-daemon";
 import {
     useLibraryStore,
@@ -90,6 +91,8 @@ function setStatus(status: DeviceSyncStatus, msg?: string) {
 let responderReadyPromise: Promise<void> | null = null;
 /** Shared unlisten reference for the global responder event listener. */
 let responderEventUnlisten: (() => void) | null = null;
+/** Shared unlisten reference for the iroh-docs live event listener. */
+let _docsLiveUnlisten: (() => void) | null = null;
 
 // ─── Domain manifest builder ───
 
@@ -255,6 +258,43 @@ async function mergeIncomingData(
         // If validation fails entirely, fall through with raw incomingMap.
     }
 
+    // Aggregate per-entity keys (book:<id>, annotation:<id>, collection:<id>)
+    // from the incremental write path into their domain arrays. This allows
+    // the incremental subscription path and the full-sync provision path to
+    // coexist — the merge pipeline handles both formats transparently.
+    const perEntityBooks: Record<string, unknown>[] = [];
+    const perEntityAnnotations: Record<string, unknown>[] = [];
+    const perEntityCollections: Record<string, unknown>[] = [];
+    const perEntityKeys = new Set<string>();
+
+    for (const key of Object.keys(safeMap)) {
+        if (key.startsWith("book:") && key !== "books") {
+            try {
+                const parsed = JSON.parse(safeMap[key]);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    perEntityBooks.push(parsed);
+                    perEntityKeys.add(key);
+                }
+            } catch {}
+        } else if (key.startsWith("annotation:") && key !== "annotations") {
+            try {
+                const parsed = JSON.parse(safeMap[key]);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    perEntityAnnotations.push(parsed);
+                    perEntityKeys.add(key);
+                }
+            } catch {}
+        } else if (key.startsWith("collection:") && key !== "collections") {
+            try {
+                const parsed = JSON.parse(safeMap[key]);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    perEntityCollections.push(parsed);
+                    perEntityKeys.add(key);
+                }
+            } catch {}
+        }
+    }
+
     // ── Merge tombstones FIRST so books/annotations/collections can respect them ──
     let allTombstones = useLibraryStore.getState().deletionTombstones;
 
@@ -314,11 +354,16 @@ async function mergeIncomingData(
         currentLibState = { ...currentLibState, ...libraryPatch };
     }
 
-    if (safeMap["books"]) {
+    if (safeMap["books"] || perEntityBooks.length > 0) {
         try {
-            const incoming = JSON.parse(safeMap["books"]);
-            if (Array.isArray(incoming)) {
+            const domainBooks = safeMap["books"]
+                ? (() => { const p = JSON.parse(safeMap["books"]); return Array.isArray(p) ? p : []; })()
+                : [];
+            const incoming = [...domainBooks, ...perEntityBooks];
+            if (incoming.length > 0) {
+                console.log(`[sync-merge] books: ${incoming.length} incoming (${domainBooks.length} domain + ${perEntityBooks.length} per-entity), ${currentLibState.books.length} existing`);
                 const merged = mergeBooks(incoming, currentLibState.books, allTombstones);
+                console.log(`[sync-merge] books: ${merged.length} after merge (lost ${incoming.length + currentLibState.books.length - merged.length})`);
                 applyLibraryPatch({ books: merged });
                 markUpdated("books");
 
@@ -338,10 +383,13 @@ async function mergeIncomingData(
         }
     }
 
-    if (safeMap["annotations"]) {
+    if (safeMap["annotations"] || perEntityAnnotations.length > 0) {
         try {
-            const incoming = JSON.parse(safeMap["annotations"]);
-            if (Array.isArray(incoming)) {
+            const domainAnns = safeMap["annotations"]
+                ? (() => { const p = JSON.parse(safeMap["annotations"]); return Array.isArray(p) ? p : []; })()
+                : [];
+            const incoming = [...domainAnns, ...perEntityAnnotations];
+            if (incoming.length > 0) {
                 const merged = mergeAnnotations(incoming, currentLibState.annotations, allTombstones);
                 applyLibraryPatch({ annotations: merged });
                 markUpdated("annotations");
@@ -351,10 +399,13 @@ async function mergeIncomingData(
         }
     }
 
-    if (safeMap["collections"]) {
+    if (safeMap["collections"] || perEntityCollections.length > 0) {
         try {
-            const incoming = JSON.parse(safeMap["collections"]);
-            if (Array.isArray(incoming)) {
+            const domainCols = safeMap["collections"]
+                ? (() => { const p = JSON.parse(safeMap["collections"]); return Array.isArray(p) ? p : []; })()
+                : [];
+            const incoming = [...domainCols, ...perEntityCollections];
+            if (incoming.length > 0) {
                 const merged = mergeCollections(incoming, currentLibState.collections, allTombstones);
                 applyLibraryPatch({ collections: merged });
                 markUpdated("collections");
@@ -424,7 +475,10 @@ async function mergeIncomingData(
         try {
             const incoming = JSON.parse(safeMap["rss_feeds"]);
             if (Array.isArray(incoming)) {
-                const result = mergeRssFeeds(incoming, useRssStore.getState().feeds, allTombstones);
+                const currentFeeds = useRssStore.getState().feeds;
+                console.log(`[sync-merge] rss_feeds: ${incoming.length} incoming, ${currentFeeds.length} existing`);
+                const result = mergeRssFeeds(incoming, currentFeeds, allTombstones);
+                console.log(`[sync-merge] rss_feeds: ${result.feeds.length} after merge`);
                 useRssStore.setState({ feeds: result.feeds });
                 feedIdMap = result.feedIdMap;
                 markUpdated("rss_feeds");
@@ -437,7 +491,10 @@ async function mergeIncomingData(
         try {
             const incoming = JSON.parse(safeMap["rss_articles"]);
             if (Array.isArray(incoming)) {
-                const merged = mergeRssArticles(incoming, useRssStore.getState().articles, feedIdMap, allTombstones);
+                const currentArticles = useRssStore.getState().articles;
+                console.log(`[sync-merge] rss_articles: ${incoming.length} incoming, ${currentArticles.length} existing`);
+                const merged = mergeRssArticles(incoming, currentArticles, feedIdMap, allTombstones);
+                console.log(`[sync-merge] rss_articles: ${merged.length} after merge`);
                 useRssStore.setState({ articles: merged });
                 markUpdated("rss_articles");
             }
@@ -472,33 +529,172 @@ async function mergeIncomingData(
 // ─── File transfer after metadata merge ───
 
 /**
+ * Add local book files to the iroh-blobs store.
+ * For each book that has a real file path, add it to blobs and update
+ * the book's blobHash so the peer can download it via iroh-blobs.
+ */
+async function provisionBookFileBlobs(): Promise<void> {
+    if (!isTauri()) { console.log("[blob-provision] Skipped: not Tauri"); return; }
+    const books = useLibraryStore.getState().books;
+    console.log(`[blob-provision] Processing ${books.length} books for blob provisioning`);
+    const updates: Array<{ id: string; blobHash?: string; coverBlobHash?: string }> = [];
+    let completed = 0;
+    let skipped = 0;
+    let fromDisk = 0;
+    let fromSqlite = 0;
+    for (const book of books) {
+        // Skip books that already have a valid blobHash — avoids re-reading
+        // every book file on every sync startup (192 sequential reads on a
+        // 192-book library would take minutes). Only process books that are
+        // missing a blobHash (e.g., newly imported, or SQLite books that
+        // were skipped before the SQLite-fallthrough fix).
+        if (book.blobHash) {
+            skipped++;
+            completed++;
+            continue;
+        }
+
+        const filePath = book.filePath || book.storagePath;
+        let hash: string | null = null;
+
+        // Try disk path first (fastest — iroh-blobs reads the file directly).
+        if (filePath && !filePath.startsWith("sqlite://") && !filePath.startsWith("idb://")) {
+            hash = await blobsAddFile(filePath);
+            if (hash) fromDisk++;
+        }
+
+        // Fallback: read from SQLite blob store.
+        if (!hash) {
+            try {
+                const { getBookData } = await import("./storage");
+                const data = await getBookData(book.id, filePath);
+                if (data && data.byteLength > 0) {
+                    console.log(`[blob-provision] Reading ${book.title || book.id} from SQLite (${data.byteLength} bytes)`);
+                    hash = await blobsAddBytes(new Uint8Array(data));
+                    if (hash) fromSqlite++;
+                }
+            } catch {
+            }
+        }
+
+        if (!hash) {
+            console.log(`[blob-provision] No file for book: ${book.title || book.id} (path: ${filePath})`);
+        }
+
+        completed++;
+        if (hash && hash !== book.blobHash) {
+            updates.push({ id: book.id, blobHash: hash });
+        }
+        // Add covers that are local files (not data URLs)
+        if (book.coverPath && !book.coverPath.startsWith("data:") && !book.coverPath.startsWith("http")) {
+            const coverHash = await blobsAddFile(book.coverPath);
+            if (coverHash && coverHash !== book.coverBlobHash) {
+                const existing = updates.find(u => u.id === book.id);
+                if (existing) existing.coverBlobHash = coverHash;
+                else updates.push({ id: book.id, coverBlobHash: coverHash });
+            }
+        }
+    }
+    console.log(`[blob-provision] ${updates.length} books got new blob hashes (${completed} processed, ${fromDisk} from disk, ${fromSqlite} from SQLite, ${skipped} skipped)`);
+    if (updates.length > 0) {
+        useLibraryStore.setState((state) => ({
+            books: state.books.map((b) => {
+                const update = updates.find(u => u.id === b.id);
+                return update ? { ...b, ...update } : b;
+            }),
+        }));
+        console.log(`[blob-provision] State updated with ${updates.length} blob hashes`);
+    }
+}
+
+/**
  * After metadata merge, attempt to pull the binary book data and covers
- * from the peer.
+ * from the peer using iroh-blobs.
  *
  * For each successfully transferred book file:
  *  - Clears `syncedWithoutFile`
- *  - Sets `storagePath` to `sqlite://<id>` so the storage layer resolves it
- *  - Resets `coverExtractionDone` so Library auto-extracts the cover
+ *  - Sets `storagePath` to the downloaded file path
+ *  - Updates `blobHash`
  */
 async function pullMissingBookFilesAndCovers(
-    _peerDeviceId: string,
+    peerDeviceId: string,
     _syncedBookIds: string[],
     _log: (msg: string) => void,
 ): Promise<void> {
+    if (!isTauri()) return;
     const books = useLibraryStore.getState().books;
-    const needFiles = books.filter((b) => b.syncedWithoutFile === true);
-    console.log(`[sync] needFiles: ${needFiles.length} / ${books.length} books syncedWithoutFile=true`);
+    const needFiles = books.filter((b) => b.syncedWithoutFile === true && b.blobHash);
+    const noBlobHash = books.filter((b) => b.syncedWithoutFile === true && !b.blobHash);
+    console.log(`[sync] needFiles: ${needFiles.length} with blobHash, ${noBlobHash.length} without blobHash (${books.length} total)`);
 
-    // File transfer now uses iroh-blobs (blobs_add_file / blobs_download_file).
-    // Covers also use iroh-blobs (add_slice / get_bytes).
-    // Files/cover data flows through docs entry metadata + blobs protocol.
-    // No legacy chunked transfer needed.
-    for (const book of needFiles) {
-        useLibraryStore.getState().updateBook(book.id, {
-            syncedWithoutFile: false,
-            filePath: `sqlite://${book.id}`,
-            storagePath: `sqlite://${book.id}`,
-        });
+    if (needFiles.length === 0) {
+        if (noBlobHash.length > 0) {
+            console.log(`[sync] ${noBlobHash.length} books have no blobHash — source device must rebuild with blob provisioning`);
+        }
+        return;
+    }
+
+    let appDir = "";
+    try {
+        const { appDataDir } = await import("@tauri-apps/api/path");
+        appDir = await appDataDir();
+    } catch {
+        console.error("[sync] Failed to get app data dir");
+        return;
+    }
+
+    // Parallel download with concurrency limit
+    const CONCURRENCY = 4;
+    let completed = 0;
+    let index = 0;
+    let failures = 0;
+
+    const downloadBook = async () => {
+        while (index < needFiles.length && !_syncCancelled) {
+            const book = needFiles[index++];
+            const destPath = `${appDir}/book-cache/${book.id}.book`;
+            setStatus("syncing", `Downloading ${completed + 1}/${needFiles.length} books...`);
+            const success = await blobsDownloadFile(peerDeviceId, book.blobHash!, destPath);
+            if (success) {
+                completed++;
+                useLibraryStore.setState((state) => ({
+                    books: state.books.map((b) =>
+                        b.id === book.id
+                            ? { ...b, syncedWithoutFile: false, filePath: destPath, storagePath: destPath }
+                            : b
+                    ),
+                }));
+            } else {
+                failures++;
+                console.error(`[sync] Failed to download: ${book.title} (${book.id})`);
+            }
+        }
+    };
+
+    const workers = Array.from({ length: Math.min(CONCURRENCY, needFiles.length) }, () => downloadBook());
+    await Promise.all(workers);
+
+    if (_syncCancelled) {
+        console.log("[sync] Sync cancelled — aborting file download");
+        _syncCancelled = false;
+    }
+
+    console.log(`[sync] Downloaded ${completed}/${needFiles.length} files (${failures} failed)`);
+
+    // Also attempt cover downloads for books that have coverBlobHash
+    const needCovers = books.filter((b) => b.coverBlobHash && (!b.coverPath || b.coverPath.startsWith("data:")));
+    if (needCovers.length > 0) {
+        for (const book of needCovers) {
+            const bytes = await blobsDownloadBytes(peerDeviceId, book.coverBlobHash!);
+            if (bytes && bytes.length > 0) {
+                try {
+                    const blob = new Blob([Uint8Array.from(bytes)]);
+                    const { saveCoverImage } = await import("./storage");
+                    await saveCoverImage(book.id, blob);
+                } catch {
+                }
+            }
+        }
     }
 }
 
@@ -524,18 +720,50 @@ export async function ensureResponderSyncReady(): Promise<void> {
         return;
     }
 
+    // Wait for ALL Zustand stores to fully rehydrate from persistent storage
+    // before provisioning data to iroh-docs. Without this, we'd write stale
+    // or empty state (e.g., 0 books) to the doc. Missing any store means a
+    // peer syncing during this window would see incomplete data and could
+    // overwrite local state with empty/partial data (data annihilation).
+    for (let i = 0; i < 50; i++) { // up to 5 seconds
+        const settingsReady = useSettingsStore.persist?.hasHydrated?.() ?? false;
+        const libraryReady = useLibraryStore.persist?.hasHydrated?.() ?? false;
+        const vocabReady = useVocabularyStore.persist?.hasHydrated?.() ?? true;
+        const rssReady = useRssStore.persist?.hasHydrated?.() ?? true;
+        if (settingsReady && libraryReady && vocabReady && rssReady) break;
+        await new Promise(r => setTimeout(r, 100));
+    }
+
     if (responderReadyPromise) {
         await responderReadyPromise;
         return;
     }
 
     responderReadyPromise = (async () => {
-        // Provision data FIRST so the server never starts without data.
+        // Provision legacy responder data for backward compat.
         await provisionSyncData();
         await irohStart();
 
+        // Compute blob hashes for local book files BEFORE provisioning to
+        // iroh-docs. Without this, books written to the doc lack blobHash
+        // and peers receive metadata without the ability to download files.
+        await provisionBookFileBlobs();
+
+        // Provision ALL local state (books, annotations, RSS, settings,
+        // vocabulary, stats) to the iroh-docs doc so paired peers can
+        // sync it. Books now include blobHash so the peer can download files.
+
         if (!responderEventUnlisten) {
             responderEventUnlisten = await initSyncEventListener();
+        }
+
+        // Register the iroh-docs live event listener so real-time
+        // CRDT updates from the peer are applied to Zustand stores.
+        // This must be registered here, not just in startAutoSync(),
+        // because startAutoSync has a 15-second startup delay and
+        // a manual sync triggered before that would miss all events.
+        if (!_docsLiveUnlisten) {
+            _docsLiveUnlisten = await initDocsLiveListener();
         }
     })();
 
@@ -561,23 +789,99 @@ export async function runDeviceSync(
         return { success: false, domainsUpdated: [], error: "Sync already in progress" };
     }
     _isMerging = true;
+    _currentSyncPeerId = peerDeviceId;
     const log = (msg: string) => {
         onProgress?.(msg);
     };
+
+    // Snapshot book count before sync so the poll loop can detect whether
+    // data actually arrived. On a fresh device (0 books), we must not settle
+    // quickly — either data arrives or we hit the full timeout.
+    const _bookCountBeforeSync = useLibraryStore.getState().books.length;
 
     try {
         setStatus("syncing", "Preparing data...");
         log("Gathering local data snapshot...");
 
-        // 1. Provision local state to iroh-docs — live events handle incoming data
-        await provisionToIrohDocs();
-        await docsSyncNow(peerDeviceId);
-
-        // 2. Ensure the Rust responder is ready for incoming connections
-        log("Ensuring sync responder is ready...");
+        // 1. Ensure the iroh Router + responder are ready FIRST so both sides
+        //    can accept incoming iroh-docs sync connections. Starting the Router
+        //    after docsSyncNow is backwards — the peer's connection attempt
+        //    would fail because this device's Router isn't accepting yet.
+        log("Starting sync responder...");
         await ensureResponderSyncReady();
 
-        // 3. Re-provision for responder mode
+        // 2. Before syncing, force-rehash any books that are missing blobHash.
+        //    On the first sync after the SQLite-fallthrough fix, books stored in
+        //    the database (filePath: sqlite://...) would have been skipped by the
+        //    old code. This ensures they get blobHash before the sync sends them
+        //    to the peer, so the peer can download the actual file.
+        //    This runs even if ensureResponderSyncReady already ran (it does this
+        //    on first startup but the guard prevents re-execution).
+        {
+            const books = useLibraryStore.getState().books;
+            const missingHash = books.filter(b => !b.blobHash);
+            if (missingHash.length > 0) {
+                if (_syncCancelled) {
+                    throw new Error("Sync cancelled");
+                }
+                log(`Re-hashing ${missingHash.length} books missing blobHash...`);
+                setStatus("syncing", `Preparing ${missingHash.length} books...`);
+                await provisionBookFileBlobs();
+                await provisionToIrohDocs();
+            }
+        }
+
+        // 3. Set up iroh-docs completion listeners BEFORE triggering sync.
+        //    docsSyncNow → doc.start_sync() triggers reconciliation asynchronously.
+        //    The PendingContentReady event fires when all content blobs from the
+        //    last sync round are available locally. If we register AFTER sync,
+        //    we may miss a fast-firing event and wait until the poll timeout.
+        log("Waiting for peer data via CRDT sync...");
+        setStatus("syncing", "Connecting to peer...");
+
+        let syncResolve: (() => void) | null = null;
+        const syncPromise = new Promise<void>((res) => { syncResolve = res; });
+        let settled = false;
+        const settle = () => { if (!settled) { settled = true; syncResolve?.(); } };
+
+        let contentReadyUnlisten: (() => void) | null = null;
+        let syncFinishedUnlisten: (() => void) | null = null;
+        try {
+            const { listen: evListen } = await import("@tauri-apps/api/event");
+            contentReadyUnlisten = await evListen("docs-pending-content-ready", () => {
+                // Only settle when books have ACTUALLY arrived. The initial
+                // docs-pending-content-ready fires from the auto-import sync
+                // (before docsSyncNow even starts) with 0 data. Settling on
+                // that would return "Synced 0 books" before the real sync
+                // completes. This is the critical fix for the 0-books-after-
+                // re-pairing issue.
+                const currentBooks = useLibraryStore.getState().books.length;
+                if (currentBooks > 0) {
+                    console.log(`[sync] Received docs-pending-content-ready with ${currentBooks} books — settling`);
+                    settle();
+                } else {
+                    console.log("[sync] Received docs-pending-content-ready with 0 books — waiting for actual data");
+                }
+            });
+            syncFinishedUnlisten = await evListen("docs-sync-finished", () => {
+                console.log("[sync] Received docs-sync-finished — reconciliation complete");
+            });
+        } catch {}
+
+        // 4. Trigger iroh-docs CRDT sync with the peer.
+        log("Syncing with peer via iroh-docs...");
+        const docsSynced = await docsSyncNow(peerDeviceId);
+        if (!docsSynced) {
+            log("Warning: iroh-docs sync initiation returned false");
+            // If docsSyncNow failed (no shared doc, peer unreachable), don't
+            // sit in a poll loop — return immediately with a clear error.
+            if (_bookCountBeforeSync === 0) {
+                // Fresh device with no pairing → immediate failure.
+                return { success: false, domainsUpdated: [], error: "No sync document — device may need re-pairing after data reset" };
+            }
+        }
+
+        // 5. Also provision the legacy responder data (file serving, etc.)
         try {
             const { domains, manifest } = await buildDomainsAndManifest();
             await setSyncData(domains, manifest, buildBookFilePaths());
@@ -585,21 +889,152 @@ export async function runDeviceSync(
             // Non-critical — will be re-provisioned on next sync.
         }
 
-        // 4. Wait briefly for live events to arrive from the peer
-        await new Promise(r => setTimeout(r, 3000));
+        // Stability-based backoff: poll hydrateFromIrohDocs every 3s.
+        // Exit when 3 consecutive polls produce no changes AND data arrived.
+        // On a fresh device (0 books before sync), don't settle until either
+        // books arrive from the peer or the full timeout is reached.
+        let stablePolls = 0;
+        const STABLE_THRESHOLD = 3;
+        const MAX_WAIT_SECS = 120;
+        const POLL_INTERVAL_MS = 3000;
+        const MIN_ELAPSED_MS = 5000;
 
-        // 5. Pull missing book files from peer
-        // Books are already populated in Zustand via live events (docs-entry-changed).
-        // If not (first sync), attempt hydration from docs as fallback.
-        const currentBooks = useLibraryStore.getState().books;
-        if (currentBooks.length === 0) {
-            await hydrateFromIrohDocs();
+        const waitStart = Date.now();
+        let prevDomainSet = "";
+        const pollLoop = async () => {
+            while (!settled) {
+                if (_syncCancelled) {
+                    console.log("[sync] Sync cancelled during poll");
+                    settle();
+                    break;
+                }
+                await new Promise<void>(r => setTimeout(r, 500));
+                if (_syncCancelled || settled) {
+                    if (_syncCancelled) console.log("[sync] Sync cancelled during poll (fast check)");
+                    settle();
+                    break;
+                }
+                await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS - 500));
+                if (settled) break;
+
+                await hydrateFromIrohDocs();
+                const booksCount = useLibraryStore.getState().books.length;
+                const annCount = useLibraryStore.getState().annotations.length;
+                const currentDomainSet = `${booksCount}|${annCount}`;
+                const elapsed = Date.now() - waitStart;
+
+                if (currentDomainSet !== prevDomainSet && elapsed >= MIN_ELAPSED_MS) {
+                    stablePolls = 0;
+                    prevDomainSet = currentDomainSet;
+                    setStatus("syncing", `Syncing... (${booksCount} books, ${annCount} annotations)`);
+                } else {
+                    // Only count as stable if we actually have data (books > 0)
+                    // OR the device had books before sync (no new data expected).
+                    // On a fresh device (0 books before sync), never increment
+                    // stability — wait for data or timeout.
+                    if (booksCount > 0 || _bookCountBeforeSync > 0) {
+                        stablePolls++;
+                    }
+                }
+
+                if (stablePolls >= STABLE_THRESHOLD && elapsed >= MIN_ELAPSED_MS) {
+                    console.log(`[sync] Stable for ${STABLE_THRESHOLD} polls, elapsed=${elapsed}ms — done`);
+                    settle();
+                    break;
+                }
+                if (elapsed >= MAX_WAIT_SECS * 1000) {
+                    console.log(`[sync] Max wait ${MAX_WAIT_SECS}s reached with ${booksCount} books — done`);
+                    settle();
+                    break;
+                }
+            }
+        };
+
+        // Run poll loop concurrently with event-driven resolution.
+        // Promise.race gives us the first signal, but the pollLoop promise
+        // continues running until settled — we await it below to ensure the
+        // final hydrate step ran.
+        await Promise.race([
+            pollLoop(),
+            syncPromise,
+        ]);
+        // Wait for the poll loop to actually finish its current iteration.
+        // At this point settled=true so the next poll iteration will break.
+        // Give it a couple seconds to exit cleanly.
+        await new Promise<void>(r => setTimeout(r, 1500));
+        contentReadyUnlisten?.();
+        syncFinishedUnlisten?.();
+
+        // Final hydrate: read ALL entries from the doc. By now content blobs
+        // from the peer should be available (PendingContentReady fired or we
+        // hit the stability threshold). This catches any entries that were
+        // pending during the poll loop and ensures the store is up to date
+        // BEFORE we compute the book count for the summary message.
+        // Also force-drain any buffered live events that accumulated during
+        // the sync (they were deferred while _isMerging was true).
+        await hydrateFromIrohDocs();
+        // Check cancellation before status updates in drain/poll.
+        // cancelRunningSync sets _syncCancelled = true and status="idle";
+        // we must not overwrite that with "syncing".
+        if (_syncCancelled) {
+            log("Sync cancelled before final merge");
+            return { success: false, domainsUpdated: [], error: "Sync cancelled" };
         }
+
+        // Drain buffered live events synchronously before releasing _isMerging.
+        // Without this, entries from ContentReady events that arrived during
+        // the poll loop would only be processed after _isMerging is released
+        // in the finally block — AFTER the summary message is computed.
+        const liveEntries: Record<string, string> = {};
+        for (const [k, v] of _pendingDocsEntries) {
+            liveEntries[k] = v;
+        }
+        _pendingDocsEntries.clear();
+        if (Object.keys(liveEntries).length > 0) {
+            await mergeIncomingData(liveEntries);
+        }
+        // Flush any remaining progressive book batch
+        if (_progressiveBookTimer) clearTimeout(_progressiveBookTimer);
+        _flushProgressiveBooks();
+
+        const postWaitBooks = useLibraryStore.getState().books.length;
+        console.log(`[sync] After wait: ${postWaitBooks} books`);
+
+        // Check for cancellation before proceeding to file downloads.
+        // The poll loop may have been cancelled; if so, return immediately.
+        if (_syncCancelled) {
+            log("Sync cancelled after metadata sync");
+            _syncCancelled = false;
+            return { success: false, domainsUpdated: [], error: "Sync cancelled" };
+        }
+
+        // 6. Pull missing book files from peer
         const syncedBookIds = useLibraryStore.getState().books.map(b => b.id);
+        const needFileCount = useLibraryStore.getState().books.filter(b => b.syncedWithoutFile === true && b.blobHash).length;
+        if (needFileCount > 0) {
+            log(`Downloading ${needFileCount} book files...`);
+            setStatus("syncing", `Downloading ${needFileCount} books...`);
+        }
         await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, log);
 
+        // 7. After pulling files, re-add them to the local blobs store so
+        //    blobHash is updated, then re-provision to iroh-docs so any
+        //    newly-downloaded books can be shared with other peers.
+        if (!_syncCancelled) {
+            await provisionBookFileBlobs();
+            await provisionToIrohDocs();
+        }
+
         const bookCount = useLibraryStore.getState().books.length;
-        const summary = bookCount > 0
+        let summary: string;
+        if (_syncCancelled) {
+            _syncCancelled = false;
+            summary = "Sync cancelled";
+            log(summary);
+            setStatus("idle", summary);
+            return { success: false, domainsUpdated: [], error: "Sync cancelled" };
+        }
+        summary = bookCount > 0
             ? `Synced ${bookCount} books`
             : "Sync complete — no changes yet";
 
@@ -623,6 +1058,8 @@ export async function runDeviceSync(
         return { success: false, domainsUpdated: [], error: errMsg };
     } finally {
         _isMerging = false;
+        _currentSyncPeerId = null;
+        _processDownloadQueue();
     }
 }
 
@@ -669,6 +1106,23 @@ let _syncCompleteTimer: ReturnType<typeof setTimeout> | null = null;
 let _lastValidPeerDeviceId: string | undefined;
 
 let _isMerging = false;
+/** Set to true to cancel a running sync session. */
+let _syncCancelled = false;
+
+/**
+ * Cancel the currently running sync if any. The sync loop and download
+ * workers check this flag between operations and abort cleanly.
+ */
+export function cancelRunningSync(): void {
+    _syncCancelled = true;
+    // Clear download queue so no new downloads start after cancel
+    _fileDownloadQueue.splice(0, _fileDownloadQueue.length);
+    // Cancel any pending progressive book flush
+    if (_progressiveBookTimer) clearTimeout(_progressiveBookTimer);
+    _progressiveBookBatch = [];
+    setStatus("idle", "Sync cancelled");
+    console.log("[sync] Cancel requested — _syncCancelled = true");
+}
 
 /**
  * Handles the "sync-incoming-complete" event from the Rust backend.
@@ -808,6 +1262,199 @@ export async function initSyncEventListener(): Promise<() => void> {
     return responderEventUnlisten;
 }
 
+/**
+ * Initialize the iroh-docs live event listener for real-time CRDT updates.
+ * When a peer modifies a doc entry and the CRDT sync delivers it, the Rust
+ * backend emits "docs-entry-changed". This listener applies those changes
+ * to Zustand stores.
+ *
+ * Returns an unlisten function for cleanup. Safe to call multiple times —
+ * only registers once.
+ */
+let _docsLiveTimer: ReturnType<typeof setTimeout> | null = null;
+const _pendingDocsEntries = new Map<string, string>();
+/** Peer being synced — set by runDeviceSync so live events can trigger file downloads. */
+let _currentSyncPeerId: string | null = null;
+
+// Progressive book batch — per-entity book events are accumulated for 200ms
+// then merged in a single setState call to avoid 192 individual re-renders.
+let _progressiveBookBatch: any[] = [];
+let _progressiveBookTimer: ReturnType<typeof setTimeout> | null = null;
+
+function _flushProgressiveBooks() {
+    if (_progressiveBookBatch.length === 0) return;
+    const batch = _progressiveBookBatch.splice(0);
+    const state = useLibraryStore.getState();
+    const merged = mergeBooks(batch, state.books, state.deletionTombstones);
+    useLibraryStore.setState({ books: merged });
+
+    // Don't update status if sync was cancelled — cancelRunningSync set it to "idle"
+    if (!_syncCancelled) {
+        const total = useLibraryStore.getState().books.length;
+        setStatus("syncing", `Syncing... (${total} books)`);
+    }
+
+    // Enqueue file downloads for newly added books with blobHash
+    for (const book of batch) {
+        const added = merged.find((b: any) => b.id === book.id);
+        if (added?.syncedWithoutFile && added.blobHash && _currentSyncPeerId) {
+            _enqueueFileDownload(added.id, added.blobHash, added.coverBlobHash);
+        }
+    }
+}
+
+// Background download queue
+const _fileDownloadQueue: Array<{ bookId: string; blobHash: string; coverBlobHash?: string }> = [];
+let _fileDownloadActive = false;
+
+async function _processDownloadQueue() {
+    if (_fileDownloadActive || _fileDownloadQueue.length === 0) return;
+    _fileDownloadActive = true;
+    const peerId = _currentSyncPeerId;
+    if (!peerId || !isTauri()) { _fileDownloadActive = false; return; }
+
+    let appDir = "";
+    try {
+        const { appDataDir } = await import("@tauri-apps/api/path");
+        appDir = await appDataDir();
+    } catch { _fileDownloadActive = false; return; }
+
+    const CONCURRENCY = 4;
+    let completed = 0;
+    const total = _fileDownloadQueue.length;
+    let index = 0;
+
+    const downloadWorker = async () => {
+        while (index < _fileDownloadQueue.length) {
+            const { bookId, blobHash, coverBlobHash } = _fileDownloadQueue[index++];
+            const book = useLibraryStore.getState().books.find(b => b.id === bookId);
+            if (!book || !book.syncedWithoutFile) continue;
+
+            const destPath = `${appDir}/book-cache/${bookId}.book`;
+            setStatus("syncing", `Downloading ${book.title || bookId} (${completed + 1}/${total})`);
+            const success = await blobsDownloadFile(peerId, blobHash, destPath);
+            if (success) {
+                completed++;
+                useLibraryStore.setState(state => ({
+                    books: state.books.map(b =>
+                        b.id === bookId ? { ...b, syncedWithoutFile: false, filePath: destPath, storagePath: destPath } : b
+                    )
+                }));
+            }
+
+            if (coverBlobHash) {
+                const coverBytes = await blobsDownloadBytes(peerId, coverBlobHash);
+                if (coverBytes && coverBytes.length > 0) {
+                    try {
+                        const blob = new Blob([Uint8Array.from(coverBytes)], { type: "image/jpeg" });
+                        const { saveCoverImage } = await import("./storage");
+                        await saveCoverImage(bookId, blob);
+                    } catch {}
+                }
+            }
+        }
+    };
+
+    const workers = Array.from({ length: Math.min(CONCURRENCY, total) }, () => downloadWorker());
+    await Promise.all(workers);
+    // Clear processed items from queue
+    _fileDownloadQueue.splice(0, index);
+    _fileDownloadActive = false;
+}
+
+function _enqueueFileDownload(bookId: string, blobHash: string, coverBlobHash?: string) {
+    // Deduplicate
+    if (_fileDownloadQueue.some(q => q.bookId === bookId)) return;
+    _fileDownloadQueue.push({ bookId, blobHash, coverBlobHash });
+    _processDownloadQueue();
+}
+
+export async function initDocsLiveListener(): Promise<() => void> {
+    if (!isTauri()) {
+        return () => {};
+    }
+
+    if (_docsLiveUnlisten) {
+        return _docsLiveUnlisten;
+    }
+
+    const { listen } = await import("@tauri-apps/api/event");
+
+    const _processPendingDocs = async () => {
+        if (_isMerging) {
+            _docsLiveTimer = setTimeout(_processPendingDocs, 2000);
+            return;
+        }
+        const entries: Record<string, string> = {};
+        for (const [k, v] of _pendingDocsEntries) {
+            entries[k] = v;
+        }
+        _pendingDocsEntries.clear();
+        await mergeIncomingData(entries);
+    };
+
+    const rawUnlisten = await listen<{ key: string; value: string }>("docs-entry-changed", (event) => {
+        const { key, value } = event.payload;
+
+        // ── Per-entity keys: process PROGRESSIVELY ──
+        // Books, annotations, and collections written as individual entries
+        // (by subscribeZustandToIrohDocs or provisionToIrohDocs) appear in
+        // the library IMMEDIATELY — no waiting for a batch merge. Files start
+        // downloading the moment a book arrives with a blobHash.
+        if (key.startsWith("book:")) {
+            try {
+                const parsed = JSON.parse(value);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && parsed.id) {
+                    _progressiveBookBatch.push(parsed);
+                    if (_progressiveBookTimer) clearTimeout(_progressiveBookTimer);
+                    _progressiveBookTimer = setTimeout(_flushProgressiveBooks, 200);
+                }
+            } catch {}
+            return;
+        }
+        if (key.startsWith("annotation:")) {
+            try {
+                const parsed = JSON.parse(value);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && parsed.id) {
+                    const state = useLibraryStore.getState();
+                    const merged = mergeAnnotations([parsed], state.annotations, state.deletionTombstones);
+                    useLibraryStore.setState({ annotations: merged });
+                }
+            } catch {}
+            return;
+        }
+        if (key.startsWith("collection:")) {
+            try {
+                const parsed = JSON.parse(value);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && parsed.id) {
+                    const state = useLibraryStore.getState();
+                    const merged = mergeCollections([parsed], state.collections, state.deletionTombstones);
+                    useLibraryStore.setState({ collections: merged });
+                }
+            } catch {}
+            return;
+        }
+
+        // ── Domain-level keys: batch for full merge pipeline ──
+        _pendingDocsEntries.set(key, value);
+        if (_docsLiveTimer) clearTimeout(_docsLiveTimer);
+        _docsLiveTimer = setTimeout(_processPendingDocs, 500);
+    });
+
+    _docsLiveUnlisten = () => {
+        rawUnlisten();
+        if (_docsLiveTimer) clearTimeout(_docsLiveTimer);
+        _docsLiveTimer = null;
+        if (_progressiveBookTimer) clearTimeout(_progressiveBookTimer);
+        _progressiveBookTimer = null;
+        _progressiveBookBatch = [];
+        _pendingDocsEntries.clear();
+        _docsLiveUnlisten = null;
+    };
+
+    return _docsLiveUnlisten;
+}
+
 // ─── Auto-Sync ───
 
 /** How often to auto-sync in the background (milliseconds). */
@@ -844,14 +1491,17 @@ async function autoSyncRound(force = false): Promise<void> {
 
     _isAutoSyncing = true;
     try {
-        let allPeersSynced = true;
+        let anyPeerSynced = false;
         for (const device of devices) {
             const result = await runDeviceSync(device.deviceId);
-            if (!result.success) {
-                allPeersSynced = false;
+            if (result.success) {
+                anyPeerSynced = true;
             }
         }
-        _dataDirty = !allPeersSynced;
+        // Only mark clean if at least one peer synced successfully.
+        // A single failed peer (offline, timeout) shouldn't block
+        // subsequent sync rounds or leave _dataDirty stuck.
+        _dataDirty = !anyPeerSynced;
     } catch {
         // Silent — peer might be offline; retry next cycle
     } finally {
@@ -860,11 +1510,30 @@ async function autoSyncRound(force = false): Promise<void> {
 }
 
 /**
+ * Check if the sync daemon is running AND has paired devices.
+ * Without peers, delegating to the daemon is pointless — the JS iroh-docs
+ * sync path handles pairing and CRDT reconciliation independently.
+ * Also guards against the case where a stale daemon process (e.g., from a
+ * different install prefix with a different data directory) responds to the
+ * health check but has no pairing data for THIS app.
+ */
+async function isDaemonReady(): Promise<boolean> {
+    try {
+        const running = await isDaemonRunning();
+        if (!running) return false;
+        const status = await getDaemonStatus();
+        return (status?.paired_devices?.length ?? 0) > 0;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Schedule a debounced sync triggered by data mutations.
  * Call this after annotations, books, or settings change.
  * The sync is batched: rapid mutations only trigger one sync.
  *
- * If the sync daemon is running, pushes latest data to it.
+ * If the sync daemon is running and has paired peers, pushes latest data to it.
  * Falls back to JS-based auto-sync round.
  *
  * Also wakes the Rust background sync loop so it can sync
@@ -882,8 +1551,8 @@ export function scheduleMutationSync(): void {
     _mutationSyncTimer = setTimeout(async () => {
         _mutationSyncTimer = null;
 
-        // If daemon is available, push data to it and let it handle sync.
-        if (await isDaemonRunning().catch(() => false)) {
+        // If daemon is available AND has paired peers, let it handle sync.
+        if (await isDaemonReady()) {
             const built = await buildDomainsAndManifest();
             const bfp = buildBookFilePaths();
             await pushSyncDataToDaemon(built.domains, built.manifest, bfp);
@@ -943,8 +1612,10 @@ export async function startAutoSync(): Promise<() => void> {
         return () => {};
     }
 
-    // Check if the sync daemon is running — if so, delegate to it.
-    const daemonAvailable = await isDaemonRunning();
+    // Check if the daemon is running AND has paired peers — if so, delegate.
+    // Without peers the daemon can't sync, and a stale daemon (from a different
+    // install prefix with no pairing data) would block the iroh-docs CRDT path.
+    const daemonAvailable = await isDaemonReady();
     if (daemonAvailable) {
         const cleanups: Array<() => void> = [];
 
@@ -1029,34 +1700,11 @@ export async function startAutoSync(): Promise<() => void> {
     }
 
     // 5. iroh-docs live event listener — real-time Zustand updates from peers
+    //    Uses the shared initDocsLiveListener which also guards against
+    //    double-registration (already registered by ensureResponderSyncReady).
     if (isTauri()) {
         try {
-            const { listen } = await import("@tauri-apps/api/event");
-            const unlisten = await listen<{ key: string; value: string }>("docs-entry-changed", (event) => {
-                const { key, value } = event.payload;
-                try {
-                    const parsed = JSON.parse(value);
-                    if (key === "books" && Array.isArray(parsed)) {
-                        useLibraryStore.setState({ books: parsed });
-                    } else if (key === "annotations" && Array.isArray(parsed)) {
-                        useLibraryStore.setState({ annotations: parsed });
-                    } else if (key === "collections" && Array.isArray(parsed)) {
-                        useLibraryStore.setState({ collections: parsed });
-                    } else if (key === "deletion_tombstones" && Array.isArray(parsed)) {
-                        useLibraryStore.setState({ deletionTombstones: parsed });
-                    } else if (key === "vocabulary" && Array.isArray(parsed)) {
-                        useVocabularyStore.setState({ vocabularyTerms: parsed });
-                    } else if (key === "settings" && typeof parsed === "object") {
-                        useSettingsStore.setState({ settings: parsed });
-                    } else if (key === "reading_stats" && typeof parsed === "object") {
-                        useSettingsStore.setState({ stats: parsed });
-                    } else if (key === "rss_feeds" && Array.isArray(parsed)) {
-                        useRssStore.setState({ feeds: parsed });
-                    } else if (key === "rss_articles" && Array.isArray(parsed)) {
-                        useRssStore.setState({ articles: parsed });
-                    }
-                } catch {}
-            });
+            const unlisten = await initDocsLiveListener();
             cleanups.push(unlisten);
         } catch {
             // iroh-docs event not available
@@ -1127,13 +1775,22 @@ export async function docsGetAllEntries(): Promise<Record<string, string> | null
     } catch { return null; }
 }
 
-/** Trigger iroh-docs reconciliation with a specific peer. */
+/** Trigger iroh-docs reconciliation with a specific peer. Times out after 120s. */
 export async function docsSyncNow(peerDeviceId: string): Promise<boolean> {
     try {
         const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("docs_sync_now", { peerDeviceId });
+        const timeout = new Promise<boolean>((_, reject) =>
+            setTimeout(() => reject(new Error("docs_sync_now timed out after 120s")), 120_000)
+        );
+        await Promise.race([
+            invoke("docs_sync_now", { peerDeviceId }),
+            timeout,
+        ]);
         return true;
-    } catch { return false; }
+    } catch (e) {
+        console.error(`[sync] docsSyncNow failed: ${e}`);
+        return false;
+    }
 }
 
 // ─── iroh-docs ↔ Zustand bridge ───
@@ -1149,12 +1806,27 @@ export async function provisionToIrohDocs(): Promise<boolean> {
         const rss = useRssStore.getState();
         const settings = useSettingsStore.getState();
 
-        await docsSetEntry("books", JSON.stringify(lib.books.map(
-            ({ filePath: _f, storagePath: _s, coverPath, locations: _l, ...book }) => ({
-                ...book,
+        // Write the full books array as a domain-level entry (batch path).
+        // Also write each book as an individual per-entity entry so the
+        // receiver can process them PROGRESSIVELY — books appear in the
+        // library one at a time instead of all at once after the full merge.
+        const serializeBook = (book: typeof lib.books[number]) => {
+            const { filePath: _f, storagePath: _s, coverPath, locations: _l, ...stripped } = book;
+            return JSON.stringify({
+                ...stripped,
+                ...(book.blobHash ? { blobHash: book.blobHash } : {}),
+                ...(book.coverBlobHash ? { coverBlobHash: book.coverBlobHash } : {}),
                 ...(coverPath && !coverPath.startsWith("data:") ? { coverPath } : {}),
-            })
-        )));
+            });
+        };
+
+        await docsSetEntry("books", JSON.stringify(lib.books.map(b => JSON.parse(serializeBook(b)))));
+        // Write per-entity book entries for progressive processing on the receiver.
+        // The receiver's live listener processes book:<id> events immediately,
+        // adding the book to the library and starting file downloads.
+        for (const book of lib.books) {
+            await docsSetEntry(`book:${book.id}`, serializeBook(book));
+        }
         await docsSetEntry("annotations", JSON.stringify(lib.annotations));
         await docsSetEntry("collections", JSON.stringify(lib.collections));
         await docsSetEntry("deletion_tombstones", JSON.stringify(lib.deletionTombstones));
@@ -1172,95 +1844,25 @@ export async function provisionToIrohDocs(): Promise<boolean> {
 
 /**
  * Hydrate Zustand from iroh-docs entries.
- * Replaces mergeIncomingData(). Reads all entries and applies to stores.
+ * Reads all entries (merged from all authors by docs_get_all_entries),
+ * then feeds them to mergeIncomingData for proper LWW merging per entity.
  */
 export async function hydrateFromIrohDocs(): Promise<string[]> {
     const domainsUpdated: string[] = [];
     try {
         const entries = await docsGetAllEntries();
-        if (!entries) return domainsUpdated;
+        if (!entries || Object.keys(entries).length === 0) return domainsUpdated;
 
-        if (entries["books"]) {
-            try {
-                const books = JSON.parse(entries["books"]);
-                if (Array.isArray(books)) {
-                    useLibraryStore.setState({ books });
-                    domainsUpdated.push("books");
-                }
-            } catch {}
-        }
-        if (entries["annotations"]) {
-            try {
-                const annotations = JSON.parse(entries["annotations"]);
-                if (Array.isArray(annotations)) {
-                    useLibraryStore.setState({ annotations });
-                    domainsUpdated.push("annotations");
-                }
-            } catch {}
-        }
-        if (entries["collections"]) {
-            try {
-                const collections = JSON.parse(entries["collections"]);
-                if (Array.isArray(collections)) {
-                    useLibraryStore.setState({ collections });
-                    domainsUpdated.push("collections");
-                }
-            } catch {}
-        }
-        if (entries["deletion_tombstones"]) {
-            try {
-                const tombstones = JSON.parse(entries["deletion_tombstones"]);
-                if (Array.isArray(tombstones)) {
-                    useLibraryStore.setState({ deletionTombstones: tombstones });
-                    domainsUpdated.push("deletion_tombstones");
-                }
-            } catch {}
-        }
-        if (entries["vocabulary"]) {
-            try {
-                const terms = JSON.parse(entries["vocabulary"]);
-                if (Array.isArray(terms)) {
-                    useVocabularyStore.setState({ vocabularyTerms: terms });
-                    domainsUpdated.push("vocabulary");
-                }
-            } catch {}
-        }
-        if (entries["settings"]) {
-            try {
-                const settings = JSON.parse(entries["settings"]);
-                if (settings) {
-                    useSettingsStore.setState({ settings });
-                    domainsUpdated.push("settings");
-                }
-            } catch {}
-        }
-        if (entries["reading_stats"]) {
-            try {
-                const stats = JSON.parse(entries["reading_stats"]);
-                if (stats) {
-                    useSettingsStore.setState({ stats });
-                    domainsUpdated.push("reading_stats");
-                }
-            } catch {}
-        }
-        if (entries["rss_feeds"]) {
-            try {
-                const feeds = JSON.parse(entries["rss_feeds"]);
-                if (Array.isArray(feeds)) {
-                    useRssStore.setState({ feeds });
-                    domainsUpdated.push("rss_feeds");
-                }
-            } catch {}
-        }
-        if (entries["rss_articles"]) {
-            try {
-                const articles = JSON.parse(entries["rss_articles"]);
-                if (Array.isArray(articles)) {
-                    useRssStore.setState({ articles });
-                    domainsUpdated.push("rss_articles");
-                }
-            } catch {}
-        }
+        // Pass all entries through mergeIncomingData which handles
+        // per-entity LWW dedup via the existing mergeBooks/mergeAnnotations
+        // etc. functions. This is the same merge path used by the legacy
+        // sync protocol — it handles tombstones first, dedup by ID, etc.
+        const localSettingsUpdatedAt = useSettingsStore.getState().settingsLastModifiedAt || new Date(0).toISOString();
+        const { domainsUpdated: merged } = await mergeIncomingData(
+            entries,
+            localSettingsUpdatedAt,
+        );
+        return merged;
     } catch {}
 
     return domainsUpdated;
@@ -1323,7 +1925,10 @@ export async function blobsDownloadFile(
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("blobs_download_file", { peerDeviceId, hashStr: hash, destPath });
         return true;
-    } catch { return false; }
+    } catch (e) {
+        console.error(`[blob-download] blobs_download_file failed: hash=${hash.substring(0, 16)}... dest=${destPath.substring(destPath.lastIndexOf("/") + 1)} error=${e}`);
+        return false;
+    }
 }
 
 /**
@@ -1340,29 +1945,84 @@ export function subscribeZustandToIrohDocs(): () => void {
     let prevCollections = useLibraryStore.getState().collections;
     let prevTombstones = useLibraryStore.getState().deletionTombstones;
 
+    const serializeBook = (book: ReturnType<typeof useLibraryStore.getState>["books"][number]) => {
+        const { filePath: _f, storagePath: _s, coverPath, locations: _l, ...stripped } = book;
+        return JSON.stringify({
+            ...stripped,
+            ...(book.blobHash ? { blobHash: book.blobHash } : {}),
+            ...(book.coverBlobHash ? { coverBlobHash: book.coverBlobHash } : {}),
+            ...(coverPath && !coverPath.startsWith("data:") ? { coverPath } : {}),
+        });
+    };
+
     unsubs.push(useLibraryStore.subscribe((state) => {
         if (state.books !== prevBooks) {
+            const prev = prevBooks;
             prevBooks = state.books;
-            scheduleDocsWrite("books", () => {
-                docsSetEntry("books", JSON.stringify(state.books.map(
-                    ({ filePath: _f, storagePath: _s, coverPath, locations: _l, ...book }) => ({
-                        ...book,
-                        ...(coverPath && !coverPath.startsWith("data:") ? { coverPath } : {}),
-                    })
-                )));
-            });
+            const currMap = new Map(state.books.map(b => [b.id, b]));
+            const prevMap = new Map(prev.map(b => [b.id, b]));
+            const hasDeletions = [...prevMap.keys()].some(id => !currMap.has(id));
+            if (hasDeletions) {
+                scheduleDocsWrite("books", () =>
+                    docsSetEntry("books", JSON.stringify(state.books.map(b =>
+                        JSON.parse(serializeBook(b))))));
+            } else {
+                for (const [id, book] of currMap) {
+                    const prevBook = prevMap.get(id);
+                    const currSerialized = serializeBook(book);
+                    if (!prevBook) {
+                        scheduleDocsWrite("book:" + id, () =>
+                            docsSetEntry("book:" + id, currSerialized));
+                    } else {
+                        const prevSerialized = serializeBook(prevBook);
+                        if (currSerialized !== prevSerialized) {
+                            scheduleDocsWrite("book:" + id, () =>
+                                docsSetEntry("book:" + id, currSerialized));
+                        }
+                    }
+                }
+            }
         }
         if (state.annotations !== prevAnnotations) {
+            const prev = prevAnnotations;
             prevAnnotations = state.annotations;
-            scheduleDocsWrite("annotations", () => docsSetEntry("annotations", JSON.stringify(state.annotations)));
+            const currMap = new Map(state.annotations.map(a => [a.id, a]));
+            const prevMap = new Map(prev.map(a => [a.id, a]));
+            const hasDeletions = [...prevMap.keys()].some(id => !currMap.has(id));
+            if (hasDeletions) {
+                scheduleDocsWrite("annotations", () =>
+                    docsSetEntry("annotations", JSON.stringify(state.annotations)));
+            } else {
+                for (const [id, ann] of currMap) {
+                    if (!prevMap.has(id) || JSON.stringify(ann) !== JSON.stringify(prevMap.get(id)!)) {
+                        scheduleDocsWrite("annotation:" + id, () =>
+                            docsSetEntry("annotation:" + id, JSON.stringify(ann)));
+                    }
+                }
+            }
         }
         if (state.collections !== prevCollections) {
+            const prev = prevCollections;
             prevCollections = state.collections;
-            scheduleDocsWrite("collections", () => docsSetEntry("collections", JSON.stringify(state.collections)));
+            const currMap = new Map(state.collections.map(c => [c.id, c]));
+            const prevMap = new Map(prev.map(c => [c.id, c]));
+            const hasDeletions = [...prevMap.keys()].some(id => !currMap.has(id));
+            if (hasDeletions) {
+                scheduleDocsWrite("collections", () =>
+                    docsSetEntry("collections", JSON.stringify(state.collections)));
+            } else {
+                for (const [id, col] of currMap) {
+                    if (!prevMap.has(id) || JSON.stringify(col) !== JSON.stringify(prevMap.get(id)!)) {
+                        scheduleDocsWrite("collection:" + id, () =>
+                            docsSetEntry("collection:" + id, JSON.stringify(col)));
+                    }
+                }
+            }
         }
         if (state.deletionTombstones !== prevTombstones) {
             prevTombstones = state.deletionTombstones;
-            scheduleDocsWrite("deletion_tombstones", () => docsSetEntry("deletion_tombstones", JSON.stringify(state.deletionTombstones)));
+            scheduleDocsWrite("deletion_tombstones", () =>
+                docsSetEntry("deletion_tombstones", JSON.stringify(state.deletionTombstones)));
         }
     }));
 

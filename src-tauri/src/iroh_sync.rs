@@ -8,10 +8,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use futures::StreamExt;
 use iroh::endpoint::{self, presets::N0, RelayMode};
 use iroh::protocol::{ProtocolHandler, Router};
 use iroh::{PublicKey, SecretKey};
+use iroh_docs::engine::LiveEvent;
 use tauri::Emitter;
 use tokio::sync::Mutex;
 
@@ -57,7 +57,6 @@ pub struct SyncTransportState {
     pub app_data_dir: PathBuf,
     pub paired_devices: Mutex<HashMap<String, PairedDevice>>,
     pub sync_data: Mutex<Option<SyncDataSnapshot>>,
-    pub pending_pairing: Mutex<Option<PendingPairing>>,
     pub event_emitter: Option<EventCallback>,
     pub docs_api: Mutex<Option<DocsApiSnapshot>>,
 }
@@ -313,304 +312,16 @@ pub async fn sync_with_peer(
     Ok(incoming)
 }
 
-// ─── Client-Side File Transfer ───
-
-pub struct FileTransferResult {
-    pub transferred: Vec<String>,
-    pub failed: Vec<FileTransferError>,
-    pub unavailable: Vec<String>,
-}
-
-pub struct FileTransferError {
-    pub book_id: String,
-    pub error: String,
-}
-
-pub struct CoverTransferResult {
-    pub transferred: Vec<String>,
-    pub failed: Vec<FileTransferError>,
-    pub unavailable: Vec<String>,
-    pub covers: HashMap<String, String>,
-}
-
-/// Pull book files from a peer over an iroh connection.
-/// Uses bounded concurrency to transfer files in parallel.
-/// Emits `sync-file-progress` Tauri events when `app` is provided.
-pub async fn pull_files_via_iroh(
-    app: Option<&tauri::AppHandle>,
-    conn: endpoint::Connection,
-    sym_key: [u8; 32],
-    my_device_id: String,
-    book_ids: &[String],
-    cache_dir: std::path::PathBuf,
-) -> Result<FileTransferResult, String> {
-    let mut result = FileTransferResult {
-        transferred: Vec::new(),
-        failed: Vec::new(),
-        unavailable: Vec::new(),
-    };
-
-    // Check availability first
-    let avail_req = FileAvailabilityRequest {
-        book_ids: book_ids.to_vec(),
-    };
-    let enc_req = sync_crypto::encrypt_payload(&sym_key, &serde_json::to_vec(&avail_req).unwrap())?;
-    let auth_req = AuthenticatedRequest {
-        device_id: my_device_id.clone(),
-        payload: enc_req,
-    };
-    let resp_val = iroh_request(&conn, "file_availability", &auth_req).await?;
-    let enc_resp: EncryptedPayload =
-        serde_json::from_value(resp_val).map_err(|e| format!("parse avail enc: {e}"))?;
-    let resp_bytes = sync_crypto::decrypt_payload(&sym_key, &enc_resp)?;
-    let avail: FileAvailabilityResponse =
-        serde_json::from_slice(&resp_bytes).map_err(|e| format!("parse avail: {e}"))?;
-
-    let available_set: std::collections::HashSet<&str> =
-        avail.available_ids.iter().map(|s| s.as_str()).collect();
-    for id in book_ids {
-        if !available_set.contains(id.as_str()) {
-            result.unavailable.push(id.clone());
-        }
-    }
-
-    let total_files = avail.available_ids.len();
-    if total_files == 0 {
-        return Ok(result);
-    }
-
-    // Bounded concurrency: 3 on mobile, 8 otherwise
-    let max_concurrent = if cfg!(target_os = "android") { 3 } else { 8 };
-
-    // Build download futures in a for-loop so each owns its captured values
-    type DownloadFut =
-        std::pin::Pin<Box<dyn std::future::Future<Output = (String, Result<u64, String>)> + Send>>;
-    let mut book_downloads: Vec<DownloadFut> = Vec::with_capacity(total_files);
-    for book_id in avail.available_ids {
-        let conn = conn.clone();
-        let my_device_id = my_device_id.clone();
-        let cache_dir = cache_dir.clone();
-        book_downloads.push(Box::pin(async move {
-            let size =
-                pull_single_file_iroh(&conn, &sym_key, &my_device_id, &book_id, &cache_dir).await;
-            (book_id, size)
-        }));
-    }
-
-    let mut stream = futures::stream::iter(book_downloads).buffer_unordered(max_concurrent);
-    let mut completed_files: usize = 0;
-
-    while let Some((book_id, size_result)) = stream.next().await {
-        completed_files += 1;
-        match size_result {
-            Ok(_size) => {
-                result.transferred.push(book_id);
-            }
-            Err(e) => {
-                result.failed.push(FileTransferError { book_id, error: e });
-            }
-        }
-        // Emit per-file progress (including failed ones so count is accurate)
-        if let Some(app) = app {
-            app.emit(
-                "sync-file-progress",
-                serde_json::to_string(
-                    &serde_json::json!({"phase": "transferring", "completed_files": completed_files, "total_files": total_files}),
-                )
-                .unwrap_or_default(),
-            )
-            .ok();
-        }
-    }
-
-    // Emit final completion event
-    if let Some(app) = app {
-        app.emit(
-            "sync-file-progress",
-            serde_json::to_string(
-                &serde_json::json!({"phase": "complete", "total_files": total_files}),
-            )
-            .unwrap_or_default(),
-        )
-        .ok();
-    }
-
-    Ok(result)
-}
-
-async fn pull_single_file_iroh(
-    conn: &endpoint::Connection,
-    sym_key: &[u8; 32],
-    my_device_id: &str,
-    book_id: &str,
-    cache_dir: &std::path::Path,
-) -> Result<u64, String> {
-    let pull_response = request_file_pull(conn, sym_key, my_device_id, book_id, None).await?;
-
-    if !pull_response.available {
-        return Err("File not available on peer".to_string());
-    }
-
-    let meta = pull_response.meta.ok_or("File response missing metadata")?;
-    if !pull_response.chunks.is_empty() {
-        return Err("Metadata response unexpectedly included file data".to_string());
-    }
-
-    let mut file_data = Vec::with_capacity(meta.total_size as usize);
-    for chunk_index in 0..meta.total_chunks {
-        let chunk_response =
-            request_file_pull(conn, sym_key, my_device_id, book_id, Some(chunk_index)).await?;
-        if !chunk_response.available {
-            return Err(format!(
-                "Chunk {chunk_index} is no longer available on peer"
-            ));
-        }
-        if chunk_response.chunks.len() != 1 {
-            return Err(format!(
-                "Chunk {chunk_index} response count mismatch: expected 1 got {}",
-                chunk_response.chunks.len()
-            ));
-        }
-
-        let chunk = &chunk_response.chunks[0];
-        if chunk.chunk_index != chunk_index || chunk.total_chunks != meta.total_chunks {
-            return Err(format!("Chunk {chunk_index} metadata mismatch"));
-        }
-        let decrypted = sync_crypto::decrypt_file_chunk(sym_key, &chunk.data_b64)
-            .map_err(|e| format!("chunk {chunk_index} decrypt fail: {e}"))?;
-        file_data.extend_from_slice(&decrypted);
-    }
-
-    if file_data.len() as u64 != meta.total_size {
-        return Err(format!(
-            "File size mismatch: expected {} got {}",
-            meta.total_size,
-            file_data.len()
-        ));
-    }
-
-    let file_path = cache_dir.join(format!("{book_id}.book"));
-    let bytes_written = file_data.len() as u64;
-    std::fs::write(&file_path, &file_data).map_err(|e| format!("write file: {e}"))?;
-
-    Ok(bytes_written)
-}
-
-async fn request_file_pull(
-    conn: &endpoint::Connection,
-    sym_key: &[u8; 32],
-    my_device_id: &str,
-    book_id: &str,
-    chunk_index: Option<u32>,
-) -> Result<FilePullResponse, String> {
-    let pull_req = FilePullRequest {
-        book_id: book_id.to_string(),
-        chunk_index,
-    };
-    let enc_req = sync_crypto::encrypt_payload(sym_key, &serde_json::to_vec(&pull_req).unwrap())?;
-    let auth_req = AuthenticatedRequest {
-        device_id: my_device_id.to_string(),
-        payload: enc_req,
-    };
-    let resp_val = iroh_request(conn, "file_pull", &auth_req).await?;
-    serde_json::from_value(resp_val).map_err(|e| format!("parse file pull: {e}"))
-}
-
-/// Pull cover images from a peer over an iroh connection.
-pub async fn pull_covers_via_iroh(
-    conn: endpoint::Connection,
-    sym_key: [u8; 32],
-    my_device_id: String,
-    book_ids: &[String],
-) -> Result<CoverTransferResult, String> {
-    eprintln!(
-        "[iroh-sync] pull_covers_via_iroh: pulling {} covers",
-        book_ids.len()
-    );
-    let mut result = CoverTransferResult {
-        transferred: Vec::new(),
-        failed: Vec::new(),
-        unavailable: Vec::new(),
-        covers: HashMap::new(),
-    };
-
-    if book_ids.is_empty() {
-        return Ok(result);
-    }
-
-    // Covers are small — fetch with higher concurrency
-    let max_concurrent = if cfg!(target_os = "android") { 8 } else { 16 };
-
-    // Build cover futures in a for-loop so each owns its captured values
-    type CoverFut = std::pin::Pin<
-        Box<dyn std::future::Future<Output = (String, Result<CoverPullResponse, String>)> + Send>,
-    >;
-    let mut cover_futures: Vec<CoverFut> = Vec::with_capacity(book_ids.len());
-    for book_id in book_ids.iter().cloned() {
-        let conn = conn.clone();
-        let my_device_id = my_device_id.clone();
-        cover_futures.push(Box::pin(async move {
-            let cover_req = CoverPullRequest {
-                book_id: book_id.clone(),
-            };
-            let enc_req = match sync_crypto::encrypt_payload(
-                &sym_key,
-                &serde_json::to_vec(&cover_req).unwrap(),
-            ) {
-                Ok(v) => v,
-                Err(e) => return (book_id, Err(e)),
-            };
-            let auth_req = AuthenticatedRequest {
-                device_id: my_device_id,
-                payload: enc_req,
-            };
-            match iroh_request(&conn, "cover_pull", &auth_req).await {
-                Ok(resp_val) => match serde_json::from_value::<EncryptedPayload>(resp_val) {
-                    Ok(enc_resp) => match sync_crypto::decrypt_payload(&sym_key, &enc_resp) {
-                        Ok(resp_bytes) => {
-                            match serde_json::from_slice::<CoverPullResponse>(&resp_bytes) {
-                                Ok(cover) => (book_id, Ok(cover)),
-                                Err(e) => (book_id, Err(format!("parse cover: {e}"))),
-                            }
-                        }
-                        Err(e) => (book_id, Err(e)),
-                    },
-                    Err(e) => (book_id, Err(format!("parse cover enc: {e}"))),
-                },
-                Err(e) => (book_id, Err(e)),
-            }
-        }));
-    }
-
-    let mut stream = futures::stream::iter(cover_futures).buffer_unordered(max_concurrent);
-    while let Some((book_id, cover_res)) = stream.next().await {
-        match cover_res {
-            Ok(cover) => {
-                if !cover.available {
-                    result.unavailable.push(book_id);
-                } else if let Some(data_url) = cover.data_url {
-                    result.transferred.push(book_id.clone());
-                    result.covers.insert(book_id, data_url);
-                } else {
-                    result.failed.push(FileTransferError {
-                        book_id,
-                        error: "Cover response missing data".to_string(),
-                    });
-                }
-            }
-            Err(e) => {
-                eprintln!("[iroh-sync]   cover pull error: {e}");
-            }
-        }
-    }
-
-    Ok(result)
-}
-
 // ─── Full iroh Stack: Docs + Blobs + Gossip + Router ───
 
 /// Subscribe to iroh-docs live events for a document and emit Tauri events
 /// to the frontend when entries change. Enables real-time Zustand updates.
+///
+/// Always tries get_bytes immediately on InsertRemote (content may be
+/// available if downloaded during the sync session). If not available,
+/// tracks the entry and waits for ContentReady / PendingContentReady.
+/// Also emits docs-sync-finished and docs-pending-content-ready events
+/// for the frontend to detect sync completion.
 pub fn subscribe_doc_events(
     app: tauri::AppHandle,
     doc: iroh_docs::api::Doc,
@@ -625,22 +336,103 @@ pub fn subscribe_doc_events(
             }
         };
         use futures::StreamExt;
+        let mut pending: std::collections::HashMap<iroh_blobs::Hash, String> =
+            std::collections::HashMap::new();
+
         while let Some(event) = stream.next().await {
-            if let Ok(iroh_docs::engine::LiveEvent::InsertRemote { entry, .. }) = event {
-                let key = String::from_utf8_lossy(entry.key()).to_string();
-                if let Ok(content) = blobs.blobs().get_bytes(entry.content_hash()).await {
-                    if let Ok(value) = String::from_utf8(content.to_vec()) {
-                        #[derive(serde::Serialize, Clone)]
-                        struct EntryPayload {
-                            key: String,
-                            value: String,
+            match event {
+                Ok(LiveEvent::InsertRemote { entry, .. }) => {
+                    let key = String::from_utf8_lossy(entry.key()).to_string();
+                    let hash = entry.content_hash();
+                    if let Ok(content) = blobs.blobs().get_bytes(hash).await {
+                        if let Ok(value) = String::from_utf8(content.to_vec()) {
+                            let app_clone = app.clone();
+                            #[derive(serde::Serialize, Clone)]
+                            struct EntryPayload {
+                                key: String,
+                                value: String,
+                            }
+                            app_clone
+                                .emit(
+                                    "docs-entry-changed",
+                                    EntryPayload {
+                                        key: key.clone(),
+                                        value,
+                                    },
+                                )
+                                .ok();
+                            pending.insert(hash, key);
                         }
-                        app.emit("docs-entry-changed", EntryPayload { key, value })
-                            .ok();
+                    } else {
+                        pending.insert(hash, key);
                     }
                 }
+                Ok(LiveEvent::ContentReady { hash }) => {
+                    if let Some(key) = pending.remove(&hash) {
+                        if let Ok(content) = blobs.blobs().get_bytes(hash).await {
+                            if let Ok(value) = String::from_utf8(content.to_vec()) {
+                                let app_clone = app.clone();
+                                #[derive(serde::Serialize, Clone)]
+                                struct EntryPayload {
+                                    key: String,
+                                    value: String,
+                                }
+                                app_clone
+                                    .emit("docs-entry-changed", EntryPayload { key, value })
+                                    .ok();
+                            }
+                        }
+                    }
+                }
+                Ok(LiveEvent::PendingContentReady) => {
+                    let remaining: Vec<(iroh_blobs::Hash, String)> = pending.drain().collect();
+                    for (hash, key) in remaining {
+                        if let Ok(content) = blobs.blobs().get_bytes(hash).await {
+                            if let Ok(value) = String::from_utf8(content.to_vec()) {
+                                let app_clone = app.clone();
+                                #[derive(serde::Serialize, Clone)]
+                                struct EntryPayload {
+                                    key: String,
+                                    value: String,
+                                }
+                                app_clone
+                                    .emit("docs-entry-changed", EntryPayload { key, value })
+                                    .ok();
+                            }
+                        }
+                    }
+                    #[derive(serde::Serialize, Clone)]
+                    struct PendingContentPayload {
+                        remaining_count: usize,
+                    }
+                    let _ = app.emit(
+                        "docs-pending-content-ready",
+                        PendingContentPayload {
+                            remaining_count: pending.len(),
+                        },
+                    );
+                }
+                Ok(LiveEvent::SyncFinished(event)) => {
+                    #[derive(serde::Serialize, Clone)]
+                    struct SyncFinishedPayload {
+                        peer: String,
+                        synced: bool,
+                    }
+                    let _ = app.emit(
+                        "docs-sync-finished",
+                        SyncFinishedPayload {
+                            peer: event.peer.to_string(),
+                            synced: true,
+                        },
+                    );
+                }
+                Err(err) => {
+                    eprintln!("[iroh-sync] doc event stream error: {err}");
+                }
+                _ => {}
             }
         }
+        eprintln!("[iroh-sync] doc event stream ended (doc closed or Router shut down)");
     });
 }
 
@@ -825,9 +617,9 @@ async fn handle_peer_connection(
             continue;
         }
 
-        // Look up symmetric key
-        let sym_key: Option<[u8; 32]> = None;
-
+        // Legacy protocol uses deterministic key for backward compatibility.
+        // Both sides agree on [0u8; 32]. DEPRECATED — new sync uses iroh-docs CRDT.
+        let sym_key: Option<[u8; 32]> = Some([0u8; 32]);
         let sym_key = match sym_key {
             Some(k) => k,
             None => {
@@ -882,15 +674,6 @@ fn make_peer_info(state: &SyncTransportState) -> IrohPeerInfo {
 }
 
 // ─── Pairing over iroh ───
-
-/// Ephemeral pairing state stored during a pairing session.
-#[derive(Clone)]
-#[allow(dead_code)]
-pub struct PendingPairing {
-    pub host_secret_bytes: [u8; 32],
-    pub nonce: [u8; 32],
-    pub created_at: std::time::Instant,
-}
 
 async fn dispatch_request(
     state: &Arc<SyncTransportState>,

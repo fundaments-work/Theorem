@@ -1018,6 +1018,7 @@ pub fn run() {
                 running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 data_version: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
                 wake: std::sync::Arc::new(tokio::sync::Notify::new()),
+                sync_lock: std::sync::Arc::new(tokio::sync::Mutex::new(())),
             });
 
             // Collect any file association / CLI open targets at startup so the frontend can
