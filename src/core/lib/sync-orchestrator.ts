@@ -614,6 +614,7 @@ export async function runDeviceSync(
     }
     _isMerging = true;
     _currentSyncPeerId = peerDeviceId;
+    _syncCancelled = false; // Clear stale cancel flag from previous round
     const log = (msg: string) => {
         onProgress?.(msg);
     };
