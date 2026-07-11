@@ -12,9 +12,7 @@
  */
 
 import {
-    setSyncData,
     irohStart,
-    getIncomingSyncData,
     getPairedDevices,
     updateSyncNotification,
     setAutoSyncFlag,
@@ -43,31 +41,6 @@ import { saveCoverImage } from "./storage";
 
 // ─── Helpers ───
 
-/** Compute SHA-256 hex digest of a string using SubtleCrypto. */
-async function sha256Hex(input: string): Promise<string> {
-    const data = new TextEncoder().encode(input);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function computeLatestDate<T>(
-    items: T[],
-    dateSelector: (item: T) => Date | string | undefined | null,
-): string {
-    let latest = 0;
-    for (const item of items) {
-        const val = dateSelector(item);
-        if (val) {
-            const time = new Date(val as string | number).getTime();
-            if (!Number.isNaN(time) && time > latest) {
-                latest = time;
-            }
-        }
-    }
-    return latest > 0 ? new Date(latest).toISOString() : new Date(0).toISOString();
-}
-
 function setStatus(status: DeviceSyncStatus, msg?: string) {
     useUIStore.getState().setDeviceSyncStatus(
         status,
@@ -83,145 +56,9 @@ function setStatus(status: DeviceSyncStatus, msg?: string) {
 /** Guards concurrent responder bootstrap attempts. */
 let responderReadyPromise: Promise<void> | null = null;
 /** Shared unlisten reference for the global responder event listener. */
-let responderEventUnlisten: (() => void) | null = null;
+
 /** Shared unlisten reference for the iroh-docs live event listener. */
 let _docsLiveUnlisten: (() => void) | null = null;
-
-// ─── Domain manifest builder ───
-
-async function buildDomainsAndManifest() {
-    const library = useLibraryStore.getState();
-    const vocabulary = useVocabularyStore.getState();
-    const rss = useRssStore.getState();
-    const settingsStore = useSettingsStore.getState();
-
-    // Garbage-collect expired tombstones before serialising.
-    // mergeTombstones([], existing) is a no-op union that only prunes by TTL.
-    const gcTombstones = mergeTombstones([], library.deletionTombstones);
-    if (gcTombstones.length !== library.deletionTombstones.length) {
-        useLibraryStore.setState({ deletionTombstones: gcTombstones });
-    }
-
-    // Build a settings payload that excludes device-specific settings.
-    // Use the persisted settingsLastModifiedAt for LWW comparison
-    // instead of generating "now" (which makes both sides look equally recent).
-    const settingsUpdatedAt = settingsStore.settingsLastModifiedAt || new Date(0).toISOString();
-    const { deviceSync: _excluded, ...syncableSettings } = settingsStore.settings;
-    const settingsPayload = {
-        ...syncableSettings,
-        _settingsUpdatedAt: settingsUpdatedAt,
-    };
-
-    const domains: Record<string, string> = {
-        books: JSON.stringify(library.books.map(({ filePath: _f, storagePath: _s, coverPath, locations: _l, ...book }) => ({
-            ...book,
-            // Strip data URL covers — they are base64-encoded images that can
-            // be 100+ KB each, blowing up the JSON payload to hundreds of MB.
-            // The peer pulls covers on-demand via the dedicated cover pull endpoint.
-            // Strip locations (foliate-js pagination data) — stored in SQLite BLOB,
-            // never needed for sync; can be 50-100MB across opened books.
-            ...(coverPath && !coverPath.startsWith("data:") ? { coverPath } : {}),
-        }))),
-        annotations: JSON.stringify(library.annotations),
-        collections: JSON.stringify(library.collections),
-        deletion_tombstones: JSON.stringify(gcTombstones),
-        vocabulary: JSON.stringify(vocabulary.vocabularyTerms),
-        settings: JSON.stringify(settingsPayload),
-        reading_stats: JSON.stringify(settingsStore.stats),
-        rss_feeds: JSON.stringify(rss.feeds),
-        rss_articles: JSON.stringify((() => {
-            const MAX_ARTICLES = 500;
-            const MAX_ARTICLE_AGE_DAYS = 30;
-            const cutoffDate = new Date();
-            cutoffDate.setDate(cutoffDate.getDate() - MAX_ARTICLE_AGE_DAYS);
-            const filtered = rss.articles
-                .filter(article => {
-                    const articleDate = article.publishedAt || article.fetchedAt;
-                    return new Date(articleDate) >= cutoffDate;
-                })
-                .slice(0, MAX_ARTICLES);
-            return filtered.map(article => ({
-                ...article,
-                content: article.content.length > 50000
-                    ? article.content.slice(0, 50000) + '... [truncated]'
-                    : article.content,
-            }));
-        })()),
-    };
-
-    // Compute SHA-256 content hashes for each domain in parallel.
-    // When both sides have the same hash, the domain is skipped entirely.
-    const domainNames = Object.keys(domains);
-    const hashResults = await Promise.all(
-        domainNames.map((name) => sha256Hex(domains[name])),
-    );
-    const contentHashes: Record<string, string> = {};
-    for (let i = 0; i < domainNames.length; i++) {
-        contentHashes[domainNames[i]] = hashResults[i];
-    }
-
-    const manifest: Record<string, { version: number; itemCount: number; lastModifiedAt: string; contentHash: string }> = {
-        books: {
-            version: library.books.reduce((sum, b) => {
-                const t = new Date(b.lastReadAt || b.addedAt || 0).getTime();
-                return sum + Math.floor(t / 1000);
-            }, 0),
-            itemCount: library.books.length,
-            lastModifiedAt: computeLatestDate(library.books, b => b.lastReadAt || b.addedAt),
-            contentHash: contentHashes["books"],
-        },
-        annotations: {
-            version: library.annotations.length,
-            itemCount: library.annotations.length,
-            lastModifiedAt: computeLatestDate(library.annotations, a => a.updatedAt || a.createdAt),
-            contentHash: contentHashes["annotations"],
-        },
-        collections: {
-            version: library.collections.length,
-            itemCount: library.collections.length,
-            lastModifiedAt: computeLatestDate(library.collections, c => c.createdAt),
-            contentHash: contentHashes["collections"],
-        },
-        deletion_tombstones: {
-            version: gcTombstones.length,
-            itemCount: gcTombstones.length,
-            lastModifiedAt: computeLatestDate(gcTombstones, t => t.deletedAt),
-            contentHash: contentHashes["deletion_tombstones"],
-        },
-        vocabulary: {
-            version: vocabulary.vocabularyTerms.length,
-            itemCount: vocabulary.vocabularyTerms.length,
-            lastModifiedAt: computeLatestDate(vocabulary.vocabularyTerms, v => v.updatedAt || v.createdAt),
-            contentHash: contentHashes["vocabulary"],
-        },
-        settings: {
-            version: 1, // Settings is a single object, always version 1.
-            itemCount: 1,
-            lastModifiedAt: settingsUpdatedAt,
-            contentHash: contentHashes["settings"],
-        },
-        reading_stats: {
-            version: 1,
-            itemCount: 1,
-            lastModifiedAt: settingsStore.stats.lastReadDate ?? new Date(0).toISOString(),
-            contentHash: contentHashes["reading_stats"],
-        },
-        rss_feeds: {
-            version: rss.feeds.length,
-            itemCount: rss.feeds.length,
-            lastModifiedAt: computeLatestDate(rss.feeds, f => f.lastFetched || f.addedAt),
-            contentHash: contentHashes["rss_feeds"],
-        },
-        rss_articles: {
-            version: rss.articles.length,
-            itemCount: rss.articles.length,
-            lastModifiedAt: computeLatestDate(rss.articles, a => a.fetchedAt),
-            contentHash: contentHashes["rss_articles"],
-        },
-    };
-
-    return { domains, manifest, library, vocabulary, rss, settingsStore, settingsUpdatedAt };
-}
 
 // ─── Merge incoming data ───
 
@@ -733,8 +570,6 @@ export async function ensureResponderSyncReady(): Promise<void> {
     }
 
     responderReadyPromise = (async () => {
-        // Provision legacy responder data for backward compat.
-        await provisionSyncData();
         await irohStart();
 
         // Compute blob hashes for local book files BEFORE provisioning to
@@ -745,10 +580,6 @@ export async function ensureResponderSyncReady(): Promise<void> {
         // Provision ALL local state (books, annotations, RSS, settings,
         // vocabulary, stats) to the iroh-docs doc so paired peers can
         // sync it. Books now include blobHash so the peer can download files.
-
-        if (!responderEventUnlisten) {
-            responderEventUnlisten = await initSyncEventListener();
-        }
 
         // Register the iroh-docs live event listener so real-time
         // CRDT updates from the peer are applied to Zustand stores.
@@ -872,14 +703,6 @@ export async function runDeviceSync(
                 // Fresh device with no pairing → immediate failure.
                 return { success: false, domainsUpdated: [], error: "No sync document — device may need re-pairing after data reset" };
             }
-        }
-
-        // 5. Also provision the legacy responder data (file serving, etc.)
-        try {
-            const { domains, manifest } = await buildDomainsAndManifest();
-            await setSyncData(domains, manifest, buildBookFilePaths());
-        } catch {
-            // Non-critical — will be re-provisioned on next sync.
         }
 
         // Stability-based backoff: poll hydrateFromIrohDocs every 3s.
@@ -1035,14 +858,6 @@ export async function runDeviceSync(
         setStatus("synced", summary);
         _dataDirty = false; // successfully synced, reset dirty flag
 
-        // Re-provision so the server has up-to-date data for subsequent syncs
-        // (e.g. if this device is also a responder for another peer).
-        try {
-            await provisionSyncData();
-        } catch {
-            // Non-critical — will be re-provisioned on next sync or server start.
-        }
-
         return { success: true, domainsUpdated: [] };
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : String(error);
@@ -1067,36 +882,7 @@ export async function runDeviceSync(
  * that have a real, resolvable path (i.e. not a placeholder like sqlite:// or idb://).
  * This lets the Rust responder serve books stored at external OS paths.
  */
-function buildBookFilePaths(): Record<string, string> {
-    const books = useLibraryStore.getState().books;
-    const paths: Record<string, string> = {};
-    for (const book of books) {
-        const p = book.filePath || book.storagePath;
-        if (
-            p &&
-            !p.startsWith("sqlite://") &&
-            !p.startsWith("idb://") &&
-            !p.startsWith("browser://") &&
-            !p.startsWith("data:")
-        ) {
-            paths[book.id] = p;
-        }
-    }
-    return paths;
-}
-
-export async function provisionSyncData(): Promise<void> {
-    const { domains, manifest } = await buildDomainsAndManifest();
-    const bookFilePaths = buildBookFilePaths();
-    await setSyncData(domains, manifest, bookFilePaths);
-}
-
 // ─── Responder-side event listener ───
-
-/** Debounce timer for batching rapid per-domain push events. */
-let _syncCompleteTimer: ReturnType<typeof setTimeout> | null = null;
-/** Persistent peer device ID — survives across debounced event firings. */
-let _lastValidPeerDeviceId: string | undefined;
 
 let _isMerging = false;
 /** Set to true to cancel a running sync session. */
@@ -1115,144 +901,6 @@ export function cancelRunningSync(): void {
     _progressiveBookBatch = [];
     setStatus("idle", "Sync cancelled");
     console.log("[sync] Cancel requested — _syncCancelled = true");
-}
-
-/**
- * Handles the "sync-incoming-complete" event from the Rust backend.
- * This fires when a remote peer has finished pushing all domains and
- * sent the /sync/complete call. We retrieve the buffered incoming data,
- * merge it into the local stores, and re-provision so the server
- * has up-to-date data for subsequent syncs.
- *
- * @param peerDeviceId - The device ID of the peer that pushed data, from event payload.
- */
-async function handleIncomingComplete(peerDeviceId?: string): Promise<void> {
-    if (_isMerging) {
-        return;
-    }
-    _isMerging = true;
-    try {
-        setStatus("syncing", "Receiving data from peer...");
-
-        const incomingMap = await getIncomingSyncData();
-        const domainCount = Object.keys(incomingMap).length;
-
-        if (domainCount === 0) {
-            if (peerDeviceId) {
-                const responderLog = (_msg: string) => {};
-                const needFilesIds = useLibraryStore.getState().books
-                    .filter((b) => b.syncedWithoutFile)
-                    .map((b) => b.id);
-                await pullMissingBookFilesAndCovers(peerDeviceId, needFilesIds, responderLog);
-            }
-            setStatus("synced", "No new data from peer");
-            return;
-        }
-
-        setStatus("syncing", "Merging data from peer...");
-
-        // mergeIncomingData reads fresh state internally, so no need to snapshot here.
-        // Use the persisted settingsLastModifiedAt for LWW comparison (same as initiator path)
-        // instead of generating "now" which biases the responder to always win.
-        const localSettingsUpdatedAt = useSettingsStore.getState().settingsLastModifiedAt || new Date(0).toISOString();
-
-        const { domainsUpdated } = await mergeIncomingData(
-            incomingMap,
-            localSettingsUpdatedAt,
-        );
-
-        const summary = domainsUpdated.length > 0
-            ? `Received: ${domainsUpdated.join(", ")}`
-            : "No changes after merge";
-
-
-        // Pull any missing book files on every responder merge pass.
-        // The initiator's SyncCompleteMessage includes its server address,
-        // which handle_sync_complete already saved. Discover to verify reachability.
-        if (peerDeviceId) {
-            let syncedBookIds: string[] = [];
-            try {
-                if (incomingMap["books"]) {
-                    const books = JSON.parse(incomingMap["books"]);
-                    if (Array.isArray(books)) {
-                        syncedBookIds = books.map((b) => b.id);
-                    }
-                }
-            } catch (_err) {}
-            
-            const responderLog = (_msg: string) => {};
-            await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, responderLog);
-        }
-
-        setStatus("synced", summary);
-        _dataDirty = false; // synced by peer, reset dirty flag
-
-        // Re-provision so the server has updated data for the next sync.
-        await provisionSyncData();
-    } catch (error: unknown) {
-        const errMsg = error instanceof Error ? error.message : String(error);
-        setStatus("error", `Responder merge failed: ${errMsg}`);
-    } finally {
-        _isMerging = false;
-    }
-}
-
-/**
- * Initializes the Tauri event listener for responder-side sync.
- *
- * When this device's sync server receives data pushed by a peer,
- * the Rust backend emits "sync-incoming-complete" after the peer
- * calls /sync/complete. This listener picks up that event and
- * triggers the merge.
- *
- * Call this once when the sync server is started.
- * Returns an unlisten function for cleanup.
- */
-export async function initSyncEventListener(): Promise<() => void> {
-    if (!isTauri()) {
-        return () => {};
-    }
-
-    if (responderEventUnlisten) {
-        return responderEventUnlisten;
-    }
-
-    // Dynamic import to avoid issues in web builds where @tauri-apps/api
-    // may not be available at parse time.
-    const { listen } = await import("@tauri-apps/api/event");
-
-    const rawUnlisten = await listen<string>("sync-incoming-complete", (event) => {
-        // Parse the peer device ID from the event payload.
-        // Persist across debounce firings so a parse failure on one event
-        // doesn't lose a successfully-parsed ID from a prior event.
-        try {
-            const payload = typeof event.payload === "string"
-                ? JSON.parse(event.payload)
-                : event.payload;
-            if (payload?.peer_device_id) {
-                _lastValidPeerDeviceId = payload.peer_device_id;
-            }
-        } catch {
-            // If parsing fails, keep the previously saved peer ID (if any).
-        }
-
-        // Debounce: if multiple domains arrive rapidly, wait a moment
-        // to let the complete event settle before triggering merge.
-        if (_syncCompleteTimer) {
-            clearTimeout(_syncCompleteTimer);
-        }
-        _syncCompleteTimer = setTimeout(() => {
-            _syncCompleteTimer = null;
-            handleIncomingComplete(_lastValidPeerDeviceId);
-        }, 300);
-    });
-
-    responderEventUnlisten = () => {
-        rawUnlisten();
-        responderEventUnlisten = null;
-    };
-
-    return responderEventUnlisten;
 }
 
 /**
@@ -1525,23 +1173,10 @@ export function scheduleMutationSync(): void {
     _mutationSyncTimer = setTimeout(async () => {
         _mutationSyncTimer = null;
 
-        try {
-            await provisionSyncData();
-        } catch {
-            // Non-critical — data will be provisioned on next sync.
-        }
         void autoSyncRound();
     }, MUTATION_SYNC_DEBOUNCE_MS);
 
-    // Wake Rust background sync immediately. The sync loop will see the
-    // bumped data_version and check for changes. If the provisionSyncData
-    // above hasn't fired yet, the sync loop will find the data unchanged
-    // and skip — but the next tick (after the debounce) will pick it up.
-    if (isTauri()) {
-        import("./device-sync").then((mod) => {
-            mod.wakeBackgroundSync().catch(e => console.error("[catch]", e));
-        });
-    }
+    // Background sync wake removed — no longer needed.
 }
 
 /**

@@ -258,11 +258,11 @@ describe("Cover BLOB migration (Rust)", () => {
 
 // ─── Fix: Database indexes created ───
 describe("Database indexes (Rust)", () => {
-    it("indexes on books(title), books(author), covers(book_id) exist", () => {
+    it("covers(book_id) index exists, books(title/author) removed (no such columns)", () => {
         const content = readSource("src-tauri/src/database.rs");
-        expect(content).toContain("CREATE INDEX IF NOT EXISTS idx_books_title");
-        expect(content).toContain("CREATE INDEX IF NOT EXISTS idx_books_author");
         expect(content).toContain("CREATE INDEX IF NOT EXISTS idx_covers_book_id");
+        expect(content).not.toContain("idx_books_title");
+        expect(content).not.toContain("idx_books_author");
     });
 });
 

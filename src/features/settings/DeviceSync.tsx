@@ -38,7 +38,6 @@ import {
 } from "../../core/lib/device-sync";
 import {
     runDeviceSync,
-    provisionSyncData,
     ensureResponderSyncReady,
 } from "../../core/lib/sync-orchestrator";
 import { useUIStore, useSettingsStore } from "../../core/store";
@@ -262,11 +261,6 @@ export function DeviceSyncSection() {
             setIsQrModalOpen(true);
             setIsIrohRunning(true);
             setDeviceSyncStatus("hosting");
-            // Provision data after QR generation starts iroh
-            try {
-                await provisionSyncData();
-            } catch (e) {
-            }
             try {
                 await ensureResponderSyncReady();
                 const info = await irohStart();

@@ -308,60 +308,53 @@ impl std::fmt::Debug for PairingProtocolHandler {
 
 impl ProtocolHandler for PairingProtocolHandler {
     async fn accept(&self, conn: endpoint::Connection) -> Result<(), iroh::protocol::AcceptError> {
-        // Stream 1: handshake (IrohPeerInfo from submit_pairing_code)
-        // Read the client's info and send back an empty response so the
-        // client's read_exact for the length prefix doesn't hang.
-        match conn.accept_bi().await {
-            Ok((mut send, mut recv)) => {
-                let _ = recv_from_bi(&mut recv).await;
-                let empty = serde_json::json!({});
-                if let Ok(json) = serde_json::to_vec(&empty) {
-                    let len = (json.len() as u32).to_be_bytes();
-                    let _ = send.write_all(&len).await;
-                    let _ = send.write_all(&json).await;
-                    let _ = send.finish();
+        loop {
+            let stream = conn.accept_bi().await;
+            let (mut send, mut recv) = match stream {
+                Ok(s) => s,
+                Err(_) => break, // Client disconnected, we're done
+            };
+
+            let req_bytes = match recv_from_bi(&mut recv).await {
+                Ok(b) => b,
+                Err(_) => break,
+            };
+
+            // Try to parse as IrohEnvelope — if it fails, this was the raw
+            // IrohPeerInfo handshake; send empty response and continue.
+            let env: IrohEnvelope = match serde_json::from_slice(&req_bytes) {
+                Ok(e) => e,
+                Err(_) => {
+                    // Raw handshake — send empty response so the client's
+                    // read_exact for the length prefix doesn't hang.
+                    let empty = serde_json::json!({});
+                    if let Ok(json) = serde_json::to_vec(&empty) {
+                        let len = (json.len() as u32).to_be_bytes();
+                        let _ = send.write_all(&len).await;
+                        let _ = send.write_all(&json).await;
+                        let _ = send.finish();
+                    }
+                    continue;
                 }
+            };
+
+            if env.msg_type != "pair" {
+                continue;
             }
-            Err(e) => {
-                eprintln!("[iroh-sync] Pairing: handshake accept_bi failed: {e}");
-                return Ok(());
+
+            // Pairing request — handle and send response
+            let resp_val = handle_pair_req(&self.state, &env.data).await;
+            let resp_env = IrohEnvelope {
+                msg_type: "pair_resp".to_string(),
+                data: resp_val,
+            };
+            if let Ok(resp_json) = serde_json::to_vec(&resp_env) {
+                let len = (resp_json.len() as u32).to_be_bytes();
+                let _ = send.write_all(&len).await;
+                let _ = send.write_all(&resp_json).await;
+                let _ = send.finish();
             }
         }
-        // Stream 2: pairing request (PairingRequest wrapped in IrohEnvelope)
-        let (mut send, mut recv) = match conn.accept_bi().await {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("[iroh-sync] Pairing: request accept_bi failed: {e}");
-                return Ok(());
-            }
-        };
-        let req_bytes = match recv_from_bi(&mut recv).await {
-            Ok(b) => b,
-            Err(e) => {
-                eprintln!("[iroh-sync] Pairing: recv failed: {e}");
-                return Ok(());
-            }
-        };
-        let env: IrohEnvelope = match serde_json::from_slice(&req_bytes) {
-            Ok(e) => e,
-            Err(_) => return Ok(()),
-        };
-        if env.msg_type != "pair" {
-            return Ok(());
-        }
-        let resp_val = handle_pair_req(&self.state, &env.data).await;
-        let resp_env = IrohEnvelope {
-            msg_type: "pair_resp".to_string(),
-            data: resp_val,
-        };
-        let resp_json = match serde_json::to_vec(&resp_env) {
-            Ok(j) => j,
-            Err(_) => return Ok(()),
-        };
-        let len = (resp_json.len() as u32).to_be_bytes();
-        let _ = send.write_all(&len).await;
-        let _ = send.write_all(&resp_json).await;
-        let _ = send.finish();
         Ok(())
     }
 }

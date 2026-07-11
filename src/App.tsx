@@ -360,14 +360,7 @@ function App() {
                 // Auto-sync scheduling unavailable.
             }
 
-            if (!cancelled) {
-                try {
-                    const { startBackgroundSync } = await import("./core/lib/device-sync");
-                    await startBackgroundSync(300);
-                } catch {
-                    // Background sync not available on this platform.
-                }
-            }
+            // Background sync removed — no longer needed.
         };
 
         const timer = setTimeout(() => {
@@ -379,9 +372,6 @@ function App() {
             clearTimeout(timer);
             bridgeCleanup?.();
             stopAutoSync();
-            import("./core/lib/device-sync").then((mod) => {
-                mod.stopBackgroundSync().catch(e => console.error("[catch]", e));
-            }).catch(e => console.error("[catch]", e));
         };
     }, [hasCompletedOnboarding, autoSyncEnabled]);
 
