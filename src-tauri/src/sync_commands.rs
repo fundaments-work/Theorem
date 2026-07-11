@@ -722,9 +722,13 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
             peer_addr = peer_addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, port));
         }
     }
-    doc.start_sync(vec![peer_addr])
-        .await
-        .map_err(|e| format!("start_sync: {e}"))?;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        doc.start_sync(vec![peer_addr]),
+    )
+    .await
+    .map_err(|_| format!("Peer is offline or unreachable (timeout after 20s)"))?
+    .map_err(|e| format!("start_sync: {e}"))?;
 
     // Update last_sync_at so the peer list shows "Synced at ..." instead of "Never synced"
     {

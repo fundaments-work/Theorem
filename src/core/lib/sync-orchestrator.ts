@@ -175,6 +175,13 @@ async function mergeIncomingData(
 
         if (prunedFeeds.feeds.length !== rssState.feeds.length) markUpdated("rss_feeds");
         if (prunedArticles.length !== rssState.articles.length) markUpdated("rss_articles");
+
+        // Same pruning for vocabulary terms — tombstoned terms must be
+        // removed even when no vocabulary domain arrives.
+        const vocabState = useVocabularyStore.getState();
+        const prunedVocab = mergeVocabulary([], vocabState.vocabularyTerms, allTombstones);
+        useVocabularyStore.setState({ vocabularyTerms: prunedVocab });
+        if (prunedVocab.length !== vocabState.vocabularyTerms.length) markUpdated("vocabulary");
     }
 
     // Read a snapshot of current state for merges that depends on it.
@@ -624,7 +631,7 @@ export async function runDeviceSync(
     const _bookCountBeforeSync = useLibraryStore.getState().books.length;
 
     try {
-        setStatus("syncing", "Preparing data...");
+        setStatus("syncing", "Preparing...");
         log("Gathering local data snapshot...");
 
         // 1. Ensure the iroh Router + responder are ready FIRST so both sides
@@ -649,7 +656,7 @@ export async function runDeviceSync(
                     throw new Error("Sync cancelled");
                 }
                 log(`Re-hashing ${missingHash.length} books missing blobHash...`);
-                setStatus("syncing", `Preparing ${missingHash.length} books...`);
+                setStatus("syncing", `Hashing ${missingHash.length} books...`);
                 await provisionBookFileBlobs();
                 await provisionToIrohDocs();
             }
@@ -694,15 +701,17 @@ export async function runDeviceSync(
 
         // 4. Trigger iroh-docs CRDT sync with the peer.
         log("Syncing with peer via iroh-docs...");
-        const docsSynced = await docsSyncNow(peerDeviceId);
-        if (!docsSynced) {
-            log("Warning: iroh-docs sync initiation returned false");
-            // If docsSyncNow failed (no shared doc, peer unreachable), don't
-            // sit in a poll loop — return immediately with a clear error.
-            if (_bookCountBeforeSync === 0) {
-                // Fresh device with no pairing → immediate failure.
-                return { success: false, domainsUpdated: [], error: "No sync document — device may need re-pairing after data reset" };
-            }
+        const docsSyncError = await docsSyncNow(peerDeviceId);
+        if (docsSyncError) {
+            log(`Warning: iroh-docs sync failed: ${docsSyncError}`);
+            // If docsSyncNow failed (peer offline, no shared doc), don't sit
+            // in a poll loop — return immediately with a clear error.
+            const isOffline = docsSyncError.includes("offline") || docsSyncError.includes("timeout");
+            const errorMsg = isOffline
+                ? `Peer is offline — try again later`
+                : docsSyncError;
+            setStatus("error", errorMsg);
+            return { success: false, domainsUpdated: [], error: errorMsg };
         }
 
         // Stability-based backoff: poll hydrateFromIrohDocs every 3s.
@@ -743,8 +752,8 @@ export async function runDeviceSync(
                     stablePolls = 0;
                     prevDomainSet = currentDomainSet;
                     setStatus("syncing", booksCount > 0 || annCount > 0
-                    ? `Syncing... (${booksCount} books, ${annCount} annotations)`
-                    : "Syncing with peer...");
+                        ? `Syncing (${booksCount}b, ${annCount}a)`
+                        : "Syncing...");
                 } else {
                     // Only count as stable if we actually have data (books > 0)
                     // OR the device had books before sync (no new data expected).
@@ -831,16 +840,17 @@ export async function runDeviceSync(
         const needFileCount = useLibraryStore.getState().books.filter(b => b.syncedWithoutFile === true && b.blobHash).length;
         if (needFileCount > 0) {
             log(`Downloading ${needFileCount} book files...`);
-            setStatus("syncing", `Downloading ${needFileCount} books...`);
+            setStatus("syncing", `Downloading ${needFileCount}...`);
         }
         await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, log);
 
         // 7. After pulling files, re-add them to the local blobs store so
-        //    blobHash is updated, then re-provision to iroh-docs so any
-        //    newly-downloaded books can be shared with other peers.
+        //    blobHash is updated. We do NOT call provisionToIrohDocs() here —
+        //    that would push ALL data on every sync round, defeating CRDT
+        //    incremental sync. The subscribeZustandToIrohDocs bridge watches
+        //    Zustand for book changes and writes them incrementally.
         if (!_syncCancelled) {
             await provisionBookFileBlobs();
-            await provisionToIrohDocs();
         }
 
         const bookCount = useLibraryStore.getState().books.length;
@@ -915,6 +925,7 @@ export function cancelRunningSync(): void {
  * only registers once.
  */
 let _docsLiveTimer: ReturnType<typeof setTimeout> | null = null;
+const MAX_PENDING_ENTRIES = 2000;
 const _pendingDocsEntries = new Map<string, string>();
 /** Peer being synced — set by runDeviceSync so live events can trigger file downloads. */
 let _currentSyncPeerId: string | null = null;
@@ -934,7 +945,7 @@ function _flushProgressiveBooks() {
     // Don't update status if sync was cancelled — cancelRunningSync set it to "idle"
     if (!_syncCancelled) {
         const total = useLibraryStore.getState().books.length;
-        setStatus("syncing", `Syncing... (${total} books)`);
+        setStatus("syncing", `Syncing ${total} books`);
     }
 
     // Enqueue file downloads for newly added books with blobHash
@@ -974,7 +985,7 @@ async function _processDownloadQueue() {
             if (!book || !book.syncedWithoutFile) continue;
 
             const destPath = `${appDir}/book-cache/${bookId}.book`;
-            setStatus("syncing", `Downloading ${book.title || bookId} (${completed + 1}/${total})`);
+            setStatus("syncing", `Downloading ${completed + 1}/${total}`);
             const success = await blobsDownloadFile(peerId, blobHash, destPath);
             if (success) {
                 completed++;
@@ -1080,6 +1091,12 @@ export async function initDocsLiveListener(): Promise<() => void> {
 
         // ── Domain-level keys: batch for full merge pipeline ──
         _pendingDocsEntries.set(key, value);
+        if (_pendingDocsEntries.size > MAX_PENDING_ENTRIES) {
+            // Cap reached — process immediately
+            if (_docsLiveTimer) clearTimeout(_docsLiveTimer);
+            _processPendingDocs();
+            return;
+        }
         if (_docsLiveTimer) clearTimeout(_docsLiveTimer);
         _docsLiveTimer = setTimeout(_processPendingDocs, 500);
     });
@@ -1325,21 +1342,22 @@ export async function docsGetAllEntries(): Promise<Record<string, string> | null
     } catch { return null; }
 }
 
-/** Trigger iroh-docs reconciliation with a specific peer. Times out after 120s. */
-export async function docsSyncNow(peerDeviceId: string): Promise<boolean> {
+/** Trigger iroh-docs reconciliation with a specific peer. Returns null on success, error message on failure. */
+export async function docsSyncNow(peerDeviceId: string): Promise<string | null> {
     try {
         const { invoke } = await import("@tauri-apps/api/core");
-        const timeout = new Promise<boolean>((_, reject) =>
-            setTimeout(() => reject(new Error("docs_sync_now timed out after 120s")), 120_000)
+        const timeout = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("docs_sync_now timed out after 25s")), 25_000)
         );
         await Promise.race([
             invoke("docs_sync_now", { peerDeviceId }),
             timeout,
         ]);
-        return true;
+        return null; // success
     } catch (e) {
-        console.error(`[sync] docsSyncNow failed: ${e}`);
-        return false;
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[sync] docsSyncNow failed: ${msg}`);
+        return msg;
     }
 }
 
@@ -1381,7 +1399,10 @@ export async function provisionToIrohDocs(): Promise<boolean> {
         await docsSetEntry("collections", JSON.stringify(lib.collections));
         await docsSetEntry("deletion_tombstones", JSON.stringify(lib.deletionTombstones));
         await docsSetEntry("vocabulary", JSON.stringify(vocab.vocabularyTerms));
-        await docsSetEntry("settings", JSON.stringify(settings.settings));
+        await docsSetEntry("settings", JSON.stringify({
+            ...settings.settings,
+            _settingsUpdatedAt: settings.settingsLastModifiedAt || new Date(0).toISOString(),
+        }));
         await docsSetEntry("reading_stats", JSON.stringify(settings.stats));
         await docsSetEntry("rss_feeds", JSON.stringify(rss.feeds));
         await docsSetEntry("rss_articles", JSON.stringify(rss.articles));
@@ -1605,7 +1626,10 @@ export function subscribeZustandToIrohDocs(): () => void {
     unsubs.push(useSettingsStore.subscribe((state) => {
         if (state.settings !== prevSettings) {
             prevSettings = state.settings;
-            scheduleDocsWrite("settings", () => docsSetEntry("settings", JSON.stringify(state.settings)));
+            scheduleDocsWrite("settings", () => docsSetEntry("settings", JSON.stringify({
+                ...state.settings,
+                _settingsUpdatedAt: useSettingsStore.getState().settingsLastModifiedAt || new Date(0).toISOString(),
+            })));
         }
         if (state.stats !== prevStats) {
             prevStats = state.stats;

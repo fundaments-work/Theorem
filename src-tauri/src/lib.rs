@@ -1293,14 +1293,7 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
         let paired_devices = theorem_sync_core::sync_persistence::load_paired_devices(&data_dir);
 
         // ── Create temporary iroh endpoint for CRDT sync ──
-        let key_path = data_dir.join("iroh-key");
-        let secret_key = match crate::iroh_sync::load_or_create_key(&key_path) {
-            Ok(k) => k,
-            Err(e) => {
-                eprintln!("[background-sync] Failed to load iroh key: {e}");
-                return false;
-            }
-        };
+        let secret_key = iroh::SecretKey::generate();
         let endpoint = match iroh::endpoint::Endpoint::builder(N0)
             .secret_key(secret_key)
             .alpns(vec![iroh_docs::ALPN.to_vec(), iroh_blobs::ALPN.to_vec()])
@@ -1316,7 +1309,7 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
         };
 
         // ── Create docs + blobs stack using temp directory ──
-        let blobs_path = data_dir.join("iroh-blobs-jni");
+        let blobs_path = data_dir.join("iroh-blobs");
         let _ = std::fs::create_dir_all(&blobs_path);
         let blobs = match iroh_blobs::store::fs::FsStore::load(&blobs_path).await {
             Ok(s) => s,

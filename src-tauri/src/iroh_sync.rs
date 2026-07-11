@@ -183,111 +183,119 @@ pub fn subscribe_doc_events(
     blobs: iroh_blobs::api::Store,
 ) {
     tokio::spawn(async move {
-        let mut stream = match doc.subscribe().await {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("[iroh-sync] Failed to subscribe to doc events: {e}");
-                return;
-            }
-        };
-        use futures::StreamExt;
-        let mut pending: std::collections::HashMap<iroh_blobs::Hash, String> =
-            std::collections::HashMap::new();
+        loop {
+            let mut stream = match doc.subscribe().await {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!(
+                        "[iroh-sync] Failed to subscribe to doc events: {e}, retrying in 1s"
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    continue;
+                }
+            };
+            use futures::StreamExt;
+            let mut pending: std::collections::HashMap<iroh_blobs::Hash, String> =
+                std::collections::HashMap::new();
 
-        while let Some(event) = stream.next().await {
-            match event {
-                Ok(LiveEvent::InsertRemote { entry, .. }) => {
-                    let key = String::from_utf8_lossy(entry.key()).to_string();
-                    let hash = entry.content_hash();
-                    if let Ok(content) = blobs.blobs().get_bytes(hash).await {
-                        if let Ok(value) = String::from_utf8(content.to_vec()) {
-                            let app_clone = app.clone();
-                            #[derive(serde::Serialize, Clone)]
-                            struct EntryPayload {
-                                key: String,
-                                value: String,
+            while let Some(event) = stream.next().await {
+                match event {
+                    Ok(LiveEvent::InsertRemote { entry, .. }) => {
+                        let key = String::from_utf8_lossy(entry.key()).to_string();
+                        let hash = entry.content_hash();
+                        if let Ok(content) = blobs.blobs().get_bytes(hash).await {
+                            if let Ok(value) = String::from_utf8(content.to_vec()) {
+                                let app_clone = app.clone();
+                                #[derive(serde::Serialize, Clone)]
+                                struct EntryPayload {
+                                    key: String,
+                                    value: String,
+                                }
+                                app_clone
+                                    .emit(
+                                        "docs-entry-changed",
+                                        EntryPayload {
+                                            key: key.clone(),
+                                            value,
+                                        },
+                                    )
+                                    .ok();
+                                pending.insert(hash, key);
                             }
-                            app_clone
-                                .emit(
-                                    "docs-entry-changed",
-                                    EntryPayload {
-                                        key: key.clone(),
-                                        value,
-                                    },
-                                )
-                                .ok();
+                        } else {
                             pending.insert(hash, key);
                         }
-                    } else {
-                        pending.insert(hash, key);
                     }
-                }
-                Ok(LiveEvent::ContentReady { hash }) => {
-                    if let Some(key) = pending.remove(&hash) {
-                        if let Ok(content) = blobs.blobs().get_bytes(hash).await {
-                            if let Ok(value) = String::from_utf8(content.to_vec()) {
-                                let app_clone = app.clone();
-                                #[derive(serde::Serialize, Clone)]
-                                struct EntryPayload {
-                                    key: String,
-                                    value: String,
+                    Ok(LiveEvent::ContentReady { hash }) => {
+                        if let Some(key) = pending.remove(&hash) {
+                            if let Ok(content) = blobs.blobs().get_bytes(hash).await {
+                                if let Ok(value) = String::from_utf8(content.to_vec()) {
+                                    let app_clone = app.clone();
+                                    #[derive(serde::Serialize, Clone)]
+                                    struct EntryPayload {
+                                        key: String,
+                                        value: String,
+                                    }
+                                    app_clone
+                                        .emit("docs-entry-changed", EntryPayload { key, value })
+                                        .ok();
                                 }
-                                app_clone
-                                    .emit("docs-entry-changed", EntryPayload { key, value })
-                                    .ok();
                             }
                         }
                     }
-                }
-                Ok(LiveEvent::PendingContentReady) => {
-                    let remaining: Vec<(iroh_blobs::Hash, String)> = pending.drain().collect();
-                    for (hash, key) in remaining {
-                        if let Ok(content) = blobs.blobs().get_bytes(hash).await {
-                            if let Ok(value) = String::from_utf8(content.to_vec()) {
-                                let app_clone = app.clone();
-                                #[derive(serde::Serialize, Clone)]
-                                struct EntryPayload {
-                                    key: String,
-                                    value: String,
+                    Ok(LiveEvent::PendingContentReady) => {
+                        let remaining: Vec<(iroh_blobs::Hash, String)> = pending.drain().collect();
+                        for (hash, key) in remaining {
+                            if let Ok(content) = blobs.blobs().get_bytes(hash).await {
+                                if let Ok(value) = String::from_utf8(content.to_vec()) {
+                                    let app_clone = app.clone();
+                                    #[derive(serde::Serialize, Clone)]
+                                    struct EntryPayload {
+                                        key: String,
+                                        value: String,
+                                    }
+                                    app_clone
+                                        .emit("docs-entry-changed", EntryPayload { key, value })
+                                        .ok();
                                 }
-                                app_clone
-                                    .emit("docs-entry-changed", EntryPayload { key, value })
-                                    .ok();
                             }
                         }
+                        #[derive(serde::Serialize, Clone)]
+                        struct PendingContentPayload {
+                            remaining_count: usize,
+                        }
+                        let _ = app.emit(
+                            "docs-pending-content-ready",
+                            PendingContentPayload {
+                                remaining_count: pending.len(),
+                            },
+                        );
                     }
-                    #[derive(serde::Serialize, Clone)]
-                    struct PendingContentPayload {
-                        remaining_count: usize,
+                    Ok(LiveEvent::SyncFinished(event)) => {
+                        #[derive(serde::Serialize, Clone)]
+                        struct SyncFinishedPayload {
+                            peer: String,
+                            synced: bool,
+                        }
+                        let _ = app.emit(
+                            "docs-sync-finished",
+                            SyncFinishedPayload {
+                                peer: event.peer.to_string(),
+                                synced: true,
+                            },
+                        );
                     }
-                    let _ = app.emit(
-                        "docs-pending-content-ready",
-                        PendingContentPayload {
-                            remaining_count: pending.len(),
-                        },
-                    );
-                }
-                Ok(LiveEvent::SyncFinished(event)) => {
-                    #[derive(serde::Serialize, Clone)]
-                    struct SyncFinishedPayload {
-                        peer: String,
-                        synced: bool,
+                    Err(err) => {
+                        eprintln!("[iroh-sync] doc event stream error: {err}");
                     }
-                    let _ = app.emit(
-                        "docs-sync-finished",
-                        SyncFinishedPayload {
-                            peer: event.peer.to_string(),
-                            synced: true,
-                        },
-                    );
+                    _ => {}
                 }
-                Err(err) => {
-                    eprintln!("[iroh-sync] doc event stream error: {err}");
-                }
-                _ => {}
             }
+            eprintln!(
+                "[iroh-sync] doc event stream ended, re-subscribing in 1s..."
+            );
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
-        eprintln!("[iroh-sync] doc event stream ended (doc closed or Router shut down)");
     });
 }
 
