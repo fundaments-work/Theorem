@@ -749,8 +749,16 @@ No zod/valibot schemas. `mergeIncomingData` has 9 `try { JSON.parse(...) } catch
 | 77 | **sonner `<Toaster />` added** to `App.tsx` root | ✅ |
 | 78 | **Fix script created** — `scripts/fix-audit-issues.sh` | ✅ |
 | 79 | **Verification tests** — 26 tests in `tests/release-1.0.7-audit-verification.test.ts` | ✅ |
+| 80 | **`reqwest 0.11 → 0.12`** — upgraded w/ no breaking changes needed | ✅ |
+| 81 | **`zip 0.6 → 2.x`** — upgraded, `FileOptions` type annotation fix | ✅ |
+| 82 | **`@tauri-apps/plugin-app` removed** — dead JS dep (no imports) | ✅ |
+| 83 | **`@tauri-apps/plugin-window` removed** — dead JS dep (no imports, no Rust dep) | ✅ |
+| 84 | **`soundtouchjs` removed** — dead dep (type decl only, never imported) | ✅ |
+| 85 | **`@types/uuid` moved to devDeps** — correct categorization | ✅ |
+| 86 | **`tauri-plugin-app` updated to latest alpha** — `2.0.0-alpha.2` | ✅ |
+| 87 | **Barrel imports audited** — codebase already compliant (0 barrel imports found) | ✅ |
 
-**Total: 62/64 fixes implemented.** 2 planned (daemon + worker migration).
+**Total: 75/77 fixes implemented.** 2 planned (daemon + worker migration).
 
 ### Files Created (1.0.7)
 

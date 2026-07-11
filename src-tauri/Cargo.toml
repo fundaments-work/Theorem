@@ -32,7 +32,7 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-os = "2"
-tauri-plugin-app = "2.0.0-alpha.1"
+tauri-plugin-app = "2.0.0-alpha.2"
 tauri-plugin-barcode-scanner = "2"
 tauri-plugin-http = { version = "2", features = ["rustls-tls"] }
 tauri-plugin-mobile-folder-scan = { path = "plugins/mobile-folder-scan" }
@@ -40,7 +40,7 @@ tauri-plugin-android-sync-worker = { path = "plugins/android-sync-worker" }
 tauri-plugin-android-tts-audio = { path = "plugins/android-tts-audio" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls", "cookies", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "cookies", "stream"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.25"
@@ -63,7 +63,7 @@ base64 = "0.22"
 hex = "0.4"
 bzip2 = "0.4"
 tar = "0.4"
-zip = "0.6"
+zip = "2"
 walkdir = "2"
 
 # Crypto provider for rustls (iroh's reqwest v0.13 uses rustls-no-provider;

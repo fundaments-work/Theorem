@@ -225,7 +225,7 @@ fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
         let mut zip_buffer = Cursor::new(Vec::new());
         {
             let mut zip_writer = zip::ZipWriter::new(&mut zip_buffer);
-            let options = zip::write::FileOptions::default()
+            let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
             let mut archive = archive;
             loop {

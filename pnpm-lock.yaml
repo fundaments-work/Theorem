@@ -29,9 +29,6 @@ importers:
       '@tauri-apps/api':
         specifier: ^2.11.1
         version: 2.11.1
-      '@tauri-apps/plugin-app':
-        specifier: 2.0.0-alpha.1
-        version: 2.0.0-alpha.1
       '@tauri-apps/plugin-barcode-scanner':
         specifier: ^2.4.5
         version: 2.4.5
@@ -50,15 +47,9 @@ importers:
       '@tauri-apps/plugin-os':
         specifier: ^2.3.2
         version: 2.3.2
-      '@tauri-apps/plugin-window':
-        specifier: 2.0.0-alpha.1
-        version: 2.0.0-alpha.1
       '@tauri-controls/react':
         specifier: ^0.4.0
         version: 0.4.0(clsx@2.1.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwind-merge@3.6.0)
-      '@types/uuid':
-        specifier: ^10.0.0
-        version: 10.0.0
       '@zip.js/zip.js':
         specifier: ^2.8.26
         version: 2.8.26
@@ -116,9 +107,6 @@ importers:
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      soundtouchjs:
-        specifier: ^0.3.0
-        version: 0.3.0
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -153,6 +141,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.17)
+      '@types/uuid':
+        specifier: ^10.0.0
+        version: 10.0.0
       '@vitejs/plugin-react':
         specifier: ^6.0.2
         version: 6.0.2(vite@8.0.16(@types/node@26.0.0)(jiti@2.7.0))
@@ -911,10 +902,6 @@ packages:
   '@tanstack/virtual-core@3.17.1':
     resolution: {integrity: sha512-VZyW2Uiml5tmBZwPGrSD3Sz73OxzljQMCmzYHsUTPEuTsERf5xwa+uWb01xEzkz3ZSYTjj8NEb/mKHvgKxyZdA==}
 
-  '@tauri-apps/api@2.0.0-alpha.6':
-    resolution: {integrity: sha512-ZMOc3eu9amwvkC6M69h3hWt4/EsFaAXmtkiw4xd2LN59/lTb4ZQiVfq2QKlRcu1rj3n/Tcr7U30ZopvHwXBGIg==}
-    engines: {node: '>= 14.6.0', npm: '>= 6.6.0', yarn: '>= 1.19.1'}
-
   '@tauri-apps/api@2.11.1':
     resolution: {integrity: sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==}
 
@@ -989,9 +976,6 @@ packages:
     engines: {node: '>= 10'}
     hasBin: true
 
-  '@tauri-apps/plugin-app@2.0.0-alpha.1':
-    resolution: {integrity: sha512-DKlbG4ymoa8xDKdK36adPlZYeY8wcDQfi/XJG4qxhK6YC4GLrM1sG5eQgjVKheDI6wDQC5CiUjhnvddXVFUPTg==}
-
   '@tauri-apps/plugin-barcode-scanner@2.4.5':
     resolution: {integrity: sha512-sIPRYEfxww8/y8skZ2LcAp/h5bwvlHkQiq+3w6QEl+2BHs13xnpn7hP+pv4fkBs8DyDfpUbOBIYS5YBwP7x1QQ==}
 
@@ -1009,9 +993,6 @@ packages:
 
   '@tauri-apps/plugin-os@2.3.2':
     resolution: {integrity: sha512-n+nXWeuSeF9wcEsSPmRnBEGrRgOy6jjkSU+UVCOV8YUGKb2erhDOxis7IqRXiRVHhY8XMKks00BJ0OAdkpf6+A==}
-
-  '@tauri-apps/plugin-window@2.0.0-alpha.1':
-    resolution: {integrity: sha512-dFOAgal/3Txz3SQ+LNQq0AK1EPC+acdaFlwPVB/6KXUZYmaFleIlzgxDVoJCQ+/xOhxvYrdQaFLefh0I/Kldbg==}
 
   '@tauri-controls/react@0.4.0':
     resolution: {integrity: sha512-1wcob6mDkbWoh1lJFjgrLlMfNndZHhMw3XMmuWoaKgwDRBpI3FZU+e07Y8cHBAW6lmx3PdwToHgsXrHxOU6eNg==}
@@ -1585,9 +1566,6 @@ packages:
     peerDependencies:
       react: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
-
-  soundtouchjs@0.3.0:
-    resolution: {integrity: sha512-P/+SwnIE4BLrMbYK8aB8+GfXRfLv3+BV8HFMrEqOuF0F9BsI3sKEN1T+kY/JqiVURcCQgr50BC8D/uVzE/GozQ==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -2467,8 +2445,6 @@ snapshots:
 
   '@tanstack/virtual-core@3.17.1': {}
 
-  '@tauri-apps/api@2.0.0-alpha.6': {}
-
   '@tauri-apps/api@2.11.1': {}
 
   '@tauri-apps/cli-darwin-arm64@2.11.3':
@@ -2518,10 +2494,6 @@ snapshots:
       '@tauri-apps/cli-win32-ia32-msvc': 2.11.3
       '@tauri-apps/cli-win32-x64-msvc': 2.11.3
 
-  '@tauri-apps/plugin-app@2.0.0-alpha.1':
-    dependencies:
-      '@tauri-apps/api': 2.0.0-alpha.6
-
   '@tauri-apps/plugin-barcode-scanner@2.4.5':
     dependencies:
       '@tauri-apps/api': 2.11.1
@@ -2545,10 +2517,6 @@ snapshots:
   '@tauri-apps/plugin-os@2.3.2':
     dependencies:
       '@tauri-apps/api': 2.11.1
-
-  '@tauri-apps/plugin-window@2.0.0-alpha.1':
-    dependencies:
-      '@tauri-apps/api': 2.0.0-alpha.6
 
   '@tauri-controls/react@0.4.0(clsx@2.1.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwind-merge@3.6.0)':
     dependencies:
@@ -3089,8 +3057,6 @@ snapshots:
     dependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
-
-  soundtouchjs@0.3.0: {}
 
   source-map-js@1.2.1: {}
 
