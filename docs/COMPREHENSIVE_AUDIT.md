@@ -48,6 +48,10 @@ Scope: Full-stack audit covering Rust, TypeScript, dependencies, performance, se
 | — | Fix script created | ✅ `scripts/fix-audit-issues.sh` | v1.0.7 |
 | — | Rust integration tests (database + epub parser) | ✅ 43 unit tests: 25 database (KV, blob, cover, FTS, metadata, annotations), 18 epub parser (BOM, path resolution, OPF parsing, synthetic EPUBs) | v1.0.7 |
 | — | Zustand store split into slices | ✅ `index.ts` (2525→5 lines barrel), 5 domain files (`uiStore.ts`, `libraryStore.ts`, `settingsStore.ts`, `vocabularyStore.ts`, `rssStore.ts`) | v1.0.7 |
+| — | Legacy LWW protocol removed | ✅ Removed TheoremProtocolHandler, sync_with_peer, all handle_*_req, initiate_sync, sync_now, start/stop/wake_background_sync, set_sync_data, get_incoming_sync_data | v1.0.7 |
+| — | sync-daemon sidecar removed | ✅ Deleted `crates/sync-daemon/` (HTTP axum server, port 43935) | v1.0.7 |
+| — | DeviceIdentity crypto simplified | ✅ Removed x25519-dalek, chacha20poly1305, hkdf, rand — device_id now derived from iroh key | v1.0.7 |
+| — | Android JNI rewritten to iroh-docs | ✅ `runBackgroundSync()` now creates temp iroh endpoint + doc.start_sync() instead of HTTP POST | v1.0.7 |
 
 ### ❌ Not Fixed (Remaining for v1.0.7)
 
@@ -58,14 +62,14 @@ Scope: Full-stack audit covering Rust, TypeScript, dependencies, performance, se
 | 10.2 | TanStack Query for data fetching (87+ useEffect) | Large refactor — 3 days | v1.0.7 |
 | — | `rand 0.8 → 0.9` | Blocked by `chacha20poly1305`'s `rand_core 0.6` dep — resolves after legacy LWW protocol removal. When unblocked: update both `Cargo.toml`s, fix `OsRng` usage in `sync_crypto.rs` to use `rand::rng()`, verify with `cargo check && cargo clippy && cargo test` | v1.0.7 |
 
-### 🔄 Planned (Legacy Protocol Removal)
+### 🟢 Done (Legacy Protocol Removal — Completed in v1.0.7)
 
 | # | Issue | Status |
 |---|-------|--------|
-| — | Custom ALPN `theorem-sync/v1` + full legacy LWW protocol | Removal planned — iroh-docs CRDT is the only needed path |
-| — | sync-daemon sidecar (HTTP-based LWW) | Removal planned — replaced by in-process iroh |
-| — | Android worker HTTP → iroh keepalive | Planned |
-| — | `chacha20poly1305`, `x25519-dalek`, `hkdf`, `sha2` | Removable after legacy protocol deleted |
+| — | Custom ALPN `theorem-sync/v1` + full legacy LWW protocol | ✅ Removed — iroh-docs CRDT is the only sync path |
+| — | sync-daemon sidecar (HTTP-based LWW) | ✅ Removed — deleted `crates/sync-daemon/` |
+| — | Android worker HTTP → iroh-docs CRDT | ✅ Rewritten — JNI uses temp iroh endpoint |
+| — | `chacha20poly1305`, `x25519-dalek`, `hkdf`, `sha2`, `rand` | ✅ Removed from both Cargo.tomls |
 
 ---
 
@@ -452,12 +456,11 @@ src/core/store/
 ### Low (P3)
 | Issue | Location | Why it matters |
 |-------|----------|----------------|
-| `rand` 0.8 → 0.9 | `Cargo.toml` | Blocked by chacha20poly1305's rand_core 0.6 dep |
 
 ### Planned (Not Started)
 | Issue | Status |
 |-------|--------|
-| Daemon HTTP → iroh Router migration | ⬜ Planned (DAEMON_IROH_MIGRATION.md) |
-| Android worker → iroh keepalive | ⬜ Planned |
+| Cloudflare Durable Object sync peer | ⬜ Planned — always-on cloud peer for seamless cross-device sync |
+| Reader.tsx refactoring (2515 lines) | ⬜ Planned |
 
 
