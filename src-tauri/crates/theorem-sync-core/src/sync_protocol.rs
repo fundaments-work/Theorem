@@ -35,6 +35,10 @@ pub struct PairingQrPayload {
     /// without requiring internet (N0 DNS/relay fallback).
     #[serde(default)]
     pub lan_addrs: Vec<String>,
+    /// Host's iroh relay URL so the scanner can use it for blob
+    /// downloads when direct connection fails (mobile vs WiFi).
+    #[serde(default)]
+    pub relay_url: String,
 }
 
 /// Data returned to the frontend after generating a pairing QR code.
@@ -57,6 +61,9 @@ pub struct PairingRequest {
     pub fingerprint: String,
     #[serde(default)]
     pub node_id: String,
+    /// Scanner's iroh relay URL (so host can use it for blob downloads).
+    #[serde(default)]
+    pub relay_url: String,
 }
 
 /// Response sent by the host back to the scanner after successful pairing.
@@ -69,6 +76,9 @@ pub struct PairingResponse {
     pub fingerprint: String,
     #[serde(default)]
     pub sync_doc_ticket: String,
+    /// Host's iroh relay URL (so scanner can use it for blob downloads).
+    #[serde(default)]
+    pub relay_url: String,
 }
 
 // ─── Paired Device (persisted) ───

@@ -630,7 +630,7 @@ async fn handle_pair_req(
         paired_at: format!("{}Z", now),
         last_sync_at: None,
         fingerprint: pairing_req.fingerprint.clone(),
-        peer_relay_url: String::new(),
+        peer_relay_url: pairing_req.relay_url.clone(),
         sync_doc_id: String::new(),
         sync_doc_ticket: String::new(),
     };
@@ -719,6 +719,7 @@ async fn handle_pair_req(
         fingerprint: sync_crypto::get_frontend_fingerprint()
             .unwrap_or_else(|| state.fingerprint.clone()),
         sync_doc_ticket,
+        relay_url: crate::sync_commands::get_iroh_relay_url(),
     };
 
     serde_json::to_value(response)

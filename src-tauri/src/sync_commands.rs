@@ -93,6 +93,23 @@ async fn get_or_init_iroh(app: &tauri::AppHandle) -> Result<Arc<IrohSyncEndpoint
     Ok(ep)
 }
 
+/// Get the iroh endpoint's relay URL for pairing handshakes.
+pub fn get_iroh_relay_url() -> String {
+    IROH_ENDPOINT
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|ep| {
+            ep.endpoint
+                .addr()
+                .relay_urls()
+                .collect::<Vec<_>>()
+                .first()
+                .map(|u| u.to_string())
+        })
+        .unwrap_or_default()
+}
+
 #[derive(serde::Serialize)]
 pub struct IrohNodeIdResponse {
     pub node_id: String,
@@ -249,6 +266,14 @@ pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData,
             .into_iter()
             .map(|a| a.to_string())
             .collect(),
+        relay_url: ep
+            .endpoint
+            .addr()
+            .relay_urls()
+            .collect::<Vec<_>>()
+            .first()
+            .map(|u| u.to_string())
+            .unwrap_or_default(),
     };
 
     let payload_json = serde_json::to_string(&qr_payload)
@@ -343,6 +368,14 @@ pub async fn submit_pairing_code(
         fingerprint: sync_crypto::get_frontend_fingerprint()
             .unwrap_or_else(|| sync_state.transport_state.fingerprint.clone()),
         node_id: ep.public_key.to_string(),
+        relay_url: ep
+            .endpoint
+            .addr()
+            .relay_urls()
+            .collect::<Vec<_>>()
+            .first()
+            .map(|u| u.to_string())
+            .unwrap_or_default(),
     };
 
     let pairing_response = iroh_sync::send_pair_request(&conn, &pairing_request).await?;
@@ -376,6 +409,17 @@ pub async fn submit_pairing_code(
         }
     };
 
+    // Prefer the host's relay URL from the pairing response, then from
+    // the connection, then from the QR code payload. This ensures blob
+    // downloads can use the relay even for direct-LAN pairings.
+    let host_relay = if !pairing_response.relay_url.is_empty() {
+        pairing_response.relay_url.clone()
+    } else if !connected_relay.is_empty() {
+        connected_relay
+    } else {
+        qr_payload.relay_url.clone()
+    };
+
     let paired_device = PairedDevice {
         device_id: pairing_response.device_id.clone(),
         device_name: pairing_response.device_name.clone(),
@@ -386,7 +430,7 @@ pub async fn submit_pairing_code(
         paired_at: format!("{}Z", now),
         last_sync_at: None,
         fingerprint: pairing_response.fingerprint.clone(),
-        peer_relay_url: connected_relay,
+        peer_relay_url: host_relay,
         sync_doc_id: String::new(),
         sync_doc_ticket: pairing_response.sync_doc_ticket.clone(),
     };
