@@ -2,7 +2,7 @@
 
 ## Prerequisite Status
 
-The following items are **ALREADY DONE** in v1.0.8 — do not re-do them, just verify they're complete:
+The following items are **ALREADY DONE** (this session) — do not re-do them, just verify they're complete:
 
 | Item | Status | Proof |
 |------|--------|-------|
@@ -324,7 +324,7 @@ After all fixes are complete, update these documentation files:
 - Move completed items from "Not Fixed" to "Fixed" section
 - Update counts (currently 34/42 fixed)
 - Remove or update section 11 (remaining issues)
-- Add a new subsection for "v1.0.9" with any new items found
+- Add a new subsection for any new items found
 
 ### `docs/PERFORMANCE_SYNC_AUDIT.md`
 

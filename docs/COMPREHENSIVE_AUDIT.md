@@ -1,13 +1,13 @@
 # Theorem — Comprehensive Codebase Audit
 
-Generated: v1.0.7-to-1.0.8
+Generated: v1.0.7
 Scope: Full-stack audit covering Rust, TypeScript, dependencies, performance, security, accessibility, and test coverage.
 
 ---
 
-## 0. Fix Status (Updated v1.0.8)
+## 0. Fix Status
 
-### ✅ Fixed (v1.0.7 hotfix + v1.0.8 cleanup)
+### ✅ Fixed
 
 | # | Issue | Status | Fixed In |
 |---|-------|--------|----------|
@@ -17,18 +17,18 @@ Scope: Full-stack audit covering Rust, TypeScript, dependencies, performance, se
 | 1.4 | `book.locations` in Zustand | ✅ Fixed (stripped from partialize, stored in SQLite BLOB) | v1.0.7 |
 | 1.5 | Silent `.catch(() => {})` | ✅ Fixed (26 locations → console.error) | v1.0.7 |
 | 2.1 | Rust deps: `axum`, `tower-http`, `local-ip-address` | 🔶 `axum`/`tower-http` still used by sync-daemon controller; `local-ip-address` removed | v1.0.7 |
-| 2.2 | JS deps: alpha plugins, `soundtouchjs`, `@types/uuid` | ✅ Fixed: removed `@tauri-apps/plugin-app`, `@tauri-apps/plugin-window`, `soundtouchjs` (all dead); moved `@types/uuid` to devDeps | v1.0.8 |
+| 2.2 | JS deps: alpha plugins, `soundtouchjs`, `@types/uuid` | ✅ Fixed: removed `@tauri-apps/plugin-app`, `@tauri-apps/plugin-window`, `soundtouchjs` (all dead); moved `@types/uuid` to devDeps | v1.0.7 |
 | 3.2 | No centralized toast system | ✅ Fixed (sonner `<Toaster />` added to App.tsx) | v1.0.7 |
 | 4.1 | Security audit (DOMPurify, .unwrap(), .catch()) | ✅ Fixed — all 3 categories resolved | v1.0.7 |
 | 6 | Recommended deps (sonner, dompurify) | ✅ Both installed and in use | v1.0.7 |
-| 7 | Dep upgrades (reqwest 0.12, zip 2.x) | ✅ Both upgraded and compiling. `rand 0.9` blocked by `chacha20poly1305`'s `rand_core 0.6` dep — resolves after legacy LWW removal | v1.0.8 |
+| 7 | Dep upgrades (reqwest 0.12, zip 2.x) | ✅ Both upgraded and compiling. `rand 0.9` blocked by `chacha20poly1305`'s `rand_core 0.6` dep — resolves after legacy LWW removal | v1.0.7 |
 | 8.3 | `content-visibility: auto` | ✅ Added on 7 scroll containers | v1.0.7 |
 | 10.3 | No centralized toast | ✅ Fixed (sonner) | v1.0.7 |
 | 10.4 | React.memo incomplete | ✅ SettingsPage, ArticleViewer, BookCard, ReaderPage wrapped | v1.0.7 |
 | 10.6 | Rust `.unwrap()` calls | ✅ Fixed (15 calls) | v1.0.7 |
 | 10.8 | Silent `.catch(() => {})` | ✅ Fixed | v1.0.7 |
 | 10.9 | `content-visibility: auto` | ✅ Fixed | v1.0.7 |
-| 10.10 | Barrel imports | ✅ Audited — codebase already compliant (never imports from barrel) | v1.0.8 |
+| 10.10 | Barrel imports | ✅ Audited — codebase already compliant (never imports from barrel) | v1.0.7 |
 | — | `searchBooks()` O(n) uncached | ✅ WeakMap cache added | v1.0.7 |
 | — | `addBookToCollection()` O(n) `.some()` | ✅ Changed to O(1) `getBookLookup` | v1.0.7 |
 | — | Missing DB indexes (title, author, cover) | ✅ Added `CREATE INDEX` | v1.0.7 |
@@ -47,18 +47,18 @@ Scope: Full-stack audit covering Rust, TypeScript, dependencies, performance, se
 | — | Verification test suite created | ✅ 26 tests | v1.0.7 |
 | — | Fix script created | ✅ `scripts/fix-audit-issues.sh` | v1.0.7 |
 
-### ❌ Not Fixed (Remaining)
+### ❌ Not Fixed (Remaining for v1.0.7)
 
 | # | Issue | Reason | Target |
 |---|-------|--------|--------|
-| 3.1 | Reader.tsx 2515 lines (30+ useState, 31 useEffect) | Major refactor — needs careful decomposition | v1.0.9 |
-| 3.3 | Cross-store state mutations | Architectural — needs zustand slices pattern | v1.0.9 |
-| 5 | No Rust integration tests | 3-day effort to write test harness + tests | v1.0.9 |
-| 10.1 | `useOptimistic` for likes/favorites/ratings | Small scope — 0.5 day | v1.0.9 |
-| 10.2 | TanStack Query for data fetching (87+ useEffect) | Large refactor — 3 days | v1.0.9 |
-| 10.5 | Zustand slices pattern (2520 lines → split) | Architectural refactor — 2 days | v1.0.9 |
-| 10.7 | No Rust integration tests | 3 days | v1.0.9 |
-| — | `rand 0.8 → 0.9` | Blocked by `chacha20poly1305`'s `rand_core 0.6` dep — resolves after legacy LWW protocol removal | v1.0.9 |
+| 3.1 | Reader.tsx 2515 lines (30+ useState, 31 useEffect) | Major refactor — needs careful decomposition | v1.0.7 |
+| 3.3 | Cross-store state mutations | Architectural — needs zustand slices pattern | v1.0.7 |
+| 5 | No Rust integration tests | 3-day effort to write test harness + tests | v1.0.7 |
+| 10.1 | `useOptimistic` for likes/favorites/ratings | Small scope — 0.5 day | v1.0.7 |
+| 10.2 | TanStack Query for data fetching (87+ useEffect) | Large refactor — 3 days | v1.0.7 |
+| 10.5 | Zustand slices pattern (2520 lines → split) | Architectural refactor — 2 days | v1.0.7 |
+| 10.7 | No Rust integration tests | 3 days | v1.0.7 |
+| — | `rand 0.8 → 0.9` | Blocked by `chacha20poly1305`'s `rand_core 0.6` dep — resolves after legacy LWW protocol removal | v1.0.7 |
 
 ### 🔄 Planned (Legacy Protocol Removal)
 
@@ -68,8 +68,6 @@ Scope: Full-stack audit covering Rust, TypeScript, dependencies, performance, se
 | — | sync-daemon sidecar (HTTP-based LWW) | Removal planned — replaced by in-process iroh |
 | — | Android worker HTTP → iroh keepalive | Planned |
 | — | `chacha20poly1305`, `x25519-dalek`, `hkdf`, `sha2` | Removable after legacy protocol deleted |
-
-**Total: 34/42 fixes implemented. 8 remaining (3 large refactors, 1 blocked, 4 planned).**
 
 ---
 
