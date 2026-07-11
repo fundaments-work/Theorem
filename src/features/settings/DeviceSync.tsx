@@ -949,7 +949,7 @@ export function DeviceSyncSection() {
             <div className="flex items-center gap-2.5 py-2">
                 <Lock className="w-3.5 h-3.5 text-[color:var(--color-text-muted)] shrink-0 opacity-60" />
                 <p className="text-[11px] text-[color:var(--color-text-muted)] leading-relaxed">
-                    End-to-end encrypted (ChaCha20-Poly1305). Data never leaves your local network.
+                    Sync uses iroh-docs CRDT with iroh QUIC transport security. Only paired devices share data.
                 </p>
             </div>
 

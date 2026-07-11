@@ -730,7 +730,8 @@ async fn encrypt_response(sym_key: &[u8; 32], data: &impl serde::Serialize) -> s
         Err(e) => return serde_json::json!({"error": format!("serialize: {e}")}),
     };
     match sync_crypto::encrypt_payload(sym_key, &json) {
-        Ok(enc) => serde_json::to_value(enc).unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")})),
+        Ok(enc) => serde_json::to_value(enc)
+            .unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")})),
         Err(e) => serde_json::json!({"error": format!("encrypt: {e}")}),
     }
 }
@@ -1014,8 +1015,9 @@ async fn handle_file_pull_req(
                                 meta: None,
                                 chunks: Vec::new(),
                             };
-                            return serde_json::to_value(response)
-                                .unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}));
+                            return serde_json::to_value(response).unwrap_or_else(
+                                |e| serde_json::json!({"error": format!("to_value: {e}")}),
+                            );
                         }
                     }
                 }
@@ -1035,8 +1037,9 @@ async fn handle_file_pull_req(
                             meta: None,
                             chunks: Vec::new(),
                         };
-                        return serde_json::to_value(response)
-                            .unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}));
+                        return serde_json::to_value(response).unwrap_or_else(
+                            |e| serde_json::json!({"error": format!("to_value: {e}")}),
+                        );
                     }
                 }
             }
@@ -1049,7 +1052,8 @@ async fn handle_file_pull_req(
             meta: None,
             chunks: Vec::new(),
         };
-        return serde_json::to_value(response).unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}));
+        return serde_json::to_value(response)
+            .unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}));
     }
 
     // Chunk requests read only the requested slice so a full book is never
@@ -1111,7 +1115,8 @@ async fn handle_file_pull_req(
                 }),
                 chunks,
             };
-            serde_json::to_value(response).unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}))
+            serde_json::to_value(response)
+                .unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}))
         }
         Err(e) => serde_json::json!({"error": e}),
     }
@@ -1246,7 +1251,8 @@ async fn handle_pair_req(
         sync_doc_ticket,
     };
 
-    serde_json::to_value(response).unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}))
+    serde_json::to_value(response)
+        .unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}))
 }
 
 /// Send a pairing request to a peer over iroh.

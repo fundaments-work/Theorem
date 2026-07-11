@@ -995,6 +995,13 @@ pub fn run() {
                 .or_else(|_| app.path().app_cache_dir())
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
 
+            // Run database schema migrations (CREATE INDEX IF NOT EXISTS, ALTER TABLE,
+            // schema evolution). Runs on every startup via a temporary connection so
+            // changes take effect even when the connection pool is already cached.
+            if let Err(e) = database::run_schema_migrations(app.handle()) {
+                eprintln!("[database] Schema migration failed: {e}");
+            }
+
             let device_name = std::env::var("HOSTNAME")
                 .or_else(|_| std::env::var("COMPUTERNAME"))
                 .unwrap_or_else(|_| "Theorem Device".to_string());

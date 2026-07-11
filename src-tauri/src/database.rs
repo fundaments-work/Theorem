@@ -73,35 +73,34 @@ fn remove_materialized_cache_file(app: &AppHandle, book_id: &str) {
     }
 }
 
-fn init_db_pool(db_path: &Path) -> Result<&DbPool, String> {
-    if let Some(pool) = DB_POOL.get() {
-        return Ok(pool);
-    }
-
-    // Run the schema migration on a standalone connection first, then
-    // create the pool.  PRAGMAs that persist in the database file
-    // (journal_mode, synchronous, foreign_keys) are set once here;
-    // per-connection PRAGMAs (busy_timeout, cache_size, mmap_size,
-    // temp_store, journal_size_limit) are applied on every connection
-    // acquired from the pool so they survive connection recycling.
-    let conn = Connection::open(db_path)
-        .map_err(|error| format!("Failed to open SQLite database '{db_path:?}': {error}"))?;
-
+/// Run schema migrations on every app startup, independent of the connection pool.
+/// The pool caches the connection after first init, so schema changes (CREATE INDEX
+/// IF NOT EXISTS, ALTER TABLE) would never execute on subsequent starts without this.
+pub fn run_schema_migrations(app: &AppHandle) -> Result<(), String> {
+    let db_path = database_path(app)?;
+    // Use a temporary connection so we don't interfere with the pool
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database for migration: {e}"))?;
     conn.execute_batch(DB_SCHEMA_PERSISTENT_PRAGMAS)
-        .map_err(|error| format!("Failed to initialize SQLite schema: {error}"))?;
-
-    // Schema migration: add covers.data BLOB column for existing installs
-    // (new installs get it from CREATE TABLE covers which includes data BLOB).
-    let has_data_column: bool = conn
+        .map_err(|e| format!("Failed to run schema migrations: {e}"))?;
+    // Migration: add covers.data BLOB for existing installs
+    let has_data: bool = conn
         .query_row(
             "SELECT COUNT(*) > 0 FROM pragma_table_info('covers') WHERE name = 'data'",
             [],
             |row| row.get(0),
         )
         .unwrap_or(false);
-    if !has_data_column {
+    if !has_data {
         conn.execute_batch("ALTER TABLE covers ADD COLUMN data BLOB;")
             .ok();
+    }
+    Ok(())
+}
+
+fn init_db_pool(db_path: &Path) -> Result<&DbPool, String> {
+    if let Some(pool) = DB_POOL.get() {
+        return Ok(pool);
     }
 
     let manager = SqliteConnectionManager::file(db_path);
