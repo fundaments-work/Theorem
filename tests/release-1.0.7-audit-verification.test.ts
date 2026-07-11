@@ -140,16 +140,18 @@ describe("0-book stability guard", () => {
     });
 });
 
-// ─── Fix 65: Global sync_lock prevents concurrent sync (Rust verification) ───
-describe("Global sync lock (Rust)", () => {
-    it("sync_commands.rs has sync_lock field", () => {
+// ─── Fix 65: Unified iroh-docs CRDT sync path (was sync_lock) ───
+describe("Unified iroh-docs CRDT sync (Rust)", () => {
+    it("sync_commands.rs has docs_sync_now command", () => {
         const content = readSource("src-tauri/src/sync_commands.rs");
-        expect(content).toContain("sync_lock");
+        expect(content).toContain("pub async fn docs_sync_now");
+        expect(content).toContain("doc.start_sync");
     });
 
-    it("initiate_sync acquires sync_lock", () => {
-        const content = readSource("src-tauri/src/sync_commands.rs");
-        expect(content).toContain("sync_lock.lock()");
+    it("PairingProtocolHandler exists for QR pairing", () => {
+        const content = readSource("src-tauri/src/iroh_sync.rs");
+        expect(content).toContain("PairingProtocolHandler");
+        expect(content).toContain("impl ProtocolHandler for PairingProtocolHandler");
     });
 });
 
@@ -193,12 +195,18 @@ describe("docs_get_all_entries object merge (Rust)", () => {
     });
 });
 
-// ─── Fix 61: isDaemonReady checks paired peers ───
-describe("isDaemonReady peer check", () => {
-    it("isDaemonReady function checks paired_devices?.length", () => {
+// ─── Fix 61: JS timer auto-sync calls runDeviceSync (replaced isDaemonReady) ───
+describe("JS timer auto-sync calls runDeviceSync", () => {
+    it("autoSyncRound calls runDeviceSync for each peer", () => {
         const content = readSource("src/core/lib/sync-orchestrator.ts");
-        expect(content).toContain("isDaemonReady");
-        expect(content).toContain("paired_devices?.length");
+        expect(content).toContain("autoSyncRound");
+        expect(content).toContain("runDeviceSync(device.deviceId)");
+    });
+
+    it("startAutoSync sets up periodic timer and visibility listener", () => {
+        const content = readSource("src/core/lib/sync-orchestrator.ts");
+        expect(content).toContain("startAutoSync");
+        expect(content).toContain("visibilitychange");
     });
 });
 

@@ -22,6 +22,11 @@ use tauri::AppHandle;
 use tauri::Emitter;
 use tauri::Manager;
 
+#[cfg(target_os = "android")]
+use iroh::endpoint::{presets::N0, RelayMode};
+#[cfg(target_os = "android")]
+use iroh::protocol::Router;
+
 fn shared_http_client() -> &'static Client {
     static CLIENT: OnceLock<Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
@@ -1017,58 +1022,11 @@ pub fn run() {
                 }
             }
 
-            // Manage background sync handle (used by Android ForegroundService
-            // and desktop background scheduler).
-            use sync_commands::BackgroundSyncHandle;
-            app.manage(BackgroundSyncHandle {
-                cancel: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
-                running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-                data_version: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
-                wake: std::sync::Arc::new(tokio::sync::Notify::new()),
-                sync_lock: std::sync::Arc::new(tokio::sync::Mutex::new(())),
-            });
-
             // Collect any file association / CLI open targets at startup so the frontend can
             // import and open them once it is ready.
             let startup_args: Vec<String> = std::env::args().skip(1).collect();
             let open_paths = collect_open_paths(startup_args, None);
             enqueue_open_paths(app.handle(), open_paths, false);
-
-            // ── Launch sync-daemon (Linux only) ──
-            #[cfg(target_os = "linux")]
-            {
-                use std::sync::Mutex;
-                let daemon_data_dir = daemon_data_dir.clone();
-                let handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    let daemon_path = std::env::var("HOME")
-                        .map(|h| std::path::PathBuf::from(h).join(".local/lib/theorem/sync-daemon"))
-                        .ok();
-                    let daemon_path = match daemon_path {
-                        Some(p) if p.exists() => p,
-                        _ => return,
-                    };
-                    match tokio::process::Command::new(&daemon_path)
-                        .arg(daemon_data_dir.to_string_lossy().as_ref())
-                        .kill_on_drop(true)
-                        .spawn()
-                    {
-                        Ok(child) => {
-                            eprintln!("[sync-daemon] launched (pid={})", child.id().unwrap_or(0));
-                            #[allow(dead_code)]
-                            struct DaemonChild {
-                                inner: Mutex<Option<tokio::process::Child>>,
-                            }
-                            handle.manage(DaemonChild {
-                                inner: Mutex::new(Some(child)),
-                            });
-                        }
-                        Err(e) => {
-                            eprintln!("[sync-daemon] spawn failed: {e}");
-                        }
-                    }
-                });
-            }
 
             // ── System tray (desktop only) ──
             #[cfg(desktop)]
@@ -1179,13 +1137,7 @@ pub fn run() {
             sync_commands::set_device_fingerprint,
             sync_commands::get_paired_devices,
             sync_commands::unpair_device,
-            // Sync data provisioning
-            sync_commands::set_sync_data,
-            sync_commands::get_incoming_sync_data,
-            sync_commands::update_peer_address,
-            // iroh-based sync + file transfer
-            sync_commands::initiate_sync,
-            sync_commands::sync_now,
+            // iroh-docs CRDT sync
             // iroh-docs CRDT sync
             sync_commands::docs_create_sync_doc,
             sync_commands::docs_import_sync_doc,
@@ -1197,10 +1149,6 @@ pub fn run() {
             sync_commands::blobs_download_bytes,
             sync_commands::blobs_add_file,
             sync_commands::blobs_download_file,
-            // Background sync
-            sync_commands::start_background_sync,
-            sync_commands::stop_background_sync,
-            sync_commands::wake_background_sync,
             set_android_fingerprint,
             start_android_sync_worker,
             stop_android_sync_worker,
@@ -1342,69 +1290,133 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
     };
 
     let result = rt.block_on(async {
-        let identity =
-            match theorem_sync_core::sync_crypto::DeviceIdentity::load_or_create(&data_dir) {
-                Ok(id) => id,
-                Err(e) => {
-                    eprintln!("[background-sync] Failed to load identity: {}", e);
-                    return false;
-                }
-            };
-
         let paired_devices = theorem_sync_core::sync_persistence::load_paired_devices(&data_dir);
 
-        let device_id = identity.device_id.clone();
-        let paired_devices = tokio::sync::Mutex::new(paired_devices);
-        let sync_data: tokio::sync::Mutex<Option<serde_json::Value>> =
-            tokio::sync::Mutex::new(None);
+        // ── Create temporary iroh endpoint for CRDT sync ──
+        let key_path = data_dir.join("iroh-key");
+        let secret_key = match crate::iroh_sync::load_or_create_key(&key_path) {
+            Ok(k) => k,
+            Err(e) => {
+                eprintln!("[background-sync] Failed to load iroh key: {e}");
+                return false;
+            }
+        };
+        let endpoint = match iroh::endpoint::Endpoint::builder(N0)
+            .secret_key(secret_key)
+            .alpns(vec![iroh_docs::ALPN.to_vec(), iroh_blobs::ALPN.to_vec()])
+            .relay_mode(RelayMode::Default)
+            .bind()
+            .await
+        {
+            Ok(ep) => ep,
+            Err(e) => {
+                eprintln!("[background-sync] Failed to bind iroh endpoint: {e}");
+                return false;
+            }
+        };
 
-        // ── Outbound sync: push our data to each paired peer ──
-        let client = reqwest::Client::new();
-        for (_peer_id, peer) in paired_devices.lock().await.iter() {
-            let peer_url = format!("http://{}:{}", peer.last_ip, peer.last_port);
-            let manifest = theorem_sync_core::sync_protocol::SyncManifest {
-                device_id: device_id.clone(),
-                domains: Default::default(),
-                last_sync_at: None,
+        // ── Create in-memory docs + blobs stack ──
+        let blobs = iroh_blobs::store::mem::Store::default();
+        let gossip = iroh_gossip::net::Gossip::builder().spawn(endpoint.clone());
+        let docs_handler = match iroh_docs::protocol::Docs::memory()
+            .spawn(endpoint.clone(), blobs.clone().into(), gossip)
+            .await
+        {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("[background-sync] Failed to spawn iroh-docs: {e}");
+                let _ = endpoint.close().await;
+                return false;
+            }
+        };
+        let blobs_handler = iroh_blobs::BlobsProtocol::new(&blobs, None);
+        let docs_api = docs_handler.api().clone();
+
+        // ── Build Router to accept incoming sync connections ──
+        let router = match Router::builder(endpoint.clone())
+            .accept(iroh_docs::ALPN, docs_handler)
+            .accept(iroh_blobs::ALPN, blobs_handler)
+            .spawn()
+        {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("[background-sync] Failed to spawn Router: {e}");
+                let _ = endpoint.close().await;
+                return false;
+            }
+        };
+
+        // ── Sync with each paired peer via iroh-docs CRDT ──
+        let mut any_synced = false;
+        for (_, peer) in &paired_devices {
+            if peer.sync_doc_id.is_empty() {
+                continue;
+            }
+            let doc_id: iroh_docs::NamespaceId = match peer.sync_doc_id.parse() {
+                Ok(id) => id,
+                Err(e) => {
+                    eprintln!(
+                        "[background-sync] Invalid doc id for {}: {e}",
+                        peer.device_name
+                    );
+                    continue;
+                }
             };
-            let _ = client
-                .post(format!("{peer_url}/sync/manifest"))
-                .json(&manifest)
-                .timeout(std::time::Duration::from_secs(5))
-                .send()
-                .await;
-        }
-
-        // Persist any incoming data received from peers during this window.
-        let incoming_cache_path = data_dir.join("sync-incoming-cache.json");
-        let sync_data_guard = sync_data.lock().await;
-        if let Some(ref snapshot) = *sync_data_guard {
-            let incoming: std::collections::HashMap<String, String> = snapshot
-                .as_object()
-                .map(|obj| {
-                    obj.iter()
-                        .filter(|(k, _)| k.starts_with("incoming_"))
-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-                        .collect()
-                })
-                .unwrap_or_default();
-            if !incoming.is_empty() {
-                if let Ok(json) = serde_json::to_string_pretty(&incoming) {
-                    if let Err(e) = std::fs::write(&incoming_cache_path, &json) {
-                        eprintln!("[background-sync] Failed to persist incoming data cache: {e}");
-                    } else {
-                        eprintln!(
-                            "[background-sync] Persisted {} incoming domain(s) to {}",
-                            incoming.len(),
-                            incoming_cache_path.display()
-                        );
-                    }
+            let doc = match docs_api.open(doc_id).await {
+                Ok(Some(d)) => d,
+                Ok(None) => {
+                    eprintln!("[background-sync] Doc not found for {}", peer.device_name);
+                    continue;
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[background-sync] Failed to open doc for {}: {e}",
+                        peer.device_name
+                    );
+                    continue;
+                }
+            };
+            let peer_pk: iroh::PublicKey = match peer.iroh_node_id.parse() {
+                Ok(pk) => pk,
+                Err(e) => {
+                    eprintln!(
+                        "[background-sync] Invalid peer key for {}: {e}",
+                        peer.device_name
+                    );
+                    continue;
+                }
+            };
+            let mut peer_addr = iroh::EndpointAddr::new(peer_pk);
+            if !peer.peer_relay_url.is_empty() {
+                if let Ok(url) = peer.peer_relay_url.parse::<iroh::RelayUrl>() {
+                    peer_addr = peer_addr.with_relay_url(url);
+                }
+            }
+            match doc.start_sync(vec![peer_addr]).await {
+                Ok(()) => {
+                    eprintln!(
+                        "[background-sync] Initiated CRDT sync with {}",
+                        peer.device_name
+                    );
+                    any_synced = true;
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[background-sync] start_sync failed for {}: {e}",
+                        peer.device_name
+                    );
                 }
             }
         }
-        drop(sync_data_guard);
 
-        eprintln!("[background-sync] JNI sync round complete");
+        // Give sync a short window to exchange data, then shut down.
+        if any_synced {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        }
+
+        let _ = router.shutdown().await;
+        let _ = endpoint.close().await;
+        eprintln!("[background-sync] JNI sync round complete — synced: {any_synced}");
         true
     });
 

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/theorem-sync-core", "crates/sync-daemon"]
+members = ["crates/theorem-sync-core"]
 resolver = "2"
 
 [package]
@@ -50,16 +50,6 @@ theorem-sync-core = { path = "crates/theorem-sync-core" }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros", "process"] }
 futures = "0.3"
 
-# Cryptography (RustCrypto, NCC Group audited)
-chacha20poly1305 = "0.10"
-x25519-dalek = { version = "2", features = ["static_secrets"] }
-hkdf = "0.12"
-sha2 = "0.10"
-rand = "0.8"
-
-# QR code generation + encoding utilities
-qrcode = { version = "0.14", default-features = false, features = ["svg"] }
-base64 = "0.22"
 hex = "0.4"
 bzip2 = "0.4"
 tar = "0.4"

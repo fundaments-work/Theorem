@@ -1,20 +1,17 @@
 /// Theorem Sync — Tauri Command Wrappers
 ///
 /// Bridges the iroh P2P sync transport with the Tauri frontend via IPC commands.
-use crate::iroh_sync::{
-    self, DocsApiSnapshot, EventCallback, IrohPeerInfo, IrohSyncEndpoint, SyncDataSnapshot,
-    SyncTransportState,
+use crate::iroh_sync::{self, DocsApiSnapshot, IrohSyncEndpoint, SyncTransportState};
+use theorem_sync_core::sync_crypto;
+use theorem_sync_core::sync_protocol::{
+    DeviceIdentityInfo, PairedDevice, PairedDeviceInfo, PairingQrData, PairingQrPayload,
+    PairingRequest,
 };
-use theorem_sync_core::sync_crypto::{self, DeviceIdentity};
-use theorem_sync_core::sync_protocol::*;
 
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tokio::sync::Mutex;
-use tokio::time::Duration;
 
 // ─── Global iroh endpoint ───
 
@@ -27,18 +24,6 @@ pub struct SyncState {
     accept_cancel: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
 }
 
-// ─── Background Sync Handle ───
-pub struct BackgroundSyncHandle {
-    pub cancel: Arc<Mutex<Option<tokio::sync::watch::Sender<bool>>>>,
-    pub running: Arc<AtomicBool>,
-    pub data_version: Arc<AtomicU64>,
-    pub wake: Arc<tokio::sync::Notify>,
-    /// Global sync lock — prevents concurrent initiate_sync calls from
-    /// the JS timer (2min), the Rust background loop (5min), or the
-    /// daemon auto-sync (2min) from racing each other.
-    pub sync_lock: Arc<tokio::sync::Mutex<()>>,
-}
-
 // ─── Init ───
 
 pub fn init_sync(
@@ -46,29 +31,21 @@ pub fn init_sync(
     device_name: String,
     app_handle: tauri::AppHandle,
 ) -> Result<SyncState, String> {
-    let identity = DeviceIdentity::load_or_create(&app_data_dir)?;
-    let paired_devices = iroh_sync::load_paired_devices_from_disk(&app_data_dir);
+    let key_path = app_data_dir.join("iroh-key");
+    let secret_key = crate::iroh_sync::load_or_create_key(&key_path)?;
+    let public_key_bytes = *secret_key.public().as_bytes();
+    let device_id = sync_crypto::compute_device_id(&public_key_bytes);
+    let fingerprint = sync_crypto::read_machine_fingerprint();
 
-    let emitter: EventCallback = {
-        let handle = app_handle.clone();
-        Arc::new(move |event_name: &str, payload_json: &str| {
-            if let Err(e) = handle.emit(event_name, payload_json.to_string()) {
-                eprintln!(
-                    "[theorem-sync] Failed to emit event '{}': {}",
-                    event_name, e
-                );
-            }
-        })
-    };
+    let paired_devices = iroh_sync::load_paired_devices_from_disk(&app_data_dir);
 
     let transport_state = Arc::new(SyncTransportState {
         app_handle: app_handle.clone(),
-        identity,
+        device_id,
+        fingerprint,
         device_name,
         app_data_dir,
         paired_devices: Mutex::new(paired_devices),
-        sync_data: Mutex::new(None),
-        event_emitter: Some(emitter),
         docs_api: Mutex::new(None),
     });
 
@@ -98,13 +75,13 @@ async fn get_or_init_iroh(app: &tauri::AppHandle) -> Result<Arc<IrohSyncEndpoint
         .map_err(|e| format!("app_data_dir: {e}"))?;
     let key_path = data_dir.join("iroh-key");
     let sync_state = get_sync_state(app)?;
-    let identity = &sync_state.transport_state.identity;
     let ep = Arc::new(
         IrohSyncEndpoint::new(
             &key_path,
-            identity.device_id.clone(),
+            sync_state.transport_state.device_id.clone(),
             sync_state.transport_state.device_name.clone(),
-            identity.effective_fingerprint(),
+            sync_crypto::get_frontend_fingerprint()
+                .unwrap_or_else(|| sync_state.transport_state.fingerprint.clone()),
         )
         .await?,
     );
@@ -199,9 +176,10 @@ pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData,
     let qr_payload = PairingQrPayload {
         version: 1,
         node_id: ep.public_key_string(),
-        device_id: sync_state.transport_state.identity.device_id.clone(),
+        device_id: sync_state.transport_state.device_id.clone(),
         device_name: sync_state.transport_state.device_name.clone(),
-        fingerprint: sync_state.transport_state.identity.effective_fingerprint(),
+        fingerprint: sync_crypto::get_frontend_fingerprint()
+            .unwrap_or_else(|| sync_state.transport_state.fingerprint.clone()),
     };
 
     let payload_json = serde_json::to_string(&qr_payload)
@@ -248,9 +226,10 @@ pub async fn submit_pairing_code(
     // Send handshake first
     let my_info = iroh_sync::IrohPeerInfo {
         public_key: ep.public_key,
-        device_id: sync_state.transport_state.identity.device_id.clone(),
+        device_id: sync_state.transport_state.device_id.clone(),
         device_name: sync_state.transport_state.device_name.clone(),
-        fingerprint: sync_state.transport_state.identity.effective_fingerprint(),
+        fingerprint: sync_crypto::get_frontend_fingerprint()
+            .unwrap_or_else(|| sync_state.transport_state.fingerprint.clone()),
     };
     {
         let (mut send, mut recv) = conn.open_bi().await.map_err(|e| format!("open_bi: {e}"))?;
@@ -272,9 +251,10 @@ pub async fn submit_pairing_code(
     }
 
     let pairing_request = PairingRequest {
-        device_id: sync_state.transport_state.identity.device_id.clone(),
+        device_id: sync_state.transport_state.device_id.clone(),
         device_name: sync_state.transport_state.device_name.clone(),
-        fingerprint: sync_state.transport_state.identity.effective_fingerprint(),
+        fingerprint: sync_crypto::get_frontend_fingerprint()
+            .unwrap_or_else(|| sync_state.transport_state.fingerprint.clone()),
         node_id: ep.public_key.to_string(),
     };
 
@@ -412,10 +392,11 @@ pub async fn submit_pairing_code(
 pub async fn get_device_identity(app: tauri::AppHandle) -> Result<DeviceIdentityInfo, String> {
     let sync_state = get_sync_state(&app)?;
     Ok(DeviceIdentityInfo {
-        device_id: sync_state.transport_state.identity.device_id.clone(),
+        device_id: sync_state.transport_state.device_id.clone(),
         device_name: sync_state.transport_state.device_name.clone(),
-        public_key_hex: hex::encode(sync_state.transport_state.identity.public_key_bytes()),
-        fingerprint: sync_state.transport_state.identity.effective_fingerprint(),
+        public_key_hex: String::new(),
+        fingerprint: sync_crypto::get_frontend_fingerprint()
+            .unwrap_or_else(|| sync_state.transport_state.fingerprint.clone()),
     })
 }
 
@@ -443,476 +424,6 @@ pub async fn unpair_device(app: tauri::AppHandle, device_id: String) -> Result<(
         return Err(format!("Device {} not found", device_id));
     }
     iroh_sync::save_paired_devices_to_disk(&sync_state.transport_state.app_data_dir, &devices)?;
-    Ok(())
-}
-
-// ─── Sync Data Provisioning ───
-
-#[tauri::command]
-pub async fn set_sync_data(
-    app: tauri::AppHandle,
-    domains_map: HashMap<String, String>,
-    manifest_map: HashMap<String, DomainVersion>,
-    book_file_paths: Option<HashMap<String, String>>,
-) -> Result<(), String> {
-    let sync_state = get_sync_state(&app)?;
-    let mut sync_data = sync_state.transport_state.sync_data.lock().await;
-    *sync_data = Some(SyncDataSnapshot {
-        domains: domains_map,
-        manifest: manifest_map,
-        book_file_paths: book_file_paths.unwrap_or_default(),
-    });
-    let bg = app.state::<BackgroundSyncHandle>();
-    bg.data_version.fetch_add(1, Ordering::SeqCst);
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn get_incoming_sync_data(app: tauri::AppHandle) -> Result<String, String> {
-    let sync_state = get_sync_state(&app)?;
-    let mut sync_data = sync_state.transport_state.sync_data.lock().await;
-
-    let mut incoming: HashMap<String, String> = HashMap::new();
-
-    // Load persisted incoming data from prior WorkManager/JNI sync rounds
-    let cache_path = sync_state
-        .transport_state
-        .app_data_dir
-        .join("sync-incoming-cache.json");
-    if cache_path.exists() {
-        if let Ok(cache_json) = std::fs::read_to_string(&cache_path) {
-            if let Ok(cached_incoming) =
-                serde_json::from_str::<HashMap<String, String>>(&cache_json)
-            {
-                for (k, v) in cached_incoming {
-                    incoming.insert(k.replace("incoming_", ""), v);
-                }
-            }
-        }
-        let _ = std::fs::remove_file(&cache_path);
-    }
-
-    if let Some(data) = sync_data.as_mut() {
-        let incoming_keys: Vec<String> = data
-            .domains
-            .keys()
-            .filter(|k| k.starts_with("incoming_"))
-            .cloned()
-            .collect();
-        for key in &incoming_keys {
-            if let Some(val) = data.domains.remove(key) {
-                let domain = key.strip_prefix("incoming_").unwrap_or(key);
-                incoming.insert(domain.to_string(), val);
-            }
-        }
-    }
-
-    serde_json::to_string(&incoming).map_err(|e| format!("Serialize incoming data failed: {e}"))
-}
-
-async fn queue_incoming_sync_result(
-    app: &tauri::AppHandle,
-    peer_device_id: &str,
-    incoming_json: &str,
-) -> Result<(), String> {
-    let incoming: HashMap<String, String> = serde_json::from_str(incoming_json)
-        .map_err(|e| format!("Parse incoming sync data: {e}"))?;
-    let sync_state = get_sync_state(app)?;
-    let mut sync_data = sync_state.transport_state.sync_data.lock().await;
-
-    if sync_data.is_none() {
-        *sync_data = Some(SyncDataSnapshot::default());
-    }
-    if let Some(data) = sync_data.as_mut() {
-        for (domain, payload) in incoming {
-            data.domains.insert(format!("incoming_{domain}"), payload);
-        }
-    }
-    drop(sync_data);
-
-    if let Some(emitter) = &sync_state.transport_state.event_emitter {
-        emitter(
-            "sync-incoming-complete",
-            &serde_json::json!({ "peerDeviceId": peer_device_id }).to_string(),
-        );
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn update_peer_address(
-    app: tauri::AppHandle,
-    device_id: String,
-    ip: String,
-    port: u16,
-) -> Result<(), String> {
-    let sync_state = get_sync_state(&app)?;
-    let mut devices = sync_state.transport_state.paired_devices.lock().await;
-    if let Some(device) = devices.get_mut(&device_id) {
-        device.last_ip = ip;
-        device.last_port = port;
-        iroh_sync::save_paired_devices_to_disk(&sync_state.transport_state.app_data_dir, &devices)?;
-        Ok(())
-    } else {
-        Err(format!("Device {} not paired", device_id))
-    }
-}
-
-#[tauri::command]
-pub async fn sync_now(app: tauri::AppHandle) -> Result<(), String> {
-    let peer_ids: Vec<String> = {
-        let sync_state = get_sync_state(&app)?;
-        let devices = sync_state.transport_state.paired_devices.lock().await;
-        devices.keys().cloned().collect()
-    };
-
-    if peer_ids.is_empty() {
-        return Ok(());
-    }
-
-    let mut failures = Vec::new();
-    let mut successes = 0u32;
-    for peer_id in peer_ids.clone() {
-        match initiate_sync(app.clone(), peer_id.clone()).await {
-            Ok(incoming) => {
-                if let Err(error) = queue_incoming_sync_result(&app, &peer_id, &incoming).await {
-                    failures.push(format!("{peer_id}: {error}"));
-                } else {
-                    successes += 1;
-                }
-            }
-            Err(error) => failures.push(format!("{peer_id}: {error}")),
-        }
-    }
-
-    if successes > 0 {
-        // At least one peer synced — partial success.
-        if !failures.is_empty() {
-            eprintln!(
-                "[sync] sync_now: {successes} succeeded, {} failed: {}",
-                failures.len(),
-                failures.join("; ")
-            );
-        }
-        Ok(())
-    } else if failures.is_empty() {
-        Ok(())
-    } else {
-        Err(format!("Sync failed: {}", failures.join("; ")))
-    }
-}
-
-// ─── Sync Orchestrator (Client Side) ───
-
-/// Extract peer addressing info from a connection and save it for reconnection.
-async fn save_peer_addrs_from_conn(
-    app: &tauri::AppHandle,
-    device_id: &str,
-    conn: &iroh::endpoint::Connection,
-) {
-    let relay_url = conn.paths().iter().find_map(|p| match p.remote_addr() {
-        iroh::TransportAddr::Relay(url) => Some(url.to_string()),
-        _ => None,
-    });
-    let direct_addr = conn.paths().iter().find_map(|p| match p.remote_addr() {
-        iroh::TransportAddr::Ip(addr) => Some(*addr),
-        _ => None,
-    });
-
-    let sync_state = match app.try_state::<SyncState>() {
-        Some(s) => s,
-        None => return,
-    };
-    let mut devices = sync_state.transport_state.paired_devices.lock().await;
-    if let Some(device) = devices.get_mut(device_id) {
-        if let Some(url) = &relay_url {
-            device.peer_relay_url = url.clone();
-        }
-        if let Some(addr) = direct_addr {
-            device.last_ip = addr.ip().to_string();
-            device.last_port = addr.port();
-        }
-        let _ = iroh_sync::save_paired_devices_to_disk(
-            &sync_state.transport_state.app_data_dir,
-            &devices,
-        );
-    }
-}
-
-/// Connect to a peer via iroh. With the N0 preset, the endpoint publishes its own
-/// relay URL to DNS (dns.iroh.link) so peers can resolve by PublicKey alone, even
-/// after restarts. Stored relay URL and IP are used as speed hints but are optional.
-async fn connect_to_peer(
-    app: &tauri::AppHandle,
-    peer: &PairedDevice,
-) -> Result<(iroh::endpoint::Connection, iroh::PublicKey), String> {
-    let ep = get_or_init_iroh(app).await?;
-    let peer_pk: iroh::PublicKey = peer
-        .iroh_node_id
-        .parse()
-        .map_err(|e| format!("Invalid peer node_id: {e}"))?;
-
-    // Build address with stored hints (optional — N0 DNS lookup resolves without them).
-    let mut addr = iroh::EndpointAddr::new(peer_pk);
-    if !peer.peer_relay_url.is_empty() {
-        if let Ok(relay_url) = peer.peer_relay_url.parse::<iroh::RelayUrl>() {
-            addr = addr.with_relay_url(relay_url);
-        }
-    }
-    if let Ok(ip_addr) = peer.last_ip.parse::<std::net::IpAddr>() {
-        if peer.last_port > 0 {
-            addr = addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, peer.last_port));
-        }
-    }
-
-    eprintln!("[sync] Connecting to peer {}...", peer.device_name);
-    let conn = tokio::time::timeout(std::time::Duration::from_secs(60), async {
-        ep.endpoint
-            .connect(addr, crate::iroh_sync::ALPN_BYTES)
-            .await
-    })
-    .await
-    .map_err(|_| "Connect to peer timed out after 60s".to_string())?
-    .map_err(|e| format!("Connect to peer failed: {e}"))?;
-    eprintln!("[sync] Connected to peer {}", peer.device_name);
-
-    Ok((conn, ep.public_key))
-}
-
-/// Perform the iroh peer info handshake on a newly established connection.
-/// Both sides exchange their `IrohPeerInfo` so the acceptor can identify the peer.
-/// After this, the connection is ready for protocol requests via `iroh_request`.
-async fn perform_handshake(
-    conn: &iroh::endpoint::Connection,
-    public_key: iroh::PublicKey,
-    device_id: &str,
-    device_name: &str,
-    fingerprint: &str,
-) -> Result<(), String> {
-    eprintln!("[sync] Performing handshake with {device_name}...");
-    let h = tokio::time::timeout(std::time::Duration::from_secs(30), async {
-        let my_info = IrohPeerInfo {
-            public_key,
-            device_id: device_id.to_string(),
-            device_name: device_name.to_string(),
-            fingerprint: fingerprint.to_string(),
-        };
-        let (mut send, mut recv) = conn.open_bi().await.map_err(|e| format!("open_bi: {e}"))?;
-        let json = serde_json::to_vec(&my_info).map_err(|e| format!("serialize: {e}"))?;
-        let len = (json.len() as u32).to_be_bytes();
-        send.write_all(&len)
-            .await
-            .map_err(|e| format!("write: {e}"))?;
-        send.write_all(&json)
-            .await
-            .map_err(|e| format!("write: {e}"))?;
-        send.finish().map_err(|e| format!("finish: {e}"))?;
-        let mut lb = [0u8; 4];
-        recv.read_exact(&mut lb)
-            .await
-            .map_err(|e| format!("read: {e}"))?;
-        let _ = u32::from_be_bytes(lb);
-        Ok::<(), String>(())
-    })
-    .await;
-    match h {
-        Ok(Ok(())) => {}
-        Ok(Err(e)) => return Err(e),
-        Err(_) => return Err("Handshake timeout (30s)".to_string()),
-    }
-    eprintln!("[sync] Handshake complete with {device_name}");
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn initiate_sync(
-    app: tauri::AppHandle,
-    peer_device_id: String,
-) -> Result<String, String> {
-    let bg_handle = app.state::<BackgroundSyncHandle>();
-    // Acquire global sync lock to prevent concurrent sync operations
-    // from racing each other (JS timer, Rust background timer, daemon loop).
-    let _sync_guard = bg_handle.sync_lock.lock().await;
-
-    let sync_state = get_sync_state(&app)?;
-
-    let devices = sync_state.transport_state.paired_devices.lock().await;
-    let peer = devices
-        .get(&peer_device_id)
-        .cloned()
-        .ok_or("Peer not paired")?;
-    drop(devices);
-
-    // DEPRECATED: Legacy ChaCha20-Poly1305 encryption with zero key.
-    // This symmetric encryption was a placeholder — real transport security
-    // is provided by iroh QUIC. This code path will be removed when the
-    // legacy LWW sync protocol is fully replaced by iroh-docs CRDT.
-    // DO NOT use this key pattern for any new sensitive data.
-    #[allow(non_upper_case_globals)]
-    let sym_key: [u8; 32] = [0u8; 32];
-    let my_device_id = sync_state.transport_state.identity.device_id.clone();
-
-    let sync_data_guard = sync_state.transport_state.sync_data.lock().await;
-    let data = sync_data_guard.clone();
-    drop(sync_data_guard);
-
-    let data = data.ok_or("Sync data not set by frontend yet")?;
-
-    let manifest = SyncManifest {
-        device_id: my_device_id.clone(),
-        last_sync_at: peer.last_sync_at.clone(),
-        domains: data.manifest.clone(),
-    };
-
-    // Connect via iroh — uses stored relay URL + IP/port as address hints.
-    let (conn, my_public_key) = connect_to_peer(&app, &peer).await?;
-    // Capture the peer's actual relay URL and direct address from this connection
-    // so future reconnections (after restarts) can use them as address hints.
-    save_peer_addrs_from_conn(&app, &peer_device_id, &conn).await;
-
-    // Perform handshake
-    perform_handshake(
-        &conn,
-        my_public_key,
-        &my_device_id,
-        &sync_state.transport_state.device_name,
-        &sync_state.transport_state.identity.effective_fingerprint(),
-    )
-    .await?;
-
-    let incoming =
-        iroh_sync::sync_with_peer(&conn, &sym_key, &my_device_id, &manifest, &data.domains)
-            .await
-            .map_err(|e| format!("sync failed: {e}"))?;
-
-    // Update last_sync_at
-    {
-        let mut devices = sync_state.transport_state.paired_devices.lock().await;
-        if let Some(d) = devices.get_mut(&peer_device_id) {
-            d.last_sync_at = Some(sync_crypto::now_iso8601());
-        }
-    }
-
-    serde_json::to_string(&incoming).map_err(|e| format!("Serialize incoming map: {e}"))
-}
-
-// ─── Background Sync ───
-
-#[tauri::command]
-pub async fn start_background_sync(
-    app: tauri::AppHandle,
-    interval_secs: Option<u64>,
-) -> Result<(), String> {
-    let bg_handle = app.state::<BackgroundSyncHandle>();
-    if bg_handle.running.load(Ordering::SeqCst) {
-        return Ok(());
-    }
-
-    let interval = interval_secs.unwrap_or(300).max(60);
-    let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
-
-    {
-        let mut cancel_lock = bg_handle.cancel.lock().await;
-        *cancel_lock = Some(cancel_tx);
-    }
-    bg_handle.running.store(true, Ordering::SeqCst);
-
-    let app_clone = app.clone();
-    let wake = bg_handle.wake.clone();
-    tokio::spawn(async move {
-        let mut timer = tokio::time::interval(Duration::from_secs(interval));
-        let mut last_synced_version: u64 = 0;
-
-        loop {
-            tokio::select! {
-                _ = timer.tick() => {}
-                _ = wake.notified() => {
-                    eprintln!("[background-sync] Woken by JS mutation trigger");
-                }
-                _ = cancel_rx.changed() => {
-                    if *cancel_rx.borrow() {
-                        eprintln!("[background-sync] Stopped by cancel signal");
-                        break;
-                    }
-                }
-            }
-
-            let bg = app_clone.state::<BackgroundSyncHandle>();
-            let current_version = bg.data_version.load(Ordering::SeqCst);
-            if current_version == last_synced_version {
-                continue;
-            }
-
-            let peer_ids: Vec<String> = {
-                let sync_state = match get_sync_state(&app_clone) {
-                    Ok(s) => s,
-                    Err(_) => continue,
-                };
-                let devices = sync_state.transport_state.paired_devices.lock().await;
-                devices.keys().cloned().collect()
-            };
-
-            if peer_ids.is_empty() {
-                continue;
-            }
-
-            let mut any_success = false;
-            for peer_id in &peer_ids {
-                match initiate_sync(app_clone.clone(), peer_id.clone()).await {
-                    Ok(incoming) => {
-                        match queue_incoming_sync_result(&app_clone, peer_id, &incoming).await {
-                            Ok(()) => {
-                                any_success = true;
-                                eprintln!("[background-sync] Completed sync with {peer_id}");
-                            }
-                            Err(e) => eprintln!(
-                                "[background-sync] Failed to queue sync data from {peer_id}: {e}"
-                            ),
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("[background-sync] Sync with {peer_id} failed: {e} (continuing)")
-                    }
-                }
-            }
-
-            if any_success {
-                last_synced_version = current_version;
-            }
-        }
-
-        let bg = app_clone.state::<BackgroundSyncHandle>();
-        bg.running.store(false, Ordering::SeqCst);
-    });
-
-    eprintln!("[background-sync] Started (interval={interval}s)");
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn stop_background_sync(app: tauri::AppHandle) -> Result<(), String> {
-    let bg_handle = app.state::<BackgroundSyncHandle>();
-    if !bg_handle.running.load(Ordering::SeqCst) {
-        return Ok(());
-    }
-    let mut cancel_lock = bg_handle.cancel.lock().await;
-    if let Some(sender) = cancel_lock.take() {
-        let _ = sender.send(true);
-    }
-    drop(cancel_lock);
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    eprintln!("[background-sync] Stopped");
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn wake_background_sync(app: tauri::AppHandle) -> Result<(), String> {
-    let bg_handle = app.state::<BackgroundSyncHandle>();
-    if !bg_handle.running.load(Ordering::SeqCst) {
-        return Ok(());
-    }
-    bg_handle.data_version.fetch_add(1, Ordering::SeqCst);
-    bg_handle.wake.notify_one();
     Ok(())
 }
 
