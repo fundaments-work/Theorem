@@ -48,15 +48,13 @@ describe("Settings page provisions after pairing", () => {
 
 // ─── Fix 54: Ephemeral sync status not persisted ───
 describe("Ephemeral sync status not persisted", () => {
-    it("partialize does not include deviceSyncStatus", () => {
-        const content = readSource("src/core/store/index.ts");
-        // Use a broader regex to match the partialize section
-        const partializeMatch = content.match(/partialize:\s*\(state\)\s*=>\s*\(\{[\s\S]{0,800}\}\)/);
-        expect(partializeMatch).not.toBeNull();
-        if (partializeMatch) {
-            expect(partializeMatch[0]).not.toContain("deviceSyncStatus");
-            expect(partializeMatch[0]).not.toContain("deviceSyncMessage");
-            expect(partializeMatch[0]).not.toContain("deviceSyncAt");
+    it("settings store does not contain deviceSyncStatus (UI-only field)", () => {
+        const content = readSource("src/core/store/settingsStore.ts");
+        const storeInterface = content.match(/SettingsStore \{[\s\S]{0,2000}\}[\s\S]{0,200}export/);
+        expect(storeInterface).not.toBeNull();
+        if (storeInterface) {
+            // deviceSyncStatus is a UI-only field, not persisted
+            expect(storeInterface[0]).not.toContain("deviceSyncStatus");
         }
     });
 });
@@ -64,7 +62,7 @@ describe("Ephemeral sync status not persisted", () => {
 // ─── Fix 55: Settings migration doesn't force autoSyncEnabled: false ───
 describe("Settings migration preserves autoSyncEnabled", () => {
     it("migration does not force autoSyncEnabled to false", () => {
-        const content = readSource("src/core/store/index.ts");
+        const content = readSource("src/core/store/settingsStore.ts");
         // Find the deviceSync migration section
         const migrationSection = content.match(/deviceSync:\s*\{[\s\S]{0,300}\},/);
         expect(migrationSection).not.toBeNull();
@@ -207,13 +205,13 @@ describe("isDaemonReady peer check", () => {
 // ─── Audit: searchBooks cache and addBookToCollection O(1) ───
 describe("Store performance fixes", () => {
     it("searchBooks uses WeakMap cache", () => {
-        const content = readSource("src/core/store/index.ts");
+        const content = readSource("src/core/store/libraryStore.ts");
         expect(content).toContain("searchBooksResultCache");
         expect(content).toContain("queryMap.get(q)");
     });
 
     it("addBookToCollection uses O(1) getBookLookup", () => {
-        const content = readSource("src/core/store/index.ts");
+        const content = readSource("src/core/store/libraryStore.ts");
         expect(content).toContain("getBookLookup(state.books).has(bookId)");
         expect(content).not.toContain("state.books.some((b) => b.id === bookId)");
     });

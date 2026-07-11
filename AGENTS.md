@@ -77,7 +77,13 @@ src/
   core/
     index.ts                    # Barrel re-exporting lib, store, types, services
     types/index.ts              # Core domain contracts (Book, Annotation, settings, routes)
-    store/index.ts              # Zustand stores + persistence + migrations
+    store/                      # Zustand stores (slices — one file per store)
+      index.ts                  # Barrel re-exporting all 5 stores
+      uiStore.ts                # useUIStore (navigation, search, dialogs)
+      libraryStore.ts           # useLibraryStore (books, collections, annotations)
+      settingsStore.ts          # useSettingsStore (settings, stats, migrations)
+      vocabularyStore.ts        # useVocabularyStore (terms, dictionaries, lookup)
+      rssStore.ts               # useRssStore (feeds, articles)
     lib/                        # Runtime helpers (env, storage, import, design tokens, dialogs, vault sync)
     services/                   # Dictionary, StarDict, RSS services
   shell/                        # App chrome (sidebar, titlebar, bottom nav, error boundary)
@@ -162,12 +168,12 @@ Notes:
   - `src/core/lib/search/domain.ts`
 
 ### State + persistence
-- Stores live in `src/core/store/index.ts`:
-  - `useUIStore` (ephemeral UI/navigation/search/vault sync state)
-  - `useLibraryStore` (books/collections/annotations + persisted cache)
-  - `useSettingsStore` (settings/stats)
-  - `useVocabularyStore` (terms/dictionaries/lookup cache)
-  - `useRssStore` (feeds/articles/current article)
+- Stores live in `src/core/store/` (one file per store, barrel `index.ts` re-exports all):
+  - `uiStore.ts` → `useUIStore` (ephemeral UI/navigation/search/vault sync state)
+  - `libraryStore.ts` → `useLibraryStore` (books/collections/annotations + persisted cache)
+  - `settingsStore.ts` → `useSettingsStore` (settings/stats)
+  - `vocabularyStore.ts` → `useVocabularyStore` (terms/dictionaries/lookup cache)
+  - `rssStore.ts` → `useRssStore` (feeds/articles/current article)
 - Persisted stores already use versioned migrations. When changing persisted schema:
   - Update defaults.
   - Bump version.
@@ -218,7 +224,7 @@ Notes:
 
 ## Placement Rules (Where New Code Goes)
 - Shared domain types/contracts: `src/core/types/index.ts`
-- Shared state/persistence: `src/core/store/index.ts`
+- Shared state/persistence: `src/core/store/` (one file per store slice)
 - Shared utility/runtime integration:
   - storage/import: `src/core/lib/storage.ts`, `src/core/lib/import.ts`
   - design tokens/theme sync: `src/core/lib/design-tokens.ts` + CSS tokens
@@ -323,6 +329,7 @@ Notes:
 - Do not hardcode colors where design tokens exist.
 - Do not directly edit vendored foliate-js internals for app-level behavior tweaks if the wrapper/engine layer can solve it.
 - Do not import from the barrel (`src/core/index.ts`). Import from specific source modules only.
+- Do not recombine store imports — import `useLibraryStore` from `"../../core/store"` (the barrel re-exports from there), not from individual slice files like `"../../core/store/libraryStore"`. The barrel `index.ts` is the canonical import path for stores.
 - Do not commit code that fails `pnpm typecheck`, `cargo fmt`, `cargo clippy`, or `cargo check`.
 - Do not leave clippy warnings unfixed — clean them up as part of the same commit.
 - **Do not add `awaitSettledLayout()` / double-RAF delays after navigation.** The paginator's container dimensions are determined by CSS grid track sizing, not by iframe content — they're correct immediately.
