@@ -255,11 +255,10 @@ export function DeviceSyncSection() {
         };
     }, [available, desktopPlatform]);
 
-    // Ensure iroh endpoint is running for incoming peer connections.
-    // Does NOT call ensureResponderSyncReady() — that's called from App.tsx
-    // bootstrap and from runDeviceSync, and it re-provisions all data to
-    // the doc which triggers "Syncing..." status. On the settings page we
-    // only need the endpoint alive so the peer can initiate sync.
+    // Ensure iroh endpoint is running AND provision local data to the shared
+    // iroh-docs doc so paired peers can sync it. This runs when the settings
+    // page mounts with paired devices (after pairing, the peer's data must be
+    // written to the doc so the other side can receive it via reconciliation).
     const hasPairedDevices = pairedDevices.length > 0;
     useEffect(() => {
         if (!available || !hasPairedDevices) {
@@ -267,10 +266,11 @@ export function DeviceSyncSection() {
         }
 
         let cancelled = false;
-        const ensureEndpointRunning = async () => {
+        const ensureReceiverReady = async () => {
             try {
-                const info = await irohStart();
+                await ensureResponderSyncReady();
                 if (!cancelled) {
+                    const info = await irohStart();
                     setNodeInfo(info);
                     setIsIrohRunning(true);
                 }
@@ -280,7 +280,7 @@ export function DeviceSyncSection() {
             }
         };
 
-        void ensureEndpointRunning();
+        void ensureReceiverReady();
         return () => {
             cancelled = true;
         };

@@ -35,16 +35,14 @@ describe("PairedDevice type completeness", () => {
     });
 });
 
-// ─── Fix 53: Settings page no dummy sync ───
-describe("Settings page no dummy sync", () => {
-    it("DeviceSync useEffect with hasPairedDevices calls irohStart not ensureResponderSyncReady", () => {
+// ─── Fix 53: Settings page provisions data after pairing ───
+describe("Settings page provisions after pairing", () => {
+    it("DeviceSync useEffect with hasPairedDevices calls ensureResponderSyncReady to provision data", () => {
         const content = readSource("src/features/settings/DeviceSync.tsx");
-        // The hasPairedDevices useEffect should call irohStart
-        const section = content.match(/const hasPairedDevices[\s\S]{0,200}useEffect[\s\S]{0,1000}irohStart/);
+        // The hasPairedDevices useEffect should call ensureResponderSyncReady
+        // to write local data to the shared doc after pairing
+        const section = content.match(/const hasPairedDevices[\s\S]{0,200}useEffect[\s\S]{0,1000}ensureResponderSyncReady/);
         expect(section).not.toBeNull();
-        // Should NOT call ensureResponderSyncReady in that same effect
-        const prohibited = content.match(/const hasPairedDevices[\s\S]{0,200}useEffect[\s\S]{0,1000}ensureResponderSyncReady/);
-        expect(prohibited).toBeNull();
     });
 });
 
