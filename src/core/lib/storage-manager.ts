@@ -22,6 +22,13 @@ import {
     sqliteGetKv,
     sqliteGetStorageStats,
 } from './sqlite-storage';
+import {
+    useLibraryStore,
+    useVocabularyStore,
+    useRssStore,
+    useSettingsStore,
+    useUIStore,
+} from '../store';
 
 const STORE_NAME = 'theorem-books';
 const COVERS_STORE = 'theorem-covers';
@@ -342,4 +349,26 @@ export async function clearAllApplicationStorage(): Promise<void> {
         }
     }
     sessionKeysToRemove.forEach((key) => sessionStorage.removeItem(key));
+
+    // Reset Zustand stores immediately so subsequent sync re-imports data
+    // from the peer instead of showing "Already in sync" with stale memory state.
+    useLibraryStore.setState({
+        books: [],
+        annotations: [],
+        collections: [],
+        deletionTombstones: [],
+        recentBooksCache: [],
+        coversHydrated: true,
+    });
+    useVocabularyStore.setState({ vocabularyTerms: [] });
+    useRssStore.setState({ feeds: [], articles: [] });
+    useSettingsStore.setState({
+        settings: useSettingsStore.getState().settings,
+        stats: { totalReadingTime: 0, booksCompleted: 0, averageReadingSpeed: 0, currentStreak: 0, longestStreak: 0, dailyGoal: 30, yearlyBookGoal: 24, booksReadThisYear: 0, dailyActivity: [] },
+        settingsLastModifiedAt: new Date().toISOString(),
+    });
+    useUIStore.setState({
+        searchQuery: "",
+        searchCommittedQuery: "",
+    });
 }
