@@ -353,6 +353,11 @@ pub async fn submit_pairing_code(
             Ok(ticket) => match api.import(ticket).await {
                 Ok(doc) => {
                     let doc_id = doc.id().to_string();
+                    // Start live sync so future writes propagate via gossip
+                    if let Ok(host_pk) = qr_payload.node_id.parse::<iroh::PublicKey>() {
+                        let host_addr = iroh::EndpointAddr::new(host_pk);
+                        let _ = doc.start_sync(vec![host_addr]).await;
+                    }
                     // Subscribe to live events
                     if let Ok(blobs) = get_blobs_store(&app) {
                         iroh_sync::subscribe_doc_events(app.clone(), doc, blobs);
@@ -723,21 +728,17 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
         }
     }
 
-    // Check peer reachability BEFORE start_sync (which returns Ok immediately
-    // even if peer is offline — it registers for background sync).
-    let ep = get_or_init_iroh(&app).await?;
+    // Start CRDT sync with peer. start_sync() may return Ok before the
+    // actual reconciliation completes — it triggers a background sync session
+    // (gossip subscription + state reconciliation). After pairing, gossip is
+    // already active so this call is fast (registers peer for live updates).
     tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        ep.endpoint.connect(peer_addr.clone(), iroh_docs::ALPN),
+        std::time::Duration::from_secs(15),
+        doc.start_sync(vec![peer_addr]),
     )
     .await
-    .map_err(|_| format!("Peer is offline or unreachable (timeout after 10s)"))?
-    .map_err(|_| format!("Peer is offline or unreachable (connection rejected)"))?;
-
-    // Now start the actual CRDT sync
-    doc.start_sync(vec![peer_addr])
-        .await
-        .map_err(|e| format!("start_sync: {e}"))?;
+    .map_err(|_| format!("Peer is offline or unreachable (timeout after 15s)"))?
+    .map_err(|e| format!("start_sync: {e}"))?;
 
     // Update last_sync_at so the peer list shows "Synced at ..." instead of "Never synced"
     {

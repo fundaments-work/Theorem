@@ -58,7 +58,6 @@ function setStatus(status: DeviceSyncStatus, msg?: string) {
 }
 
 /** Guards concurrent responder bootstrap attempts. */
-let responderReadyPromise: Promise<void> | null = null;
 /** Shared unlisten reference for the global responder event listener. */
 
 /** Shared unlisten reference for the iroh-docs live event listener. */
@@ -575,37 +574,21 @@ export async function ensureResponderSyncReady(): Promise<void> {
         await new Promise(r => setTimeout(r, 100));
     }
 
-    if (responderReadyPromise) {
-        await responderReadyPromise;
-        return;
-    }
+    await irohStart();
 
-    responderReadyPromise = (async () => {
-        await irohStart();
+    // Re-provision data to iroh-docs EVERY time this is called.
+    // This ensures that after pairing (when a new shared doc is created),
+    // all local data is written to the new doc. Provisioning is idempotent
+    // so redundant calls are harmless.
+    await provisionBookFileBlobs();
 
-        // Compute blob hashes for local book files BEFORE provisioning to
-        // iroh-docs. Without this, books written to the doc lack blobHash
-        // and peers receive metadata without the ability to download files.
-        await provisionBookFileBlobs();
-
-        // Provision ALL local state (books, annotations, RSS, settings,
-        // vocabulary, stats) to the iroh-docs doc so paired peers can
-        // sync it. Books now include blobHash so the peer can download files.
-
-        // Register the iroh-docs live event listener so real-time
-        // CRDT updates from the peer are applied to Zustand stores.
-        // This must be registered here, not just in startAutoSync(),
-        // because startAutoSync has a 15-second startup delay and
-        // a manual sync triggered before that would miss all events.
-        if (!_docsLiveUnlisten) {
-            _docsLiveUnlisten = await initDocsLiveListener();
-        }
-    })();
-
-    try {
-        await responderReadyPromise;
-    } finally {
-        responderReadyPromise = null;
+    // Register the iroh-docs live event listener so real-time
+    // CRDT updates from the peer are applied to Zustand stores.
+    // This must be registered here, not just in startAutoSync(),
+    // because startAutoSync has a 15-second startup delay and
+    // a manual sync triggered before that would miss all events.
+    if (!_docsLiveUnlisten) {
+        _docsLiveUnlisten = await initDocsLiveListener();
     }
 }
 
@@ -672,7 +655,7 @@ export async function runDeviceSync(
         //    last sync round are available locally. If we register AFTER sync,
         //    we may miss a fast-firing event and wait until the poll timeout.
         log("Waiting for peer data via CRDT sync...");
-        setStatus("syncing", "Connecting to peer...");
+        setStatus("syncing", "Syncing...");
 
         let syncResolve: (() => void) | null = null;
         const syncPromise = new Promise<void>((res) => { syncResolve = res; });
@@ -858,6 +841,7 @@ export async function runDeviceSync(
         }
 
         const bookCount = useLibraryStore.getState().books.length;
+        const annCount = useLibraryStore.getState().annotations.length;
         let summary: string;
         if (_syncCancelled) {
             _syncCancelled = false;
@@ -866,9 +850,12 @@ export async function runDeviceSync(
             setStatus("idle", summary);
             return { success: false, domainsUpdated: [], error: "Sync cancelled" };
         }
-        summary = bookCount > 0
-            ? `Synced ${bookCount} books`
-            : "Sync complete — no changes yet";
+        const parts: string[] = [];
+        if (bookCount > 0) parts.push(`${bookCount} books`);
+        if (annCount > 0) parts.push(`${annCount} annotations`);
+        summary = parts.length > 0
+            ? `Synced ${parts.join(", ")}`
+            : "Sync complete";
 
         log(`Sync complete. ${summary}`);
         setStatus("synced", summary);
@@ -1374,7 +1361,7 @@ export async function docsSyncNow(peerDeviceId: string): Promise<string | null> 
     try {
         const { invoke } = await import("@tauri-apps/api/core");
         const timeout = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("docs_sync_now timed out after 25s")), 25_000)
+            setTimeout(() => reject(new Error("docs_sync_now timed out")), 20_000)
         );
         await Promise.race([
             invoke("docs_sync_now", { peerDeviceId }),

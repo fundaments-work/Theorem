@@ -524,6 +524,11 @@ async fn handle_pair_req(
                             doc.clone(),
                             snapshot.blobs.clone(),
                         );
+                        // Start live sync so future writes propagate via gossip
+                        if let Ok(peer_pk) = pairing_req.node_id.parse::<iroh::PublicKey>() {
+                            let peer_addr = iroh::EndpointAddr::new(peer_pk);
+                            let _ = doc.start_sync(vec![peer_addr]).await;
+                        }
                         // Store the doc_id on the paired device
                         let mut devices = state.paired_devices.lock().await;
                         if let Some(device) = devices.get_mut(&pairing_req.device_id) {
