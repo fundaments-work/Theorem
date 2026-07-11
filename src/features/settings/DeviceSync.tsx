@@ -26,13 +26,7 @@ import {
     Lock,
 } from "lucide-react";
 import { cn } from "../../core/lib/utils";
-import { isMobile, isTauri, isTauriDesktop } from "../../core/lib/env";
-import {
-    isDaemonRunning,
-    getDaemonStatus,
-    triggerDaemonSync,
-} from "../../core/lib/device-sync-daemon";
-import type { DaemonStatus } from "../../core/lib/device-sync-daemon";
+import { isMobile, isTauri } from "../../core/lib/env";
 import { Modal, ModalBody, ModalHeader } from "../../ui";
 import {
     irohStart,
@@ -188,10 +182,6 @@ export function DeviceSyncSection() {
     const [copiedCode, setCopiedCode] = useState(false);
     const syncAbortRef = useRef(false);
 
-    const [daemonAvailable, setDaemonAvailable] = useState(false);
-    const [daemonStatus, setDaemonStatus] = useState<DaemonStatus | null>(null);
-    const [checkingDaemon, setCheckingDaemon] = useState(true);
-
     const syncStatus = useUIStore((state) => state.deviceSyncStatus);
     const syncMessage = useUIStore((state) => state.deviceSyncMessage);
     const setDeviceSyncStatus = useUIStore(
@@ -203,7 +193,6 @@ export function DeviceSyncSection() {
 
     const available = isTauri();
     const mobilePlatform = isMobile();
-    const desktopPlatform = isTauriDesktop();
 
     // Load identity + paired devices on mount.
     useEffect(() => {
@@ -220,40 +209,6 @@ export function DeviceSyncSection() {
             }
         })();
     }, [available]);
-
-    // Poll daemon status on desktop (background sync sidecar).
-    useEffect(() => {
-        if (!available || !desktopPlatform) {
-            setCheckingDaemon(false);
-            return;
-        }
-
-        let cancelled = false;
-        const check = async () => {
-            const running = await isDaemonRunning();
-            if (cancelled) return;
-            setDaemonAvailable(running);
-            if (running) {
-                const status = await getDaemonStatus();
-                if (!cancelled) setDaemonStatus(status);
-            } else {
-                setDaemonStatus(null);
-            }
-            setCheckingDaemon(false);
-        };
-
-        void check();
-
-        // Re-check every 30s in case daemon starts/stops.
-        const interval = setInterval(() => {
-            void check();
-        }, 30000);
-
-        return () => {
-            cancelled = true;
-            clearInterval(interval);
-        };
-    }, [available, desktopPlatform]);
 
     // Ensure iroh endpoint is running AND provision local data to the shared
     // iroh-docs doc so paired peers can sync it. This runs when the settings
@@ -600,46 +555,6 @@ export function DeviceSyncSection() {
                         )}
                     </div>
 
-                    {/* Daemon status row (desktop only) */}
-                    {desktopPlatform && (
-                        <div className="flex items-center gap-3 pt-3 border-t border-[var(--color-border)]">
-                            <ReceiverDot active={daemonAvailable} />
-                            <div className="flex-1 min-w-0">
-                                {checkingDaemon ? (
-                                    <p className="text-xs text-[color:var(--color-text-muted)]">
-                                        Checking daemon...
-                                    </p>
-                                ) : daemonAvailable ? (
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-xs text-[color:var(--color-text-secondary)]">
-                                            Daemon running
-                                            {daemonStatus?.last_sync_at && (
-                                                <span className="ml-1.5 text-[color:var(--color-text-muted)]">
-                                                    &middot; Last sync{" "}
-                                                    {new Date(daemonStatus.last_sync_at).toLocaleTimeString()}
-                                                </span>
-                                            )}
-                                        </p>
-                                        <button
-                                            onClick={() => void triggerDaemonSync()}
-                                            className="ml-auto text-[10px] uppercase tracking-wider font-medium text-[color:var(--color-accent)] hover:underline shrink-0"
-                                        >
-                                            Sync Now
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <p className="text-xs text-[color:var(--color-text-muted)]">
-                                        Daemon not running — background sync uses in-app scheduling
-                                    </p>
-                                )}
-                            </div>
-                            {daemonAvailable ? (
-                                <ArrowDownUp className="w-4 h-4 text-[color:var(--color-accent)] shrink-0" />
-                            ) : (
-                                <WifiOff className="w-4 h-4 text-[color:var(--color-text-muted)] shrink-0 opacity-40" />
-                            )}
-                        </div>
-                    )}
                 </div>
             </Card>
 
@@ -658,7 +573,7 @@ export function DeviceSyncSection() {
                             </p>
                         </div>
                         <button
-                            onClick={async () => {
+                            onClick={() => {
                                 const newValue = !deviceSyncSettings.autoSyncEnabled;
                                 updateSettings({
                                     deviceSync: {
@@ -666,11 +581,6 @@ export function DeviceSyncSection() {
                                         autoSyncEnabled: newValue,
                                     },
                                 });
-                                // If daemon is running, sync the setting.
-                                if (daemonAvailable) {
-                                    const { configureDaemon } = await import("../../core/lib/device-sync-daemon");
-                                    await configureDaemon({ auto_sync_enabled: newValue }).catch(e => console.error("[catch]", e));
-                                }
                             }}
                             className={cn(
                                 "px-3 py-1.5 text-[11px] font-medium border transition-colors shrink-0",

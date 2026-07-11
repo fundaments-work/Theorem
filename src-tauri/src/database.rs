@@ -167,8 +167,6 @@ const DB_SCHEMA_PERSISTENT_PRAGMAS: &str = r#"
     );
 
     -- Indexes for query performance
-    CREATE INDEX IF NOT EXISTS idx_books_title ON books(title);
-    CREATE INDEX IF NOT EXISTS idx_books_author ON books(author);
     CREATE INDEX IF NOT EXISTS idx_covers_book_id ON covers(book_id);
 
     CREATE TABLE IF NOT EXISTS book_metadata (

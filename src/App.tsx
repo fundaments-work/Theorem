@@ -6,7 +6,6 @@ import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
 import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
 import { initReaderStyles } from "./core/lib/design-tokens";
 import { ensureResponderSyncReady, startAutoSync, stopAutoSync } from "./core/lib/sync-orchestrator";
-import { isDaemonRunning, configureDaemon } from "./core/lib/device-sync-daemon";
 import { importBooksIncremental, getBookFormat, isImportFormatSupported } from "./core/lib/import";
 import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
@@ -341,28 +340,13 @@ function App() {
                 return;
             }
 
-            // Check if the sync daemon is already running — if so, skip
-            // in-app sync server and Rust loop (daemon handles it).
-            let daemonRunning = false;
             try {
-                daemonRunning = await isDaemonRunning();
+                await ensureResponderSyncReady();
             } catch {
-                // Daemon check failed, proceed with in-app sync.
-            }
-
-            // Step 1: Start iroh P2P endpoint so peers can connect to us
-            // (skip if daemon is running — it owns its own endpoint).
-            if (!daemonRunning) {
-                try {
-                    await ensureResponderSyncReady();
-                } catch {
-                    // Sync server unavailable on this device.
-                }
+                // Sync server unavailable on this device.
             }
             if (cancelled) return;
 
-            // Step 2: Subscribe Zustand stores to iroh-docs for real-time sync
-            // of all user interactions (likes, highlights, shelves, etc.)
             try {
                 const { subscribeZustandToIrohDocs } = await import("./core/lib/sync-orchestrator");
                 bridgeCleanup = subscribeZustandToIrohDocs();
@@ -370,17 +354,13 @@ function App() {
                 // Bridge initialization not available.
             }
 
-            // Step 3: Start JS-based auto-sync scheduler
-            // (startAutoSync detects daemon and delegates if available).
             try {
                 await startAutoSync();
             } catch {
                 // Auto-sync scheduling unavailable.
             }
 
-            // Step 3: Start Rust background sync loop
-            // (skip if daemon is running — it has its own loop).
-            if (!cancelled && !daemonRunning) {
+            if (!cancelled) {
                 try {
                     const { startBackgroundSync } = await import("./core/lib/device-sync");
                     await startBackgroundSync(300);
@@ -402,8 +382,6 @@ function App() {
             import("./core/lib/device-sync").then((mod) => {
                 mod.stopBackgroundSync().catch(e => console.error("[catch]", e));
             }).catch(e => console.error("[catch]", e));
-            // Notify daemon to disable auto-sync if this device turns it off.
-            configureDaemon({ auto_sync_enabled: false }).catch(e => console.error("[catch]", e));
         };
     }, [hasCompletedOnboarding, autoSyncEnabled]);
 

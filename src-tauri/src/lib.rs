@@ -1315,11 +1315,21 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
             }
         };
 
-        // ── Create in-memory docs + blobs stack ──
-        let blobs = iroh_blobs::store::mem::Store::default();
+        // ── Create docs + blobs stack using temp directory ──
+        let blobs_path = data_dir.join("iroh-blobs-jni");
+        let _ = std::fs::create_dir_all(&blobs_path);
+        let blobs = match iroh_blobs::store::fs::FsStore::load(&blobs_path).await {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[background-sync] Failed to load blobs store: {e}");
+                let _ = endpoint.close().await;
+                return false;
+            }
+        };
         let gossip = iroh_gossip::net::Gossip::builder().spawn(endpoint.clone());
-        let docs_handler = match iroh_docs::protocol::Docs::memory()
-            .spawn(endpoint.clone(), blobs.clone().into(), gossip)
+        let blobs_store: iroh_blobs::api::Store = blobs.clone().into();
+        let docs_handler = match iroh_docs::protocol::Docs::persistent(blobs_path)
+            .spawn(endpoint.clone(), blobs_store.clone(), gossip)
             .await
         {
             Ok(d) => d,
@@ -1333,18 +1343,10 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
         let docs_api = docs_handler.api().clone();
 
         // ── Build Router to accept incoming sync connections ──
-        let router = match Router::builder(endpoint.clone())
+        let router = Router::builder(endpoint.clone())
             .accept(iroh_docs::ALPN, docs_handler)
             .accept(iroh_blobs::ALPN, blobs_handler)
-            .spawn()
-        {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("[background-sync] Failed to spawn Router: {e}");
-                let _ = endpoint.close().await;
-                return false;
-            }
-        };
+            .spawn();
 
         // ── Sync with each paired peer via iroh-docs CRDT ──
         let mut any_synced = false;

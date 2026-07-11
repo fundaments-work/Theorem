@@ -20,13 +20,6 @@ import {
     setAutoSyncFlag,
 } from "./device-sync";
 import {
-    isDaemonRunning,
-    pushSyncDataToDaemon,
-    triggerDaemonSync,
-    configureDaemon,
-    getDaemonStatus,
-} from "./device-sync-daemon";
-import {
     useLibraryStore,
     useVocabularyStore,
     useRssStore,
@@ -1510,25 +1503,6 @@ async function autoSyncRound(force = false): Promise<void> {
 }
 
 /**
- * Check if the sync daemon is running AND has paired devices.
- * Without peers, delegating to the daemon is pointless — the JS iroh-docs
- * sync path handles pairing and CRDT reconciliation independently.
- * Also guards against the case where a stale daemon process (e.g., from a
- * different install prefix with a different data directory) responds to the
- * health check but has no pairing data for THIS app.
- */
-async function isDaemonReady(): Promise<boolean> {
-    try {
-        const running = await isDaemonRunning();
-        if (!running) return false;
-        const status = await getDaemonStatus();
-        return (status?.paired_devices?.length ?? 0) > 0;
-    } catch {
-        return false;
-    }
-}
-
-/**
  * Schedule a debounced sync triggered by data mutations.
  * Call this after annotations, books, or settings change.
  * The sync is batched: rapid mutations only trigger one sync.
@@ -1551,25 +1525,6 @@ export function scheduleMutationSync(): void {
     _mutationSyncTimer = setTimeout(async () => {
         _mutationSyncTimer = null;
 
-        // If daemon is available AND has paired peers, let it handle sync.
-        if (await isDaemonReady()) {
-            const built = await buildDomainsAndManifest();
-            const bfp = buildBookFilePaths();
-            await pushSyncDataToDaemon(built.domains, built.manifest, bfp);
-            // Also provision the main process so file-transfer responders
-            // have up-to-date book_file_paths for serving book files.
-            try {
-                await setSyncData(built.domains, built.manifest, bfp);
-            } catch {
-                // Non-critical — daemon handles sync rounds.
-            }
-            await triggerDaemonSync().catch(e => console.error("[catch]", e));
-            return;
-        }
-
-        // No daemon: provision data to Rust server, then wake the
-        // background sync loop so it picks up the new data immediately
-        // instead of waiting for the next timer tick.
         try {
             await provisionSyncData();
         } catch {
@@ -1612,47 +1567,6 @@ export async function startAutoSync(): Promise<() => void> {
         return () => {};
     }
 
-    // Check if the daemon is running AND has paired peers — if so, delegate.
-    // Without peers the daemon can't sync, and a stale daemon (from a different
-    // install prefix with no pairing data) would block the iroh-docs CRDT path.
-    const daemonAvailable = await isDaemonReady();
-    if (daemonAvailable) {
-        const cleanups: Array<() => void> = [];
-
-        // Push initial data snapshot to daemon and main process.
-        const built = await buildDomainsAndManifest();
-        const bfp = buildBookFilePaths();
-        await pushSyncDataToDaemon(built.domains, built.manifest, bfp);
-        try {
-            await setSyncData(built.domains, built.manifest, bfp);
-        } catch {
-            // Non-critical.
-        }
-
-        // Configure daemon with our auto-sync preference.
-        const { settings } = useSettingsStore.getState();
-        await configureDaemon({
-            auto_sync_enabled: settings.deviceSync?.autoSyncEnabled ?? true,
-        });
-
-        // Still listen for tray events and forward to daemon.
-        if (isTauri()) {
-            try {
-                const { listen } = await import("@tauri-apps/api/event");
-                const unlisten = await listen("tray-sync-now", () => {
-                    void triggerDaemonSync();
-                });
-                cleanups.push(unlisten);
-            } catch {
-                // Tray event not available
-            }
-        }
-
-        _autoSyncCleanups = cleanups;
-        return () => stopAutoSync();
-    }
-
-    // Fallback: JS-based auto-sync (same as before).
     const cleanups: Array<() => void> = [];
 
     // 1. Startup sync — delay to let the app fully initialize.
@@ -1733,7 +1647,6 @@ export function stopAutoSync(): void {
     }
     _dataDirty = false;
     setAutoSyncFlag(false).catch(e => console.error("[catch]", e));
-    configureDaemon({ auto_sync_enabled: false }).catch(e => console.error("[catch]", e));
 }
 
 // ─── iroh-docs CRDT Sync (replaces legacy LWW merge) ───

@@ -308,10 +308,19 @@ impl std::fmt::Debug for PairingProtocolHandler {
 
 impl ProtocolHandler for PairingProtocolHandler {
     async fn accept(&self, conn: endpoint::Connection) -> Result<(), iroh::protocol::AcceptError> {
-        // Stream 1: handshake (IrohPeerInfo from submit_pairing_code) — discard
+        // Stream 1: handshake (IrohPeerInfo from submit_pairing_code)
+        // Read the client's info and send back an empty response so the
+        // client's read_exact for the length prefix doesn't hang.
         match conn.accept_bi().await {
-            Ok((_send, mut recv)) => {
+            Ok((mut send, mut recv)) => {
                 let _ = recv_from_bi(&mut recv).await;
+                let empty = serde_json::json!({});
+                if let Ok(json) = serde_json::to_vec(&empty) {
+                    let len = (json.len() as u32).to_be_bytes();
+                    let _ = send.write_all(&len).await;
+                    let _ = send.write_all(&json).await;
+                    let _ = send.finish();
+                }
             }
             Err(e) => {
                 eprintln!("[iroh-sync] Pairing: handshake accept_bi failed: {e}");
