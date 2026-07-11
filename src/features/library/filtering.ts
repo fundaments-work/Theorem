@@ -33,7 +33,7 @@ export function getFilteredAndSortedBooks({
     // 1. Search — prefer SQLite FTS5 results when available (Tauri),
     //    fall back to Fuse.js (web / no FTS results yet).
     if (trimmedQuery) {
-        if (ftsSearchIds) {
+        if (ftsSearchIds && ftsSearchIds.length > 0) {
             const idSet = new Set(ftsSearchIds);
             searchResults = books.filter((b) => idSet.has(b.id));
         } else {

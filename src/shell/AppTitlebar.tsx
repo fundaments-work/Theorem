@@ -439,7 +439,10 @@ export const AppTitlebar = memo(function AppTitlebar({
                             )}
                         />
                         <button
-                            onClick={() => setIsMobileSearchOpen(false)}
+                            onClick={() => {
+                                useUIStore.getState().clearSearch();
+                                setIsMobileSearchOpen(false);
+                            }}
                             className={cn(
                                 "absolute right-2 top-1/2 -translate-y-1/2 !h-7 !w-7",
                                 "ui-icon-btn"

@@ -9,7 +9,10 @@ import { persistBookLocations } from "../lib/book-locations";
 import {
     sqliteSaveBookMetadata,
     sqliteSaveBookAnnotations,
+    sqliteIndexBooksFtsBatch,
+    sqliteIndexBookFts,
 } from "../lib/sqlite-storage";
+import { isTauri } from "../lib/env";
 import type {
     Annotation,
     Book,
@@ -533,6 +536,9 @@ export const useLibraryStore = create<LibraryStore>()(
 
                 if (duplicateIndex === -1) {
                     set({ books: [...state.books, book] });
+                    if (isTauri()) {
+                        sqliteIndexBookFts(book.id, book.title, book.author).catch(e => console.error("[catch]", e));
+                    }
                     return;
                 }
 
@@ -562,6 +568,9 @@ export const useLibraryStore = create<LibraryStore>()(
                         : { books, recentBooksCache },
                 );
                 scheduleMutationSync();
+                if (isTauri()) {
+                    sqliteIndexBookFts(book.id, book.title, book.author).catch(e => console.error("[catch]", e));
+                }
             },
 
             addBooks: (incomingBooks) => {
@@ -651,6 +660,10 @@ export const useLibraryStore = create<LibraryStore>()(
                 scheduleMutationSync();
                 for (const book of nextBooks) {
                     sqliteSaveBookMetadata(book.id, JSON.stringify(book)).catch(e => console.error("[catch]", e));
+                }
+                if (isTauri() && incomingBooks.length > 0) {
+                    const ftsEntries: Array<[string, string, string]> = incomingBooks.map(b => [b.id, b.title, b.author]);
+                    sqliteIndexBooksFtsBatch(ftsEntries).catch(e => console.error("[catch]", e));
                 }
             },
 
@@ -822,6 +835,10 @@ export const useLibraryStore = create<LibraryStore>()(
                     }));
                     if (!updatedBook) {
                         return { books };
+                    }
+
+                    if (isTauri() && (metadata.title !== undefined || metadata.author !== undefined)) {
+                        sqliteIndexBookFts(bookId, updatedBook.title, updatedBook.author).catch(e => console.error("[catch]", e));
                     }
 
                     const recentBooksCache = syncRecentBooksCacheWithBook(
@@ -1363,6 +1380,18 @@ export const useLibraryStore = create<LibraryStore>()(
                     state.deletionTombstones = state.deletionTombstones.filter(
                         (t: { deletedAt: string }) => t.deletedAt > cutoffStr,
                     );
+                }
+
+                // Build the FTS5 search index from all rehydrated books.
+                // Without this, the books_fts virtual table stays empty and
+                // sqliteSearchBooks always returns zero results on desktop.
+                if (state.books?.length > 0 && isTauri()) {
+                    const ftsBatch = state.books.map((b: { id: string; title: string; author: string }) => [
+                        b.id,
+                        b.title,
+                        b.author,
+                    ] as [string, string, string]);
+                    sqliteIndexBooksFtsBatch(ftsBatch).catch(e => console.error("[catch]", e));
                 }
             },
         }
