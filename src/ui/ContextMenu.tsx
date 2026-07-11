@@ -89,12 +89,4 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
     );
 }
 
-/**
- * Retained for backward compatibility. Radix renders per-menu portals;
- * a singleton root is no longer needed but callers in App.tsx still mount this.
- */
-export function ContextMenuRoot() {
-    return null;
-}
-
 export default ContextMenu;

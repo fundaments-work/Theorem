@@ -98,12 +98,6 @@ pub fn run_schema_migrations(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[allow(dead_code)]
-pub fn run_schema_migrations_inner(connection: &Connection) -> rusqlite::Result<()> {
-    connection.execute_batch(DB_SCHEMA_PERSISTENT_PRAGMAS)?;
-    Ok(())
-}
-
 fn init_db_pool(db_path: &Path) -> Result<&DbPool, String> {
     if let Some(pool) = DB_POOL.get() {
         return Ok(pool);

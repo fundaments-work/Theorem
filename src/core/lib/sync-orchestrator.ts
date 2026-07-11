@@ -57,9 +57,6 @@ function setStatus(status: DeviceSyncStatus, msg?: string) {
     }
 }
 
-/** Guards concurrent responder bootstrap attempts. */
-/** Shared unlisten reference for the global responder event listener. */
-
 /** Shared unlisten reference for the iroh-docs live event listener. */
 let _docsLiveUnlisten: (() => void) | null = null;
 
@@ -111,7 +108,6 @@ async function mergeIncomingData(
     const perEntityBooks: Record<string, unknown>[] = [];
     const perEntityAnnotations: Record<string, unknown>[] = [];
     const perEntityCollections: Record<string, unknown>[] = [];
-    const perEntityKeys = new Set<string>();
 
     for (const key of Object.keys(safeMap)) {
         if (key.startsWith("book:") && key !== "books") {
@@ -119,7 +115,6 @@ async function mergeIncomingData(
                 const parsed = JSON.parse(safeMap[key]);
                 if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
                     perEntityBooks.push(parsed);
-                    perEntityKeys.add(key);
                 }
             } catch {}
         } else if (key.startsWith("annotation:") && key !== "annotations") {
@@ -127,7 +122,6 @@ async function mergeIncomingData(
                 const parsed = JSON.parse(safeMap[key]);
                 if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
                     perEntityAnnotations.push(parsed);
-                    perEntityKeys.add(key);
                 }
             } catch {}
         } else if (key.startsWith("collection:") && key !== "collections") {
@@ -135,7 +129,6 @@ async function mergeIncomingData(
                 const parsed = JSON.parse(safeMap[key]);
                 if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
                     perEntityCollections.push(parsed);
-                    perEntityKeys.add(key);
                 }
             } catch {}
         }
@@ -947,11 +940,6 @@ export async function runDeviceSync(
  * Call this when starting the server so it can respond to sync requests
  * from any paired peer (passive sync / responder mode).
  */
-/**
- * Build a map of bookId → absolute file path for all books on this device
- * that have a real, resolvable path (i.e. not a placeholder like sqlite:// or idb://).
- * This lets the Rust responder serve books stored at external OS paths.
- */
 // ─── Responder-side event listener ───
 
 let _isMerging = false;
@@ -1257,8 +1245,6 @@ export function scheduleMutationSync(): void {
         }
         void autoSyncRound();
     }, MUTATION_SYNC_DEBOUNCE_MS);
-
-    // Background sync wake removed — no longer needed.
 }
 
 /**
@@ -1481,7 +1467,7 @@ export async function provisionToIrohDocs(): Promise<boolean> {
         await docsSetEntry("vocabulary", JSON.stringify(vocab.vocabularyTerms));
         await docsSetEntry("settings", JSON.stringify({
             ...settings.settings,
-            _settingsUpdatedAt: settings.settingsLastModifiedAt || new Date(0).toISOString(),
+            _settingsUpdatedAt: settings.settingsLastModifiedAt || new Date().toISOString(),
         }));
         await docsSetEntry("reading_stats", JSON.stringify(settings.stats));
         await docsSetEntry("rss_feeds", JSON.stringify(rss.feeds));
@@ -1508,7 +1494,7 @@ export async function hydrateFromIrohDocs(): Promise<string[]> {
         // per-entity LWW dedup via the existing mergeBooks/mergeAnnotations
         // etc. functions. This is the same merge path used by the legacy
         // sync protocol — it handles tombstones first, dedup by ID, etc.
-        const localSettingsUpdatedAt = useSettingsStore.getState().settingsLastModifiedAt || new Date(0).toISOString();
+        const localSettingsUpdatedAt = useSettingsStore.getState().settingsLastModifiedAt || new Date().toISOString();
         const { domainsUpdated: merged } = await mergeIncomingData(
             entries,
             localSettingsUpdatedAt,
@@ -1708,7 +1694,7 @@ export function subscribeZustandToIrohDocs(): () => void {
             prevSettings = state.settings;
             scheduleDocsWrite("settings", () => docsSetEntry("settings", JSON.stringify({
                 ...state.settings,
-                _settingsUpdatedAt: useSettingsStore.getState().settingsLastModifiedAt || new Date(0).toISOString(),
+                _settingsUpdatedAt: useSettingsStore.getState().settingsLastModifiedAt || new Date().toISOString(),
             })));
         }
         if (state.stats !== prevStats) {

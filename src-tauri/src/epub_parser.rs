@@ -38,11 +38,6 @@ fn read_zip_entry(archive: &mut zip::ZipArchive<File>, path: &str) -> Option<Str
     read_zip_entry_inner(archive, path)
 }
 
-#[allow(dead_code)]
-fn read_zip_by_name(archive: &mut zip::ZipArchive<File>, name: &str) -> Option<String> {
-    read_zip_by_name_inner(archive, name)
-}
-
 fn resolve_relative(base: &str, target: &str) -> String {
     let base_dir = Path::new(base).parent().unwrap_or(Path::new(""));
     base_dir
@@ -201,11 +196,6 @@ fn read_rootfile_path_inner<R: std::io::Read + std::io::Seek>(
         buf.clear();
     }
     None
-}
-
-#[allow(dead_code)]
-fn read_rootfile_path(archive: &mut zip::ZipArchive<File>) -> Option<String> {
-    read_rootfile_path_inner(archive)
 }
 
 /// Pre-decoded EPUB metadata: container, OPF, nav, NCX, encryption text.

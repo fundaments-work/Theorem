@@ -141,22 +141,3 @@ impl From<&PairedDevice> for PairedDeviceInfo {
         }
     }
 }
-
-// ─── Sync Manifest ───
-
-/// Version stamp for a single data domain.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct DomainVersion {
-    /// Monotonic version counter or max timestamp for this domain.
-    pub version: u64,
-    /// Number of items in this domain.
-    pub item_count: u32,
-    /// ISO 8601 timestamp of the last modification in this domain.
-    pub last_modified_at: String,
-    /// SHA-256 hex digest of the serialized domain data.
-    /// When both sides have the same content_hash for a domain,
-    /// that domain can be skipped entirely (no push/pull/merge needed).
-    #[serde(default)]
-    pub content_hash: String,
-}

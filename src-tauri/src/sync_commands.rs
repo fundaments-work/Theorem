@@ -438,10 +438,16 @@ pub async fn submit_pairing_code(
 #[tauri::command]
 pub async fn get_device_identity(app: tauri::AppHandle) -> Result<DeviceIdentityInfo, String> {
     let sync_state = get_sync_state(&app)?;
+    let public_key = IROH_ENDPOINT
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|ep| ep.public_key_string())
+        .unwrap_or_default();
     Ok(DeviceIdentityInfo {
         device_id: sync_state.transport_state.device_id.clone(),
         device_name: sync_state.transport_state.device_name.clone(),
-        public_key_hex: String::new(),
+        public_key_hex: public_key,
         fingerprint: sync_crypto::get_frontend_fingerprint()
             .unwrap_or_else(|| sync_state.transport_state.fingerprint.clone()),
     })

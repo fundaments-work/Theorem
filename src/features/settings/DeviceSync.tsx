@@ -29,7 +29,6 @@ import { cn } from "../../core/lib/utils";
 import { isMobile, isTauri } from "../../core/lib/env";
 import { Modal, ModalBody, ModalHeader } from "../../ui";
 import {
-    irohStart,
     generatePairingQr,
     submitPairingCode,
     getDeviceIdentity,
@@ -41,7 +40,6 @@ import {
     ensureResponderSyncReady,
 } from "../../core/lib/sync-orchestrator";
 import { useUIStore, useSettingsStore } from "../../core/store";
-import type { IrohNodeIdResponse } from "../../core/lib/device-sync";
 import type {
     PairedDevice,
     DeviceIdentityInfo,
@@ -166,7 +164,7 @@ function ReceiverDot({ active }: { active: boolean }) {
 
 export function DeviceSyncSection() {
     const [identity, setIdentity] = useState<DeviceIdentityInfo | null>(null);
-    const [nodeInfo, setNodeInfo] = useState<IrohNodeIdResponse | null>(null);
+    const [nodeInfo, setNodeInfo] = useState<{ nodeId: string } | null>(null);
     const [qrData, setQrData] = useState<PairingQrData | null>(null);
     const [pairedDevices, setPairedDevices] = useState<PairedDevice[]>([]);
     const [pairingCode, setPairingCode] = useState("");
@@ -222,11 +220,15 @@ export function DeviceSyncSection() {
         let cancelled = false;
         const ensureReceiverReady = async () => {
             try {
+                // ensureResponderSyncReady already calls irohStart internally.
+                // Do NOT call irohStart again — a redundant call can hit the
+                // database-wipe retry path in the Rust backend if the first
+                // call is still initializing, silently deleting sync data.
                 await ensureResponderSyncReady();
                 if (!cancelled) {
-                    const info = await irohStart();
-                    setNodeInfo(info);
                     setIsIrohRunning(true);
+                    const identity = await getDeviceIdentity();
+                    setNodeInfo({ nodeId: identity.publicKeyHex });
                 }
             } catch (e) {
                 if (!cancelled) {
@@ -255,19 +257,18 @@ export function DeviceSyncSection() {
         }
         setError(null);
         setIsLoading(true);
-        try {
-            const data = await generatePairingQr();
-            setQrData(data);
-            setIsQrModalOpen(true);
-            setIsIrohRunning(true);
-            setDeviceSyncStatus("hosting");
             try {
-                await ensureResponderSyncReady();
-                const info = await irohStart();
-                setNodeInfo(info);
-            } catch (e) {
-            }
-        } catch (e: any) {
+                const data = await generatePairingQr();
+                setQrData(data);
+                setIsQrModalOpen(true);
+                setIsIrohRunning(true);
+                setDeviceSyncStatus("hosting");
+                try {
+                    // generatePairingQr already started the accept loop internally
+                    await ensureResponderSyncReady();
+                } catch (e) {
+                }
+            } catch (e: any) {
             setError(e?.message || String(e));
         } finally {
             setIsLoading(false);

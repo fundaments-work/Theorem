@@ -225,6 +225,8 @@ export interface AppSettings {
 export interface PairedDevice {
     deviceId: string;
     deviceName: string;
+    /** Peer's iroh node ID (public key) for QUIC connectivity. */
+    irohNodeId: string;
     lastIp: string;
     lastPort: number;
     pairedAt: string;
