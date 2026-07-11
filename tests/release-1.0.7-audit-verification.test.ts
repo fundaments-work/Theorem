@@ -159,26 +159,24 @@ describe("Global sync lock (Rust)", () => {
 
 // ─── Fix 49: Custom ALPN removed from Router (Rust verification) ───
 describe("Custom ALPN removed (Rust)", () => {
-    it("Router does not accept theorem-sync/v1 ALPN", () => {
+    it("Router accepts theorem-sync/v1 for pairing", () => {
         const content = readSource("src-tauri/src/iroh_sync.rs");
-        expect(content).not.toContain(".accept(ALPN, theorem_handler)");
+        // The custom ALPN is needed for QR pairing
+        expect(content).toContain(".accept(ALPN, pairing_handler)");
         expect(content).toContain(".accept(iroh_docs::ALPN");
         expect(content).toContain(".accept(iroh_blobs::ALPN");
     });
 
-    it("Endpoint does not advertise theorem-sync/v1 in alpns", () => {
+    it("Endpoint has ALPN for pairing (alongsides iroh ones)", () => {
         const content = readSource("src-tauri/src/iroh_sync.rs");
-        // The alpns section should contain only iroh_* ALPNs, not the custom one
+        // Custom ALPN is needed for QR pairing (connect with theorem-sync/v1).
+        // iroh_* ALPNs handle sync after pairing.
         expect(content).toContain("iroh_blobs::ALPN.to_vec()");
         expect(content).toContain("iroh_docs::ALPN.to_vec()");
-        // The old custom `ALPN.to_vec()` line should NOT be in the alpns section.
-        // ALPN.to_vec() appears nowhere in the file as a standalone item
-        // (iroh_blobs::ALPN.to_vec contains the substring but it's different).
-        // Count occurrences of "ALPN.to_vec()":
+        // Should have 4 ALPNs: custom + 3 iroh ones
         const matches = content.match(/ALPN\.to_vec\(\)/g);
-        // Should only be the iroh_* ones (3 of them), NOT the bare one (4 total would mean bare one is back)
         expect(matches).not.toBeNull();
-        expect(matches!.length).toBe(3);
+        expect(matches!.length).toBe(4);
     });
 });
 
