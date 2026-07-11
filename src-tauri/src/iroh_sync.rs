@@ -396,6 +396,7 @@ pub fn start_accept_loop(
         let docs_path = data_dir.join("iroh-docs");
         let _ = std::fs::create_dir_all(&docs_path);
         let blobs_store: iroh_blobs::api::Store = blobs.into();
+        let blobs_for_subscribe = blobs_store.clone();
         let blobs_for_cmds = blobs_store.clone();
         let docs_handler = match iroh_docs::protocol::Docs::persistent(docs_path)
             .spawn(router_endpoint.clone(), blobs_store, gossip.clone())
@@ -410,6 +411,7 @@ pub fn start_accept_loop(
 
         // Store the DocsApi so Tauri commands can read/write entries
         let api = docs_handler.api().clone();
+        let api_for_subscribe = api.clone();
         let author = match api.author_default().await {
             Ok(a) => a,
             Err(_) => match api.author_create().await {
@@ -428,6 +430,59 @@ pub fn start_accept_loop(
             blobs: blobs_for_cmds,
         });
         drop(docs_api_state);
+
+        // Re-subscribe to live events + restart CRDT sync for all existing
+        // paired device sync docs. Without this, after app restart the Rust
+        // backend never subscribes to doc events — LiveEvent::InsertRemote
+        // goes unhandled, no "docs-entry-changed" Tauri events are emitted,
+        // and the frontend never learns about peer changes between sync rounds.
+        {
+            let paired = state_clone.paired_devices.lock().await;
+            let docs: Vec<(String, String, String, String, u16)> = paired
+                .values()
+                .filter(|d| !d.sync_doc_id.is_empty())
+                .map(|d| {
+                    (
+                        d.sync_doc_id.clone(),
+                        d.iroh_node_id.clone(),
+                        d.peer_relay_url.clone(),
+                        d.last_ip.clone(),
+                        d.last_port,
+                    )
+                })
+                .collect();
+            drop(paired);
+
+            for (doc_id_str, node_id, relay_url, last_ip, last_port) in docs {
+                if let Ok(doc_id) = doc_id_str.parse::<iroh_docs::NamespaceId>() {
+                    if let Ok(Some(doc)) = api_for_subscribe.open(doc_id).await {
+                        subscribe_doc_events(
+                            state_clone.app_handle.clone(),
+                            doc.clone(),
+                            blobs_for_subscribe.clone(),
+                        );
+                        // Restart peer sync so the doc is ready for incoming CRDT data
+                        if !node_id.is_empty() {
+                            if let Ok(peer_pk) = node_id.parse::<iroh::PublicKey>() {
+                                let mut peer_addr = iroh::EndpointAddr::new(peer_pk);
+                                if !relay_url.is_empty() {
+                                    if let Ok(url) = relay_url.parse::<iroh::RelayUrl>() {
+                                        peer_addr = peer_addr.with_relay_url(url);
+                                    }
+                                }
+                                if let Ok(ip) = last_ip.parse::<std::net::IpAddr>() {
+                                    if last_port > 0 {
+                                        peer_addr = peer_addr
+                                            .with_ip_addr(std::net::SocketAddr::new(ip, last_port));
+                                    }
+                                }
+                                let _ = doc.start_sync(vec![peer_addr]).await;
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // ── Pairing protocol handler ──
         let pairing_handler = PairingProtocolHandler {

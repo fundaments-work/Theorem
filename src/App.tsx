@@ -336,10 +336,15 @@ function App() {
         let cancelled = false;
         let bridgeCleanup: (() => void) | null = null;
         const bootstrap = async () => {
-            if (cancelled || !autoSyncEnabled) {
+            if (cancelled) {
                 return;
             }
 
+            // Always start the iroh responder + bridge so the device can
+            // receive incoming sync, and Zustand mutations are written to
+            // iroh-docs even when auto-sync is off. Without this, manual
+            // "Sync Now" would miss any changes made since the last sync
+            // because the bridge (subscribeZustandToIrohDocs) was never set up.
             try {
                 await ensureResponderSyncReady();
             } catch {
@@ -354,13 +359,14 @@ function App() {
                 // Bridge initialization not available.
             }
 
-            try {
-                await startAutoSync();
-            } catch {
-                // Auto-sync scheduling unavailable.
+            // Auto-sync (periodic background sync) only runs when enabled.
+            if (autoSyncEnabled) {
+                try {
+                    await startAutoSync();
+                } catch {
+                    // Auto-sync scheduling unavailable.
+                }
             }
-
-            // Background sync removed — no longer needed.
         };
 
         const timer = setTimeout(() => {

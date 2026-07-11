@@ -87,6 +87,19 @@ async function mergeIncomingData(
         for (const [domain, data] of Object.entries(validated)) {
             safeMap[domain] = JSON.stringify(data);
         }
+        // Restore per-entity keys that validateSyncPayloads strips — they
+        // don't match domain array schemas (book:<id> vs books) but are
+        // needed by the per-entity extraction below. Without this, the
+        // incremental bridge's per-entity writes (annotation:<id>,
+        // book:<id>, collection:<id>) are silently dropped and changes
+        // never propagate to the peer.
+        for (const key of Object.keys(incomingMap)) {
+            if (key.startsWith("book:") || key.startsWith("annotation:") || key.startsWith("collection:")) {
+                if (!safeMap[key]) {
+                    safeMap[key] = incomingMap[key];
+                }
+            }
+        }
     } catch {
         // If validation fails entirely, fall through with raw incomingMap.
     }
@@ -782,14 +795,15 @@ export async function runDeviceSync(
         // Final hydrate: read ALL entries from the doc. By now content blobs
         // from the peer should be available (PendingContentReady fired or we
         // hit the stability threshold). This catches any entries that were
-        // pending during the poll loop and ensures the store is up to date
-        // BEFORE we compute the book count for the summary message.
+        // pending during the poll loop.
         // Also force-drain any buffered live events that accumulated during
         // the sync (they were deferred while _isMerging was true).
-        await hydrateFromIrohDocs();
-        // Check cancellation before status updates in drain/poll.
-        // cancelRunningSync sets _syncCancelled = true and status="idle";
-        // we must not overwrite that with "syncing".
+        const changedDomains = new Set<string>();
+
+        {
+            const updated = await hydrateFromIrohDocs();
+            for (const d of updated) changedDomains.add(d);
+        }
         if (_syncCancelled) {
             log("Sync cancelled before final merge");
             return { success: false, domainsUpdated: [], error: "Sync cancelled" };
@@ -805,7 +819,8 @@ export async function runDeviceSync(
         }
         _pendingDocsEntries.clear();
         if (Object.keys(liveEntries).length > 0) {
-            await mergeIncomingData(liveEntries);
+            const { domainsUpdated } = await mergeIncomingData(liveEntries);
+            for (const d of domainsUpdated) changedDomains.add(d);
         }
         // Flush any remaining progressive book batch
         if (_progressiveBookTimer) clearTimeout(_progressiveBookTimer);
@@ -840,28 +855,46 @@ export async function runDeviceSync(
             await provisionBookFileBlobs();
         }
 
-        const bookCount = useLibraryStore.getState().books.length;
-        const annCount = useLibraryStore.getState().annotations.length;
-        let summary: string;
         if (_syncCancelled) {
             _syncCancelled = false;
-            summary = "Sync cancelled";
-            log(summary);
-            setStatus("idle", summary);
+            log("Sync cancelled");
+            setStatus("idle", "Sync cancelled");
             return { success: false, domainsUpdated: [], error: "Sync cancelled" };
         }
-        const parts: string[] = [];
-        if (bookCount > 0) parts.push(`${bookCount} books`);
-        if (annCount > 0) parts.push(`${annCount} annotations`);
-        summary = parts.length > 0
-            ? `Synced ${parts.join(", ")}`
-            : "Sync complete";
+
+        // Build a human-readable summary from what actually changed during
+        // this sync round, not from total store counts. Showing total counts
+        // ("192 books, 97 annotations") is misleading — it always shows the
+        // same number and gives no indication of what was actually transferred.
+        const domainLabels: Record<string, string> = {
+            books: "Books",
+            annotations: "Annotations",
+            collections: "Collections",
+            deletion_tombstones: "Deletions",
+            vocabulary: "Vocabulary",
+            rss_feeds: "Feeds",
+            rss_articles: "Articles",
+            settings: "Settings",
+            reading_stats: "Stats",
+        };
+
+        let summary: string;
+        if (changedDomains.size > 0) {
+            const parts = [...changedDomains]
+                .map(d => domainLabels[d] || d)
+                .join(", ");
+            summary = `Synced: ${parts}`;
+        } else {
+            summary = needFileCount > 0
+                ? `Synced: ${needFileCount} book files`
+                : "Already in sync";
+        }
 
         log(`Sync complete. ${summary}`);
         setStatus("synced", summary);
-        _dataDirty = false; // successfully synced, reset dirty flag
+        _dataDirty = false;
 
-        return { success: true, domainsUpdated: [] };
+        return { success: true, domainsUpdated: [...changedDomains] };
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : String(error);
         log(`Sync failed: ${errMsg}`);

@@ -395,8 +395,8 @@ export function DeviceSyncSection() {
                 if (result.success) {
                     setSuccessMessage(
                         result.domainsUpdated.length > 0
-                            ? `Synced ${result.domainsUpdated.length} domain(s)`
-                            : "Already in sync — no changes needed",
+                            ? `Updated: ${result.domainsUpdated.join(", ")}`
+                            : "Already in sync",
                     );
                     const devices = await getPairedDevices();
                     setPairedDevices(devices);

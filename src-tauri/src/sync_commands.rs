@@ -737,7 +737,7 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
         doc.start_sync(vec![peer_addr]),
     )
     .await
-    .map_err(|_| format!("Peer is offline or unreachable (timeout after 15s)"))?
+    .map_err(|_| "Peer is offline or unreachable (timeout after 15s)".to_string())?
     .map_err(|e| format!("start_sync: {e}"))?;
 
     // Update last_sync_at so the peer list shows "Synced at ..." instead of "Never synced"
