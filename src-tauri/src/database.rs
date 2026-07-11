@@ -90,6 +90,20 @@ fn init_db_pool(db_path: &Path) -> Result<&DbPool, String> {
     conn.execute_batch(DB_SCHEMA_PERSISTENT_PRAGMAS)
         .map_err(|error| format!("Failed to initialize SQLite schema: {error}"))?;
 
+    // Schema migration: add covers.data BLOB column for existing installs
+    // (new installs get it from CREATE TABLE covers which includes data BLOB).
+    let has_data_column: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('covers') WHERE name = 'data'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    if !has_data_column {
+        conn.execute_batch("ALTER TABLE covers ADD COLUMN data BLOB;")
+            .ok();
+    }
+
     let manager = SqliteConnectionManager::file(db_path);
     let pool = Pool::builder()
         .max_size(1)
@@ -117,6 +131,7 @@ const DB_SCHEMA_PERSISTENT_PRAGMAS: &str = r#"
     CREATE TABLE IF NOT EXISTS covers (
         book_id TEXT PRIMARY KEY,
         data_url TEXT NOT NULL,
+        data BLOB,
         updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
         FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
     );
@@ -145,6 +160,11 @@ const DB_SCHEMA_PERSISTENT_PRAGMAS: &str = r#"
         title,
         author
     );
+
+    -- Indexes for query performance
+    CREATE INDEX IF NOT EXISTS idx_books_title ON books(title);
+    CREATE INDEX IF NOT EXISTS idx_books_author ON books(author);
+    CREATE INDEX IF NOT EXISTS idx_covers_book_id ON covers(book_id);
 
     CREATE TABLE IF NOT EXISTS book_metadata (
         book_id TEXT PRIMARY KEY,

@@ -305,6 +305,7 @@ const favoriteBooksResultCache = new WeakMap<Book[], Book[]>();
 const booksByCategoryResultCache = new WeakMap<Book[], Map<string, Book[]>>();
 const highlightsResultCache = new WeakMap<Annotation[], Map<string, Annotation[]>>();
 const bookmarksResultCache = new WeakMap<Annotation[], Map<string, Annotation[]>>();
+const searchBooksResultCache = new WeakMap<Book[], Map<string, Book[]>>();
 const COVER_RESTORE_BATCH_SIZE = 48;
 
 function getBookLookup(books: Book[]): Map<string, Book> {
@@ -1231,8 +1232,7 @@ export const useLibraryStore = create<LibraryStore>()(
 
             addBookToCollection: (bookId, collectionId) => {
                 set((state) => {
-                    const bookExists = state.books.some((b) => b.id === bookId);
-                    if (!bookExists) return state;
+                    if (!getBookLookup(state.books).has(bookId)) return state;
                     return {
                         collections: state.collections.map((c) =>
                             c.id === collectionId && !c.bookIds.includes(bookId)
@@ -1443,12 +1443,23 @@ export const useLibraryStore = create<LibraryStore>()(
             searchBooks: (query) => {
                 const q = query.toLowerCase();
                 if (!q) return [];
-                return get().books.filter(
+                const books = get().books;
+                let queryMap = searchBooksResultCache.get(books);
+                if (queryMap) {
+                    const cached = queryMap.get(q);
+                    if (cached) return cached;
+                } else {
+                    queryMap = new Map();
+                    searchBooksResultCache.set(books, queryMap);
+                }
+                const result = books.filter(
                     (b) =>
                         b.title.toLowerCase().includes(q) ||
                         b.author.toLowerCase().includes(q) ||
                         b.tags.some((t) => t.toLowerCase().includes(q))
                 );
+                queryMap.set(q, result);
+                return result;
             },
 
             getCachedBook: (bookId) => getCachedBookLookup(get().recentBooksCache).get(bookId),
