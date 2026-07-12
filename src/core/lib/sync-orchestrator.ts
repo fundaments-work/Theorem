@@ -771,10 +771,10 @@ export async function runDeviceSync(
         // On a fresh device (0 books before sync), don't settle until either
         // books arrive from the peer or the full timeout is reached.
         let stablePolls = 0;
-        const STABLE_THRESHOLD = 2;
+        const STABLE_THRESHOLD = 4;
         const MAX_WAIT_SECS = 60;
         const POLL_INTERVAL_MS = 1500;
-        const MIN_ELAPSED_MS = 2000;
+        const MIN_ELAPSED_MS = 5000;
 
         const waitStart = Date.now();
         let prevDomainSet = "";
@@ -1058,6 +1058,7 @@ export function cancelRunningSync(): void {
 export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
     if (!isTauri()) return false;
 
+    setStatus("syncing", "Downloading book...");
     const { requestBookFile, getPairedDevices } = await import("./device-sync");
     const { appDataDir } = await import("@tauri-apps/api/path");
     const appDir = await appDataDir();
@@ -1087,25 +1088,28 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
             console.error(`[file-xfer] write failed for ${bookId}: ${e}`);
         }
     }
+    setStatus("idle", "Book download failed — peer not available");
     return false;
 }
 
 /**
- * Download cover images for all synced books that don't have a local cover.
- * Covers are small (< 100KB each) and are fetched in the background after
- * metadata sync completes so the library shows cover images immediately.
+ * Download cover images for all books that have a coverBlobHash but no
+ * local cover file yet (coverPath is a blob: reference from the peer).
+ * Runs in the background after metadata sync so the library shows covers
+ * immediately on next render.
  */
 async function syncBookCovers(peerDeviceId: string): Promise<void> {
     const { requestBookFile } = await import("./device-sync");
     const { saveCoverImage } = await import("./storage");
 
     const books = useLibraryStore.getState().books;
+    // Books needing cover: have coverBlobHash but coverPath is a peer ref
     const needCovers = books.filter(
-        (b) => b.syncedWithoutFile && b.coverBlobHash && (!b.coverPath || b.coverPath.startsWith("data:")),
+        (b) => b.coverBlobHash && b.coverPath && b.coverPath !== "data:" && b.coverPath.includes("blob:"),
     );
     if (needCovers.length === 0) return;
 
-    const CONCURRENCY = 4;
+    const CONCURRENCY = 8;
     let index = 0;
     await Promise.all(
         Array.from({ length: CONCURRENCY }, async () => {
