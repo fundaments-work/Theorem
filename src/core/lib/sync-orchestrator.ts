@@ -742,12 +742,7 @@ export async function runDeviceSync(
             contentReadyUnlisten = await evListen("docs-pending-content-ready", () => {
                 _syncActivityDetected = true;
                 const currentBooks = useLibraryStore.getState().books.length;
-                if (currentBooks > 0) {
-                    console.log(`[sync] Received docs-pending-content-ready with ${currentBooks} books — settling`);
-                    settle();
-                } else {
-                    console.log("[sync] Received docs-pending-content-ready with 0 books — waiting for actual data");
-                }
+                console.log(`[sync] Received docs-pending-content-ready (${currentBooks} books so far)`);
             });
             syncFinishedUnlisten = await evListen("docs-sync-finished", () => {
                 _syncActivityDetected = true;
@@ -1061,14 +1056,14 @@ export function cancelRunningSync(): void {
 export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
     if (!isTauri()) return false;
 
-    const { requestBookFile } = await import("./device-sync");
-    const { invoke } = await import("@tauri-apps/api/core");
+    const { requestBookFile, getPairedDevices } = await import("./device-sync");
     const { appDataDir } = await import("@tauri-apps/api/path");
     const appDir = await appDataDir();
     const destPath = `${appDir}/book-cache/${bookId}.book`;
 
+    const { mkdir, writeFile } = await import("@tauri-apps/plugin-fs");
     try {
-        await invoke("plugin:fs|mkdir", { path: `${appDir}/book-cache`, recursive: true });
+        await mkdir(`${appDir}/book-cache`, { recursive: true });
     } catch {}
 
     const devices = await getPairedDevices().catch(() => []);
@@ -1077,10 +1072,7 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
         if (!data || data.byteLength === 0) continue;
 
         try {
-            await invoke("plugin:fs|write_file", {
-                path: destPath,
-                contents: Array.from(data),
-            });
+            await writeFile(destPath, data);
             useLibraryStore.setState((state) => ({
                 books: state.books.map((b) =>
                     b.id === bookId
@@ -1089,7 +1081,9 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
                 ),
             }));
             return true;
-        } catch {}
+        } catch (e) {
+            console.error(`[file-xfer] write failed for ${bookId}: ${e}`);
+        }
     }
     return false;
 }
