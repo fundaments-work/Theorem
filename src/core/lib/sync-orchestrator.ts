@@ -596,6 +596,8 @@ export async function ensureResponderSyncReady(): Promise<void> {
  * @param onProgress - Optional progress callback for UI updates.
  * @returns A SyncResult indicating what happened.
  */
+let _lastSyncPeerId: string | undefined;
+
 export async function runDeviceSync(
     peerDeviceId: string,
     onProgress?: (msg: string) => void,
@@ -826,6 +828,7 @@ export async function runDeviceSync(
             setStatus("error", summary);
         } else {
             setStatus("synced", summary);
+            _lastSyncPeerId = peerDeviceId;
             // Download covers in background so the library shows cover images
             void syncBookCovers(peerDeviceId).then(() => prefetchRecentBooks(peerDeviceId));
         }
@@ -892,12 +895,21 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
         await mkdir(`${appDir}/book-cache`, { recursive: true });
     } catch {}
 
+    // Try the last known sync peer first (fast path — avoids calling
+    // getPairedDevices which may return stale/empty results on fresh
+    // install + re-pair).
+    const peerIds: string[] = [];
+    if (_lastSyncPeerId) peerIds.push(_lastSyncPeerId);
     const devices = await getPairedDevices().catch(() => []);
-    for (const device of devices) {
+    for (const d of devices) {
+        if (!peerIds.includes(d.deviceId)) peerIds.push(d.deviceId);
+    }
+
+    for (const peerId of peerIds) {
         if (_syncCancelled) break;
         let data: Uint8Array | null = null;
         try {
-            data = await requestBookFile(device.deviceId, bookId);
+            data = await requestBookFile(peerId, bookId);
         } catch (e) {
             console.error(`[file-xfer] request failed for ${bookId}: ${e}`);
             continue;
