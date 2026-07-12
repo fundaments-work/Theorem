@@ -613,24 +613,17 @@ export async function runDeviceSync(
         log("Starting P2P transport...");
         await ensureResponderSyncReady();
 
-        // 2. Before syncing, force-rehash any books that are missing blobHash.
-        //    On the first sync after the SQLite-fallthrough fix, books stored in
-        //    the database (filePath: sqlite://...) would have been skipped by the
-        //    old code. This ensures they get blobHash before the sync sends them
-        //    to the peer, so the peer can download the actual file.
-        //    This runs even if ensureResponderSyncReady already ran (it does this
-        //    on first startup but the guard prevents re-execution).
+        // 2. Write ALL local Zustand data to the shared doc before syncing.
+        //    This ensures the peer receives our current state even if this is
+        //    the first sync after pairing (the pairing flow no longer provisions
+        //    data). Also catches books that were imported/modified since the
+        //    last sync. Idempotent — CRDT deduplicates by key + author.
         {
-            const books = useLibraryStore.getState().books;
-            const missingHash = books.filter(b => !b.blobHash);
-            if (missingHash.length > 0) {
-                if (_syncCancelled) {
-                    throw new Error("Sync cancelled");
-                }
-                log(`Re-provisioning ${missingHash.length} books to iroh docs...`);
-                setStatus("syncing", `Syncing ${missingHash.length} books...`);
-                await provisionToIrohDocs();
+            if (_syncCancelled) {
+                throw new Error("Sync cancelled");
             }
+            log("Provisioning local data to sync doc...");
+            await provisionToIrohDocs();
         }
 
         // 3. Set up iroh-docs completion listeners BEFORE triggering sync.
