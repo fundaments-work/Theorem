@@ -919,7 +919,7 @@ async fn get_docs_api_or_init(app: &tauri::AppHandle) -> Result<iroh_docs::api::
 pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Result<(), String> {
     let api = get_docs_api_or_init(&app).await?;
     let sync_state = get_sync_state(&app)?;
-    let (doc_id, peer_pk, relay_url, ip, port) = {
+    let (doc_id, peer_pk, relay_url) = {
         let devices = sync_state.transport_state.paired_devices.lock().await;
         let device = devices
             .get(&peer_device_id)
@@ -928,8 +928,6 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
         let sync_doc_ticket = device.sync_doc_ticket.clone();
         let iroh_node_id = device.iroh_node_id.clone();
         let peer_relay_url = device.peer_relay_url.clone();
-        let last_ip = device.last_ip.clone();
-        let last_port = device.last_port;
         drop(devices);
 
         let doc_id: iroh_docs::NamespaceId = if sync_doc_id.is_empty() {
@@ -973,16 +971,12 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
         let pk: iroh::PublicKey = iroh_node_id
             .parse()
             .map_err(|e| format!("parse peer key: {e}"))?;
-        (doc_id, pk, peer_relay_url, last_ip, last_port)
+        (doc_id, pk, peer_relay_url)
     };
 
     let doc = match api.open(doc_id).await {
         Ok(Some(d)) => d,
         Ok(None) | Err(_) => {
-            // Doc not found — likely the iroh-docs database was wiped due to
-            // corruption recovery. Try to re-import the doc from the stored
-            // DocTicket (saved during pairing). This avoids requiring the user
-            // to re-pair after a database reset.
             let ticket_str = {
                 let devices = sync_state.transport_state.paired_devices.lock().await;
                 devices
@@ -1012,9 +1006,6 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
                     }
                 }
             } else {
-                // No stored ticket — can't recover after database wipe.
-                // Don't clear sync_doc_id; the doc might still exist but be
-                // temporarily unavailable. Clear only if it clearly doesn't exist.
                 return Err("Sync doc not available — will retry".to_string());
             }
         }
@@ -1026,12 +1017,6 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
             peer_addr = peer_addr.with_relay_url(url);
         }
     }
-    if let Ok(ip_addr) = ip.parse::<std::net::IpAddr>() {
-        if port > 0 {
-            peer_addr = peer_addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, port));
-        }
-    }
-
     // Start CRDT sync with peer. start_sync() may return Ok before the
     // actual reconciliation completes — it triggers a background sync session
     // (gossip subscription + state reconciliation). After pairing, gossip is
