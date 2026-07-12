@@ -692,9 +692,9 @@ export async function runDeviceSync(
         // books arrive from the peer or the full timeout is reached.
         let stablePolls = 0;
         const STABLE_THRESHOLD = 4;
-        const MAX_WAIT_SECS = 60;
-        const POLL_INTERVAL_MS = 1500;
-        const MIN_ELAPSED_MS = 5000;
+        const MAX_WAIT_SECS = 30;
+        const POLL_INTERVAL_MS = 5000;
+        const MIN_ELAPSED_MS = 10000;
 
         const waitStart = Date.now();
         let prevDomainSet = "";
