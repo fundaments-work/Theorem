@@ -11,6 +11,7 @@ use iroh::endpoint::{self, presets::N0, RelayMode};
 use iroh::protocol::{ProtocolHandler, Router};
 use iroh::{PublicKey, SecretKey};
 use iroh_docs::engine::LiveEvent;
+use iroh_mdns_address_lookup::MdnsAddressLookup;
 use tauri::Emitter;
 use tokio::sync::Mutex;
 
@@ -82,7 +83,7 @@ impl IrohSyncEndpoint {
     ) -> Result<Self, String> {
         let secret_key = load_or_create_key(key_path)?;
         let public_key = secret_key.public();
-        let endpoint = iroh::endpoint::Endpoint::builder(N0)
+        let builder = iroh::endpoint::Endpoint::builder(N0)
             .secret_key(secret_key)
             .alpns(vec![
                 ALPN.to_vec(),
@@ -90,7 +91,18 @@ impl IrohSyncEndpoint {
                 iroh_docs::ALPN.to_vec(),
                 iroh_gossip::ALPN.to_vec(),
             ])
-            .relay_mode(RelayMode::Default)
+            .relay_mode(RelayMode::Default);
+        // mDNS address lookup: discovers peers on the same LAN without needing
+        // internet or relay servers. The blobs downloader connects directly via
+        // the discovered LAN IP — orders of magnitude faster than relaying.
+        // Disable with THEOREM_DISABLE_MDNS=1 for debugging.
+        let builder = if std::env::var("THEOREM_DISABLE_MDNS").is_err() {
+            builder.address_lookup(MdnsAddressLookup::builder())
+        } else {
+            eprintln!("[iroh-sync] mDNS disabled via THEOREM_DISABLE_MDNS env var");
+            builder
+        };
+        let endpoint = builder
             .bind()
             .await
             .map_err(|e| format!("iroh bind: {e}"))?;
@@ -326,6 +338,13 @@ pub fn subscribe_doc_events(
                     }
                     Err(err) => {
                         eprintln!("[iroh-sync] doc event stream error: {err}");
+                        // If the iroh-docs actor shut down (Router restart),
+                        // the stream will never produce more events. Break
+                        // the inner loop to trigger stream-death detection.
+                        let msg = err.to_string();
+                        if msg.contains("actor failed") || msg.contains("actor closed") {
+                            break;
+                        }
                     }
                     _ => {}
                 }
@@ -590,6 +609,80 @@ pub fn start_accept_loop(
             }
         }
 
+        // ── Recovery: handle paired devices with empty sync_doc_id ──
+        // This happens when pairing completed but the sync doc was never
+        // persisted to disk (fixed now, but old pairings may still be broken).
+        // If sync_doc_ticket is non-empty, re-import the doc from the ticket.
+        // If both are empty, emit a "sync-doc-missing" event so the frontend
+        // can prompt the user to re-pair.
+        {
+            let paired = state_clone.paired_devices.lock().await;
+            let broken: Vec<(String, String, String)> = paired
+                .values()
+                .filter(|d| d.sync_doc_id.is_empty())
+                .map(|d| {
+                    (
+                        d.device_id.clone(),
+                        d.sync_doc_ticket.clone(),
+                        d.device_name.clone(),
+                    )
+                })
+                .collect();
+            drop(paired);
+
+            for (device_id, ticket_str, device_name) in broken {
+                if !ticket_str.is_empty() {
+                    // Try to re-import the doc from the stored ticket
+                    if let Ok(ticket) = ticket_str.parse::<iroh_docs::DocTicket>() {
+                        match api_for_subscribe.import(ticket).await {
+                            Ok(doc) => {
+                                let doc_id = doc.id().to_string();
+                                eprintln!(
+                                    "[iroh-sync] Recovered sync doc {doc_id} from ticket for peer {device_name}"
+                                );
+                                subscribe_doc_events(
+                                    state_clone.app_handle.clone(),
+                                    doc,
+                                    blobs_for_subscribe.clone(),
+                                );
+                                let mut devices = state_clone.paired_devices.lock().await;
+                                if let Some(device) = devices.get_mut(&device_id) {
+                                    device.sync_doc_id = doc_id;
+                                }
+                                let _ = save_paired_devices_to_disk(
+                                    &state_clone.app_data_dir,
+                                    &devices,
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "[iroh-sync] Recovery import failed for {device_name}: {e}"
+                                );
+                                let _ = state_clone.app_handle.emit(
+                                    "sync-doc-missing",
+                                    serde_json::json!({
+                                        "deviceId": device_id,
+                                        "deviceName": device_name,
+                                    }),
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    eprintln!(
+                        "[iroh-sync] Paired device {device_name} has no sync doc — re-pair required"
+                    );
+                    let _ = state_clone.app_handle.emit(
+                        "sync-doc-missing",
+                        serde_json::json!({
+                            "deviceId": device_id,
+                            "deviceName": device_name,
+                        }),
+                    );
+                }
+            }
+        }
+
         // ── Pairing protocol handler ──
         let pairing_handler = PairingProtocolHandler {
             state: state_clone.clone(),
@@ -666,46 +759,56 @@ async fn handle_pair_req(
 
     // Create a shared iroh-docs sync document and generate a DocTicket
     // for the scanner to import.
+    //
+    // We clone the api + blobs out of the DocsApiSnapshot and drop the
+    // guard immediately so the docs_api lock is held for microseconds,
+    // not the full duration of create + share + start_sync.  Using
+    // lock().await (instead of try_lock()) prevents a race where a
+    // concurrent docs_get_all_entries call causes the sync doc to
+    // silently never be created — leaving sync_doc_id empty forever
+    // and making sync appear to connect but exchange zero data.
     let sync_doc_ticket = {
-        if let Ok(guard) = state.docs_api.try_lock() {
-            if let Some(snapshot) = guard.as_ref() {
-                match snapshot.api.create().await {
-                    Ok(doc) => {
-                        let doc_id = doc.id();
-                        let ticket = doc
-                            .share(
-                                iroh_docs::api::protocol::ShareMode::Write,
-                                Default::default(),
-                            )
-                            .await
-                            .map(|t| t.to_string())
-                            .unwrap_or_default();
-                        // Subscribe to live events for this document
-                        subscribe_doc_events(
-                            state.app_handle.clone(),
-                            doc.clone(),
-                            snapshot.blobs.clone(),
-                        );
-                        // Start live sync so future writes propagate via gossip
-                        if let Ok(peer_pk) = pairing_req.node_id.parse::<iroh::PublicKey>() {
-                            let peer_addr = iroh::EndpointAddr::new(peer_pk);
-                            let _ = doc.start_sync(vec![peer_addr]).await;
-                        }
-                        // Store the doc_id + ticket on the paired device
-                        let mut devices = state.paired_devices.lock().await;
-                        if let Some(device) = devices.get_mut(&pairing_req.device_id) {
-                            device.sync_doc_id = doc_id.to_string();
-                            device.sync_doc_ticket = ticket.clone();
-                        }
-                        ticket
+        let snapshot_cloned = {
+            let guard = state.docs_api.lock().await;
+            guard.as_ref().map(|s| (s.api.clone(), s.blobs.clone()))
+        };
+        match snapshot_cloned {
+            Some((api, blobs)) => match api.create().await {
+                Ok(doc) => {
+                    let doc_id = doc.id();
+                    let ticket = doc
+                        .share(
+                            iroh_docs::api::protocol::ShareMode::Write,
+                            Default::default(),
+                        )
+                        .await
+                        .map(|t| t.to_string())
+                        .unwrap_or_default();
+                    // Subscribe to live events for this document
+                    subscribe_doc_events(state.app_handle.clone(), doc.clone(), blobs);
+                    // Start live sync so future writes propagate via gossip
+                    if let Ok(peer_pk) = pairing_req.node_id.parse::<iroh::PublicKey>() {
+                        let peer_addr = iroh::EndpointAddr::new(peer_pk);
+                        let _ = doc.start_sync(vec![peer_addr]).await;
                     }
-                    Err(_) => String::new(),
+                    // Store the doc_id + ticket on the paired device and
+                    // PERSIST to disk.  Without this save, the paired
+                    // device file retains the empty sync_doc_id written at
+                    // line 664 (before doc creation).  On app restart the
+                    // host loads the empty sync_doc_id, so docs_set_entry
+                    // skips this peer, the doc stays empty, and the scanner
+                    // connects via SyncFinished but receives zero data.
+                    let mut devices = state.paired_devices.lock().await;
+                    if let Some(device) = devices.get_mut(&pairing_req.device_id) {
+                        device.sync_doc_id = doc_id.to_string();
+                        device.sync_doc_ticket = ticket.clone();
+                    }
+                    let _ = save_paired_devices_to_disk(&state.app_data_dir, &devices);
+                    ticket
                 }
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
+                Err(_) => String::new(),
+            },
+            None => String::new(),
         }
     };
 

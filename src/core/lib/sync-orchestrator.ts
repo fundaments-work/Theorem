@@ -456,24 +456,18 @@ async function provisionBookFileBlobs(): Promise<void> {
     const books = useLibraryStore.getState().books;
     console.log(`[blob-provision] Processing ${books.length} books for blob provisioning`);
 
-    // Fast check: is the blobs store populated? If not (e.g., after cache clear),
-    // we must re-provision ALL books regardless of blobHash metadata.
-    let storePopulated = true;
-    try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        storePopulated = await invoke<boolean>("blobs_store_is_populated");
-    } catch {}
-    if (!storePopulated) {
-        console.log("[blob-provision] Blobs store is empty — re-provisioning all books");
-    }
-
+    // Skip books that already have a valid blobHash — avoids re-reading
+    // every book file on every sync startup (192 sequential reads on a
+    // 192-book library would take minutes). Only process books that are
+    // missing a blobHash (e.g., newly imported, or books that were
+    // skipped before the SQLite-fallthrough fix).
     const updates: Array<{ id: string; blobHash?: string; coverBlobHash?: string }> = [];
     let completed = 0;
     let skipped = 0;
     let fromDisk = 0;
     let fromSqlite = 0;
     for (const book of books) {
-        if (book.blobHash && storePopulated) {
+        if (book.blobHash) {
             skipped++;
             completed++;
             continue;
@@ -775,13 +769,23 @@ export async function ensureResponderSyncReady(): Promise<void> {
         if (!_initialProvisionDone) {
             const alreadyDone = await wasAlreadyProvisioned();
             if (!alreadyDone) {
-                await provisionBookFileBlobs();
-                await provisionToIrohDocs();
-                await markProvisioned();
+                // Pause the Zustand→iroh bridge while provisioning so we
+                // don't cascade 192 scheduleDocsWrite calls on top of the
+                // sequential provisionToIrohDocs writes (2× redundancy,
+                // 2× gossip churn, and a feedback loop with the peer).
+                _bridgePaused = true;
+                try {
+                    await provisionBookFileBlobs();
+                    await provisionToIrohDocs();
+                    await markProvisioned();
+                } finally {
+                    _bridgePaused = false;
+                }
             } else {
                 console.log("[sync] Already provisioned — skipping re-provision");
             }
             _initialProvisionDone = true;
+            _bridgePaused = false;  // bridge can start syncing real-time changes now
             runBlobsGarbageCollection().then((removed) => {
                 if (removed > 0) console.log(`[blob-gc] Removed ${removed} orphaned blobs`);
             }).catch(() => {});
@@ -798,6 +802,11 @@ export async function ensureResponderSyncReady(): Promise<void> {
         await _responderReadyPromise;
     } finally {
         _responderReadyPromise = null;
+        // Unpause the bridge now that provisioning (or skip) is done.
+        // This is the final safety net — the provisioning block also
+        // clears it, but a second call to ensureResponderSyncReady
+        // skips the block and needs this to unpause.
+        _bridgePaused = false;
     }
 }
 
@@ -817,6 +826,7 @@ export async function runDeviceSync(
     }
     _isMerging = true;
     _currentSyncPeerId = peerDeviceId;
+    _lastSyncPeerId = peerDeviceId;
     _syncCancelled = false; // Clear stale cancel flag from previous round
     const log = (msg: string) => {
         onProgress?.(msg);
@@ -1152,7 +1162,10 @@ export async function runDeviceSync(
             // unreachable, so data never flowed either direction.
             summary = "Peer offline";
         } else {
-            summary = "Already in sync";
+            // Connected and SyncFinished fired, but no data arrived.
+            // The peer either has no data to share or blob content
+            // couldn't be transferred (NAT, relay issue, etc.).
+            summary = "No data received — peer may not be sharing";
         }
 
         log(`Sync complete. ${summary}`);
@@ -1187,6 +1200,10 @@ export async function runDeviceSync(
 let _isMerging = false;
 /** Set to true to cancel a running sync session. */
 let _syncCancelled = false;
+/** Set to true while ensureResponderSyncReady is provisioning to prevent
+ *  the Zustand→iroh bridge from cascading writes during the bulk provision.
+ *  Starts true so the bridge is gated until after the first provisioning completes. */
+let _bridgePaused = true;
 
 /**
  * Cancel the currently running sync if any. The sync loop and download
@@ -1217,6 +1234,8 @@ const MAX_PENDING_ENTRIES = 2000;
 const _pendingDocsEntries = new Map<string, string>();
 /** Peer being synced — set by runDeviceSync so live events can trigger file downloads. */
 let _currentSyncPeerId: string | null = null;
+/** Persists across sync rounds so progressive live events (outside runDeviceSync) can still download files. */
+let _lastSyncPeerId: string | null = null;
 
 // Progressive book batch — per-entity book events are accumulated for 200ms
 // then merged in a single setState call to avoid 192 individual re-renders.
@@ -1259,7 +1278,8 @@ function _flushProgressiveBooks() {
     // Enqueue file downloads for newly added books with blobHash
     for (const book of batch) {
         const added = merged.find((b: any) => b.id === book.id);
-        if (added?.syncedWithoutFile && added.blobHash && _currentSyncPeerId) {
+        const peerForDownload = _currentSyncPeerId ?? _lastSyncPeerId;
+        if (added?.syncedWithoutFile && added.blobHash && peerForDownload) {
             console.log(`[blob-download] Enqueueing progressive: ${book.title || book.id} (hash=${added.blobHash.substring(0, 16)}...)`);
             _enqueueFileDownload(added.id, added.blobHash, added.coverBlobHash);
         } else if (added && !added.blobHash) {
@@ -1275,7 +1295,7 @@ let _fileDownloadActive = false;
 async function _processDownloadQueue() {
     if (_fileDownloadActive || _fileDownloadQueue.length === 0) return;
     _fileDownloadActive = true;
-    const peerId = _currentSyncPeerId;
+    const peerId = _currentSyncPeerId ?? _lastSyncPeerId;
     if (!peerId || !isTauri()) { _fileDownloadActive = false; return; }
 
     let appDir = "";
@@ -1574,8 +1594,14 @@ export async function startAutoSync(): Promise<() => void> {
     });
 
     // 3. Visibility change (tab/window focus) — force: peer may have changed.
+    //    Cooldown prevents sync on every tab switch.
+    let lastVisibilitySync = 0;
+    const VISIBILITY_COOLDOWN_MS = 30_000;
     const onVisibilityChange = () => {
         if (document.visibilityState === "visible") {
+            const now = Date.now();
+            if (now - lastVisibilitySync < VISIBILITY_COOLDOWN_MS) return;
+            lastVisibilitySync = now;
             void autoSyncRound(true);
         }
     };
@@ -1610,12 +1636,18 @@ export async function startAutoSync(): Promise<() => void> {
     // 5b. Peer online/offline — auto-trigger sync when a paired device comes online.
     //     This eliminates the need to press "Sync" on both devices — when either
     //     device comes online, the other detects it and starts syncing.
+    //     Cooldown prevents rapid re-syncs when the peer reconnects repeatedly.
     if (isTauri()) {
         try {
             const { listen } = await import("@tauri-apps/api/event");
+            let lastPeerOnlineSync = 0;
+            const PEER_ONLINE_COOLDOWN_MS = 30_000;
             const peerOnlineUnlisten = await listen<{ peer: string }>("docs-peer-online", async (event) => {
                 const nodeId = event.payload.peer;
                 if (!nodeId) return;
+                const now = Date.now();
+                if (now - lastPeerOnlineSync < PEER_ONLINE_COOLDOWN_MS) return;
+                lastPeerOnlineSync = now;
                 try {
                     const devices = await getPairedDevices();
                     const matched = devices.find(d => d.irohNodeId === nodeId);
@@ -1645,6 +1677,30 @@ export async function startAutoSync(): Promise<() => void> {
                 void autoSyncRound(true);
             });
             cleanups.push(docReimportedUnlisten);
+        } catch {
+            // Tauri events not available.
+        }
+    }
+
+    // 5d. Sync doc missing — a paired device has no sync_doc_id (caused by
+    //     a pairing bug where the host didn't persist it). The Rust side
+    //     already tried to recover from the stored ticket. If that failed,
+    //     the user must re-pair. Warn so the user knows why sync shows
+    //     "synced" but no data arrives.
+    if (isTauri()) {
+        try {
+            const { listen } = await import("@tauri-apps/api/event");
+            const syncDocMissingUnlisten = await listen<{ deviceId: string; deviceName: string }>(
+                "sync-doc-missing",
+                (event) => {
+                    console.warn(
+                        `[sync] Paired device "${event.payload.deviceName}" has no sync doc. ` +
+                        `Sync will connect but exchange no data. Re-pair to fix.`,
+                    );
+                    setStatus("error", `Re-pair required with ${event.payload.deviceName}`);
+                },
+            );
+            cleanups.push(syncDocMissingUnlisten);
         } catch {
             // Tauri events not available.
         }
@@ -1974,7 +2030,12 @@ export function subscribeZustandToIrohDocs(): () => void {
         });
     };
 
+    // Cache of last serialized form per book ID — avoids re-serializing
+    // all 192 books when only 1 book changed (common case: reading progress).
+    const _bookSerializedCache = new Map<string, string>();
+
     unsubs.push(useLibraryStore.subscribe((state) => {
+        if (_bridgePaused) return;  // skip during initial provisioning burst
         if (state.books !== prevBooks) {
             const oldBooks = prevBooks;
             prevBooks = state.books;
@@ -1985,26 +2046,41 @@ export function subscribeZustandToIrohDocs(): () => void {
                 || oldBooks.some(b => !newIdSet.has(b.id));
 
             if (!hasDeletions) {
-                // Common case: same books, in-place updates. Only serialize
-                // books whose reference changed (shallow diff via identity).
+                // Common case: same books, in-place updates. Use cached
+                // serialization to avoid re-serializing all 192 books
+                // when only 1 book changed (reading progress, favorite, etc.).
                 for (const book of state.books) {
                     const oldBook = oldMap.get(book.id);
                     if (!oldBook) {
+                        const serialized = serializeBook(book);
+                        _bookSerializedCache.set(book.id, serialized);
                         scheduleDocsWrite("book:" + book.id, () =>
-                            docsSetEntry("book:" + book.id, serializeBook(book)), "book:" + book.id);
+                            docsSetEntry("book:" + book.id, serialized), "book:" + book.id);
                     } else if (book !== oldBook) {
-                        const currSerialized = serializeBook(book);
-                        const prevSerialized = serializeBook(oldBook);
-                        if (currSerialized !== prevSerialized) {
+                        const cached = _bookSerializedCache.get(book.id);
+                        if (cached === undefined) {
+                            const serialized = serializeBook(book);
+                            _bookSerializedCache.set(book.id, serialized);
                             scheduleDocsWrite("book:" + book.id, () =>
-                                docsSetEntry("book:" + book.id, currSerialized), "book:" + book.id);
+                                docsSetEntry("book:" + book.id, serialized), "book:" + book.id);
+                        } else {
+                            const currSerialized = serializeBook(book);
+                            if (currSerialized !== cached) {
+                                _bookSerializedCache.set(book.id, currSerialized);
+                                scheduleDocsWrite("book:" + book.id, () =>
+                                    docsSetEntry("book:" + book.id, currSerialized), "book:" + book.id);
+                            }
                         }
                     }
                 }
             } else {
+                // Deletions: different book IDs, serialize all. Clear cache
+                // since the entire book set changed.
+                _bookSerializedCache.clear();
                 for (const book of state.books) {
                     const prevBook = oldMap.get(book.id);
                     const currSerialized = serializeBook(book);
+                    _bookSerializedCache.set(book.id, currSerialized);
                     if (!prevBook) {
                         scheduleDocsWrite("book:" + book.id, () =>
                             docsSetEntry("book:" + book.id, currSerialized), "book:" + book.id);

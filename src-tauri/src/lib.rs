@@ -1342,14 +1342,16 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
         let gossip = iroh_gossip::net::Gossip::builder().spawn(endpoint.clone());
         let blobs_store: iroh_blobs::api::Store = blobs.clone().into();
 
-        // ── Persistent docs store — same as the main app uses ──
-        // This is critical: the previous in-memory docs store (Docs::memory())
-        // meant that CRDT data exchanged during this background sync was
-        // discarded on function exit. Using Docs::persistent() with the same
-        // directory as the main app ensures that data received from peers
-        // during background sync survives and is available when the app
-        // reopens and calls hydrateFromIrohDocs().
-        let docs_handler = match iroh_docs::protocol::Docs::persistent(data_dir.join("iroh-docs"))
+        // ── In-memory docs store ──
+        // DO NOT use Docs::persistent() here — the main app already has the
+        // same database open, and redb's flock only protects against other
+        // PROCESSES, not other threads in the same process. Two concurrent
+        // writers to the same redb file corrupt the database, causing the
+        // main app's iroh-docs actor to crash with "sending to iroh_docs
+        // actor failed". The in-memory store is fine: CRDT data received
+        // during this background sync will be picked up by the main app on
+        // its next sync round (DataDog ticket recovery + re-sync with peer).
+        let docs_handler = match iroh_docs::protocol::Docs::memory()
             .spawn(endpoint.clone(), blobs_store.clone(), gossip)
             .await
         {
