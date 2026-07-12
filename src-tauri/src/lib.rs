@@ -1322,11 +1322,13 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
             }
         };
 
-        // ── Temp directory for blobs store (cleaned up on drop) ──
-        // NOTE: We use the persistent iroh-blobs store so that blobs added
-        // during this background sync round survive and can be downloaded
-        // by the peer when the app reopens.
-        let blobs = match iroh_blobs::store::fs::FsStore::load(&data_dir.join("iroh-blobs")).await {
+        // ── Separate blobs store (independent from main app) ──
+        // MUST NOT use the main app's data_dir/iroh-blobs — two concurrent
+        // writers to the same FsStore corrupt the B-tree, causing the main
+        // app's iroh-docs actor to crash with "sending to iroh_docs actor
+        // failed". A separate directory avoids the conflict entirely.
+        // Also cleaned up on drop since the data is ephemeral to this round.
+        let blobs = match iroh_blobs::store::fs::FsStore::load(&data_dir.join("iroh-blobs-bg")).await {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("[background-sync] blobs: {e}");
