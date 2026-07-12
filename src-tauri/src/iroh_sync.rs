@@ -453,6 +453,18 @@ pub fn start_accept_loop(
     tokio::spawn(async move {
         // ── iroh-blobs: persistent file-backed store ──
         let blobs_path = data_dir.join("iroh-blobs");
+
+        // Wipe stale databases from pre-1.0.7 (buggy background sync era).
+        // The corrupted redb + FsStore cause iroh-docs actor crashes
+        // ("sending to iroh_docs actor failed"). Fresh start is safe —
+        // sync data is re-synced from the peer.
+        let stale_docs = data_dir.join("iroh-docs").join("db.redb");
+        if stale_docs.exists() {
+            eprintln!("[iroh-sync] Purging stale databases from pre-1.0.7...");
+            let _ = std::fs::remove_dir_all(data_dir.join("iroh-docs"));
+            let _ = std::fs::remove_dir_all(&blobs_path);
+        }
+
         let _ = std::fs::create_dir_all(&blobs_path);
         let blobs = match iroh_blobs::store::fs::FsStore::load(&blobs_path).await {
             Ok(s) => s,
@@ -470,6 +482,15 @@ pub fn start_accept_loop(
 
         // ── iroh-docs: CRDT metadata sync ──
         let docs_path = data_dir.join("iroh-docs");
+
+        // Wipe any existing docs database that was created by a pre-1.0.7
+        // version (when the buggy background sync corrupted it). The sync
+        // data is re-synced from the peer on first sync — clean start.
+        if docs_path.join("db.redb").exists() {
+            eprintln!("[iroh-sync] Removing stale iroh-docs database from pre-1.0.7...");
+            let _ = std::fs::remove_dir_all(&docs_path);
+        }
+
         let _ = std::fs::create_dir_all(&docs_path);
         let blobs_store: iroh_blobs::api::Store = blobs.into();
         let blobs_for_subscribe = blobs_store.clone();
