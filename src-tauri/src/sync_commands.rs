@@ -919,7 +919,7 @@ async fn get_docs_api_or_init(app: &tauri::AppHandle) -> Result<iroh_docs::api::
 pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Result<(), String> {
     let api = get_docs_api_or_init(&app).await?;
     let sync_state = get_sync_state(&app)?;
-    let (doc_id, peer_pk, relay_url) = {
+    let (doc_id, peer_pk, relay_url, ip, port) = {
         let devices = sync_state.transport_state.paired_devices.lock().await;
         let device = devices
             .get(&peer_device_id)
@@ -928,6 +928,8 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
         let sync_doc_ticket = device.sync_doc_ticket.clone();
         let iroh_node_id = device.iroh_node_id.clone();
         let peer_relay_url = device.peer_relay_url.clone();
+        let last_ip = device.last_ip.clone();
+        let last_port = device.last_port;
         drop(devices);
 
         let doc_id: iroh_docs::NamespaceId = if sync_doc_id.is_empty() {
@@ -971,7 +973,7 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
         let pk: iroh::PublicKey = iroh_node_id
             .parse()
             .map_err(|e| format!("parse peer key: {e}"))?;
-        (doc_id, pk, peer_relay_url)
+        (doc_id, pk, peer_relay_url, last_ip, last_port)
     };
 
     let doc = match api.open(doc_id).await {
@@ -1015,6 +1017,14 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
     if !relay_url.is_empty() {
         if let Ok(url) = relay_url.parse::<iroh::RelayUrl>() {
             peer_addr = peer_addr.with_relay_url(url);
+        }
+    }
+    // Add cached LAN IP as fallback — may be stale (DHCP renewal) but if
+    // still valid the connection is much faster than going through relay.
+    // iroh tries all addresses in parallel and picks the fastest working one.
+    if let Ok(ip_addr) = ip.parse::<std::net::IpAddr>() {
+        if port > 0 {
+            peer_addr = peer_addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, port));
         }
     }
     // Start CRDT sync with peer. start_sync() may return Ok before the
