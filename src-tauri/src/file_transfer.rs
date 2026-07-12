@@ -123,20 +123,18 @@ pub async fn request_book_file(
         (pk, peer.peer_relay_url.clone())
     };
 
-    let mut peer_addr = iroh::EndpointAddr::new(peer_pk);
-    if !relay_url.is_empty() {
+    let peer_addr = iroh::EndpointAddr::new(peer_pk);
+    // mDNS address lookup on the endpoint discovers LAN addresses automatically.
+    // The relay URL from pairing is available as fallback if mDNS fails.
+    let peer_addr = if !relay_url.is_empty() {
         if let Ok(url) = relay_url.parse::<iroh::RelayUrl>() {
-            peer_addr = peer_addr.with_relay_url(url);
+            peer_addr.with_relay_url(url)
+        } else {
+            peer_addr
         }
-    }
-
-    if let Err(e) = ep
-        .endpoint
-        .connect(peer_addr.clone(), FILE_TRANSFER_ALPN)
-        .await
-    {
-        eprintln!("[file-xfer] connect warmup: {e}");
-    }
+    } else {
+        peer_addr
+    };
 
     let conn = ep
         .endpoint
