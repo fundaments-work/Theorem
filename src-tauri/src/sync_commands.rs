@@ -811,21 +811,27 @@ pub async fn docs_get_all_entries(
                 pin_mut!(stream);
                 let mut doc_entries_seen = 0u64;
                 let mut doc_entries_read = 0u64;
-                while let Some(entry_res) = stream.next().await {
+                'entries: while let Some(entry_res) = stream.next().await {
                     doc_entries_seen += 1;
                     if let Ok(entry) = entry_res {
                         let key = String::from_utf8_lossy(entry.key()).to_string();
                         let hash = entry.content_hash();
-                        if let Ok(content) = blobs.blobs().get_bytes(hash).await {
-                            if let Ok(value) = String::from_utf8(content.to_vec()) {
-                                per_key.entry(key).or_default().push(value);
-                                doc_entries_read += 1;
+                        let value = 'retry: {
+                            for _ in 0..10 {
+                                if let Ok(content) = blobs.blobs().get_bytes(hash).await {
+                                    if let Ok(v) = String::from_utf8(content.to_vec()) {
+                                        doc_entries_read += 1;
+                                        break 'retry v;
+                                    }
+                                }
+                                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                             }
-                        } else {
                             eprintln!(
-                                "[iroh-sync] docs_get_all_entries: blob not available for key={key}"
+                                "[iroh-sync] docs_get_all_entries: blob not available for key={key} (gave up after 5s)"
                             );
-                        }
+                            continue 'entries;
+                        };
+                        per_key.entry(key).or_default().push(value);
                     }
                 }
                 eprintln!(

@@ -1434,7 +1434,7 @@ export function LibraryPage() {
             useUIStore.getState().setDownloadingBook(book.id);
             setRoute("reader", book.id);
             import("../../core/lib/sync-orchestrator").then(({ downloadBookOnDemand }) => {
-                downloadBookOnDemand(book.id);
+                downloadBookOnDemand(book.id).catch(() => {});
             });
             return;
         }

@@ -994,7 +994,13 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
     const devices = await getPairedDevices().catch(() => []);
     for (const device of devices) {
         if (_syncCancelled) break;
-        const data = await requestBookFile(device.deviceId, bookId);
+        let data: Uint8Array | null = null;
+        try {
+            data = await requestBookFile(device.deviceId, bookId);
+        } catch (e) {
+            console.error(`[file-xfer] request failed for ${bookId}: ${e}`);
+            continue;
+        }
         if (!data || data.byteLength === 0) continue;
 
         try {

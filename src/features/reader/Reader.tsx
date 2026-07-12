@@ -517,7 +517,7 @@ const BookReaderPage = memo(function BookReaderPage() {
                 if (state.downloadingBookId !== book.id) {
                     state.setDownloadingBook(book.id);
                     import("../../core/lib/sync-orchestrator").then(({ downloadBookOnDemand }) => {
-                        downloadBookOnDemand(book.id);
+                        downloadBookOnDemand(book.id).catch(() => {});
                     });
                 }
                 return;
