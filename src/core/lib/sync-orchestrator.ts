@@ -526,148 +526,6 @@ async function provisionBookFileBlobs(): Promise<void> {
     }
 }
 
-/**
- * After metadata merge, attempt to pull the binary book data and covers
- * from the peer using iroh-blobs.
- *
- * For each successfully transferred book file:
- *  - Clears `syncedWithoutFile`
- *  - Sets `storagePath` to the downloaded file path
- *  - Updates `blobHash`
- */
-async function pullMissingBookFilesAndCovers(
-    peerDeviceId: string,
-    _syncedBookIds: string[],
-    _log: (msg: string) => void,
-): Promise<{ completed: number; failed: number }> {
-    if (!isTauri()) return { completed: 0, failed: 0 };
-    const books = useLibraryStore.getState().books;
-    const needFiles = books.filter((b) => b.syncedWithoutFile === true && b.blobHash);
-    const noBlobHash = books.filter((b) => b.syncedWithoutFile === true && !b.blobHash);
-    console.log(`[sync] needFiles: ${needFiles.length} with blobHash, ${noBlobHash.length} without blobHash (${books.length} total)`);
-    if (needFiles.length > 0) {
-        console.log(`[sync] Books needing download:`, needFiles.map(b => `${b.title} (hash=${b.blobHash?.substring(0, 16)}...)`).join(", "));
-    }
-
-    if (needFiles.length === 0) {
-        if (noBlobHash.length > 0) {
-            console.log(`[sync] ${noBlobHash.length} books have no blobHash — source device must rebuild with blob provisioning. Books:`, noBlobHash.map(b => b.title).join(", "));
-        }
-        return { completed: 0, failed: 0 };
-    }
-
-    let appDir = "";
-    try {
-        const { appDataDir } = await import("@tauri-apps/api/path");
-        appDir = await appDataDir();
-    } catch {
-        console.error("[sync] Failed to get app data dir");
-        return { completed: 0, failed: needFiles.length };
-    }
-
-    // Build ordered peer list: current peer first, then all other paired devices.
-    const allPeers: string[] = [peerDeviceId];
-    try {
-        const devices = await getPairedDevices();
-        for (const d of devices) {
-            if (d.deviceId !== peerDeviceId) {
-                allPeers.push(d.deviceId);
-            }
-        }
-    } catch {
-        // If we can't enumerate peers, just try the current one.
-    }
-
-    const CONCURRENCY = 4;
-    const MAX_RETRIES = 2;
-    const RETRY_DELAY_MS = 5000;
-    let completed = 0;
-    let index = 0;
-    let failures = 0;
-
-    const downloadBook = async () => {
-        while (index < needFiles.length && !_syncCancelled) {
-            const book = needFiles[index++];
-            const destPath = `${appDir}/book-cache/${book.id}.book`;
-
-            let succeeded = false;
-            for (let attempt = 0; attempt <= MAX_RETRIES && !succeeded && !_syncCancelled; attempt++) {
-                if (attempt > 0) {
-                    await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-                }
-
-                for (const peerId of allPeers) {
-                    if (_syncCancelled) break;
-                    const success = await blobsDownloadFile(peerId, book.blobHash!, destPath);
-                    if (success) {
-                        succeeded = true;
-                        completed++;
-                        console.log(`[blob-download] OK: ${book.title} from peer ${peerId}`);
-                        useLibraryStore.setState((state) => ({
-                            books: state.books.map((b) =>
-                                b.id === book.id
-                                    ? { ...b, syncedWithoutFile: false, filePath: destPath, storagePath: destPath }
-                                    : b
-                            ),
-                        }));
-                        break;
-                    }
-                    console.log(`[blob-download] Peer ${peerId} failed for ${book.title} — trying next peer`);
-                }
-            }
-
-            if (succeeded) {
-                setStatus("syncing", `Downloading ${completed}/${needFiles.length} books...`);
-            } else if (!_syncCancelled) {
-                failures++;
-                setStatus("syncing", `Downloading ${completed}/${needFiles.length} (${failures} failed)`);
-                console.error(`[blob-download] FAIL after ${MAX_RETRIES + 1} attempts: ${book.title} (${book.id}, hash=${book.blobHash?.substring(0, 16)}...)`);
-            }
-        }
-    };
-
-    const workers = Array.from({ length: Math.min(CONCURRENCY, needFiles.length) }, () => downloadBook());
-    await Promise.all(workers);
-
-    if (_syncCancelled) {
-        console.log("[sync] Sync cancelled — aborting file download");
-        _syncCancelled = false;
-        setStatus("idle", "Sync cancelled");
-    } else if (completed === 0 && failures > 0) {
-        setStatus("synced", `0/${needFiles.length} downloaded — peer not available`);
-        console.log(`[sync] All ${needFiles.length} downloads failed — peer may be offline or blobs not provisioned`);
-    } else if (failures > 0) {
-        setStatus("synced", `${completed}/${needFiles.length} downloaded (${failures} failed)`);
-    } else if (completed > 0) {
-        setStatus("synced", `${completed} books synced`);
-    }
-
-    console.log(`[sync] Downloaded ${completed}/${needFiles.length} files (${failures} failed)`);
-
-    // Also attempt cover downloads for books that have coverBlobHash
-    const needCovers = books.filter((b) => b.coverBlobHash && (!b.coverPath || b.coverPath.startsWith("data:")));
-    if (needCovers.length > 0) {
-        for (const book of needCovers) {
-            if (_syncCancelled) break;
-            let coverDone = false;
-            for (const peerId of allPeers) {
-                if (coverDone || _syncCancelled) break;
-                const bytes = await blobsDownloadBytes(peerId, book.coverBlobHash!);
-                if (bytes && bytes.length > 0) {
-                    try {
-                        const blob = new Blob([Uint8Array.from(bytes)]);
-                        const { saveCoverImage } = await import("./storage");
-                        await saveCoverImage(book.id, blob);
-                        coverDone = true;
-                    } catch {
-                    }
-                }
-            }
-        }
-    }
-    return { completed, failed: failures };
-}
-
 // ─── Public API ───
 
 export interface SyncResult {
@@ -825,8 +683,6 @@ export async function runDeviceSync(
         return { success: false, domainsUpdated: [], error: "Sync already in progress" };
     }
     _isMerging = true;
-    _currentSyncPeerId = peerDeviceId;
-    _lastSyncPeerId = peerDeviceId;
     _syncCancelled = false; // Clear stale cancel flag from previous round
     const log = (msg: string) => {
         onProgress?.(msg);
@@ -1077,23 +933,14 @@ export async function runDeviceSync(
             return { success: false, domainsUpdated: [], error: "Sync cancelled" };
         }
 
-        // 6. Pull missing book files from peer
-        const syncedBookIds = useLibraryStore.getState().books.map(b => b.id);
-        const needFileCount = useLibraryStore.getState().books.filter(b => b.syncedWithoutFile === true && b.blobHash).length;
-        let downloadStats = { completed: 0, failed: 0 };
-        if (needFileCount > 0) {
-            log(`Downloading ${needFileCount} book files...`);
-            setStatus("syncing", `Downloading 0/${needFileCount}...`);
-        }
-        downloadStats = await pullMissingBookFilesAndCovers(peerDeviceId, syncedBookIds, log);
-
-        // 7. After pulling files, re-add them to the local blobs store so
-        //    blobHash is updated. We do NOT call provisionToIrohDocs() here —
-        //    that would push ALL data on every sync round, defeating CRDT
-        //    incremental sync. The subscribeZustandToIrohDocs bridge watches
-        //    Zustand for book changes and writes them incrementally.
-        if (!_syncCancelled) {
-            await provisionBookFileBlobs();
+        // 6. File transfer is ON-DEMAND — downloads happen when the user
+        //    taps "Open Book", not during metadata sync. The book arrived
+        //    with syncedWithoutFile=true, and the peer's file will be fetched
+        //    via the `theorem-file/v1` QUIC stream handler on first open.
+        //    This avoids downloading 20GB+ on a fresh sync peer.
+        const pendingDownloads = useLibraryStore.getState().books.filter(b => b.syncedWithoutFile === true && b.blobHash).length;
+        if (pendingDownloads > 0) {
+            log(`${pendingDownloads} book(s) available for on-demand download`);
         }
 
         if (_syncCancelled) {
@@ -1140,20 +987,11 @@ export async function runDeviceSync(
                 })
                 .join(", ");
             summary = `Synced: ${parts}`;
-            if (downloadStats.completed > 0) {
-                summary += ` · Downloaded ${downloadStats.completed} file(s)`;
-            }
-            if (downloadStats.failed > 0) {
-                summary += ` · ${downloadStats.failed} download(s) failed`;
-                setStatus("error", summary);
-            }
             if (changedConflicts.length > 0) {
                 summary += ` · ${changedConflicts.length} conflict(s) resolved`;
             }
-        } else if (downloadStats.completed > 0) {
-            summary = `Synced: ${downloadStats.completed} file(s)`;
-        } else if (downloadStats.failed > 0) {
-            summary = `Metadata synced, ${downloadStats.failed} download(s) failed`;
+        } else if (pendingDownloads > 0) {
+            summary = `Metadata synced, ${pendingDownloads} files available for download`;
         } else if (!_syncActivityDetected) {
             // docsSyncNow succeeded (start_sync returned Ok) but NO sync
             // events (docs-pending-content-ready, docs-sync-finished) ever
@@ -1163,8 +1001,7 @@ export async function runDeviceSync(
             summary = "Peer offline";
         } else {
             // Connected and SyncFinished fired, but no data arrived.
-            // The peer either has no data to share or blob content
-            // couldn't be transferred (NAT, relay issue, etc.).
+            // The peer has no data to share.
             summary = "No data received — peer may not be sharing";
         }
 
@@ -1184,8 +1021,6 @@ export async function runDeviceSync(
         return { success: false, domainsUpdated: [], error: errMsg };
     } finally {
         _isMerging = false;
-        _currentSyncPeerId = null;
-        _processDownloadQueue();
     }
 }
 
@@ -1211,9 +1046,6 @@ let _bridgePaused = true;
  */
 export function cancelRunningSync(): void {
     _syncCancelled = true;
-    // Clear download queue so no new downloads start after cancel
-    _fileDownloadQueue.splice(0, _fileDownloadQueue.length);
-    // Cancel any pending progressive book flush
     if (_progressiveBookTimer) clearTimeout(_progressiveBookTimer);
     _progressiveBookBatch = [];
     setStatus("idle", "Sync cancelled");
@@ -1232,10 +1064,7 @@ export function cancelRunningSync(): void {
 let _docsLiveTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_PENDING_ENTRIES = 2000;
 const _pendingDocsEntries = new Map<string, string>();
-/** Peer being synced — set by runDeviceSync so live events can trigger file downloads. */
-let _currentSyncPeerId: string | null = null;
-/** Persists across sync rounds so progressive live events (outside runDeviceSync) can still download files. */
-let _lastSyncPeerId: string | null = null;
+
 
 // Progressive book batch — per-entity book events are accumulated for 200ms
 // then merged in a single setState call to avoid 192 individual re-renders.
@@ -1275,83 +1104,14 @@ function _flushProgressiveBooks() {
         }
     }
 
-    // Enqueue file downloads for newly added books with blobHash
+    // On-demand download: files are fetched when the user opens the book.
+    // The metadata (title, author, progress, etc.) is already available.
     for (const book of batch) {
         const added = merged.find((b: any) => b.id === book.id);
-        const peerForDownload = _currentSyncPeerId ?? _lastSyncPeerId;
-        if (added?.syncedWithoutFile && added.blobHash && peerForDownload) {
-            console.log(`[blob-download] Enqueueing progressive: ${book.title || book.id} (hash=${added.blobHash.substring(0, 16)}...)`);
-            _enqueueFileDownload(added.id, added.blobHash, added.coverBlobHash);
-        } else if (added && !added.blobHash) {
-            console.log(`[blob-download] No blobHash for: ${book.title || book.id} — peer hasn't provisioned this blob`);
+        if (added && !added.blobHash) {
+            console.log(`[sync] No blobHash for: ${book.title || book.id} — peer hasn't provisioned this blob`);
         }
     }
-}
-
-// Background download queue
-const _fileDownloadQueue: Array<{ bookId: string; blobHash: string; coverBlobHash?: string }> = [];
-let _fileDownloadActive = false;
-
-async function _processDownloadQueue() {
-    if (_fileDownloadActive || _fileDownloadQueue.length === 0) return;
-    _fileDownloadActive = true;
-    const peerId = _currentSyncPeerId ?? _lastSyncPeerId;
-    if (!peerId || !isTauri()) { _fileDownloadActive = false; return; }
-
-    let appDir = "";
-    try {
-        const { appDataDir } = await import("@tauri-apps/api/path");
-        appDir = await appDataDir();
-    } catch { _fileDownloadActive = false; return; }
-
-    const CONCURRENCY = 4;
-    let completed = 0;
-    const total = _fileDownloadQueue.length;
-    let index = 0;
-
-    const downloadWorker = async () => {
-        while (index < _fileDownloadQueue.length) {
-            const { bookId, blobHash, coverBlobHash } = _fileDownloadQueue[index++];
-            const book = useLibraryStore.getState().books.find(b => b.id === bookId);
-            if (!book || !book.syncedWithoutFile) continue;
-
-            const destPath = `${appDir}/book-cache/${bookId}.book`;
-            setStatus("syncing", `Downloading ${completed + 1}/${total}`);
-            const success = await blobsDownloadFile(peerId, blobHash, destPath);
-            if (success) {
-                completed++;
-                useLibraryStore.setState(state => ({
-                    books: state.books.map(b =>
-                        b.id === bookId ? { ...b, syncedWithoutFile: false, filePath: destPath, storagePath: destPath } : b
-                    )
-                }));
-            }
-
-            if (coverBlobHash) {
-                const coverBytes = await blobsDownloadBytes(peerId, coverBlobHash);
-                if (coverBytes && coverBytes.length > 0) {
-                    try {
-                        const blob = new Blob([Uint8Array.from(coverBytes)], { type: "image/jpeg" });
-                        const { saveCoverImage } = await import("./storage");
-                        await saveCoverImage(bookId, blob);
-                    } catch {}
-                }
-            }
-        }
-    };
-
-    const workers = Array.from({ length: Math.min(CONCURRENCY, total) }, () => downloadWorker());
-    await Promise.all(workers);
-    // Clear processed items from queue
-    _fileDownloadQueue.splice(0, index);
-    _fileDownloadActive = false;
-}
-
-function _enqueueFileDownload(bookId: string, blobHash: string, coverBlobHash?: string) {
-    // Deduplicate
-    if (_fileDownloadQueue.some(q => q.bookId === bookId)) return;
-    _fileDownloadQueue.push({ bookId, blobHash, coverBlobHash });
-    _processDownloadQueue();
 }
 
 export async function initDocsLiveListener(): Promise<() => void> {
@@ -1837,9 +1597,13 @@ export async function provisionToIrohDocs(): Promise<boolean> {
         };
 
         for (const book of lib.books) {
-            const key = `book:${book.id}`;
-            markSelfOriginated(key);
-            await docsSetEntry(key, serializeBook(book));
+            try {
+                const key = `book:${book.id}`;
+                markSelfOriginated(key);
+                await docsSetEntry(key, serializeBook(book));
+            } catch (e) {
+                console.error(`[sync] Failed to provision book ${book.id} (${book.title || "unknown"}): ${e}`);
+            }
         }
         markSelfOriginated("annotations");
         await docsSetEntry("annotations", JSON.stringify(lib.annotations));

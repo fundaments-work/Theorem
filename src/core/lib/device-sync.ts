@@ -167,6 +167,18 @@ export async function cancelPeriodicSyncWork(): Promise<void> {
     }
 }
 
+/** Request a book file from a paired peer using the theorem-file/v1 QUIC stream. */
+export async function requestBookFile(peerDeviceId: string, bookId: string): Promise<Uint8Array | null> {
+    if (!isTauri()) return null;
+    try {
+        const result = await invoke<number[]>("request_book_file", { peerDeviceId, bookId });
+        return new Uint8Array(result);
+    } catch (e) {
+        console.error(`[file-xfer] requestBookFile failed for ${bookId}: ${e}`);
+        return null;
+    }
+}
+
 /** Update the auto-sync-disabled flag file for Android JNI worker. */
 export async function setAutoSyncFlag(enabled: boolean): Promise<void> {
     if (!isTauri()) return;

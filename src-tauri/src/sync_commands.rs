@@ -64,7 +64,9 @@ pub fn init_sync(
     })
 }
 
-fn get_sync_state(app: &tauri::AppHandle) -> Result<tauri::State<'_, SyncState>, String> {
+pub(crate) fn get_sync_state(
+    app: &tauri::AppHandle,
+) -> Result<tauri::State<'_, SyncState>, String> {
     app.try_state::<SyncState>().ok_or_else(|| {
         "Sync subsystem is not initialized. Sync features are unavailable on this device."
             .to_string()
@@ -73,7 +75,9 @@ fn get_sync_state(app: &tauri::AppHandle) -> Result<tauri::State<'_, SyncState>,
 
 // ─── Iroh Lifecycle ───
 
-async fn get_or_init_iroh(app: &tauri::AppHandle) -> Result<Arc<IrohSyncEndpoint>, String> {
+pub(crate) async fn get_or_init_iroh(
+    app: &tauri::AppHandle,
+) -> Result<Arc<IrohSyncEndpoint>, String> {
     if let Some(ep) = IROH_ENDPOINT.lock().unwrap().clone() {
         return Ok(ep);
     }

@@ -688,12 +688,18 @@ pub fn start_accept_loop(
             state: state_clone.clone(),
         };
 
+        // ── Fast file transfer handler (replaces iroh-blobs for book files) ──
+        let file_handler = crate::file_transfer::FileTransferHandler {
+            data_dir: data_dir.clone(),
+        };
+
         // ── Router: dispatch by ALPN ──
         let router = Router::builder(router_endpoint)
             .accept(iroh_blobs::ALPN, blobs_handler)
             .accept(iroh_gossip::ALPN, gossip)
             .accept(iroh_docs::ALPN, docs_handler)
             .accept(ALPN, pairing_handler)
+            .accept(crate::file_transfer::ALPN_BYTES, file_handler)
             .spawn();
 
         let _ = cancel_rx.changed().await;

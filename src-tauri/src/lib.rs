@@ -1,5 +1,6 @@
 mod database;
 mod epub_parser;
+mod file_transfer;
 mod iroh_sync;
 mod sync_commands;
 #[cfg(target_os = "linux")]
@@ -1144,11 +1145,10 @@ pub fn run() {
             sync_commands::docs_set_entry,
             sync_commands::docs_get_all_entries,
             sync_commands::docs_sync_now,
-            // iroh-blobs file/cove r transfer
+            // Fast file transfer via QUIC streams (replaces iroh-blobs)
+            file_transfer::request_book_file,
+            // Legacy iroh-blobs — kept for CRDT blob content
             sync_commands::blobs_add_bytes,
-            sync_commands::blobs_download_bytes,
-            sync_commands::blobs_add_file,
-            sync_commands::blobs_download_file,
             sync_commands::blobs_gc,
             sync_commands::blobs_has_hash,
             sync_commands::blobs_store_is_populated,
