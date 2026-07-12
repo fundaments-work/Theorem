@@ -1005,6 +1005,8 @@ export async function runDeviceSync(
             setStatus("error", summary);
         } else {
             setStatus("synced", summary);
+            // Download covers in background so the library shows cover images
+            void syncBookCovers(peerDeviceId);
         }
         _dataDirty = false;
 
@@ -1086,6 +1088,38 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
         }
     }
     return false;
+}
+
+/**
+ * Download cover images for all synced books that don't have a local cover.
+ * Covers are small (< 100KB each) and are fetched in the background after
+ * metadata sync completes so the library shows cover images immediately.
+ */
+async function syncBookCovers(peerDeviceId: string): Promise<void> {
+    const { requestBookFile } = await import("./device-sync");
+    const { saveCoverImage } = await import("./storage");
+
+    const books = useLibraryStore.getState().books;
+    const needCovers = books.filter(
+        (b) => b.syncedWithoutFile && b.coverBlobHash && (!b.coverPath || b.coverPath.startsWith("data:")),
+    );
+    if (needCovers.length === 0) return;
+
+    const CONCURRENCY = 4;
+    let index = 0;
+    await Promise.all(
+        Array.from({ length: CONCURRENCY }, async () => {
+            while (index < needCovers.length && !_syncCancelled) {
+                const book = needCovers[index++];
+                const data = await requestBookFile(peerDeviceId, `cover:${book.id}`);
+                if (!data || data.byteLength === 0) continue;
+                try {
+                    const blob = new Blob([data.buffer as ArrayBuffer], { type: "image/jpeg" });
+                    await saveCoverImage(book.id, blob);
+                } catch {}
+            }
+        }),
+    );
 }
 
 /**
