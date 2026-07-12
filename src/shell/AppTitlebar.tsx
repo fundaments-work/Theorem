@@ -79,14 +79,20 @@ export const AppTitlebar = memo(function AppTitlebar({
             }
         };
 
+        let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+
         const handleResize = () => {
-            updateMaximizedState();
+            if (resizeTimer) clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(updateMaximizedState, 150);
         };
 
         window.addEventListener("resize", handleResize);
         updateMaximizedState();
 
-        return () => window.removeEventListener("resize", handleResize);
+        return () => {
+            window.removeEventListener("resize", handleResize);
+            if (resizeTimer) clearTimeout(resizeTimer);
+        };
     }, [showDesktopWindowControls]);
 
     useEffect(() => {

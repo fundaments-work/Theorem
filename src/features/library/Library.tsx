@@ -95,11 +95,8 @@ export const BookCard = memo(function BookCard({
     const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const clickCountRef = useRef(0);
     const isCompleted = isBookMarkedRead(book);
-    const updateBook = useLibraryStore((state) => state.updateBook);
-    const collections = useLibraryStore((state) => state.collections);
-    const removeBookFromCollection = useLibraryStore((state) => state.removeBookFromCollection);
 
-    const bookShelves = collections.filter((c) => c.bookIds.includes(book.id));
+    const bookShelves = useLibraryStore.getState().collections.filter((c) => c.bookIds.includes(book.id));
 
     const handleCardClick = () => {
         if (isSelecting && onToggleSelect) {
@@ -162,7 +159,7 @@ export const BookCard = memo(function BookCard({
             id: `shelf-${shelf.id}`,
             label: `Remove from "${shelf.name}"`,
             icon: <BookMarked className="w-4 h-4" />,
-            onClick: () => removeBookFromCollection(shelf.id, book.id),
+            onClick: () => useLibraryStore.getState().removeBookFromCollection(shelf.id, book.id),
         })),
         {
             id: "separator1",
@@ -182,7 +179,7 @@ export const BookCard = memo(function BookCard({
             onClick: () => {
                 const newTitle = prompt("Enter new title:", book.title);
                 if (newTitle && newTitle.trim() !== "" && newTitle !== book.title) {
-                    updateBook(book.id, { title: newTitle.trim() });
+                    useLibraryStore.getState().updateBook(book.id, { title: newTitle.trim() });
                 }
             },
         },
@@ -454,6 +451,9 @@ export const MemoizedBookCard = memo(BookCard, (prev, next) => {
         prev.book.progress === next.book.progress &&
         prev.book.isFavorite === next.book.isFavorite &&
         prev.book.coverPath === next.book.coverPath &&
+        prev.book.title === next.book.title &&
+        prev.book.author === next.book.author &&
+        prev.book.syncedWithoutFile === next.book.syncedWithoutFile &&
         prev.viewMode === next.viewMode &&
         prev.isSelecting === next.isSelecting &&
         prev.isSelected === next.isSelected;

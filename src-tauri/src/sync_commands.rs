@@ -18,6 +18,13 @@ use tokio::sync::Mutex;
 
 static IROH_ENDPOINT: std::sync::Mutex<Option<Arc<IrohSyncEndpoint>>> = std::sync::Mutex::new(None);
 
+/// Global init lock — prevents concurrent iroh_start() calls from
+/// interfering with each other. Without this, two concurrent starts
+/// can race: the second sees the docs API not ready within 5s and
+/// triggers the database-wipe retry path, destroying the first
+/// Router's databases while it's still initializing.
+static IROH_START_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 // ─── Sync State ───
 
 pub struct SyncState {
@@ -119,6 +126,10 @@ pub struct IrohNodeIdResponse {
 
 #[tauri::command]
 pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, String> {
+    // Serialize all iroh_start calls — prevents concurrent starts from
+    // wiping each other's databases via the 5s timeout retry path.
+    let _init_lock = IROH_START_LOCK.lock().await;
+
     let data_dir = app
         .path()
         .app_data_dir()
@@ -158,13 +169,19 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
                 let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
                 *cancel_guard = Some(cancel);
             } else if attempt > 0 {
-                // On retry, clear the old dead guard so the loop restarts
+                // On retry, the previous accept loop died (corrupted database).
+                // Drop its cancel guard and start a fresh accept loop.
                 *cancel_guard = None;
+                let transport = sync_state.transport_state.clone();
+                let ep_clone = ep.clone();
+                let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
+                *cancel_guard = Some(cancel);
             }
         }
 
-        // Wait up to 5s for the docs API to be initialized
-        for _ in 0..50 {
+        // Wait up to 15s for the docs API to be initialized (was 5s — too
+        // short for slow devices or large databases).
+        for _ in 0..150 {
             if sync_state
                 .transport_state
                 .docs_api
@@ -787,16 +804,24 @@ pub async fn docs_get_all_entries(
     }
 
     // Merge values for each key: if multiple authors wrote to the same key,
-    // merge them appropriately based on value type:
-    // - JSON arrays -> concatenate (dedup happens on the JS side via mergeBooks etc.)
-    // - JSON objects -> merge top-level keys (for settings, reading_stats)
-    // - Other types -> last writer wins
+    // merge them appropriately based on value type and key namespace:
+    //
+    // Domain arrays ("books", "annotations", "collections"):
+    //   -> concatenate (dedup happens on the JS side via mergeBooks etc.)
+    // Domain objects ("settings", "reading_stats"):
+    //   -> merge top-level keys (for settings, reading_stats)
+    // Per-entity keys ("book:<id>", "annotation:<id>", "collection:<id>"):
+    //   -> last-writer-wins (each key represents a single entity; field-
+    //      level object-merge would produce incoherent hybrid entities)
+    // Other types -> last writer wins
     let mut results = std::collections::HashMap::new();
     for (key, values) in per_key {
-        if values.len() == 1 {
-            results.insert(key, values.into_iter().next().unwrap());
+        let is_per_entity = key.starts_with("book:")
+            || key.starts_with("annotation:")
+            || key.starts_with("collection:");
+        if values.len() == 1 || is_per_entity {
+            results.insert(key, values.into_iter().last().unwrap());
         } else {
-            // Check if all values are JSON objects (settings, reading_stats)
             let parsed: Vec<serde_json::Value> = values
                 .iter()
                 .filter_map(|v| serde_json::from_str(v).ok())
@@ -806,10 +831,6 @@ pub async fn docs_get_all_entries(
             let all_arrays = parsed.iter().all(|v| v.is_array());
 
             if all_objects {
-                // JSON objects: deep-merge top-level keys. Later authors
-                // overwrite earlier authors for the same key. This is correct
-                // for settings and reading_stats — small objects where field-
-                // level LWW is acceptable.
                 let mut merged = serde_json::Map::new();
                 for v in &parsed {
                     if let Some(obj) = v.as_object() {
@@ -823,8 +844,6 @@ pub async fn docs_get_all_entries(
                     serde_json::to_string(&merged).unwrap_or_else(|_| values.join("\n")),
                 );
             } else if all_arrays {
-                // JSON arrays: concatenate. The JS mergeIncomingData handles
-                // dedup via mergeBooks/mergeAnnotations etc.
                 let mut merged: Vec<serde_json::Value> = Vec::new();
                 for v in &parsed {
                     if let Some(arr) = v.as_array() {
@@ -836,7 +855,6 @@ pub async fn docs_get_all_entries(
                     serde_json::to_string(&merged).unwrap_or_else(|_| values.join("\n")),
                 );
             } else {
-                // Mixed types or unknown — last writer wins
                 results.insert(key, values.into_iter().last().unwrap());
             }
         }
@@ -912,39 +930,29 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
 
             if let Ok(ticket) = ticket_str.parse::<iroh_docs::DocTicket>() {
                 eprintln!("[iroh-sync] Re-importing doc from stored ticket...");
-                if let Ok(imported) = api.import(ticket).await {
-                    let new_doc_id = imported.id().to_string();
-                    let mut devices = sync_state.transport_state.paired_devices.lock().await;
-                    if let Some(d) = devices.get_mut(&peer_device_id) {
-                        d.sync_doc_id = new_doc_id;
-                        let _ = iroh_sync::save_paired_devices_to_disk(
-                            &sync_state.transport_state.app_data_dir,
-                            &devices,
-                        );
+                match api.import(ticket).await {
+                    Ok(imported) => {
+                        let new_doc_id = imported.id().to_string();
+                        let mut devices = sync_state.transport_state.paired_devices.lock().await;
+                        if let Some(d) = devices.get_mut(&peer_device_id) {
+                            d.sync_doc_id = new_doc_id;
+                            let _ = iroh_sync::save_paired_devices_to_disk(
+                                &sync_state.transport_state.app_data_dir,
+                                &devices,
+                            );
+                        }
+                        imported
                     }
-                    imported
-                } else {
-                    let mut devices = sync_state.transport_state.paired_devices.lock().await;
-                    if let Some(d) = devices.get_mut(&peer_device_id) {
-                        d.sync_doc_id.clear();
-                        let _ = iroh_sync::save_paired_devices_to_disk(
-                            &sync_state.transport_state.app_data_dir,
-                            &devices,
-                        );
+                    Err(e) => {
+                        eprintln!("[iroh-sync] Re-import from ticket failed: {e}. Ticket preserved for retry.");
+                        return Err(format!("Sync doc recovery failed — will retry: {e}"));
                     }
-                    return Err("Sync doc lost — re-pair required".to_string());
                 }
             } else {
-                // No stored ticket — clear stale reference and require re-pair
-                let mut devices = sync_state.transport_state.paired_devices.lock().await;
-                if let Some(d) = devices.get_mut(&peer_device_id) {
-                    d.sync_doc_id.clear();
-                    let _ = iroh_sync::save_paired_devices_to_disk(
-                        &sync_state.transport_state.app_data_dir,
-                        &devices,
-                    );
-                }
-                return Err("Sync doc lost — re-pair required".to_string());
+                // No stored ticket — can't recover after database wipe.
+                // Don't clear sync_doc_id; the doc might still exist but be
+                // temporarily unavailable. Clear only if it clearly doesn't exist.
+                return Err("Sync doc not available — will retry".to_string());
             }
         }
     };
@@ -1201,6 +1209,51 @@ pub async fn blobs_gc(app: tauri::AppHandle, keep_hashes: Vec<String>) -> Result
     Ok(removed)
 }
 
+/// Check if a blob with the given hash exists in the local FsStore.
+/// Used by provisionBookFileBlobs to verify that blobs didn't get
+/// deleted from disk (e.g., via cache cleanup) while their metadata
+/// still references the hash.
+#[tauri::command]
+pub async fn blobs_has_hash(app: tauri::AppHandle, hash_str: String) -> Result<bool, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    let blobs_path = data_dir
+        .join("iroh-blobs")
+        .join("blobs")
+        .join(&hash_str[..2])
+        .join(&hash_str);
+    Ok(blobs_path.exists())
+}
+
+/// Fast check: are there any blob files in the iroh-blobs FsStore?
+/// Used to decide whether to skip blob re-provisioning.
+/// Returns true if at least one blob prefix subdirectory has content.
+#[tauri::command]
+pub async fn blobs_store_is_populated(app: tauri::AppHandle) -> Result<bool, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    let blobs_sub = data_dir.join("iroh-blobs").join("blobs");
+    if !blobs_sub.exists() {
+        return Ok(false);
+    }
+    match std::fs::read_dir(&blobs_sub) {
+        Ok(mut entries) => Ok(entries.any(|e| {
+            e.ok().is_some_and(|entry| {
+                entry.path().is_dir()
+                    && entry.file_type().ok().is_some_and(|ft| ft.is_dir())
+                    && std::fs::read_dir(entry.path())
+                        .ok()
+                        .is_some_and(|mut inner| inner.next().is_some())
+            })
+        })),
+        Err(_) => Ok(false),
+    }
+}
+
 /// Clear all sync databases (iroh-blobs FsStore + iroh-docs redb).
 /// Called from `clearAllApplicationStorage` so wiped-app-data re-syncs
 /// don't show stale old blob storage usage.
@@ -1216,9 +1269,14 @@ pub async fn clear_sync_databases(app: tauri::AppHandle) -> Result<(), String> {
 
     let blobs_path = data_dir.join("iroh-blobs");
     let docs_path = data_dir.join("iroh-docs");
+    let key_path = data_dir.join("iroh-key");
+    let paired_path = data_dir.join("sync-paired-devices.json");
+
     let _ = std::fs::remove_dir_all(&blobs_path);
     let _ = std::fs::remove_dir_all(&docs_path);
+    let _ = std::fs::remove_file(&key_path);
+    let _ = std::fs::remove_file(&paired_path);
 
-    eprintln!("[iroh-sync] Cleared sync databases");
+    eprintln!("[iroh-sync] Cleared sync databases, identity key, and paired devices");
     Ok(())
 }

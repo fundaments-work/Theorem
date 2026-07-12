@@ -307,7 +307,6 @@ foliate-view * {
    =============================== */
 
 .reader-viewport {
-    filter: brightness(var(--reader-brightness, 100%));
     transition: filter 0.05s ease;
 }
 

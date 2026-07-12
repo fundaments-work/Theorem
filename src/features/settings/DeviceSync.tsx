@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../core/lib/utils";
 import { isMobile, isTauri } from "../../core/lib/env";
+import { showConfirm } from "../../core/lib/dialogs";
 import { Modal, ModalBody, ModalHeader } from "../../ui";
 import {
     generatePairingQr,
@@ -402,10 +403,13 @@ export function DeviceSyncSection() {
     }, [available, mobilePlatform, submitPairingCodeValue]);
 
     const handleUnpair = useCallback(async (deviceId: string) => {
-        // Confirm before unpairing
-        if (!window.confirm("Are you sure you want to unpair this device? It will need to be paired again to sync.")) {
-            return;
-        }
+        const confirmed = await showConfirm({
+            message: "Are you sure you want to unpair this device? It will need to be paired again to sync.",
+            okLabel: "Unpair",
+            cancelLabel: "Cancel",
+            kind: "warning",
+        });
+        if (!confirmed) return;
         try {
             const { cancelRunningSync } = await import("../../core/lib/sync-orchestrator");
             cancelRunningSync();

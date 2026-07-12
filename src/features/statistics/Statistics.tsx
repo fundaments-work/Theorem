@@ -271,11 +271,11 @@ export function StatisticsPage() {
     }
 
     const totalBooks = books.length;
-    const completedBooks = books.filter((book) => isBookCompleted(book)).length;
-    const inProgressBooks = books.filter((book) => !isBookCompleted(book) && book.progress > 0).length;
-    const totalHighlights = annotations.filter((a) => a.type === "highlight").length;
-    const totalNotes = annotations.filter((a) => a.type === "note").length;
-    const totalBookmarks = annotations.filter((a) => a.type === "bookmark").length;
+    const completedBooks = useMemo(() => books.filter((book) => isBookCompleted(book)).length, [books]);
+    const inProgressBooks = useMemo(() => books.filter((book) => !isBookCompleted(book) && book.progress > 0).length, [books]);
+    const totalHighlights = useMemo(() => annotations.filter((a) => a.type === "highlight").length, [annotations]);
+    const totalNotes = useMemo(() => annotations.filter((a) => a.type === "note").length, [annotations]);
+    const totalBookmarks = useMemo(() => annotations.filter((a) => a.type === "bookmark").length, [annotations]);
 
     const recentBooks = useMemo(() => {
         return [...books]

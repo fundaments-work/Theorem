@@ -183,15 +183,18 @@ pub fn subscribe_doc_events(
     blobs: iroh_blobs::api::Store,
 ) {
     tokio::spawn(async move {
-        let mut retries = 0;
-        const MAX_RETRIES: u32 = 3;
+        let mut subscribe_failures = 0u32;
+        let mut stream_deaths = 0u32;
+        const MAX_SUBSCRIBE_RETRIES: u32 = 3;
+        const MAX_STREAM_DEATHS: u32 = 10;
+        let mut backoff_ms: u64 = 1000;
         loop {
             let mut stream = match doc.subscribe().await {
                 Ok(s) => s,
                 Err(e) => {
-                    retries += 1;
-                    if retries > MAX_RETRIES {
-                        eprintln!("[iroh-sync] Failed to subscribe to doc events after {MAX_RETRIES} retries: {e}. Giving up.");
+                    subscribe_failures += 1;
+                    if subscribe_failures > MAX_SUBSCRIBE_RETRIES {
+                        eprintln!("[iroh-sync] Failed to subscribe to doc events after {MAX_SUBSCRIBE_RETRIES} retries: {e}. Giving up.");
                         break;
                     }
                     eprintln!(
@@ -201,7 +204,7 @@ pub fn subscribe_doc_events(
                     continue;
                 }
             };
-            retries = 0; // reset on successful subscribe
+            subscribe_failures = 0;
             use futures::StreamExt;
             let mut pending: std::collections::HashMap<iroh_blobs::Hash, String> =
                 std::collections::HashMap::new();
@@ -327,13 +330,22 @@ pub fn subscribe_doc_events(
                     _ => {}
                 }
             }
-            eprintln!("[iroh-sync] doc event stream ended, re-subscribing in 1s...");
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            retries += 1;
-            if retries > MAX_RETRIES {
-                eprintln!("[iroh-sync] doc event stream kept ending after {MAX_RETRIES} retries. Giving up.");
+            // Stream ended (actor died, connection lost, or doc closed).
+            // Use a separate counter (not the subscribe-failure counter) and
+            // exponential backoff — the actor may recover on its own.
+            stream_deaths += 1;
+            if stream_deaths > MAX_STREAM_DEATHS {
+                eprintln!(
+                    "[iroh-sync] doc event stream died {MAX_STREAM_DEATHS} times. Giving up."
+                );
                 break;
             }
+            eprintln!(
+                "[iroh-sync] doc event stream ended ({stream_deaths}/{MAX_STREAM_DEATHS}), re-subscribing in {}ms...",
+                backoff_ms
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+            backoff_ms = std::cmp::min(backoff_ms * 2, 30_000);
         }
     });
 }
@@ -527,6 +539,9 @@ pub fn start_accept_loop(
                                         eprintln!(
                                             "[iroh-sync] Re-imported sync doc from ticket for peer {node_id}"
                                         );
+                                        // The doc was wiped and re-created — notify the frontend
+                                        // that re-provisioning is needed so peers see data again.
+                                        let _ = state_clone.app_handle.emit("doc-reimported", ());
                                         Some(doc)
                                     }
                                     Err(e) => {

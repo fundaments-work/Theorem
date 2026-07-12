@@ -152,7 +152,7 @@ function normalizeInitialReaderLocation(location?: string): string | undefined {
     return normalized;
 }
 
-function BookReaderPage() {
+const BookReaderPage = memo(function BookReaderPage() {
     const currentBookId = useUIStore((state) => state.currentBookId);
     const setRoute = useUIStore((state) => state.setRoute);
 
@@ -436,7 +436,7 @@ function BookReaderPage() {
 
     // Sync book title from store to metadata when renamed while reader is open
     const storeTitle = useLibraryStore(
-        (s) => currentBookId ? (s.books.find((b) => b.id === currentBookId)?.title ?? null) : null,
+        (s) => currentBookId ? (s.getBook(currentBookId)?.title ?? null) : null,
     );
     useEffect(() => {
         if (!storeTitle || !metadata || storeTitle === metadata.title) return;
@@ -2471,7 +2471,7 @@ function BookReaderPage() {
             )}
         </div>
     );
-}
+});
 
 export const ReaderPage = memo(function ReaderPage() {
     const currentRoute = useUIStore((state) => state.currentRoute);

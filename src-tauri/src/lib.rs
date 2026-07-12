@@ -1150,6 +1150,8 @@ pub fn run() {
             sync_commands::blobs_add_file,
             sync_commands::blobs_download_file,
             sync_commands::blobs_gc,
+            sync_commands::blobs_has_hash,
+            sync_commands::blobs_store_is_populated,
             sync_commands::clear_sync_databases,
             set_android_fingerprint,
             start_android_sync_worker,
@@ -1326,15 +1328,10 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
         };
 
         // ── Temp directory for blobs store (cleaned up on drop) ──
-        let tmp = match tempfile::tempdir() {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!("[background-sync] tempdir: {e}");
-                let _ = endpoint.close().await;
-                return false;
-            }
-        };
-        let blobs = match iroh_blobs::store::fs::FsStore::load(&tmp.path().join("blobs")).await {
+        // NOTE: We use the persistent iroh-blobs store so that blobs added
+        // during this background sync round survive and can be downloaded
+        // by the peer when the app reopens.
+        let blobs = match iroh_blobs::store::fs::FsStore::load(&data_dir.join("iroh-blobs")).await {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("[background-sync] blobs: {e}");
@@ -1345,8 +1342,14 @@ pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgr
         let gossip = iroh_gossip::net::Gossip::builder().spawn(endpoint.clone());
         let blobs_store: iroh_blobs::api::Store = blobs.clone().into();
 
-        // ── In-memory docs store (no file, no corruption risk) ──
-        let docs_handler = match iroh_docs::protocol::Docs::memory()
+        // ── Persistent docs store — same as the main app uses ──
+        // This is critical: the previous in-memory docs store (Docs::memory())
+        // meant that CRDT data exchanged during this background sync was
+        // discarded on function exit. Using Docs::persistent() with the same
+        // directory as the main app ensures that data received from peers
+        // during background sync survives and is available when the app
+        // reopens and calls hydrateFromIrohDocs().
+        let docs_handler = match iroh_docs::protocol::Docs::persistent(data_dir.join("iroh-docs"))
             .spawn(endpoint.clone(), blobs_store.clone(), gossip)
             .await
         {

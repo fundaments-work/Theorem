@@ -105,23 +105,27 @@ export function mergeBooks(
     tombstones: DeletionTombstone[] = [],
 ): Book[] {
     const deletedBookIds = tombstoneIdSet(tombstones, "book");
-    // Build lookup maps — skip locally-tombstoned books so they stay deleted.
     const byId = new Map<string, Book>();
     const byHash = new Map<string, Book>();
+    const byBlobHash = new Map<string, Book>();
 
     for (const book of existing) {
         if (deletedBookIds.has(book.id)) continue;
         byId.set(book.id, book);
         if (book.contentHash) byHash.set(book.contentHash, book);
+        if (book.blobHash) byBlobHash.set(book.blobHash, book);
     }
 
     for (const inc of incoming) {
         // Skip incoming books that have been tombstoned (deleted on either device).
         if (deletedBookIds.has(inc.id)) continue;
 
-        // Try to match by contentHash first (same file on both devices).
+        // Match by contentHash (SHA-256) first, then by blobHash (BLAKE3
+        // from iroh-blobs — same file on both devices produces the same
+        // BLAKE3 hash), then by ID.
         const match =
             (inc.contentHash ? byHash.get(inc.contentHash) : undefined) ??
+            (inc.blobHash ? byBlobHash.get(inc.blobHash) : undefined) ??
             byId.get(inc.id);
 
         if (!match) {
@@ -142,6 +146,7 @@ export function mergeBooks(
             };
             byId.set(inc.id, remoteBook);
             if (inc.contentHash) byHash.set(inc.contentHash, remoteBook);
+            if (inc.blobHash) byBlobHash.set(inc.blobHash, remoteBook);
             continue;
         }
 
@@ -224,6 +229,7 @@ export function mergeBooks(
         };
 
         byId.set(match.id, merged);
+        if (merged.blobHash) byBlobHash.set(merged.blobHash, merged);
     }
 
     return [...byId.values()];
