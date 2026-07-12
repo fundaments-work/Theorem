@@ -28,6 +28,7 @@ interface UIStore extends UIState {
         message?: string,
         syncedAt?: string,
     ) => void;
+    setDownloadingBook: (bookId?: string) => void;
     // Reader-specific UI
     setReaderToolbarVisible: (visible: boolean) => void;
     toggleReaderToolbar: () => void;
@@ -52,6 +53,7 @@ export const useUIStore = create<UIStore>()(
             deviceSyncStatus: "idle",
             deviceSyncMessage: undefined,
             deviceSyncAt: undefined,
+            downloadingBookId: undefined,
             hasHydrated: true,
 
             setRoute: (route, bookId, pushHistory = true) => {
@@ -96,6 +98,7 @@ export const useUIStore = create<UIStore>()(
                 set({ vaultSyncStatus, vaultSyncMessage, vaultSyncAt }),
             setDeviceSyncStatus: (deviceSyncStatus, deviceSyncMessage, deviceSyncAt) =>
                 set({ deviceSyncStatus, deviceSyncMessage, deviceSyncAt }),
+            setDownloadingBook: (bookId) => set({ downloadingBookId: bookId }),
 
             setHydrated: () => set({ hasHydrated: true }),
 

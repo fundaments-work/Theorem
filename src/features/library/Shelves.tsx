@@ -360,18 +360,13 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     });
 
     // Unused remove handler removed
-    const handleOpenBook = async (book: Book) => {
+    const handleOpenBook = (book: Book) => {
         if (book.syncedWithoutFile) {
-            const { downloadBookOnDemand } = await import("../../core/lib/sync-orchestrator");
-            const ok = await downloadBookOnDemand(book.id);
-            if (ok) {
-                setRoute("reader", book.id);
-            } else {
-                window.alert(
-                    "This book was synced from another device but the source is not available. " +
-                    "Make sure both devices are online and connected, then try again."
-                );
-            }
+            useUIStore.getState().setDownloadingBook(book.id);
+            setRoute("reader", book.id);
+            import("../../core/lib/sync-orchestrator").then(({ downloadBookOnDemand }) => {
+                downloadBookOnDemand(book.id);
+            });
             return;
         }
         setRoute("reader", book.id);

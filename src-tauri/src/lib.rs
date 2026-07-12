@@ -1147,11 +1147,6 @@ pub fn run() {
             sync_commands::docs_sync_now,
             // Fast file transfer via QUIC streams (replaces iroh-blobs)
             file_transfer::request_book_file,
-            // Legacy iroh-blobs — kept for CRDT blob content
-            sync_commands::blobs_add_bytes,
-            sync_commands::blobs_gc,
-            sync_commands::blobs_has_hash,
-            sync_commands::blobs_store_is_populated,
             sync_commands::clear_sync_databases,
             set_android_fingerprint,
             start_android_sync_worker,

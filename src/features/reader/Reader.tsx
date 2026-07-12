@@ -499,14 +499,14 @@ const BookReaderPage = memo(function BookReaderPage() {
             });
 
             if (book.syncedWithoutFile) {
-                const { downloadBookOnDemand } = await import("../../core/lib/sync-orchestrator");
-                const ok = await downloadBookOnDemand(book.id);
-                if (!ok) {
-                    setLoadError('This book was synced from another device but the source is not available. Make sure both devices are online and connected, then try again.');
-                    loadedBookIdRef.current = null;
-                    return;
+                const state = useUIStore.getState();
+                if (state.downloadingBookId !== book.id) {
+                    state.setDownloadingBook(book.id);
+                    import("../../core/lib/sync-orchestrator").then(({ downloadBookOnDemand }) => {
+                        downloadBookOnDemand(book.id);
+                    });
                 }
-                book = getBook(currentBookId) ?? book;
+                return;
             }
             if (!book) {
                 setLoadError('Book not found in library');
@@ -2070,6 +2070,32 @@ const BookReaderPage = memo(function BookReaderPage() {
             saveBookLocations(currentBookId, locations);
         }
     }, [currentBookId, saveBookLocations]);
+
+    // Download progress state
+    const downloadingBookId = useUIStore((s) => s.downloadingBookId);
+    if (downloadingBookId === currentBookId) {
+        return (
+            <div className="fixed inset-0 flex items-center justify-center bg-[var(--color-background)] px-4 sm:px-8 py-8">
+                <div className="mx-auto w-full max-w-[26rem] min-w-0 flex flex-col items-center text-center">
+                    <div className="w-16 h-16 flex items-center justify-center mb-6 bg-[var(--color-accent)]/10 text-[var(--color-accent)]">
+                        <svg className="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                    </div>
+                    <h2 className="w-full break-words text-balance text-xl font-semibold text-[color:var(--color-text-primary)] mb-2">
+                        Downloading Book
+                    </h2>
+                    <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-secondary)] mb-8 leading-relaxed">
+                        This book was synced from another device. Downloading from paired device...
+                    </p>
+                    <div className="w-full max-w-xs h-1.5 bg-[var(--color-surface-muted)] overflow-hidden">
+                        <div className="h-full bg-[var(--color-accent)] animate-pulse rounded-full" style={{ width: "60%" }} />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     // Error state
     if (loadError) {

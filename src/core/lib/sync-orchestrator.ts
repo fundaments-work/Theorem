@@ -447,84 +447,9 @@ async function mergeIncomingData(
 // ─── File transfer after metadata merge ───
 
 /**
- * Add local book files to the iroh-blobs store.
- * For each book that has a real file path, add it to blobs and update
- * the book's blobHash so the peer can download it via iroh-blobs.
+ * No-op: iroh-blobs provisioning was removed in favor of the
+ * theorem-file/v1 QUIC protocol handler for book file transfer.
  */
-async function provisionBookFileBlobs(): Promise<void> {
-    if (!isTauri()) { console.log("[blob-provision] Skipped: not Tauri"); return; }
-    const books = useLibraryStore.getState().books;
-    console.log(`[blob-provision] Processing ${books.length} books for blob provisioning`);
-
-    // Skip books that already have a valid blobHash — avoids re-reading
-    // every book file on every sync startup (192 sequential reads on a
-    // 192-book library would take minutes). Only process books that are
-    // missing a blobHash (e.g., newly imported, or books that were
-    // skipped before the SQLite-fallthrough fix).
-    const updates: Array<{ id: string; blobHash?: string; coverBlobHash?: string }> = [];
-    let completed = 0;
-    let skipped = 0;
-    let fromDisk = 0;
-    let fromSqlite = 0;
-    for (const book of books) {
-        if (book.blobHash) {
-            skipped++;
-            completed++;
-            continue;
-        }
-
-        const filePath = book.filePath || book.storagePath;
-        let hash: string | null = null;
-
-        // Try disk path first (fastest — iroh-blobs reads the file directly).
-        if (filePath && !filePath.startsWith("sqlite://") && !filePath.startsWith("idb://")) {
-            hash = await blobsAddFile(filePath);
-            if (hash) fromDisk++;
-        }
-
-        // Fallback: read from SQLite blob store.
-        if (!hash) {
-            try {
-                const { getBookData } = await import("./storage");
-                const data = await getBookData(book.id, filePath);
-                if (data && data.byteLength > 0) {
-                    console.log(`[blob-provision] Reading ${book.title || book.id} from SQLite (${data.byteLength} bytes)`);
-                    hash = await blobsAddBytes(new Uint8Array(data));
-                    if (hash) fromSqlite++;
-                }
-            } catch {
-            }
-        }
-
-        if (!hash) {
-            console.log(`[blob-provision] No file for book: ${book.title || book.id} (path: ${filePath})`);
-        }
-
-        completed++;
-        if (hash && hash !== book.blobHash) {
-            updates.push({ id: book.id, blobHash: hash });
-        }
-        // Add covers that are local files (not data URLs)
-        if (book.coverPath && !book.coverPath.startsWith("data:") && !book.coverPath.startsWith("http")) {
-            const coverHash = await blobsAddFile(book.coverPath);
-            if (coverHash && coverHash !== book.coverBlobHash) {
-                const existing = updates.find(u => u.id === book.id);
-                if (existing) existing.coverBlobHash = coverHash;
-                else updates.push({ id: book.id, coverBlobHash: coverHash });
-            }
-        }
-    }
-    console.log(`[blob-provision] ${updates.length} books got new blob hashes (${completed} processed, ${fromDisk} from disk, ${fromSqlite} from SQLite, ${skipped} skipped)`);
-    if (updates.length > 0) {
-        useLibraryStore.setState((state) => ({
-            books: state.books.map((b) => {
-                const update = updates.find(u => u.id === b.id);
-                return update ? { ...b, ...update } : b;
-            }),
-        }));
-        console.log(`[blob-provision] State updated with ${updates.length} blob hashes`);
-    }
-}
 
 // ─── Public API ───
 
@@ -633,7 +558,6 @@ export async function ensureResponderSyncReady(): Promise<void> {
                 // 2× gossip churn, and a feedback loop with the peer).
                 _bridgePaused = true;
                 try {
-                    await provisionBookFileBlobs();
                     await provisionToIrohDocs();
                     await markProvisioned();
                 } finally {
@@ -644,9 +568,6 @@ export async function ensureResponderSyncReady(): Promise<void> {
             }
             _initialProvisionDone = true;
             _bridgePaused = false;  // bridge can start syncing real-time changes now
-            runBlobsGarbageCollection().then((removed) => {
-                if (removed > 0) console.log(`[blob-gc] Removed ${removed} orphaned blobs`);
-            }).catch(() => {});
         }
 
         // Register the iroh-docs live event listener so real-time
@@ -718,9 +639,8 @@ export async function runDeviceSync(
                 if (_syncCancelled) {
                     throw new Error("Sync cancelled");
                 }
-                log(`Re-hashing ${missingHash.length} books missing blobHash...`);
-                setStatus("syncing", `Hashing ${missingHash.length} books...`);
-                await provisionBookFileBlobs();
+                log(`Re-provisioning ${missingHash.length} books to iroh docs...`);
+                setStatus("syncing", `Syncing ${missingHash.length} books...`);
                 await provisionToIrohDocs();
             }
         }
@@ -1006,7 +926,7 @@ export async function runDeviceSync(
         } else {
             setStatus("synced", summary);
             // Download covers in background so the library shows cover images
-            void syncBookCovers(peerDeviceId);
+            void syncBookCovers(peerDeviceId).then(() => prefetchRecentBooks(peerDeviceId));
         }
         _dataDirty = false;
 
@@ -1045,6 +965,7 @@ export function cancelRunningSync(): void {
     _syncCancelled = true;
     if (_progressiveBookTimer) clearTimeout(_progressiveBookTimer);
     _progressiveBookBatch = [];
+    useUIStore.getState().setDownloadingBook(undefined);
     setStatus("idle", "Sync cancelled");
     console.log("[sync] Cancel requested — _syncCancelled = true");
 }
@@ -1059,6 +980,7 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
     if (!isTauri()) return false;
 
     setStatus("syncing", "Downloading book...");
+    useUIStore.getState().setDownloadingBook(bookId);
     const { requestBookFile, getPairedDevices } = await import("./device-sync");
     const { appDataDir } = await import("@tauri-apps/api/path");
     const appDir = await appDataDir();
@@ -1071,6 +993,7 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
 
     const devices = await getPairedDevices().catch(() => []);
     for (const device of devices) {
+        if (_syncCancelled) break;
         const data = await requestBookFile(device.deviceId, bookId);
         if (!data || data.byteLength === 0) continue;
 
@@ -1083,11 +1006,13 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
                         : b,
                 ),
             }));
+            useUIStore.getState().setDownloadingBook(undefined);
             return true;
         } catch (e) {
             console.error(`[file-xfer] write failed for ${bookId}: ${e}`);
         }
     }
+    useUIStore.getState().setDownloadingBook(undefined);
     setStatus("idle", "Book download failed — peer not available");
     return false;
 }
@@ -1120,6 +1045,47 @@ async function syncBookCovers(peerDeviceId: string): Promise<void> {
                 try {
                     const blob = new Blob([data.buffer as ArrayBuffer], { type: "image/jpeg" });
                     await saveCoverImage(book.id, blob);
+                } catch {}
+            }
+        }),
+    );
+}
+
+async function prefetchRecentBooks(peerDeviceId: string): Promise<void> {
+    const { requestBookFile } = await import("./device-sync");
+    const { appDataDir } = await import("@tauri-apps/api/path");
+    const { mkdir, writeFile } = await import("@tauri-apps/plugin-fs");
+    const appDir = await appDataDir();
+    try { await mkdir(`${appDir}/book-cache`, { recursive: true }); } catch {}
+
+    const books = useLibraryStore.getState().books
+        .filter((b) => b.syncedWithoutFile && b.lastReadAt)
+        .sort((a, b) => {
+            const aDate = a.lastReadAt instanceof Date ? a.lastReadAt : new Date(a.lastReadAt!);
+            const bDate = b.lastReadAt instanceof Date ? b.lastReadAt : new Date(b.lastReadAt!);
+            return bDate.getTime() - aDate.getTime();
+        })
+        .slice(0, 10);
+
+    if (books.length === 0) return;
+
+    let index = 0;
+    await Promise.all(
+        Array.from({ length: 3 }, async () => {
+            while (index < books.length && !_syncCancelled) {
+                const book = books[index++];
+                const data = await requestBookFile(peerDeviceId, book.id);
+                if (!data || data.byteLength === 0) continue;
+                const destPath = `${appDir}/book-cache/${book.id}.book`;
+                try {
+                    await writeFile(destPath, data);
+                    useLibraryStore.setState((state) => ({
+                        books: state.books.map((b) =>
+                            b.id === book.id
+                                ? { ...b, syncedWithoutFile: false, filePath: destPath, storagePath: destPath }
+                                : b,
+                        ),
+                    }));
                 } catch {}
             }
         }),
@@ -1731,31 +1697,6 @@ export async function hydrateFromIrohDocs(): Promise<string[]> {
     return domainsUpdated;
 }
 
-// ─── iroh-blobs File/Cover Transfer ───
-
-/** Add bytes to the iroh-blobs store (for covers, small files). Returns BLAKE3 hash. */
-export async function blobsAddBytes(data: Uint8Array): Promise<string | null> {
-    try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        return await invoke<string>("blobs_add_bytes", { data: Array.from(data) });
-    } catch { return null; }
-}
-
-/** Download bytes from a peer's iroh-blobs store. */
-export async function blobsDownloadBytes(
-    peerDeviceId: string,
-    hash: string,
-): Promise<Uint8Array | null> {
-    try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const result = await invoke<number[]>("blobs_download_bytes", {
-            peerDeviceId,
-            hashStr: hash,
-        });
-        return new Uint8Array(result);
-    } catch { return null; }
-}
-
 // ─── Zustand → iroh-docs Bridge (real-time mutation sync) ───
 
 const _docsDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -1788,60 +1729,6 @@ function scheduleDocsWrite(domain: string, fn: () => void, selfOriginatedKey?: s
         _docsDebounceTimers.delete(domain);
         fn();
     }, DOCS_DEBOUNCE_MS));
-}
-
-/** Add a file to iroh-blobs store by path. Returns BLAKE3 hash. */
-export async function blobsAddFile(filePath: string): Promise<string | null> {
-    try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        return await invoke<string>("blobs_add_file", { filePath });
-    } catch { return null; }
-}
-
-/** Check if a blob with the given hash exists in the local iroh-blobs FsStore. */
-export async function blobsHasHash(hash: string): Promise<boolean> {
-    try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        return await invoke<boolean>("blobs_has_hash", { hashStr: hash });
-    } catch { return false; }
-}
-
-/** Download a blob from a peer and export it to a file path. */
-export async function blobsDownloadFile(
-    peerDeviceId: string,
-    hash: string,
-    destPath: string,
-): Promise<boolean> {
-    try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("blobs_download_file", { peerDeviceId, hashStr: hash, destPath });
-        return true;
-    } catch (e) {
-        console.error(`[blob-download] blobs_download_file failed: hash=${hash.substring(0, 16)}... dest=${destPath.substring(destPath.lastIndexOf("/") + 1)} error=${e}`);
-        return false;
-    }
-}
-
-// ─── Blobs Garbage Collection ───
-
-/** Remove orphaned blobs from the iroh-blobs FsStore. Collects all
- *  blobHash/coverBlobHash values from current books, then tells the
- *  Rust backend to delete any stored blob not in the keep list. */
-export async function runBlobsGarbageCollection(): Promise<number> {
-    if (!isTauri()) return 0;
-    const books = useLibraryStore.getState().books;
-    const keep = new Set<string>();
-    for (const b of books) {
-        if (b.blobHash) keep.add(b.blobHash);
-        if (b.coverBlobHash) keep.add(b.coverBlobHash);
-    }
-    if (keep.size === 0) return 0;
-    try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        return await invoke<number>("blobs_gc", { keepHashes: Array.from(keep) });
-    } catch {
-        return 0;
-    }
 }
 
 /**

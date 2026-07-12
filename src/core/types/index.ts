@@ -413,6 +413,8 @@ export interface UIState {
     deviceSyncStatus: DeviceSyncStatus;
     deviceSyncMessage?: string;
     deviceSyncAt?: string;
+    /** Book ID currently being downloaded on-demand (shows progress bar in reader). */
+    downloadingBookId?: string;
     /** Set to true once all Zustand stores have been rehydrated from persistence. */
     hasHydrated: boolean;
 }
