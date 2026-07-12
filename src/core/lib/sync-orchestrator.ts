@@ -14,12 +14,6 @@
 import {
     irohStart,
     getPairedDevices,
-    updateSyncNotification,
-    setAutoSyncFlag,
-    startAndroidSyncWorker,
-    stopAndroidSyncWorker,
-    schedulePeriodicSyncWork,
-    cancelPeriodicSyncWork,
 } from "./device-sync";
 import {
     useLibraryStore,
@@ -40,7 +34,7 @@ import {
     mergeSettings,
     mergeReadingStats,
 } from "./sync-import";
-import { isMobile, isTauri } from "./env";
+import { isTauri } from "./env";
 import { saveCoverImage } from "./storage";
 
 // ─── Helpers ───
@@ -52,9 +46,6 @@ function setStatus(status: DeviceSyncStatus, msg?: string) {
         status === "synced" ? new Date().toISOString() : undefined,
     );
     // Update Android notification so the user sees what's being synced.
-    if (msg) {
-        void updateSyncNotification(msg);
-    }
 }
 
 /** Shared unlisten reference for the iroh-docs live event listener. */
@@ -1282,7 +1273,6 @@ export function scheduleMutationSync(): void {
  */
 export async function startAutoSync(): Promise<() => void> {
     stopAutoSync();
-    setAutoSyncFlag(true).catch(e => console.error("[catch]", e));
 
     if (!isTauri()) {
         return () => {};
@@ -1425,17 +1415,6 @@ export async function startAutoSync(): Promise<() => void> {
         }
     }
 
-    // 6. Android: start ForegroundService + schedule WorkManager
-    if (isMobile()) {
-        try {
-            await startAndroidSyncWorker();
-            await updateSyncNotification("Auto-sync enabled");
-            await schedulePeriodicSyncWork();
-        } catch {
-            // Android worker not available.
-        }
-    }
-
     _autoSyncCleanups = cleanups;
     return () => stopAutoSync();
 }
@@ -1457,13 +1436,6 @@ export function stopAutoSync(): void {
         _mutationSyncTimer = null;
     }
     _dataDirty = false;
-    setAutoSyncFlag(false).catch(e => console.error("[catch]", e));
-
-    // Android: stop ForegroundService + cancel WorkManager
-    if (isMobile()) {
-        stopAndroidSyncWorker().catch(e => console.error("[catch]", e));
-        cancelPeriodicSyncWork().catch(e => console.error("[catch]", e));
-    }
 }
 
 // ─── iroh-docs CRDT Sync (replaces legacy LWW merge) ───

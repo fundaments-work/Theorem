@@ -7,7 +7,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { isTauri, isMobile } from "./env";
+import { isTauri } from "./env";
 import type {
     PairedDevice,
     DeviceIdentityInfo,
@@ -117,56 +117,6 @@ export async function unpairDevice(deviceId: string): Promise<void> {
     return invoke("unpair_device", { deviceId });
 }
 
-/** Start the Android ForegroundService for persistent background sync. */
-export async function startAndroidSyncWorker(): Promise<void> {
-    if (!isMobile()) return;
-    try {
-        await invoke("start_android_sync_worker");
-    } catch {
-        // ForegroundService not available.
-    }
-}
-
-/** Stop the Android ForegroundService. */
-export async function stopAndroidSyncWorker(): Promise<void> {
-    if (!isMobile()) return;
-    try {
-        await invoke("stop_android_sync_worker");
-    } catch {
-        // ForegroundService not available.
-    }
-}
-
-/** Update the sync notification text on Android (shows what's being synced). */
-export async function updateSyncNotification(text: string): Promise<void> {
-    if (!isMobile()) return;
-    try {
-        await invoke("update_sync_notification", { text });
-    } catch {
-        // Notification update not available.
-    }
-}
-
-/** Schedule periodic WorkManager background sync (survives app kill). */
-export async function schedulePeriodicSyncWork(): Promise<void> {
-    if (!isMobile()) return;
-    try {
-        await invoke("schedule_sync_work");
-    } catch {
-        // WorkManager not available.
-    }
-}
-
-/** Cancel periodic WorkManager background sync. */
-export async function cancelPeriodicSyncWork(): Promise<void> {
-    if (!isMobile()) return;
-    try {
-        await invoke("cancel_sync_work");
-    } catch {
-        // WorkManager not available.
-    }
-}
-
 /** Request a book file from a paired peer using the theorem-file/v1 QUIC stream. */
 export async function requestBookFile(peerDeviceId: string, bookId: string): Promise<Uint8Array | null> {
     if (!isTauri()) return null;
@@ -179,12 +129,4 @@ export async function requestBookFile(peerDeviceId: string, bookId: string): Pro
     }
 }
 
-/** Update the auto-sync-disabled flag file for Android JNI worker. */
-export async function setAutoSyncFlag(enabled: boolean): Promise<void> {
-    if (!isTauri()) return;
-    try {
-        await invoke("set_auto_sync_flag", { enabled });
-    } catch {
-        // Flag file operation failed — non-critical.
-    }
-}
+

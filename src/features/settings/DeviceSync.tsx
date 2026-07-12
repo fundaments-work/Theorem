@@ -39,7 +39,6 @@ import {
 import {
     runDeviceSync,
     ensureResponderSyncReady,
-    markProvisioningNeeded,
 } from "../../core/lib/sync-orchestrator";
 import { useUIStore, useSettingsStore } from "../../core/store";
 import type {
@@ -265,11 +264,6 @@ export function DeviceSyncSection() {
                 setIsQrModalOpen(true);
                 setIsIrohRunning(true);
                 setDeviceSyncStatus("hosting");
-                try {
-                    // generatePairingQr already started the accept loop internally
-                    await ensureResponderSyncReady();
-                } catch (e) {
-                }
             } catch (e: any) {
             setError(e?.message || String(e));
         } finally {
@@ -278,10 +272,9 @@ export function DeviceSyncSection() {
     }, [qrData, setDeviceSyncStatus]);
 
     // When hosting (showing QR), listen for devices that successfully pair.
-    // On `pairing-completed`, re-provision all local data into the new shared
-    // doc that was created by the pairing handler. Without this, the host's
-    // books never reach the scanner — _initialProvisionDone is true on the
-    // host so ensureResponderSyncReady skips provisionToIrohDocs.
+    // Pairing only exchanges keys and creates the shared doc — no data sync.
+    // The user taps "Sync Now" on the paired device card when they want to
+    // transfer data for the first time.
     useEffect(() => {
         if (!available || !qrData) return;
         let cancelled = false;
@@ -290,9 +283,7 @@ export function DeviceSyncSection() {
             if (cancelled) return;
             listen<{ device_id: string; device_name: string }>("pairing-completed", () => {
                 if (cancelled) return;
-                setDeviceSyncStatus("synced", "Device paired, sharing data...");
-                markProvisioningNeeded();
-                ensureResponderSyncReady().catch(() => {});
+                setDeviceSyncStatus("synced", "Device paired!");
             }).then((fn) => { unlisten = fn; });
         }).catch(() => {});
         return () => {
@@ -329,13 +320,7 @@ export function DeviceSyncSection() {
                 setSuccessMessage(
                     `Paired with ${device.deviceName || device.deviceId}`,
                 );
-                setDeviceSyncStatus("synced", "Setting up sync...");
-                try {
-                    markProvisioningNeeded();
-                    await ensureResponderSyncReady();
-                } catch (e) {
-                }
-                setDeviceSyncStatus("idle");
+                setDeviceSyncStatus("synced", "Device paired!");
             } catch (e: any) {
                 pairUnlisten?.();
                 setError(e?.message || String(e));

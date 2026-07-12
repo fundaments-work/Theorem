@@ -461,22 +461,10 @@ const BookReaderPage = memo(function BookReaderPage() {
 
     const downloadingBookId = useUIStore((s) => s.downloadingBookId);
 
-    // Reset the load guard when a download completes for the current book.
-    // Without this, the effect sees loadedBookIdRef === currentBookId and
-    // skips loading after the download finishes.
-    const prevDownloadId = useRef<string | undefined>(undefined);
-    useEffect(() => {
-        if (prevDownloadId.current === currentBookId && !downloadingBookId) {
-            loadedBookIdRef.current = null;
-        }
-        prevDownloadId.current = downloadingBookId && currentBookId === downloadingBookId ? downloadingBookId : prevDownloadId.current;
-    }, [downloadingBookId, currentBookId]);
-
     // Load book file
     useEffect(() => {
-        // Guard: already loaded this book (skip if still downloading — UI
-        // shows progress via downloadingBookId instead).
-        if (currentBookId && loadedBookIdRef.current === currentBookId && downloadingBookId !== currentBookId) {
+        // Guard: already loaded this book
+        if (currentBookId && loadedBookIdRef.current === currentBookId) {
             return;
         }
 
@@ -514,13 +502,24 @@ const BookReaderPage = memo(function BookReaderPage() {
 
             if (book.syncedWithoutFile) {
                 const state = useUIStore.getState();
-                if (state.downloadingBookId !== book.id) {
-                    state.setDownloadingBook(book.id);
+                const downloadId = book.id;
+                if (state.downloadingBookId !== downloadId) {
+                    state.setDownloadingBook(downloadId);
                     import("../../core/lib/sync-orchestrator").then(({ downloadBookOnDemand }) => {
-                        downloadBookOnDemand(book.id).catch(() => {});
+                        downloadBookOnDemand(downloadId).catch(() => {});
                     });
                 }
-                return;
+                // Wait for the download to complete by polling the book's state.
+                // The Library/Shelves handleOpenBook kicks off the download in
+                // the background and navigates here immediately. Keep checking
+                // until syncedWithoutFile flips to false.
+                while (book.syncedWithoutFile) {
+                    await new Promise<void>(r => setTimeout(r, 200));
+                    if (isCancelled) return;
+                    const current = getBook(currentBookId);
+                    if (!current) return;
+                    book = current;
+                }
             }
             if (!book) {
                 setLoadError('Book not found in library');
@@ -641,7 +640,7 @@ const BookReaderPage = memo(function BookReaderPage() {
             // (React 18/19 development) actually loads the book on re-run.
             loadedBookIdRef.current = null;
         };
-    }, [currentBookId, downloadingBookId, getBook]);
+    }, [currentBookId, getBook]);
 
     // Preload the next few books to keep tap-to-open latency low on mobile.
     useEffect(() => {
