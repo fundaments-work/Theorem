@@ -1053,6 +1053,48 @@ export function cancelRunningSync(): void {
 }
 
 /**
+ * Download a synced book file on demand when the user taps "Open Book".
+ * Tries all paired peers until one succeeds. Saves to book-cache/<id>.book
+ * and updates the book's state to syncedWithoutFile=false.
+ * Returns true if the file was downloaded successfully.
+ */
+export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
+    if (!isTauri()) return false;
+
+    const { requestBookFile } = await import("./device-sync");
+    const { invoke } = await import("@tauri-apps/api/core");
+    const { appDataDir } = await import("@tauri-apps/api/path");
+    const appDir = await appDataDir();
+    const destPath = `${appDir}/book-cache/${bookId}.book`;
+
+    try {
+        await invoke("plugin:fs|mkdir", { path: `${appDir}/book-cache`, recursive: true });
+    } catch {}
+
+    const devices = await getPairedDevices().catch(() => []);
+    for (const device of devices) {
+        const data = await requestBookFile(device.deviceId, bookId);
+        if (!data || data.byteLength === 0) continue;
+
+        try {
+            await invoke("plugin:fs|write_file", {
+                path: destPath,
+                contents: Array.from(data),
+            });
+            useLibraryStore.setState((state) => ({
+                books: state.books.map((b) =>
+                    b.id === bookId
+                        ? { ...b, syncedWithoutFile: false, filePath: destPath, storagePath: destPath }
+                        : b,
+                ),
+            }));
+            return true;
+        } catch {}
+    }
+    return false;
+}
+
+/**
  * Initialize the iroh-docs live event listener for real-time CRDT updates.
  * When a peer modifies a doc entry and the CRDT sync delivers it, the Rust
  * backend emits "docs-entry-changed". This listener applies those changes

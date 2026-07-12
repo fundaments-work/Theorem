@@ -484,21 +484,32 @@ const BookReaderPage = memo(function BookReaderPage() {
         let isCancelled = false;
 
         const loadBook = async () => {
-            const book = getBook(currentBookId);
+            let book = getBook(currentBookId);
             if (!book) {
                 setLoadError('Book not found in library');
                 return;
             }
 
+            const bookLoc = book;
             // Restore locations from SQLite BLOB (stripped from Zustand persist).
             loadBookLocations(currentBookId).then((loadedLocations) => {
-                if (loadedLocations && loadedLocations !== book.locations) {
+                if (loadedLocations && loadedLocations !== bookLoc.locations) {
                     updateBook(currentBookId, { locations: loadedLocations });
                 }
             });
 
             if (book.syncedWithoutFile) {
-                setLoadError('This book was synced from another device but the file has not been transferred yet. Sync again or re-import the book to read it.');
+                const { downloadBookOnDemand } = await import("../../core/lib/sync-orchestrator");
+                const ok = await downloadBookOnDemand(book.id);
+                if (!ok) {
+                    setLoadError('This book was synced from another device but the source is not available. Make sure both devices are online and connected, then try again.');
+                    loadedBookIdRef.current = null;
+                    return;
+                }
+                book = getBook(currentBookId) ?? book;
+            }
+            if (!book) {
+                setLoadError('Book not found in library');
                 loadedBookIdRef.current = null;
                 return;
             }

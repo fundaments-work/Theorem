@@ -360,12 +360,18 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     });
 
     // Unused remove handler removed
-    const handleOpenBook = (book: Book) => {
+    const handleOpenBook = async (book: Book) => {
         if (book.syncedWithoutFile) {
-            window.alert(
-                "This book was synced from another device but the file hasn't been transferred yet. " +
-                "Please sync again with the source device to download the book file."
-            );
+            const { downloadBookOnDemand } = await import("../../core/lib/sync-orchestrator");
+            const ok = await downloadBookOnDemand(book.id);
+            if (ok) {
+                setRoute("reader", book.id);
+            } else {
+                window.alert(
+                    "This book was synced from another device but the source is not available. " +
+                    "Make sure both devices are online and connected, then try again."
+                );
+            }
             return;
         }
         setRoute("reader", book.id);
