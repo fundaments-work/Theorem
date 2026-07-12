@@ -609,11 +609,6 @@ export async function runDeviceSync(
         onProgress?.(msg);
     };
 
-    // Snapshot book count before sync so the poll loop can detect whether
-    // data actually arrived. On a fresh device (0 books), we must not settle
-    // quickly — either data arrives or we hit the full timeout.
-    const _bookCountBeforeSync = useLibraryStore.getState().books.length;
-
     try {
         setStatus("syncing", "Preparing to sync...");
         log("Connecting to peer...");
@@ -657,147 +652,53 @@ export async function runDeviceSync(
         let contentReadyUnlisten: (() => void) | null = null;
         let syncFinishedUnlisten: (() => void) | null = null;
         let _syncActivityDetected = false;
-        try {
-            const { listen: evListen } = await import("@tauri-apps/api/event");
-            contentReadyUnlisten = await evListen("docs-pending-content-ready", () => {
-                _syncActivityDetected = true;
-                const currentBooks = useLibraryStore.getState().books.length;
-                console.log(`[sync] Received docs-pending-content-ready (${currentBooks} books so far)`);
-            });
-            syncFinishedUnlisten = await evListen("docs-sync-finished", () => {
-                _syncActivityDetected = true;
-                console.log("[sync] Received docs-sync-finished — reconciliation complete");
-            });
-        } catch {}
+        const MAX_WAIT_SECS = 30;
+        let settleSignals = 0;
+        const signalSettle = () => {
+            settleSignals++;
+            // Settle when both sync-finished AND pending-content-ready fire,
+            // OR when any activity persists for 3+ signals.
+            if (settleSignals >= 3) settle();
+        };
 
         // 4. Trigger iroh-docs CRDT sync with the peer.
         log("Syncing with peer via iroh-docs...");
         setStatus("syncing", "Connected, receiving data...");
+
+        // Set up event listeners BEFORE docsSyncNow so we don't miss events.
+        // iroh-gossip propagates changes in real-time — no polling needed.
+        try {
+            const { listen: evListen } = await import("@tauri-apps/api/event");
+            contentReadyUnlisten = await evListen("docs-pending-content-ready", () => {
+                _syncActivityDetected = true;
+                console.log(`[sync] Received docs-pending-content-ready`);
+                signalSettle();
+            });
+            syncFinishedUnlisten = await evListen("docs-sync-finished", () => {
+                _syncActivityDetected = true;
+                console.log("[sync] Received docs-sync-finished");
+                signalSettle();
+            });
+        } catch {}
+
         const docsSyncError = await docsSyncNow(peerDeviceId);
         if (docsSyncError) {
             log(`Warning: iroh-docs sync failed: ${docsSyncError}`);
-            // If docsSyncNow failed (peer offline, no shared doc), don't sit
-            // in a poll loop — return immediately with a clear error.
             const isOffline = docsSyncError.includes("offline") || docsSyncError.includes("timeout");
             const errorMsg = isOffline
                 ? `Peer is offline — try again later`
                 : docsSyncError;
             setStatus("error", errorMsg);
+            contentReadyUnlisten?.();
+            syncFinishedUnlisten?.();
             return { success: false, domainsUpdated: [], error: errorMsg };
         }
 
-        // Stability-based backoff: poll hydrateFromIrohDocs every 3s.
-        // Exit when 3 consecutive polls produce no changes AND data arrived.
-        // On a fresh device (0 books before sync), don't settle until either
-        // books arrive from the peer or the full timeout is reached.
-        let stablePolls = 0;
-        const STABLE_THRESHOLD = 4;
-        const MAX_WAIT_SECS = 30;
-        const POLL_INTERVAL_MS = 5000;
-        const MIN_ELAPSED_MS = 10000;
+        // Timeout fallback: if the peer is unreachable, don't wait forever
+        const timeoutId = setTimeout(() => { settle(); }, MAX_WAIT_SECS * 1000);
 
-        const waitStart = Date.now();
-        let prevDomainSet = "";
-        let lastProgressMsg = "";
-        const updateProgress = (msg: string) => {
-            if (msg !== lastProgressMsg) {
-                lastProgressMsg = msg;
-                setStatus("syncing", msg);
-            }
-        };
-        const pollLoop = async () => {
-            while (!settled) {
-                if (_syncCancelled) {
-                    console.log("[sync] Sync cancelled during poll");
-                    settle();
-                    break;
-                }
-                const elapsed = Date.now() - waitStart;
-
-                // Show a simple status pulse so the notification keeps
-                // updating (Android kills stale notifications). CRDT sync
-                // typically takes 3-15s depending on network quality.
-                // Show actual book count so user sees progress.
-                const currentBooks = useLibraryStore.getState().books.length;
-                if (currentBooks > 0) {
-                    const booksSynced = currentBooks - _bookCountBeforeSync;
-                    if (booksSynced > 0) {
-                        updateProgress(`Receiving: ${booksSynced} books received`);
-                    } else if (elapsed < 10000) {
-                        updateProgress("Syncing metadata...");
-                    } else {
-                        updateProgress("Receiving data...");
-                    }
-                } else if (elapsed < 10000) {
-                    updateProgress("Connecting to peer...");
-                } else {
-                    updateProgress("Waiting for peer...");
-                }
-
-                await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS));
-                if (settled) break;
-
-                const updated = await hydrateFromIrohDocs();
-                const currentDomainSet = updated.sort().join(",");
-
-                if (currentDomainSet !== prevDomainSet && currentDomainSet !== "" && elapsed >= MIN_ELAPSED_MS) {
-                    stablePolls = 0;
-                    prevDomainSet = currentDomainSet;
-                    const domainLabels: Record<string, string> = {
-                        books: "Books", annotations: "Annotations", collections: "Collections",
-                        deletion_tombstones: "Deletions", vocabulary: "Vocabulary",
-                        rss_feeds: "Feeds", rss_articles: "Articles",
-                        settings: "Settings", reading_stats: "Stats",
-                    };
-                    const store = useLibraryStore.getState();
-                    const counts: Record<string, number> = {
-                        books: store.books.length,
-                        annotations: store.annotations.length,
-                        collections: store.collections.length,
-                        vocabulary: useVocabularyStore.getState().vocabularyTerms.length,
-                        rss_feeds: useRssStore.getState().feeds.length,
-                        rss_articles: useRssStore.getState().articles.length,
-                    };
-                    const detailParts = updated.map(d => {
-                        const label = domainLabels[d] || d;
-                        const count = counts[d];
-                        return count !== undefined ? `${label} (${count})` : label;
-                    });
-                    updateProgress(`Received: ${detailParts.join(", ")}`);
-                } else {
-                    // Only count as stable if we actually have data (books > 0)
-                    // OR the device had books before sync (no new data expected).
-                    // On a fresh device (0 books before sync), never increment
-                    // stability — wait for data or timeout.
-                    const currentBooks = useLibraryStore.getState().books.length;
-                    if (currentBooks > 0 || _bookCountBeforeSync > 0) {
-                        stablePolls++;
-                    }
-                }
-
-                if (stablePolls >= STABLE_THRESHOLD && elapsed >= MIN_ELAPSED_MS) {
-                    console.log(`[sync] Stable for ${STABLE_THRESHOLD} polls, elapsed=${elapsed}ms — done`);
-                    settle();
-                    break;
-                }
-                if (elapsed >= MAX_WAIT_SECS * 1000) {
-                    console.log(`[sync] Max wait ${MAX_WAIT_SECS}s reached — done`);
-                    settle();
-                    break;
-                }
-            }
-        };
-
-        // Run poll loop concurrently with event-driven resolution.
-        // Promise.race gives us the first signal, but the pollLoop promise
-        // continues running until settled — we await it below to ensure the
-        // final hydrate step ran.
-        await Promise.race([
-            pollLoop(),
-            syncPromise,
-        ]);
-        // Wait for the poll loop to exit its current iteration.
-        await new Promise<void>(r => setTimeout(r, 200));
+        await syncPromise;
+        clearTimeout(timeoutId);
         contentReadyUnlisten?.();
         syncFinishedUnlisten?.();
 
