@@ -1429,6 +1429,7 @@ export function LibraryPage() {
 
     // Book actions
     const handleOpenBook = useCallback((book: Book) => {
+        import("../../features/reader"); // prewarm lazy chunk
         if (book.syncedWithoutFile) {
             useUIStore.getState().setDownloadingBook(book.id);
             setRoute("reader", book.id);

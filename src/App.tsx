@@ -18,9 +18,17 @@ const LibraryPage = lazy(() =>
     import("./features/library").then((module) => ({ default: module.LibraryPage })),
 );
 const loadReaderPage = () => import("./features/reader");
+let _readerChunkPromise: Promise<typeof import("./features/reader")> | null = null;
+function getReaderChunk(): Promise<typeof import("./features/reader")> {
+    if (!_readerChunkPromise) _readerChunkPromise = loadReaderPage();
+    return _readerChunkPromise;
+}
 const ReaderPage = lazy(() =>
-    loadReaderPage().then((module) => ({ default: module.ReaderPage })),
+    getReaderChunk().then((module) => ({ default: module.ReaderPage })),
 );
+export function prewarmReaderChunk(): void {
+    void getReaderChunk();
+}
 const VocabularyPage = lazy(() =>
     import("./features/vocabulary").then((module) => ({ default: module.VocabularyPage })),
 );

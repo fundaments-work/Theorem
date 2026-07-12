@@ -361,6 +361,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
 
     // Unused remove handler removed
     const handleOpenBook = (book: Book) => {
+        import("../../features/reader"); // prewarm lazy chunk
         if (book.syncedWithoutFile) {
             useUIStore.getState().setDownloadingBook(book.id);
             setRoute("reader", book.id);
