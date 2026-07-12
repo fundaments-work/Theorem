@@ -459,10 +459,24 @@ const BookReaderPage = memo(function BookReaderPage() {
         setPdfZoom(scale);
     }, []);
 
+    const downloadingBookId = useUIStore((s) => s.downloadingBookId);
+
+    // Reset the load guard when a download completes for the current book.
+    // Without this, the effect sees loadedBookIdRef === currentBookId and
+    // skips loading after the download finishes.
+    const prevDownloadId = useRef<string | undefined>(undefined);
+    useEffect(() => {
+        if (prevDownloadId.current === currentBookId && !downloadingBookId) {
+            loadedBookIdRef.current = null;
+        }
+        prevDownloadId.current = downloadingBookId && currentBookId === downloadingBookId ? downloadingBookId : prevDownloadId.current;
+    }, [downloadingBookId, currentBookId]);
+
     // Load book file
     useEffect(() => {
-        // Guard: already loaded this book
-        if (currentBookId && loadedBookIdRef.current === currentBookId) {
+        // Guard: already loaded this book (skip if still downloading — UI
+        // shows progress via downloadingBookId instead).
+        if (currentBookId && loadedBookIdRef.current === currentBookId && downloadingBookId !== currentBookId) {
             return;
         }
 
@@ -627,7 +641,7 @@ const BookReaderPage = memo(function BookReaderPage() {
             // (React 18/19 development) actually loads the book on re-run.
             loadedBookIdRef.current = null;
         };
-    }, [currentBookId, getBook]);
+    }, [currentBookId, downloadingBookId, getBook]);
 
     // Preload the next few books to keep tap-to-open latency low on mobile.
     useEffect(() => {
@@ -2071,8 +2085,6 @@ const BookReaderPage = memo(function BookReaderPage() {
         }
     }, [currentBookId, saveBookLocations]);
 
-    // Download progress state
-    const downloadingBookId = useUIStore((s) => s.downloadingBookId);
     if (downloadingBookId === currentBookId) {
         return (
             <div className="fixed inset-0 flex items-center justify-center bg-[var(--color-background)] px-4 sm:px-8 py-8">
