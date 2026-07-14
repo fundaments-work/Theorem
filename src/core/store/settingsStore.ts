@@ -137,6 +137,7 @@ export const useSettingsStore = create<SettingsStore>()(
                     },
                     settingsLastModifiedAt: new Date().toISOString(),
                 }));
+                scheduleMutationSync();
             },
 
             updateVocabularySettings: (updates) => {

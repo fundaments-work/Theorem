@@ -478,10 +478,8 @@ const BookReaderPage = memo(function BookReaderPage() {
         loadedBookIdRef.current = currentBookId;
         setShowToolbar(true);
         setTtsData(null);
-        // Reset zoom to 100 % when opening a new book — the zoom setting is
-        // global and a previous session may have left it at another level (#23).
-        readerZoomRef.current = 100;
-        updateReaderSettings({ zoom: 100 });
+        // Initialize zoom from persisted settings across book opens
+        readerZoomRef.current = settings.readerSettings.zoom;
 
         let isCancelled = false;
 
