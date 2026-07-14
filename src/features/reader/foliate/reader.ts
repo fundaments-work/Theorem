@@ -1,9 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/**
- * Reader - Core reader implementation
- * Ported from foliate/src/reader/reader.js
- * Adapted for React web app (removed WebKit/GTK specific code)
- */
 
 import { getTheme, type Theme } from "./themes";
 
@@ -51,7 +45,6 @@ export class Reader {
         this.book = book;
         this.callbacks = callbacks;
         
-        // Get page total from page list if available
         this.pageTotal = book.pageList?.findLast((x: any) => !isNaN(parseInt(x.label)))?.label;
         
         this.style = {
@@ -64,22 +57,20 @@ export class Reader {
     }
 
     async init() {
-        // Create foliate-view element
+        
         this.view = document.createElement('foliate-view');
         this.handleEvents();
         await this.view.open(this.book);
         
-        // Calculate section fractions for progress
         this.sectionFractions = this.view.getSectionFractions();
     }
 
     private handleEvents() {
-        // Relocate event - location changed
+        
         this.view.addEventListener('relocate', (e: any) => {
             const { heads, feet } = this.view.renderer;
             const detail = e.detail;
             
-            // Update running heads
             if (heads) {
                 const { tocItem } = detail;
                 heads.at(-1).innerText = tocItem?.label ?? '';
@@ -88,7 +79,6 @@ export class Reader {
                 }
             }
             
-            // Update running feet (page numbers)
             if (feet) {
                 const { pageItem, location } = detail;
                 if (pageItem) {
@@ -109,38 +99,31 @@ export class Reader {
             this.callbacks.onRelocate?.(detail);
         });
 
-        // Load event - section loaded
         this.view.addEventListener('load', (e: any) => {
             this.callbacks.onLoad?.(e.detail);
         });
 
-        // Create overlay event - for annotations
         this.view.addEventListener('create-overlay', (e: any) => {
             this.callbacks.onCreateOverlay?.(e.detail);
         });
 
-        // Show annotation event
         this.view.addEventListener('show-annotation', (e: any) => {
             this.callbacks.onShowAnnotation?.(e.detail);
         });
 
-        // Draw annotation event
         this.view.addEventListener('draw-annotation', (e: any) => {
             this.callbacks.onDrawAnnotation?.(e.detail);
         });
 
-        // External link event
         this.view.addEventListener('external-link', (e: any) => {
             e.preventDefault();
             this.callbacks.onExternalLink?.(e.detail);
         });
 
-        // Link event (internal navigation)
         this.view.addEventListener('link', (e: any) => {
             this.callbacks.onLink?.(e.detail);
         });
 
-        // History change event
         this.view.history.addEventListener('index-change', (e: any) => {
             const { canGoBack, canGoForward } = e.target;
             this.callbacks.onHistoryChange?.({ canGoBack, canGoForward });
@@ -155,7 +138,6 @@ export class Reader {
         Object.assign(this.style, style);
         const { theme } = style;
         
-        // Set CSS variables
         const root = document.documentElement;
         root.style.setProperty('--light-bg', theme.light.bg);
         root.style.setProperty('--light-fg', theme.light.fg);
@@ -179,14 +161,12 @@ export class Reader {
             renderer.setStyles?.(getCSS(this.style));
         }
         
-        // Toggle invert class
         if (this.style.invert) {
             document.body.classList.add('invert');
         } else {
             document.body.classList.remove('invert');
         }
         
-        // Autohide cursor
         if (autohideCursor) {
             this.view?.setAttribute('autohide-cursor', '');
         } else {
@@ -194,7 +174,6 @@ export class Reader {
         }
     }
 
-    // Navigation methods
     goTo(target: string | number) {
         return this.view.goTo(target);
     }
@@ -207,7 +186,6 @@ export class Reader {
         return this.view.prev();
     }
 
-    // Utility methods
     private formatLanguageMap(x: any): string {
         if (!x) return '';
         if (typeof x === 'string') return x;
@@ -224,10 +202,6 @@ export class Reader {
     }
 }
 
-/**
- * Generate CSS for themes and typography
- * Ported from foliate getCSS function
- */
 export function getCSS({
     lineHeight,
     justify,
@@ -324,21 +298,21 @@ export function getCSS({
         }
         @media screen and (prefers-color-scheme: dark) {
             ${invert ? '' : `
-            html, body {
-                color: ${theme.dark.fg} !important;
+            html, body 
+                color: $theme.dark.fg} !important;
                 background: none !important;
             }
-            body * {
+            body * 
                 color: inherit !important;
                 border-color: currentColor !important;
-                background-color: ${theme.dark.bg} !important;
+                background-color: $theme.dark.bg} !important;
             }
-            a:any-link {
-                color: ${theme.dark.link} !important;
+            a:any-link 
+                color: $theme.dark.link} !important;
             }
-            .${CSS.escape(activeClass)}, .${CSS.escape(activeClass)} * {
-                color: ${theme.dark.fg} !important;
-                background: color-mix(in hsl, ${theme.dark.fg}, ${theme.dark.bg} 75%) !important;
+            .$CSS.escape(activeClass)}, .$CSS.escape(activeClass)} * 
+                color: $theme.dark.fg} !important;
+                background: color-mix(in hsl, $theme.dark.fg}, $theme.dark.bg} 75%) !important;
             }`}
         }
         p, li, blockquote, dd {
@@ -346,6 +320,6 @@ export function getCSS({
             text-align: ${justify ? 'justify' : 'start'};
             hyphens: ${hyphenate ? 'auto' : 'none'};
         }
-        ${overrideFont ? '* { font-family: revert !important }' : ''}
+        ${overrideFont ? '*  font-family: revert !important }' : ''}
     ` + (userStylesheet || '')];
 }

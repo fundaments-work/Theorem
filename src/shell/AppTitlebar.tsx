@@ -1,7 +1,3 @@
-/**
- * AppTitlebar Component
- * Frameless window title bar with navigation, search, and window controls
- */
 
 import { useState, useEffect, memo } from "react";
 import type { KeyboardEvent } from "react";
@@ -72,7 +68,7 @@ export const AppTitlebar = memo(function AppTitlebar({
                 const maximized = await win.isMaximized();
                 setIsMaximized(maximized);
             } catch (err) {
-                // Fallback to window size detection if Tauri API fails
+                
                 const isMax = window.innerWidth === window.screen.availWidth &&
                     window.innerHeight === window.screen.availHeight;
                 setIsMaximized(isMax);
@@ -243,7 +239,7 @@ export const AppTitlebar = memo(function AppTitlebar({
                 className="flex h-12 items-center justify-between gap-3 sm:gap-4 lg:h-11"
                 data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
             >
-                {/* Left side - Menu + Title */}
+                
                 <div
                     className="flex items-center gap-2 shrink-0 min-w-0"
                     data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
@@ -269,7 +265,6 @@ export const AppTitlebar = memo(function AppTitlebar({
                     </h1>
                 </div>
 
-                {/* Center - Search (desktop) */}
                 {isSearchVisible && (
                     <div
                         className="hidden lg:flex lg:flex-1 lg:min-w-[18rem] lg:max-w-3xl"
@@ -301,7 +296,6 @@ export const AppTitlebar = memo(function AppTitlebar({
                     </div>
                 )}
 
-                {/* Right side - Stats button + Window controls */}
                 <div
                     className={cn(
                         "flex items-center shrink-0",
@@ -410,7 +404,6 @@ export const AppTitlebar = memo(function AppTitlebar({
                 </div>
             </div>
 
-            {/* Search - Mobile (toggle from icon) */}
             {isSearchVisible && isMobileSearchOpen && (
                 <div className="mt-1.5 sm:hidden">
                     <div className="relative w-full">
@@ -443,7 +436,6 @@ export const AppTitlebar = memo(function AppTitlebar({
                 </div>
             )}
 
-            {/* Search - Tablet layouts (hidden on phone sizes) */}
             {isSearchVisible && (
                 <div className="mt-1.5 hidden sm:block lg:hidden">
                     <div className="relative w-full">

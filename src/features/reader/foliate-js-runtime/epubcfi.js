@@ -100,7 +100,6 @@ const parser = tokens => {
     return parts
 }
 
-// split at step indirections, then parse each part
 const parserIndir = tokens =>
     splitAt(tokens, findTokens(tokens, '!')).map(parser)
 
@@ -116,7 +115,7 @@ const partToString = ({ index, id, offset, temporal, spatial, text, side }) => {
     const param = side ? `;s=${side}` : ''
     return `/${index}`
         + (id ? `[${escapeCFI(id)}${param}]` : '')
-        // "CFI expressions [..] SHOULD include an explicit character offset"
+        
         + (offset != null && index % 2 ? `:${offset}` : '')
         + (temporal ? `~${temporal}` : '')
         + (spatial ? `@${spatial.join(':')}` : '')
@@ -135,13 +134,12 @@ export const collapse = (x, toEnd) => typeof x === 'string'
     ? toString(collapse(parse(x), toEnd))
     : x.parent ? concatArrays(x.parent, x[toEnd ? 'end' : 'start']) : x
 
-// create range CFI from two CFIs
 const buildRange = (from, to) => {
     if (typeof from === 'string') from = parse(from)
     if (typeof to === 'string') to = parse(to)
     from = collapse(from)
     to = collapse(to, true)
-    // ranges across multiple documents are not allowed; handle local paths only
+    
     const localFrom = from[from.length - 1], localTo = to[to.length - 1]
     const localParent = [], localStart = [], localEnd = []
     let pushToParent = true
@@ -155,7 +153,7 @@ const buildRange = (from, to) => {
             if (b) localEnd.push(b)
         }
     }
-    // copy non-local paths from `from`
+    
     const parent = from.slice(0, -1).concat([localParent])
     return toString({ parent, start: [localStart], end: [localEnd] })
 }
@@ -176,7 +174,7 @@ export const compare = (a, b) => {
             if (x.index > y.index) return 1
             if (x.index < y.index) return -1
             if (i === maxIndex) {
-                // TODO: compare temporal & spatial offsets
+                
                 if (x.offset > y.offset) return 1
                 if (x.offset < y.offset) return -1
             }
@@ -190,7 +188,7 @@ const isElementNode = ({ nodeType }) => nodeType === 1
 
 const getChildNodes = (node, filter) => {
     const nodes = Array.from(node.childNodes)
-        // "content other than element and character data is ignored"
+        
         .filter(node => isTextNode(node) || isElementNode(node))
     return filter ? nodes.map(node => {
         const accept = filter(node)
@@ -200,17 +198,12 @@ const getChildNodes = (node, filter) => {
     }).flat().filter(x => x) : nodes
 }
 
-// child nodes are organized such that the result is always
-//     [element, text, element, text, ..., element],
-// regardless of the actual structure in the document;
-// so multiple text nodes need to be combined, and nonexistent ones counted;
-// see "Step Reference to Child Element or Character Data (/)" in EPUB CFI spec
 const indexChildNodes = (node, filter) => {
     const nodes = getChildNodes(node, filter)
         .reduce((arr, node) => {
             let last = arr[arr.length - 1]
             if (!last) arr.push(node)
-            // "there is one chunk between each pair of child elements"
+            
             else if (isTextNode(node)) {
                 if (Array.isArray(last)) last.push(node)
                 else if (isTextNode(last)) arr[arr.length - 1] = [last, node]
@@ -221,13 +214,13 @@ const indexChildNodes = (node, filter) => {
             }
             return arr
         }, [])
-    // "the first chunk is located before the first child element"
+    
     if (isElementNode(nodes[0])) nodes.unshift('first')
-    // "the last chunk is located after the last child element"
+    
     if (isElementNode(nodes[nodes.length - 1])) nodes.push('last')
-    // "'virtual' elements"
-    nodes.unshift('before') // "0 is a valid index"
-    nodes.push('after') // "n+2 is a valid index"
+    
+    nodes.unshift('before') 
+    nodes.push('after') 
     return nodes
 }
 
@@ -239,7 +232,7 @@ const partsToNode = (node, parts, filter) => {
     }
     for (const { index } of parts) {
         const newNode = node ? indexChildNodes(node, filter)[index] : null
-        // handle non-existent nodes
+        
         if (newNode === 'first') return { node: node.firstChild ?? node }
         if (newNode === 'last') return { node: node.lastChild ?? node }
         if (newNode === 'before') return { node, before: true }
@@ -248,7 +241,7 @@ const partsToNode = (node, parts, filter) => {
     }
     const { offset } = parts[parts.length - 1]
     if (!Array.isArray(node)) return { node, offset }
-    // get underlying text node and offset from the chunk
+    
     let sum = 0
     for (const n of node) {
         const { length } = n.nodeValue
@@ -266,7 +259,7 @@ const nodeToParts = (node, offset, filter) => {
     const indexed = indexChildNodes(parentNode, filter)
     const index = indexed.findIndex(x =>
         Array.isArray(x) ? x.some(x => x === node) : x === node)
-    // adjust offset as if merging the text nodes in the chunk
+    
     const chunk = indexed[index]
     if (Array.isArray(chunk)) {
         let sum = 0
@@ -281,7 +274,7 @@ const nodeToParts = (node, offset, filter) => {
     const part = { id, index, offset }
     return (parentNode !== node.ownerDocument.documentElement
         ? nodeToParts(parentNode, null, filter).concat(part) : [part])
-        // remove ignored nodes
+        
         .filter(x => x.index !== -1)
 }
 
@@ -313,7 +306,6 @@ export const toRange = (doc, parts, filter) => {
     return range
 }
 
-// faster way of getting CFIs for sorted elements in a single parent
 export const fromElements = elements => {
     const results = []
     const { parentNode } = elements[0]
@@ -329,14 +321,11 @@ export const fromElements = elements => {
 export const toElement = (doc, parts) =>
     partsToNode(doc.documentElement, collapse(parts)).node
 
-// turn indices into standard CFIs when you don't have an actual package document
 export const fake = {
     fromIndex: index => wrap(`/6/${(index + 1) * 2}`),
     toIndex: parts => parts?.at(-1).index / 2 - 1,
 }
 
-// get CFI from Calibre bookmarks
-// see https://github.com/johnfactotum/foliate/issues/849
 export const fromCalibrePos = pos => {
     const [parts] = parse(pos)
     const item = parts.shift()

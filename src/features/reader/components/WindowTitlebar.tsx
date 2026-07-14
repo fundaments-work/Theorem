@@ -1,8 +1,3 @@
-/**
- * WindowTitlebar Component
- * Custom title bar with native-looking window controls and reader controls
- * Theme-aware - adapts to reader theme colors
- */
 
 import { useState, useEffect, useRef } from "react";
 import {
@@ -43,7 +38,7 @@ interface WindowTitlebarProps {
     immersionMode?: boolean;
     onToggleImmersion?: () => void;
     className?: string;
-    // Legacy props kept for compatibility until verified
+    
     hideReaderControls?: boolean;
     pdfControls?: any;
 }
@@ -99,7 +94,7 @@ function MobileMenu({ isOpen, onClose, items, triggerRef: _triggerRef }: MenuPro
 
     return (
         <>
-            {/* Transparent overlay to catch clicks on the toolbar/chrome area */}
+            
             <div
                 className="fixed inset-0 z-[160]"
                 onClick={(e) => {
@@ -201,7 +196,7 @@ export function WindowTitlebar({
     const formatLocation = () => {
         if (!location) return null;
         if (location.pageInfo) {
-            return `Page ${location.pageInfo.currentPage}${location.pageInfo.totalPages ? ` / ${location.pageInfo.totalPages}` : ""}`;
+            return `Page ${location.pageInfo.currentPage}${location.pageInfo.totalPages ? ` / $location.pageInfo.totalPages}` : ""}`;
         }
         if (location.pageItem?.label) {
             return location.pageItem.label;
@@ -237,8 +232,6 @@ export function WindowTitlebar({
             { label: "Book Info", icon: <Info className="w-4 h-4" />, onClick: onToggleInfo, active: activePanel === "info" },
         ];
 
-
-
     if (onToggleFullscreen) {
         commonMenuItems.push({
             label: fullscreen ? "Exit Fullscreen" : "Fullscreen",
@@ -264,7 +257,7 @@ export function WindowTitlebar({
             onDoubleClick={showDesktopWindowControls ? handleMaximize : undefined}
         >
             <div className="h-10 lg:h-9 flex items-center gap-1 pl-3 pr-2">
-                {/* Left: Back + Title */}
+                
                 <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none lg:max-w-[400px]">
                     <button
                         onClick={onBack}
@@ -288,10 +281,8 @@ export function WindowTitlebar({
                     </div>
                 </div>
 
-                {/* Spacer */}
                 <div className="hidden lg:block lg:flex-1" />
 
-                {/* Content: Standard Tools - Always Visible */}
                 <div className="flex items-center gap-0.5 mr-0.5">
                     <ToolbarButton onClick={onToggleSearch} active={activePanel === "search"} title="Search">
                         <Search className="w-4 h-4" />
@@ -322,7 +313,6 @@ export function WindowTitlebar({
                     </ToolbarButton>
                 </div>
 
-                {/* Menu Trigger (Always Visible) */}
                 <button
                     ref={menuButtonRef}
                     onClick={onToggleMenu}
@@ -332,7 +322,6 @@ export function WindowTitlebar({
                     <EllipsisVertical className="w-4 h-4" />
                 </button>
 
-                {/* Mobile/Desktop Menu */}
                 <MobileMenu
                     isOpen={isMenuOpen}
                     onClose={onToggleMenu}
@@ -340,7 +329,6 @@ export function WindowTitlebar({
                     triggerRef={menuButtonRef}
                 />
 
-                {/* Desktop Window Controls */}
                 {showDesktopWindowControls && (
                     <div className="hidden lg:flex items-center gap-1 ml-2 pl-2 border-l border-[var(--color-border)]">
                         <button onClick={handleMinimize} className={ICON_BUTTON_CLASS} title="Minimize"><Minus className="w-4 h-4" /></button>

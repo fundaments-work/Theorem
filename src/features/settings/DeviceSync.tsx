@@ -1,12 +1,3 @@
-/**
- * DeviceSync – LAN Device Sync Settings Component
- *
- * Clean card layout with clear visual hierarchy:
- * - This Device card (identity + receiver status)
- * - Pair a Device card (QR / scan / manual code)
- * - Paired Devices list (large touch targets, stacked on mobile)
- * - Security footer
- */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
@@ -47,8 +38,6 @@ import type {
     PairingQrData,
 } from "../../core/types";
 
-// ─── Sub-components ───
-
 function Section({
     title,
     description,
@@ -82,7 +71,6 @@ function Section({
     );
 }
 
-/** Grouping card for related content within the section. */
 function Card({
     label,
     children,
@@ -145,7 +133,6 @@ function StatusBadge({ status }: { status: string }) {
     );
 }
 
-/** Inline status dot for the receiver. */
 function ReceiverDot({ active }: { active: boolean }) {
     return (
         <span
@@ -160,8 +147,6 @@ function ReceiverDot({ active }: { active: boolean }) {
         />
     );
 }
-
-// ─── Main Component ───
 
 export function DeviceSyncSection() {
     const [identity, setIdentity] = useState<DeviceIdentityInfo | null>(null);
@@ -192,7 +177,6 @@ export function DeviceSyncSection() {
     const available = isTauri();
     const mobilePlatform = isMobile();
 
-    // Load identity + paired devices on mount.
     useEffect(() => {
         if (!available) return;
 
@@ -208,10 +192,6 @@ export function DeviceSyncSection() {
         })();
     }, [available]);
 
-    // Ensure iroh endpoint is running AND provision local data to the shared
-    // iroh-docs doc so paired peers can sync it. This runs when the settings
-    // page mounts with paired devices (after pairing, the peer's data must be
-    // written to the doc so the other side can receive it via reconciliation).
     const hasPairedDevices = pairedDevices.length > 0;
     useEffect(() => {
         if (!available || !hasPairedDevices) {
@@ -221,10 +201,7 @@ export function DeviceSyncSection() {
         let cancelled = false;
         const ensureReceiverReady = async () => {
             try {
-                // ensureResponderSyncReady already calls irohStart internally.
-                // Do NOT call irohStart again — a redundant call can hit the
-                // database-wipe retry path in the Rust backend if the first
-                // call is still initializing, silently deleting sync data.
+                
                 await ensureResponderSyncReady();
                 if (!cancelled) {
                     setIsIrohRunning(true);
@@ -243,7 +220,6 @@ export function DeviceSyncSection() {
         };
     }, [available, hasPairedDevices]);
 
-    // Auto-clear success message.
     useEffect(() => {
         if (successMessage) {
             const timer = setTimeout(() => setSuccessMessage(null), 4000);
@@ -271,10 +247,6 @@ export function DeviceSyncSection() {
         }
     }, [qrData, setDeviceSyncStatus]);
 
-    // When hosting (showing QR), listen for devices that successfully pair.
-    // Pairing only exchanges keys and creates the shared doc — no data sync.
-    // The user taps "Sync Now" on the paired device card when they want to
-    // transfer data for the first time.
     useEffect(() => {
         if (!available || !qrData) return;
         let cancelled = false;
@@ -300,7 +272,6 @@ export function DeviceSyncSection() {
             setIsPairing(true);
             setDeviceSyncStatus("pairing", "Connecting to device...");
 
-            // Listen for step-by-step pairing progress from Rust
             let pairUnlisten: (() => void) | null = null;
             try {
                 const { listen } = await import("@tauri-apps/api/event");
@@ -378,7 +349,7 @@ export function DeviceSyncSection() {
             await submitPairingCodeValue(scannedCode);
         } catch (e: any) {
             const msg = e?.message || String(e);
-            // User-cancelled scanner should not surface as an error state.
+            
             if (!/cancel|closed|dismiss/i.test(msg)) {
                 setError(msg);
             }
@@ -473,7 +444,6 @@ export function DeviceSyncSection() {
         return `data:image/svg+xml;utf8,${encodeURIComponent(qrData.qrSvg)}`;
     }, [qrData?.qrSvg]);
 
-    // ─── Not available in browser ───
     if (!available) {
         return (
             <Section
@@ -491,14 +461,13 @@ export function DeviceSyncSection() {
         );
     }
 
-    // ─── Main render ───
     return (
         <Section
             title="Device Sync"
             description="Sync your library, annotations, and settings between devices on the same network"
             icon={<Smartphone className="w-5 h-5" />}
         >
-            {/* ── Notifications ── */}
+            
             {error && (
                 <div className="flex items-start gap-2.5 p-3 border border-[color:color-mix(in_srgb,var(--color-error)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--color-error)_8%,transparent)]">
                     <span className="text-sm text-[color:var(--color-error)] flex-1">
@@ -521,7 +490,6 @@ export function DeviceSyncSection() {
                 </div>
             )}
 
-            {/* ── Global sync status bar ── */}
             {syncStatus !== "idle" && (
                 <div className="flex items-center gap-3 p-3 bg-[var(--color-surface-muted)] border border-[var(--color-border)]">
                     <StatusBadge status={syncStatus} />
@@ -533,12 +501,9 @@ export function DeviceSyncSection() {
                 </div>
             )}
 
-            {/* ════════════════════════════════════════════
-                CARD 1 — This Device
-            ════════════════════════════════════════════ */}
             <Card label="This Device">
                 <div className="p-4 space-y-3">
-                    {/* Identity row */}
+                    
                     {identity && (
                         <div className="flex items-center gap-3">
                             <Monitor className="w-5 h-5 text-[color:var(--color-text-muted)] shrink-0" />
@@ -553,7 +518,6 @@ export function DeviceSyncSection() {
                         </div>
                     )}
 
-                    {/* Receiver status row */}
                     <div className="flex items-center gap-3 pt-3 border-t border-[var(--color-border)]">
                         <ReceiverDot active={isIrohRunning} />
                         <div className="flex-1 min-w-0">
@@ -584,9 +548,6 @@ export function DeviceSyncSection() {
                 </div>
             </Card>
 
-            {/* ════════════════════════════════════════════
-                CARD 2 — Sync Settings
-            ════════════════════════════════════════════ */}
             <Card label="Sync Settings">
                 <div className="p-4">
                     <div className="flex items-center justify-between">
@@ -621,12 +582,9 @@ export function DeviceSyncSection() {
                 </div>
             </Card>
 
-            {/* ════════════════════════════════════════════
-                CARD 3 — Pair a Device
-            ════════════════════════════════════════════ */}
             <Card label="Pair a Device">
                 <div className="divide-y divide-[var(--color-border)]">
-                    {/* Show QR button */}
+                    
                     <button
                         onClick={handleGenerateQr}
                         disabled={isLoading}
@@ -651,7 +609,6 @@ export function DeviceSyncSection() {
                         )}
                     </button>
 
-                    {/* Scan QR (mobile only) */}
                     {mobilePlatform && (
                         <button
                             onClick={() => {
@@ -680,7 +637,6 @@ export function DeviceSyncSection() {
                         </button>
                     )}
 
-                    {/* QR ready banner */}
                     {qrData && (
                         <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                             <p className="text-xs text-[color:var(--color-text-muted)]">
@@ -716,7 +672,6 @@ export function DeviceSyncSection() {
                         </div>
                     )}
 
-                    {/* Manual pairing code entry */}
                     <div className="p-4 space-y-2">
                         <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
                             Or enter a pairing code manually
@@ -762,9 +717,6 @@ export function DeviceSyncSection() {
                 </div>
             </Card>
 
-            {/* ════════════════════════════════════════════
-                CARD 3 — Paired Devices
-            ════════════════════════════════════════════ */}
             {pairedDevices.length > 0 && (
                 <Card label={`Paired Devices (${pairedDevices.length})`}>
                     <div className="divide-y divide-[var(--color-border)]">
@@ -776,7 +728,7 @@ export function DeviceSyncSection() {
                                     key={device.deviceId}
                                     className="p-4 space-y-3"
                                 >
-                                    {/* Device info row */}
+                                    
                                     <div className="flex items-center gap-3">
                                         <Smartphone className="w-5 h-5 text-[color:var(--color-text-muted)] shrink-0" />
                                         <div className="flex-1 min-w-0">
@@ -801,7 +753,6 @@ export function DeviceSyncSection() {
                                         </div>
                                     </div>
 
-                                    {/* Sync progress */}
                                     {isSyncing && syncProgress && (
                                         <div className="flex items-center gap-2 px-1">
                                             <Loader2 className="w-3 h-3 animate-spin text-[color:var(--color-accent)]" />
@@ -811,7 +762,6 @@ export function DeviceSyncSection() {
                                         </div>
                                     )}
 
-                                    {/* Action buttons — stacked on mobile, inline on desktop */}
                                     <div className="flex flex-col sm:flex-row gap-2">
                                         <button
                                             onClick={() =>
@@ -881,7 +831,6 @@ export function DeviceSyncSection() {
                 </Card>
             )}
 
-            {/* ── Security footer ── */}
             <div className="flex items-center gap-2.5 py-2">
                 <Lock className="w-3.5 h-3.5 text-[color:var(--color-text-muted)] shrink-0 opacity-60" />
                 <p className="text-[11px] text-[color:var(--color-text-muted)] leading-relaxed">
@@ -889,7 +838,6 @@ export function DeviceSyncSection() {
                 </p>
             </div>
 
-            {/* ── QR Modal ── */}
             <Modal
                 isOpen={isQrModalOpen && !!qrData}
                 onClose={() => setIsQrModalOpen(false)}

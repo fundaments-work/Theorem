@@ -81,12 +81,6 @@ export interface UnifiedSyncExportResult {
     warnings: string[];
 }
 
-/**
- * Exports all app content into one payload for backup / cloud sync.
- * By default, only metadata is included (binary book files are stored
- * separately on disk/SQLite and would cause OOM if base64-encoded).
- * Pass { includeBinaries: true } for full binary export (use with caution).
- */
 export async function exportUnifiedSyncBundle(
     opts?: { includeBinaries?: boolean },
 ): Promise<UnifiedSyncExportResult> {

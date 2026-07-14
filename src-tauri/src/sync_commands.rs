@@ -1,6 +1,3 @@
-/// Theorem Sync — Tauri Command Wrappers
-///
-/// Bridges the iroh P2P sync transport with the Tauri frontend via IPC commands.
 use crate::iroh_sync::{self, DocsApiSnapshot, IrohSyncEndpoint, SyncTransportState};
 use theorem_sync_core::sync_crypto;
 use theorem_sync_core::sync_protocol::{
@@ -14,25 +11,14 @@ use tauri::Emitter;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
-// ─── Global iroh endpoint ───
-
 static IROH_ENDPOINT: std::sync::Mutex<Option<Arc<IrohSyncEndpoint>>> = std::sync::Mutex::new(None);
 
-/// Global init lock — prevents concurrent iroh_start() calls from
-/// interfering with each other. Without this, two concurrent starts
-/// can race: the second sees the docs API not ready within 5s and
-/// triggers the database-wipe retry path, destroying the first
-/// Router's databases while it's still initializing.
 static IROH_START_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
-// ─── Sync State ───
 
 pub struct SyncState {
     pub transport_state: Arc<SyncTransportState>,
     accept_cancel: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
 }
-
-// ─── Init ───
 
 pub fn init_sync(
     app_data_dir: PathBuf,
@@ -57,7 +43,6 @@ pub fn init_sync(
         docs_api: Mutex::new(None),
     });
 
-    // Don't start iroh accept loop here — it's started on-demand by the frontend.
     Ok(SyncState {
         transport_state,
         accept_cancel: Mutex::new(None),
@@ -72,8 +57,6 @@ pub(crate) fn get_sync_state(
             .to_string()
     })
 }
-
-// ─── Iroh Lifecycle ───
 
 pub(crate) async fn get_or_init_iroh(
     app: &tauri::AppHandle,
@@ -104,7 +87,6 @@ pub(crate) async fn get_or_init_iroh(
     Ok(ep)
 }
 
-/// Get the iroh endpoint's relay URL for pairing handshakes.
 pub fn get_iroh_relay_url() -> String {
     IROH_ENDPOINT
         .lock()
@@ -130,8 +112,6 @@ pub struct IrohNodeIdResponse {
 
 #[tauri::command]
 pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, String> {
-    // Serialize all iroh_start calls — prevents concurrent starts from
-    // wiping each other's databases via the 5s timeout retry path.
     let _init_lock = IROH_START_LOCK.lock().await;
 
     let data_dir = app
@@ -139,14 +119,9 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {e}"))?;
 
-    // Periodic GC: check iroh-docs redb database size on startup.
-    // iroh-docs entries are immutable — writes accumulate forever.
-    // If the database grows beyond 100MB, wipe and recreate it.
-    // The re-import mechanism (iroh_sync.rs re-subscription loop)
-    // will restore sync docs from stored DocTickets.
     let docs_db_path = data_dir.join("iroh-docs").join("docs.db");
     if let Ok(meta) = std::fs::metadata(&docs_db_path) {
-        const MAX_DB_BYTES: u64 = 100 * 1024 * 1024; // 100 MB
+        const MAX_DB_BYTES: u64 = 100 * 1024 * 1024;
         if meta.len() > MAX_DB_BYTES {
             eprintln!(
                 "[iroh-sync] redb database is {} MB — exceeding {} MB threshold. Wiping and recreating...",
@@ -164,7 +139,6 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
         let ep = get_or_init_iroh(&app).await?;
         let sync_state = get_sync_state(&app)?;
 
-        // Start the accept loop if not running
         {
             let mut cancel_guard = sync_state.accept_cancel.lock().await;
             if cancel_guard.is_none() {
@@ -173,13 +147,6 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
                 let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
                 *cancel_guard = Some(cancel);
             } else if attempt > 0 {
-                // On retry: databases were wiped, so the old accept loop's
-                // databases are gone. Drop its cancel guard to signal
-                // shutdown, then wait for it to fully stop before starting
-                // a fresh accept loop. Without this delay, the old Router's
-                // iroh-docs actor is still shutting down while the new one
-                // starts — their event streams collide and all die with
-                // "sending to iroh_docs actor failed".
                 *cancel_guard = None;
                 tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                 let transport = sync_state.transport_state.clone();
@@ -189,8 +156,6 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
             }
         }
 
-        // Wait up to 15s for the docs API to be initialized (was 5s — too
-        // short for slow devices or large databases).
         for _ in 0..150 {
             if sync_state
                 .transport_state
@@ -210,12 +175,12 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
 
         if attempt == 0 {
             eprintln!("[iroh-sync] Database corrupted — wiping and retrying");
-            // Wipe corrupted redb databases so the next start recreates fresh
+
             let blobs_path = data_dir.join("iroh-blobs");
             let docs_path = data_dir.join("iroh-docs");
             let _ = std::fs::remove_dir_all(&blobs_path);
             let _ = std::fs::remove_dir_all(&docs_path);
-            // Close and reset the endpoint so it reconnects fresh
+
             let old_ep = IROH_ENDPOINT.lock().unwrap().clone();
             if let Some(ep) = old_ep {
                 ep.close().await;
@@ -262,14 +227,11 @@ pub async fn iroh_pair(
     Ok(())
 }
 
-// ─── Pairing ───
-
 #[tauri::command]
 pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData, String> {
     let ep = get_or_init_iroh(&app).await?;
     let sync_state = get_sync_state(&app)?;
 
-    // Ensure accept loop is running for pairing
     {
         let mut cancel_guard = sync_state.accept_cancel.lock().await;
         if cancel_guard.is_none() {
@@ -331,15 +293,11 @@ pub async fn submit_pairing_code(
     let sync_state = get_sync_state(&app)?;
     let ep = get_or_init_iroh(&app).await?;
 
-    // ── Step 1: Connect to host device ──
     let _ = app.emit(
         "pairing-progress",
         serde_json::json!({"step": "connecting", "message": "Connecting to device..."}),
     );
 
-    // Connect to host via iroh. Include LAN addresses from the QR code
-    // as direct-connect hints so pairing works without internet (no N0 DNS
-    // or relay required when on the same local network).
     let peer_pk: iroh::PublicKey = qr_payload
         .node_id
         .parse()
@@ -362,7 +320,6 @@ pub async fn submit_pairing_code(
         serde_json::json!({"step": "handshake", "message": "Connected, exchanging keys..."}),
     );
 
-    // Send handshake first
     let my_info = iroh_sync::IrohPeerInfo {
         public_key: ep.public_key,
         device_id: sync_state.transport_state.device_id.clone(),
@@ -386,7 +343,6 @@ pub async fn submit_pairing_code(
             .await
             .map_err(|e| format!("read: {e}"))?;
         let _peer_len = u32::from_be_bytes(lb) as usize;
-        // Receive host's info (we don't need it beyond verification)
     }
 
     let pairing_request = PairingRequest {
@@ -412,9 +368,6 @@ pub async fn submit_pairing_code(
         .unwrap_or_default()
         .as_secs();
 
-    // Capture the peer's actual network address from the QUIC connection
-    // so blob downloads have direct-connect hints. Without this, iroh-blobs
-    // must resolve the peer via N0 DNS (which fails on many mobile networks).
     let (connected_ip, connected_port, connected_relay) = {
         let paths = conn.paths();
         let mut direct = None;
@@ -436,9 +389,6 @@ pub async fn submit_pairing_code(
         }
     };
 
-    // Prefer the host's relay URL from the pairing response, then from
-    // the connection, then from the QR code payload. This ensures blob
-    // downloads can use the relay even for direct-LAN pairings.
     let host_relay = if !pairing_response.relay_url.is_empty() {
         pairing_response.relay_url.clone()
     } else if !connected_relay.is_empty() {
@@ -464,7 +414,6 @@ pub async fn submit_pairing_code(
 
     let paired_info = PairedDeviceInfo::from(&paired_device);
 
-    // Save to state and disk
     {
         let mut devices = sync_state.transport_state.paired_devices.lock().await;
         if !paired_device.fingerprint.is_empty() {
@@ -484,7 +433,6 @@ pub async fn submit_pairing_code(
             .unwrap_or_else(|e| eprintln!("[sync] Failed to save paired devices: {e}"));
     }
 
-    // Ensure the iroh Router + docs are initialized before importing the ticket.
     {
         let mut cancel_guard = sync_state.accept_cancel.lock().await;
         if cancel_guard.is_none() {
@@ -495,7 +443,6 @@ pub async fn submit_pairing_code(
         }
     }
 
-    // Wait for iroh-docs to be available (up to 5s after Router starts).
     let _ = app.emit(
         "pairing-progress",
         serde_json::json!({"step": "setup", "message": "Setting up sync engine..."}),
@@ -520,7 +467,6 @@ pub async fn submit_pairing_code(
         }
     };
 
-    // Import the shared iroh-docs sync document from the host's ticket.
     if docs_ready && !pairing_response.sync_doc_ticket.is_empty() {
         let api = get_docs_api(&app)?;
         match pairing_response
@@ -530,12 +476,12 @@ pub async fn submit_pairing_code(
             Ok(ticket) => match api.import(ticket).await {
                 Ok(doc) => {
                     let doc_id = doc.id().to_string();
-                    // Start live sync so future writes propagate via gossip
+
                     if let Ok(host_pk) = qr_payload.node_id.parse::<iroh::PublicKey>() {
                         let host_addr = iroh::EndpointAddr::new(host_pk);
                         let _ = doc.start_sync(vec![host_addr]).await;
                     }
-                    // Subscribe to live events
+
                     if let Ok(blobs) = get_blobs_store(&app) {
                         iroh_sync::subscribe_doc_events(app.clone(), doc, blobs);
                     }
@@ -557,7 +503,6 @@ pub async fn submit_pairing_code(
         }
     }
 
-    // Also register with iroh endpoint
     let peer_info = iroh_sync::IrohPeerInfo {
         public_key: peer_pk,
         device_id: paired_info.device_id.clone(),
@@ -573,8 +518,6 @@ pub async fn submit_pairing_code(
 
     Ok(paired_info)
 }
-
-// ─── Device Identity ───
 
 #[tauri::command]
 pub async fn get_device_identity(app: tauri::AppHandle) -> Result<DeviceIdentityInfo, String> {
@@ -601,8 +544,6 @@ pub async fn set_device_fingerprint(fingerprint: String) -> Result<(), String> {
     Ok(())
 }
 
-// ─── Paired Devices ───
-
 #[tauri::command]
 pub async fn get_paired_devices(app: tauri::AppHandle) -> Result<Vec<PairedDeviceInfo>, String> {
     let sync_state = get_sync_state(&app)?;
@@ -621,8 +562,6 @@ pub async fn unpair_device(app: tauri::AppHandle, device_id: String) -> Result<(
     Ok(())
 }
 
-// ─── iroh-docs Commands (CRDT metadata sync) ───
-
 fn get_docs_api(app: &tauri::AppHandle) -> Result<iroh_docs::api::DocsApi, String> {
     let snapshot = get_docs_snapshot(app)?;
     Ok(snapshot.api.clone())
@@ -638,9 +577,6 @@ fn get_blobs_store(app: &tauri::AppHandle) -> Result<iroh_blobs::api::Store, Str
     Ok(snapshot.blobs.clone())
 }
 
-/// Wait up to 5 seconds for the iroh-docs API snapshot to be initialized.
-/// The DocsApi is stored by the start_accept_loop background task, which
-/// may take time to set up blobs store, gossip, and docs handler.
 fn get_docs_snapshot(app: &tauri::AppHandle) -> Result<DocsApiSnapshot, String> {
     let sync_state = get_sync_state(app)?;
     for i in 0..50 {
@@ -678,7 +614,6 @@ pub async fn docs_create_sync_doc(
         .await
         .map_err(|e| format!("share doc: {e}"))?;
 
-    // Subscribe to live events for this document
     if let Ok(blobs) = get_blobs_store(&app) {
         iroh_sync::subscribe_doc_events(app.clone(), doc, blobs);
     }
@@ -712,7 +647,6 @@ pub async fn docs_import_sync_doc(
         .map_err(|e| format!("import doc: {e}"))?;
     let doc_id = doc.id();
 
-    // Subscribe to live events for this document
     if let Ok(blobs) = get_blobs_store(&app) {
         iroh_sync::subscribe_doc_events(app.clone(), doc, blobs);
     }
@@ -740,10 +674,6 @@ pub async fn docs_set_entry(
     let author = get_docs_author(&app)?;
     let sync_state = get_sync_state(&app)?;
 
-    // Clone device configs out of the lock so we don't hold it across .await
-    // points. 5000 sequential docsSetEntry calls each hold the lock across
-    // api.open().await + set_bytes().await, starving any other task that
-    // needs paired_devices (e.g. docs_sync_now, docs_get_all_entries).
     let targets: Vec<(iroh_docs::NamespaceId,)> = {
         let devices = sync_state.transport_state.paired_devices.lock().await;
         devices
@@ -788,10 +718,7 @@ pub async fn docs_get_all_entries(
         let devices = sync_state.transport_state.paired_devices.lock().await;
         (snapshot.blobs.clone(), devices)
     };
-    // Group all entries by key — multiple authors may have entries for the
-    // same key (e.g., "books"). We collect ALL values per key and merge them
-    // by concatenating JSON arrays. This way, data from all authors survives
-    // instead of only the last HashMap::insert winner.
+
     let mut per_key: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
 
@@ -841,17 +768,6 @@ pub async fn docs_get_all_entries(
         }
     }
 
-    // Merge values for each key: if multiple authors wrote to the same key,
-    // merge them appropriately based on value type and key namespace:
-    //
-    // Domain arrays ("books", "annotations", "collections"):
-    //   -> concatenate (dedup happens on the JS side via mergeBooks etc.)
-    // Domain objects ("settings", "reading_stats"):
-    //   -> merge top-level keys (for settings, reading_stats)
-    // Per-entity keys ("book:<id>", "annotation:<id>", "collection:<id>"):
-    //   -> last-writer-wins (each key represents a single entity; field-
-    //      level object-merge would produce incoherent hybrid entities)
-    // Other types -> last writer wins
     let mut results = std::collections::HashMap::new();
     for (key, values) in per_key {
         let is_per_entity = key.starts_with("book:")
@@ -901,21 +817,14 @@ pub async fn docs_get_all_entries(
     Ok(results)
 }
 
-/// Try to get the docs API, and if the accept loop died (corrupted database),
-/// restart it and retry. Without this, a corrupted redb database silently kills
-/// the accept loop at startup, and every subsequent sync round fails with
-/// "iroh-docs not initialized after 5s wait" until the user reinstalls the app.
 async fn get_docs_api_or_init(app: &tauri::AppHandle) -> Result<iroh_docs::api::DocsApi, String> {
     match get_docs_api(app) {
         Ok(api) => Ok(api),
         Err(e) => {
             eprintln!("[iroh-sync] {e} — restarting sync endpoint with database cleanup");
-            // This restarts the accept loop. If the database is corrupted,
-            // the cleanup in start_accept_loop deletes the broken redb files
-            // and the new loop recreates them fresh.
+
             let _ = iroh_start(app.clone()).await;
-            // get_docs_api polls for up to 5s internally; on a fresh database
-            // the loop initializes in <1s.
+
             get_docs_api(app)
         }
     }
@@ -1025,18 +934,13 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
             peer_addr = peer_addr.with_relay_url(url);
         }
     }
-    // Add cached LAN IP as fallback — may be stale (DHCP renewal) but if
-    // still valid the connection is much faster than going through relay.
-    // iroh tries all addresses in parallel and picks the fastest working one.
+
     if let Ok(ip_addr) = ip.parse::<std::net::IpAddr>() {
         if port > 0 {
             peer_addr = peer_addr.with_ip_addr(std::net::SocketAddr::new(ip_addr, port));
         }
     }
-    // Start CRDT sync with peer. start_sync() may return Ok before the
-    // actual reconciliation completes — it triggers a background sync session
-    // (gossip subscription + state reconciliation). After pairing, gossip is
-    // already active so this call is fast (registers peer for live updates).
+
     tokio::time::timeout(
         std::time::Duration::from_secs(15),
         doc.start_sync(vec![peer_addr]),
@@ -1045,7 +949,6 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
     .map_err(|_| "Peer is offline or unreachable (timeout after 15s)".to_string())?
     .map_err(|e| format!("start_sync: {e}"))?;
 
-    // Update last_sync_at so the peer list shows "Synced at ..." instead of "Never synced"
     {
         let mut devices = sync_state.transport_state.paired_devices.lock().await;
         if let Some(d) = devices.get_mut(&peer_device_id) {
@@ -1060,14 +963,8 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
     Ok(())
 }
 
-// ─── iroh-blobs internal (kept for CRDT content, no user-facing commands) ───
-
-/// Clear all sync databases (iroh-blobs FsStore + iroh-docs redb).
-/// Called from `clearAllApplicationStorage` so wiped-app-data re-syncs
-/// don't show stale old blob storage usage.
 #[tauri::command]
 pub async fn clear_sync_databases(app: tauri::AppHandle) -> Result<(), String> {
-    // First stop the iroh endpoint so databases aren't in use
     iroh_stop(app.clone()).await?;
 
     let data_dir = app

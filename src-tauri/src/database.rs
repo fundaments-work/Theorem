@@ -73,17 +73,14 @@ fn remove_materialized_cache_file(app: &AppHandle, book_id: &str) {
     }
 }
 
-/// Run schema migrations on every app startup, independent of the connection pool.
-/// The pool caches the connection after first init, so schema changes (CREATE INDEX
-/// IF NOT EXISTS, ALTER TABLE) would never execute on subsequent starts without this.
 pub fn run_schema_migrations(app: &AppHandle) -> Result<(), String> {
     let db_path = database_path(app)?;
-    // Use a temporary connection so we don't interfere with the pool
+
     let conn = Connection::open(&db_path)
         .map_err(|e| format!("Failed to open database for migration: {e}"))?;
     conn.execute_batch(DB_SCHEMA_PERSISTENT_PRAGMAS)
         .map_err(|e| format!("Failed to run schema migrations: {e}"))?;
-    // Migration: add covers.data BLOB for existing installs
+
     let has_data: bool = conn
         .query_row(
             "SELECT COUNT(*) > 0 FROM pragma_table_info('covers') WHERE name = 'data'",
@@ -219,8 +216,6 @@ pub fn sqlite_save_book_data(app: AppHandle, id: String, data: Vec<u8>) -> Resul
     })?;
 
     with_connection(&app, |connection| {
-        // Keep the data in SQLite as a fallback — if the book-cache file is
-        // deleted (e.g. Android cache clear), the blob can be re-materialized.
         connection.execute(
             r#"
             INSERT INTO books (id, data, updated_at)
@@ -250,16 +245,11 @@ pub fn sqlite_save_book_data(app: AppHandle, id: String, data: Vec<u8>) -> Resul
 
 #[tauri::command]
 pub fn sqlite_get_book_data(app: AppHandle, id: String) -> Result<Option<Vec<u8>>, String> {
-    // Check materialized path first (book-cache/{id}.book on disk).
     if let Ok(Some(path)) = sqlite_get_materialized_book_path(app.clone(), id.clone()) {
         let content = fs::read(&path).map_err(|e| format!("Failed to read book file: {}", e))?;
         return Ok(Some(content));
     }
-    // Fallback: read from books table data column. sqlite_save_book_data stores
-    // the file bytes there as a persistent fallback even when the on-disk cache
-    // is deleted. Without this, books imported directly into SQLite (path:
-    // sqlite://uuid) can never be hashed into iroh-blobs, leaving peers unable
-    // to download them.
+
     with_connection(&app, |connection| {
         connection
             .query_row(
@@ -741,8 +731,6 @@ pub fn sqlite_get_blob_stats(
     })
 }
 
-// ─── FTS5 Search ───
-
 #[derive(Serialize)]
 pub struct SqliteBookSearchResult {
     pub book_id: String,
@@ -829,8 +817,6 @@ pub fn sqlite_search_books(
         sqlite_search_books_inner(connection, &query, limit)
     })
 }
-
-// ─── Book Metadata (SQLite table) ───
 
 pub fn sqlite_save_book_metadata_inner(
     connection: &Connection,

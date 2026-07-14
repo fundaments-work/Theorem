@@ -1,8 +1,4 @@
-/**
- * Theorem Dropdown — wraps @radix-ui/react-dropdown-menu for production-grade
- * accessibility (arrow-key nav, type-to-select, focus management).
- * Public DropdownProps API is unchanged.
- */
+
 import { useState } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";

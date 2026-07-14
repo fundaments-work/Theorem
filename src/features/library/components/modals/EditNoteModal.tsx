@@ -12,7 +12,6 @@ interface EditNoteModalProps {
 export function EditNoteModal({ isOpen, content, onClose, onSave }: EditNoteModalProps) {
     const [editContent, setEditContent] = useState(content);
 
-    // Reset content when modal opens with new content
     useEffect(() => {
         if (isOpen) {
             setEditContent(content);

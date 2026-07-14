@@ -1,7 +1,3 @@
-/**
- * ReaderSearch Component
- * Panel for searching within the book content
- */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -129,7 +125,6 @@ export function ReaderSearch({
         }
     }, []);
 
-    // Focus input when visible
     useEffect(() => {
         if (visible) {
             const timer = setTimeout(() => inputRef.current?.focus(), 100);
@@ -203,7 +198,7 @@ export function ReaderSearch({
             <Backdrop visible={visible} onClick={onClose} />
 
             <FloatingPanel visible={visible} className={cn('flex flex-col overflow-hidden', className)}>
-                {/* Header/Search Input */}
+                
                 <div className="reader-panel-header px-4 pt-4 pb-3">
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">Search</h2>
@@ -237,7 +232,6 @@ export function ReaderSearch({
                     </form>
                 </div>
 
-                {/* Progress Bar */}
                 {isSearching && (
                     <div className="h-1 bg-[var(--color-background)] overflow-hidden">
                         <div
@@ -247,7 +241,6 @@ export function ReaderSearch({
                     </div>
                 )}
 
-                {/* Content */}
                 <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 custom-scrollbar">
                     {!query && !isSearching && results.length === 0 && (
                         <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center opacity-50">

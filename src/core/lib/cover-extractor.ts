@@ -1,7 +1,3 @@
-/**
- * Cover & Metadata Extraction Utility
- * Extracts book cover images and metadata using foliate-js and PDF.js.
- */
 
 import type { BookFormat } from '../types';
 import { saveCoverImage } from './storage';
@@ -77,10 +73,8 @@ function isPlaceholderMetadataTitle(title: string): boolean {
     return normalized === 'unknown title' || normalized === 'untitled' || normalized === 'untitled book';
 }
 
-/** Known book file extensions (lowercase, with dot). */
 const BOOK_EXTENSIONS = ['.epub', '.pdf', '.mobi', '.azw', '.azw3', '.fb2', '.cbz', '.cbr'];
 
-/** Strip a known book extension from the end of a title, if present. */
 function stripBookExtension(title: string): string {
     const lower = title.toLowerCase();
     for (const ext of BOOK_EXTENSIONS) {
@@ -91,7 +85,6 @@ function stripBookExtension(title: string): string {
     return title;
 }
 
-/** Extract filename-based metadata for comparison with book metadata. */
 function filenameFallbackData(filePath: string): { title: string; author: string } {
     const filename = filePath.split('/').pop()?.split('\\').pop() || filePath;
     const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
@@ -102,11 +95,6 @@ function filenameFallbackData(filePath: string): { title: string; author: string
     return { title: nameWithoutExt, author: '' };
 }
 
-/**
- * Whether an extracted title from book metadata should replace the current
- * (filename-derived) title on the Book object.  Rejects empty, placeholder,
- * and obviously-bogus metadata values.
- */
 export function shouldUseExtractedTitle(currentTitle: string, extractedTitle: string | undefined, filePath: string): boolean {
     const nextTitle = normalizeMetadataTitle(extractedTitle);
     if (!nextTitle) {
@@ -121,7 +109,7 @@ export function shouldUseExtractedTitle(currentTitle: string, extractedTitle: st
     if (nextTitle.length < 2 || /^[^a-zA-Z0-9]+$/.test(nextTitle)) {
         return false;
     }
-    // Dangling brackets in any position are signs of garbage metadata.
+    
     if (/^[\[({<"'`]/.test(nextTitle) || /[)\]}>"'`]$/.test(nextTitle)) {
         return false;
     }
@@ -140,10 +128,6 @@ export function shouldUseExtractedTitle(currentTitle: string, extractedTitle: st
     return currentNormalized === "Unknown" || currentNormalized.includes(".") || currentIsFilenameFallback;
 }
 
-/**
- * Whether an extracted author from book metadata should replace the current
- * (filename-derived) author on the Book object.
- */
 export function shouldUseExtractedAuthor(currentAuthor: string, extractedAuthor: string | undefined): boolean {
     const nextAuthor = normalizeMetadataString(extractedAuthor);
     if (!nextAuthor || nextAuthor.toLowerCase() === "unknown author") {
@@ -228,7 +212,7 @@ async function normalizeCoverBlob(rawCover: unknown, fallbackMimeType: string): 
 
     if (rawCover instanceof Blob) {
         if (rawCover.size > 0) {
-            // If the blob has no MIME type (common for MOBI), use the fallback
+            
             if (!rawCover.type) {
                 return new Blob([rawCover], { type: fallbackMimeType });
             }
@@ -255,7 +239,6 @@ async function normalizeCoverBlob(rawCover: unknown, fallbackMimeType: string): 
         }
     }
 
-    // Handle raw binary string or URL that isn't a data: URI
     if (typeof rawCover === 'string' && rawCover.length > 0) {
         try {
             const response = await fetch(rawCover);
@@ -264,11 +247,10 @@ async function normalizeCoverBlob(rawCover: unknown, fallbackMimeType: string): 
                 return blob.size > 0 ? blob : null;
             }
         } catch {
-            // Not a fetchable URL, may be raw data
+            
         }
     }
 
-    // Handle object with array/buffer properties (some foliate versions)
     if (typeof rawCover === 'object' && rawCover !== null) {
         const obj = rawCover as Record<string, unknown>;
         if (obj.data instanceof ArrayBuffer) {
@@ -371,12 +353,10 @@ export async function extractMetadata(
         author: '',
     };
 
-
     if (format === 'pdf') {
         try {
             const pdfjsLib = await getConfiguredPdfJs();
 
-            // Android Webkit can throw DataCloneError if we don't ensure a clean array buffer view
             const rawPdfData = new Uint8Array(data);
             const serializableData = (() => {
                 if (rawPdfData.buffer && rawPdfData.buffer instanceof ArrayBuffer) {
@@ -416,8 +396,7 @@ export async function extractMetadata(
                     }
 
                     const adjustedViewport = page.getViewport({ scale });
-                    // Hard clamp — prevents a single canvas allocation from exceeding
-                    // Android's 256 MB WebView heap limit on high-DPI devices.
+                    
                     canvas.width = Math.min(adjustedViewport.width, maxDimension);
                     canvas.height = Math.min(adjustedViewport.height, maxDimension);
 
@@ -470,7 +449,6 @@ export async function extractMetadata(
             bookInput = new File([data], filename, { type: mimeType });
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let book: any;
 
         try {
@@ -525,7 +503,7 @@ export async function extractMetadata(
             try {
                 book.destroy();
             } catch {
-                // no-op
+                
             }
         }
 

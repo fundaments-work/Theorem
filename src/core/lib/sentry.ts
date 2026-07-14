@@ -2,13 +2,6 @@ import * as Sentry from "@sentry/react";
 
 let isInitialized = false;
 
-/**
- * Initialize Sentry error reporting.
- * Uses SENTRY_DSN env var if set, otherwise Sentry is disabled.
- *
- * @param dsn - Optional Sentry DSN. Falls back to SENTRY_DSN env var.
- * @param environment - Deployment environment ("development" | "staging" | "production")
- */
 export function initSentry(
     dsn?: string,
     environment: string = "production",
@@ -32,7 +25,7 @@ export function initSentry(
         replaysSessionSampleRate: 0.1,
         replaysOnErrorSampleRate: 1.0,
         beforeSend(event) {
-            // Strip PII: never send user input or file paths in breadcrumbs
+            
             if (event.breadcrumbs) {
                 for (const crumb of event.breadcrumbs) {
                     if (crumb.data && "filePath" in crumb.data) {

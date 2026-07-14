@@ -32,9 +32,6 @@ const makeZipLoader = async (file, prefetchPromise) => {
     const textCache = prefetch?.textCache
     const sizes = prefetch?.sizes
 
-    // No native prefetch (web platform, or Tauri without a file path):
-    // use the eager zip.js path — getSize must return real values for the
-    // EPUB section loop, and sections aren't pre-decoded.
     if (!textCache && !sizes) {
         const { configure, ZipReader, BlobReader, TextWriter, BlobWriter } =
             await import('./vendor/zip.js')
@@ -50,10 +47,6 @@ const makeZipLoader = async (file, prefetchPromise) => {
         return { entries, loadText, loadBlob, getSize }
     }
 
-    // Fast path: Rust prefetch has pre-decoded all text files (container,
-    // OPF, nav, NCX, all HTML sections) and the size map. We skip zip.js
-    // entirely on the critical path — only lazy-load it when loadBlob
-    // needs an image/cover.
     let _lazyZip = null
     const getLazyZip = async () => {
         if (!_lazyZip) {
@@ -181,7 +174,7 @@ class CursorAutohider {
         this.#state = state
         if (this.#state.hidden) this.hide()
         this.#el.addEventListener('mousemove', ({ screenX, screenY }) => {
-            // check if it actually moved
+            
             if (screenX === this.#state.x && screenY === this.#state.y) return
             this.#state.x = screenX, this.#state.y = screenY
             this.show()
@@ -385,7 +378,7 @@ export class View extends HTMLElement {
         this.#emit('relocate', this.lastLocation)
     }
     #onLoad({ doc, index }) {
-        // set language and dir if not already set
+        
         doc.documentElement.lang ||= this.language.canonical ?? ''
         if (!this.language.isCJK)
             doc.documentElement.dir ||= this.language.direction ?? ''

@@ -158,42 +158,28 @@ const KNOWN_POS = new Set([
     "Root", "Stem", "Combining form",
 ]);
 
-/**
- * Parses Wiktionary-derived StarDict Pango "m" format:
- *     (Noun) * definition text (Verb) *: another definition
- *     (Noun) definition without bullet
- *
- * Returns definitions grouped by part-of-speech label, with
- * cross-references, citation stubs, and formatting artifacts removed.
- */
 function parseWiktionaryDefinitions(raw: string): WiktionaryParseGroup[] {
-    // 1. Strip HTML comments and XML/Pango tags
+    
     let text = raw.replace(/<!--.*?-->/gs, " ");
     text = text.replace(/<[^>]*>/g, " ");
 
-    // 2. Clean cross-references: "hello#Interjection|Hello!" → "Hello!"
     text = text.replace(/\w+#\w+\|/g, "");
     text = text.replace(/#\w+/g, "");
 
-    // 3. Clean Pango formatting artifacts
     text = text.replace(/\|/g, " ");
     text = text.replace(/\\"/g, '"');
     text = text.replace(/\s*["""]\s*/g, " ");
     text = text.replace(/\s*[―–—]\s*/g, " — ");
     text = text.replace(/[\[\]{}]/g, " ");
 
-    // 4. Strip leading/trailing parenthetical junk from segments later
     text = text.replace(/\s+/g, " ").trim();
 
-    // 5. Split on parenthetical labels that start with uppercase (potential POS markers)
-    //    Skip "public domain", "publication" etc. since they start with lowercase.
     const rawSegments = text.split(/(?=\([A-Z][A-Za-z ]*\))/).filter(Boolean);
 
-    // 6. Group definitions by POS
     const groups = new Map<string, string[]>();
 
     for (const segment of rawSegments) {
-        // Extract POS label — handle "Label) * def", "Label) *: def", and "Label) def"
+        
         const posMatch = segment.match(/^\(([A-Za-z ]+)\)\s*(?:\*:?)?\s*/);
         if (!posMatch) continue;
 
@@ -202,21 +188,17 @@ function parseWiktionaryDefinitions(raw: string): WiktionaryParseGroup[] {
 
         let def = segment.slice(posMatch[0].length);
 
-        // Clean up remaining artifacts
         def = def.replace(/\|/g, " ");
         def = def.replace(/\s*["""]\s*/g, " ");
         def = def.replace(/\s+/g, " ").trim();
 
-        // Quality filters
         if (!def || def.length < 4) continue;
         if (/^[\w/:#@.%\-'·\s]+$/.test(def)) continue;
         if (/^\d{4},?\s/.test(def)) continue;
         if (/^[:.…·]+$/.test(def)) continue;
 
-        // Skip sub-label markers and citations
         if (/^\([A-Za-z]/.test(def)) continue;
 
-        // Append to POS group (handles repeated POS labels across entries)
         const existing = groups.get(pos);
         if (existing) {
             existing.push(def);
@@ -225,7 +207,6 @@ function parseWiktionaryDefinitions(raw: string): WiktionaryParseGroup[] {
         }
     }
 
-    // 7. Convert to array, deduplicate within each group
     const result: WiktionaryParseGroup[] = [];
     for (const [pos, defs] of groups) {
         const seen = new Set<string>();
@@ -296,9 +277,6 @@ async function createRuntimeDictionary(buffers: {
 
     await dictionary.loadIfo(new Blob([buffers.ifo]));
 
-    // DictZip stores each chunk as an independent gzip member.
-    // We must use Gunzip (not Inflate) because the chunks carry gzip
-    // headers, and we must signal final=true so fflate flushes all output.
     const inflateChunk = (data: Uint8Array): Uint8Array => {
         const outputs: Uint8Array[] = [];
         const gunzipper = new Gunzip({});
@@ -369,9 +347,6 @@ async function ensureLoadedDictionary(id: string): Promise<LoadedStarDict | null
     }
 }
 
-/**
- * Imports StarDict files and persists them for offline lookups.
- */
 export async function importStarDictDictionary(
     files: FileList | File[],
 ): Promise<InstalledDictionary> {
@@ -435,10 +410,6 @@ export async function importStarDictDictionary(
     };
 }
 
-/**
- * Import a StarDict dictionary from raw byte arrays.
- * Useful for programmatic imports (e.g., downloaded dictionaries).
- */
 export async function importStarDictFromBytes(
     ifoBytes: Uint8Array,
     idxBytes: Uint8Array,
@@ -488,9 +459,6 @@ export async function importStarDictFromBytes(
     };
 }
 
-/**
- * Removes an imported StarDict dictionary from storage and memory.
- */
 export async function removeStarDictDictionary(id: string): Promise<void> {
     loadedDictionaries.delete(id);
     await Promise.all([
@@ -512,9 +480,6 @@ export interface ExportedStarDictDictionary {
     };
 }
 
-/**
- * Exports an installed StarDict package including raw files for sync/backup.
- */
 export async function exportStarDictDictionary(
     id: string,
 ): Promise<ExportedStarDictDictionary | null> {
@@ -543,9 +508,6 @@ export async function exportStarDictDictionary(
     };
 }
 
-/**
- * Looks up a term in a specific imported StarDict dictionary.
- */
 export async function lookupInStarDictDictionary(
     id: string,
     term: string,
@@ -566,9 +528,6 @@ export async function lookupInStarDictDictionary(
     }
 }
 
-/**
- * Looks up a term in all provided StarDict dictionary IDs.
- */
 export async function lookupInStarDictDictionaries(
     dictionaryIds: string[],
     term: string,

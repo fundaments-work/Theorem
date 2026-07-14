@@ -83,9 +83,6 @@ function isPointNearPolyline(point: Point, points: Point[], tolerance: number): 
     return false;
 }
 
-/**
- * Overlay layer for PDF annotations (highlights, freehand drawings, text notes).
- */
 export function PDFAnnotationLayer({
     pageNumber,
     annotations,
@@ -241,7 +238,7 @@ export function PDFAnnotationLayer({
             try {
                 event.currentTarget.releasePointerCapture(event.pointerId);
             } catch {
-                // Ignore capture release issues for detached nodes.
+                
             }
         }
 

@@ -23,7 +23,6 @@ const MIME = {
     JS: /\/(x-)?(javascript|ecmascript)/,
 }
 
-// https://www.w3.org/TR/epub-33/#sec-reserved-prefixes
 const PREFIX = {
     a11y: 'http://www.idpf.org/epub/vocab/package/a11y/#',
     dcterms: 'http://purl.org/dc/terms/',
@@ -56,11 +55,8 @@ const ONIX5 = {
     '34': 'issn',
 }
 
-// convert to camel case
 const camel = x => x.toLowerCase().replace(/[-:](.)/g, (_, g) => g.toUpperCase())
 
-// strip and collapse ASCII whitespace
-// https://infra.spec.whatwg.org/#strip-and-collapse-ascii-whitespace
 const normalizeWhitespace = str => str ? str
     .replace(/[\t\n\f\r ]+/g, ' ')
     .replace(/^[\t\n\f\r ]+/, '')
@@ -78,7 +74,7 @@ const getAttributes = (...xs) => el =>
 const getElementText = el => normalizeWhitespace(el?.textContent)
 
 const childGetter = (doc, ns) => {
-    // ignore the namespace if it doesn't appear in document at all
+    
     const useNS = doc.lookupNamespaceURI(null) === ns || doc.lookupPrefix(ns)
     const f = useNS
         ? (el, name) => el => el.namespaceURI === ns && el.localName === name
@@ -95,7 +91,7 @@ const childGetter = (doc, ns) => {
 const resolveURL = (url, relativeTo) => {
     try {
         if (relativeTo.includes(':')) return new URL(url, relativeTo)
-        // the base needs to be a valid URL, so set a base URL and then remove it
+        
         const root = 'https://invalid.invalid/'
         const obj = new URL(url, root + relativeTo)
         obj.search = ''
@@ -108,7 +104,6 @@ const resolveURL = (url, relativeTo) => {
 
 const isExternal = uri => /^(?!blob)\w+:/i.test(uri)
 
-// like `path.relative()` in Node.js
 const pathRelative = (from, to) => {
     if (!from) return to
     const as = from.replace(/\/$/, '').split('/')
@@ -119,8 +114,6 @@ const pathRelative = (from, to) => {
 
 const pathDirname = str => str.slice(0, str.lastIndexOf('/') + 1)
 
-// replace asynchronously and sequentially
-// same technique as https://stackoverflow.com/a/48032528
 const replaceSeries = async (str, regex, f) => {
     const matches = []
     str.replace(regex, (...args) => (matches.push(args), null))
@@ -149,7 +142,6 @@ const tidy = obj => {
     return obj
 }
 
-// https://www.w3.org/TR/epub/#sec-prefix-attr
 const getPrefixes = doc => {
     const map = new Map(Object.entries(PREFIX))
     const value = doc.documentElement.getAttributeNS(NS.EPUB, 'prefix')
@@ -159,8 +151,6 @@ const getPrefixes = doc => {
     return map
 }
 
-// https://www.w3.org/TR/epub-rs/#sec-property-values
-// but ignoring the case where the prefix is omitted
 const getPropertyURL = (value, prefixes) => {
     if (!value) return null
     const [a, b] = value.split(':')
@@ -174,7 +164,6 @@ const getMetadata = opf => {
     const { $ } = childGetter(opf, NS.OPF)
     const $metadata = $(opf.documentElement, 'metadata')
 
-    // first pass: convert to JS objects
     const els = Object.groupBy($metadata.children, el =>
         el.namespaceURI === NS.DC ? 'dc'
         : el.namespaceURI === NS.OPF && el.localName === 'meta' ?
@@ -191,7 +180,7 @@ const getMetadata = opf => {
             lang: el.getAttribute('xml:lang'),
             value: getElementText(el),
             props: getProperties(el),
-            // `opf:` attributes from EPUB 2 & EPUB 3.1 (removed in EPUB 3.2)
+            
             attrs: Object.fromEntries(Array.from(el.attributes)
                 .filter(attr => attr.namespaceURI === NS.OPF)
                 .map(attr => [attr.localName, attr.value])),
@@ -209,7 +198,6 @@ const getMetadata = opf => {
     const legacyMeta = Object.fromEntries(els.legacyMeta?.map(el =>
         [el.getAttribute('name'), el.getAttribute('content')]) ?? [])
 
-    // second pass: map to webpub
     const one = x => x?.[0]?.value
     const prop = (x, p) => one(x?.props?.[p])
     const makeLanguageMap = x => {
@@ -232,7 +220,7 @@ const getMetadata = opf => {
     }) : null
     const makeCollection = x => ({
         name: makeLanguageMap(x),
-        // NOTE: webpub requires number but EPUB allows values like "2.2.1"
+        
         position: one(x.props?.['group-position']),
     })
     const makeAltIdentifier = x => {
@@ -243,10 +231,9 @@ const getMetadata = opf => {
         if (!type) {
             const scheme = x.attrs.scheme
             if (!scheme) return value
-            // https://idpf.github.io/epub-registries/identifiers/
-            // but no "jdcn", which isn't a registered URN namespace
+            
             if (/^(doi|isbn|uuid)$/i.test(scheme)) return `urn:${scheme}:${value}`
-            // NOTE: webpub requires scheme to be a URI; EPUB allows anything
+            
             return { scheme, value }
         }
         if (type.scheme === PREFIX.onix + 'codelist5') {
@@ -282,9 +269,9 @@ const getMetadata = opf => {
             } : null,
         },
         altIdentifier: dc.identifier?.map(makeAltIdentifier),
-        source: dc.source?.map(makeAltIdentifier), // NOTE: not in webpub schema
-        rights: one(dc.rights), // NOTE: not in webpub schema
-        pageBreakSource: one(properties['pageBreakSource']), // NOTE: not in webpub schema
+        source: dc.source?.map(makeAltIdentifier), 
+        rights: one(dc.rights), 
+        pageBreakSource: one(properties['pageBreakSource']), 
     }
     const remapContributor = defaultKey => x => {
         const keys = new Set(x.role?.map(role => RELATORS[role] ?? defaultKey))
@@ -320,7 +307,7 @@ const parseNav = (doc, resolve = f => f) => {
         const $ol = $($li, 'ol')
         const href = resolveHref($a?.getAttribute('href'))
         const label = getElementText($a) || $a?.getAttribute('title')
-        // TODO: get and concat alt/title texts in content
+        
         const result = { label, href, subitems: parseOL($ol) }
         if (getType) result.type = $a?.getAttributeNS(NS.EPUB, 'type')?.split(/\s/)
         return result
@@ -485,8 +472,7 @@ class MediaOverlay extends EventTarget {
             audio.currentTime = this.#activeItem.begin ?? 0
         }
         else audio.addEventListener('canplaythrough', () => {
-            // for some reason need to seek in `canplaythrough`
-            // or it won't play when skipping in WebKit
+            
             audio.currentTime = this.#activeItem.begin ?? 0
             this.#state = 'playing'
             audio.play().catch(e => this.#error(e))
@@ -565,7 +551,6 @@ const getIdentifier = opf => getElementText(
     opf.getElementById(opf.documentElement.getAttribute('unique-identifier'))
     ?? opf.getElementsByTagNameNS(NS.DC, 'identifier')[0])
 
-// https://www.w3.org/publishing/epub32/epub-ocf.html#sec-resource-obfuscation
 const deobfuscate = async (key, length, blob) => {
     const array = new Uint8Array(await blob.slice(0, length).arrayBuffer())
     length = Math.min(length, array.length)
@@ -582,7 +567,7 @@ const WebCryptoSHA1 = async str => {
 const deobfuscators = (sha1 = WebCryptoSHA1) => ({
     'http://www.idpf.org/2008/embedding': {
         key: opf => sha1(getIdentifier(opf)
-            // eslint-disable-next-line no-control-regex
+            
             .replaceAll(/[\u0020\u0009\u000d\u000a]/g, '')),
         decode: (key, blob) => deobfuscate(key, 1040, blob),
     },
@@ -667,7 +652,7 @@ class Resources {
             }))
 
         this.cover = this.getItemByProperty('cover-image')
-            // EPUB 2 compat
+            
             ?? this.getItemByID($$$(opf, 'meta')
                 .find(filterAttribute('name', 'cover'))
                 ?.getAttribute('content'))
@@ -689,9 +674,7 @@ class Resources {
         const parts = CFI.parse(cfi)
         const top = (parts.parent ?? parts).shift()
         let $itemref = CFI.toElement(this.opf, top)
-        // make sure it's an idref; if not, try again without the ID assertion
-        // mainly because Epub.js used to generate wrong ID assertions
-        // https://github.com/futurepress/epub.js/issues/1236
+        
         if ($itemref && $itemref.nodeName !== 'idref') {
             top.at(-1).id = null
             $itemref = CFI.toElement(this.opf, top)
@@ -713,13 +696,12 @@ class Loader {
         this.loadBlob = loadBlob
         this.manifest = resources.manifest
         this.assets = resources.manifest
-        // needed only when replacing in (X)HTML w/o parsing (see below)
-        //.filter(({ mediaType }) => ![MIME.XHTML, MIME.HTML].includes(mediaType))
+        
     }
     async createURL(href, data, type, parent) {
         if (!data) return ''
         const detail = { data, type }
-        Object.defineProperty(detail, 'name', { value: href }) // readonly
+        Object.defineProperty(detail, 'name', { value: href }) 
         const event = new CustomEvent('data', { detail })
         this.eventTarget.dispatchEvent(event)
         const newData = await event.detail.data
@@ -750,13 +732,13 @@ class Loader {
             URL.revokeObjectURL(this.#cache.get(href))
             this.#cache.delete(href)
             this.#refCount.delete(href)
-            // unref children
+            
             const childList = this.#children.get(href)
             if (childList) while (childList.length) this.unref(childList.pop())
             this.#children.delete(href)
         } else this.#refCount.set(href, count)
     }
-    // load manifest item, recursively loading all resources as needed
+    
     async loadItem(item, parents = []) {
         if (!item) return null
         const { href, mediaType } = item
@@ -773,10 +755,10 @@ class Loader {
 
         const shouldReplace =
             (isScript || [MIME.XHTML, MIME.HTML, MIME.CSS, MIME.SVG].includes(mediaType))
-            // prevent circular references
+            
             && parents.every(p => p !== href)
         if (shouldReplace) return this.loadReplaced(item, parents)
-        // NOTE: this can be replaced with `Promise.try()`
+        
         const tryLoadBlob = Promise.resolve().then(() => this.loadBlob(href))
         return this.createURL(href, tryLoadBlob, mediaType, parent)
     }
@@ -798,27 +780,16 @@ class Loader {
         }
         if (!str) return null
 
-        // note that one can also just use `replaceString` for everything:
-        // ```
-        // const replaced = await this.replaceString(str, href, parents)
-        // return this.createURL(href, replaced, mediaType, parent)
-        // ```
-        // which is basically what Epub.js does, which is simpler, but will
-        // break things like iframes (because you don't want to replace links)
-        // or text that just happen to be paths
-
-        // parse and replace in HTML
         if ([MIME.XHTML, MIME.HTML, MIME.SVG].includes(mediaType)) {
             let doc = new DOMParser().parseFromString(str, mediaType)
-            // change to HTML if it's not valid XHTML
+            
             if (mediaType === MIME.XHTML && (doc.querySelector('parsererror')
             || !doc.documentElement?.namespaceURI)) {
                 console.warn(doc.querySelector('parsererror')?.innerText ?? 'Invalid XHTML')
                 item.mediaType = MIME.HTML
                 doc = new DOMParser().parseFromString(str, item.mediaType)
             }
-            // replace hrefs in XML processing instructions
-            // this is mainly for SVGs that use xml-stylesheet
+            
             if ([MIME.XHTML, MIME.SVG].includes(item.mediaType)) {
                 let child = doc.firstChild
                 while (child instanceof ProcessingInstruction) {
@@ -833,7 +804,7 @@ class Loader {
                     child = child.nextSibling
                 }
             }
-            // replace hrefs (excluding anchors)
+            
             const replace = async (el, attr) => el.setAttribute(attr,
                 await this.loadHref(el.getAttribute(attr), href, parents))
             for (const el of doc.querySelectorAll('link[href]')) await replace(el, 'href')
@@ -848,14 +819,14 @@ class Loader {
                     /(\s*)(.+?)\s*((?:\s[\d.]+[wx])+\s*(?:,|$)|,\s+|$)/g,
                     (_, p1, p2, p3) => this.loadHref(p2, href, parents)
                         .then(p2 => `${p1}${p2}${p3}`)))
-            // replace inline styles
+            
             for (const el of doc.querySelectorAll('style'))
                 if (el.textContent) el.textContent =
                     await this.replaceCSS(el.textContent, href, parents)
             for (const el of doc.querySelectorAll('[style]'))
                 el.setAttribute('style',
                     await this.replaceCSS(el.getAttribute('style'), href, parents))
-            // TODO: replace inline scripts? probably not worth the trouble
+            
             const result = new XMLSerializer().serializeToString(doc)
             return this.createURL(href, result, item.mediaType, parent)
         }
@@ -870,19 +841,19 @@ class Loader {
             /url\(\s*["']?([^'"\n]*?)\s*["']?\s*\)/gi,
             (_, url) => this.loadHref(url, href, parents)
                 .then(url => `url("${url}")`))
-        // apart from `url()`, strings can be used for `@import` (but why?!)
+        
         return replaceSeries(replacedUrls,
             /@import\s*["']([^"'\n]*?)["']/gi,
             (_, url) => this.loadHref(url, href, parents)
                 .then(url => `@import "${url}"`))
     }
-    // find & replace all possible relative paths for all assets without parsing
+    
     replaceString(str, href, parents = []) {
         const assetMap = new Map()
         const urls = this.assets.map(asset => {
-            // do not replace references to the file itself
+            
             if (asset.href === href) return
-            // href was decoded and resolved when parsing the manifest
+            
             const relative = pathRelative(pathDirname(href), asset.href)
             const relativeEnc = encodeURI(relative)
             const rootRelative = '/' + asset.href
@@ -931,10 +902,7 @@ export class EPUB {
     #loader
     #encryption
     constructor({ loadText, loadBlob, getSize, sha1 }) {
-        // In-flight dedup: nav computation and section loading can both
-        // call loadText() + createDocument() back-to-back for the same
-        // href, and without deduplication every chapter pays for two
-        // zip.js inflate operations per 100KB section.
+        
         const inflight = new Map()
         const rawLoadText = loadText
         this.loadText = async (uri) => {

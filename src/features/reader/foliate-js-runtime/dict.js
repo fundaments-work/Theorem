@@ -42,21 +42,20 @@ class DictZip {
             chunkOffset = chunkOffset + chunkSize
         }
 
-        // skip to compressed data
         let offset = 12 + xlen
         const max = Math.min(offset + 512, file.size)
         const strArr = new Uint8Array(await file.slice(0, max).arrayBuffer())
-        if (flg & 0b1000) { // fname
+        if (flg & 0b1000) { 
             const i = strArr.indexOf(0, offset)
             if (i < 0) throw new Error('Header too long')
             offset = i + 1
         }
-        if (flg & 0b10000) { // fcomment
+        if (flg & 0b10000) { 
             const i = strArr.indexOf(0, offset)
             if (i < 0) throw new Error('Header too long')
             offset = i + 1
         }
-        if (flg & 0b10) offset += 2 // fhcrc
+        if (flg & 0b10) offset += 2 
         this.#compressed = file.slice(offset)
     }
     async read(offset, size) {
@@ -78,7 +77,7 @@ class DictZip {
 
 class Index {
     strcmp = strcmp
-    // binary search
+    
     bisect(query, start = 0, end = this.words.length - 1) {
         if (end - start === 1) {
             if (!this.strcmp(query, this.getWord(start))) return start
@@ -91,7 +90,7 @@ class Index {
         if (cmp > 0) return this.bisect(query, mid, end)
         return mid
     }
-    // check for multiple definitions
+    
     checkAdjacent(query, i) {
         if (i == null) return []
         let j = i
@@ -114,11 +113,11 @@ const decodeBase64Number = str => {
     let n = 0
     for (let i = 0; i < length; i++) {
         const c = str.charCodeAt(i)
-        n += (c === 43 ? 62     // "+"
-            : c === 47 ? 63     // "/"
-            : c < 58 ? c + 4    // 0-9 -> 52-61
-            : c < 91 ? c - 65   // A-Z -> 0-25
-            : c - 71            // a-z -> 26-51
+        n += (c === 43 ? 62     
+            : c === 47 ? 63     
+            : c < 58 ? c + 4    
+            : c < 91 ? c - 65   
+            : c - 71            
         ) * 64 ** (length - 1 - i)
     }
     return n
@@ -213,7 +212,7 @@ export class StarDict {
     }
     async loadDict(file, inflate) {
         const header = new Uint8Array(await file.slice(0, 12).arrayBuffer())
-        // Not gzip at all — uncompressed .dict
+        
         if (header[0] !== 31 || header[1] !== 139) {
             const buf = await file.arrayBuffer()
             const arr = new Uint8Array(buf)
@@ -224,7 +223,7 @@ export class StarDict {
             }
             return
         }
-        // Check whether this is a DictZip (FEXTRA + RA subfield) or plain gzip
+        
         const flg = header[3]
         let isDictZip = false
         if (flg & 0b100) {
@@ -235,7 +234,7 @@ export class StarDict {
             }
         }
         if (!isDictZip) {
-            // Plain gzip .dict — decompress entire file and use a simple reader
+            
             const compressed = new Uint8Array(await file.arrayBuffer())
             const decompressed = await inflate(compressed)
             this.#dict = {

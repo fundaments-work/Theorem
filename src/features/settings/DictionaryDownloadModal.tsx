@@ -32,7 +32,6 @@ export function DictionaryDownloadModal({ isOpen, onClose }: DictionaryDownloadM
     const abortRef = useRef<(() => void) | null>(null);
     const unlistenRef = useRef<(() => void) | null>(null);
 
-    // Clean up download state and listeners when modal closes
     useEffect(() => {
         if (!isOpen) {
             abortRef.current?.();
@@ -67,7 +66,6 @@ export function DictionaryDownloadModal({ isOpen, onClose }: DictionaryDownloadM
             const { invoke } = await import("@tauri-apps/api/core");
             const { listen } = await import("@tauri-apps/api/event");
 
-            // Listen for download progress from Rust
             const unlisten = await listen<{ percent: number; downloaded: number; total: number }>(
                 "dictionary-download-progress",
                 (event) => {
@@ -83,7 +81,6 @@ export function DictionaryDownloadModal({ isOpen, onClose }: DictionaryDownloadM
             );
             unlistenRef.current = unlisten;
 
-            // Use a promise + flag so we can abort from the cancel button
             let aborted = false;
             abortRef.current = () => {
                 aborted = true;

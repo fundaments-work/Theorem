@@ -1,8 +1,4 @@
-/**
- * Swiss Design Modal — wraps @radix-ui/react-dialog for production-grade
- * accessibility (focus trap, keyboard nav, screen reader announcements).
- * Public API unchanged — all existing call sites continue to work.
- */
+
 import { useId } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { cn } from "../core/lib/utils";
@@ -59,8 +55,6 @@ export function Modal({
         </Dialog.Root>
     );
 }
-
-// ── Modal sub-components (unchanged public API) ──
 
 interface ModalHeaderProps {
     title: string;

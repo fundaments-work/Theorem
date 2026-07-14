@@ -11,7 +11,6 @@ import type {
     VocabularySettings,
 } from "../types";
 
-// Default reader settings - optimized for performance
 const defaultReaderSettings: ReaderSettings = {
     theme: "light",
     fontFamily: "original",
@@ -93,12 +92,10 @@ const defaultReadingStats: ReadingStats = {
     dailyActivity: [],
 };
 
-// Settings Store
 interface SettingsStore {
     settings: AppSettings;
     stats: ReadingStats;
-    /** ISO 8601 timestamp of the last user-initiated settings change.
-     *  Used by device sync for LWW comparison instead of generating "now". */
+    
     settingsLastModifiedAt: string;
 
     updateSettings: (updates: Partial<AppSettings>) => void;

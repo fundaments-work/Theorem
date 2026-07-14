@@ -1,11 +1,3 @@
-/**
- * PDFReader Component
- *
- * A streamlined PDF reader that renders PDFs without its own toolbar.
- * Controls are expected to be provided by the parent component (WindowTitlebar).
- *
- * @module components/reader/PDFReader
- */
 
 import {
     useRef,
@@ -20,41 +12,36 @@ import { PDFJsEngine, type PDFJsEngineRef, type PDFDocumentInfo } from "../engin
 import { cn } from "../../../core/lib/utils";
 import type { ReaderTheme, Annotation, HighlightColor, PdfZoomMode } from "../../../core/types";
 
-// ============================================================================
-// Types
-// ============================================================================
-
 interface PDFReaderProps {
-    /** Absolute path to the PDF file */
+    
     pdfPath: string;
-    /** Optional PDF data as Uint8Array (takes precedence over pdfPath) */
+    
     pdfData?: Uint8Array;
-    /** Original filename for display fallback (without extension) */
+    
     originalFilename?: string;
-    /** Initial page to open */
+    
     initialPage?: number;
-    /** Initial zoom level */
+    
     initialZoom?: number;
-    /** Initial zoom mode */
+    
     initialZoomMode?: PdfZoomMode;
-    /** Page presentation mode */
+    
     presentationMode?: 'scroll' | 'paged';
-    /** Callback when presentation mode changes */
+    
     onPresentationModeChange?: (mode: 'scroll' | 'paged') => void;
-    /** Theme mode for the reader */
+    
     theme?: ReaderTheme;
-    /** Brightness level (0-200) */
+    
     brightness?: number;
-    /** Callback when page changes - provides page state for external controls */
+    
     onPageChange?: (page: number, totalPages: number, scale: number) => void;
-    /** Callback when PDF is loaded */
-    /** Callback when PDF is loaded */
+    
     onLoad?: (info: PDFDocumentInfo) => void;
-    /** Callback when an error occurs */
+    
     onError?: (error: Error) => void;
-    /** Callback when the user taps the reading viewport */
+    
     onViewportTap?: () => void;
-    // Annotations
+    
     annotations?: Annotation[];
     annotationMode?: 'none' | 'highlight' | 'pen' | 'text' | 'erase';
     highlightColor?: HighlightColor;
@@ -66,13 +53,6 @@ interface PDFReaderProps {
     onZoomModeChange?: (mode: PdfZoomMode) => void;
 }
 
-// ============================================================================
-// Error State Component
-// ============================================================================
-
-/**
- * Error display with message
- */
 function ErrorState({
     error,
     onRetry,
@@ -118,36 +98,6 @@ function ErrorState({
     );
 }
 
-// ============================================================================
-// Main PDFReader Component
-// ============================================================================
-
-/**
- * PDFReader - A streamlined PDF reader without its own toolbar.
- *
- * Features:
- * - Full PDF rendering with PDF.js
- * - No built-in toolbar (controls provided by parent)
- * - Exposes PDF state and methods via ref for external control
- * - Theme integration (light/sepia/dark)
- * - Loading and error states
- *
- * @example
- * ```tsx
- * const pdfRef = useRef<PDFJsEngineRef>(null);
- *
- * return (
- *   <PDFReader
- *     ref={pdfRef}
- *     pdfPath="/path/to/document.pdf"
- *     theme="dark"
- *     onPageChange={(page, total, scale) => }
- *     onLoad={(info) => }
- *     onError={(err) => }
- *   />
- * );
- * ```
- */
 export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
     function PDFReader(
         {
@@ -177,10 +127,9 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
         },
         ref
     ) {
-        // Ref to the PDFJsEngine component
+        
         const engineRef = useRef<PDFJsEngineRef>(null);
 
-        // Local state for UI
         const [error, setError] = useState<string | null>(null);
         const [currentPage, setCurrentPage] = useState(initialPage ?? 1);
         const [totalPages, setTotalPages] = useState(0);
@@ -194,7 +143,6 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             setScale(initialZoom ?? 1);
         }, [initialZoom]);
 
-        // Expose the engine's imperative handle through our ref
         useImperativeHandle(ref, () => ({
             goToPage: (page: number) => engineRef.current?.goToPage(page),
             nextPage: () => engineRef.current?.nextPage(),
@@ -246,7 +194,6 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             getPresentationMode: () => engineRef.current?.getPresentationMode() ?? 'scroll',
         }));
 
-        // Handle page change from engine
         const handlePageChange = useCallback(
             (page: number, total: number, reportedScale: number) => {
                 setCurrentPage(page);
@@ -257,7 +204,6 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             [onPageChange]
         );
 
-        // Handle load from engine
         const handleLoad = useCallback(
             (info: PDFDocumentInfo) => {
                 setTotalPages(info.totalPages);
@@ -269,7 +215,6 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             [onLoad, onPageChange, scale]
         );
 
-        // Handle error from engine
         const handleError = useCallback(
             (err: Error) => {
                 setError(err.message);
@@ -278,7 +223,6 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             [onError]
         );
 
-        // Theme class mapping
         const themeClass = {
             light: "theme-light",
             sepia: "theme-sepia",
@@ -295,12 +239,11 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
                 style={{ filter: `brightness(${brightness}%)` }}
                 data-reading-mode="pdf"
             >
-                {/* PDF Viewer Area - Full height, no toolbar */}
+                
                 <div className="flex-1 relative overflow-hidden">
-                    {/* Error State */}
+                    
                     {error && <ErrorState error={error} />}
 
-                    {/* PDF Engine */}
                     <PDFJsEngine
                         ref={engineRef}
                         pdfPath={pdfPath}

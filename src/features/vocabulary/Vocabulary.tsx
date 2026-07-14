@@ -100,7 +100,7 @@ export function VocabularyPage() {
 
     return (
         <div className="h-full w-full flex overflow-hidden bg-[var(--color-background)]">
-            {/* ── Left sidebar: Term list ── */}
+            
             <div className={cn(
                 "flex-col bg-[var(--color-background)]",
                 "h-full flex-shrink-0 transition-colors duration-300",
@@ -164,7 +164,6 @@ export function VocabularyPage() {
                 </div>
             </div>
 
-            {/* ── Right content: detail or empty ── */}
             <div className={cn(
                 "flex-col min-w-0 bg-[var(--color-background)]",
                 "h-full flex-1 transition-colors duration-300",

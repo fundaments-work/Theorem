@@ -36,8 +36,6 @@ const animate = (a, b, duration, ease, render) => new Promise(resolve => {
     requestAnimationFrame(step)
 })
 
-// collapsed range doesn't return client rects sometimes (or always?)
-// try make get a non-collapsed range or element
 const uncollapse = range => {
     if (!range?.collapsed) return range
     const { endOffset, endContainer } = range
@@ -59,7 +57,6 @@ const makeRange = (doc, node, start, end = start) => {
     return range
 }
 
-// use binary search to find an offset value in a text node
 const bisectNode = (doc, node, cb, start = 0, end = node.nodeValue.length) => {
     if (end - start === 1) {
         const result = cb(makeRange(doc, node, start), makeRange(doc, node, end))
@@ -76,10 +73,6 @@ const { SHOW_ELEMENT, SHOW_TEXT, SHOW_CDATA_SECTION,
 
 const filter = SHOW_ELEMENT | SHOW_TEXT | SHOW_CDATA_SECTION
 
-// needed cause there seems to be a bug in `getBoundingClientRect()` in Firefox
-// where it fails to include rects that have zero width and non-zero height
-// (CSSOM spec says "rectangles [...] of which the height or width is not zero")
-// which makes the visible range include an extra space at column boundaries
 const getBoundingClientRect = target => {
     let top = Infinity, right = -Infinity, left = Infinity, bottom = -Infinity
     for (const rect of target.getClientRects()) {
@@ -92,29 +85,26 @@ const getBoundingClientRect = target => {
 }
 
 const getVisibleRange = (doc, start, end, mapRect) => {
-    // first get all visible nodes
+    
     const acceptNode = node => {
         const name = node.localName?.toLowerCase()
-        // ignore all scripts, styles, and their children
+        
         if (name === 'script' || name === 'style') return FILTER_REJECT
         if (node.nodeType === 1) {
             const { left, right } = mapRect(node.getBoundingClientRect())
-            // no need to check child nodes if it's completely out of view
+            
             if (right < start || left > end) return FILTER_REJECT
-            // elements must be completely in view to be considered visible
-            // because you can't specify offsets for elements
+            
             if (left >= start && right <= end) return FILTER_ACCEPT
-            // TODO: it should probably allow elements that do not contain text
-            // because they can exceed the whole viewport in both directions
-            // especially in scrolled mode
+            
         } else {
-            // ignore empty text nodes
+            
             if (!node.nodeValue?.trim()) return FILTER_SKIP
-            // create range to get rect
+            
             const range = doc.createRange()
             range.selectNodeContents(node)
             const { left, right } = mapRect(range.getBoundingClientRect())
-            // it's visible if any part of it is in view
+            
             if (right >= start && left <= end) return FILTER_ACCEPT
         }
         return FILTER_SKIP
@@ -124,11 +114,9 @@ const getVisibleRange = (doc, start, end, mapRect) => {
     for (let node = walker.nextNode(); node; node = walker.nextNode())
         nodes.push(node)
 
-    // we're only interested in the first and last visible nodes
     const from = nodes[0] ?? doc.body
     const to = nodes[nodes.length - 1] ?? from
 
-    // find the offset at which visibility changes
     const startOffset = from.nodeType === 1 ? 0
         : bisectNode(doc, from, (a, b) => {
             const p = mapRect(getBoundingClientRect(a))
@@ -239,8 +227,7 @@ class View {
             display: 'none',
             width: '100%', height: '100%',
         })
-        // `allow-scripts` is needed for events because of WebKit bug
-        // https://bugs.webkit.org/show_bug.cgi?id=218086
+        
         this.#iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts')
         this.#iframe.setAttribute('scrolling', 'no')
     }
@@ -257,7 +244,6 @@ class View {
                 const doc = this.document
                 afterLoad?.(doc)
 
-                // it needs to be visible for Firefox to get computed style
                 this.#iframe.style.display = 'block'
                 const { vertical, rtl } = getDirection(doc)
                 const background = getBackground(doc)
@@ -268,11 +254,6 @@ class View {
 
                 this.#contentRange.selectNodeContents(doc.body)
 
-                // On WebKitGTK, the iframe 'load' event fires before the shadow
-                // DOM CSS grid track sizes are committed to layout. Reading
-                // this.container.offsetWidth forces a synchronous style/layout
-                // flush so that the subsequent #container.getBoundingClientRect()
-                // in beforeRender() returns the real dimensions, not stale zeros.
                 void this.container.offsetWidth
 
                 const layout = beforeRender?.({ vertical, rtl, background })
@@ -280,9 +261,6 @@ class View {
                 this.render(layout)
                 this.#observer.observe(doc.body)
 
-                // the resize observer above doesn't work in Firefox
-                // (see https://bugzilla.mozilla.org/show_bug.cgi?id=1832939)
-                // until the bug is fixed we can at least account for font load
                 doc.fonts.ready.then(() => this.expand())
 
                 resolve()
@@ -329,13 +307,13 @@ class View {
                 : { 'height': `${height}px` }),
             'padding': vertical ? `${gap / 2}px 0` : `0 ${gap / 2}px`,
             'overflow': 'hidden',
-            // force wrap long words
+            
             'overflow-wrap': 'break-word',
-            // reset some potentially problematic props
+            
             'position': 'static', 'border': '0', 'margin': '0',
             'max-height': 'none', 'max-width': 'none',
             'min-height': 'none', 'min-width': 'none',
-            // fix glyph clipping in WebKit
+            
             '-webkit-line-box-contain': 'block glyphs replaced',
         })
         setStylesImportant(doc.body, {
@@ -351,7 +329,7 @@ class View {
         const vertical = this.#vertical
         const doc = this.document
         for (const el of doc.body.querySelectorAll('img, svg, video')) {
-            // preserve max size if they are already set
+            
             const { maxHeight, maxWidth } = doc.defaultView.getComputedStyle(el)
             setStylesImportant(el, {
                 'max-height': vertical
@@ -374,8 +352,7 @@ class View {
             const otherSide = this.#vertical ? 'width' : 'height'
             const contentRect = this.#contentRange.getBoundingClientRect()
             const rootRect = documentElement.getBoundingClientRect()
-            // offset caused by column break at the start of the page
-            // which seem to be supported only by WebKit and only for horizontal writing
+            
             const contentStart = this.#vertical ? 0
                 : this.#rtl ? rootRect.right - contentRect.right : contentRect.left - rootRect.left
             const contentSize = contentStart + contentRect[side]
@@ -428,7 +405,6 @@ class View {
     }
 }
 
-// NOTE: everything here assumes the so-called "negative scroll type" for RTL
 export class Paginator extends HTMLElement {
     static observedAttributes = [
         'flow', 'gap', 'margin',
@@ -446,9 +422,9 @@ export class Paginator extends HTMLElement {
     #rtl = false
     #margin = 0
     #index = -1
-    #anchor = 0 // anchor view to a fraction (0-1), Range, or Element
+    #anchor = 0 
     #justAnchored = false
-    #locked = false // while true, prevent any further navigation
+    #locked = false 
     #styles
     #styleMap = new WeakMap()
     #mediaQuery = matchMedia('(prefers-color-scheme: dark)')
@@ -457,17 +433,9 @@ export class Paginator extends HTMLElement {
     #touchState
     #touchScrolled
     #lastVisibleRange
-    // Timestamp until which text selection is considered active.
-    // Set on every non-collapsed selectionchange so drag-select keeps
-    // the flag alive; expires 1.5s after the last selection change.
-    // Used to suppress touch swipe page-turns while the user is selecting.
+    
     #selectionActiveUntil = 0
-    // Abstract scroll position for paginated mode. With #container set to
-    // `overflow: clip` it can no longer be scrolled (even programmatically),
-    // so pages are panned via `transform` on the view element. This field
-    // holds the offset that *would* have been #container[scrollProp]; all
-    // navigation math (start/end/page/snap/scrollBy) reads it instead of
-    // the inert scrollLeft/scrollTop. (#20 structural fix.)
+    
     #pageOffset = 0
     constructor() {
         super()
@@ -616,22 +584,13 @@ export class Paginator extends HTMLElement {
             let isKeyboardSelecting = false
             doc.addEventListener('keydown', () => isKeyboardSelecting = true)
             doc.addEventListener('keyup', () => isKeyboardSelecting = false)
-            // NOTE: checkPointerSelection intentionally disabled.
-            // Upstream foliate navigates to the adjacent page when a pointer
-            // drag extends the selection past the visible column. On mobile
-            // with CSS columns splitting a section across pages this fires
-            // far too eagerly — selecting text near a column edge grabs the
-            // adjacent page's content and triggers an unwanted page turn.
+            
             const checkPointerSelection = debounce((_range, _sel) => {}, 700)
             doc.addEventListener('selectionchange', () => {
                 if (this.scrolled) return
                 const sel = doc.getSelection()
                 if (!sel?.rangeCount) return
-                // Keep the touch-swipe page-turn suppression flag alive while
-                // the user is actively selecting text. Without it, the
-                // touchend after a drag-to-select would flip the page. The
-                // flag expires 1.5s after the last selection change so taps
-                // and swipes work again afterwards.
+                
                 if (!sel.isCollapsed && sel.toString().trim().length > 0) {
                     this.#selectionActiveUntil = Date.now() + 1500
                 }
@@ -650,15 +609,12 @@ export class Paginator extends HTMLElement {
             })
             doc.addEventListener('focusin', e => {
                 if (this.scrolled) return
-                // Never scroll to the document body or root — when the
-                // browser refocuses the iframe during text selection on
-                // mobile, scrolling to the body would jump to page 1.
+                
                 if (e.target === doc.body || e.target === doc.documentElement) return
-                // Don't scroll to the focused element while the user is
-                // actively selecting text with a pointer (touch/mouse).
+                
                 if (isPointerSelecting) return
                 if (Date.now() < this.#selectionActiveUntil) return
-                // NOTE: `requestAnimationFrame` is needed in WebKit
+                
                 requestAnimationFrame(() => this.#scrollToAnchor(e.target))
             })
         })
@@ -681,7 +637,7 @@ export class Paginator extends HTMLElement {
                 this.#top.style.setProperty('--_' + name, value)
                 break
             case 'max-inline-size':
-                // needs explicit `render()` as it doesn't necessarily resize
+                
                 this.#top.style.setProperty('--_' + name, value)
                 this.render()
                 break
@@ -695,12 +651,12 @@ export class Paginator extends HTMLElement {
             const w = innerWidth
             const h = innerHeight
             detail.data = Promise.resolve(detail.data).then(data => data
-                // unprefix as most of the props are (only) supported unprefixed
+                
                 .replace(/(?<=[{\s;])-epub-/gi, '')
-                // replace vw and vh as they cause problems with layout
+                
                 .replace(/(\d*\.?\d+)vw/gi, (_, d) => parseFloat(d) * w / 100 + 'px')
                 .replace(/(\d*\.?\d+)vh/gi, (_, d) => parseFloat(d) * h / 100 + 'px')
-                // `page-break-*` unsupported in columns; replace with `column-break-*`
+                
                 .replace(/page-break-(after|before|inside)\s*:/gi, (_, x) =>
                     `-webkit-column-break-${x}:`)
                 .replace(/break-(after|before|inside)\s*:\s*(avoid-)?page/gi, (_, x, y) =>
@@ -724,8 +680,6 @@ export class Paginator extends HTMLElement {
         this.#rtl = rtl
         this.#top.classList.toggle('vertical', vertical)
 
-        // set background to `doc` background
-        // this is needed because the iframe does not fill the whole element
         this.#background.style.background = background
 
         const { width, height } = this.#container.getBoundingClientRect()
@@ -738,28 +692,12 @@ export class Paginator extends HTMLElement {
         this.#margin = margin
 
         const g = parseFloat(style.getPropertyValue('--_gap')) / 100
-        // The gap will be a percentage of the #container, not the whole view.
-        // This means the outer padding will be bigger than the column gap. Let
-        // `a` be the gap percentage. The actual percentage for the column gap
-        // will be (1 - a) * a. Let us call this `b`.
-        //
-        // To make them the same, we start by shrinking the outer padding
-        // setting to `b`, but keep the column gap setting the same at `a`. Then
-        // the actual size for the column gap will be (1 - b) * a. Repeating the
-        // process again and again, we get the sequence
-        //     x₁ = (1 - b) * a
-        //     x₂ = (1 - x₁) * a
-        //     ...
-        // which converges to x = (1 - x) * a. Solving for x, x = a / (1 + a).
-        // So to make the spacing even, we must shrink the outer padding with
-        //     f(x) = x / (1 + x).
-        // But we want to keep the outer padding, and make the inner gap bigger.
-        // So we apply the inverse, f⁻¹ = -x / (x - 1) to the column gap.
+        
         const gap = -g / (g - 1) * size
 
         const flow = this.getAttribute('flow')
         if (flow === 'scrolled') {
-            // FIXME: vertical-rl only, not -lr
+            
             this.setAttribute('dir', vertical ? 'rtl' : 'ltr')
             this.#top.style.padding = '0'
             const columnWidth = maxInlineSize
@@ -797,14 +735,12 @@ export class Paginator extends HTMLElement {
     }
     render() {
         if (!this.#view) return
-        // Force a synchronous layout flush before measuring — on WebKitGTK
-        // getBoundingClientRect() may return stale zeros until a layout-
-        // triggering property is read after any pending style change.
+        
         void this.offsetWidth
         const { width, height } = this.#container.getBoundingClientRect()
         const measuredSize = this.#vertical ? height : width
         if (this.getAttribute('flow') !== 'scrolled' && measuredSize === 0) {
-            // Dimensions still zero even after flush — defer one frame.
+            
             requestAnimationFrame(() => this.render())
             return
         }
@@ -834,9 +770,7 @@ export class Paginator extends HTMLElement {
         return this.#view.element.getBoundingClientRect()[this.sideProp]
     }
     get start() {
-        // Scrolled mode keeps a real scroll container; paginated mode
-        // reads the abstract offset (#container is overflow:clip and
-        // cannot be scrolled, even programmatically).
+        
         return this.scrolled
             ? Math.abs(this.#container[this.scrollProp])
             : Math.abs(this.#pageOffset)
@@ -850,9 +784,7 @@ export class Paginator extends HTMLElement {
     get pages() {
         return Math.round(this.viewSize / this.size)
     }
-    // Position the page in paginated mode without scrolling #container
-    // (which is overflow:clip and inert). Pans the wide view element via
-    // transform; the visual result is identical to the old scrollLeft set.
+    
     #setViewPosition(offset, animate = true) {
         const prev = this.#pageOffset
         this.#pageOffset = offset
@@ -878,8 +810,7 @@ export class Paginator extends HTMLElement {
             element[scrollProp] = Math.max(min, Math.min(max,
                 element[scrollProp] + delta))
         } else {
-            // Paginated: #container is non-scrollable (overflow:clip),
-            // so pan the view via transform instead.
+            
             const next = Math.max(min, Math.min(max, this.#pageOffset + delta))
             this.#setViewPosition(next, false)
         }
@@ -920,10 +851,7 @@ export class Paginator extends HTMLElement {
             if (this.#touchScrolled) e.preventDefault()
             return
         }
-        // Don't scroll the page while the user is actively selecting text
-        // (e.g. dragging selection handles on mobile). The flag is kept alive
-        // by selectionchange events during the drag; it expires 1.5s after
-        // the last selection change so taps/swipes work again afterwards.
+        
         if (Date.now() < this.#selectionActiveUntil) return
         const sel = this.#view?.document?.getSelection?.()
         if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
@@ -940,17 +868,13 @@ export class Paginator extends HTMLElement {
         state.t = e.timeStamp
         state.vx = dx / dt
         state.vy = dy / dt
-        // Track velocity but DO NOT scrollBy() — pages must not move
-        // while the user is touching the screen. Jumping the page during
-        // a long-press text selection is the primary bug this fixes.
-        // The snap() on touchend handles the page turn.
+        
         this.#touchScrolled = true
     }
     #onTouchEnd() {
         this.#touchScrolled = false
         if (this.scrolled) return
 
-        // Don't snap to nearest page while the user is actively selecting text.
         if (Date.now() < this.#selectionActiveUntil) return
         const sel = this.#view?.document?.getSelection?.()
         if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
@@ -958,15 +882,12 @@ export class Paginator extends HTMLElement {
             return
         }
 
-        // XXX: Firefox seems to report scale as 1... sometimes...?
-        // at this point I'm basically throwing `requestAnimationFrame` at
-        // anything that doesn't work
         requestAnimationFrame(() => {
             if (globalThis.visualViewport.scale === 1)
                 this.snap(this.#touchState.vx, this.#touchState.vy)
         })
     }
-    // allows one to process rects as if they were LTR and horizontal
+    
     #getRectMapper() {
         if (this.scrolled) {
             const size = this.viewSize
@@ -995,9 +916,7 @@ export class Paginator extends HTMLElement {
     async #scrollTo(offset, reason, smooth) {
         const { size } = this
         const scrolled = this.scrolled
-        // Paginated mode pans the view via transform (#container is
-        // overflow:clip and cannot be scrolled). Scrolled mode keeps
-        // real container scrolling.
+        
         const cur = () => scrolled
             ? this.#container[this.scrollProp]
             : this.#pageOffset
@@ -1007,14 +926,11 @@ export class Paginator extends HTMLElement {
         if (cur() === offset) {
             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
-            // Always call apply in paginated mode so #setViewPosition can
-            // set the CSS transition on newly-created view elements after
-            // chapter transitions. Without this, the transition is never
-            // set and page turns within the new chapter are instant.
+            
             if (!scrolled) apply(offset)
             return
         }
-        // FIXME: vertical-rl only, not -lr
+        
         if (scrolled && this.#vertical) offset = -offset
         if ((reason === 'snap' || smooth) && this.hasAttribute('animated')) return animate(
             cur(), offset, 300, easeOutQuad,
@@ -1039,17 +955,16 @@ export class Paginator extends HTMLElement {
     async #scrollToAnchor(anchor, reason = 'anchor') {
         this.#anchor = anchor
         const rects = uncollapse(anchor)?.getClientRects?.()
-        // if anchor is an element or a range
+        
         if (rects) {
-            // when the start of the range is immediately after a hyphen in the
-            // previous column, there is an extra zero width rect in that column
+            
             const rect = Array.from(rects)
                 .find(r => r.width > 0 && r.height > 0) || rects[0]
             if (!rect) return
             await this.#scrollToRect(rect, reason)
             return
         }
-        // if anchor is a fraction
+        
         if (this.scrolled) {
             await this.#scrollTo(anchor * this.viewSize, reason)
             return
@@ -1070,7 +985,7 @@ export class Paginator extends HTMLElement {
     #afterScroll(reason) {
         const range = this.#getVisibleRange()
         this.#lastVisibleRange = range
-        // don't set new anchor if relocation was to scroll to anchor
+        
         if (reason !== 'selection' && reason !== 'navigation' && reason !== 'anchor')
             this.#anchor = range
         else this.#justAnchored = true
@@ -1226,11 +1141,9 @@ export class Paginator extends HTMLElement {
             $style.textContent = style
         } else $style.textContent = styles
 
-        // NOTE: needs `requestAnimationFrame` in Chromium
         requestAnimationFrame(() =>
             this.#background.style.background = getBackground(this.#view.document))
 
-        // needed because the resize observer doesn't work in Firefox
         this.#view?.document?.fonts?.ready?.then(() => this.#view.expand())
     }
     focusView() {

@@ -1,8 +1,3 @@
-//! Theorem — iroh P2P Sync Transport
-//!
-//! Unified iroh QUIC transport. Sync flows through iroh-docs CRDT for metadata
-//! and iroh-blobs for file transfer. QR-based device pairing uses a custom ALPN.
-//! Legacy LWW protocol (manifest/push/pull/complete/file/cover over QUIC) removed.
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -22,8 +17,6 @@ use theorem_sync_core::sync_protocol::{PairedDevice, PairingRequest, PairingResp
 const ALPN: &[u8] = b"theorem-sync/v1";
 pub const ALPN_BYTES: &[u8] = ALPN;
 
-// ─── iroh Wire Envelope (used only for pairing) ───
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 struct IrohEnvelope {
     #[serde(rename = "t")]
@@ -31,8 +24,6 @@ struct IrohEnvelope {
     #[serde(rename = "d")]
     data: serde_json::Value,
 }
-
-// ─── Peer Info ───
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct IrohPeerInfo {
@@ -42,10 +33,6 @@ pub struct IrohPeerInfo {
     pub fingerprint: String,
 }
 
-// ─── Sync Transport State ───
-
-/// Shared state needed by the iroh Router and Tauri commands.
-/// Owned by `sync_commands` and passed via Arc.
 pub struct SyncTransportState {
     pub app_handle: tauri::AppHandle,
     pub device_id: String,
@@ -56,16 +43,12 @@ pub struct SyncTransportState {
     pub docs_api: Mutex<Option<DocsApiSnapshot>>,
 }
 
-/// Snapshot of the iroh-docs API client + author, stored after Router startup.
-/// Tauri commands access this to read/write sync entries.
 #[derive(Clone)]
 pub struct DocsApiSnapshot {
     pub api: iroh_docs::api::DocsApi,
     pub author: iroh_docs::AuthorId,
     pub blobs: iroh_blobs::api::Store,
 }
-
-// ─── Iroh Sync Endpoint ───
 
 pub struct IrohSyncEndpoint {
     pub endpoint: iroh::endpoint::Endpoint,
@@ -92,10 +75,7 @@ impl IrohSyncEndpoint {
                 iroh_gossip::ALPN.to_vec(),
             ])
             .relay_mode(RelayMode::Default);
-        // mDNS address lookup: discovers peers on the same LAN without needing
-        // internet or relay servers. The blobs downloader connects directly via
-        // the discovered LAN IP — orders of magnitude faster than relaying.
-        // Disable with THEOREM_DISABLE_MDNS=1 for debugging.
+
         let builder = if std::env::var("THEOREM_DISABLE_MDNS").is_err() {
             builder.address_lookup(MdnsAddressLookup::builder())
         } else {
@@ -133,8 +113,6 @@ impl IrohSyncEndpoint {
     }
 }
 
-// ─── Key Management ───
-
 pub fn load_or_create_key(path: &PathBuf) -> Result<SecretKey, String> {
     if let Ok(bytes) = std::fs::read(path) {
         if let Ok(arr) = <[u8; 32]>::try_from(bytes) {
@@ -148,8 +126,6 @@ pub fn load_or_create_key(path: &PathBuf) -> Result<SecretKey, String> {
     std::fs::write(path, key.to_bytes()).map_err(|e| e.to_string())?;
     Ok(key)
 }
-
-// ─── Stream I/O (for pairing) ───
 
 async fn send_on_bi(
     send: &mut iroh::endpoint::SendStream,
@@ -179,16 +155,6 @@ async fn recv_from_bi(recv: &mut iroh::endpoint::RecvStream) -> Result<Vec<u8>, 
     Ok(buf)
 }
 
-// ─── Full iroh Stack: Docs + Blobs + Gossip + Router ───
-
-/// Subscribe to iroh-docs live events for a document and emit Tauri events
-/// to the frontend when entries change. Enables real-time Zustand updates.
-///
-/// Always tries get_bytes immediately on InsertRemote (content may be
-/// available if downloaded during the sync session). If not available,
-/// tracks the entry and waits for ContentReady / PendingContentReady.
-/// Also emits docs-sync-finished and docs-pending-content-ready events
-/// for the frontend to detect sync completion.
 pub fn subscribe_doc_events(
     app: tauri::AppHandle,
     doc: iroh_docs::api::Doc,
@@ -338,9 +304,7 @@ pub fn subscribe_doc_events(
                     }
                     Err(err) => {
                         eprintln!("[iroh-sync] doc event stream error: {err}");
-                        // If the iroh-docs actor shut down (Router restart),
-                        // the stream will never produce more events. Break
-                        // the inner loop to trigger stream-death detection.
+
                         let msg = err.to_string();
                         if msg.contains("actor failed") || msg.contains("actor closed") {
                             break;
@@ -349,9 +313,7 @@ pub fn subscribe_doc_events(
                     _ => {}
                 }
             }
-            // Stream ended (actor died, connection lost, or doc closed).
-            // Use a separate counter (not the subscribe-failure counter) and
-            // exponential backoff — the actor may recover on its own.
+
             stream_deaths += 1;
             if stream_deaths > MAX_STREAM_DEATHS {
                 eprintln!(
@@ -369,10 +331,6 @@ pub fn subscribe_doc_events(
     });
 }
 
-/// Minimal pairing protocol handler — handles `theorem-sync/v1` ALPN connections
-/// for QR-based device pairing. When the scanner connects, reads the pairing
-/// request, calls `handle_pair_req`, and sends back the response.
-/// Legacy protocol handlers for manifest/push/pull/complete/file/cover were removed.
 #[derive(Clone)]
 pub struct PairingProtocolHandler {
     pub state: Arc<SyncTransportState>,
@@ -390,7 +348,7 @@ impl ProtocolHandler for PairingProtocolHandler {
             let stream = conn.accept_bi().await;
             let (mut send, mut recv) = match stream {
                 Ok(s) => s,
-                Err(_) => break, // Client disconnected, we're done
+                Err(_) => break,
             };
 
             let req_bytes = match recv_from_bi(&mut recv).await {
@@ -398,13 +356,9 @@ impl ProtocolHandler for PairingProtocolHandler {
                 Err(_) => break,
             };
 
-            // Try to parse as IrohEnvelope — if it fails, this was the raw
-            // IrohPeerInfo handshake; send empty response and continue.
             let env: IrohEnvelope = match serde_json::from_slice(&req_bytes) {
                 Ok(e) => e,
                 Err(_) => {
-                    // Raw handshake — send empty response so the client's
-                    // read_exact for the length prefix doesn't hang.
                     let empty = serde_json::json!({});
                     if let Ok(json) = serde_json::to_vec(&empty) {
                         let len = (json.len() as u32).to_be_bytes();
@@ -420,7 +374,6 @@ impl ProtocolHandler for PairingProtocolHandler {
                 continue;
             }
 
-            // Pairing request — handle and send response
             let resp_val = handle_pair_req(&self.state, &env.data).await;
             let resp_env = IrohEnvelope {
                 msg_type: "pair_resp".to_string(),
@@ -437,9 +390,6 @@ impl ProtocolHandler for PairingProtocolHandler {
     }
 }
 
-/// Start the iroh Router with Docs (metadata CRDT), Blobs (file transfer),
-/// and Gossip (live notifications). Stores the DocsApi in the transport state
-/// for Tauri command access. Returns a cancel sender — drop or send `true` to shut down.
 pub fn start_accept_loop(
     endpoint: Arc<IrohSyncEndpoint>,
     state: Arc<SyncTransportState>,
@@ -451,13 +401,8 @@ pub fn start_accept_loop(
     let data_dir = state.app_data_dir.clone();
 
     tokio::spawn(async move {
-        // ── iroh-blobs: persistent file-backed store ──
         let blobs_path = data_dir.join("iroh-blobs");
 
-        // Wipe stale databases from pre-1.0.7 (buggy background sync era).
-        // The corrupted redb + FsStore cause iroh-docs actor crashes
-        // ("sending to iroh_docs actor failed"). Fresh start is safe —
-        // sync data is re-synced from the peer.
         let stale_docs = data_dir.join("iroh-docs").join("db.redb");
         if stale_docs.exists() {
             eprintln!("[iroh-sync] Purging stale databases from pre-1.0.7...");
@@ -470,22 +415,17 @@ pub fn start_accept_loop(
             Ok(s) => s,
             Err(e) => {
                 eprintln!("[iroh-sync] Failed to load blobs store: {e}");
-                // Database likely corrupted — wipe so next start recreates
+
                 let _ = std::fs::remove_dir_all(&blobs_path);
                 return;
             }
         };
         let blobs_handler = iroh_blobs::BlobsProtocol::new(&blobs, None);
 
-        // ── iroh-gossip: P2P messaging ──
         let gossip = iroh_gossip::net::Gossip::builder().spawn(router_endpoint.clone());
 
-        // ── iroh-docs: CRDT metadata sync ──
         let docs_path = data_dir.join("iroh-docs");
 
-        // Wipe any existing docs database that was created by a pre-1.0.7
-        // version (when the buggy background sync corrupted it). The sync
-        // data is re-synced from the peer on first sync — clean start.
         if docs_path.join("db.redb").exists() {
             eprintln!("[iroh-sync] Removing stale iroh-docs database from pre-1.0.7...");
             let _ = std::fs::remove_dir_all(&docs_path);
@@ -502,17 +442,15 @@ pub fn start_accept_loop(
             Ok(d) => d,
             Err(e) => {
                 eprintln!("[iroh-sync] Failed to spawn iroh-docs: {e}");
-                // Database likely corrupted — wipe and let next start recreate
+
                 eprintln!("[iroh-sync] Removing corrupted databases and retrying...");
                 let _ = std::fs::remove_dir_all(&blobs_path);
                 let _ = std::fs::remove_dir_all(&docs_path);
-                // Don't return — let the retry attempt below handle it
-                // by calling start_accept_loop again on the next iroh_start.
+
                 return;
             }
         };
 
-        // Store the DocsApi so Tauri commands can read/write entries
         let api = docs_handler.api().clone();
         let api_for_subscribe = api.clone();
         let author = match api.author_default().await {
@@ -534,11 +472,6 @@ pub fn start_accept_loop(
         });
         drop(docs_api_state);
 
-        // Re-subscribe to live events + restart CRDT sync for all existing
-        // paired device sync docs. Without this, after app restart the Rust
-        // backend never subscribes to doc events — LiveEvent::InsertRemote
-        // goes unhandled, no "docs-entry-changed" Tauri events are emitted,
-        // and the frontend never learns about peer changes between sync rounds.
         {
             let paired = state_clone.paired_devices.lock().await;
             let docs: Vec<(String, String, String, String, String, u16)> = paired
@@ -579,8 +512,7 @@ pub fn start_accept_loop(
                                         eprintln!(
                                             "[iroh-sync] Re-imported sync doc from ticket for peer {node_id}"
                                         );
-                                        // The doc was wiped and re-created — notify the frontend
-                                        // that re-provisioning is needed so peers see data again.
+
                                         let _ = state_clone.app_handle.emit("doc-reimported", ());
                                         Some(doc)
                                     }
@@ -607,7 +539,7 @@ pub fn start_accept_loop(
                             doc.clone(),
                             blobs_for_subscribe.clone(),
                         );
-                        // Restart peer sync so the doc is ready for incoming CRDT data
+
                         if !node_id.is_empty() {
                             if let Ok(peer_pk) = node_id.parse::<iroh::PublicKey>() {
                                 let mut peer_addr = iroh::EndpointAddr::new(peer_pk);
@@ -630,12 +562,6 @@ pub fn start_accept_loop(
             }
         }
 
-        // ── Recovery: handle paired devices with empty sync_doc_id ──
-        // This happens when pairing completed but the sync doc was never
-        // persisted to disk (fixed now, but old pairings may still be broken).
-        // If sync_doc_ticket is non-empty, re-import the doc from the ticket.
-        // If both are empty, emit a "sync-doc-missing" event so the frontend
-        // can prompt the user to re-pair.
         {
             let paired = state_clone.paired_devices.lock().await;
             let broken: Vec<(String, String, String)> = paired
@@ -653,7 +579,6 @@ pub fn start_accept_loop(
 
             for (device_id, ticket_str, device_name) in broken {
                 if !ticket_str.is_empty() {
-                    // Try to re-import the doc from the stored ticket
                     if let Ok(ticket) = ticket_str.parse::<iroh_docs::DocTicket>() {
                         match api_for_subscribe.import(ticket).await {
                             Ok(doc) => {
@@ -704,17 +629,14 @@ pub fn start_accept_loop(
             }
         }
 
-        // ── Pairing protocol handler ──
         let pairing_handler = PairingProtocolHandler {
             state: state_clone.clone(),
         };
 
-        // ── Fast file transfer handler (replaces iroh-blobs for book files) ──
         let file_handler = crate::file_transfer::FileTransferHandler {
             data_dir: data_dir.clone(),
         };
 
-        // ── Router: dispatch by ALPN ──
         let router = Router::builder(router_endpoint)
             .accept(iroh_blobs::ALPN, blobs_handler)
             .accept(iroh_gossip::ALPN, gossip)
@@ -731,9 +653,6 @@ pub fn start_accept_loop(
     cancel_tx
 }
 
-// ─── Pairing Handler ───
-
-/// Handle an incoming pairing request.
 async fn handle_pair_req(
     state: &Arc<SyncTransportState>,
     data: &serde_json::Value,
@@ -747,7 +666,6 @@ async fn handle_pair_req(
         return serde_json::json!({"error": "pairing request missing node_id"});
     }
 
-    // Save paired device
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -784,16 +702,6 @@ async fn handle_pair_req(
     let _ = save_paired_devices_to_disk(&state.app_data_dir, &devices);
     drop(devices);
 
-    // Create a shared iroh-docs sync document and generate a DocTicket
-    // for the scanner to import.
-    //
-    // We clone the api + blobs out of the DocsApiSnapshot and drop the
-    // guard immediately so the docs_api lock is held for microseconds,
-    // not the full duration of create + share + start_sync.  Using
-    // lock().await (instead of try_lock()) prevents a race where a
-    // concurrent docs_get_all_entries call causes the sync doc to
-    // silently never be created — leaving sync_doc_id empty forever
-    // and making sync appear to connect but exchange zero data.
     let sync_doc_ticket = {
         let snapshot_cloned = {
             let guard = state.docs_api.lock().await;
@@ -811,20 +719,14 @@ async fn handle_pair_req(
                         .await
                         .map(|t| t.to_string())
                         .unwrap_or_default();
-                    // Subscribe to live events for this document
+
                     subscribe_doc_events(state.app_handle.clone(), doc.clone(), blobs);
-                    // Start live sync so future writes propagate via gossip
+
                     if let Ok(peer_pk) = pairing_req.node_id.parse::<iroh::PublicKey>() {
                         let peer_addr = iroh::EndpointAddr::new(peer_pk);
                         let _ = doc.start_sync(vec![peer_addr]).await;
                     }
-                    // Store the doc_id + ticket on the paired device and
-                    // PERSIST to disk.  Without this save, the paired
-                    // device file retains the empty sync_doc_id written at
-                    // line 664 (before doc creation).  On app restart the
-                    // host loads the empty sync_doc_id, so docs_set_entry
-                    // skips this peer, the doc stays empty, and the scanner
-                    // connects via SyncFinished but receives zero data.
+
                     let mut devices = state.paired_devices.lock().await;
                     if let Some(device) = devices.get_mut(&pairing_req.device_id) {
                         device.sync_doc_id = doc_id.to_string();
@@ -839,10 +741,6 @@ async fn handle_pair_req(
         }
     };
 
-    // Notify the frontend that a new device paired, so it re-provisions
-    // all local data into the newly created shared doc. Without this,
-    // the host's 192 books never arrive on the scanner because the host's
-    // _initialProvisionDone flag causes provisionToIrohDocs to be skipped.
     if !sync_doc_ticket.is_empty() {
         #[derive(serde::Serialize, Clone)]
         struct PairedPayload {
@@ -871,7 +769,6 @@ async fn handle_pair_req(
         .unwrap_or_else(|e| serde_json::json!({"error": format!("to_value: {e}")}))
 }
 
-/// Send a pairing request to a peer over iroh.
 pub async fn send_pair_request(
     conn: &endpoint::Connection,
     req: &PairingRequest,
@@ -891,7 +788,6 @@ pub async fn send_pair_request(
     serde_json::from_value(resp_env.data).map_err(|e| format!("parse pair resp: {e}"))
 }
 
-/// Load paired devices from disk.
 pub fn load_paired_devices_from_disk(
     app_data_dir: &std::path::Path,
 ) -> HashMap<String, PairedDevice> {

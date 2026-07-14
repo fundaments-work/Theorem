@@ -1,7 +1,3 @@
-/**
- * Annotations/Highlights Page
- * View and manage all highlights and notes across books
- */
 
 import { useState, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -19,7 +15,6 @@ import {
 } from "lucide-react";
 import { ShareMenu } from "./components/ShareMenu";
 
-// Color badge component
 function ColorBadge({ color }: { color: HighlightColor }) {
     return (
         <span
@@ -29,7 +24,6 @@ function ColorBadge({ color }: { color: HighlightColor }) {
     );
 }
 
-// Empty state component
 function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" }) {
     const icons = {
         all: Highlighter,
@@ -64,7 +58,6 @@ function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" }) {
     );
 }
 
-// Annotation card component
 interface AnnotationCardProps {
     annotation: {
         id: string;
@@ -101,7 +94,7 @@ function AnnotationCard({
 
     return (
         <div className="group border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-black">
-            {/* Header */}
+            
             <div className="flex items-start justify-between mb-4">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -177,7 +170,6 @@ function AnnotationCard({
                 </div>
             </div>
 
-            {/* Content */}
             <div className="space-y-3">
                 {annotation.selectedText && (
                     <blockquote className="border-l-2 border-black pl-3 font-serif text-[17px] leading-relaxed text-[color:var(--color-text-primary)]">
@@ -194,14 +186,12 @@ function AnnotationCard({
     );
 }
 
-// Filter tabs - removed bookmarks tab
 const filterTabs = [
     { id: "all" as const, label: "All", icon: Highlighter },
     { id: "highlights" as const, label: "Highlights", icon: Highlighter },
     { id: "notes" as const, label: "Notes", icon: StickyNote },
 ];
 
-// Main page component
 export function AnnotationsPage() {
     const annotations = useLibraryStore((state) => state.annotations);
     const books = useLibraryStore((state) => state.books);
@@ -220,7 +210,6 @@ export function AnnotationsPage() {
         [books],
     );
 
-    // Filter annotations (excluding bookmarks - they have their own page)
     const filteredAnnotations = useMemo(() => {
         let filtered = annotations.filter((a) => a.type !== "bookmark");
 
@@ -228,7 +217,6 @@ export function AnnotationsPage() {
             filtered = filtered.filter((annotation) => annotation.bookId === currentBookId);
         }
 
-        // Apply type filter
         if (activeFilter !== "all") {
             const typeMap = {
                 highlights: "highlight",
@@ -238,7 +226,6 @@ export function AnnotationsPage() {
             filtered = filtered.filter((a) => a.type === typeMap[activeFilter]);
         }
 
-        // Apply search filter from global search
         if (searchQuery.trim()) {
             const rankedAnnotations = rankByFuzzyQuery(
                 filtered.map((annotation) => ({
@@ -259,7 +246,6 @@ export function AnnotationsPage() {
             return rankedAnnotations.map(({ item }) => item.annotation);
         }
 
-        // Sort
         filtered.sort((a, b) => {
             switch (sortBy) {
                 case "newest": {
@@ -318,7 +304,6 @@ export function AnnotationsPage() {
         return books.find((b) => b.id === bookId);
     };
 
-    // Filter out bookmarks for the count
     const annotationCount = annotations.filter((a) => a.type !== "bookmark").length;
     const selectedBookTitle = currentBookId
         ? (bookTitleLookup.get(currentBookId) || "Selected reference")
@@ -334,7 +319,7 @@ export function AnnotationsPage() {
 
     return (
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
-            {/* Header */}
+            
             <div className="mb-8 flex items-start justify-between">
                 <div>
                     <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
@@ -362,9 +347,8 @@ export function AnnotationsPage() {
                 </div>
             )}
 
-            {/* Filters */}
             <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                {/* Filter Tabs */}
+                
                 <div className="flex items-center gap-1 w-fit">
                     {filterTabs.map((tab) => (
                         <button
@@ -382,7 +366,6 @@ export function AnnotationsPage() {
                     ))}
                 </div>
 
-                {/* Sort Dropdown */}
                 <Dropdown
                     value={sortBy}
                     onChange={(value) => setSortBy(value as typeof sortBy)}
@@ -394,7 +377,6 @@ export function AnnotationsPage() {
                 />
             </div>
 
-            {/* Edit Modal */}
             <EditNoteModal
                 isOpen={!!editingId}
                 content={editContent}
@@ -408,7 +390,6 @@ export function AnnotationsPage() {
                 }}
             />
 
-            {/* Annotations Grid */}
             {filteredAnnotations.length === 0 ? (
                 <div className="text-center py-16">
                     <p className="text-[color:var(--color-text-muted)]">

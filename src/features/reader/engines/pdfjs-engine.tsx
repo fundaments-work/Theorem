@@ -1,23 +1,3 @@
-/**
- * PDF.js Engine Component
- *
- * A React component that renders PDF documents using PDF.js.
- *
- * Performance / memory improvements vs original:
- *  1. PAGE proxy cache and render windows tuned for smoother dynamic loading.
- *  2. prefetchedOperatorPagesRef pruned when it exceeds OPERATOR_PREFETCH_MAX_SET_SIZE
- *  3. Search fallback array bounded by PDF_SEARCH_FALLBACK_TOTAL_CHAR_BUDGET (~600 KB)
- *  4. ResizeObserver debounced (120 ms) to prevent rapid layout-flush bursts
- *  5. WebKit text-layer calibration sample limit reduced 2500 → 600 (fewer getBCR calls)
- *  6. Second calibration pass is skipped when first-pass correction is below threshold
- *  7. Zoom/rotation re-renders no longer flash blank — offscreen canvas + atomic pixel swap.
- *     Canvas CSS dimensions are updated eagerly in the size effect (old content stretches
- *     naturally), then the pixel buffer is swapped atomically on completion so canvas.width
- *     never leaves a blank frame visible to the user.
- *  8. Wheel zoom and pinch-to-zoom now anchor to the mouse / pinch-center coordinate.
- *     PageCanvas size effect promoted to useLayoutEffect so the parent scroll adjustment
- *     runs after child container dimensions are already committed at the new scale.
- */
 
 import {
     useEffect,
@@ -45,8 +25,6 @@ import { PDFAnnotationLayer } from "../components/PDFAnnotationLayer";
 import "./pdfjs-engine.css";
 
 configurePdfJsWorker(pdfjsLib);
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PDFJsEngineProps {
     pdfPath: string;
@@ -116,8 +94,6 @@ export interface PDFJsEngineRef {
     clearSearch: () => void;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 5.0;
 const ZOOM_STEP = 0.10;
@@ -133,15 +109,11 @@ const PAGE_PROXY_LOAD_CONCURRENCY = 3;
 const KEYBOARD_SCROLL_STEP_RATIO = 0.82;
 const KEYBOARD_SCROLL_STEP_MIN_PX = 72;
 
-// Keep a larger live page window to avoid visible load gaps during rapid
-// reverse scrolling on large PDFs.
 const PAGE_PROXY_KEEP_WINDOW = 45;
 
 const OPERATOR_PREFETCH_AHEAD = 1;
 const OPERATOR_PREFETCH_IDLE_TIMEOUT_MS = 1200;
 
-// FIX 2 — cap for the operator-prefetch tracking set to prevent unbounded growth
-//          during long reading sessions on large documents.
 const OPERATOR_PREFETCH_MAX_SET_SIZE = 50;
 
 const WEBKIT_MIN_OUTPUT_SCALE = 1.2;
@@ -157,9 +129,6 @@ const PDF_SEARCH_FALLBACK_TRIGGER_THRESHOLD = 3;
 const PDF_SEARCH_FALLBACK_LIMIT = 12;
 const PDF_SEARCH_FALLBACK_PAGE_CHAR_LIMIT = 8_000;
 
-// FIX 3 — total character budget across all pages accumulated for fuzzy search.
-//          At 8000 chars/page a 500-page PDF was allocating ~4 MB just for this
-//          array; 600 KB is more than enough for Fuse.js to rank results well.
 const PDF_SEARCH_FALLBACK_TOTAL_CHAR_BUDGET = 600_000;
 const PDF_SEARCH_MAX_PAGES_SCANNED = 500;
 
@@ -189,23 +158,11 @@ function getMaxActiveCanvasRenders(): number {
 
 const MAX_ACTIVE_CANVAS_RENDERS = getMaxActiveCanvasRenders();
 
-// FIX 4 — debounce delay for ResizeObserver → rebuildPageLayout. Sidebar
-//          animations and window-drag resize events previously fired on every
-//          animation frame; collapsing them saves many querySelectorAll + offsetTop
-//          layout reads with no perceptible UX difference.
 const RESIZE_OBSERVER_DEBOUNCE_MS = 120;
 
-// FIX 5 — reduced from 2500. getBoundingClientRect forces a synchronous layout
-//          flush on each call. The statistical median converges well below 600
-//          samples, halving calibration time on dense pages.
 const WEBKIT_CALIBRATION_SAMPLE_LIMIT = 600;
 
-// FIX 6 — minimum absolute scaleX deviation from the first calibration pass that
-//          justifies the cost of a second pass (two additional frame waits +
-//          another full set of getBoundingClientRect calls).
 const WEBKIT_CALIBRATION_SECOND_PASS_THRESHOLD = 0.015;
-
-// ─── Module-level state ───────────────────────────────────────────────────────
 
 const activeTextLayers = new Map<HTMLDivElement, HTMLDivElement>();
 const pageTextContentCache = new Map<number, PageTextContent>();
@@ -222,8 +179,6 @@ interface CanvasRenderSlotRequest {
 const canvasRenderQueue: CanvasRenderSlotRequest[] = [];
 let activeCanvasRenders = 0;
 let nextCanvasRenderRequestId = 1;
-
-// ─── Canvas render queue ──────────────────────────────────────────────────────
 
 function pumpCanvasRenderQueue(): void {
     if (canvasRenderQueue.length > 1) {
@@ -262,8 +217,6 @@ function requestCanvasRenderSlot(priority: number): { promise: Promise<() => voi
     };
     return { promise, cancel };
 }
-
-// ─── Canvas sizing helpers ────────────────────────────────────────────────────
 
 function getCanvasPixelRatio(
     cssWidth: number,
@@ -326,8 +279,6 @@ function getCanvasSizing(cssWidth: number, cssHeight: number, outputScale: numbe
     const pageHeight = Math.max(1, floorToDivide(Math.round(cssHeight), sfy[1]));
     return { canvasWidth, canvasHeight, renderScaleX: canvasWidth / pageWidth, renderScaleY: canvasHeight / pageHeight, scaleRoundX: sfx[1], scaleRoundY: sfy[1] };
 }
-
-// ─── Text layer selection helpers ─────────────────────────────────────────────
 
 function resetTextLayerSelectionState(endNode: HTMLDivElement, layerNode: HTMLDivElement): void {
     layerNode.append(endNode);
@@ -439,7 +390,7 @@ function ensureGlobalTextLayerSelectionListeners(): void {
             for (let i = 0; i < selection.rangeCount; i++) {
                 const range = selection.getRangeAt(i);
                 for (const layerNode of activeTextLayers.keys()) {
-                    try { if (!selectedLayerNodes.has(layerNode) && range.intersectsNode(layerNode)) selectedLayerNodes.add(layerNode); } catch { /* ignore detached node errors */ }
+                    try { if (!selectedLayerNodes.has(layerNode) && range.intersectsNode(layerNode)) selectedLayerNodes.add(layerNode); } catch {  }
                 }
             }
             if (selectedLayerNodes.size === 0) {
@@ -491,8 +442,6 @@ function unregisterTextLayer(layerNode: HTMLDivElement): void {
     textLayerSelectionAbortController = null;
 }
 
-// ─── Text content cache ───────────────────────────────────────────────────────
-
 interface TextItemLike { str?: string; width?: number; }
 type PageTextContent = Awaited<ReturnType<PDFPageProxy["getTextContent"]>>;
 interface PDFSearchPageItem { pageNumber: number; text: string; }
@@ -522,8 +471,6 @@ function getNormalizedPageText(textContent: PageTextContent): string {
     return textItems.map((item) => (typeof item?.str === "string" ? item.str : "")).join(" ").replace(/\s+/g, " ").trim();
 }
 
-// ─── PDF document info cache ──────────────────────────────────────────────────
-
 function buildPdfInfoCacheKey(pdfPath: string, originalFilename: string | undefined, dataByteLength?: number): string {
     if (pdfPath && pdfPath.length > 0) return `path:${pdfPath}`;
     const filenamePart = originalFilename || "document";
@@ -550,8 +497,6 @@ function getCachedPdfDocumentInfo(cacheKey: string, totalPages: number): PDFDocu
     return cached;
 }
 
-// ─── Zoom helpers ─────────────────────────────────────────────────────────────
-
 function getFitWidthScale(container: HTMLElement, page: PDFPageProxy): number {
     const viewportPadding = container.clientWidth < 768 ? 12 : 32;
     const containerWidth = container.clientWidth - viewportPadding;
@@ -571,8 +516,6 @@ function getFitPageScale(container: HTMLElement, page: PDFPageProxy): number {
     return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min(containerWidth / viewport.width, containerHeight / viewport.height)));
 }
 
-// ─── Search helpers ───────────────────────────────────────────────────────────
-
 function getPdfSearchLocation(pageNumber: number): string { return `pdf:page:${pageNumber}`; }
 
 function createPdfSearchExcerpt(pageText: string, query: string, knownMatchIndex?: number): string {
@@ -586,8 +529,6 @@ function createPdfSearchExcerpt(pageText: string, query: string, knownMatchIndex
     const excerptEnd = Math.min(normalizedText.length, matchIndex + normalizedQuery.length + PDF_SEARCH_EXCERPT_CONTEXT_CHARS);
     return `${excerptStart > 0 ? "…" : ""}${normalizedText.slice(excerptStart, excerptEnd)}${excerptEnd < normalizedText.length ? "…" : ""}`;
 }
-
-// ─── WebKit text-layer width calibration ──────────────────────────────────────
 
 function computeMedian(values: number[]): number | null {
     if (values.length === 0) return null;
@@ -609,14 +550,6 @@ function mergeScaleX(transform: string, correction: number): string {
     return transform.replace(/scaleX\(([-+0-9.eE]+)\)/, `scaleX(${existing * correction})`);
 }
 
-/**
- * Calibrates WebKit text-layer span widths by measuring a sample of rendered
- * spans and applying per-font scaleX corrections.
- *
- * FIX 5+6: Sample limit reduced 2500 → WEBKIT_CALIBRATION_SAMPLE_LIMIT (600).
- * Returns the maximum absolute scaleX deviation applied so the caller can
- * decide whether a second pass is cost-effective.
- */
 function calibrateWebKitTextLayerWidth(
     textDivs: HTMLSpanElement[],
     textItems: TextItemLike[],
@@ -687,8 +620,6 @@ function calibrateWebKitTextLayerWidth(
 function waitForNextFrame(): Promise<void> {
     return new Promise((resolve) => { requestAnimationFrame(() => resolve()); });
 }
-
-// ─── PDF outline / TOC ────────────────────────────────────────────────────────
 
 interface PdfOutlineItemLike { title?: string | null; dest?: unknown; items?: PdfOutlineItemLike[] | null; }
 
@@ -783,8 +714,6 @@ class TauriPdfRangeTransport extends pdfjsLib.PDFDataRangeTransport {
     }
 }
 
-// ─── PageCanvas component ─────────────────────────────────────────────────────
-
 interface PageCanvasProps {
     page: PDFPageProxy;
     scale: number;
@@ -829,23 +758,6 @@ const PageCanvas = memo(function PageCanvas({
     const shouldRenderAnnotationLayer = annotationMode !== "none" || annotations.length > 0;
     const shouldRender = isNearViewport || isRenderActive || forceRenderActive;
 
-    // FIX 7+8 — Promoted from useEffect to useLayoutEffect.
-    //
-    // Why useLayoutEffect:
-    //   React flushes child useLayoutEffects before parent useLayoutEffects. The
-    //   parent (PDFJsEngine) has a useLayoutEffect that applies a pending scroll
-    //   adjustment after zoom. For that adjustment to land correctly the scroll
-    //   container must already reflect its new scrollable dimensions — which only
-    //   happens once these container/canvas style writes are committed to the DOM.
-    //   Using useEffect (async, post-paint) meant the parent's scroll adjustment
-    //   ran against stale layout metrics, causing the anchor point to be wrong.
-    //
-    // Why canvas.style.width/height are updated here (not deferred to the swap):
-    //   Updating CSS dimensions eagerly makes the old pixel content stretch to the
-    //   new size while the off-screen re-render is in progress. This looks natural
-    //   (like a native zoom gesture settling) and gives the user immediate visual
-    //   feedback. The actual pixel buffer (canvas.width / canvas.height) is swapped
-    //   atomically in the render effect below, so no blank frame ever occurs.
     useLayoutEffect(() => {
         const container = containerRef.current;
         const canvas = canvasRef.current;
@@ -862,7 +774,6 @@ const PageCanvas = memo(function PageCanvas({
         canvas.style.width = `${cssWidth}px`;
         canvas.style.height = `${cssHeight}px`;
 
-        // GPU-rescale cached bitmap for instant zoom feedback while re-render runs in background
         const bitmap = cachedBitmapRef.current;
         if (bitmap && hasRenderedCanvasRef.current) {
             const outputScale = getCanvasPixelRatio(cssWidth, cssHeight, preferSharpCanvas, scale, reduceRenderQuality);
@@ -884,7 +795,6 @@ const PageCanvas = memo(function PageCanvas({
         }
     }, [page, scale, rotation, enableTextLayer, snapCssToPixels, preferSharpCanvas, reduceRenderQuality]);
 
-    // Intersection observer for deferred rendering
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -897,7 +807,6 @@ const PageCanvas = memo(function PageCanvas({
         return () => { observer.disconnect(); };
     }, []);
 
-    // Tear down when page leaves render window
     useEffect(() => {
         if (shouldRender) {
             if (inactiveReleaseTimeoutRef.current) {
@@ -911,9 +820,9 @@ const PageCanvas = memo(function PageCanvas({
         const textLayerDiv = textLayerRef.current;
         inactiveReleaseTimeoutRef.current = setTimeout(() => {
             inactiveReleaseTimeoutRef.current = null;
-            try { renderTaskRef.current?.cancel(); } catch { /* ignore */ }
+            try { renderTaskRef.current?.cancel(); } catch {  }
             renderTaskRef.current = null;
-            try { textLayerInstanceRef.current?.cancel(); } catch { /* ignore */ }
+            try { textLayerInstanceRef.current?.cancel(); } catch {  }
             textLayerInstanceRef.current = null;
             if (enableTextLayer && textLayerDiv) { unregisterTextLayer(textLayerDiv); textLayerDiv.innerHTML = ""; }
             if (canvas && hasRenderedCanvasRef.current) {
@@ -943,7 +852,6 @@ const PageCanvas = memo(function PageCanvas({
         }
     }, []);
 
-    // Main render effect
     useEffect(() => {
         if (!shouldRender) return;
         let cancelled = false;
@@ -955,9 +863,9 @@ const PageCanvas = memo(function PageCanvas({
         if (enableTextLayer && !textLayerDiv) return;
 
         const renderPage = async () => {
-            try { renderTaskRef.current?.cancel(); } catch { /* ignore */ }
+            try { renderTaskRef.current?.cancel(); } catch {  }
             renderTaskRef.current = null;
-            try { textLayerInstanceRef.current?.cancel(); } catch { /* ignore */ }
+            try { textLayerInstanceRef.current?.cancel(); } catch {  }
             textLayerInstanceRef.current = null;
 
             try {
@@ -981,13 +889,6 @@ const PageCanvas = memo(function PageCanvas({
                     cancelQueuedRenderSlot = null;
                     if (cancelled) { releaseRenderSlot(); releaseRenderSlot = null; return; }
 
-                    // FIX 7 — Render into an off-screen canvas while the on-screen canvas
-                    // continues showing old content (stretched to the new CSS size via the
-                    // useLayoutEffect above). Once PDF.js finishes we do an atomic swap:
-                    //   canvas.width = x  ← clears the buffer (blank for ~0 ns)
-                    //   drawImage(temp)   ← immediately refills it
-                    // Both operations run synchronously before the browser's next paint
-                    // commit, so the on-screen canvas is never in a blank/white state.
                     const tempCanvas = document.createElement("canvas");
                     tempCanvas.width = sizing.canvasWidth;
                     tempCanvas.height = sizing.canvasHeight;
@@ -998,7 +899,6 @@ const PageCanvas = memo(function PageCanvas({
                     await renderTask.promise;
                     if (cancelled) return;
 
-                    // Atomic pixel-buffer swap
                     canvas.width = sizing.canvasWidth;
                     canvas.height = sizing.canvasHeight;
                     const mainCtx = canvas.getContext("2d", { alpha: false });
@@ -1009,7 +909,6 @@ const PageCanvas = memo(function PageCanvas({
                     releaseRenderSlot();
                     releaseRenderSlot = null;
 
-                    // Cache rendered canvas for GPU-rescaling on zoom
                     try {
                         if (typeof createImageBitmap === "function") {
                             const newBitmap = await createImageBitmap(canvas);
@@ -1057,9 +956,6 @@ const PageCanvas = memo(function PageCanvas({
                         textLayerInstanceRef.current = textLayer;
                         await textLayer.render();
 
-                        // FIX 6: Only perform the second calibration pass when the first
-                        //         pass found a large enough correction to be worth two more
-                        //         frame waits and a full second round of getBoundingClientRect.
                         if (calibrateTextLayerWidths && textItemsForCalibration) {
                             const renderedSpans = textLayer.textDivs as unknown as HTMLSpanElement[];
                             const firstPassMaxDeviation = calibrateWebKitTextLayerWidth(renderedSpans, textItemsForCalibration, viewport.scale);
@@ -1076,14 +972,14 @@ const PageCanvas = memo(function PageCanvas({
                         registerTextLayer(textLayerDiv, endOfContent);
                     } catch (textError) {
                         const isAbortError = textError instanceof Error && (textError.name === "AbortException" || textError.message.toLowerCase().includes("abort") || textError.message.toLowerCase().includes("cancel"));
-                        if (!isAbortError) { /* non-fatal text layer error */ }
+                        if (!isAbortError) {  }
                     }
                 }
 
                 if (!cancelled) { renderTaskRef.current = null; }
             } catch (error: unknown) {
                 const isCancelled = error instanceof Error && (error.message.includes("cancelled") || error.message.includes("Rendering cancelled"));
-                if (!isCancelled) { /* rendering was cancelled */ }
+                if (!isCancelled) {  }
             } finally {
                 cancelQueuedRenderSlot?.(); cancelQueuedRenderSlot = null;
                 releaseRenderSlot?.(); releaseRenderSlot = null;
@@ -1100,9 +996,9 @@ const PageCanvas = memo(function PageCanvas({
             }
             cancelQueuedRenderSlot?.();
             releaseRenderSlot?.();
-            try { renderTaskRef.current?.cancel(); } catch { /* ignore */ }
+            try { renderTaskRef.current?.cancel(); } catch {  }
             if (enableTextLayer) {
-                try { textLayerInstanceRef.current?.cancel(); } catch { /* ignore */ }
+                try { textLayerInstanceRef.current?.cancel(); } catch {  }
                 if (textLayerRef.current) unregisterTextLayer(textLayerRef.current);
             }
         };
@@ -1125,8 +1021,6 @@ const PageCanvas = memo(function PageCanvas({
     );
 });
 
-// ─── Page layout / scroll tracking ───────────────────────────────────────────
-
 interface PageLayoutEntry { pageNumber: number; top: number; bottom: number; }
 
 function findPageForScrollCenter(pageLayout: PageLayoutEntry[], centerY: number): number | null {
@@ -1145,8 +1039,6 @@ function findPageForScrollCenter(pageLayout: PageLayoutEntry[], centerY: number)
     const belowEntry = pageLayout[low];
     return Math.abs(centerY - aboveEntry.bottom) <= Math.abs(belowEntry.top - centerY) ? aboveEntry.pageNumber : belowEntry.pageNumber;
 }
-
-// ─── PDFJsEngine ─────────────────────────────────────────────────────────────
 
 export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
     function PDFJsEngine({
@@ -1196,10 +1088,9 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const initialPageToRestoreRef = useRef(initialPage);
         const zoomModeRef = useRef<PdfZoomMode>(initialZoomMode);
         const searchSessionRef = useRef(0);
-        // FIX 4: debounce timer for ResizeObserver bursts
+        
         const resizeDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-        // FIX 8: last wheel-event mouse position (viewport-relative) used to anchor
-        // the zoom to the cursor location in flushWheelZoom.
+        
         const lastWheelMouseRef = useRef<{ x: number; y: number } | null>(null);
 
         const isDesktopWebKit = useMemo(() => isWebKitBrowserEngine(), []);
@@ -1215,8 +1106,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         const inactiveCanvasReleaseDelayMs = isDesktopWebKit
             ? DESKTOP_WEBKIT_INACTIVE_RELEASE_DELAY_MS
             : INACTIVE_CANVAS_RELEASE_DELAY_MS;
-        // Keep text selectable on all pages that are likely visible. Restricting
-        // text layers too aggressively can make selection feel randomly broken.
+        
         const textLayerPageWindow = isDesktopWebKit
             ? Math.max(WEBKIT_TEXT_LAYER_PAGE_WINDOW, canvasRenderWindow)
             : Math.max(1, canvasRenderWindow);
@@ -1294,14 +1184,6 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             return () => { cancelAnimationFrame(rafId); };
         }, [pages, scale, rotation, totalPages, rebuildPageLayout]);
 
-        // FIX 8 — Apply the zoom-anchor scroll adjustment after scale changes.
-        //
-        // Ordering guarantee: React flushes child useLayoutEffects before parent
-        // useLayoutEffects. PageCanvas's size useLayoutEffect (which writes
-        // container.style.width/height) therefore always runs before this one,
-        // meaning the scroll container already has its correct scrollable dimensions
-        // when we reposition it here. This was the root cause of the broken anchor —
-        // the old useEffect ran after paint, when the layout was still stale.
         useLayoutEffect(() => {
             const container = containerRef.current;
             const scrollAdjustment = pendingScrollAdjustmentRef.current;
@@ -1329,8 +1211,6 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             return clampedScale;
         }, [setZoomMode]);
 
-        // FIX 4: debounce ResizeObserver to prevent rapid layout-flush bursts.
-        //         Also re-applies fit-scale when zoom mode is width-fit or page-fit.
         useEffect(() => {
             const container = containerRef.current;
             if (!container || typeof ResizeObserver === "undefined") return;
@@ -1433,7 +1313,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             const normalizedQueryLower = normalizedQuery.toLowerCase();
             const yieldedLocations = new Set<string>();
             const searchablePages: PDFSearchPageItem[] = [];
-            // FIX 3: track total chars to enforce budget
+            
             let searchablePagesCharTotal = 0;
             let exactMatchCount = 0;
             let pagesScanned = 0;
@@ -1454,7 +1334,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 }
 
                 if (pageText) {
-                    // FIX 3: only accumulate fuzzy search data while under char budget
+                    
                     if (searchablePagesCharTotal < PDF_SEARCH_FALLBACK_TOTAL_CHAR_BUDGET) {
                         const boundedPageText = pageText.slice(0, PDF_SEARCH_FALLBACK_PAGE_CHAR_LIMIT);
                         searchablePages.push({ pageNumber, text: boundedPageText });
@@ -1520,7 +1400,6 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             return grouped;
         }, [annotations]);
 
-        // Load PDF
         useEffect(() => {
             let cancelled = false;
             let loadedPdf: PDFDocumentProxy | null = null;
@@ -1533,10 +1412,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
 
                 try {
                     setError(null); setPages([]);
-                    // Grace period: only show the loading spinner if PDF parsing
-                    // takes longer than 300ms. With pdfjs-dist prewarmed and
-                    // Tauri direct-asset URLs, many PDFs render fast enough that
-                    // no spinner is needed at all.
+                    
                     if (loadingGraceTimerRef.current) clearTimeout(loadingGraceTimerRef.current);
                     loadingGraceTimerRef.current = setTimeout(() => {
                         loadingGraceTimerRef.current = null;
@@ -1699,10 +1575,9 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 clearPageTextContentCache();
                 searchSessionRef.current += 1;
             };
-            // eslint-disable-next-line react-hooks/exhaustive-deps
+            
         }, [initialPage, initialZoom, initialZoomMode, pdfPath, pdfData, originalFilename, setZoomMode]);
 
-        // Apply initial zoom + restore initial page
         useEffect(() => {
             if (hasAppliedInitialViewStateRef.current) return;
             if (!containerRef.current || pages.length === 0) return;
@@ -1723,7 +1598,6 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             return () => { cancelAnimationFrame(rafId); };
         }, [pages, applyZoom, initialZoom, initialZoomMode, restoreInitialPageWithRetry]);
 
-        // Load pages near current reading position
         useEffect(() => {
             if (!pdfDocument || totalPages <= 0) return;
             const rangeStart = Math.max(1, currentPage - PAGE_LOAD_AHEAD_THRESHOLD);
@@ -1739,7 +1613,6 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             setPages((existingPages) => prunePageProxyCache(existingPages, currentPage, pdfDocument.numPages));
         }, [currentPage, pages.length, pdfDocument, prunePageProxyCache]);
 
-        // Operator list prefetch
         useEffect(() => {
             if (!pdfDocument || totalPagesRef.current <= 0) return;
             const idleWindow = window as Window & typeof globalThis & { requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number; cancelIdleCallback?: (h: number) => void; };
@@ -1751,7 +1624,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             if (targets.length === 0) return;
 
             const runPrefetch = () => {
-                // FIX 2: prune the set to prevent unbounded growth during long sessions
+                
                 if (prefetchedOperatorPagesRef.current.size > OPERATOR_PREFETCH_MAX_SET_SIZE) {
                     const currentP = currentPageRef.current;
                     const keep = new Set<number>();
@@ -1779,7 +1652,6 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             };
         }, [currentPage, pdfDocument, totalPages]);
 
-        // Scroll tracking + wheel zoom
         useEffect(() => {
             const container = containerRef.current;
             if (!container || pages.length === 0) return;
@@ -1836,18 +1708,6 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                 });
             };
 
-            // FIX 8 — Zoom-to-pointer for wheel zoom.
-            //
-            // The anchor math is the same for wheel and pinch:
-            //   contentX = scrollLeft + mouseX   (the content-space point under the cursor)
-            //   After scaling by ratio = newScale / oldScale, that point is at:
-            //   contentX * ratio  in the new coordinate system.
-            //   To keep it under the cursor we need:
-            //   newScrollLeft = contentX * ratio - mouseX
-            //
-            // We capture the mouse position on every wheel event so the anchor reflects
-            // the latest cursor position even when multiple wheel ticks are coalesced
-            // into a single RAF-batched flushWheelZoom call.
             const commitWheelZoom = () => {
                 if (pendingWheelDelta === 0) return;
                 const oldScale = scaleRef.current;
@@ -1897,7 +1757,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                     markViewportInteracting();
                     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
                     pendingWheelDelta = Math.max(-ZOOM_STEP * 3, Math.min(ZOOM_STEP * 3, pendingWheelDelta + delta));
-                    // Record viewport-relative mouse position for the zoom anchor.
+                    
                     const rect = container.getBoundingClientRect();
                     lastWheelMouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
                     if (zoomRafId === null) zoomRafId = window.requestAnimationFrame(flushWheelZoom);
@@ -1915,7 +1775,6 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
             };
         }, [pages.length, applyZoom, rebuildPageLayout, markViewportInteracting, isInitialRenderStabilizing, loadSpecificPages]);
 
-        // Touch pinch-to-zoom
         useEffect(() => {
             const container = containerRef.current;
             const zoomContainer = zoomContainerRef.current;
@@ -1960,9 +1819,7 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
                             const visualScale = parseFloat(match[1]);
                             const finalScale = initialScale * visualScale;
                             const ratio = finalScale / initialScale;
-                            // FIX 8 — Anchor scroll adjustment for pinch (same math as wheel).
-                            // contentCenter is the pinch midpoint in content-space coordinates.
-                            // After scaling, we reposition so it stays at the same viewport position.
+                            
                             const contentCenterX = initialPinchCenterX + initialScrollLeft;
                             const contentCenterY = initialPinchCenterY + initialScrollTop;
                             pendingScrollAdjustmentRef.current = {

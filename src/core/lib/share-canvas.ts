@@ -47,8 +47,6 @@ function getContrastColor(hexColor: string): string {
     return luminance > 0.45 ? "#1C1C1C" : "#FFFFFF";
 }
 
-
-
 interface WrappedTextParams {
     lines: string[];
     lineHeight: number;
@@ -129,7 +127,6 @@ const BOOK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fi
 const HIGHLIGHT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h3l6-6"/><path d="m22 2-9 9 4 4 9-9z"/><path d="m14 4 6 6"/></svg>`;
 const TRENDING_UP_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`;
 
-
 export interface ShareImageOptions {
     format: "square" | "story";
     theme: "match" | "dark" | "tinted" | "sepia";
@@ -141,7 +138,7 @@ export async function generateShareCardImage(
     book: Pick<Book, "title" | "author"> | undefined,
     options: ShareImageOptions = { format: "square", theme: "match", showNote: true }
 ): Promise<Blob> {
-    // Cap canvas at 540px wide on mobile to stay well under Android's 256MB WebView heap.
+    
     const canvasWidth = isMobile() ? 540 : 1080;
     const canvasHeight = options.format === "story"
         ? (isMobile() ? 960 : 1920)
@@ -167,29 +164,26 @@ export async function generateShareCardImage(
         textPrimary = getContrastColor(accentColor);
         borderColor = textPrimary === "#FFFFFF" ? "rgba(255, 255, 255, 0.25)" : "rgba(0, 0, 0, 0.15)";
     } else if (options.theme === "sepia") {
-        surfaceColor = "#F4EAE0"; // Warm paper
-        textPrimary = "#433422"; // Deep brown ink
+        surfaceColor = "#F4EAE0"; 
+        textPrimary = "#433422"; 
         borderColor = "#D1C4A9";
     }
 
-    // Fonts from design-tokens
     const fontSerif = "'EB Garamond', Lora, Georgia, serif";
     const fontSans = "'Helvetica Neue', Helvetica, Arial, sans-serif";
 
-    // 1. Draw Background
     ctx.fillStyle = surfaceColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     if (options.theme === "tinted") {
         ctx.fillStyle = accentColor;
-        ctx.globalAlpha = 0.1; // 10% tint
+        ctx.globalAlpha = 0.1; 
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.globalAlpha = 1.0;
     }
 
-    // 2. Draw Elegant Left Accent Bar (or alternate styling based on theme)
     if (options.theme === "sepia") {
-        // Sepia gets an elegant inner frame instead of a thick bar
+        
         ctx.strokeStyle = accentColor;
         ctx.lineWidth = 4;
         ctx.strokeRect(24, 24, canvas.width - 48, canvas.height - 48);
@@ -201,75 +195,60 @@ export async function generateShareCardImage(
         ctx.fillRect(0, 0, 16, canvas.height);
     }
 
-    // Layout margins
     const paddingX = 96; 
-    const paddingY = options.format === "story" ? 240 : 96; // More vertical padding for stories
+    const paddingY = options.format === "story" ? 240 : 96; 
     const maxWidth = canvas.width - (paddingX * 2) - 16;
-    const drawX = 16 + paddingX; // account for left bar
+    const drawX = 16 + paddingX; 
 
     const quoteIconColor = options.theme === "tinted" ? textPrimary : accentColor;
     const ghostIconColor = options.theme === "tinted" ? textPrimary : accentColor;
 
-    // Load SVGs
     const [quoteImg, ghostImg, theoremImg] = await Promise.all([
         createSvgImage(QUOTE_SVG, quoteIconColor, 0.30),
         createSvgImage(QUOTE_SVG, ghostIconColor, 1.0),
         createSvgImage(THEOREM_SVG, textPrimary)
     ]);
 
-    // 2.5 Draw Ghost Icon (Option 3)
-    // Draw a massive, subtle watermark of the quote icon in the bottom right background area
     const ghostSize = options.format === "story" ? 1000 : 700;
     ctx.globalAlpha = options.theme === "tinted" ? 0.08 : 0.05;
     ctx.drawImage(
         ghostImg, 
-        canvas.width - ghostSize * 0.6, // let it bleed off the right edge
-        canvas.height - ghostSize * 0.8, // position in lower half
+        canvas.width - ghostSize * 0.6, 
+        canvas.height - ghostSize * 0.8, 
         ghostSize, 
         ghostSize
     );
     ctx.globalAlpha = 1.0;
 
-    // We will draw the quote icon later when we know the final currentY
-
-    // 4. Calculate Available Space for Text
     const bottomReservedSpace = options.format === "story" ? 300 : 160; 
     const maxTextSpace = canvas.height - paddingY - 64 - 40 - bottomReservedSpace;
 
     const displayText = truncateText(annotation.selectedText || "", 1200);
     const displayNote = options.showNote && annotation.noteContent ? truncateText(annotation.noteContent, 500) : null;
 
-    // Allocate space roughly: 70% quote, 30% note (if exists)
     const quoteMaxSpace = displayNote ? maxTextSpace * 0.7 : maxTextSpace;
-    const noteMaxSpace = displayNote ? maxTextSpace * 0.3 - 40 : 0; // -40 for border
+    const noteMaxSpace = displayNote ? maxTextSpace * 0.3 - 40 : 0; 
 
-    // Calculate Quote Text Layout (can be larger in Story mode)
     const maxFontSize = options.format === "story" ? 64 : 52;
     const quoteLayout = calculateWrappedText(ctx, displayText, maxWidth, fontSerif, "", 28, maxFontSize, quoteMaxSpace);
     
-    // Calculate Note Text Layout
     let noteLayout: WrappedTextParams | null = null;
     if (displayNote) {
         noteLayout = calculateWrappedText(ctx, displayNote, maxWidth, fontSerif, "italic", 22, maxFontSize - 16, noteMaxSpace);
     }
 
-    // 5. Draw Quote Text
-    // In story mode, if text is short, we might want to vertically center it. 
-    // Let's compute total height used.
-    // We add 30px for the timestamp that we will draw below
     const totalContentHeight = 64 + 40 + quoteLayout.totalHeight + (displayNote && noteLayout ? 50 + noteLayout.totalHeight : 0) + 40;
     let currentY = paddingY;
 
     if (options.format === "story") {
-        // Vertically center content in the available space
+        
         const emptySpace = maxTextSpace - totalContentHeight;
         currentY += Math.max(0, emptySpace / 2);
     }
 
-    // 3. Draw Quote Icon at the resolved currentY
     ctx.drawImage(quoteImg, drawX, currentY, 64, 64);
 
-    currentY += 64 + 40; // Below quote icon
+    currentY += 64 + 40; 
     
     ctx.textBaseline = "top";
     ctx.fillStyle = textPrimary;
@@ -280,19 +259,17 @@ export async function generateShareCardImage(
         currentY += quoteLayout.lineHeight;
     }
 
-    // 6. Draw Note Text
     if (displayNote && noteLayout) {
-        currentY += 20; // Margin before border
+        currentY += 20; 
 
-        // Separator Line
         ctx.beginPath();
         ctx.moveTo(drawX, currentY);
-        ctx.lineTo(drawX + Math.min(maxWidth, 200), currentY); // A short elegant separator
+        ctx.lineTo(drawX + Math.min(maxWidth, 200), currentY); 
         ctx.strokeStyle = borderColor;
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        currentY += 30; // Margin after border
+        currentY += 30; 
 
         ctx.fillStyle = textPrimary;
         ctx.globalAlpha = 0.85;
@@ -304,8 +281,7 @@ export async function generateShareCardImage(
         ctx.globalAlpha = 1.0;
     }
 
-    // 6.5 Draw Timestamp (Option 1)
-    currentY += 24; // Margin before timestamp
+    currentY += 24; 
     const dateStr = new Date(annotation.createdAt).toLocaleDateString("en-US", {
         month: "long",
         day: "numeric",
@@ -317,15 +293,12 @@ export async function generateShareCardImage(
     ctx.fillText(`Highlighted on ${dateStr}`, drawX, currentY);
     ctx.globalAlpha = 1.0;
 
-    // 7. Draw Footer (Source and Branding)
     const bottomY = canvas.height - (options.format === "story" ? 160 : 96);
 
-    // Title
     ctx.textBaseline = "bottom";
     const title = (book?.title || "Unknown Source").toUpperCase();
     const author = book?.author;
 
-    // Modern Canvas API supports letterSpacing natively
     if ('letterSpacing' in ctx) {
         (ctx as any).letterSpacing = "2px";
     }
@@ -335,10 +308,9 @@ export async function generateShareCardImage(
 
     let titleY = bottomY;
     if (author) {
-        titleY -= 32; // Make room for author
+        titleY -= 32; 
     }
 
-    // Wrap title in the space between timestamp and title position
     const titleAvailableHeight = Math.max(40, titleY - currentY - 40);
     const titleWrapped = calculateWrappedText(
         ctx, title, maxWidth, fontSans, "600", 12, 24, titleAvailableHeight
@@ -352,7 +324,6 @@ export async function generateShareCardImage(
         (ctx as any).letterSpacing = "0px";
     }
 
-    // Draw Author
     if (author) {
         ctx.fillStyle = textPrimary;
         ctx.globalAlpha = options.theme === "tinted" ? 0.90 : 0.75;
@@ -367,7 +338,6 @@ export async function generateShareCardImage(
         ctx.globalAlpha = 1.0;
     }
 
-    // Draw "Shared via Theorem"
     const footerFontPx = 22;
     ctx.fillStyle = textPrimary;
     ctx.globalAlpha = options.theme === "tinted" ? 0.75 : 0.45;
@@ -376,8 +346,6 @@ export async function generateShareCardImage(
     const textWidth = ctx.measureText(sharedText).width;
     const rightX = canvas.width - paddingX;
 
-    // textBaseline is "bottom" here — text bottom edge is at bottomY
-    // logo top = bottomY - fontSize aligns logo bottom with text bottom
     const logoSz = footerFontPx;
     const logoTopY = bottomY - logoSz;
     const logoLeftX = rightX - textWidth - logoSz - 10;
@@ -398,7 +366,7 @@ export async function generateShareCardImage(
 export interface ShareStatsData {
     totalBooks: number;
     completedBooks: number;
-    totalReadingTime: number; // in minutes
+    totalReadingTime: number; 
     currentStreak: number;
     longestStreak: number;
     booksReadThisYear: number;
@@ -407,7 +375,7 @@ export interface ShareStatsData {
     recentlyReading?: {
         title: string;
         author: string;
-        progress: number; // 0–1
+        progress: number; 
     };
 }
 
@@ -424,7 +392,7 @@ function drawStatBox(
     fontSerif: string,
     fontSans: string
 ) {
-    // Background
+    
     ctx.fillStyle = theme === "dark" ? "#111111" : theme === "sepia" ? "#EAE0CF" : "rgba(0, 0, 0, 0.03)";
     if (theme === "tinted") {
         ctx.fillStyle = textPrimary === "#FFFFFF" ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)";
@@ -444,21 +412,18 @@ function drawStatBox(
     const pad = 24;
     const iconSize = 28;
 
-    // Icon (top-left)
     ctx.globalAlpha = 0.75;
     ctx.drawImage(iconImg, x + pad, y + pad, iconSize, iconSize);
     ctx.globalAlpha = 1.0;
 
-    // Value (serif, large) — below icon with gap
     ctx.fillStyle = textPrimary;
     ctx.font = `bold 36px ${fontSerif}`;
     ctx.fillText(value, x + pad, y + pad + iconSize + 16);
 
-    // Label (sans, small, muted) — below value with generous gap
     ctx.fillStyle = textPrimary;
     ctx.globalAlpha = 0.55;
     ctx.font = `500 14px ${fontSans}`;
-    // Truncate label to fit within box width
+    
     const maxLabelWidth = w - pad * 2;
     let displayLabel = label;
     while (ctx.measureText(displayLabel).width > maxLabelWidth && displayLabel.length > 4) {
@@ -482,7 +447,7 @@ function drawHorizontalStatCard(
     fontSerif: string,
     fontSans: string
 ) {
-    // Background
+    
     ctx.fillStyle = theme === "dark" ? "#111111" : theme === "sepia" ? "#EAE0CF" : "rgba(0, 0, 0, 0.03)";
     if (theme === "tinted") {
         ctx.fillStyle = textPrimary === "#FFFFFF" ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)";
@@ -503,29 +468,25 @@ function drawHorizontalStatCard(
     const iconX = x + 32;
     const iconY = y + (h - iconSize) / 2;
 
-    // Left: Icon (vertically centered)
     ctx.globalAlpha = 0.75;
     ctx.drawImage(iconImg, iconX, iconY, iconSize, iconSize);
     ctx.globalAlpha = 1.0;
 
-    // Right side: value + label stacked vertically, centered in remaining height
     const textX = iconX + iconSize + 28;
     const valueFontSize = 40;
     const labelFontSize = 17;
-    const gap = 20; // generous gap between value and label text
+    const gap = 20; 
     const totalTextH = valueFontSize + gap + labelFontSize;
     const textStartY = y + (h - totalTextH) / 2;
 
-    // Value
     ctx.fillStyle = textPrimary;
     ctx.font = `bold ${valueFontSize}px ${fontSerif}`;
     ctx.fillText(value, textX, textStartY);
 
-    // Label (muted, smaller)
     ctx.fillStyle = textPrimary;
     ctx.globalAlpha = 0.55;
     ctx.font = `500 ${labelFontSize}px ${fontSans}`;
-    // Truncate label to fit
+    
     const maxLabelWidth = w - (textX - x) - 24;
     let displayLabel = label;
     while (ctx.measureText(displayLabel).width > maxLabelWidth && displayLabel.length > 4) {
@@ -551,13 +512,11 @@ function drawCanvasProgressBar(
     const labelFontSize = 15;
     const countFontSize = 15;
 
-    // Label (left)
     ctx.fillStyle = textPrimary;
     ctx.globalAlpha = 0.7;
     ctx.font = `600 ${labelFontSize}px ${fontSans}`;
     ctx.fillText(label, x, y);
 
-    // Progress count (right)
     const progressText = `${current} / ${target} books`;
     ctx.font = `500 ${countFontSize}px ${fontSans}`;
     const countW = ctx.measureText(progressText).width;
@@ -566,7 +525,6 @@ function drawCanvasProgressBar(
 
     const trackY = y + labelFontSize + 10;
 
-    // Track background
     ctx.fillStyle = "rgba(128, 128, 128, 0.15)";
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = 1;
@@ -579,7 +537,6 @@ function drawCanvasProgressBar(
     ctx.fill();
     ctx.stroke();
 
-    // Fill
     const percentage = Math.min(100, (current / Math.max(target, 1)) * 100);
     if (percentage > 0) {
         ctx.fillStyle = accentColor;
@@ -594,7 +551,6 @@ function drawCanvasProgressBar(
         ctx.globalAlpha = 1.0;
     }
 
-    // Percentage label below bar
     ctx.fillStyle = textPrimary;
     ctx.globalAlpha = 0.5;
     ctx.font = `400 13px ${fontSans}`;
@@ -606,7 +562,7 @@ export async function generateShareStatsImage(
     statsData: ShareStatsData,
     options: ShareImageOptions = { format: "square", theme: "match", showNote: true }
 ): Promise<Blob> {
-    // Cap canvas at 540px wide on mobile to stay well under Android's 256MB WebView heap.
+    
     const canvasWidth = isMobile() ? 540 : 1080;
     const canvasHeight = options.format === "story"
         ? (isMobile() ? 960 : 1920)
@@ -640,7 +596,6 @@ export async function generateShareStatsImage(
     const fontSerif = "'EB Garamond', Lora, Georgia, serif";
     const fontSans = "'Helvetica Neue', Helvetica, Arial, sans-serif";
 
-    // 1. Draw Background
     ctx.fillStyle = surfaceColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -651,7 +606,6 @@ export async function generateShareStatsImage(
         ctx.globalAlpha = 1.0;
     }
 
-    // 2. Draw Left Accent Bar
     if (options.theme === "sepia") {
         ctx.strokeStyle = accentColor;
         ctx.lineWidth = 4;
@@ -664,7 +618,6 @@ export async function generateShareStatsImage(
         ctx.fillRect(0, 0, 16, canvas.height);
     }
 
-    // SVGs
     const iconColor = options.theme === "tinted" ? textPrimary : accentColor;
     const ghostColor = options.theme === "tinted" ? textPrimary : accentColor;
 
@@ -677,7 +630,6 @@ export async function generateShareStatsImage(
         createSvgImage(THEOREM_SVG, textPrimary)
     ]);
 
-    // Watermark
     const ghostSize = options.format === "story" ? 1000 : 700;
     ctx.globalAlpha = options.theme === "tinted" ? 0.08 : 0.05;
     ctx.drawImage(
@@ -689,13 +641,11 @@ export async function generateShareStatsImage(
     );
     ctx.globalAlpha = 1.0;
 
-    // Layout calculations
     const paddingX = 96; 
     const paddingY = options.format === "story" ? 220 : 96;
     const maxWidth = canvas.width - (paddingX * 2) - 16;
     const drawX = 16 + paddingX;
 
-    // Format stats values
     const formatReadingTimeStr = (minutes: number): string => {
         if (minutes < 60) return `${minutes}m`;
         const hours = Math.floor(minutes / 60);
@@ -711,8 +661,7 @@ export async function generateShareStatsImage(
     ctx.textBaseline = "top";
 
     if (options.format === "square") {
-        // Draw Header
-        // Eyebrow label
+        
         ctx.fillStyle = textPrimary;
         ctx.globalAlpha = 0.45;
         ctx.font = `600 13px ${fontSans}`;
@@ -721,12 +670,10 @@ export async function generateShareStatsImage(
         if ('letterSpacing' in ctx) (ctx as any).letterSpacing = "0px";
         ctx.globalAlpha = 1.0;
 
-        // Title
         ctx.fillStyle = textPrimary;
         ctx.font = `italic 40px ${fontSerif}`;
         ctx.fillText("My Reading Journey", drawX, paddingY + 24);
 
-        // Draw 2x2 Grid of Stat Boxes
         const gridY = paddingY + 90;
         const boxSpacing = 20;
         const boxW = (maxWidth - boxSpacing) / 2;
@@ -737,17 +684,14 @@ export async function generateShareStatsImage(
         drawStatBox(ctx, drawX, gridY + boxH + boxSpacing, boxW, boxH, booksVal, `${statsData.totalBooks} books in library`, bookImg, options.theme, borderColor, textPrimary, fontSerif, fontSans);
         drawStatBox(ctx, drawX + boxW + boxSpacing, gridY + boxH + boxSpacing, boxW, boxH, highlightsVal, "Highlights Created", highlightImg, options.theme, borderColor, textPrimary, fontSerif, fontSans);
 
-        // Draw progress bar
         const progressY = gridY + (boxH * 2) + (boxSpacing * 2) + 28;
         drawCanvasProgressBar(ctx, drawX, progressY, maxWidth, 10, statsData.booksReadThisYear, statsData.yearlyBookGoal, "Yearly Reading Goal", accentColor, borderColor, textPrimary, fontSans);
 
-        // Currently Reading strip
         if (statsData.recentlyReading) {
-            const crY = progressY + 10 + 15 + 14 + 36; // label + bar + % label + gap
+            const crY = progressY + 10 + 15 + 14 + 36; 
             const crPad = 20;
             const crH = 72;
 
-            // Card background
             ctx.fillStyle = options.theme === "dark" ? "#111111" : options.theme === "sepia" ? "#EAE0CF" : "rgba(0,0,0,0.03)";
             if (options.theme === "tinted") ctx.fillStyle = textPrimary === "#FFFFFF" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)";
             ctx.strokeStyle = borderColor;
@@ -758,7 +702,6 @@ export async function generateShareStatsImage(
             ctx.fill();
             ctx.stroke();
 
-            // Left accent stripe
             ctx.fillStyle = accentColor;
             ctx.globalAlpha = 0.7;
             ctx.beginPath();
@@ -767,7 +710,6 @@ export async function generateShareStatsImage(
             ctx.fill();
             ctx.globalAlpha = 1.0;
 
-            // Eyebrow
             ctx.fillStyle = textPrimary;
             ctx.globalAlpha = 0.4;
             ctx.font = `600 11px ${fontSans}`;
@@ -776,7 +718,6 @@ export async function generateShareStatsImage(
             if ('letterSpacing' in ctx) (ctx as any).letterSpacing = "0px";
             ctx.globalAlpha = 1.0;
 
-            // Title
             ctx.fillStyle = textPrimary;
             ctx.font = `500 17px ${fontSans}`;
             const crMaxTitleW = maxWidth - crPad * 2 - 4 - 120;
@@ -785,7 +726,6 @@ export async function generateShareStatsImage(
             if (crTitle !== statsData.recentlyReading.title) crTitle = crTitle.slice(0, -1) + "\u2026";
             ctx.fillText(crTitle, drawX + crPad + 4, crY + crPad + 16);
 
-            // Author
             ctx.fillStyle = textPrimary;
             ctx.globalAlpha = 0.5;
             ctx.font = `400 13px ${fontSans}`;
@@ -795,7 +735,6 @@ export async function generateShareStatsImage(
             ctx.fillText(crAuthor, drawX + crPad + 4, crY + crPad + 38);
             ctx.globalAlpha = 1.0;
 
-            // Mini progress bar (right side)
             const pct = Math.min(1, statsData.recentlyReading.progress);
             const barW = 110;
             const barH = 6;
@@ -815,7 +754,7 @@ export async function generateShareStatsImage(
                 ctx.fill();
                 ctx.globalAlpha = 1.0;
             }
-            // % label
+            
             ctx.fillStyle = textPrimary;
             ctx.globalAlpha = 0.45;
             ctx.font = `400 12px ${fontSans}`;
@@ -826,8 +765,7 @@ export async function generateShareStatsImage(
         }
 
     } else {
-        // Story format
-        // Eyebrow label
+        
         ctx.fillStyle = textPrimary;
         ctx.globalAlpha = 0.45;
         ctx.font = `600 15px ${fontSans}`;
@@ -836,12 +774,10 @@ export async function generateShareStatsImage(
         if ('letterSpacing' in ctx) (ctx as any).letterSpacing = "0px";
         ctx.globalAlpha = 1.0;
 
-        // Title
         ctx.fillStyle = textPrimary;
         ctx.font = `italic 56px ${fontSerif}`;
         ctx.fillText("My Reading Journey", drawX, paddingY + 30);
 
-        // Vertical stack of horizontal cards
         const cardStartY = paddingY + 120;
         const cardSpacing = 24;
         const cardH = 150;
@@ -851,11 +787,9 @@ export async function generateShareStatsImage(
         drawHorizontalStatCard(ctx, drawX, cardStartY + (cardH * 2) + (cardSpacing * 2), maxWidth, cardH, booksVal, `${statsData.totalBooks} books in library`, bookImg, options.theme, borderColor, textPrimary, fontSerif, fontSans);
         drawHorizontalStatCard(ctx, drawX, cardStartY + (cardH * 3) + (cardSpacing * 3), maxWidth, cardH, highlightsVal, "Annotations and Highlights Created", highlightImg, options.theme, borderColor, textPrimary, fontSerif, fontSans);
 
-        // Progress bar
         const progressY = cardStartY + (cardH * 4) + (cardSpacing * 4) + 36;
         drawCanvasProgressBar(ctx, drawX, progressY, maxWidth, 12, statsData.booksReadThisYear, statsData.yearlyBookGoal, "Yearly Reading Goal", accentColor, borderColor, textPrimary, fontSans);
 
-        // Currently Reading strip (story layout)
         if (statsData.recentlyReading) {
             const crY = progressY + 15 + 12 + 10 + 14 + 40;
             const crPad = 20;
@@ -932,21 +866,16 @@ export async function generateShareStatsImage(
         }
     }
 
-    // Draw Footer (Source and Branding)
     const footerFontSize = 22;
     const bottomY = canvas.height - (options.format === "story" ? 120 : 80);
     const rightX = canvas.width - paddingX;
 
-    // Draw "Shared via Theorem"
     ctx.fillStyle = textPrimary;
     ctx.globalAlpha = options.theme === "tinted" ? 0.75 : 0.45;
     ctx.font = `500 ${footerFontSize}px ${fontSans}`;
     const sharedText = "Shared via Theorem";
     const textWidth = ctx.measureText(sharedText).width;
 
-    // textBaseline is "top" here — text top edge is at bottomY
-    // Logo is drawn from (logoX, bottomY) to (logoX+size, bottomY+size),
-    // so its top exactly matches the text top → both on the same line
     const logoSize = footerFontSize;
     const logoX = rightX - textWidth - logoSize - 10;
 

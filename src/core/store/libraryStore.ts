@@ -26,7 +26,6 @@ import { useUIStore } from "./uiStore";
 import { useRssStore } from "./rssStore";
 import { useVocabularyStore } from "./vocabularyStore";
 
-// Recently opened books cache for fast access
 interface CachedBookMetadata {
     id: string;
     title: string;
@@ -47,7 +46,6 @@ interface CachedBookMetadata {
 
 type CompletionUpdateSource = "auto" | "manual";
 
-// Helper to create cache entry from book
 const createCacheEntry = (book: Book): CachedBookMetadata => ({
     id: book.id,
     title: book.title,
@@ -88,7 +86,6 @@ const cachedBookLookupCache = new WeakMap<CachedBookMetadata[], Map<string, Cach
 
 const annotationsByBookCache = new WeakMap<Annotation[], Map<string, Annotation[]>>();
 
-// Caches for unstable selectors — keyed by source array identity
 const recentBooksResultCache = new WeakMap<Book[], Book[]>();
 const favoriteBooksResultCache = new WeakMap<Book[], Book[]>();
 const booksByCategoryResultCache = new WeakMap<Book[], Map<string, Book[]>>();
@@ -446,21 +443,19 @@ function queueVaultSync(annotation: Annotation): void {
         });
 }
 
-// Library Store
 interface LibraryStore {
     books: Book[];
     collections: Collection[];
     annotations: Annotation[];
     deletionTombstones: DeletionTombstone[];
     lastScannedAt?: Date;
-    // Cache for quick access to recently opened books
+    
     recentBooksCache: CachedBookMetadata[];
-    // Currently active book for annotations
+    
     currentBookId?: string;
-    // Marks when cover paths stripped from persisted state have been restored from IDB.
+    
     coversHydrated: boolean;
 
-    // Book actions
     addBook: (book: Book) => void;
     addBooks: (books: Book[]) => void;
     removeBook: (bookId: string) => void;
@@ -471,24 +466,20 @@ interface LibraryStore {
     updateBookMetadata: (bookId: string, metadata: Partial<Book>) => void;
     saveBookLocations: (bookId: string, locations: string) => void;
 
-    // Reading time tracking
     addReadingTime: (bookId: string, minutes: number) => void;
 
-    // Book completion
     markBookCompleted: (
         bookId: string,
         source?: CompletionUpdateSource,
     ) => { wasAlreadyCompleted: boolean; completedYear: number } | null;
     markBookUnread: (bookId: string) => boolean;
 
-    // Collection actions
     addCollection: (collection: Collection) => void;
     removeCollection: (collectionId: string) => void;
     updateCollection: (collectionId: string, updates: Partial<Omit<Collection, 'id'>>) => void;
     addBookToCollection: (bookId: string, collectionId: string) => void;
     removeBookFromCollection: (bookId: string, collectionId: string) => void;
 
-    // Annotation actions
     addAnnotation: (annotation: Annotation) => void;
     addHighlightWithNote: (cfi: string, text: string, color: HighlightColor, note?: string) => Annotation;
     updateAnnotation: (annotationId: string, updates: Partial<Annotation>) => void;
@@ -498,7 +489,6 @@ interface LibraryStore {
     getBookmarks: (bookId: string) => Annotation[];
     exportAnnotationsToMarkdown: (bookId: string) => string;
 
-    // Getters
     getBook: (bookId: string) => Book | undefined;
     getRecentBooks: (limit?: number) => Book[];
     getFavoriteBooks: () => Book[];
@@ -506,10 +496,8 @@ interface LibraryStore {
     searchBooks: (query: string) => Book[];
     getCachedBook: (bookId: string) => CachedBookMetadata | undefined;
 
-    // Scanning
     setLastScannedAt: (date: Date) => void;
 
-    // Current book tracking
     setCurrentBookId: (bookId: string | undefined) => void;
 
 }
@@ -529,7 +517,6 @@ export const useLibraryStore = create<LibraryStore>()(
             recentBooksCache: [],
             coversHydrated: false,
 
-            // Book actions
             addBook: (book) => {
                 const state = get();
                 const duplicateIndex = findDuplicateBookIndex(state.books, book);
@@ -868,7 +855,6 @@ export const useLibraryStore = create<LibraryStore>()(
                 });
             },
 
-            // Reading time tracking
             addReadingTime: (bookId, minutes) =>
                 set((state) => {
                     const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
@@ -888,7 +874,6 @@ export const useLibraryStore = create<LibraryStore>()(
                         : { books, recentBooksCache };
                 }),
 
-            // Book completion
             markBookCompleted: (bookId, source = "manual") => {
                 const book = get().books.find((b) => b.id === bookId);
                 if (!book) return null;
@@ -986,7 +971,6 @@ export const useLibraryStore = create<LibraryStore>()(
                 return true;
             },
 
-            // Collection actions
             addCollection: (collection) => {
                 set((state) => ({ collections: [...state.collections, collection] }));
                 scheduleMutationSync();
@@ -1045,7 +1029,6 @@ export const useLibraryStore = create<LibraryStore>()(
                 scheduleMutationSync();
             },
 
-            // Annotation actions
             addAnnotation: (annotation) => {
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
                 queueVaultSync(annotation);
@@ -1177,7 +1160,6 @@ export const useLibraryStore = create<LibraryStore>()(
                 return markdown;
             },
 
-            // Getters
             getBook: (bookId) => getBookLookup(get().books).get(bookId),
 
             getRecentBooks: (limit = 10) => {
@@ -1369,7 +1351,7 @@ export const useLibraryStore = create<LibraryStore>()(
                             };
                         });
                     } catch {
-                        // Silently fail
+                        
                     }
                 })();
 
@@ -1382,9 +1364,6 @@ export const useLibraryStore = create<LibraryStore>()(
                     );
                 }
 
-                // Build the FTS5 search index from all rehydrated books.
-                // Without this, the books_fts virtual table stays empty and
-                // sqliteSearchBooks always returns zero results on desktop.
                 if (state.books?.length > 0 && isTauri()) {
                     const ftsBatch = state.books.map((b: { id: string; title: string; author: string }) => [
                         b.id,

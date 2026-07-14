@@ -71,9 +71,6 @@ async function lookupWithStarDict(
     return { meanings };
 }
 
-/**
- * Looks up a term using installed StarDict dictionaries only.
- */
 export async function lookupDictionaryTerm(
     input: DictionaryLookupInput,
 ): Promise<DictionaryLookupResult | null> {
@@ -105,9 +102,6 @@ export async function lookupDictionaryTerm(
     }
 }
 
-/**
- * Helper to convert a lookup result into a persisted vocabulary term object.
- */
 export function vocabularyTermFromLookup(result: DictionaryLookupResult): VocabularyTerm {
     return toVocabularyTerm(result);
 }

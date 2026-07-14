@@ -1,8 +1,3 @@
-/**
- * Rss Service
- * Fetches and parses RSS/Atom/JSON/RDF feeds using fast-xml-parser for robust
- * XML handling, with @mozilla/readability for full-article extraction.
- */
 
 import type { RssFeed, RssArticle } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,8 +8,6 @@ import MarkdownIt from 'markdown-it';
 
 const md = new MarkdownIt({ html: true, linkify: true, breaks: true });
 
-// ── Types ──
-
 interface ParsedFeed {
     title: string;
     description?: string;
@@ -22,8 +15,6 @@ interface ParsedFeed {
     iconUrl?: string;
     articles: Omit<RssArticle, 'id' | 'feedId' | 'fetchedAt' | 'isRead' | 'isFavorite'>[];
 }
-
-// ── Rate Limiter ──
 
 class TokenBucket {
     private tokens: number;
@@ -86,18 +77,11 @@ const ARTICLE_FETCH_CACHE_TTL_MS = 5 * 60 * 1000;
 const feedResponseCache = new Map<string, CachedTextResponse>();
 const articleResponseCache = new Map<string, CachedTextResponse>();
 
-// ── Helpers ──
-
-/**
- * Safely coerce a value to a string.
- * fast-xml-parser may return numbers, booleans, objects, or strings depending
- * on how the XML node is structured.
- */
 function str(value: unknown): string {
     if (value == null) return '';
     if (typeof value === 'string') return value.trim();
     if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-    // Object: could be an element with attributes — try #text or toString
+    
     if (typeof value === 'object') {
         const obj = value as Record<string, unknown>;
         if ('#text' in obj) return str(obj['#text']);
@@ -107,7 +91,6 @@ function str(value: unknown): string {
     return '';
 }
 
-/** Ensure a value is an array. */
 function ensureArray<T>(value: T | T[] | undefined | null): T[] {
     if (value == null) return [];
     return Array.isArray(value) ? value : [value];
@@ -177,34 +160,30 @@ function putCachedResponse(
     });
 }
 
-// ── XML Parser Factory ──
-
 async function createFeedParser(): Promise<XMLParser> {
     const { XMLParser } = await import('fast-xml-parser');
     return new XMLParser({
         ignoreAttributes: false,
         attributeNamePrefix: '@_',
-        // Preserve namespace prefixes so we can match on them.
+        
         removeNSPrefix: false,
-        // Parse text inside CDATA as text (not raw CDATA markers).
+        
         cdataPropName: undefined,
         textNodeName: '#text',
-        // Never treat known feed values as numbers — keep them as strings.
+        
         parseTagValue: false,
         parseAttributeValue: false,
-        // Treat certain tags that can repeat as arrays even if only one exists.
+        
         isArray: (_name: string, _jpath: any, _isLeafNode?: boolean, _isAttribute?: boolean) => {
-            // Items / entries are always arrays.
+            
             if (_name === 'item' || _name === 'entry') return true;
-            // Atom links can repeat.
+            
             if (_name === 'link') return true;
             return false;
         },
         trimValues: true,
     });
 }
-
-// ── HTML Detection & Feed Discovery ──
 
 function isHtmlContent(text: string): boolean {
     const trimmed = text.trim().toLowerCase();
@@ -214,7 +193,7 @@ function isHtmlContent(text: string): boolean {
     if (trimmed.includes('<html') && !trimmed.includes('<rss') && !trimmed.includes('<feed')) {
         return true;
     }
-    // If it has typical HTML-only elements and no feed-level indicators.
+    
     const htmlTags = ['<head', '<body', '<meta', '<div', '<script', '<style'];
     const feedIndicators = ['<rss', '<feed', '<channel', 'jsonfeed', '<rdf:'];
     if (htmlTags.some(t => trimmed.includes(t)) && !feedIndicators.some(t => trimmed.includes(t))) {
@@ -223,16 +202,11 @@ function isHtmlContent(text: string): boolean {
     return false;
 }
 
-/**
- * Extract all discoverable feed URLs from an HTML page.
- * Returns an array of absolute URLs.
- */
 function extractFeedUrlsFromHtml(htmlText: string, baseUrl?: string): string[] {
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlText, 'text/html');
     const urls: string[] = [];
 
-    // Standard <link> discovery.
     const feedLinks = doc.querySelectorAll(
         'link[type="application/rss+xml"],' +
         'link[type="application/atom+xml"],' +
@@ -249,7 +223,6 @@ function extractFeedUrlsFromHtml(htmlText: string, baseUrl?: string): string[] {
         }
     }
 
-    // Anchor-based heuristic: <a href="...rss...">, <a href="...feed...">
     if (urls.length === 0) {
         const anchors = doc.querySelectorAll<HTMLAnchorElement>('a[href]');
         const feedPattern = /\/(feed|rss|atom)(\.xml|\.json|\/)?$/i;
@@ -264,13 +237,10 @@ function extractFeedUrlsFromHtml(htmlText: string, baseUrl?: string): string[] {
     return urls;
 }
 
-/** Legacy single-URL convenience wrapper. */
 function extractFeedUrlFromHtml(htmlText: string, baseUrl?: string): string | null {
     const urls = extractFeedUrlsFromHtml(htmlText, baseUrl);
     return urls[0] ?? null;
 }
-
-// ── JSON Feed ──
 
 interface JsonFeedAttachment {
     url: string;
@@ -344,30 +314,22 @@ function tryParseJsonFeed(text: string): ParsedFeed | null {
     }
 }
 
-// ── XML Feed Parsing with fast-xml-parser ──
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FeedNode = Record<string, any>;
 
-/** Extract a text string from a node that could be #text, plain string, or nested. */
 function nodeText(node: unknown): string {
     if (node == null) return '';
     if (typeof node === 'string') return node.trim();
     if (typeof node === 'number') return String(node);
     if (typeof node === 'object') {
         const obj = node as FeedNode;
-        // CDATA / text content
+        
         if ('#text' in obj) return str(obj['#text']);
-        // If it's an array, join texts
+        
         if (Array.isArray(obj)) return obj.map(nodeText).join(' ').trim();
     }
     return '';
 }
 
-/**
- * Find the first truthy value from a list of potential node paths on an object.
- * Handles namespaced keys like "content:encoded", "dc:creator", etc.
- */
 function firstOf(obj: FeedNode, ...keys: string[]): unknown {
     for (const key of keys) {
         if (obj[key] != null) return obj[key];
@@ -375,10 +337,9 @@ function firstOf(obj: FeedNode, ...keys: string[]): unknown {
     return undefined;
 }
 
-/** Get the Atom link href, preferring rel="alternate", then bare links. */
 function atomLinkHref(links: FeedNode | FeedNode[] | undefined, rel = 'alternate'): string {
     const arr = ensureArray(links) as FeedNode[];
-    // First try the specified rel.
+    
     for (const link of arr) {
         if (typeof link === 'string') return (link as string).trim();
         const l = link as FeedNode;
@@ -387,7 +348,7 @@ function atomLinkHref(links: FeedNode | FeedNode[] | undefined, rel = 'alternate
             if (href) return str(href);
         }
     }
-    // Fallback to first href we find.
+    
     for (const link of arr) {
         if (typeof link === 'string') return (link as string).trim();
         const l = link as FeedNode;
@@ -396,8 +357,6 @@ function atomLinkHref(links: FeedNode | FeedNode[] | undefined, rel = 'alternate
     }
     return '';
 }
-
-// ── RSS 2.0 Parser ──
 
 function parseRss2(root: FeedNode): ParsedFeed {
     const rss = root.rss || root;
@@ -412,7 +371,6 @@ function parseRss2(root: FeedNode): ParsedFeed {
     const articles = items.map((item: FeedNode) => {
         const itemTitle = nodeText(item.title);
 
-        // Link: try <link>, then <guid isPermaLink="true">
         let link = nodeText(item.link);
         if (!link) {
             const guid = item.guid;
@@ -423,7 +381,6 @@ function parseRss2(root: FeedNode): ParsedFeed {
             }
         }
 
-        // Content: prefer content:encoded, then description
         const contentEncoded = firstOf(item, 'content:encoded', 'content\\:encoded', 'encoded');
         let content = nodeText(contentEncoded);
         if (!content) {
@@ -432,18 +389,14 @@ function parseRss2(root: FeedNode): ParsedFeed {
 
         const summary = nodeText(item.description);
 
-        // Author: try <author>, <dc:creator>, <dc:author>
         const author = nodeText(firstOf(item, 'author', 'dc:creator', 'dc:author'))
             || nodeText(firstOf(item, 'itunes:author'))
             || undefined;
 
-        // Date: <pubDate>, <dc:date>
         const pubDate = nodeText(firstOf(item, 'pubDate', 'dc:date', 'published', 'updated'));
 
-        // Image: enclosure, media:content, media:thumbnail, itunes:image
         let articleImageUrl: string | undefined;
 
-        // 1. Enclosure with image type
         const enclosures = ensureArray(item.enclosure);
         for (const enc of enclosures) {
             const type = str(enc?.['@_type']);
@@ -453,7 +406,6 @@ function parseRss2(root: FeedNode): ParsedFeed {
             }
         }
 
-        // 2. media:content
         if (!articleImageUrl) {
             const mediaContents = ensureArray(firstOf(item, 'media:content')) as FeedNode[];
             for (const mc of mediaContents) {
@@ -464,7 +416,7 @@ function parseRss2(root: FeedNode): ParsedFeed {
                     articleImageUrl = url;
                     break;
                 }
-                // If medium="image" without a type attribute
+                
                 if (url && str(n['@_medium']) === 'image') {
                     articleImageUrl = url;
                     break;
@@ -472,14 +424,12 @@ function parseRss2(root: FeedNode): ParsedFeed {
             }
         }
 
-        // 3. media:thumbnail
         if (!articleImageUrl) {
             const mediaThumbnail = firstOf(item, 'media:thumbnail');
             const thumbUrl = str(typeof mediaThumbnail === 'object' ? (mediaThumbnail as FeedNode)?.['@_url'] : mediaThumbnail);
             if (thumbUrl) articleImageUrl = thumbUrl;
         }
 
-        // 4. media:group > media:content / media:thumbnail
         if (!articleImageUrl) {
             const mediaGroup = item['media:group'];
             if (mediaGroup) {
@@ -498,7 +448,6 @@ function parseRss2(root: FeedNode): ParsedFeed {
             }
         }
 
-        // 5. itunes:image
         if (!articleImageUrl) {
             const itunesImage = item['itunes:image'];
             if (itunesImage) {
@@ -506,7 +455,6 @@ function parseRss2(root: FeedNode): ParsedFeed {
             }
         }
 
-        // 6. Extract first <img> from content HTML as last resort
         if (!articleImageUrl && content) {
             const imgMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
             if (imgMatch?.[1]) {
@@ -534,8 +482,6 @@ function parseRss2(root: FeedNode): ParsedFeed {
     };
 }
 
-// ── Atom Parser ──
-
 function parseAtomFeed(root: FeedNode): ParsedFeed {
     const feed: FeedNode = root.feed || root;
 
@@ -549,7 +495,6 @@ function parseAtomFeed(root: FeedNode): ParsedFeed {
         const entryTitle = nodeText(entry.title);
         const link = atomLinkHref(entry.link, 'alternate');
 
-        // Content: prefer type="html", then any content, then summary.
         let content = '';
         const contentNode = entry.content;
         if (contentNode != null) {
@@ -563,24 +508,21 @@ function parseAtomFeed(root: FeedNode): ParsedFeed {
         const summary = nodeText(entry.summary);
         if (!content) content = summary;
 
-        // Author
         let author = '';
         const authorNode = entry.author;
         if (authorNode) {
             author = nodeText(authorNode.name) || nodeText(authorNode);
         }
         if (!author) {
-            // Try feed-level author.
+            
             const feedAuthor = feed.author;
             if (feedAuthor) {
                 author = nodeText(feedAuthor.name) || nodeText(feedAuthor);
             }
         }
 
-        // Date
         const published = nodeText(firstOf(entry, 'published', 'updated', 'dc:date'));
 
-        // Image: try media:thumbnail, media:content, enclosure
         let imageUrl: string | undefined;
         const mediaThumbnail = firstOf(entry, 'media:thumbnail');
         if (mediaThumbnail) {
@@ -605,7 +547,7 @@ function parseAtomFeed(root: FeedNode): ParsedFeed {
                 }
             }
         }
-        // Last resort: first <img> in content
+        
         if (!imageUrl && content) {
             const imgMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
             if (imgMatch?.[1]) imageUrl = imgMatch[1];
@@ -631,11 +573,8 @@ function parseAtomFeed(root: FeedNode): ParsedFeed {
     };
 }
 
-// ── RDF / RSS 1.0 Parser ──
-
 function parseRdfFeed(root: FeedNode): ParsedFeed {
-    // RDF feeds use namespaced tags like rdf:RDF > rss:channel + rss:item
-    // fast-xml-parser preserves prefixes, so we search for common patterns.
+    
     const rdf = root['rdf:RDF'] || root['RDF'] || root;
     const channel: FeedNode = rdf.channel || rdf['rss:channel'] || {};
 
@@ -673,10 +612,8 @@ function parseRdfFeed(root: FeedNode): ParsedFeed {
     };
 }
 
-// ── Main Feed Dispatcher ──
-
 async function parseFeedXml(xmlText: string): Promise<ParsedFeed> {
-    // HTML detection.
+    
     if (isHtmlContent(xmlText)) {
         const feedUrl = extractFeedUrlFromHtml(xmlText);
         if (feedUrl) {
@@ -694,11 +631,9 @@ async function parseFeedXml(xmlText: string): Promise<ParsedFeed> {
         );
     }
 
-    // Try JSON Feed first (before XML parsing).
     const jsonFeed = tryParseJsonFeed(xmlText);
     if (jsonFeed) return jsonFeed;
 
-    // Parse XML.
     const parser = await createFeedParser();
     let parsed: FeedNode;
     try {
@@ -708,28 +643,22 @@ async function parseFeedXml(xmlText: string): Promise<ParsedFeed> {
         throw new Error(`Failed to parse feed XML: ${msg}`);
     }
 
-    // Detect feed type from the parsed object structure.
-    // RSS 2.0: root has <rss> or <rss><channel>.
     if (parsed.rss) {
         return parseRss2(parsed);
     }
 
-    // Atom: root has <feed>.
     if (parsed.feed) {
         return parseAtomFeed(parsed);
     }
 
-    // RDF / RSS 1.0: root has <rdf:RDF> or <RDF>.
     if (parsed['rdf:RDF'] || parsed['RDF']) {
         return parseRdfFeed(parsed);
     }
 
-    // Some feeds omit the <rss> wrapper and just start with <channel>.
     if (parsed.channel) {
         return parseRss2({ channel: parsed.channel });
     }
 
-    // Last resort: look at all top-level keys.
     const keys = Object.keys(parsed).filter(k => !k.startsWith('?'));
     if (keys.length === 1) {
         const root = parsed[keys[0]];
@@ -741,8 +670,6 @@ async function parseFeedXml(xmlText: string): Promise<ParsedFeed> {
         'Unrecognized feed format. Supported formats: RSS 2.0, RSS 1.0/RDF, Atom, JSON Feed.'
     );
 }
-
-// ── Fetching ──
 
 async function fetchWithTauri(url: string): Promise<string> {
     const cached = getCachedResponse(feedResponseCache, url);
@@ -789,8 +716,6 @@ function isLikelyCorsRestricted(url: string): boolean {
     ];
     return corsRestrictedServices.some(service => lowerUrl.includes(service));
 }
-
-// ── Article Content Extraction (Readability + fallback) ──
 
 const ARTICLE_CONTAINER_SELECTORS = [
     'article',
@@ -1059,8 +984,6 @@ async function fetchUrlContent(url: string): Promise<string> {
     return body;
 }
 
-// ── Public API ──
-
 function looksLikeMarkdown(text: string): boolean {
     if (!text || text.length < 3) return false;
     return /^#{1,6}\s/m.test(text)
@@ -1084,10 +1007,6 @@ export async function convertMarkdownToHtml(html: string): Promise<string> {
     }
 }
 
-/**
- * Fetches the linked article URL and extracts full readable content.
- * Falls back to feed content if extraction fails.
- */
 export async function fetchAndExtractArticleContent(articleUrl: string): Promise<ExtractedArticleContent> {
     await articleRateLimiter.acquire();
     const htmlText = await fetchUrlContent(articleUrl);
@@ -1096,15 +1015,11 @@ export async function fetchAndExtractArticleContent(articleUrl: string): Promise
     if (!extracted) {
         throw new Error('Could not extract full article content from source page.');
     }
-    // Convert markdown content to HTML for proper rendering
+    
     extracted.content = await convertMarkdownToHtml(extracted.content);
     return extracted;
 }
 
-/**
- * Fetch and parse an RSS or Atom feed from a URL.
- * If the URL returns HTML, attempts auto-discovery of feed URLs and follows them.
- */
 export async function fetchAndParseFeed(
     url: string,
 ): Promise<{ feed: Omit<ParsedFeed, 'articles'>; articles: ParsedFeed['articles'] }> {
@@ -1182,7 +1097,6 @@ export async function fetchAndParseFeed(
         }
     }
 
-    // If we got HTML, attempt feed auto-discovery and follow redirects.
     if (isHtmlContent(xmlText)) {
         const discoveredUrls = extractFeedUrlsFromHtml(xmlText, url);
         for (const feedUrl of discoveredUrls) {
@@ -1202,11 +1116,10 @@ export async function fetchAndParseFeed(
                     return { feed: feedMeta, articles };
                 }
             } catch {
-                // Try next discovered URL.
+                
             }
         }
 
-        // If no discovered URLs worked, try common feed paths as a heuristic.
         const commonFeedPaths = ['/feed', '/rss', '/feed.xml', '/rss.xml', '/atom.xml', '/index.xml', '/feed/'];
         for (const path of commonFeedPaths) {
             try {
@@ -1225,7 +1138,7 @@ export async function fetchAndParseFeed(
                     return { feed: feedMeta, articles };
                 }
             } catch {
-                // Continue trying.
+                
             }
         }
     }
@@ -1235,9 +1148,6 @@ export async function fetchAndParseFeed(
     return { feed: feedMeta, articles };
 }
 
-/**
- * Convert parsed feed results into store-ready objects.
- */
 export async function materializeFeed(
     url: string,
     parsed: Awaited<ReturnType<typeof fetchAndParseFeed>>,

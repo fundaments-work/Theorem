@@ -32,7 +32,7 @@ export function prewarmPdfJsRuntime(): Promise<void> {
         prewarmPromise = getConfiguredPdfJs()
             .then(() => undefined)
             .catch(() => {
-                // Allow retry if warmup fails due transient startup conditions.
+                
                 prewarmPromise = null;
             });
     }

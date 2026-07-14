@@ -1,12 +1,3 @@
-/**
- * Foliate Engine - Optimized Version
- * 
- * Key optimizations based on Foliate GTK research:
- * 1. CSS variables for instant visual feedback (no async/debounce needed)
- * 2. Batched engine updates using requestAnimationFrame
- * 3. Synchronous zoom application
- * 4. Minimal re-renders through efficient change detection
- */
 
 import type {
     DocLocation,
@@ -66,7 +57,6 @@ export interface FoliateEngineOptions {
     shouldForceViewportTap?: () => boolean;
 }
 
-
 export class FoliateEngine {
     private container: HTMLElement | null = null;
     private view: any = null;
@@ -76,40 +66,31 @@ export class FoliateEngine {
     private currentLocation: DocLocation | null = null;
     private sectionFractions: number[] = [];
 
-    // Format tracking for format-specific behavior
     private format: BookFormat = 'epub';
     private isFixedLayoutFormat = false;
 
-    // Settings cache
     private layout: PageLayout = 'single';
     private flow: ReadingFlow = 'paged';
     private zoom_level = 1;
-    // When non-zero, all page navigation (next/prev/scroll) is blocked.
-    // Set to Date.now()+timeout whenever a non-collapsed text selection is
-    // observed in any iframe document; expires automatically.
+    
     private selectionNavLockUntil = 0;
     private theme: ReaderTheme = 'light';
     
-    // Batch update mechanism
     private pendingUpdateFrame: number | null = null;
 
-    // CSS cache — avoid rebuilding large CSS strings on every settings change
     private _lastCssSettingsKey = '';
     private _lastCssResult: string | null = null;
 
-    // Style update unsubscribe
     private unsubscribeFromStyles: (() => void) | null = null;
 
-    // Keyboard listeners attached to iframe documents
     private _keyboardAttached = new WeakSet<Document>();
 
     private searchSectionCache: ReaderSearchSectionCacheItem[] | null = null;
     private searchCacheBookRef: unknown = null;
     private _awaitingInitialRelocate = false;
-    /** Tracks the last section index to detect chapter boundary crosses. */
+    
     private _lastSectionIndex = -1;
-    /** When true, the relocate handler skips its deferred applyZoomSync —
-     *  goTo/goToFraction already runs applyZoomSync after navigation. */
+    
     private _navigationInProgress = false;
 
     constructor(options: FoliateEngineOptions = {}) {
@@ -139,8 +120,7 @@ export class FoliateEngine {
         if (flow === 'scroll') {
             return MIN_READER_ZOOM_LEVEL;
         }
-        // For paged reflowable content, allow zoom down to 0.5 (50%) for smaller text
-        // For fixed-layout in paged mode, keep minimum at 1.0 (fit-page)
+        
         if (this.isFixedLayoutFormat) {
             return MIN_PAGED_READER_ZOOM_LEVEL;
         }
@@ -172,8 +152,6 @@ export class FoliateEngine {
             root.style.removeProperty('zoom');
             root.style.removeProperty('font-size');
             
-            // Set inline zoom and font-size so paginator layout calculates perfectly
-            // before the async CSS stylesheet arrives.
             const currentSettings = getCurrentReaderSettings();
             const baseFontSize = currentSettings?.fontSize ?? 16;
             const effectiveFontSize = baseFontSize * this.zoom_level;
@@ -186,7 +164,6 @@ export class FoliateEngine {
     async init(container: HTMLElement): Promise<void> {
         this.container = container;
         
-        // Register for style updates from the main app
         this.unsubscribeFromStyles = registerEngineStyleCallback(() => {
             this.handleExternalStyleChange();
         });
@@ -206,21 +183,21 @@ export class FoliateEngine {
             if (!doc || !doc.body) continue;
 
             if (visibleRange) {
-                // visibleRange marks what's on screen. Extract text from it.
+                
                 let rangeText = "";
-                try { rangeText = visibleRange.toString(); } catch { /* ignore */ }
+                try { rangeText = visibleRange.toString(); } catch {  }
                 rangeText = rangeText.trim();
                 if (!rangeText) {
-                    // toString() failed on some backends. Try cloneContents.
+                    
                     try {
                         const frag = visibleRange.cloneContents();
                         const w = doc.createElement("div");
                         w.appendChild(frag);
                         rangeText = (w.textContent || '').trim();
-                    } catch { /* ignore */ }
+                    } catch {  }
                 }
                 if (!rangeText) {
-                    // Both failed — fall back to body text.
+                    
                     const body = doc.body as HTMLElement;
                     rangeText = (body.innerText || '').trim();
                 }
@@ -236,7 +213,6 @@ export class FoliateEngine {
         return { text: parts.join("\n"), startWordId: "" };
     }
 
-    /** Like getVisibleTextForTts but returns text AFTER visible (for preloading next page). */
     public getNextPageTextForTts(): { text: string; startWordId: string } | null {
         if (!this.view?.renderer?.getContents) return null;
 
@@ -249,7 +225,7 @@ export class FoliateEngine {
         let firstWordId = "";
 
         if (visibleRange) {
-            // Extract text after the visible range
+            
             type Phase = 'before' | 'during' | 'after';
             let phase: Phase = 'before';
 
@@ -275,14 +251,13 @@ export class FoliateEngine {
                 }
             }
         } else {
-            // No visible range — extract from the second section onward
-            // (first section is the current one being read)
+            
             let sectionIndex = 0;
             for (const content of contents) {
                 const doc = content.document || content.doc;
                 if (!doc) continue;
                 sectionIndex++;
-                if (sectionIndex <= 1) continue; // skip current section
+                if (sectionIndex <= 1) continue; 
 
                 const ttsWords = Array.from(doc.querySelectorAll('.tts-word')) as HTMLElement[];
                 for (const node of ttsWords) {
@@ -308,7 +283,7 @@ export class FoliateEngine {
         format: BookFormat = 'epub',
         nativeFilePath?: string,
     ): Promise<void> {
-        // Store format for format-specific behavior
+        
         this.format = format;
         this.isFixedLayoutFormat = isFixedLayout(format);
         if (!this.container) {
@@ -316,10 +291,9 @@ export class FoliateEngine {
         }
 
         try {
-            // Dynamically import foliate-js runtime
+            
             const { makeBook } = await import('../foliate-js-runtime/view.js');
 
-            // Open book - ensure we pass a File object with name for foliate-js
             let file: File | Blob;
             if (source instanceof File) {
                 file = source;
@@ -337,57 +311,42 @@ export class FoliateEngine {
             this.searchSectionCache = null;
             this.searchCacheBookRef = this.book;
 
-            // Create foliate-view element
             this.view = document.createElement('foliate-view');
             this.view.style.width = '100%';
             this.view.style.height = '100%';
             this.view.style.display = 'block';
             this.container.appendChild(this.view);
 
-            // Set up event listeners
             this.setupEventListeners();
 
-            // Open the book in the view
             await this.withTimeout(
                 this.view.open(this.book),
                 READER_OPEN_TIMEOUT_MS,
                 'opening the book',
             );
 
-            // Get section fractions for progress calculation
             this.sectionFractions = this.view.getSectionFractions() || [];
             
-            
             if (this.sectionFractions.length === 0) {
-                // Fallback: assume single section
+                
                 this.sectionFractions = [0, 1];
             }
 
-            // Apply initial settings
             this.layout = layout;
             this.flow = flow;
             this.zoom_level = this.clampZoomLevel(zoom / 100, this.flow);
 
-            // Apply settings synchronously where possible
             this.applySettingsSync();
             
-            // Async settings application
             await this.applySettingsAsync();
             
-            // Ensure a final synchronized render now that async CSS is applied
-            // This guarantees columns and font sizes are correct at startup.
             this.applyZoomSync();
 
-            // Extract metadata and TOC
             const metadata = this.extractMetadata();
             const toc = this.extractToc();
 
-            // Navigate to initial location or beginning
-            
-            // Set flag BEFORE navigation - relocate fires synchronously during goTo()
             this._awaitingInitialRelocate = true;
-            // Suppress the relocate handler's deferred applyZoomSync during
-            // explicit navigation — we run it ourselves below.
+            
             this._navigationInProgress = true;
             
             try {
@@ -399,7 +358,7 @@ export class FoliateEngine {
                             'restoring saved location',
                         );
                         if (!result) {
-                            // Fall back to beginning if CFI is invalid
+                            
                             await this.withTimeout(
                                 this.view.goTo({ index: 0, fraction: 0 }),
                                 READER_NAVIGATION_TIMEOUT_MS,
@@ -408,13 +367,13 @@ export class FoliateEngine {
                         } else {
                         }
                 } catch (err) {
-                    // Fall back to beginning if CFI navigation throws
+                    
                     await this.withTimeout(
                         this.view.goTo({ index: 0, fraction: 0 }),
                         READER_NAVIGATION_TIMEOUT_MS,
                         'navigating to the start',
                     );
-                    // Clear invalid CFI by navigating to beginning
+                    
                     if (this.options.onLocationChange) {
                         this.options.onLocationChange({ cfi: '', percentage: 0, tocItem: undefined, pageItem: undefined, pageInfo: undefined });
                     }
@@ -427,16 +386,12 @@ export class FoliateEngine {
                     );
                 }
 
-                // Re-apply zoom + re-render columns now that the initial section
-                // has loaded — ensures columns are calculated with both the
-                // paginator's CSS and our inline zoom applied.
                 this.applyZoomSync();
                 this.scheduleSettingsUpdate();
             } finally {
                 this._navigationInProgress = false;
             }
 
-            // Signal that book is ready
             this.options.onReady?.(metadata, toc);
 
         } catch (error) {
@@ -448,15 +403,12 @@ export class FoliateEngine {
     private setupEventListeners(): void {
         if (!this.view) return;
 
-        // Load event - apply styles to newly loaded sections
         this.view.addEventListener('load', (e: any) => {
             const detail = e.detail;
             if (detail?.doc?.documentElement) {
-                // Apply zoom immediately
+                
                 this.applyZoomToDocument(detail.doc);
 
-                // Attach keyboard navigation to iframe document (keydown events in
-                // iframes don't bubble to the parent window, so we must listen inside).
                 const doc = detail.doc;
                 const win = doc?.defaultView;
                 if (win && !this._keyboardAttached.has(doc)) {
@@ -484,18 +436,11 @@ export class FoliateEngine {
             }
         });
 
-        // Relocate event - location changed
-        // The view.js already calculates and provides CFI in the event detail
-        // See foliate-js view.js #onRelocate: this.lastLocation = { ...progress, tocItem, pageItem, cfi, range }
         this.view.addEventListener('relocate', (e: any) => {
             const detail = e.detail;
             
-            // Use CFI directly from event detail (already calculated by view.js)
-            // The view.js getCFI is called in #onRelocate and included in lastLocation
             let cfi = detail.cfi || '';
             
-            // Fallback: if CFI is empty but we have section info, try to regenerate
-            // detail.section.current contains the section index (from progress.js getProgress)
             if (!cfi && detail.section?.current != null && detail.section.current >= 0 && this.view?.getCFI) {
                 try {
                     cfi = this.view.getCFI(detail.section.current, detail.range) || '';
@@ -518,8 +463,6 @@ export class FoliateEngine {
                 isEstimated: true,
             } : undefined;
 
-            // Clamp fraction to valid range [0, 1].
-            // Prefer foliate's global fraction, but derive a robust fallback when it is missing.
             const rawFraction = detail.fraction;
             let fraction = typeof rawFraction === 'number' && isFinite(rawFraction)
                 ? Math.max(0, Math.min(1, rawFraction))
@@ -546,7 +489,6 @@ export class FoliateEngine {
                 fraction = this.currentLocation?.percentage ?? 0;
             }
             
-            
             const location: DocLocation = {
                 cfi,
                 percentage: fraction,
@@ -557,13 +499,6 @@ export class FoliateEngine {
 
             this.currentLocation = location;
 
-            // Detect chapter boundary cross (section index changed) and
-            // re-render columns. This handles page-turn wraps to the next
-            // chapter via next()/prev(). Always update _lastSectionIndex
-            // so page turns within the same section don't falsely trigger.
-            // Skip the deferred applyZoomSync when an explicit navigation
-            // (goTo/goToFraction/open) is already in progress — those
-            // methods run their own applyZoomSync after navigation.
             const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
             if (sectionIndex >= 0 && sectionIndex !== this._lastSectionIndex) {
                 this._lastSectionIndex = sectionIndex;
@@ -585,41 +520,32 @@ export class FoliateEngine {
 
             this.options.onLocationChange?.(location);
 
-            // When the paginator auto-navigates after a cross-column text selection
-            // (reason === 'selection'), re-render annotations so highlights from
-            // the previous visible area stay painted in the new scroll position.
             if (detail.reason === 'selection') {
                 const sectionIndex = typeof detail.index === 'number' ? detail.index : -1;
                 this.renderAnnotationsForSection(sectionIndex);
             }
         });
 
-        // Handle history changes
         this.view.history?.addEventListener('popstate', (_e: any) => {
         });
 
-        // Handle section load - re-attach selection listeners for new sections
         this.view.addEventListener('load', (e: any) => {
             const detail = e.detail;
             
-            // Clear the attached listeners set for new sections
             if (detail?.doc) {
                 this.iframeListenersAttached.delete(detail.doc);
             }
             
-            // Re-setup selection listeners and re-render highlights after a short delay
             setTimeout(() => {
                 if (this.options.onTextSelected) {
                     this.setupIframeSelectionListener(this.options.onTextSelected);
                 } else {
                 }
                 
-                // Re-render all annotations for this section
                 this.renderAnnotationsForSection(detail?.index);
             }, 500);
         });
 
-        // Handle annotation drawing
         this.view.addEventListener('draw-annotation', (e: any) => {
             const { draw, annotation, doc } = e.detail;
             
@@ -627,12 +553,10 @@ export class FoliateEngine {
                 return;
             }
 
-            // Get the color for the highlight
             const color = this.getHighlightColor(annotation.color || 'yellow');
             
-            // Draw the highlight using the overlayer
             try {
-                // Store annotation value for click handler
+                
                 const annotationValue = annotation.value;
                 
                 draw((rects: DOMRectList) => {
@@ -641,7 +565,7 @@ export class FoliateEngine {
                     g.setAttribute('data-highlight', 'true');
                     g.style.opacity = '0.4';
                     g.style.mixBlendMode = 'multiply';
-                    // Enable pointer events so the highlight is clickable
+                    
                     g.style.pointerEvents = 'all';
                     g.style.cursor = 'pointer';
                     g.style.touchAction = 'manipulation';
@@ -661,12 +585,11 @@ export class FoliateEngine {
                         e.stopPropagation();
                         e.preventDefault();
                         
-                        // Find the annotation
                         const clickedAnnotation = Array.from(this.annotations.values())
                             .find(a => a.location === annotationValue);
                         
                         if (clickedAnnotation && this.options.onTextSelected) {
-                            // Get bounding rect for positioning
+                            
                             const firstRect = rects[0];
                             const frameElement = doc.defaultView?.frameElement;
                             const frameRect = frameElement instanceof HTMLElement
@@ -688,7 +611,6 @@ export class FoliateEngine {
                         }
                     };
 
-                    // Mobile browsers may not dispatch `click` reliably inside SVG overlays.
                     g.addEventListener('click', activateHighlight);
                     g.addEventListener('touchend', activateHighlight, { passive: false });
                     g.addEventListener('pointerup', (event: PointerEvent) => {
@@ -703,22 +625,19 @@ export class FoliateEngine {
             }
         });
 
-        // Handle annotation click
         this.view.addEventListener('show-annotation', (e: any) => {
             const { value, range } = e.detail;
             
-            // Find the annotation by CFI
             let annotation = Array.from(this.annotations.values())
                 .find(a => a.location === value);
             
-            // Fallback: find by partial CFI match (in case of slight variations)
             if (!annotation && value) {
                 annotation = Array.from(this.annotations.values())
                     .find(a => a.location && value.startsWith(a.location));
             }
             
             if (annotation) {
-                // Call the callback with annotation data
+                
                 if (this.options.onTextSelected) {
                     if (range && typeof range.cloneRange === 'function') {
                         this.options.onTextSelected(annotation.location, annotation.selectedText || '', range.cloneRange());
@@ -762,9 +681,6 @@ export class FoliateEngine {
         return getHighlightSolidColor(colorKey);
     }
 
-    /**
-     * Handle style changes from the main app (when CSS variables are updated)
-     */
     private handleExternalStyleChange(): void {
         const currentSettings = getCurrentReaderSettings();
         if (!currentSettings) return;
@@ -783,7 +699,7 @@ export class FoliateEngine {
         const meta = this.book.metadata || {};
         return {
             title: this.formatLanguageMap(meta.title) || 'Unknown Title',
-            // Author can be string, {name, sortAs, role}, or array - normalize it
+            
             author: normalizeAuthor(meta.author) || 'Unknown Author',
             description: meta.description,
             publisher: meta.publisher,
@@ -816,19 +732,15 @@ export class FoliateEngine {
         return x[keys[0]] || '';
     }
 
-    /**
-     * Synchronous settings application - for instant feedback
-     */
     private applySettingsSync(): void {
         if (!this.view?.renderer) return;
 
         const renderer = this.view.renderer;
         const currentSettings = getCurrentReaderSettings();
         
-        // These can be applied synchronously
         renderer.setAttribute('flow', this.flow === 'scroll' ? 'scrolled' : 'paginated');
         renderer.setAttribute('gap', '5%');
-        // Auto layout: use double columns for paged mode on larger screens, single for scroll or small screens
+        
         const isMobileViewport = typeof window !== 'undefined'
             && window.matchMedia('(max-width: 768px)').matches;
         const columnCount = isMobileViewport && this.flow !== 'scroll'
@@ -841,7 +753,6 @@ export class FoliateEngine {
                         ? 1
                         : 2;
         
-        // Set column count BEFORE inline-size because setting inline-size synchronously triggers a render
         renderer.setAttribute('max-column-count', String(columnCount));
         
         renderer.setAttribute(
@@ -855,7 +766,6 @@ export class FoliateEngine {
             renderer.removeAttribute('animated');
         }
 
-        // Apply zoom for fixed-layout formats (CBZ, etc.) via renderer attribute
         if (this.isFixedLayoutFormat && this.flow !== 'scroll') {
             const zoomValue = this.zoom_level === 1.0 ? 'fit-page' : this.zoom_level;
             renderer.setAttribute('zoom', String(zoomValue));
@@ -863,21 +773,15 @@ export class FoliateEngine {
             renderer.removeAttribute('zoom');
         }
         
-        // Apply zoom synchronously to existing contents
         this.applyZoomSync();
     }
 
-    /**
-     * Asynchronous settings application - for CSS that needs compilation
-     */
     private async applySettingsAsync(): Promise<void> {
         if (!this.view?.renderer) return;
 
         const currentSettings = getCurrentReaderSettings();
         if (!currentSettings) return;
 
-        // Cache CSS output by settings key to avoid rebuilding ~4 KB of CSS
-        // on every font-size slider tick or theme toggle.
         const cssKey = [
             currentSettings.fontSize,
             currentSettings.lineHeight,
@@ -899,7 +803,6 @@ export class FoliateEngine {
         }
         this._lastCssSettingsKey = cssKey;
 
-        // Compute text alignment value for CSS
         const alignValue = currentSettings.textAlign === 'justify' ? 'justify' :
                           currentSettings.textAlign === 'center' ? 'center' : 'left';
 
@@ -916,10 +819,9 @@ export class FoliateEngine {
         };
         
         if (renderer.setStyles) {
-            // Create CSS with current actual values, not CSS variables
+            
             const colors = getThemeColors(this.theme);
             
-            // Build font-family CSS only if not using original book font
             const fontFamilyCSS = currentSettings.fontFamily === 'original' ? '' : `
                 /* Font family override - applies to ALL elements with !important */
                 html, body, 
@@ -945,7 +847,6 @@ export class FoliateEngine {
                 }
             `;
             
-            // Build text alignment CSS
             const textAlignCSS = `
                 /* Text alignment - comprehensive selector coverage */
                 body, p, div, 
@@ -975,8 +876,6 @@ export class FoliateEngine {
                 }
             `;
             
-            // Force font-size inheritance on all text elements to override book CSS.
-            // Only applied when NOT forcing publisher styles.
             const fontSizeOverrideCSS = currentSettings.forcePublisherStyles ? '' : `
                 /* Force font-size inheritance on ALL text elements to override book CSS */
                 p, div, span,
@@ -1068,9 +967,6 @@ export class FoliateEngine {
         }
     }
 
-    /**
-     * Batched settings update - schedules update for next frame
-     */
     private scheduleSettingsUpdate(): void {
         if (this.pendingUpdateFrame) {
             cancelAnimationFrame(this.pendingUpdateFrame);
@@ -1082,8 +978,6 @@ export class FoliateEngine {
             this.applySettingsAsync().catch(console.error);
         });
     }
-
-
 
     async goTo(target: string | number): Promise<void> {
         if (!this.view) return;
@@ -1144,10 +1038,6 @@ export class FoliateEngine {
         }
     }
 
-    /**
-     * Scroll up by a specified distance (used in scroll mode)
-     * Falls back to prev() in paginated mode
-     */
     async scrollUp(distance?: number): Promise<void> {
         if (Date.now() < this.selectionNavLockUntil) return;
         if (this.flow === 'scroll') {
@@ -1164,10 +1054,6 @@ export class FoliateEngine {
         }
     }
 
-    /**
-     * Scroll down by a specified distance (used in scroll mode)
-     * Falls back to next() in paginated mode
-     */
     async scrollDown(distance?: number): Promise<void> {
         if (Date.now() < this.selectionNavLockUntil) return;
         if (this.flow === 'scroll') {
@@ -1184,16 +1070,11 @@ export class FoliateEngine {
         }
     }
 
-    /**
-     * Calculate default scroll distance based on font size and line height
-     * Similar to Foliate GTK4's implementation
-     */
     private getScrollDistance(): number {
-        // Get current settings from the store
-        const currentSettings = getCurrentReaderSettings();
-        if (!currentSettings) return 48; // Default fallback
         
-        // Scroll distance = fontSize * lineHeight * 3 lines
+        const currentSettings = getCurrentReaderSettings();
+        if (!currentSettings) return 48; 
+        
         return currentSettings.fontSize * currentSettings.lineHeight * 3;
     }
 
@@ -1225,7 +1106,6 @@ export class FoliateEngine {
         return this.view?.history?.canGoForward || false;
     }
 
-    // Settings methods - optimized for speed
     setLayout(layout: PageLayout): void {
         if (this.layout === layout) return;
         this.layout = layout;
@@ -1240,7 +1120,7 @@ export class FoliateEngine {
             this.zoom_level = clampedZoom;
             this.applyZoomSync();
         }
-        // For fixed-layout, update zoom attribute when flow changes
+        
         if (this.isFixedLayoutFormat && this.view?.renderer) {
             if (this.flow !== 'scroll') {
                 const zoomValue = this.zoom_level === 1.0 ? 'fit-page' : this.zoom_level;
@@ -1252,7 +1132,6 @@ export class FoliateEngine {
         this.scheduleSettingsUpdate();
     }
 
-    // Zoom methods - synchronous for instant feedback
     zoomIn(): void {
         this.setZoomLevel(this.zoom_level + READER_ZOOM_STEP);
     }
@@ -1281,9 +1160,6 @@ export class FoliateEngine {
         return this.zoom_level;
     }
 
-    /**
-     * Synchronous zoom application - instant visual feedback
-     */
     private applyZoomSync(): void {
         if (!this.view?.renderer) {
             return;
@@ -1311,10 +1187,7 @@ export class FoliateEngine {
         }
 
         if (!this.isFixedLayoutFormat && typeof this.view.renderer.render === 'function') {
-            // Skip a full re-render when the paginator already has a valid
-            // layout (size > 0). The render() forces a layout flush + full
-            // columnize which is expensive on every page turn. Only do it
-            // when the layout is genuinely broken (size === 0).
+            
             const renderer = this.view.renderer as any;
             const currentSize = renderer?.size ?? 0;
             if (currentSize === 0) {
@@ -1324,11 +1197,6 @@ export class FoliateEngine {
         }
     }
 
-    /**
-     * On desktop WebKitGTK the paginator may measure container dimensions
-     * before CSS grid track sizing has settled.  If the render produced a
-     * broken layout (NaN/zero pages), retry on the next frame.
-     */
     private _retryIfBrokenLayout(retries: number): void {
         if (retries >= 3) return;
         try {
@@ -1345,7 +1213,7 @@ export class FoliateEngine {
                     this.view.renderer.render();
                 }
             } catch {
-                // renderer may be gone if book was closed during retry
+                
             }
             this._retryIfBrokenLayout(retries + 1);
         });
@@ -1354,9 +1222,6 @@ export class FoliateEngine {
     setMargins(_margins: number): void {
     }
 
-    /**
-     * Apply theme/settings - optimized with batching
-     */
     applyTheme(settings: ThemeSettings): void {
         
         if (settings.flow) {
@@ -1368,11 +1233,10 @@ export class FoliateEngine {
 
         this.scheduleSettingsUpdate();
         
-        // Apply zoom immediately if changed
         if (settings.zoom) {
             this.applyZoomSync();
         }
-        // For fixed-layout, update zoom attribute
+        
         if (this.isFixedLayoutFormat && this.view?.renderer && settings.zoom) {
             if (this.flow !== 'scroll') {
                 const zoomValue = this.zoom_level === 1.0 ? 'fit-page' : this.zoom_level;
@@ -1389,7 +1253,6 @@ export class FoliateEngine {
         this.scheduleSettingsUpdate();
     }
 
-    // Annotation methods
     async addHighlight(cfi: string, text: string, color: HighlightColor, bookId?: string): Promise<Annotation> {
         
         const annotation: Annotation = {
@@ -1404,7 +1267,6 @@ export class FoliateEngine {
 
         this.annotations.set(annotation.id, annotation);
         
-        // Add to view for rendering
         try {
             await this.view?.addAnnotation?.({
                 value: cfi,
@@ -1419,8 +1281,6 @@ export class FoliateEngine {
     async addAnnotation(annotation: Annotation): Promise<void> {
         this.annotations.set(annotation.id, annotation);
         
-        // Render highlights for both 'highlight' and 'note' types
-        // Notes should still show the highlighted text with a note indicator
         if ((annotation.type === 'highlight' || annotation.type === 'note') && annotation.location) {
             try {
                 await this.view?.addAnnotation?.({
@@ -1438,18 +1298,15 @@ export class FoliateEngine {
             return;
         }
         
-        
-        // Delete from internal map first
         this.annotations.delete(id);
         
-        // Remove from foliate view
         try {
             if (this.view?.deleteAnnotation) {
                 await this.view.deleteAnnotation({ value: annotation.location });
             } else {
-                // Fall back to beginning if CFI is invalid
+                
                 await this.view.goTo({ index: 0, fraction: 0 });
-                // Clear invalid CFI by navigating to beginning
+                
                 if (this.options.onLocationChange) {
                     this.options.onLocationChange({ cfi: '', percentage: 0, tocItem: undefined, pageItem: undefined, pageInfo: undefined });
                 }
@@ -1470,24 +1327,15 @@ export class FoliateEngine {
         return Array.from(this.annotations.values()).filter(a => a.bookId === bookId);
     }
 
-    /**
-     * Re-render all annotations for a specific section
-     * Called when a section reloads (e.g., when navigating back to a previous page)
-     */
     async renderAnnotationsForSection(_sectionIndex: number): Promise<void> {
         if (!this.view || !this.book) {
             return;
         }
 
-        
-        // Get all annotations and filter by section
         const allAnnotations = Array.from(this.annotations.values());
         
-        // We need to determine which annotations belong to this section
-        // Since we don't have an easy way to check, we'll try to render all
-        // and let foliate-js handle the ones that don't match
         for (const annotation of allAnnotations) {
-            // Render highlights for both 'highlight' and 'note' types
+            
             if ((annotation.type === 'highlight' || annotation.type === 'note') && annotation.location) {
                 try {
                     await this.view?.addAnnotation?.({
@@ -1495,23 +1343,19 @@ export class FoliateEngine {
                         color: annotation.color,
                     });
                 } catch (e) {
-                    // Silently ignore errors for annotations that don't belong to this section
+                    
                 }
             }
         }
         
     }
 
-    /**
-     * Load and render all annotations for a book
-     */
     async loadAnnotations(annotations: Annotation[]): Promise<void> {
-        // Wait for view to be ready
+        
         if (!this.view || !this.book) {
             return;
         }
 
-        // Clear existing in parallel
         const deleteOps = Array.from(this.annotations.values())
             .map((annotation) =>
                 this.view?.deleteAnnotation?.({ value: annotation.location })
@@ -1520,7 +1364,6 @@ export class FoliateEngine {
         await Promise.all(deleteOps);
         this.annotations.clear();
 
-        // Add new annotations in small concurrent batches
         const toRender = annotations.filter(
             (a) => a.location && (a.type === 'highlight' || a.type === 'note'),
         );
@@ -1537,23 +1380,19 @@ export class FoliateEngine {
                     color: annotation.color,
                 })?.catch((e: any) => console.error("[catch]", e)) ?? Promise.resolve(),
             ));
-            // Yield to the renderer between batches
+            
             if (i + BATCH_SIZE < toRender.length) {
                 await new Promise((resolve) => setTimeout(resolve, 4));
             }
         }
     }
 
-    /**
-     * Go to an annotation's location
-     */
     async goToAnnotation(annotation: Annotation): Promise<void> {
         if (annotation.location) {
             await this.goTo(annotation.location);
         }
     }
 
-    // Search
     async *search(query: string): AsyncGenerator<SearchResult | { progress: number } | 'done'> {
         if (!this.book || !this.view) return;
 
@@ -1813,9 +1652,6 @@ export class FoliateEngine {
         return this.sectionFractions;
     }
 
-    /**
-     * Get CFI from a range in the current document
-     */
     getCFIFromRange(index: number, range: Range): string {
         if (!this.view?.getCFI) return '';
         try {
@@ -1825,11 +1661,8 @@ export class FoliateEngine {
         }
     }
 
-    /**
-     * Get the currently selected text and its CFI from the active document
-     */
     getSelectionFromDocument(): { text: string; cfi: string; range: Range } | null {
-        // Guard against accessing view during transitions
+        
         if (!this.view || !this.book) {
             return null;
         }
@@ -1838,7 +1671,7 @@ export class FoliateEngine {
             const contents = this.view.renderer?.getContents?.() || [];
             
             for (const content of contents) {
-                // Check if content is valid
+                
                 if (!content || typeof content.index !== 'number') continue;
                 
                 const doc = content.doc;
@@ -1857,7 +1690,7 @@ export class FoliateEngine {
                 }
             }
         } catch (e) {
-            // Silently ignore errors during transitions
+            
         }
         return null;
     }
@@ -1901,26 +1734,20 @@ export class FoliateEngine {
         return this.options.shouldForceViewportTap?.() ?? false;
     }
 
-    /**
-     * Setup selection listeners inside iframe documents
-     * This is needed because selectionchange doesn't bubble from iframes
-     */
     setupIframeSelectionListener(callback: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void): void {
         if (!this.view?.renderer) return;
 
-        // Setup postMessage listener for iframe selections (Tauri WebView compatible)
         if (!this.postMessageHandler) {
             this.postMessageHandler = (event: MessageEvent) => {
                 if (event.data?.type === 'foliate-selection') {
                     
                     const { sectionIndex, text, clientX, clientY, rect } = event.data;
                     
-                    // Get the document for this section
                     const contents = this.view?.renderer?.getContents?.() || [];
                     const content = contents.find((c: any) => c.index === sectionIndex);
                     
                     if (content?.doc) {
-                        // Try to find the range for CFI generation
+                        
                         const doc = content.doc;
                         const selection = doc.getSelection();
                         const frameElement = doc.defaultView?.frameElement;
@@ -1971,7 +1798,6 @@ export class FoliateEngine {
 
         const contents = this.view.renderer.getContents?.() || [];
         
-        
         for (const content of contents) {
             const doc = content.doc;
             const win = doc?.defaultView;
@@ -1979,44 +1805,30 @@ export class FoliateEngine {
                 continue;
             }
 
-            // Skip if already has listeners
             if (this.iframeListenersAttached.has(doc)) {
                 continue;
             }
 
-
-            // Mark as having listeners
             this.iframeListenersAttached.add(doc);
 
-            // Log document info for debugging
-
-            // Try to access iframe element directly and add load listener
-            // This is more reliable than injected scripts in sandboxed iframes
             const iframeElement = doc.defaultView?.frameElement as HTMLIFrameElement;
             if (iframeElement) {
                 
-                // Listen for iframe load to re-attach listeners
                 iframeElement.addEventListener('load', () => {
                     this.attachSelectionListenersToIframe(iframeElement, content.index, callback);
                 });
                 
-                // Attach listeners now
                 this.attachSelectionListenersToIframe(iframeElement, content.index, callback);
             } else {
-                // Fallback to script injection
+                
                 this.injectSelectionScript(doc, content.index, callback);
             }
 
         }
 
-        // Setup polling as fallback
         this.setupSelectionPolling(callback);
     }
 
-    /**
-     * Attach selection listeners directly to an iframe element
-     * This tries to access the iframe's contentDocument and attach listeners
-     */
     private attachSelectionListenersToIframe(
         iframe: HTMLIFrameElement,
         index: number,
@@ -2037,8 +1849,6 @@ export class FoliateEngine {
                 doc.body.style.touchAction = 'manipulation';
             }
             
-            
-            // Track last selection to avoid duplicates
             let lastSelectionKey = '';
             let pointerDownX = 0;
             let pointerDownY = 0;
@@ -2102,9 +1912,7 @@ export class FoliateEngine {
                         lastSelectionKey = selectionKey;
 
                         lastSelectionCapturedAt = Date.now();
-                        // Lock navigation while the user has an active text
-                        // selection — without this, touch swipe gestures
-                        // fired during selection turn pages unexpectedly.
+                        
                         this.selectionNavLockUntil = Date.now() + 2000;
                         try {
                             callback(cfi, text, range.cloneRange());
@@ -2127,7 +1935,6 @@ export class FoliateEngine {
                 }, SELECTION_CAPTURE_DELAY);
             };
 
-            // Suppress native text action menus inside the reading iframe.
             doc.addEventListener(
                 'contextmenu',
                 (event: MouseEvent) => {
@@ -2241,7 +2048,6 @@ export class FoliateEngine {
 
                     if (this.isInteractiveTapTarget(event.target)) return;
 
-                    // Don't turn page when interacting with highlight overlays
                     if (event.target instanceof Element && event.target.closest('g[data-highlight]')) return;
 
                     if (
@@ -2254,9 +2060,7 @@ export class FoliateEngine {
                     }
 
                     event.preventDefault();
-                    // Wait for selection capture to complete before deciding
-                    // whether to turn page — avoids race on mobile where the
-                    // selection may not yet be established at touchend time.
+                    
                     window.setTimeout(() => {
                         const shouldSuppressInteraction =
                             Date.now() - lastSelectionCapturedAt < SELECTION_INTERACTION_SUPPRESS_MS;
@@ -2284,9 +2088,7 @@ export class FoliateEngine {
             );
 
             doc.addEventListener('selectionchange', () => {
-                // Lock navigation immediately when a non-collapsed selection
-                // is present — this fires before scheduleSelectionCapture's
-                // debounce, so the lock is active by the time touchend fires.
+                
                 const sel = doc.getSelection();
                 if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
                     this.selectionNavLockUntil = Date.now() + 2000;
@@ -2294,7 +2096,6 @@ export class FoliateEngine {
                 scheduleSelectionCapture();
             }, true);
 
-            // Listen for mouseup on the iframe window
             win.addEventListener('mouseup', (event: MouseEvent) => {
                 scheduleSelectionCapture(event);
             }, true);
@@ -2323,7 +2124,6 @@ export class FoliateEngine {
                     pointerMoved = false;
                     scheduleSelectionCapture(event);
 
-                    // Don't trigger viewport tap when interacting with highlight overlays
                     const pointerTarget = event.target;
                     if (pointerTarget instanceof Element && pointerTarget.closest('g[data-highlight]')) {
                         return;
@@ -2359,10 +2159,6 @@ export class FoliateEngine {
         }
     }
 
-    /**
-     * Inject a script into the iframe to detect selection and send via postMessage
-     * This is necessary for Tauri WebView which restricts cross-frame access
-     */
     private injectSelectionScript(
         doc: Document, 
         index: number, 
@@ -2483,13 +2279,9 @@ export class FoliateEngine {
     }
 
     private setupSelectionPolling(_callback: (cfi: string, text: string, event: MouseEvent) => void): void {
-        // NOTE: Polling removed for performance. Event-based detection is sufficient.
-        // This method is kept for API compatibility but does nothing.
+        
     }
 
-    /**
-     * Clear any text selection in all documents
-     */
     clearSelection(): void {
         if (!this.view) return;
         
@@ -2502,13 +2294,10 @@ export class FoliateEngine {
                 }
             }
         } catch (e) {
-            // Silently ignore errors during transitions
+            
         }
     }
 
-    /**
-     * Get the current section index being displayed
-     */
     getCurrentSectionIndex(): number {
         const contents = this.view?.renderer?.getContents?.() || [];
         if (contents.length > 0) {
@@ -2517,40 +2306,26 @@ export class FoliateEngine {
         return -1;
     }
 
-    /**
-     * Get the document for a specific section index
-     */
     getDocumentForSection(index: number): Document | null {
         const contents = this.view?.renderer?.getContents?.() || [];
         const content = contents.find((c: { index: number }) => c.index === index);
         return content?.doc || null;
     }
 
-    /**
-     * Get the current document format
-     */
     getFormat(): BookFormat {
         return this.format;
     }
 
-    /**
-     * Check if current document has fixed layout (CBZ/PDF, plus legacy CBR entries)
-     * Fixed layouts use zoom instead of font settings
-     */
     isFixedLayout(): boolean {
         return this.isFixedLayoutFormat;
     }
 
-    /**
-     * Check if current document is reflowable (EPUB, MOBI, FB2)
-     * Reflowable documents support font/size controls
-     */
     isReflowable(): boolean {
         return !this.isFixedLayoutFormat;
     }
 
     destroy(): void {
-        // Cancel pending updates
+        
         if (this.pendingUpdateFrame) {
             cancelAnimationFrame(this.pendingUpdateFrame);
             this.pendingUpdateFrame = null;
@@ -2566,7 +2341,6 @@ export class FoliateEngine {
             this.postMessageHandler = null;
         }
         
-        // Unsubscribe from style updates
         if (this.unsubscribeFromStyles) {
             this.unsubscribeFromStyles();
             this.unsubscribeFromStyles = null;

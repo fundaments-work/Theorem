@@ -1,19 +1,9 @@
-/**
- * Theorem — Sync Domain Zod Schemas
- *
- * Runtime validation for all 9 sync domains. Every peer-provided JSON payload
- * is validated before merging to prevent crashes from malformed / malicious data.
- */
 
 import { z } from "zod";
-
-// ─── Primitives ───
 
 const highlightColor = z.enum(["yellow", "green", "blue", "red", "orange", "purple"]);
 
 const dateLike = z.union([z.string(), z.date()]).optional();
-
-// ─── Book ───
 
 export const BookSchema = z.object({
     id: z.string().min(1),
@@ -68,8 +58,6 @@ export const BookSchema = z.object({
 
 export const BooksArraySchema = z.array(BookSchema);
 
-// ─── Annotation ───
-
 export const AnnotationSchema = z.object({
     id: z.string().min(1),
     bookId: z.string().min(1),
@@ -108,8 +96,6 @@ export const AnnotationSchema = z.object({
 
 export const AnnotationsArraySchema = z.array(AnnotationSchema);
 
-// ─── Collection ───
-
 export const CollectionSchema = z.object({
     id: z.string().min(1),
     name: z.string(),
@@ -121,8 +107,6 @@ export const CollectionSchema = z.object({
 }).passthrough();
 
 export const CollectionsArraySchema = z.array(CollectionSchema);
-
-// ─── DeletionTombstone ───
 
 export const DeletionTombstoneSchema = z.object({
     entityId: z.string().min(1),
@@ -139,8 +123,6 @@ export const DeletionTombstoneSchema = z.object({
 }).passthrough();
 
 export const TombstonesArraySchema = z.array(DeletionTombstoneSchema);
-
-// ─── VocabularyTerm ───
 
 export const VocabularyMeaningSchema = z.object({
     partOfSpeech: z.string().optional(),
@@ -169,8 +151,6 @@ export const VocabularyTermSchema = z.object({
 
 export const VocabularyTermsArraySchema = z.array(VocabularyTermSchema);
 
-// ─── RSS Feed ───
-
 export const RssFeedSchema = z.object({
     id: z.string().min(1),
     title: z.string(),
@@ -185,8 +165,6 @@ export const RssFeedSchema = z.object({
 }).passthrough();
 
 export const RssFeedsArraySchema = z.array(RssFeedSchema);
-
-// ─── RSS Article ───
 
 export const RssArticleSchema = z.object({
     id: z.string().min(1),
@@ -204,8 +182,6 @@ export const RssArticleSchema = z.object({
 }).passthrough();
 
 export const RssArticlesArraySchema = z.array(RssArticleSchema);
-
-// ─── Settings ───
 
 const ReaderSettingsSchema = z.object({
     theme: z.enum(["light", "sepia", "dark"]),
@@ -286,8 +262,6 @@ export const AppSettingsSchema = z.object({
     _settingsUpdatedAt: z.string().optional(),
 }).passthrough();
 
-// ─── ReadingStats ───
-
 const DailyActivitySchema = z.object({
     date: z.string(),
     minutes: z.number().min(0),
@@ -307,8 +281,6 @@ export const ReadingStatsSchema = z.object({
     lastReadDate: z.string().optional(),
 }).passthrough();
 
-// ─── Domain map of all schemas ───
-
 const DOMAIN_SCHEMAS = {
     books: BooksArraySchema,
     annotations: AnnotationsArraySchema,
@@ -321,7 +293,6 @@ const DOMAIN_SCHEMAS = {
     reading_stats: ReadingStatsSchema,
 } as const;
 
-/** Parse and validate a domain's JSON payload. Returns the parsed data or null if invalid. */
 export function validateSyncDomain(
     domain: keyof typeof DOMAIN_SCHEMAS,
     json: string,
@@ -337,7 +308,6 @@ export function validateSyncDomain(
     }
 }
 
-/** Batch-validate all incoming domain payloads. Returns the map of successfully validated domains. */
 export function validateSyncPayloads(
     incomingMap: Record<string, string>,
 ): Record<string, unknown> {
@@ -348,7 +318,7 @@ export function validateSyncPayloads(
             valid[domain] = data;
         }
     }
-    // Log domain item counts so we can see what passed/failed validation
+    
     for (const [domain, data] of Object.entries(valid)) {
         if (Array.isArray(data)) {
             const incomingCount = (() => {

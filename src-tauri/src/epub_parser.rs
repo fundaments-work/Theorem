@@ -5,18 +5,14 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-// ── Helpers ──
-
 fn read_zip_entry_inner<R: std::io::Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
     path: &str,
 ) -> Option<String> {
-    // First try the path as-is
     if let Some(text) = read_zip_by_name_inner(archive, path) {
         return Some(text);
     }
-    // Fall back to percent-decoded path (OPF hrefs may be percent-encoded
-    // while the zip stores decoded bytes, or vice versa)
+
     let decoded = percent_encoding::percent_decode(path.as_bytes()).decode_utf8_lossy();
     if decoded.as_ref() != path {
         return read_zip_by_name_inner(archive, decoded.as_ref());
@@ -47,7 +43,6 @@ fn resolve_relative(base: &str, target: &str) -> String {
         .to_string()
 }
 
-/// Strip a leading UTF-8 or UTF-16 BOM from XML bytes.
 fn strip_xml_bom(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
     use std::borrow::Cow;
     if bytes.len() >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF {
@@ -82,17 +77,11 @@ fn local_name(bytes: &[u8]) -> &[u8] {
     }
 }
 
-// ── OPF toc-source location (streaming quick-xml) ──
-
 struct LocatedTocSources {
     nav_href: Option<String>,
     ncx_href: Option<String>,
 }
 
-/// Single-pass streaming scan of the OPF to find the nav document href
-/// and NCX href. Mirrors foliate-js Resources logic:
-///   - nav: first manifest <item> whose `properties` contains the token "nav"
-///   - ncx: any <item> with media-type `application/x-dtbncx+xml`
 fn locate_toc_sources(opf_bytes: &[u8]) -> Result<LocatedTocSources, String> {
     let normalized = strip_xml_bom(opf_bytes);
     let mut reader = Reader::from_reader(normalized.as_ref());
@@ -198,7 +187,6 @@ fn read_rootfile_path_inner<R: std::io::Read + std::io::Seek>(
     None
 }
 
-/// Pre-decoded EPUB metadata: container, OPF, nav, NCX, encryption text.
 struct EpubMeta {
     container: Option<String>,
     opf_path: String,
@@ -215,7 +203,7 @@ fn read_epub_metadata_inner<R: std::io::Read + std::io::Seek>(
 ) -> Option<EpubMeta> {
     let container_text = read_zip_entry_inner(archive, "META-INF/container.xml")?;
     let opf_rel = read_rootfile_path_inner(archive)?;
-    // container.xml full-path is root-relative (per EPUB spec), use as-is
+
     let opf_path = opf_rel;
     let opf_text = read_zip_entry_inner(archive, &opf_path)?;
 
@@ -276,13 +264,6 @@ pub struct ZipPrefetch {
     pub sections: HashMap<String, String>,
 }
 
-/// Opens a zip file in Rust and returns:
-///   - an uncompressed-size map of every entry
-///   - EPUB-specific: pre-decoded text for container, OPF, nav, NCX,
-///     encryption.xml, plus ALL HTML/XHTML sections
-///
-/// The operation runs on the blocking thread pool so 4 concurrent
-/// JS `invoke()` calls get true parallelism.
 #[tauri::command]
 pub async fn prefetch_zip_metadata(
     app: tauri::AppHandle,
@@ -302,7 +283,6 @@ fn prefetch_sync(_app: &tauri::AppHandle, path: &str) -> Result<ZipPrefetch, Str
     let file = File::open(file_path).map_err(|e| format!("Cannot open {path}: {e}"))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Not a valid zip: {e}"))?;
 
-    // 1. Build uncompressed-size map for every zip entry
     let mut sizes: HashMap<String, u64> = HashMap::with_capacity(archive.len());
     for i in 0..archive.len() {
         if let Ok(f) = archive.by_index(i) {
@@ -310,10 +290,8 @@ fn prefetch_sync(_app: &tauri::AppHandle, path: &str) -> Result<ZipPrefetch, Str
         }
     }
 
-    // 2. EPUB-specific: container → OPF → nav/NCX → encryption
     let epub = read_epub_metadata(&mut archive);
 
-    // 3. Pre-load HTML/XHTML section content so JS never touches zip for text
     let mut sections: HashMap<String, String> = HashMap::new();
     let section_exts = [".html", ".htm", ".xhtml", ".xml"];
     for name in sizes.keys() {
@@ -321,7 +299,7 @@ fn prefetch_sync(_app: &tauri::AppHandle, path: &str) -> Result<ZipPrefetch, Str
         if !section_exts.iter().any(|e| lower.ends_with(e)) {
             continue;
         }
-        // Skip already-read metadata files
+
         if epub.as_ref().is_some_and(|e| {
             e.nav_path.as_deref() == Some(name.as_str())
                 || e.ncx_path.as_deref() == Some(name.as_str())
@@ -389,7 +367,7 @@ mod tests {
     fn create_simple_opf(title: &str, author: &str) -> Vec<u8> {
         format!(
             r#"<?xml version="1.0"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+<package xmlns="http:
   <metadata>
     <dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">{}</dc:title>
     <dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">{}</dc:creator>
@@ -616,7 +594,7 @@ mod tests {
         ]);
         let cursor = Cursor::new(zip_data);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
-        // Try reading with a percent-encoded name that doesn't exist in the zip
+
         let result = read_zip_entry_inner(&mut archive, "nonexistent/path.html");
         assert_eq!(result, None);
     }

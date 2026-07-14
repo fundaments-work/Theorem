@@ -1,8 +1,4 @@
-/**
- * Foliate Styles
- * CSS for foliate-js integration
- * Ported from foliate/src/reader/reader.html
- */
+
 
 :root {
     --light-bg: var(--reader-bg);
@@ -26,7 +22,7 @@
     }
 }
 
-/* Foliate view custom element */
+
 foliate-view {
     display: block;
     width: 100%;
@@ -40,7 +36,7 @@ foliate-view {
     }
 }
 
-/* Head and foot parts */
+
 foliate-view::part(head),
 foliate-view::part(foot) {
     font-family: system-ui, -apple-system, sans-serif;
@@ -48,13 +44,13 @@ foliate-view::part(foot) {
     color: var(--fg);
 }
 
-/* Filter part for invert mode */
+
 .invert foliate-view::part(filter) {
     color-scheme: light;
     filter: invert(1) hue-rotate(180deg);
 }
 
-/* Footnote dialog styles */
+
 #footnote-dialog {
     font-family: system-ui, -apple-system, sans-serif;
     padding: 0;
@@ -125,7 +121,7 @@ foliate-view::part(foot) {
     }
 }
 
-/* Ribbon for bookmarks */
+
 #ribbon {
     visibility: hidden;
     display: inline-block;

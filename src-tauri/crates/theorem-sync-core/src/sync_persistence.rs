@@ -1,8 +1,3 @@
-/// Theorem — Sync Persistence Helpers
-///
-/// Shared persistence functions for paired devices.
-/// Uses atomic write (write-to-temp + rename) to prevent corruption on crash.
-/// Used by both the main app (wrapped by iroh_sync) and the standalone daemon.
 use crate::sync_protocol::PairedDevice;
 use std::collections::HashMap;
 use std::io::Write;
@@ -28,8 +23,6 @@ pub fn save_paired_devices(
     let json = serde_json::to_string_pretty(&devices.values().collect::<Vec<_>>())
         .map_err(|e| format!("serialize: {e}"))?;
 
-    // Atomic write: write to temp file, fsync, then rename.
-    // A crash during write only affects the .tmp file, never the real file.
     {
         let mut f = std::fs::File::create(&tmp_path).map_err(|e| format!("create tmp: {e}"))?;
         f.write_all(json.as_bytes())

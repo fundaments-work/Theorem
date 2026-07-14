@@ -9,9 +9,7 @@ mod tts_linux;
 use reqwest::blocking::Client;
 use serde::Serialize;
 use std::env;
-/**
- * Tauri Library Module
- */
+
 use std::fs;
 #[cfg(not(target_os = "android"))]
 use std::io::{Cursor, Write};
@@ -94,7 +92,6 @@ fn file_uri_to_path(candidate: &str) -> Option<String> {
 
     let decoded = decode_percent_escapes(rest);
 
-    // Windows file URL shape: file:///C:/Users/...
     if decoded.starts_with('/') {
         let bytes = decoded.as_bytes();
         if bytes.len() > 3 && bytes[2] == b':' {
@@ -125,7 +122,6 @@ fn normalize_open_path(candidate: &str, cwd: Option<&str>) -> Option<String> {
         return None;
     }
 
-    // Ignore non-file scheme arguments.
     if trimmed.contains("://") && !trimmed.starts_with("file://") {
         return None;
     }
@@ -170,9 +166,6 @@ fn enqueue_open_paths(app: &tauri::AppHandle, paths: Vec<String>, emit_event: bo
     if emit_event {
         let _ = app.emit("theorem://open-files", paths);
     }
-
-    // Window management is handled by the frontend
-    // The window should already be visible when the app starts
 }
 
 #[tauri::command]
@@ -181,9 +174,6 @@ fn take_pending_open_files(state: tauri::State<PendingOpenFiles>) -> Vec<String>
     guard.drain(..).collect()
 }
 
-/**
- * Metadata structure for PDF documents.
- */
 #[derive(Serialize)]
 struct PdfMetadata {
     title: Option<String>,
@@ -195,29 +185,11 @@ struct PdfMetadata {
     modification_date: Option<String>,
 }
 
-/**
- * Reads a file from the given path and returns its contents as bytes.
- * Used for loading PDF and other document files.
- *
- * # Arguments
- * * `path` - The absolute path to the file to read
- *
- * # Returns
- * * `Ok(Vec<u8>)` - The file contents as bytes
- * * `Err(String)` - Error message if reading fails
- */
 #[tauri::command]
 fn read_file(path: String) -> Result<Vec<u8>, String> {
     fs::read(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))
 }
 
-/// Reads a CBR (RAR comic archive) file and converts it to CBZ (ZIP) format
-/// in memory. The resulting ZIP bytes can be passed to the existing CBZ
-/// reading pipeline unchanged.
-///
-/// CBR conversion requires the unrar-ng crate which bundles native C++
-/// unrar code — this does not cross-compile for the Android NDK, so the
-/// command is a no-op on Android (CBR must be pre-converted before transfer).
 #[tauri::command]
 #[allow(unused_variables)]
 fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
@@ -265,29 +237,8 @@ fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
     }
 }
 
-/**
- * Reads a PDF file from the given path and returns its contents as bytes.
- * Supports both absolute paths and app storage paths.
- *
- * The storage path in the frontend is constructed as:
- * `${appDataDir}/books/${id}.book`
- *
- * Since the Tauri FS plugin on the frontend side handles scoped permissions,
- * this command just needs to use standard fs::read for the resolved paths.
- *
- * # Arguments
- * * `path` - The file path (can be absolute or from app storage)
- *
- * # Returns
- * * `Ok(Vec<u8>)` - The PDF file contents as bytes
- * * `Err(String)` - Error message if reading fails
- */
 #[tauri::command]
 fn read_pdf_file(path: String) -> Result<Response, String> {
-    // Try to read the file directly using standard fs
-    // The Tauri FS plugin's scope permissions are checked on the frontend side
-    // when reading from app storage, so by the time we get here, the path
-    // should be accessible.
     let data = fs::read(&path).map_err(|e| format!("Failed to read PDF file '{}': {}", path, e))?;
     Ok(Response::new(data))
 }
@@ -332,23 +283,13 @@ fn read_pdf_range(path: String, offset: u64, length: u64) -> Result<Response, St
     Ok(Response::new(buffer))
 }
 
-/**
- * Extracts metadata from a PDF file.
- *
- * # Arguments
- * * `path` - The absolute path to the PDF file
- *
- * # Returns
- * * `Ok(PdfMetadata)` - The extracted PDF metadata
- * * `Err(String)` - Error message if reading fails
- */
 #[tauri::command]
 fn get_pdf_metadata(path: String) -> Result<PdfMetadata, String> {
     let metadata = fs::metadata(&path)
         .map_err(|e| format!("Failed to read PDF file metadata '{}': {}", path, e))?;
     let file_size = metadata.len();
 
-    const HEAD_SIZE: u64 = 65536; // 64KB for header + Info dict
+    const HEAD_SIZE: u64 = 65536;
     let first_chunk_size = HEAD_SIZE.min(file_size);
 
     let mut file =
@@ -360,8 +301,6 @@ fn get_pdf_metadata(path: String) -> Result<PdfMetadata, String> {
 
     let metadata = extract_pdf_metadata(&first_bytes);
 
-    // If no title found in the first 64KB, the Info dict might be near the end.
-    // Try the last 64KB as a fallback.
     if metadata.title.is_none() && file_size > HEAD_SIZE {
         let tail_size = HEAD_SIZE.min(file_size);
         let tail_offset = file_size.saturating_sub(tail_size);
@@ -398,14 +337,9 @@ fn get_pdf_metadata(path: String) -> Result<PdfMetadata, String> {
     Ok(metadata)
 }
 
-/**
- * Extracts metadata from PDF bytes by parsing the document structure.
- * This is a basic parser that extracts info from the PDF header and Info dictionary.
- */
 fn extract_pdf_metadata(bytes: &[u8]) -> PdfMetadata {
     let content = String::from_utf8_lossy(bytes);
 
-    // Extract page count by counting /Type /Page occurrences (approximation)
     let pages = content
         .matches("/Type /Page")
         .count()
@@ -413,7 +347,6 @@ fn extract_pdf_metadata(bytes: &[u8]) -> PdfMetadata {
         .ok()
         .filter(|&n: &u32| n > 0);
 
-    // Try to extract fields from the Info dictionary
     let title = extract_pdf_string(&content, "/Title");
     let author = extract_pdf_string(&content, "/Author");
     let creator = extract_pdf_string(&content, "/Creator");
@@ -432,16 +365,11 @@ fn extract_pdf_metadata(bytes: &[u8]) -> PdfMetadata {
     }
 }
 
-/**
- * Extracts a string value for a given key from PDF content.
- * Handles PDF string literals (both parentheses and angle bracket encodings).
- */
 fn extract_pdf_string(content: &str, key: &str) -> Option<String> {
     if let Some(pos) = content.find(key) {
         let after_key = &content[pos + key.len()..];
         let trimmed = after_key.trim_start();
 
-        // Handle parenthesis-enclosed strings: (value)
         if let Some(rest) = trimmed.strip_prefix('(') {
             if let Some(end_pos) = find_closing_paren(rest) {
                 let value = &rest[..end_pos];
@@ -449,7 +377,6 @@ fn extract_pdf_string(content: &str, key: &str) -> Option<String> {
             }
         }
 
-        // Handle hex strings: <hexvalue>
         if let Some(rest) = trimmed.strip_prefix('<') {
             if let Some(end_pos) = rest.find('>') {
                 let hex = &rest[..end_pos];
@@ -460,9 +387,6 @@ fn extract_pdf_string(content: &str, key: &str) -> Option<String> {
     None
 }
 
-/**
- * Finds the position of the closing parenthesis, handling escaped parentheses.
- */
 fn find_closing_paren(s: &str) -> Option<usize> {
     let mut depth = 1;
     let mut escaped = false;
@@ -488,9 +412,6 @@ fn find_closing_paren(s: &str) -> Option<usize> {
     None
 }
 
-/**
- * Decodes a PDF string literal, handling escape sequences.
- */
 fn decode_pdf_string(s: &str) -> String {
     let mut result = String::new();
     let mut chars = s.chars().peekable();
@@ -503,9 +424,8 @@ fn decode_pdf_string(s: &str) -> String {
                 Some('t') => result.push('\t'),
                 Some('b') => result.push('\x08'),
                 Some('f') => result.push('\x0c'),
-                Some('\n') => {} // Line continuation, skip
+                Some('\n') => {}
                 Some(d) if d.is_ascii_digit() => {
-                    // Octal escape sequence
                     let mut octal = String::new();
                     octal.push(d);
                     for _ in 0..2 {
@@ -532,9 +452,6 @@ fn decode_pdf_string(s: &str) -> String {
     result
 }
 
-/**
- * Decodes a hex-encoded PDF string.
- */
 fn decode_hex_string(hex: &str) -> Option<String> {
     let cleaned: String = hex.chars().filter(|c| !c.is_whitespace()).collect();
 
@@ -548,17 +465,6 @@ fn decode_hex_string(hex: &str) -> Option<String> {
         .and_then(|bytes| String::from_utf8(bytes).ok())
 }
 
-/**
- * Fetches RSS feed content from a URL using native HTTP client.
- * This bypasses browser CORS restrictions.
- *
- * # Arguments
- * * `url` - The URL of the RSS feed to fetch
- *
- * # Returns
- * * `Ok(String)` - The feed content as a string
- * * `Err(String)` - Error message if fetching fails
- */
 #[tauri::command]
 fn fetch_rss_feed(url: String) -> Result<String, String> {
     let response = shared_http_client()
@@ -582,17 +488,6 @@ fn fetch_rss_feed(url: String) -> Result<String, String> {
         .map_err(|e| format!("Failed to read response: {}", e))
 }
 
-/**
- * Fetches generic URL content using native HTTP client.
- * Primarily used to fetch full article HTML for RSS items.
- *
- * # Arguments
- * * `url` - The URL to fetch
- *
- * # Returns
- * * `Ok(String)` - The response body as text
- * * `Err(String)` - Error message if fetching fails
- */
 #[tauri::command]
 fn fetch_url_content(url: String) -> Result<String, String> {
     let parsed_url =
@@ -681,10 +576,6 @@ fn fetch_url_content(url: String) -> Result<String, String> {
     Err(last_error.unwrap_or_else(|| "Failed to fetch URL content".to_string()))
 }
 
-/**
- * Fetches binary URL content (for example PDF files) using native HTTP client.
- * Returns raw bytes so the frontend can store the document in app storage.
- */
 #[tauri::command]
 fn fetch_binary_content(url: String) -> Result<Vec<u8>, String> {
     let parsed_url =
@@ -796,7 +687,6 @@ fn scan_library_folder_desktop(folder_path: String) -> Result<Vec<String>, Strin
             }
         }
 
-        // Sort for deterministic order
         book_files.sort();
         Ok(book_files)
     }
@@ -838,8 +728,6 @@ async fn materialize_android_content_uri(
 
 #[cfg(target_os = "linux")]
 fn apply_linux_webkit_workarounds() {
-    // Allow advanced users to disable these workarounds for troubleshooting:
-    // THEOREM_WEBKIT_WORKAROUNDS=0
     if env::var("THEOREM_WEBKIT_WORKAROUNDS")
         .map(|value| value == "0")
         .unwrap_or(false)
@@ -847,12 +735,10 @@ fn apply_linux_webkit_workarounds() {
         return;
     }
 
-    // WebKitGTK fallback for known Linux compositor/acceleration regressions.
     if env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
         env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
     }
 
-    // Helps with fractional-scaling blur regressions in GTK/WebKit paths.
     let existing_gdk_debug = env::var("GDK_DEBUG").unwrap_or_default();
     if existing_gdk_debug
         .split(',')
@@ -866,9 +752,6 @@ fn apply_linux_webkit_workarounds() {
         env::set_var("GDK_DEBUG", merged);
     }
 }
-
-// ─── TTS Commands ───
-// Linux: spd-say CLI. macOS: say command. Windows: PowerShell SAPI. Android: plugin.
 
 #[tauri::command]
 #[allow(unused_variables, unreachable_code)]
@@ -951,16 +834,12 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     apply_linux_webkit_workarounds();
 
-    // Install the default crypto provider for rustls (used by reqwest v0.13 via iroh).
-    // iroh's reqwest dependency uses `rustls-no-provider`, so no provider is set by
-    // default — without this, any reqwest TLS connection will panic with "No provider set".
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let builder = tauri::Builder::default()
         .manage(PendingOpenFiles::default())
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Hide to tray instead of closing — user must use tray "Quit"
                 let _ = window.hide();
                 api.prevent_close();
             }
@@ -976,10 +855,9 @@ pub fn run() {
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
-        // Called when a secondary instance is invoked (e.g. "Open With" or relaunch).
         let paths = collect_open_paths(argv, Some(&cwd));
         enqueue_open_paths(app, paths, true);
-        // Show and focus the existing window (it may be hidden to tray).
+
         if let Some(window) = app.get_webview_window("main") {
             let _ = window.show();
             let _ = window.set_focus();
@@ -991,18 +869,12 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            // Initialize iroh P2P sync subsystem.
-            // On Android, app_data_dir can fail to resolve, so we try
-            // multiple fallback paths before giving up.
             let app_data_dir = app
                 .path()
                 .app_data_dir()
                 .or_else(|_| app.path().app_cache_dir())
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
 
-            // Run database schema migrations (CREATE INDEX IF NOT EXISTS, ALTER TABLE,
-            // schema evolution). Runs on every startup via a temporary connection so
-            // changes take effect even when the connection pool is already cached.
             if let Err(e) = database::run_schema_migrations(app.handle()) {
                 eprintln!("[database] Schema migration failed: {e}");
             }
@@ -1022,13 +894,10 @@ pub fn run() {
                 }
             }
 
-            // Collect any file association / CLI open targets at startup so the frontend can
-            // import and open them once it is ready.
             let startup_args: Vec<String> = std::env::args().skip(1).collect();
             let open_paths = collect_open_paths(startup_args, None);
             enqueue_open_paths(app.handle(), open_paths, false);
 
-            // ── System tray (desktop only) ──
             #[cfg(desktop)]
             {
                 let show = MenuItemBuilder::with_id("show", "Show Theorem").build(app)?;
@@ -1124,25 +993,20 @@ pub fn run() {
             database::sqlite_get_book_metadata,
             database::sqlite_save_book_annotations,
             database::sqlite_get_book_annotations,
-            // iroh P2P sync commands
             sync_commands::iroh_start,
             sync_commands::iroh_stop,
             sync_commands::iroh_pair,
-            // Pairing + device management
             sync_commands::generate_pairing_qr,
             sync_commands::submit_pairing_code,
             sync_commands::get_device_identity,
             sync_commands::set_device_fingerprint,
             sync_commands::get_paired_devices,
             sync_commands::unpair_device,
-            // iroh-docs CRDT sync
-            // iroh-docs CRDT sync
             sync_commands::docs_create_sync_doc,
             sync_commands::docs_import_sync_doc,
             sync_commands::docs_set_entry,
             sync_commands::docs_get_all_entries,
             sync_commands::docs_sync_now,
-            // Fast file transfer via QUIC streams (replaces iroh-blobs)
             file_transfer::request_book_file,
             sync_commands::clear_sync_databases,
             set_android_fingerprint,
@@ -1153,8 +1017,6 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// On Android, reads ANDROID_ID via the mobile-folder-scan plugin and
-/// sets it as the device fingerprint. No-op on other platforms.
 #[tauri::command]
 async fn set_android_fingerprint(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
@@ -1165,7 +1027,6 @@ async fn set_android_fingerprint(app: tauri::AppHandle) -> Result<(), String> {
                 eprintln!("[sync] Android fingerprint set from ANDROID_ID");
             }
             _ => {
-                // Fallback: generate a placeholder fingerprint.
                 theorem_sync_core::sync_crypto::set_fingerprint_from_frontend("android:unknown");
             }
         }
@@ -1177,9 +1038,6 @@ async fn set_android_fingerprint(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Initialize the ndk-context global so hickory-resolver (used by iroh DNS)
-/// can access the Android JVM and application context on tokio worker threads.
-/// Called from MainActivity.onCreate() before the Tauri setup callback fires.
 #[cfg(target_os = "android")]
 #[no_mangle]
 pub extern "C" fn Java_work_fundamentals_theorem_MainActivity_initNdkContext(
@@ -1227,8 +1085,6 @@ fn get_application_context(env: &mut jni::JNIEnv) -> Option<*mut std::ffi::c_voi
     Some(raw_ptr)
 }
 
-/// Hide the main window to the system tray.
-/// The app continues running in the background with the sync server alive.
 #[tauri::command]
 fn hide_to_tray(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
@@ -1240,11 +1096,6 @@ fn hide_to_tray(app: tauri::AppHandle) -> Result<(), String> {
     }
 }
 
-/// Download and extract a StarDict dictionary from a URL.
-/// Supports both .tar.bz2 and .zip archives.
-/// Writes extracted files directly to SQLite blob storage and returns
-/// dictionary metadata so the frontend never handles large blobs over IPC.
-/// Runs the download on a blocking thread so the UI stays responsive.
 #[tauri::command]
 async fn download_and_extract_stardict(
     app: AppHandle,
@@ -1307,7 +1158,6 @@ async fn download_and_extract_stardict(
     .map_err(|e| format!("Extraction task failed: {e}"))?
     .map_err(|e| format!("Extraction failed: {e}"))?;
 
-    // Parse .ifo to get dictionary metadata
     let ifo_text = String::from_utf8_lossy(&ifo);
     let mut name = String::from("Unknown Dictionary");
     let mut lang = String::from("en");
@@ -1316,10 +1166,9 @@ async fn download_and_extract_stardict(
         if let Some(value) = trimmed.strip_prefix("bookname=") {
             name = value.trim().to_string();
         } else if trimmed.starts_with("sametypesequence=") {
-            // Dictionary format indicator — captured for info, not needed elsewhere
         }
     }
-    // Derive language from URL (e.g., .../file/en/dict-en-en.zip)
+
     if let Some(segments) = url.split('/').nth(4) {
         if segments.len() == 2 {
             lang = segments.to_string();

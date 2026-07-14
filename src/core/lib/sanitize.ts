@@ -1,10 +1,4 @@
-/**
- * Theorem — HTML Sanitization Utility
- *
- * Wraps DOMPurify for consistent XSS protection across all
- * dangerouslySetInnerHTML usage. Import this instead of
- * using DOMPurify directly or setting innerHTML raw.
- */
+
 import DOMPurify from "dompurify";
 import type { Config } from "dompurify";
 

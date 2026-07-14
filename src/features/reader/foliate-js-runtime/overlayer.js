@@ -40,7 +40,7 @@ export class Overlayer {
     }
     hitTest({ x, y }) {
         const arr = Array.from(this.#map.entries())
-        // loop in reverse to hit more recently added items first
+        
         for (let i = arr.length - 1; i >= 0; i--) {
             const [key, obj] = arr[i]
             for (const { left, top, right, bottom } of obj.rects)
@@ -156,10 +156,7 @@ export class Overlayer {
         }
         return g
     }
-    // make an exact copy of an image in the overlay
-    // one can then apply filters to the entire element, without affecting them;
-    // it's a bit silly and probably better to just invert images twice
-    // (though the color will be off in that case if you do heu-rotate)
+    
     static copyImage([rect], options = {}) {
         const { src } = options
         const image = createSVGElement('image')
@@ -172,4 +169,3 @@ export class Overlayer {
         return image
     }
 }
-

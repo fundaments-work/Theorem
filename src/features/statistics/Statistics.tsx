@@ -1,7 +1,3 @@
-/**
- * Statistics Page
- * User statistics, reading progress, and achievements
- */
 
 import { useState, useMemo } from "react";
 import { cn, normalizeAuthor, formatReadingTime } from "../../core/lib/utils";
@@ -22,7 +18,6 @@ import {
 } from "lucide-react";
 import { ShareStatsStudioModal } from "./ShareStatsStudioModal";
 
-// Stat card component
 interface StatCardProps {
     icon: React.ReactNode;
     label: string;
@@ -50,7 +45,6 @@ function StatCard({ icon, label, value, subtext }: StatCardProps) {
     );
 }
 
-// Progress bar component
 function ProgressBar({
     current,
     target,
@@ -87,7 +81,6 @@ function getDateTimestamp(dateValue: unknown): number {
     return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-// Recent book card
 interface RecentBookCardProps {
     book: {
         id: string;
@@ -141,7 +134,6 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
     );
 }
 
-// Activity heatmap — scrolls horizontally inside its own container
 function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivity[] | undefined }) {
     const weeks = useMemo(() => {
         const data: { level: number; dateStr: string }[][] = [];
@@ -193,7 +185,7 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivit
                 <span className="text-sm font-medium text-[color:var(--color-text-primary)]">Reading Activity</span>
                 <span className="text-xs text-[color:var(--color-text-muted)]">Last 12 weeks</span>
             </div>
-            {/* Scroll container: heatmap uses full width with larger cells */}
+            
             <div className="overflow-x-auto -mx-1 px-1 pb-1">
                 <div className="flex gap-[3px] w-full justify-between" style={{ minWidth: "max-content" }}>
                     {weeks.map((week, weekIndex) => (
@@ -225,7 +217,6 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivit
     );
 }
 
-// Main page component
 export function StatisticsPage() {
     const books = useLibraryStore((state) => state.books);
     const annotations = useLibraryStore((state) => state.annotations);
@@ -240,7 +231,6 @@ export function StatisticsPage() {
             return !!book.completedAt || book.progress >= 0.99;
         });
 
-        // Most recently read book that is still in progress
         const currentlyReading = [...books]
             .filter((b) => b.lastReadAt && b.progress > 0 && b.progress < 0.99 && b.manualCompletionState !== "read")
             .sort((a, b) => getDateTimestamp(b.lastReadAt) - getDateTimestamp(a.lastReadAt))[0];
@@ -294,7 +284,7 @@ export function StatisticsPage() {
 
     return (
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in overflow-x-hidden">
-            {/* Header */}
+            
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8 sm:mb-10">
                 <div>
                     <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
@@ -313,7 +303,6 @@ export function StatisticsPage() {
                 </button>
             </div>
 
-            {/* Stats Grid — 2 cols on mobile, 4 on md+ */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-10">
                 <StatCard
                     icon={<BookOpen className="w-5 h-5" />}
@@ -341,11 +330,10 @@ export function StatisticsPage() {
                 />
             </div>
 
-            {/* Main Content Grid — single col on mobile, 3 cols on lg+ */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-                {/* Left Column */}
+                
                 <div className="lg:col-span-2 space-y-6 sm:space-y-8">
-                    {/* Reading Goals */}
+                    
                     <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
                         <div className="flex items-center gap-3 mb-5 sm:mb-6">
                             <div className="p-2 bg-[var(--color-surface-muted)]">
@@ -367,12 +355,10 @@ export function StatisticsPage() {
                         </div>
                     </section>
 
-                    {/* Activity Heatmap */}
                     <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
                         <ActivityHeatmap dailyActivity={stats.dailyActivity} />
                     </section>
 
-                    {/* Recently Read */}
                     {recentBooks.length > 0 && (
                         <section>
                             <div className="flex items-center justify-between mb-4">
@@ -398,9 +384,8 @@ export function StatisticsPage() {
                     )}
                 </div>
 
-                {/* Right Column */}
                 <div className="space-y-6 sm:space-y-8">
-                    {/* Annotations Summary */}
+                    
                     <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
                         <div className="flex items-center gap-3 mb-5 sm:mb-6">
                             <div className="p-2 bg-[var(--color-surface-muted)]">
@@ -425,7 +410,6 @@ export function StatisticsPage() {
                         </div>
                     </section>
 
-                    {/* Favorites */}
                     {favoriteBooks.length > 0 && (
                         <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
                             <div className="flex items-center gap-3 mb-5 sm:mb-6">
@@ -466,7 +450,6 @@ export function StatisticsPage() {
                         </section>
                     )}
 
-                    {/* Achievements */}
                     <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
                         <div className="flex items-center gap-3 mb-5 sm:mb-6">
                             <div className="p-2 bg-[var(--color-surface-muted)]">

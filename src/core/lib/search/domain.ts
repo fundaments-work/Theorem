@@ -34,9 +34,6 @@ const SEARCH_PLACEHOLDER_BY_DOMAIN: Record<Exclude<SearchDomain, "none">, string
     reader: "Search in book...",
 };
 
-/**
- * Resolves the active search domain from placement and current route.
- */
 export function resolveSearchDomain({
     placement,
     route,
@@ -51,9 +48,6 @@ export function resolveSearchDomain({
     return APP_TITLEBAR_DOMAIN_BY_ROUTE[route] ?? "none";
 }
 
-/**
- * Returns the search placeholder for a domain.
- */
 export function getSearchPlaceholder(domain: SearchDomain): string {
     if (domain === "none") {
         return "";
@@ -61,9 +55,6 @@ export function getSearchPlaceholder(domain: SearchDomain): string {
     return SEARCH_PLACEHOLDER_BY_DOMAIN[domain];
 }
 
-/**
- * Helper for route/placement rendering logic.
- */
 export function hasSearchDomain(domain: SearchDomain): boolean {
     return domain !== "none";
 }

@@ -139,7 +139,6 @@ function normalizeDirectoryPath(value: string): string {
             return `//${url.host}${decodedPath}`;
         }
 
-        // Windows file URI shape: file:///C:/Users/...
         if (/^\/[A-Za-z]:\//.test(decodedPath)) {
             return decodedPath.slice(1);
         }
@@ -206,7 +205,7 @@ function toErrorMessage(error: unknown, fallback: string): string {
                 return serialized;
             }
         } catch {
-            // ignore serialization failures and use fallback message
+            
         }
     }
 
@@ -627,7 +626,6 @@ export async function syncVaultMarkdownSnapshot({
 
         const pages = buildBookPages(books, rssArticles, annotations, vaultPath, pagesDirectoryName);
 
-        // Write pages in batches to avoid exceeding file descriptor limits.
         const BATCH_SIZE = 16;
         for (let i = 0; i < pages.length; i += BATCH_SIZE) {
             const batch = pages.slice(i, i + BATCH_SIZE);
@@ -639,7 +637,6 @@ export async function syncVaultMarkdownSnapshot({
             ));
         }
 
-        // Write vocabulary in parallel with the last page batch (already awaited above).
         await fs.writeTextFile(
             vocabularyPath,
             buildVocabularyMarkdown(vocabularyTerms, generatedAt),

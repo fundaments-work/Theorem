@@ -1,7 +1,3 @@
-/**
- * Storage Utilities
- * SQLite-first storage in Tauri with IndexedDB web fallback.
- */
 
 import { get, set, del } from 'idb-keyval';
 import { isTauri } from './env';
@@ -218,11 +214,6 @@ export async function getBookMaterializedPath(id: string, filePath?: string): Pr
     return null;
 }
 
-/**
- * Save book data to storage.
- * - Tauri: SQLite (primary)
- * - Web: IndexedDB
- */
 export async function saveBookData(id: string, data: ArrayBuffer): Promise<string> {
     clearBlobCacheForBook(id);
 
@@ -242,9 +233,6 @@ export async function saveBookData(id: string, data: ArrayBuffer): Promise<strin
     }
 }
 
-/**
- * Get book data from storage as ArrayBuffer.
- */
 export async function getBookData(id: string, filePath?: string): Promise<ArrayBuffer | null> {
     const cacheKey = getStorageKey(id, filePath);
     const pendingRead = pendingDataReads.get(cacheKey);
@@ -256,8 +244,6 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
         const normalizedPath = filePath ? normalizeFilePath(filePath) : undefined;
         const sqliteBookId = resolveSqliteBookId(id, normalizedPath);
 
-        // Prefer direct file-system reads for source paths to avoid expensive
-        // SQLite->JS binary marshalling when a readable path is available.
         if (isTauri() && normalizedPath && isExternalFilePath(normalizedPath)) {
             const externalData = await readExternalFile(normalizedPath);
             if (externalData && externalData.byteLength > 0) {
@@ -316,9 +302,6 @@ export async function getBookData(id: string, filePath?: string): Promise<ArrayB
     }
 }
 
-/**
- * Get book data as a Blob.
- */
 export async function getBookBlob(id: string, filePath?: string): Promise<Blob | null> {
     const cacheKey = getStorageKey(id, filePath);
     const cachedBlob = getCachedBlob(cacheKey);
@@ -358,9 +341,6 @@ export async function getBookBlob(id: string, filePath?: string): Promise<Blob |
     }
 }
 
-/**
- * Delete book data from storage.
- */
 export async function deleteBookData(id: string, filePath?: string): Promise<void> {
     clearBlobCacheForBook(id, filePath);
 
@@ -502,15 +482,12 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
     });
 }
 
-/**
- * Save cover image as data URL.
- */
 export async function saveCoverImage(bookId: string, blob: Blob): Promise<string> {
     let finalBlob = blob;
     try {
         finalBlob = await downsampleCoverImage(blob);
     } catch (e) {
-        // fallback to original
+        
     }
     const dataUrl = await blobToDataUrl(finalBlob);
     lruSet(coverCache, bookId, dataUrl, COVER_CACHE_MAX);
@@ -531,9 +508,6 @@ export async function saveCoverImage(bookId: string, blob: Blob): Promise<string
     }
 }
 
-/**
- * Get cover image data URL.
- */
 export async function getCoverImage(bookId: string): Promise<string | null> {
     const cached = coverCache.get(bookId);
     if (cached !== undefined) return cached || null;
@@ -560,9 +534,6 @@ export async function getCoverImage(bookId: string): Promise<string | null> {
     }
 }
 
-/**
- * Delete cover image.
- */
 export async function deleteCoverImage(bookId: string): Promise<void> {
     coverCache.delete(bookId);
 

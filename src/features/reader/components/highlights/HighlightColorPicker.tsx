@@ -1,7 +1,3 @@
-/**
- * HighlightColorPicker Component - Optimized & Redesigned
- * Modern, sleek popup for selecting highlight color with smooth animations
- */
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -48,7 +44,6 @@ interface HighlightColorPickerProps {
     onClose: () => void;
 }
 
-// Color configurations with proper highlight styling
 const COLOR_OPTIONS: {
     color: HighlightColor;
     label: string;
@@ -61,7 +56,6 @@ const COLOR_OPTIONS: {
         { color: "purple", label: HIGHLIGHT_COLOR_TOKENS.purple.label },
     ];
 
-// Animation keyframes
 const ANIMATION_STYLES = `
     @keyframes picker-appear {
         from {
@@ -140,7 +134,6 @@ export function HighlightColorPicker({
         }
     }, []);
 
-    // Sync selectedColor with currentColor when picker opens
     useEffect(() => {
         if (isOpen) {
             setSelectedColor(currentColor || null);
@@ -160,9 +153,8 @@ export function HighlightColorPicker({
         }
     }, [isDictionaryView]);
 
-    // Position calculation with viewport boundary detection
     useEffect(() => {
-        // Skip calculation if not open
+        
         if (!isOpen) {
             setIsClosing(false);
             hasScheduledCloseRef.current = false;
@@ -187,10 +179,8 @@ export function HighlightColorPicker({
 
             let { x, y } = position;
 
-            // Center horizontally relative to click position
             x = x - rect.width / 2;
 
-            // Adjust horizontal bounds
             if (x + rect.width > rightBound) {
                 x = rightBound - rect.width;
             }
@@ -211,7 +201,6 @@ export function HighlightColorPicker({
                 return Math.max(0, Math.min(popupBottom, selectionBottom) - Math.max(popupTop, selectionTop));
             };
 
-            // Flip above/below based on selection position with a guaranteed visual gap.
             const fallbackSelectionHeight = isMobileViewport ? 32 : 24;
             const selectionHeight = Math.max(position.height ?? fallbackSelectionHeight, fallbackSelectionHeight);
             const inferredSelectionTop = position.height === undefined
@@ -222,8 +211,6 @@ export function HighlightColorPicker({
             const softViewportHeight = Math.max(softBottomBound - softTopBound, 1);
             const isLargeSelection = selectionHeight >= softViewportHeight * 0.55;
 
-            // Mobile-first behavior for select-all / page-sized selections:
-            // keep the overlay centered instead of pushing it into status/title bars.
             if (isLargeSelection) {
                 x = (viewportWidth - rect.width) / 2;
                 if (x + rect.width > rightBound) {
@@ -281,7 +268,6 @@ export function HighlightColorPicker({
                 }
             }
 
-            // Ensure vertical bounds
             if (y + rect.height > hardBottomBound) {
                 y = hardBottomBound - rect.height;
             }
@@ -292,7 +278,6 @@ export function HighlightColorPicker({
             setAdjustedPosition({ x, y });
         };
 
-        // Small delay to ensure popup is rendered for measurement
         requestAnimationFrame(calculatePosition);
     }, [
         dictionary?.error,
@@ -307,7 +292,6 @@ export function HighlightColorPicker({
         viewportPadding?.top,
     ]);
 
-    // Close handlers with animation
     const handleClose = useCallback(() => {
         if (hasScheduledCloseRef.current) {
             return;
@@ -321,20 +305,17 @@ export function HighlightColorPicker({
         }, 150);
     }, [onClose]);
 
-    // Color selection with animation feedback
     const handleColorClick = useCallback((color: HighlightColor) => {
         setSelectedColor(color);
-        // Small delay for visual feedback before closing
+        
         requestAnimationFrame(() => {
             onSelectColor(color);
         });
     }, [onSelectColor]);
 
-    // Handle delete with confirmation
     const handleDeleteClick = useCallback(async () => {
         if (isTauri()) {
-            // Tauri uses its own native dialog
-            // Use empty title to avoid duplication
+            
             const confirmed = await ask('Delete this highlight and any associated notes?', {
                 title: '',
                 kind: 'warning',
@@ -344,7 +325,7 @@ export function HighlightColorPicker({
                 handleClose();
             }
         } else {
-            // Web: use inline confirm UI to avoid native confirm() duplication
+            
             setShowDeleteConfirm(true);
         }
     }, [onDelete, handleClose]);
@@ -359,7 +340,6 @@ export function HighlightColorPicker({
         setShowDeleteConfirm(false);
     }, []);
 
-    // Keyboard shortcuts
     useEffect(() => {
         if (!isOpen) return;
 
@@ -373,7 +353,6 @@ export function HighlightColorPicker({
                 }
             }
 
-            // Number keys 1-6 for quick color selection (only when not confirming delete)
             if (!showDeleteConfirm && !isDictionaryView) {
                 const num = parseInt(e.key);
                 if (num >= 1 && num <= 6) {
@@ -387,9 +366,6 @@ export function HighlightColorPicker({
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [isDictionaryView, isOpen, showDeleteConfirm, handleClose, handleColorClick]);
 
-    // Click outside handler - also handles clicks in iframe.
-    // In dictionary view the popup stays open so the user can scroll/read
-    // the definition; only explicit Back/Save/Escape closes it.
     useEffect(() => {
         if (!isOpen) return;
 
@@ -400,14 +376,12 @@ export function HighlightColorPicker({
             }
         };
 
-        // Use capture phase to catch clicks before they reach iframe
         const timer = setTimeout(() => {
             document.addEventListener('pointerdown', handleClickOutside, true);
             document.addEventListener('mousedown', handleClickOutside, true);
             document.addEventListener('click', handleClickOutside, true);
         }, 50);
 
-        // Close on scroll or resize, unless we're showing dictionary results.
         const handleScrollOrResize = () => {
             if (isDictionaryView) return;
             handleClose();
@@ -436,7 +410,6 @@ export function HighlightColorPicker({
         };
     }, []);
 
-    // Keep hook ordering stable: return null only after all hooks are declared.
     if (!isOpen) return null;
 
     const popupContent = (

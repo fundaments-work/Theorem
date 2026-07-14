@@ -80,10 +80,6 @@ function App() {
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
-    // Wait for settings store to hydrate from SQLite (max 3s) before
-    // deciding whether to show onboarding. Falls through so the app
-    // never gets stuck — if hydration doesn't complete in time, the
-    // default hasCompletedOnboarding:true kicks in.
     const [storesHydrated, setStoresHydrated] = useState(() =>
         useSettingsStore.persist.hasHydrated(),
     );
@@ -110,8 +106,7 @@ function App() {
     const hasCompletedOnboardingStore = useSettingsStore(
         (state) => state.settings.hasCompletedOnboarding,
     );
-    // localStorage is synchronous — instant check prevents the onboarding
-    // flash while SQLite hydration is still in progress.
+    
     const hasCompletedOnboarding =
         typeof localStorage !== "undefined" &&
         localStorage.getItem("theorem-onboarding-complete") === "true"
@@ -120,7 +115,6 @@ function App() {
 
     useKeyboardShortcuts(currentRoute);
 
-    // Register app-level keyboard shortcuts
     useEffect(() => {
         return registerShortcuts("app", [
             {
@@ -129,7 +123,7 @@ function App() {
                 category: "App",
                 handler: () => setShowShortcutsHelp((prev) => !prev),
             },
-            // Navigation
+            
             { label: "Go to Library",       keys: "Ctrl+1", category: "Navigation", handler: () => setRoute("library") },
             { label: "Go to Shelves",       keys: "Ctrl+2", category: "Navigation", handler: () => setRoute("shelves") },
             { label: "Go to Feeds",         keys: "Ctrl+3", category: "Navigation", handler: () => setRoute("feeds") },
@@ -138,18 +132,18 @@ function App() {
             { label: "Go to Workbench",     keys: "Ctrl+6", category: "Navigation", handler: () => setRoute("annotations") },
             { label: "Go to Bookmarks",     keys: "Ctrl+7", category: "Navigation", handler: () => setRoute("bookmarks") },
             { label: "Go to Settings",      keys: "Ctrl+,", category: "Navigation", handler: () => setRoute("settings") },
-            // Search & Filter
+            
             { label: "Find / Search",       keys: "Ctrl+F", category: "Search",     handler: () => {
                 const route = useUIStore.getState().currentRoute;
-                if (route === "reader") return; // handled by reader engine
+                if (route === "reader") return; 
                 const searchInput = document.querySelector<HTMLInputElement>('input[placeholder*="Search"]');
                 if (searchInput) { searchInput.focus(); searchInput.select(); }
             }},
-            // Sidebar
+            
             { label: "Toggle sidebar",      keys: "Ctrl+B", category: "App",        handler: () => {
                 useUIStore.getState().toggleSidebar();
             }},
-            // Library actions
+            
             { label: "Select all",          keys: "Ctrl+A", category: "Library",    handler: () => {
                 const route = useUIStore.getState().currentRoute;
                 if (route !== "library" && route !== "shelves" && route !== "bookmarks") return;
@@ -172,29 +166,26 @@ function App() {
         }
     }, [currentRoute, setRoute, vocabularyEnabled]);
 
-    // Handle system back button / browser history
     useEffect(() => {
         if (typeof window === "undefined") return;
 
-        // Initialize history state for the initial landing page
         window.history.replaceState({ route: currentRoute, bookId: useUIStore.getState().currentBookId }, "");
 
         const handlePopState = (event: PopStateEvent) => {
             const state = event.state;
             const currentUIState = useUIStore.getState();
 
-            // Ignore our internal back interceptor states
             if (state && state.__theorem_back) {
                 return;
             }
 
             if (state && state.route) {
-                // Only update if the route or book has actually changed
+                
                 if (state.route !== currentUIState.currentRoute || state.bookId !== currentUIState.currentBookId) {
                     setRoute(state.route, state.bookId, false);
                 }
             } else if (!state) {
-                // If we land on a null state (beginning of history), default to library
+                
                 if (currentUIState.currentRoute !== "library") {
                     setRoute("library", undefined, false);
                 }
@@ -203,9 +194,8 @@ function App() {
 
         window.addEventListener("popstate", handlePopState);
         return () => window.removeEventListener("popstate", handlePopState);
-    }, [setRoute]); // Only setup once, but include setRoute in deps for safety
+    }, [setRoute]); 
 
-    // Handle desktop file associations ("Open With Theorem") via Tauri.
     useEffect(() => {
         if (!isTauri() || typeof window === "undefined") {
             return;
@@ -307,22 +297,14 @@ function App() {
         };
     }, []);
 
-    // Initialize reader styles on app load
     useEffect(() => {
         initReaderStyles(useSettingsStore.getState().settings.readerSettings);
     }, []);
 
-    // Reader runtime prewarming removed — PDF.js + Foliate + ReaderPage are
-    // heavy libraries (~100-200MB). For low-resource environments, they load
-    // on-demand when the user opens a book, not at app startup.
-
-    // Initialize i18n on app load
     useEffect(() => {
         void initI18n();
     }, []);
 
-    // On Android, initialize the device fingerprint (ANDROID_ID) for stable
-    // device identity across installs. No-op on desktop where machine-id is used.
     useEffect(() => {
         if (!isTauri()) {
             return;
@@ -334,9 +316,6 @@ function App() {
         void initFingerprint();
     }, []);
 
-    // Start the iroh P2P endpoint + auto-sync scheduler when auto-sync is enabled.
-    // The iroh endpoint is also started on-demand from DeviceSync.tsx when the
-    // user opens the sync settings page (for pairing/manual sync).
     useEffect(() => {
         if (!isTauri() || !hasCompletedOnboarding) {
             return;
@@ -350,10 +329,7 @@ function App() {
             }
 
             if (!autoSyncEnabled) {
-                // Ensure any stale workers/services from a previous
-                // session (before data clear / reinstall) are stopped.
-                // stopAutoSync cancels WorkManager and stops the
-                // Android ForegroundService even if auto-sync is off.
+                
                 stopAutoSync();
                 return;
             }
@@ -361,7 +337,7 @@ function App() {
             try {
                 await ensureResponderSyncReady();
             } catch {
-                // Sync server unavailable on this device.
+                
             }
             if (cancelled) return;
 
@@ -369,13 +345,13 @@ function App() {
                 const { subscribeZustandToIrohDocs } = await import("./core/lib/sync-orchestrator");
                 bridgeCleanup = subscribeZustandToIrohDocs();
             } catch {
-                // Bridge initialization not available.
+                
             }
 
             try {
                 await startAutoSync();
             } catch {
-                // Auto-sync scheduling unavailable.
+                
             }
         };
 
@@ -392,7 +368,6 @@ function App() {
         };
     }, [hasCompletedOnboarding, autoSyncEnabled]);
 
-    // Ensure the desktop window doesn't start in a mobile-like size.
     useEffect(() => {
         if (!isTauriDesktop()) {
             return;
@@ -423,10 +398,8 @@ function App() {
         };
     }, []);
 
-    // Check if we're in reader mode (full screen, no sidebar)
     const isReaderMode = currentRoute === "reader";
 
-    // Reset scroll position when navigating between non-reader pages.
     useEffect(() => {
         if (isReaderMode) {
             return;
@@ -459,15 +432,10 @@ function App() {
         }
     };
 
-    // Show loading state until persisted stores have rehydrated from SQLite.
-    // This prevents the default hasCompletedOnboarding:false from flashing
-    // the OnboardingFlow before the persisted true value is loaded.
     if (!storesHydrated) {
         return <PageFallback />;
     }
 
-    // Reader mode: full screen without sidebar
-    // Onboarding flow for first-time users
     if (!hasCompletedOnboarding) {
         return <OnboardingFlow onComplete={handleOnboardingComplete} />;
     }
@@ -487,16 +455,14 @@ function App() {
     return (
         <>
         <div className="flex h-screen min-h-[100dvh] bg-[var(--color-background)]">
-            {/* Sidebar - Shows on md screens and up (tablets and laptops) */}
+            
             <div className="hidden md:block">
                 <Sidebar isMobile={isMobileDevice} />
             </div>
 
-            {/* Main Content */}
             <div className="relative flex-1 flex flex-col min-w-0">
                 <AppTitlebar title="Theorem" />
 
-                {/* Page Content */}
                 <main id="app-main" ref={mainScrollRef} className="flex-1 overflow-y-auto pb-16 md:pb-0 md:px-8 md:py-6 custom-scrollbar">
                     <RouteErrorBoundary>
                         <Suspense fallback={<PageFallback />}>
@@ -506,7 +472,6 @@ function App() {
                 </main>
             </div>
 
-            {/* Mobile Navigation - outside overflow container for reliable fixed positioning on all mobile browsers */}
             <BottomNav />
 
             <KeyboardShortcutsHelp

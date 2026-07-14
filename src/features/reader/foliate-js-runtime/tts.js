@@ -103,9 +103,6 @@ const getFragmentWithMarks = (range, textWalker, granularity) => {
     const segmenter = getSegmenter(lang, granularity)
     const fragment = range.cloneContents()
 
-    // we need ranges on both the original document (for highlighting)
-    // and the document fragment (for inserting marks)
-    // so unfortunately need to do it twice, as you can't copy the ranges
     const entries = [...textWalker(range, segmenter)]
     const fragmentEntries = [...textWalker(fragment, segmenter)]
 

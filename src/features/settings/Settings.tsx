@@ -1,7 +1,3 @@
-/**
- * Settings Page
- * App configuration and preferences
- */
 
 import { useRef, useState, useEffect, memo, lazy, Suspense, type ChangeEvent } from "react";
 import { cn, normalizeFilePath, formatFileSize } from "../../core/lib/utils";
@@ -59,7 +55,6 @@ type PersistableStore = {
     };
 };
 
-// Section component
 interface SectionProps {
     title: string;
     description?: string;
@@ -86,7 +81,6 @@ function Section({ title, description, icon, children }: SectionProps) {
     );
 }
 
-// Setting row component
 interface SettingRowProps {
     label: string;
     description?: string;
@@ -116,7 +110,6 @@ function normalizeHighlightsExportName(value: string): string {
     return value.replace(/\.md$/i, "").trim();
 }
 
-// Toggle component
 function Toggle({
     checked,
     onChange,
@@ -152,7 +145,6 @@ function Toggle({
     );
 }
 
-// Button select component
 function ButtonSelect<T extends string>({
     options,
     value,
@@ -313,7 +305,6 @@ const StorageTab = memo(function StorageTab({ onClearData, onExportData }: { onC
     );
 });
 
-// Main page component
 export const SettingsPage = memo(function SettingsPage() {
     const settings = useSettingsStore((state) => state.settings);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
@@ -350,8 +341,6 @@ export const SettingsPage = memo(function SettingsPage() {
         return "general";
     });
 
-    // Track which tabs have been visited — unvisited tabs don't render at all
-    // (fast initial mount); visited tabs stay in DOM with CSS hidden (instant switch).
     const [visitedTabs, setVisitedTabs] = useState<Set<SettingsTab>>(
         () => new Set([activeTab]),
     );
@@ -379,7 +368,6 @@ export const SettingsPage = memo(function SettingsPage() {
         window.sessionStorage.setItem(SETTINGS_TAB_SESSION_KEY, activeTab);
     }, [activeTab]);
 
-    // Persistent download progress listener (survives modal close)
     useEffect(() => {
         if (!isTauri()) return;
         let unlisten: (() => void) | undefined;
@@ -459,7 +447,6 @@ export const SettingsPage = memo(function SettingsPage() {
         };
         const hasVaultPath = nextVault.vaultPath.trim().length > 0;
 
-        // Keep markdown-export UX simple: configured folder means export is enabled.
         if (!("enabled" in updates)) {
             nextVault.enabled = hasVaultPath;
         }
@@ -596,7 +583,7 @@ export const SettingsPage = memo(function SettingsPage() {
                 try {
                     saved = await saveViaTauri();
                 } catch {
-                    // Save dialog may fail on some platforms — fall through to browser download.
+                    
                 }
             }
 
@@ -633,7 +620,7 @@ export const SettingsPage = memo(function SettingsPage() {
     return (
         <>
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
-            {/* Header */}
+            
             <div className="flex items-center justify-between mb-10">
                 <div>
                     <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
@@ -645,7 +632,6 @@ export const SettingsPage = memo(function SettingsPage() {
                 </div>
             </div>
 
-            {/* Tabs */}
             <div className="mb-8 space-y-3">
                 <div className="sm:hidden -mx-1 px-1">
                     <div className="flex gap-2 overflow-x-auto pb-1">
@@ -684,7 +670,6 @@ export const SettingsPage = memo(function SettingsPage() {
                 </div>
             </div>
 
-            {/* General Settings */}
             {(activeTab === "general" || visitedTabs.has("general")) && <div className={activeTab === "general" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Library"
@@ -928,7 +913,6 @@ export const SettingsPage = memo(function SettingsPage() {
                     </div>
                 </div>}
 
-            {/* Dictionary Settings */}
             {(activeTab === "dictionary" || visitedTabs.has("dictionary")) && <div className={activeTab === "dictionary" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Dictionary"
@@ -1024,8 +1008,6 @@ export const SettingsPage = memo(function SettingsPage() {
                     </Section>
                 </div>}
 
-
-            {/* Integrations Settings */}
             {(activeTab === "integrations" || visitedTabs.has("integrations")) && <div className={activeTab === "integrations" ? "space-y-8" : "hidden"}>
                     <div ref={deviceSyncSectionRef}>
                         <Suspense fallback={null}>
@@ -1158,7 +1140,6 @@ export const SettingsPage = memo(function SettingsPage() {
                     </div>
                 </div>}
 
-            {/* Storage Settings */}
             {(activeTab === "storage" || visitedTabs.has("storage")) && <div className={activeTab === "storage" ? "" : "hidden"}>
                 <StorageTab onClearData={handleClearData} onExportData={handleExportData} />
             </div>}

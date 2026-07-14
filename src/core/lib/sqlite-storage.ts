@@ -154,8 +154,6 @@ export async function sqliteGetBlobStats(prefix?: string): Promise<SqliteBlobSta
     }) as Promise<SqliteBlobStats>;
 }
 
-// ─── FTS5 Search ───
-
 export interface SqliteBookSearchResult {
     book_id: string;
     title: string;
@@ -175,8 +173,6 @@ export async function sqliteIndexBooksFtsBatch(entries: Array<[string, string, s
     const invoke = await getInvoke();
     await invoke('sqlite_index_books_fts_batch', { entries });
 }
-
-// ─── Book Metadata + Annotations (SQLite tables) ───
 
 export async function sqliteSaveBookMetadata(bookId: string, metadataJson: string): Promise<void> {
     const invoke = await getInvoke();

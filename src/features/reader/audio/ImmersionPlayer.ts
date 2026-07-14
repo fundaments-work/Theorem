@@ -1,8 +1,4 @@
-/**
- * ImmersionPlayer — native platform TTS.
- * Android: TextToSpeech plugin. Desktop: shell commands via invoke.
- * All Tauri platforms share the same estimation-based pause/resume.
- */
+
 import { invoke } from "@tauri-apps/api/core";
 
 let _isAndroid: boolean | null = null;
@@ -77,7 +73,7 @@ export class ImmersionPlayer {
         if (this._state !== 'playing') return;
         if (this.completeTimer) { clearTimeout(this.completeTimer); this.completeTimer = null; }
         await invoke("tts_stop").catch(e => console.error("[catch]", e));
-        // Estimate position and truncate to word boundary.
+        
         const elapsedSec = (performance.now() - this.startTime) / 1000;
         const charsSpoken = Math.floor(elapsedSec * BASE_CHARS_PER_SEC);
         let charCount = 0, wordsToDrop = 0;
@@ -125,7 +121,7 @@ export class ImmersionPlayer {
             try {
                 const v = await invoke<Array<{ name: string; locale: string }>>("tts_get_voices");
                 if (v.length > 0) return v.map(x => ({ name: x.name, lang: x.locale }));
-            } catch { /* fall through */ }
+            } catch {  }
         }
         if (typeof window !== "undefined" && window.speechSynthesis) {
             const voices = window.speechSynthesis.getVoices();

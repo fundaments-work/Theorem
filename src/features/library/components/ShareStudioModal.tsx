@@ -99,7 +99,7 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
         <Modal isOpen={true} onClose={onClose} size="xl">
             <ModalHeader title="Share Studio" onClose={onClose} />
             <ModalBody className="flex flex-col md:flex-row gap-8">
-                {/* Preview Area */}
+                
                 <div className="flex-1 flex items-center justify-center bg-[var(--color-surface-muted)] border border-[var(--color-border)] p-4 relative min-h-[300px]">
                     {isGenerating && (
                         <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--color-surface)] bg-opacity-70">
@@ -117,7 +117,6 @@ export function ShareStudioModal({ annotation, book, onClose }: ShareStudioModal
                     )}
                 </div>
                 
-                {/* Controls Area */}
                 <div className="w-full md:w-64 flex flex-col gap-6 shrink-0">
                     <div>
                         <h3 className="text-[11px] uppercase tracking-wider font-semibold text-[color:var(--color-text-secondary)] mb-3">

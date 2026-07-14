@@ -12,7 +12,7 @@ export function buildShareText(
     }
 
     if (book) {
-        parts.push(`— ${book.title}${book.author ? ` by ${book.author}` : ""}`);
+        parts.push(`— ${book.title}${book.author ? ` by $book.author}` : ""}`);
     }
 
     if (annotation.noteContent) {
@@ -60,7 +60,7 @@ export async function downloadImage(blob: Blob, filename: string): Promise<{ ok:
         const { isTauri, isTauriMobile } = await import("./env");
 
         if (isTauri()) {
-            // On Android, use MediaStore via native plugin to properly save to gallery
+            
             if (isTauriMobile()) {
                 const { invoke } = await import("@tauri-apps/api/core");
                 const base64Data = await blobToBase64(blob);
@@ -69,7 +69,7 @@ export async function downloadImage(blob: Blob, filename: string): Promise<{ ok:
             }
 
             const { writeFile, BaseDirectory, mkdir } = await import("@tauri-apps/plugin-fs");
-            try { await mkdir("Theorem", { baseDir: BaseDirectory.Download, recursive: true }); } catch { /* exists */ }
+            try { await mkdir("Theorem", { baseDir: BaseDirectory.Download, recursive: true }); } catch {  }
             const bytes = new Uint8Array(await blob.arrayBuffer());
             await writeFile(`Theorem/${filename}`, bytes, { baseDir: BaseDirectory.Download });
             return { ok: true };

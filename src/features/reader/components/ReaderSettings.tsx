@@ -1,8 +1,3 @@
-/**
- * ReaderSettings Component
- *
- * Unified visual language with app-wide primitives.
- */
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import {

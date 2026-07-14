@@ -1,15 +1,15 @@
 import { useEffect, useRef, useCallback } from "react";
 
 export interface KeyboardShortcut {
-    /** Display name shown in the help modal */
+    
     label: string;
-    /** The key combo string, e.g. "Ctrl+F", "Escape", "j" */
+    
     keys: string;
-    /** Category for grouping in the help modal */
+    
     category: string;
-    /** The handler to invoke when the shortcut is pressed */
+    
     handler: () => void;
-    /** If true, prevent default browser behavior */
+    
     preventDefault?: boolean;
 }
 
@@ -20,7 +20,7 @@ interface RegisteredShortcut extends KeyboardShortcut {
 
 interface ShortcutGroup {
     shortcuts: RegisteredShortcut[];
-    /** If set, this group only activates when this route matches */
+    
     route?: string;
 }
 
@@ -56,15 +56,6 @@ function matchesCombo(event: KeyboardEvent, combo: ReturnType<typeof parseCombo>
     return true;
 }
 
-/**
- * Register a group of keyboard shortcuts.
- *
- * @param groupId - Unique string ID for this group (e.g. "reader", "library")
- * @param shortcuts - Array of shortcuts
- * @param route - Optional route to scope shortcuts to
- *
- * Returns a cleanup function to unregister all shortcuts in the group.
- */
 export function registerShortcuts(
     groupId: string,
     shortcuts: KeyboardShortcut[],
@@ -86,9 +77,6 @@ export function registerShortcuts(
     };
 }
 
-/**
- * Get all currently registered shortcuts for display in a help modal.
- */
 export function getAllShortcuts(): KeyboardShortcut[] {
     const result: KeyboardShortcut[] = [];
     for (const group of shortcutsByGroup.values()) {
@@ -125,12 +113,6 @@ export function formatShortcutKeys(keys: string): string {
     return parts.map((p) => DISPLAY_KEY_MAP[p.toLowerCase()] ?? p.length === 1 ? p.toUpperCase() : p).join(" + ");
 }
 
-/**
- * React hook that listens for keyboard events and dispatches to registered shortcuts.
- *
- * @param activeRoute - The current route, used to filter route-scoped shortcuts
- * @param enabled - When false, all shortcuts are disabled (e.g. when a modal is open)
- */
 export function useKeyboardShortcuts(activeRoute?: string, enabled = true): void {
     const activeRouteRef = useRef(activeRoute);
     activeRouteRef.current = activeRoute;
@@ -139,7 +121,6 @@ export function useKeyboardShortcuts(activeRoute?: string, enabled = true): void
         (event: KeyboardEvent) => {
             if (!enabled) return;
 
-            // Skip if target is an input, textarea, or contenteditable
             const target = event.target as HTMLElement | null;
             if (
                 target
@@ -151,7 +132,6 @@ export function useKeyboardShortcuts(activeRoute?: string, enabled = true): void
                 return;
             }
 
-            // Escape always closes things even without a registered shortcut
             if (event.key === "Escape") {
                 return;
             }

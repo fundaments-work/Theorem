@@ -1,9 +1,3 @@
-/**
- * TheoremLogo Component
- * Turnstile mark (⊢) — the logical notation for "derives."
- * Built from two rectangles per design.md spec so it renders
- * identically across every platform, weight, and rasterizer.
- */
 
 interface TheoremLogoProps {
     className?: string;

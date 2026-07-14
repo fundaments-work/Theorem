@@ -1,7 +1,3 @@
-/**
- * Bookmarks Page
- * View and manage all bookmarks across books
- */
 
 import { useState, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -14,7 +10,6 @@ import {
     MoreVertical,
 } from "lucide-react";
 
-// Empty state component
 function EmptyBookmarks() {
     return (
         <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
@@ -31,7 +26,6 @@ function EmptyBookmarks() {
     );
 }
 
-// Bookmark card component
 interface BookmarkCardProps {
     bookmark: {
         id: string;
@@ -114,7 +108,6 @@ function BookmarkCard({ bookmark, book, onDelete, onGoToBookmark }: BookmarkCard
     );
 }
 
-// Main page component
 export function BookmarksPage() {
     const annotations = useLibraryStore((state) => state.annotations);
     const books = useLibraryStore((state) => state.books);
@@ -127,16 +120,13 @@ export function BookmarksPage() {
         [books],
     );
 
-    // Get only bookmark annotations
     const bookmarks = useMemo(() => {
         return annotations.filter((a) => a.type === "bookmark");
     }, [annotations]);
 
-    // Filter and sort
     const filteredBookmarks = useMemo(() => {
         let filtered = [...bookmarks];
 
-        // Apply search filter from global search
         if (searchQuery.trim()) {
             const rankedBookmarks = rankByFuzzyQuery(
                 filtered.map((bookmark) => {
@@ -160,7 +150,6 @@ export function BookmarksPage() {
             return rankedBookmarks.map(({ item }) => item.bookmark);
         }
 
-        // Sort
         filtered.sort((a, b) => {
             switch (sortBy) {
                 case "newest": {
@@ -218,7 +207,7 @@ export function BookmarksPage() {
 
     return (
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
-            {/* Header */}
+            
             <div className="flex items-start justify-between mb-10">
                 <div>
                     <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
@@ -231,7 +220,6 @@ export function BookmarksPage() {
                 </div>
             </div>
 
-            {/* Toolbar */}
             <div className="flex items-center justify-between gap-4 mb-8">
                 <Dropdown
                     value={sortBy}
@@ -244,7 +232,6 @@ export function BookmarksPage() {
                 />
             </div>
 
-            {/* Bookmarks Display */}
             {filteredBookmarks.length === 0 ? (
                 <div className="text-center py-16">
                     <p className="text-[color:var(--color-text-muted)]">

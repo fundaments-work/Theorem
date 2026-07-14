@@ -1,11 +1,4 @@
-/**
- * Theorem Context Menu — wraps @radix-ui/react-context-menu for production-grade
- * accessibility (keyboard nav, focus management, ARIA).
- *
- * ContextMenu: wraps children with right-click / long-press trigger.
- * ContextMenuRoot: transparent shell — Radix handles portal rendering per menu.
- * useContextMenuStore: retained for backward compatibility.
- */
+
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
 import { create } from "zustand";
 
@@ -26,8 +19,6 @@ interface ContextMenuProps {
     className?: string;
 }
 
-// ─── Zustand store (backward compatibility) ───
-
 interface ContextMenuState {
     isOpen: boolean;
     position: { x: number; y: number };
@@ -43,8 +34,6 @@ export const useContextMenuStore = create<ContextMenuState>(() => ({
     open: () => {},
     close: () => {},
 }));
-
-// ─── ContextMenu wrapper ───
 
 export function ContextMenu({ items, children, className }: ContextMenuProps) {
     return (

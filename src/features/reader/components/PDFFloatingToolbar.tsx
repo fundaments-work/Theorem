@@ -56,16 +56,16 @@ export function PDFFloatingToolbar({
 
     return (
         <div className={cn("fixed z-[100] flex flex-col items-end gap-4 pointer-events-none", className)}>
-            {/* Toolbar Container */}
+            
             <div
                 className={cn(
                     "flex flex-col gap-2 transition-colors duration-300 ease-out origin-bottom-right pointer-events-auto",
                     isOpen ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 translate-y-8 pointer-events-none"
                 )}
             >
-                {/* Tools */}
+                
                 <div className="flex flex-col items-center gap-2 p-2 bg-[var(--color-surface)]/90 backdrop-blur-xl border border-[var(--color-border)] shadow-2xl">
-                    {/* Tool Buttons */}
+                    
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'highlight' ? 'none' : 'highlight')}
@@ -120,7 +120,6 @@ export function PDFFloatingToolbar({
                         </button>
                     </div>
 
-                    {/* Color Picker (Conditional) */}
                     {(annotationMode === 'highlight' || annotationMode === 'pen') && (
                         <div className="w-full h-px bg-[var(--color-border)]/50 my-1" />
                     )}
@@ -144,7 +143,6 @@ export function PDFFloatingToolbar({
                 </div>
             </div>
 
-            {/* Main FAB Toggle */}
             <button
                 onClick={toggleOpen}
                 className={cn(

@@ -1,18 +1,3 @@
-//! Fast file transfer over QUIC streams.
-//!
-//! Replaces iroh-blobs download path for book files. Uses a custom ALPN
-//! (`theorem-file/v1`) with raw QUIC bidirectional streams — no BAO tree
-//! verification, no per-file QUIC handshake, no 30s timeouts.
-//!
-//! Protocol:
-//!   1. Client opens bi stream, sends `<book_id>\n` or `cover:<book_id>\n`
-//!   2. Server reads book file from `book-cache/<id>.book`
-//!      or cover from SQLite database
-//!   3. Server sends: `OK <size>\n<bytes>` or `ERR <msg>\n`
-//!   4. Stream closes
-//!
-//! Security: TLS 1.3 via iroh's ed25519 key exchange (same as CRDT/docs sync).
-
 use std::path::{Path, PathBuf};
 
 use iroh::endpoint;
@@ -22,8 +7,6 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 const FILE_TRANSFER_ALPN: &[u8] = b"theorem-file/v1";
 
 pub const ALPN_BYTES: &[u8] = FILE_TRANSFER_ALPN;
-
-// ─── ProtocolHandler ───
 
 #[derive(Clone)]
 pub struct FileTransferHandler {
@@ -37,12 +20,10 @@ impl std::fmt::Debug for FileTransferHandler {
 }
 
 impl FileTransferHandler {
-    /// Read a cover image from the SQLite database by book ID.
     async fn read_cover(data_dir: &Path, book_id: &str) -> Result<Vec<u8>, String> {
-        // Open theorem.db and query the covers table
         let db_path = data_dir.join("theorem.db");
         let conn = rusqlite::Connection::open(&db_path).map_err(|e| format!("open db: {e}"))?;
-        // Covers are stored in the blob_store table with key prefix "cover:"
+
         let cover_key = format!("cover:{}", book_id);
         let mut stmt = conn
             .prepare("SELECT value FROM blob_store WHERE key = ?1")
@@ -97,9 +78,6 @@ impl ProtocolHandler for FileTransferHandler {
     }
 }
 
-/// Tauri command: request a book file or cover image from a paired peer.
-/// Prefix `book_id` with `cover:` to request a cover image.
-/// The peer must be online and reachable via iroh (mDNS or relay).
 #[tauri::command]
 pub async fn request_book_file(
     app: tauri::AppHandle,
@@ -124,8 +102,7 @@ pub async fn request_book_file(
     };
 
     let peer_addr = iroh::EndpointAddr::new(peer_pk);
-    // mDNS address lookup on the endpoint discovers LAN addresses automatically.
-    // The relay URL from pairing is available as fallback if mDNS fails.
+
     let peer_addr = if !relay_url.is_empty() {
         if let Ok(url) = relay_url.parse::<iroh::RelayUrl>() {
             peer_addr.with_relay_url(url)

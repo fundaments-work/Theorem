@@ -1,7 +1,3 @@
-/**
- * NoteEditor Component
- * Simple popover for adding/editing notes on highlights
- */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -37,7 +33,6 @@ export function NoteEditor({
     const editorRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // Adjust position to keep editor on screen
     useEffect(() => {
         if (!isOpen) return;
 
@@ -55,7 +50,6 @@ export function NoteEditor({
 
         let { x, y } = position;
 
-        // Adjust horizontal position
         if (x + rect.width > rightBound) {
             x = rightBound - rect.width;
         }
@@ -63,7 +57,6 @@ export function NoteEditor({
             x = leftBound;
         }
 
-        // Adjust vertical position
         if (y + rect.height > bottomBound) {
             y = y - rect.height - 40;
         }
@@ -77,7 +70,6 @@ export function NoteEditor({
         setAdjustedPosition({ x, y });
     }, [isOpen, position, viewportPadding?.bottom, viewportPadding?.left, viewportPadding?.right, viewportPadding?.top]);
 
-    // Focus textarea when opened
     useEffect(() => {
         if (isOpen && textareaRef.current) {
             textareaRef.current.focus();
@@ -85,7 +77,6 @@ export function NoteEditor({
         }
     }, [isOpen]);
 
-    // Handle click outside - use capture phase for iframe compatibility
     useEffect(() => {
         if (!isOpen) return;
 
@@ -99,7 +90,6 @@ export function NoteEditor({
         document.addEventListener('mousedown', handleClickOutside, true);
         document.addEventListener('click', handleClickOutside, true);
         
-        // Also close on scroll
         const handleScroll = () => onClose();
         window.addEventListener('scroll', handleScroll, true);
         
@@ -111,7 +101,6 @@ export function NoteEditor({
         };
     }, [isOpen, onClose]);
 
-    // Handle escape key
     useEffect(() => {
         if (!isOpen) return;
 
@@ -150,7 +139,7 @@ export function NoteEditor({
                 zIndex: "calc(var(--z-tooltip) + 40)",
             }}
         >
-            {/* Header */}
+            
             <div className="flex items-center justify-between mb-3">
                 <span className="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--color-text-primary)]">
                     {initialNote ? 'Edit Note' : 'Add Note'}
@@ -168,14 +157,12 @@ export function NoteEditor({
                 </button>
             </div>
 
-            {/* Selected text preview */}
             {selectedText && (
                 <div className="mb-3 px-2 py-1.5 bg-[var(--color-surface-muted)] text-xs text-[color:var(--color-text-secondary)] line-clamp-2">
                     &ldquo;{selectedText.slice(0, 100)}{selectedText.length > 100 ? '...' : ''}&rdquo;
                 </div>
             )}
 
-            {/* Note textarea */}
             <textarea
                 ref={textareaRef}
                 value={note}
@@ -194,7 +181,6 @@ export function NoteEditor({
                 )}
             />
 
-            {/* Footer with save button */}
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--color-border)]">
                 <span className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">
                     Ctrl+Enter to save

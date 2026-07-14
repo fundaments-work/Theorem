@@ -11,11 +11,6 @@ interface State {
     error?: Error;
 }
 
-/**
- * Per-route error boundary.
- * Catches render errors within a single page/route and shows a recovery UI
- * instead of crashing the entire application to the root ErrorBoundary.
- */
 export class RouteErrorBoundary extends Component<Props, State> {
     constructor(props: Props) {
         super(props);

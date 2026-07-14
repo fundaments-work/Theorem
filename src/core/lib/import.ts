@@ -1,8 +1,3 @@
-/**
- * Book Import Utilities
- * Cross-platform file import with instant entry creation
- * Works in both Tauri and browser environments
- */
 
 import type { Book, BookFormat } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -11,7 +6,6 @@ import { saveBookData, getBookData } from './storage';
 import { normalizeFilePath, safeDecodeURIComponent } from './utils';
 import { invoke } from '@tauri-apps/api/core';
 
-// Dynamically import Tauri plugins
 let tauriDialog: typeof import('@tauri-apps/plugin-dialog') | null = null;
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
 
@@ -221,7 +215,7 @@ export function extractFilenameFromPath(filePath: string): string {
                 }
             }
         } catch {
-            // fall through to generic parsing
+            
         }
     }
 
@@ -238,7 +232,7 @@ function isSupportedImportFilename(lowerName: string): boolean {
 }
 
 function normalizePathForFormatLookup(filePath: string): string {
-    // For content URIs (Android), extract the filename from query parameters first
+    
     if (filePath.startsWith('content://')) {
         try {
             const uri = new URL(filePath);
@@ -249,7 +243,7 @@ function normalizePathForFormatLookup(filePath: string): string {
                 return nameParam.toLowerCase();
             }
         } catch {
-            // Fall through to normal processing
+            
         }
     }
     
@@ -300,7 +294,6 @@ function detectFormatFromBuffer(buffer: ArrayBuffer): BookFormat | null {
         return 'fb2';
     }
 
-    // Check for RAR (CBR) magic — RAR 4.x uses Rar!\x1A\x07\x00, RAR 5.x uses Rar!\x1A\x07\x01\x00
     if (bytes.length >= 7 && bytes[0] === 0x52 && bytes[1] === 0x61
         && bytes[2] === 0x72 && bytes[3] === 0x21 && bytes[4] === 0x1A
         && bytes[5] === 0x07) {
@@ -308,17 +301,13 @@ function detectFormatFromBuffer(buffer: ArrayBuffer): BookFormat | null {
     }
 
     if (isZipSignature(bytes)) {
-        // Probe multiple segments of the ZIP file for better detection
-        const probeSize = Math.min(bytes.length, 524288); // Increased from 262144 to 524288
+        
+        const probeSize = Math.min(bytes.length, 524288); 
         const zipProbe = new TextDecoder().decode(bytes.slice(0, probeSize)).toLowerCase();
         
-        // Check for EPUB-specific patterns
-        // EPUB must contain mimetype file with "application/epub+zip" content
-        // and META-INF/container.xml pointing to OPF file
-        // Also check for EPUB directory structure patterns
         const hasEpubMimetype = zipProbe.includes('application/epub+zip') || 
-            zipProbe.includes('mimetypeapplication/epub+zip') || // Some EPUBs have mimetype without separator
-            zipProbe.includes(' mimetype'); // EPUB mimetype file
+            zipProbe.includes('mimetypeapplication/epub+zip') || 
+            zipProbe.includes(' mimetype'); 
         
         const hasEpubStructure = zipProbe.includes('meta-inf/container.xml') || 
             zipProbe.includes('.opf') ||
@@ -329,13 +318,10 @@ function detectFormatFromBuffer(buffer: ArrayBuffer): BookFormat | null {
             return 'epub';
         }
         
-        // Check for FB2 patterns
         if (zipProbe.includes('.fb2') || zipProbe.includes('fictionbook')) {
             return 'fb2';
         }
         
-        // Check for CBZ patterns (images but no OPF)
-        // Only detect as CBZ if it contains images but no OPF or container files
         if (/\.(png|jpe?g|webp|gif|bmp|avif)/.test(zipProbe) && 
             !zipProbe.includes('.opf') && 
             !zipProbe.includes('container.xml') &&
@@ -343,8 +329,6 @@ function detectFormatFromBuffer(buffer: ArrayBuffer): BookFormat | null {
             return 'cbz';
         }
         
-        // Default to epub for ZIP files with no clear indication
-        // This is safer than returning null, as most ZIP files are likely EPUBs
         return 'epub';
     }
 
@@ -353,7 +337,7 @@ function detectFormatFromBuffer(buffer: ArrayBuffer): BookFormat | null {
 
 async function initTauriPlugins() {
     if (!isTauri()) {
-        return null; // Return null instead of throwing - caller will handle browser mode
+        return null; 
     }
 
     if (!tauriDialog) {
@@ -365,25 +349,13 @@ async function initTauriPlugins() {
     return { dialog: tauriDialog, fs: tauriFs };
 }
 
-/**
- * Determine book format from file extension
- * Supports: EPUB, MOBI/AZW, FB2, CBZ, PDF
- * Note: CBR (RAR) is autoconverted to CBZ (ZIP) at import time via Rust read_cbr_as_cbz.
- */
 export function getBookFormat(filePath: string): BookFormat | null {
     const lowerPath = normalizePathForFormatLookup(filePath);
 
-    // Extract the filename from the path
     const filename = lowerPath.split(/[\\/]/).pop() || '';
     
-    // Multi-part extensions must be checked before single-part matches.
-    // Check both filename and full path for compatibility
     if (filename.endsWith('.fb2.zip') || lowerPath.endsWith('.fb2.zip')) return 'fb2';
 
-    // Check against known extensions
-    // We check the filename specifically, not the full path, to avoid issues with
-    // directory names that might contain extension-like patterns
-    // But we also check the full path for cases where the extension might be in a query string
     const extensions: [string, BookFormat][] = [
         ['.epub', 'epub'],
         ['.mobi', 'mobi'],
@@ -396,23 +368,18 @@ export function getBookFormat(filePath: string): BookFormat | null {
         ['.pdf', 'pdf'],
     ];
 
-    // First, check if the filename ends with a known extension
     for (const [ext, format] of extensions) {
         if (filename.endsWith(ext) || lowerPath.endsWith(ext)) {
             return format;
         }
     }
 
-    // If no match, check if the filename contains a known extension
-    // This handles cases like "book.epub.backup" or "book.sk.epub"
-    // We look for the LAST occurrence of a known extension in the filename
     let lastMatch: { ext: string; format: BookFormat; position: number } | null = null;
     
     for (const [ext, format] of extensions) {
         const position = filename.lastIndexOf(ext);
         if (position !== -1) {
-            // Only consider it a match if the extension is followed by nothing or another extension separator
-            // This prevents matching "book.epub" in "book.epub.backup" as epub
+            
             const afterExt = filename.substring(position + ext.length);
             if (afterExt === '' || afterExt.startsWith('.')) {
                 if (!lastMatch || position > lastMatch.position) {
@@ -426,22 +393,13 @@ export function getBookFormat(filePath: string): BookFormat | null {
         return lastMatch.format;
     }
 
-    // If still no match, try to detect format from file content
-    // This handles cases where the file has a non-standard extension
-    // but the content is a known format
     return null;
 }
 
-/**
- * Returns true when the format can be imported and rendered in this build.
- */
 export function isImportFormatSupported(_format: BookFormat): boolean {
     return true;
 }
 
-/**
- * Open file picker dialog and return selected file paths (Tauri only)
- */
 export async function pickBookFiles(): Promise<string[]> {
     const plugins = await initTauriPlugins();
     if (!plugins?.dialog) throw new Error('Dialog plugin not available');
@@ -450,7 +408,7 @@ export async function pickBookFiles(): Promise<string[]> {
         const selected = await plugins.dialog.open({
             multiple: true,
             pickerMode: 'document',
-            // Use scoped access to avoid a dialog-level file copy.
+            
             fileAccessMode: 'scoped',
             filters: [
                 {
@@ -472,7 +430,6 @@ export async function pickBookFiles(): Promise<string[]> {
             ],
         });
 
-        // Debug logging for mobile
         if (isMobile()) {
         }
 
@@ -482,7 +439,7 @@ export async function pickBookFiles(): Promise<string[]> {
 
         for (const entry of entries) {
             if (typeof entry === 'string') {
-                // On Android, dialog may return content:// URIs which we need to handle differently
+                
                 if (entry.startsWith('content://')) {
                     paths.push(entry);
                 } else {
@@ -492,13 +449,12 @@ export async function pickBookFiles(): Promise<string[]> {
             }
 
             if (entry && typeof entry === 'object') {
-                // Handle object with path property (desktop)
+                
                 if ('path' in entry && typeof (entry as { path?: unknown }).path === 'string') {
                     paths.push(normalizeImportPath((entry as { path: string }).path));
                     continue;
                 }
                 
-                // Handle object with uri property (some mobile versions)
                 if ('uri' in entry && typeof (entry as { uri?: unknown }).uri === 'string') {
                     const uri = (entry as { uri: string }).uri;
                     paths.push(uri.startsWith('content://') ? uri : normalizeImportPath(uri));
@@ -512,10 +468,6 @@ export async function pickBookFiles(): Promise<string[]> {
     }
 }
 
-/**
- * Browser file picker using HTML5 File Input API
- * Returns array of File objects
- */
 export function pickBookFilesBrowser(): Promise<File[]> {
     return new Promise((resolve) => {
         const input = document.createElement('input');
@@ -528,18 +480,12 @@ export function pickBookFilesBrowser(): Promise<File[]> {
             resolve(files);
         };
         
-        // Handle cancel - resolve with empty array
         input.oncancel = () => resolve([]);
         
-        // Trigger file picker
         input.click();
     });
 }
 
-/**
- * Create book entry from a browser File object
- * Used for browser-based file imports
- */
 export async function createBookEntryFromFile(file: File): Promise<Book | null> {
     const format = getBookFormat(file.name);
     if (!format) {
@@ -549,7 +495,6 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
         return null;
     }
 
-    // Read file as ArrayBuffer
     const buffer = await file.arrayBuffer();
     if (!buffer || buffer.byteLength === 0) {
         return null;
@@ -559,24 +504,19 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
     const id = uuidv4();
     const fileSize = file.size;
 
-    // Check file size - warn if very large (> 100MB)
     if (fileSize > 100 * 1024 * 1024) {
     }
 
-    // Save to IndexedDB storage
     const storagePath = await saveBookData(id, buffer);
 
-    // Get filename for fallback metadata
     const filename = file.name;
     const filenameMetadata = extractFilenameMetadata(filename);
 
-    // Build book object quickly and defer expensive metadata extraction to
-    // background processing in the library screen.
     const book: Book = {
         id,
         title: filenameMetadata.title,
         author: filenameMetadata.author || "",
-        filePath: `browser://${filename}`, // Virtual path for browser-imported files
+        filePath: `browser://${filename}`, 
         storagePath,
         format,
         contentHash,
@@ -592,9 +532,6 @@ export async function createBookEntryFromFile(file: File): Promise<Book | null> 
     return book;
 }
 
-/**
- * Import books from browser File objects
- */
 export async function importBooksFromFiles(files: File[]): Promise<Book[]> {
     return importBooksFromFilesIncremental(files);
 }
@@ -626,14 +563,10 @@ export async function importBooksFromFilesIncremental(
     return imported.filter((book): book is Book => book !== null);
 }
 
-/**
- * Read a book file from storage
- * Uses the storage abstraction to handle both Tauri paths and IndexedDB
- */
 export async function readBookFile(filePath: string, bookId?: string): Promise<ArrayBuffer> {
     const normalizedFilePath = normalizeImportPath(filePath);
     try {
-        // Use getBookData which properly handles both Tauri paths and IndexedDB URLs
+        
         const data = await getBookData(bookId || '', normalizedFilePath);
         if (!data) {
             throw new Error('Could not read book file from storage - data not found');
@@ -644,14 +577,10 @@ export async function readBookFile(filePath: string, bookId?: string): Promise<A
     }
 }
 
-/**
- * Extract basic metadata from filename
- */
 export function extractFilenameMetadata(filePath: string): { title: string; author: string } {
     const filename = extractFilenameFromPath(filePath);
     const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
     
-    // Try to parse "Author - Title" format
     const parts = nameWithoutExt.split(/\s*[-–—]\s*/);
     if (parts.length >= 2) {
         return {
@@ -666,10 +595,6 @@ export function extractFilenameMetadata(filePath: string): { title: string; auth
     };
 }
 
-/**
- * Create a book entry from a file path (Tauri only)
- * Extracts metadata and cover image using foliate-js
- */
 export async function createBookEntry(filePath: string): Promise<Book | null> {
     const normalizedFilePath = normalizeImportPath(filePath);
     const isContentUri = normalizedFilePath.startsWith('content://');
@@ -679,7 +604,6 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     if (!plugins?.fs) throw new Error('FS plugin not available - this function requires Tauri');
     const fs = plugins.fs;
 
-    // Materialize Android content URIs to a regular file path the FS plugin can read
     let readPath = normalizedFilePath;
     if (isContentUri) {
         const { invoke } = await import('@tauri-apps/api/core');
@@ -697,20 +621,17 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         );
     }
 
-    // Get file stats
     let fileSize = 0;
     try {
         const stats = await fs.stat(readPath);
         fileSize = Number(stats.size);
     } catch {
-        // Stats not available, continue without size
+        
     }
 
-    // Check file size - warn if very large (> 100MB)
     if (fileSize > 100 * 1024 * 1024) {
     }
 
-    // Read file content for storage
     const buffer = await readBookFile(readPath);
     if (!buffer || buffer.byteLength === 0) {
         return null;
@@ -732,13 +653,9 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
 
     const id = uuidv4();
 
-    // Save to app storage first
     let storagePath = await saveBookData(id, buffer);
     let finalFormat = format;
 
-    // Convert CBR (RAR comic archive) to CBZ (ZIP) on import, so the
-    // reading pipeline (which only understands ZIP-based CBZ) can handle
-    // it transparently.
     if (format === 'cbr' && isTauri()) {
         try {
             const cbzData = await invoke<Uint8Array>('read_cbr_as_cbz', { path: storagePath });
@@ -750,12 +667,9 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
         }
     }
 
-    // Resolve a stable filename for metadata extraction on Android content URIs.
     const resolvedFilename = ensureFilenameForFormat(extractFilenameFromPath(normalizedFilePath), format);
     const filenameMetadata = extractFilenameMetadata(resolvedFilename);
 
-    // Build book object quickly and defer expensive metadata extraction to
-    // background processing in the library screen.
     const book: Book = {
         id,
         title: filenameMetadata.title,
@@ -776,9 +690,6 @@ export async function createBookEntry(filePath: string): Promise<Book | null> {
     return book;
 }
 
-/**
- * Import multiple books with error handling
- */
 export async function importBooks(filePaths: string[]): Promise<Book[]> {
     return importBooksIncremental(filePaths);
 }
@@ -814,10 +725,6 @@ export async function importBooksIncremental(
     return imported.filter((book): book is Book => book !== null);
 }
 
-/**
- * Show file picker and import selected books
- * Works in both Tauri and browser environments
- */
 export async function pickAndImportBooks(): Promise<Book[]> {
     return pickAndImportBooksIncremental();
 }
@@ -827,22 +734,21 @@ export async function pickAndImportBooksIncremental(
     onBookFailed?: ImportFailureHandler,
 ): Promise<Book[]> {
     if (isTauri() && !isMobile()) {
-        // Desktop Tauri: use native file picker
+        
         const filePaths = await pickBookFiles();
         if (filePaths.length === 0) {
             return [];
         }
         return importBooksIncremental(filePaths, onBookImported, onBookFailed);
     } else if (isTauri() && isMobile()) {
-        // Mobile Tauri (Android): Use browser file picker for better compatibility
-        // The native dialog on Android returns content:// URIs which are hard to handle
+        
         const files = await pickBookFilesBrowser();
         if (files.length === 0) {
             return [];
         }
         return importBooksFromFilesIncremental(files, onBookImported, onBookFailed);
     } else {
-        // Browser: use HTML5 file picker
+        
         const files = await pickBookFilesBrowser();
         if (files.length === 0) {
             return [];
@@ -851,17 +757,12 @@ export async function pickAndImportBooksIncremental(
     }
 }
 
-/**
- * Scan a folder for books using native filesystem walk (desktop)
- * or JS fs.readDir fallback (web / mobile content URIs).
- */
 export async function scanFolderForBooks(folderPath: string): Promise<string[]> {
     const rootFolderPath = normalizeImportPath(folderPath);
     if (!rootFolderPath) {
         return [];
     }
 
-    // Desktop Tauri: use Rust walkdir for near-native performance
     if (isTauri() && !isMobile()) {
         try {
             const { invoke } = await import('@tauri-apps/api/core');
@@ -870,11 +771,10 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
             });
             return Array.isArray(result) ? result : [];
         } catch (error) {
-            // Fall through to JS implementation
+            
         }
     }
 
-    // JS fallback (web, mobile content URIs, or Rust failure)
     const plugins = await initTauriPlugins();
     if (!plugins?.fs) throw new Error('FS plugin not available - folder scanning requires Tauri');
     const fs = plugins.fs;
@@ -955,7 +855,7 @@ export async function scanFolderForBooks(folderPath: string): Promise<string[]> 
                 return 'file';
             }
         } catch {
-            // Best-effort fallback for unusual entry payloads.
+            
         }
 
         return 'skip';

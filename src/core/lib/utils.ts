@@ -58,17 +58,11 @@ export function formatRelativeDate(date: Date): string {
     return `${Math.floor(diffDays / 365)} years ago`;
 }
 
-/**
- * Normalize author field which might be a string, object, or array
- * EPUB metadata can have author as: string | {name, sortAs, role} | Array<string|object>
- */
 export function normalizeAuthor(author: unknown): string {
     if (!author) return "";
     
-    // If it's already a string
     if (typeof author === "string") return author;
     
-    // If it's an array, normalize each element and join
     if (Array.isArray(author)) {
         return author
             .map(a => normalizeAuthor(a))
@@ -76,13 +70,12 @@ export function normalizeAuthor(author: unknown): string {
             .join(", ");
     }
     
-    // If it's an object with a name property (EPUB author format)
     if (typeof author === "object" && author !== null) {
         const authorObj = author as Record<string, unknown>;
         if (typeof authorObj.name === "string") {
             return authorObj.name;
         }
-        // Try to get any string value
+        
         const values = Object.values(authorObj);
         const stringVal = values.find(v => typeof v === "string");
         if (stringVal) return stringVal as string;
@@ -99,18 +92,12 @@ export function safeDecodeURIComponent(value: string): string {
     }
 }
 
-/**
- * Normalize common file:// URI forms into plain absolute paths.
- * Keeps non-file URLs untouched (except safe URL-decoding).
- */
 export function normalizeFilePath(filePath: string): string {
     const trimmedPath = filePath.trim();
     if (!trimmedPath) {
         return trimmedPath;
     }
 
-    // Keep non-file URI schemes untouched. SAF content URIs are percent-encoded
-    // and decoding them can invalidate the document identifier.
     const schemeMatch = trimmedPath.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
     if (schemeMatch && schemeMatch[1]?.toLowerCase() !== "file") {
         return trimmedPath;
@@ -127,7 +114,7 @@ export function normalizeFilePath(filePath: string): string {
         }
 
         const decodedPath = safeDecodeURIComponent(url.pathname);
-        // Windows file URL shape: file:///C:/Users/...
+        
         if (/^\/[A-Za-z]:\//.test(decodedPath)) {
             return decodedPath.slice(1);
         }

@@ -1,7 +1,3 @@
-/**
- * ReaderBookmarks Component
- * Panel for managing and navigating book bookmarks
- */
 
 import { Bookmark, X, Trash2, ExternalLink } from 'lucide-react';
 import { useLibraryStore } from "../../../core/store";
@@ -32,7 +28,7 @@ export function ReaderBookmarks({
             <Backdrop visible={visible} onClick={onClose} />
 
             <FloatingPanel visible={visible} className={className}>
-                {/* Header */}
+                
                 <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
                     <div className="flex items-center gap-2.5">
                         <div className="p-1.5 bg-[var(--color-background)] text-[color:var(--color-accent)]">
@@ -48,7 +44,6 @@ export function ReaderBookmarks({
                     </button>
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar max-h-[var(--layout-reader-list-max-height)]">
                     {bookmarks.length === 0 ? (
                         <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center">

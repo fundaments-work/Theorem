@@ -10,7 +10,7 @@ export interface LibraryFilterOptions {
     showFavoritesOnly: boolean;
     sortBy: LibrarySortBy;
     sortOrder: LibrarySortOrder;
-    /** Pre-filtered book IDs from SQLite FTS5 search (Tauri only). */
+    
     ftsSearchIds?: string[];
 }
 
@@ -30,8 +30,6 @@ export function getFilteredAndSortedBooks({
     let searchResults = books;
     const trimmedQuery = searchQuery.trim();
 
-    // 1. Search — prefer SQLite FTS5 results when available (Tauri),
-    //    fall back to Fuse.js (web / no FTS results yet).
     if (trimmedQuery) {
         if (ftsSearchIds && ftsSearchIds.length > 0) {
             const idSet = new Set(ftsSearchIds);
@@ -68,7 +66,6 @@ export function getFilteredAndSortedBooks({
         }
     }
 
-    // 2. Filter
     let result = searchResults;
 
     if (selectedShelfBookIds) {
@@ -81,8 +78,6 @@ export function getFilteredAndSortedBooks({
         result = result.filter((book) => book.isFavorite);
     }
 
-    // If there was a search query, Fuse already sorted by relevance, 
-    // so we only apply the manual sort if there's no active search.
     if (trimmedQuery) {
         return result;
     }

@@ -1,7 +1,3 @@
-/**
- * Library Page
- * Book management and import with right-click context menu, filtering, and sorting
- */
 
 import { useState, useCallback, useEffect, useRef, useMemo, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -27,7 +23,6 @@ import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
 import { sqliteSearchBooks } from "../../core/lib/sqlite-storage";
 
-// View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
     grid: <LayoutGrid className="w-4 h-4" />,
     list: <List className="w-4 h-4" />,
@@ -64,7 +59,6 @@ function isBookMarkedRead(book: Book): boolean {
     return !!book.completedAt;
 }
 
-// Book Card Component with Context Menu
 export const BookCard = memo(function BookCard({
     book,
     viewMode,
@@ -121,7 +115,6 @@ export const BookCard = memo(function BookCard({
         }
     };
 
-    // Build context menu items
     const contextMenuItems: ContextMenuItem[] = [
         {
             id: "open",
@@ -154,7 +147,7 @@ export const BookCard = memo(function BookCard({
             icon: <BookMarked className="w-4 h-4" />,
             onClick: () => onAddToShelf(book.id),
         },
-        // Show which shelves this book belongs to with one-click removal (#26)
+        
         ...bookShelves.map((shelf) => ({
             id: `shelf-${shelf.id}`,
             label: `Remove from "${shelf.name}"`,
@@ -197,7 +190,6 @@ export const BookCard = memo(function BookCard({
         },
     ];
 
-    // Grid view
     if (viewMode === "grid") {
         return (
             <ContextMenu items={contextMenuItems}>
@@ -214,7 +206,7 @@ export const BookCard = memo(function BookCard({
                         }
                     }}
                 >
-                    {/* Cover Image */}
+                    
                     <div
                         className={cn(
                             "relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden",
@@ -236,7 +228,6 @@ export const BookCard = memo(function BookCard({
                             </div>
                         )}
 
-                        {/* Selection Checkbox */}
                         {isSelecting && (
                             <div className={cn(
                                 "absolute top-2 left-2 w-6 h-6 flex items-center justify-center transition-colors duration-200 z-10",
@@ -248,7 +239,6 @@ export const BookCard = memo(function BookCard({
                             </div>
                         )}
 
-                        {/* Progress Bar */}
                         {book.progress > 0 && (
                             <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
                                 <div
@@ -258,7 +248,6 @@ export const BookCard = memo(function BookCard({
                             </div>
                         )}
 
-                        {/* Favorite Badge */}
                         <div
                             className={cn(
                                 "absolute top-2 right-2 w-6 h-6 flex items-center justify-center transition-colors duration-300 pointer-events-none",
@@ -270,7 +259,6 @@ export const BookCard = memo(function BookCard({
                             <Heart className={cn("w-3 h-3", book.isFavorite ? "fill-current" : "")} />
                         </div>
 
-                        {/* Synced Without File Badge */}
                         {book.syncedWithoutFile && (
                             <div className="absolute top-2 left-2 w-6 h-6 flex items-center justify-center text-white rounded-sm pointer-events-none" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
                                 <CloudOff className="w-3 h-3" />
@@ -278,7 +266,6 @@ export const BookCard = memo(function BookCard({
                         )}
                     </div>
 
-                    {/* Book Info */}
                     <div className="px-0.5">
                         <h3 className="font-bold text-[11px] uppercase tracking-wide text-[color:var(--color-text-primary)] line-clamp-3 mb-0.5 transition-colors group-hover:text-[color:var(--color-accent)] break-words">
                             {book.title}
@@ -292,7 +279,6 @@ export const BookCard = memo(function BookCard({
         );
     }
 
-    // List view
     if (viewMode === "list") {
         return (
             <ContextMenu items={contextMenuItems}>
@@ -309,7 +295,7 @@ export const BookCard = memo(function BookCard({
                         }
                     }}
                 >
-                    {/* Cover Image */}
+                    
                     <div className={cn(
                         "relative w-12 h-16 flex-shrink-0 bg-[var(--color-surface-muted)] overflow-hidden",
                         "border border-[var(--color-border)]"
@@ -329,7 +315,6 @@ export const BookCard = memo(function BookCard({
                         )}
                     </div>
 
-                    {/* Book Info */}
                     <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] line-clamp-2 break-words">
                             {book.title}
@@ -368,7 +353,6 @@ export const BookCard = memo(function BookCard({
                         )}
                     </div>
 
-                    {/* Progress */}
                     <div className="hidden text-right sm:block">
                         {book.progress > 0 ? (
                             <p className="text-sm text-[color:var(--color-text-secondary)]">
@@ -383,7 +367,6 @@ export const BookCard = memo(function BookCard({
         );
     }
 
-    // Compact view
     return (
         <ContextMenu items={contextMenuItems}>
             <div
@@ -413,7 +396,6 @@ export const BookCard = memo(function BookCard({
                     </div>
                 )}
 
-                {/* Progress Bar */}
                 {book.progress > 0 && (
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
                         <div
@@ -423,7 +405,6 @@ export const BookCard = memo(function BookCard({
                     </div>
                 )}
 
-                {/* Favorite Badge */}
                 <div
                     className={cn(
                         "absolute top-1 right-1 w-5 h-5 flex items-center justify-center transition-colors pointer-events-none",
@@ -435,7 +416,6 @@ export const BookCard = memo(function BookCard({
                     <Heart className={cn("w-2.5 h-2.5 fill-current")} />
                 </div>
 
-                {/* Synced Without File Badge */}
                 {book.syncedWithoutFile && (
                     <div className="absolute top-1 left-1 w-5 h-5 flex items-center justify-center text-white rounded-sm pointer-events-none" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
                         <CloudOff className="w-2.5 h-2.5" />
@@ -459,7 +439,6 @@ export const MemoizedBookCard = memo(BookCard, (prev, next) => {
         prev.isSelected === next.isSelected;
 });
 
-// Empty State Component
 function EmptyLibrary({
     onAddBooks,
     onScanFolder,
@@ -515,7 +494,6 @@ function EmptyLibrary({
     );
 }
 
-// Import Button Component
 function ImportButton({
     onImport,
     isLoading
@@ -540,7 +518,6 @@ function ImportButton({
     );
 }
 
-// Book Info Modal using Portal
 export function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: boolean; onClose: () => void }) {
     if (!book) return null;
 
@@ -672,7 +649,6 @@ export function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; is
     );
 }
 
-// Add to Shelf Modal using Portal
 export function AddToShelfModal({
     isOpen,
     onClose,
@@ -801,7 +777,6 @@ export function AddToShelfModal({
     );
 }
 
-// Main Library Page
 export function LibraryPage() {
     const books = useLibraryStore((state) => state.books);
     const collections = useLibraryStore((state) => state.collections);
@@ -829,19 +804,14 @@ export function LibraryPage() {
     const [isExtractingCovers, setIsExtractingCovers] = useState(false);
     const [isSelecting, setIsSelecting] = useState(false);
 
-    // Filter dropdown state
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
     const filterDropdownRef = useRef<HTMLDivElement>(null);
 
-
-
-    // Modal states
     const [infoModalBook, setInfoModalBook] = useState<Book | null>(null);
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
     const [addToShelfBookId, setAddToShelfBookId] = useState<string | null>(null);
     const [isAddToShelfModalOpen, setIsAddToShelfModalOpen] = useState(false);
 
-    // Tracks cover extraction jobs currently in progress.
     const extractedBookIdsRef = useRef<Set<string>>(new Set());
     const pendingImportMetadataQueueRef = useRef<Book[]>([]);
     const queuedImportMetadataIdsRef = useRef<Set<string>>(new Set());
@@ -878,7 +848,7 @@ export function LibraryPage() {
             }
 
             if (!data) {
-                // Book data unavailable — generate fallback cover from existing metadata
+                
                 if (!latestBook.coverPath) {
                     const fallbackSvg = buildFallbackCoverSvg(
                         latestBook.title,
@@ -1005,12 +975,10 @@ export function LibraryPage() {
         pumpImportMetadataQueue();
     }, [pumpImportMetadataQueue]);
 
-    // Selected shelf state (safely initialized from session storage)
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
 
-    // Favorites filter state
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-    // Initialize selected shelf from session storage on mount
+    
     useEffect(() => {
         const shelfId = sessionStorage.getItem("theorem-selected-shelf");
         if (shelfId) {
@@ -1039,7 +1007,6 @@ export function LibraryPage() {
 
     const debouncedSearchQuery = useDebounce(searchQuery, 250);
 
-    // FTS5 search results from SQLite (Tauri only). Falls back to Fuse.js.
     const [ftsSearchIds, setFtsSearchIds] = useState<string[] | undefined>(undefined);
     useEffect(() => {
         if (!isTauri() || !debouncedSearchQuery.trim()) {
@@ -1128,8 +1095,6 @@ export function LibraryPage() {
         measureElement: (el) => el.getBoundingClientRect().height,
     });
 
-    // Lightweight fallback cover generation for books that need covers.
-    // Real cover/metadata extraction happens when books are opened in the reader.
     useEffect(() => {
         if (!coversHydrated || isExtractingCovers || books.length === 0) {
             return;
@@ -1168,7 +1133,7 @@ export function LibraryPage() {
                     extractedBookIdsRef.current.add(book.id);
 
                     try {
-                        // Only try to read data for books with accessible file paths
+                        
                         const isContentUri = book.filePath.startsWith("content://");
                         const hasOriginalFilePath = (
                             !book.filePath.startsWith('browser://')
@@ -1187,7 +1152,7 @@ export function LibraryPage() {
                         }
 
                         if (data) {
-                            // File available — do real extraction
+                            
                             const filename = ensureFilenameForFormat(
                                 extractFilenameFromPath(book.filePath),
                                 book.format,
@@ -1203,7 +1168,7 @@ export function LibraryPage() {
                             if (metadata.coverDataUrl) {
                                 updates.coverPath = metadata.coverDataUrl;
                             }
-                            // Use the same title-upgrade heuristic as Path A
+                            
                             if (shouldUseExtractedTitle(book.title, metadata.title, book.filePath)) {
                                 updates.title = normalizeMetadataText(metadata.title);
                             }
@@ -1238,7 +1203,7 @@ export function LibraryPage() {
                                 if (!isCancelled) updateBook(book.id, updates);
                             }
                         } else {
-                            // Data unavailable — generate fallback from existing metadata
+                            
                             const fallbackSvg = buildFallbackCoverSvg(
                                 book.title,
                                 book.author || 'Unknown Author',
@@ -1268,7 +1233,6 @@ export function LibraryPage() {
         return () => { isCancelled = true; };
     }, [coversHydrated, books, updateBook]);
 
-    // Close filter dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
@@ -1285,9 +1249,6 @@ export function LibraryPage() {
         };
     }, [showFilterDropdown]);
 
-
-
-    // Handle importing books (works in both Tauri and browser)
     const handleAddBooks = useCallback(async () => {
         setIsImporting(true);
         const failedImports: Array<{ source: string; message: string }> = [];
@@ -1363,7 +1324,6 @@ export function LibraryPage() {
         await importDiscoveredBooks(bookPaths);
     }, [importDiscoveredBooks]);
 
-    // Handle scanning folder (Tauri only)
     const handleScanFolder = useCallback(async () => {
         if (!isTauri()) {
             alert('Folder scanning requires the desktop app.');
@@ -1374,8 +1334,6 @@ export function LibraryPage() {
             if (isMobile()) {
                 setIsScanning(true);
 
-                // Always show picker on mobile so user can confirm or change folder.
-                // SAF remembers the last location, so re-picking the same folder is quick.
                 const pickedFolder = await pickLibraryFolderMobile();
                 if (!pickedFolder) {
                     setIsScanning(false);
@@ -1388,7 +1346,7 @@ export function LibraryPage() {
                     const bookUris = await scanLibraryFolderMobile(pickedFolder);
                     await importDiscoveredBooks(bookUris);
                 } catch (err) {
-                    // Clear saved folder on failure so picker shows again next time
+                    
                     updateSettings({ scanFolders: [] });
                     throw err;
                 }
@@ -1427,9 +1385,8 @@ export function LibraryPage() {
         updateSettings,
     ]);
 
-    // Book actions
     const handleOpenBook = useCallback((book: Book) => {
-        import("../../features/reader"); // prewarm lazy chunk
+        import("../../features/reader"); 
         if (book.syncedWithoutFile) {
             useUIStore.getState().setDownloadingBook(book.id);
             setRoute("reader", book.id);
@@ -1466,7 +1423,7 @@ export function LibraryPage() {
     }, [selectedBooks, removeBook, clearSelection]);
 
     const handleBatchAddToShelf = useCallback(() => {
-        setAddToShelfBookId(null); // null means add all selected
+        setAddToShelfBookId(null); 
         setIsAddToShelfModalOpen(true);
     }, []);
 
@@ -1508,7 +1465,7 @@ export function LibraryPage() {
         if (bookId) {
             addBookToCollection(bookId, shelfId);
         } else {
-            // Batch mode: add all selected books
+            
             for (const id of selectedBooks) {
                 addBookToCollection(id, shelfId);
             }
@@ -1534,7 +1491,6 @@ export function LibraryPage() {
         }
     }, [addCollection, addToShelfBookId, isSelecting, selectedBooks, clearSelection]);
 
-    // Toggle view mode
     const toggleViewMode = () => {
         const modes: LibraryViewMode[] = ["grid", "list", "compact"];
         const currentIndex = modes.indexOf(settings.libraryViewMode);
@@ -1555,7 +1511,7 @@ export function LibraryPage() {
 
     return (
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
-            {/* Header */}
+            
             <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                     <h1 className="m-0 break-words font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
@@ -1579,7 +1535,7 @@ export function LibraryPage() {
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-4 ml-auto">
-                    {/* Import and View Mode grouped left */}
+                    
                     <ImportButton onImport={handleAddBooks} isLoading={isImporting} />
 
                     <button
@@ -1608,7 +1564,6 @@ export function LibraryPage() {
 
                     <div className="h-6 w-px bg-[var(--color-border)]" />
 
-                    {/* Folder opening then Filter */}
                     {isTauri() && (
                         <button
                             onClick={handleScanFolder}
@@ -1639,14 +1594,14 @@ export function LibraryPage() {
 
             <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-start mt-8 relative">
                 <div className="flex-1 w-full">
-                    {/* Mobile Only: Inline Filter Drawer */}
+                    
                     <div className={cn(
                         "md:hidden overflow-hidden transition-colors duration-300",
                         showFilterDropdown ? "max-h-[800px] mb-8 opacity-100" : "max-h-0 opacity-0 mb-0"
                     )}>
                         <div className="w-full border-t-2 border-b-2 border-[var(--color-border)] bg-[var(--color-surface-muted)]">
                             <div className="grid grid-cols-1 divide-y divide-[var(--color-border)]">
-                                {/* Sort Field */}
+                                
                                 <div className="p-4">
                                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-3">Sort By</h3>
                                     <div className="grid grid-cols-2 gap-1">
@@ -1673,7 +1628,6 @@ export function LibraryPage() {
                                     </div>
                                 </div>
 
-                                {/* Order & Filters Group */}
                                 <div className="grid grid-cols-2 divide-x divide-[var(--color-border)]">
                                     <div className="p-4">
                                         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-3">Order</h3>
@@ -1711,7 +1665,6 @@ export function LibraryPage() {
                         </div>
                     </div>
 
-                    {/* Books Grid/List/Compact */}
                     <section ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
                         {sortedBooks.length === 0 ? (
                             <div className="text-center py-16 border-2 border-dashed border-[var(--color-border)]">
@@ -1783,13 +1736,12 @@ export function LibraryPage() {
                     </section>
                 </div>
 
-                {/* Desktop: Filter Overlay */}
                 {showFilterDropdown && (
                     <>
                         <div className="hidden md:block fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
                         <aside className="hidden md:block w-72 absolute right-0 top-0 z-40 border-2 border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl animate-in slide-in-from-right-4 duration-200 max-h-[80vh] overflow-y-auto">
                         <div className="divide-y-2 divide-[var(--color-border)]">
-                            {/* Sort */}
+                            
                             <div className="p-5">
                                 <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Sort Criteria</h3>
                                 <div className="flex flex-col gap-1">
@@ -1816,7 +1768,6 @@ export function LibraryPage() {
                                 </div>
                             </div>
 
-                            {/* Order */}
                             <div className="p-5">
                                 <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Direction</h3>
                                 <div className="grid grid-cols-2 gap-2">
@@ -1840,7 +1791,6 @@ export function LibraryPage() {
                                 </div>
                             </div>
 
-                            {/* Quick Filters */}
                             <div className="p-5">
                                 <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Quick</h3>
                                 <button
@@ -1856,7 +1806,6 @@ export function LibraryPage() {
                                 </button>
                             </div>
 
-                            {/* Shelf Filter */}
                             <div className="p-5">
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)]">Collections</h3>
@@ -1894,7 +1843,6 @@ export function LibraryPage() {
                 )}
             </div>
 
-            {/* Batch Action Bar */}
             {isSelecting && selectedBooks.length > 0 && (
                 <div className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t-2 border-[var(--color-accent)] shadow-[0_-8px_32px_rgba(0,0,0,0.15)] px-4 py-3 flex items-center gap-3 justify-center flex-wrap">
                     <span className="text-sm font-bold text-[color:var(--color-text-primary)] mr-2">
@@ -1932,7 +1880,6 @@ export function LibraryPage() {
                 </div>
             )}
 
-            {/* Book Info Modal */}
             <BookInfoModal
                 book={infoModalBook}
                 isOpen={isInfoModalOpen}
@@ -1942,7 +1889,6 @@ export function LibraryPage() {
                 }}
             />
 
-            {/* Add to Shelf Modal */}
             <AddToShelfModal
                 isOpen={isAddToShelfModalOpen}
                 onClose={() => {

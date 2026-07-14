@@ -1,11 +1,3 @@
-/**
- * ReaderViewport Component - Optimized
- * 
- * Key optimizations:
- * - CSS variable-based instant theme/setting changes
- * - Batched engine updates using requestAnimationFrame
- * - Minimal re-renders through efficient change detection
- */
 
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState, memo } from 'react';
 import { useDocumentReader } from '../hooks/useDocumentReader';
@@ -31,15 +23,15 @@ export interface ReaderViewportHandle {
     goTo: (location: string) => Promise<void>;
     search: (query: string) => AsyncGenerator<any>;
     clearSearch: () => void;
-    // Highlight methods
+    
     addHighlight: (cfi: string, text: string, color: HighlightColor) => Promise<Annotation>;
     addAnnotation: (annotation: Annotation) => Promise<void>;
     removeHighlight: (id: string) => Promise<void>;
     loadAnnotations: (annotations: Annotation[]) => Promise<void>;
     clearSelection: () => void;
-    // Progress data
+    
     getSectionFractions: () => number[];
-    // TTS
+    
     getVisibleTextForTts: () => { text: string; startWordId: string } | null;
     getNextPageTextForTts: () => { text: string; startWordId: string } | null;
 }
@@ -59,7 +51,7 @@ interface ReaderViewportProps {
     onZoomGestureChange?: (zoom: number) => void;
     initialLocation?: string;
     savedLocations?: string;
-    /** Native filesystem path for Rust EPUB prefetch (desktop/mobile Tauri only) */
+    
     nativeFilePath?: string;
 }
 
@@ -80,12 +72,11 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
     savedLocations,
     nativeFilePath,
 }, ref) => {
-    // Navigation feedback state
+    
     const [navDirection, setNavDirection] = useState<'next' | 'prev' | null>(null);
     const [pageAnnouncement, setPageAnnouncement] = useState("");
     const navTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     
-    // Engine update batching
     const pendingEngineUpdateRef = useRef<number | null>(null);
     const lastAppliedSettingsRef = useRef<ReaderSettings | null>(null);
     const pinchAnimationFrameRef = useRef<number | null>(null);
@@ -153,7 +144,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         shouldForceViewportTap,
     });
 
-    // Expose methods via ref
     useImperativeHandle(ref, () => ({
         next: () => next(),
         prev: () => prev(),
@@ -171,7 +161,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         getSectionFractions: () => getEngine()?.getSectionFractions() ?? [],
     }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getVisibleTextForTts, getNextPageTextForTts, getEngine]);
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
             close();
@@ -185,7 +174,7 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
                 cancelAnimationFrame(pinchAnimationFrameRef.current);
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        
     }, []);
 
     useEffect(() => {
@@ -195,7 +184,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         }
     }, [settings.zoom]);
 
-    // Open file when it changes
     useEffect(() => {
         if (!file || !isInitialized) {
             return;
@@ -234,14 +222,13 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         return () => {
             cancelled = true;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        
     }, [file, format, initialLocation, isInitialized, savedLocations]);
 
-    // Apply settings changes - optimized with batching
     useEffect(() => {
         const engine = getEngine();
         if (!engine || !lastAppliedSettingsRef.current) {
-            // First load, settings will be applied during open
+            
             lastAppliedSettingsRef.current = { ...settings };
             return;
         }
@@ -253,20 +240,15 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
 
         if (!cssChanged && !engineChanged) return;
 
-        // CSS changes are already applied instantly via the store's applyReaderStyles
-        // We only need to sync settings that affect the rendering engine
-
         if (engineChanged) {
-            // Cancel any pending update
+            
             if (pendingEngineUpdateRef.current) {
                 cancelAnimationFrame(pendingEngineUpdateRef.current);
             }
 
-            // Batch engine updates
             pendingEngineUpdateRef.current = requestAnimationFrame(async () => {
                 pendingEngineUpdateRef.current = null;
 
-                // Apply settings that need engine coordination
                 if (changedKeys.includes('layout')) {
                     setLayout(settings.layout);
                 }
@@ -283,7 +265,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
                     setMargins(settings.margins);
                 }
 
-                // Apply theme changes that need CSS regeneration
                 const needsThemeUpdate = 
                     changedKeys.includes('fontSize') ||
                     changedKeys.includes('lineHeight') ||
@@ -321,7 +302,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
             });
         }
 
-        // Always update the ref for CSS changes
         if (cssChanged && !engineChanged) {
             lastAppliedSettingsRef.current = { ...settings };
         }
@@ -333,7 +313,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         };
     }, [settings, getEngine, setLayout, setFlow, setZoom, setMargins, applyTheme]);
 
-    // Keyboard navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.target instanceof HTMLInputElement ||
@@ -382,37 +361,27 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         };
     }, [next, prev, goToFraction, showNavFeedback]);
 
-
-
-    // Scroll wheel navigation - DISABLED in paged mode per user request
-    // User wants to use keyboard/touch only for navigation in paged mode
-    // Wheel scrolling allowed only in scroll mode
     useEffect(() => {
-        // Wheel navigation is disabled - foliate-js handles scrolling internally
-        // This allows TOC and other panels to scroll with wheel
+        
         return;
     }, []);
 
-    // Text selection handling - Fixed version with iframe support
     useEffect(() => {
         if (!onTextSelected || !isInitialized) return;
 
         const engine = getEngine();
         if (!engine) return;
 
-        // Set up iframe selection listener - this is crucial!
         engine.setupIframeSelectionListener((cfi, text, event) => {
             onTextSelected(cfi, text, event);
         });
 
-        // Also handle load events to set up listeners on new sections
         const handleLoad = () => {
             engine.setupIframeSelectionListener((cfi, text, event) => {
                 onTextSelected(cfi, text, event);
             });
         };
 
-        // Listen for section load events
         const engineInstance = engine as any;
         if (engineInstance.view) {
             engineInstance.view.addEventListener('load', handleLoad);
@@ -425,7 +394,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         };
     }, [onTextSelected, getEngine, isInitialized]);
 
-    // Touch gestures: swipe navigation, pinch zoom, and double-tap zoom toggle.
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -623,9 +591,7 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
 
     return (
         <div className={cn('relative w-full h-full overflow-hidden', className)}>
-            {/* Loading Overlay — only appears after the 200ms grace period in
-                 useDocumentReader. Uses the reading theme background so the
-                 transition to content is seamless. */}
+            
             {isLoading && (
                 <div
                     className="absolute inset-0 flex flex-col items-center justify-center z-20"
@@ -638,7 +604,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
                 </div>
             )}
 
-            {/* Error Display */}
             {displayError && !isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-background)] z-30">
                     <div className="mx-auto w-full max-w-[26rem] min-w-0 flex flex-col items-center gap-4 p-8 text-center">
@@ -663,9 +628,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
                 </div>
             )}
 
-            {/* Container with brightness filter applied via CSS filter.
-                 Full-bleed (inset-0) so brightness covers the entire viewport
-                 edge-to-edge without a visible seam. */}
             <div
                 ref={containerRef}
                 className={cn(
@@ -679,7 +641,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
                 }}
             />
             
-            {/* Click zones - only in paginated mode */}
             {!isLoading && !error && settings.flow !== 'scroll' && (
                 <>
                     <button
@@ -707,7 +668,6 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
                 </>
             )}
 
-            {/* Navigation Feedback Overlay */}
             {navDirection && (
                 <div
                     className={cn(

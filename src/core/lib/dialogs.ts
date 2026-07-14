@@ -1,11 +1,6 @@
 import { ask, confirm, message, open, save } from "@tauri-apps/plugin-dialog";
 import { isMobile, isTauri } from "./env";
 
-/**
- * Native Tauri Dialog Utilities
- * Provides native OS dialogs for confirmations, messages, and file operations
- */
-
 interface ConfirmOptions {
     title?: string;
     message: string;
@@ -14,13 +9,9 @@ interface ConfirmOptions {
     kind?: "info" | "warning" | "error";
 }
 
-/**
- * Shows a native confirmation dialog and waits for user choice
- * @returns Promise<boolean> - true if user confirmed, false if cancelled
- */
 export async function showConfirm(options: ConfirmOptions): Promise<boolean> {
     if (!isTauri()) {
-        // Fallback for web mode
+        
         return window.confirm(options.message);
     }
 
@@ -33,15 +24,11 @@ export async function showConfirm(options: ConfirmOptions): Promise<boolean> {
         });
         return result;
     } catch (error) {
-        // Fallback to browser confirm
+        
         return window.confirm(options.message);
     }
 }
 
-/**
- * Shows a native ask dialog (Yes/No) and waits for user choice
- * @returns Promise<boolean> - true if Yes, false if No
- */
 export async function showAsk(options: ConfirmOptions): Promise<boolean> {
     if (!isTauri()) {
         return window.confirm(options.message);
@@ -67,9 +54,6 @@ interface MessageOptions {
     okLabel?: string;
 }
 
-/**
- * Shows a native message dialog
- */
 export async function showMessage(options: MessageOptions): Promise<void> {
     if (!isTauri()) {
         window.alert(options.message);
@@ -100,13 +84,9 @@ interface DirectoryDialogOptions {
     recursive?: boolean;
 }
 
-/**
- * Shows a native file open dialog
- * @returns Promise<string | string[] | null> - selected file path(s) or null if cancelled
- */
 export async function showOpenFileDialog(options: FileDialogOptions = {}): Promise<string | string[] | null> {
     if (!isTauri()) {
-        // Web fallback - create hidden file input
+        
         return new Promise((resolve) => {
             const input = document.createElement("input");
             input.type = "file";
@@ -142,10 +122,6 @@ export async function showOpenFileDialog(options: FileDialogOptions = {}): Promi
     }
 }
 
-/**
- * Shows a native directory picker dialog
- * @returns Promise<string | null> - selected directory path or null if cancelled
- */
 export async function showOpenDirectoryDialog(options: DirectoryDialogOptions = {}): Promise<string | null> {
     if (!isTauri()) {
         return null;
@@ -178,10 +154,6 @@ interface SaveDialogOptions {
     filters?: { name: string; extensions: string[] }[];
 }
 
-/**
- * Shows a native file save dialog
- * @returns Promise<string | null> - selected file path or null if cancelled
- */
 export async function showSaveFileDialog(options: SaveDialogOptions = {}): Promise<string | null> {
     if (!isTauri()) {
         return null;
@@ -199,11 +171,6 @@ export async function showSaveFileDialog(options: SaveDialogOptions = {}): Promi
     }
 }
 
-// Predefined confirmation helpers for common scenarios
-
-/**
- * Confirmation for deleting a book
- */
 export async function confirmDeleteBook(bookTitle: string): Promise<boolean> {
     return showConfirm({
         message: `Are you sure you want to delete "${bookTitle}"? This action cannot be undone.`,
@@ -213,9 +180,6 @@ export async function confirmDeleteBook(bookTitle: string): Promise<boolean> {
     });
 }
 
-/**
- * Confirmation for clearing all data
- */
 export async function confirmClearAllData(): Promise<boolean> {
     return showConfirm({
         message: "This will permanently delete all your books, highlights, notes, vocabulary, shelves, and settings. This action cannot be undone.",
@@ -225,9 +189,6 @@ export async function confirmClearAllData(): Promise<boolean> {
     });
 }
 
-/**
- * Confirmation for removing a book from a shelf
- */
 export async function confirmRemoveFromShelf(bookTitle: string, shelfName: string): Promise<boolean> {
     return showConfirm({
         message: `Remove "${bookTitle}" from "${shelfName}"?`,
@@ -237,9 +198,6 @@ export async function confirmRemoveFromShelf(bookTitle: string, shelfName: strin
     });
 }
 
-/**
- * Confirmation for deleting a shelf
- */
 export async function confirmDeleteShelf(shelfName: string): Promise<boolean> {
     return showConfirm({
         message: `Delete the shelf "${shelfName}"? Books in this shelf will remain in your library.`,
@@ -249,9 +207,6 @@ export async function confirmDeleteShelf(shelfName: string): Promise<boolean> {
     });
 }
 
-/**
- * Confirmation for deleting a bookmark
- */
 export async function confirmDeleteBookmark(): Promise<boolean> {
     return showConfirm({
         message: "Are you sure you want to delete this bookmark?",
@@ -261,9 +216,6 @@ export async function confirmDeleteBookmark(): Promise<boolean> {
     });
 }
 
-/**
- * Confirmation for removing a dictionary
- */
 export async function confirmRemoveDictionary(dictionaryName: string): Promise<boolean> {
     return showConfirm({
         message: `Remove "${dictionaryName}"? Offline word lookups from this dictionary will stop working.`,

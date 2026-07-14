@@ -1,48 +1,25 @@
-/// Theorem LAN Sync — Cryptographic Primitives
-///
-/// Provides device identity management, machine fingerprinting,
-/// and QR code generation for the peer-to-peer sync feature.
-/// Compute a short device ID from the iroh public key bytes.
-/// Returns first 16 hex chars of SHA-256(public_key_bytes).
 pub fn compute_device_id(public_key_bytes: &[u8; 32]) -> String {
     use sha2::Digest;
     let hash = sha2::Sha256::digest(public_key_bytes);
     hex::encode(&hash[..8])
 }
 
-// ─── Timestamp Utility ───
-
-/// Get current time as ISO 8601 string via the `time` crate.
 pub fn now_iso8601() -> String {
     time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap_or_else(|_| String::from("1970-01-01T00:00:00Z"))
 }
 
-// ─── Device Fingerprint ───
-
-/// Read a stable device fingerprint that survives identity file loss.
-///
-/// Strategies per platform:
-/// - Linux: `/etc/machine-id` (128-bit hex, stable across reboots)
-/// - macOS: `IOPlatformUUID` via `ioreg` (too slow, so we use a hash of
-///   the system's serial number from `sysctl hw.model`)
-/// - Windows: Not yet implemented — uses empty string as fallback
-/// - Android: `Settings.Secure.ANDROID_ID` (handled via Tauri plugin)
-///
-/// If the fingerprint cannot be read, returns an empty string
-/// (the sync subsystem will still work, just without dedup).
 pub fn read_machine_fingerprint() -> String {
     #[cfg(target_os = "linux")]
     {
-        // Try /etc/machine-id first (most Linux distros).
         if let Ok(content) = std::fs::read_to_string("/etc/machine-id") {
             let trimmed = content.trim();
             if !trimmed.is_empty() && trimmed.len() >= 32 {
                 return trimmed[..16].to_string();
             }
         }
-        // Fallback: /var/lib/dbus/machine-id
+
         if let Ok(content) = std::fs::read_to_string("/var/lib/dbus/machine-id") {
             let trimmed = content.trim();
             if !trimmed.is_empty() {
@@ -53,7 +30,6 @@ pub fn read_machine_fingerprint() -> String {
     }
     #[cfg(target_os = "macos")]
     {
-        // Use IOPlatformUUID via ioreg on macOS
         if let Ok(output) = std::process::Command::new("ioreg")
             .args(["-rd1", "-c", "IOPlatformExpertDevice"])
             .output()
@@ -75,9 +51,6 @@ pub fn read_machine_fingerprint() -> String {
     }
     #[cfg(target_os = "windows")]
     {
-        // Read MachineGuid from the registry — the stable UUID assigned
-        // during Windows installation, survives reboots and reinstalls
-        // (unlike volume serial numbers or WMI UUIDs).
         if let Ok(output) = std::process::Command::new("reg")
             .args([
                 "query",
@@ -107,8 +80,6 @@ pub fn read_machine_fingerprint() -> String {
     }
     #[cfg(target_os = "android")]
     {
-        // Android: ANDROID_ID is passed via Tauri plugin
-        // For now, fall back to empty (will be overridden by the frontend).
         String::new()
     }
     #[cfg(not(any(
@@ -122,11 +93,9 @@ pub fn read_machine_fingerprint() -> String {
     }
 }
 
-/// Module-level static for frontend-provided fingerprint override.
 use std::sync::OnceLock;
 static FRONTEND_FINGERPRINT: OnceLock<String> = OnceLock::new();
 
-/// Helper: SHA-256 hash the input and return the first 16 hex characters.
 #[cfg(target_os = "macos")]
 fn sha2_hash_first16(data: &[u8]) -> String {
     use sha2::Digest;
@@ -134,23 +103,14 @@ fn sha2_hash_first16(data: &[u8]) -> String {
     hex::encode(&hash[..8])
 }
 
-/// Set the device fingerprint via a Tauri command (for Android where
-/// the machine ID is only accessible from the Java/Kotlin side).
 pub fn set_fingerprint_from_frontend(fp: &str) {
     let _ = FRONTEND_FINGERPRINT.set(fp.to_string());
 }
 
-/// Get any frontend-overridden fingerprint (for Android).
 pub fn get_frontend_fingerprint() -> Option<String> {
     FRONTEND_FINGERPRINT.get().cloned()
 }
 
-// ─── QR Code Generation ───
-
-/// Generate a QR code as an SVG string from a JSON payload.
-///
-/// The returned string is a complete SVG document that can be embedded directly
-/// in a frontend `<img>` tag via a data URL or rendered as inner HTML.
 pub fn generate_qr_svg(payload_json: &str) -> Result<String, String> {
     use qrcode::render::svg;
     use qrcode::QrCode;
@@ -167,8 +127,6 @@ pub fn generate_qr_svg(payload_json: &str) -> Result<String, String> {
 
     Ok(svg_string)
 }
-
-// ─── Tests ───
 
 #[cfg(test)]
 mod tests {

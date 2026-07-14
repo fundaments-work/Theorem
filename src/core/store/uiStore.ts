@@ -4,7 +4,6 @@ import { isMobile } from "../lib/env";
 import { theoremPersistStorage } from "../lib/persist-storage";
 import type { AppRoute, UIState } from "../types";
 
-// UI State Store
 interface UIStore extends UIState {
     setRoute: (route: AppRoute, bookId?: string, pushHistory?: boolean) => void;
     goBack: () => void;
@@ -29,7 +28,7 @@ interface UIStore extends UIState {
         syncedAt?: string,
     ) => void;
     setDownloadingBook: (bookId?: string) => void;
-    // Reader-specific UI
+    
     setReaderToolbarVisible: (visible: boolean) => void;
     toggleReaderToolbar: () => void;
 }
@@ -102,7 +101,6 @@ export const useUIStore = create<UIStore>()(
 
             setHydrated: () => set({ hasHydrated: true }),
 
-            // Reader toolbar
             setReaderToolbarVisible: (visible) => set({ readerToolbarVisible: visible }),
             toggleReaderToolbar: () => set((state) => ({ readerToolbarVisible: !state.readerToolbarVisible })),
         }),

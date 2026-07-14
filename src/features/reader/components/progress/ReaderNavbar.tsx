@@ -1,8 +1,3 @@
-/**
- * ReaderNavbar Component
- * Bottom navigation bar with progress slider, section markers, and time remaining
- * Inspired by Foliate GTK4's navbar implementation
- */
 
 import { useCallback, useMemo, useState, useRef, memo } from "react";
 import { List } from "lucide-react";
@@ -19,14 +14,10 @@ interface ReaderNavbarProps {
     className?: string;
 }
 
-// Average reading speed in words per minute
 const AVERAGE_WPM = 225;
-// Average words per page (rough estimate for e-books)
+
 const WORDS_PER_PAGE = 250;
 
-/**
- * Format time remaining in a human-readable way
- */
 function formatTimeRemaining(minutes: number): string {
     if (minutes < 1) {
         return "< 1 min left";
@@ -42,9 +33,6 @@ function formatTimeRemaining(minutes: number): string {
     return `${hours} hr ${remainingMins} min left`;
 }
 
-/**
- * Calculate estimated reading time remaining based on pages
- */
 function calculateTimeRemaining(
     currentProgress: number,
     totalPages: number
@@ -58,9 +46,6 @@ function calculateTimeRemaining(
     return minutesRemaining;
 }
 
-/**
- * ReaderNavbar - Foliate-style bottom progress bar
- */
 export const ReaderNavbar = memo(function ReaderNavbar({
     location,
     toc,
@@ -99,8 +84,6 @@ export const ReaderNavbar = memo(function ReaderNavbar({
         return normalized;
     }, [sectionFractions]);
 
-    // Current progress (0-1).
-    // Prefer page-based progress when available for paginated flow consistency.
     const progress = useMemo(() => {
         const percentage = typeof location?.percentage === "number" && Number.isFinite(location.percentage)
             ? Math.max(0, Math.min(1, location.percentage))
@@ -115,7 +98,6 @@ export const ReaderNavbar = memo(function ReaderNavbar({
         return percentage;
     }, [location?.percentage, location?.pageInfo?.currentPage, location?.pageInfo?.totalPages]);
 
-    // Display fraction (drag position takes precedence when dragging)
     const displayFraction = isDragging && dragFraction !== null ? dragFraction : progress;
 
     const getSectionLabelForFraction = useCallback((fraction: number): string | null => {
@@ -134,7 +116,6 @@ export const ReaderNavbar = memo(function ReaderNavbar({
         return toc[0]?.label ?? null;
     }, [toc, normalizedSectionFractions]);
 
-    // Current section label
     const currentSectionLabel = useMemo(() => {
         if (location?.tocItem?.label) {
             return location.tocItem.label;
@@ -142,26 +123,22 @@ export const ReaderNavbar = memo(function ReaderNavbar({
         return getSectionLabelForFraction(progress) ?? "";
     }, [location?.tocItem?.label, getSectionLabelForFraction, progress]);
 
-    // Hovered section label (for tooltip)
     const hoveredSectionLabel = useMemo(() => {
         if (hoverFraction === null) return null;
         return getSectionLabelForFraction(hoverFraction);
     }, [hoverFraction, getSectionLabelForFraction]);
 
-    // Time remaining estimate
     const timeRemaining = useMemo(() => {
         const pages = totalPages ?? location?.pageInfo?.totalPages ?? 0;
         if (pages <= 0) return null;
         return formatTimeRemaining(calculateTimeRemaining(progress, pages));
     }, [progress, totalPages, location?.pageInfo?.totalPages]);
 
-    // Progress text (percentage)
     const progressText = useMemo(() => {
         const pct = Math.round(displayFraction * 100);
         return `${pct}%`;
     }, [displayFraction]);
 
-    // Calculate fraction from mouse/touch position
     const getFractionFromEvent = useCallback(
         (clientX: number): number => {
             const track = trackRef.current;
@@ -175,7 +152,6 @@ export const ReaderNavbar = memo(function ReaderNavbar({
         []
     );
 
-    // Mouse/touch handlers
     const handlePointerDown = useCallback(
         (e: React.PointerEvent) => {
             e.preventDefault();
@@ -217,7 +193,6 @@ export const ReaderNavbar = memo(function ReaderNavbar({
         }
     }, [isDragging]);
 
-    // Click to seek (when not dragging)
     const handleClick = useCallback(
         (e: React.MouseEvent) => {
             if (isDragging) return;
@@ -227,16 +202,15 @@ export const ReaderNavbar = memo(function ReaderNavbar({
         [isDragging, getFractionFromEvent, onSeek]
     );
 
-    // Section markers - memoized to prevent re-renders
     const sectionMarkers = useMemo(() => {
         if (normalizedSectionFractions.length === 0) return null;
 
         return normalizedSectionFractions.map((fraction, index) => {
-            // Skip first marker at 0%
+            
             if (fraction < 0.01) return null;
-            // Skip last marker at 100%
+            
             if (fraction > 0.99) return null;
-            // Skip markers too close together (< 2%)
+            
             if (index > 0 && fraction - normalizedSectionFractions[index - 1] < 0.02) return null;
 
             return (
@@ -249,7 +223,6 @@ export const ReaderNavbar = memo(function ReaderNavbar({
         });
     }, [normalizedSectionFractions]);
 
-    // Tooltip content
     const tooltipContent = useMemo(() => {
         if (hoverFraction === null && !isDragging) return null;
 
@@ -286,7 +259,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                 borderTop: '1px solid color-mix(in srgb, var(--reader-fg, var(--color-text)) 10%, transparent)',
             }}
         >
-            {/* Top Row: TOC Button + Info */}
+            
             <div className="flex items-center gap-2">
                 <button
                     onClick={onToggleToc}
@@ -296,7 +269,6 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                     <List size={18} />
                 </button>
 
-                {/* Info: section label + time remaining */}
                 <div className="flex-1 flex items-center justify-between gap-1 text-[10px] sm:text-xs text-[color:var(--color-text-muted)] min-w-0">
                     <span
                         className="truncate max-w-[50%]"
@@ -315,7 +287,6 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                 </div>
             </div>
 
-            {/* Progress track */}
             <div
                 ref={trackRef}
                 className={cn(
@@ -329,9 +300,9 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                 onPointerUp={handlePointerUp}
                 onPointerLeave={handlePointerLeave}
             >
-                {/* Track background */}
+                
                 <div className="absolute inset-x-0 h-1 bg-[var(--color-surface-variant)] overflow-hidden">
-                    {/* Progress fill */}
+                    
                     <div
                         className={cn(
                             "h-full bg-[var(--color-accent)]",
@@ -341,10 +312,8 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                     />
                 </div>
 
-                {/* Section markers */}
                 {sectionMarkers}
 
-                {/* Thumb handle */}
                 <div
                     className={cn(
                         "absolute top-1/2 -translate-y-1/2 -translate-x-1/2",
@@ -357,7 +326,6 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                     style={{ left: `${displayFraction * 100}%` }}
                 />
 
-                {/* Hover/drag indicator line */}
                 {(hoverFraction !== null || isDragging) && tooltipPosition !== null && (
                     <div
                         className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-0.5 h-3 bg-[var(--color-accent)]/50 pointer-events-none"
@@ -365,7 +333,6 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                     />
                 )}
 
-                {/* Tooltip */}
                 {tooltipContent && tooltipPosition !== null && (
                     <div
                         className={cn(

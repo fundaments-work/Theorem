@@ -16,8 +16,6 @@ struct MobileFolderScan<R: Runtime> {
     handle: tauri::plugin::PluginHandle<R>,
 }
 
-/// Safely retrieve the plugin state without panicking.
-/// Returns a clean error if the plugin failed to initialize.
 #[cfg(target_os = "android")]
 fn get_scan_state<R: Runtime>(
     app: &AppHandle<R>,
@@ -172,8 +170,6 @@ pub fn materialize_content_uri<R: Runtime>(
     Ok(response.path)
 }
 
-/// Get the Android device's ANDROID_ID (stable per-device identifier).
-/// Only available on Android; returns empty string on other platforms.
 #[cfg(target_os = "android")]
 pub fn get_android_id<R: Runtime>(app: &AppHandle<R>) -> Result<String, String> {
     let state = get_scan_state(app)?;
