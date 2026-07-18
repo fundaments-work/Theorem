@@ -318,17 +318,27 @@ pub fn sqlite_save_cover_image_inner(
     book_id: &str,
     data_url: &str,
 ) -> rusqlite::Result<()> {
+    let cover_data = extract_base64_from_data_url(data_url).and_then(|b64| {
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64).ok()
+    });
+
     connection.execute(
         r#"
-        INSERT INTO covers (book_id, data_url, updated_at)
-        VALUES (?1, ?2, unixepoch())
+        INSERT INTO covers (book_id, data_url, data, updated_at)
+        VALUES (?1, ?2, ?3, unixepoch())
         ON CONFLICT(book_id) DO UPDATE SET
             data_url = excluded.data_url,
+            data = excluded.data,
             updated_at = unixepoch()
         "#,
-        params![book_id, data_url],
+        params![book_id, data_url, cover_data],
     )?;
     Ok(())
+}
+
+fn extract_base64_from_data_url(data_url: &str) -> Option<&str> {
+    let comma = data_url.find(',')?;
+    Some(&data_url[comma + 1..])
 }
 
 #[tauri::command]

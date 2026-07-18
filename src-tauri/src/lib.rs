@@ -186,13 +186,14 @@ struct PdfMetadata {
 }
 
 #[tauri::command]
-fn read_file(path: String) -> Result<Vec<u8>, String> {
-    fs::read(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))
+fn read_file(path: String) -> Result<Response, String> {
+    let data = fs::read(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))?;
+    Ok(Response::new(data))
 }
 
 #[tauri::command]
 #[allow(unused_variables)]
-fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
+fn read_cbr_as_cbz(path: String) -> Result<Response, String> {
     #[cfg(target_os = "android")]
     return Err("CBR conversion is not supported on Android".into());
     #[cfg(not(target_os = "android"))]
@@ -233,7 +234,7 @@ fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
                 .finish()
                 .map_err(|e| format!("Failed to finalize ZIP: {}", e))?;
         }
-        Ok(zip_buffer.into_inner())
+        Ok(Response::new(zip_buffer.into_inner()))
     }
 }
 
@@ -577,7 +578,7 @@ fn fetch_url_content(url: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn fetch_binary_content(url: String) -> Result<Vec<u8>, String> {
+fn fetch_binary_content(url: String) -> Result<Response, String> {
     let parsed_url =
         reqwest::Url::parse(&url).map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
     let referer = {
@@ -613,7 +614,7 @@ fn fetch_binary_content(url: String) -> Result<Vec<u8>, String> {
     let bytes = response
         .bytes()
         .map_err(|e| format!("Failed to read binary response: {}", e))?;
-    Ok(bytes.to_vec())
+    Ok(Response::new(bytes.to_vec()))
 }
 
 #[tauri::command]
