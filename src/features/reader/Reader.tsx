@@ -380,6 +380,11 @@ const BookReaderPage = memo(function BookReaderPage() {
         const book = getBook(bookId);
         if (!book) return;
 
+        const hasRealCover = book.coverPath && !book.coverPath.startsWith('data:image/svg+xml');
+        if (hasRealCover && book.coverExtractionDone) {
+            return;
+        }
+
         try {
             const storagePath = book.storagePath || book.filePath;
             const data = await getBookData(book.id, storagePath);
@@ -391,13 +396,6 @@ const BookReaderPage = memo(function BookReaderPage() {
                 extractFilenameFromPath(book.filePath),
                 book.format,
             );
-
-            // Only skip cover extraction if the book already has a real cover
-            // (not a generated SVG fallback).
-            const hasRealCover = book.coverPath && !book.coverPath.startsWith('data:image/svg+xml');
-            if (hasRealCover && book.coverExtractionDone) {
-                return;
-            }
 
             const metadata = await extractMetadata(data, book.format, filename, book.id, {
                 allowFallbackCover: !hasRealCover,
@@ -650,7 +648,7 @@ const BookReaderPage = memo(function BookReaderPage() {
                 const expectedMimeType = getMimeTypeForBookFormat(book.format);
                 
                 const typedBlob = blob.type === expectedMimeType
-                    ? new Blob([blob], { type: expectedMimeType })
+                    ? blob
                     : blob.slice(0, blob.size, expectedMimeType);
                 setFile(typedBlob);
             } catch (err) {

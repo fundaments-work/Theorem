@@ -2361,6 +2361,9 @@ export class FoliateEngine {
         }
         this.searchSectionCache = null;
         this.searchCacheBookRef = null;
+        if (this.book) {
+            try { this.book.destroy?.(); } catch { /* ignore destroy errors */ }
+        }
         this.book = null;
         this.container = null;
     }

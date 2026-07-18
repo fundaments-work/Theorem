@@ -30,10 +30,6 @@ fn read_zip_by_name_inner<R: std::io::Read + std::io::Seek>(
     String::from_utf8(buf).ok()
 }
 
-fn read_zip_entry(archive: &mut zip::ZipArchive<File>, path: &str) -> Option<String> {
-    read_zip_entry_inner(archive, path)
-}
-
 fn resolve_relative(base: &str, target: &str) -> String {
     let base_dir = Path::new(base).parent().unwrap_or(Path::new(""));
     base_dir
@@ -292,32 +288,6 @@ fn prefetch_sync(_app: &tauri::AppHandle, path: &str) -> Result<ZipPrefetch, Str
 
     let epub = read_epub_metadata(&mut archive);
 
-    let mut sections: HashMap<String, String> = HashMap::new();
-    let section_exts = [".html", ".htm", ".xhtml", ".xml"];
-    for name in sizes.keys() {
-        let lower = name.to_lowercase();
-        if !section_exts.iter().any(|e| lower.ends_with(e)) {
-            continue;
-        }
-
-        if epub.as_ref().is_some_and(|e| {
-            e.nav_path.as_deref() == Some(name.as_str())
-                || e.ncx_path.as_deref() == Some(name.as_str())
-                || e.opf_path == *name
-        }) {
-            continue;
-        }
-        if name == "META-INF/container.xml" || name == "META-INF/encryption.xml" {
-            continue;
-        }
-        if sections.len() >= 100 {
-            break;
-        }
-        if let Some(text) = read_zip_entry(&mut archive, name) {
-            sections.insert(name.clone(), text);
-        }
-    }
-
     Ok(ZipPrefetch {
         container: epub.as_ref().and_then(|e| e.container.clone()),
         opf_path: epub.as_ref().map(|e| e.opf_path.clone()),
@@ -328,7 +298,7 @@ fn prefetch_sync(_app: &tauri::AppHandle, path: &str) -> Result<ZipPrefetch, Str
         ncx: epub.as_ref().and_then(|e| e.ncx.clone()),
         encryption: epub.as_ref().and_then(|e| e.encryption.clone()),
         sizes,
-        sections,
+        sections: HashMap::new(),
     })
 }
 

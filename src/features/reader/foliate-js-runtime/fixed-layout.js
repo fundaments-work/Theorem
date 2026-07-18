@@ -263,17 +263,28 @@ export class FixedLayout extends HTMLElement {
             this.#render(side)
             return
         }
+        const prevSpread = this.#spreads[this.#index]
         this.#index = index
         const spread = this.#spreads[index]
         if (spread.center) {
             const index = this.book.sections.indexOf(spread.center)
             const src = await spread.center?.load?.()
+            if (prevSpread) {
+                if (prevSpread.center) prevSpread.center.unload?.()
+                if (prevSpread.left) prevSpread.left.unload?.()
+                if (prevSpread.right) prevSpread.right.unload?.()
+            }
             await this.#showSpread({ center: { index, src } })
         } else {
             const indexL = this.book.sections.indexOf(spread.left)
             const indexR = this.book.sections.indexOf(spread.right)
             const srcL = await spread.left?.load?.()
             const srcR = await spread.right?.load?.()
+            if (prevSpread) {
+                if (prevSpread.left) prevSpread.left.unload?.()
+                if (prevSpread.right) prevSpread.right.unload?.()
+                if (prevSpread.center) prevSpread.center.unload?.()
+            }
             const left = { index: indexL, src: srcL }
             const right = { index: indexR, src: srcR }
             await this.#showSpread({ left, right, side })
@@ -308,6 +319,11 @@ export class FixedLayout extends HTMLElement {
     }
     destroy() {
         this.#observer.unobserve(this)
+        for (const spread of this.#spreads ?? []) {
+            if (spread.left) spread.left.unload?.()
+            if (spread.right) spread.right.unload?.()
+            if (spread.center) spread.center.unload?.()
+        }
     }
 }
 
