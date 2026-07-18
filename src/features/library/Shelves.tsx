@@ -5,9 +5,9 @@ import { cn } from "../../core/lib/utils";
 import { getShelfColor, getShelfInitials } from "../../core/lib/design-tokens";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core/store";
-import { confirmDeleteBook } from "../../core/lib/dialogs";
 import { ShelfModal } from "./components/modals/ShelfModal";
-import { MemoizedBookCard, BookInfoModal, AddToShelfModal } from "./Library";
+import { ConfirmDialog } from "../../ui";
+import { MemoizedBookCard, BookInfoModal, AddToShelfModal, RenameBookModal } from "./Library";
 import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
 import { sqliteSearchBooks } from "../../core/lib/sqlite-storage";
@@ -237,6 +237,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     const addBookToCollection = useLibraryStore((state) => state.addBookToCollection);
     const removeBook = useLibraryStore((state) => state.removeBook);
     const toggleFavorite = useLibraryStore((state) => state.toggleFavorite);
+    const updateBook = useLibraryStore((state) => state.updateBook);
     const markBookCompleted = useLibraryStore((state) => state.markBookCompleted);
     const markBookUnread = useLibraryStore((state) => state.markBookUnread);
 
@@ -250,6 +251,9 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
     const [addToShelfBookId, setAddToShelfBookId] = useState<string | null>(null);
     const [isAddToShelfModalOpen, setIsAddToShelfModalOpen] = useState(false);
+    const [renameBook, setRenameBook] = useState<Book | null>(null);
+    const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+    const [deleteBookInfo, setDeleteBookInfo] = useState<{ bookId: string; title: string } | null>(null);
 
     const handleCreateShelf = (name: string) => {
         addCollection({
@@ -260,6 +264,17 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             createdAt: new Date(),
         });
     };
+
+    const handleRename = useCallback((book: Book) => {
+        setRenameBook(book);
+        setIsRenameModalOpen(true);
+    }, []);
+
+    const handleRenameSave = useCallback((bookId: string, newTitle: string) => {
+        updateBook(bookId, { title: newTitle });
+        setRenameBook(null);
+        setIsRenameModalOpen(false);
+    }, [updateBook]);
 
     const debouncedSearchQuery = useDebounce(searchQuery, 250);
 
@@ -287,7 +302,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             sortOrder: settings.librarySortOrder,
             ftsSearchIds,
         });
-    }, [shelf.bookIds, books, debouncedSearchQuery, settings.librarySortBy, settings.librarySortOrder]);
+    }, [shelf.bookIds, books, debouncedSearchQuery, settings.librarySortBy, settings.librarySortOrder, ftsSearchIds]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const isListView = viewMode === "list";
@@ -436,10 +451,11 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                                 onToggleFavorite: toggleFavorite,
                                 onDeleteBook: (id: string) => {
                                     const book = shelfBooks.find(b => b.id === id);
-                                    if (book) confirmDeleteBook(book.title).then((c) => { if (c) removeBook(id); });
+                                    if (book) setDeleteBookInfo({ bookId: book.id, title: book.title });
                                 },
                                 onShowInfo: (b: Book) => { setInfoModalBook(b); setIsInfoModalOpen(true); },
                                 onAddToShelf: (id: string) => { setAddToShelfBookId(id); setIsAddToShelfModalOpen(true); },
+                                onRename: handleRename,
                                 onMarkAsRead: markBookCompleted,
                                 onMarkAsUnread: markBookUnread,
                             };
@@ -488,6 +504,32 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                     if (bookId) addBookToCollection(bookId, shelfId);
                 }}
                 onCreateShelf={handleCreateShelf}
+            />
+
+            <RenameBookModal
+                isOpen={isRenameModalOpen}
+                book={renameBook}
+                onClose={() => {
+                    setIsRenameModalOpen(false);
+                    setRenameBook(null);
+                }}
+                onSave={handleRenameSave}
+            />
+
+            <ConfirmDialog
+                isOpen={!!deleteBookInfo}
+                title="Delete Book"
+                message={deleteBookInfo ? `Are you sure you want to delete "${deleteBookInfo.title}"? This action cannot be undone.` : ""}
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                variant="danger"
+                onConfirm={() => {
+                    if (deleteBookInfo) {
+                        removeBook(deleteBookInfo.bookId);
+                        setDeleteBookInfo(null);
+                    }
+                }}
+                onCancel={() => setDeleteBookInfo(null)}
             />
         </div>
     );
@@ -570,9 +612,16 @@ export function ShelvesPage() {
         setIsModalOpen(false);
     };
 
+    const [deleteShelfInfo, setDeleteShelfInfo] = useState<{ id: string; name: string } | null>(null);
+
     const handleDeleteShelf = (shelfId: string, shelfName: string) => {
-        if (confirm(`Are you sure you want to delete "${shelfName}"?`)) {
-            removeCollection(shelfId);
+        setDeleteShelfInfo({ id: shelfId, name: shelfName });
+    };
+
+    const handleDeleteShelfConfirm = () => {
+        if (deleteShelfInfo) {
+            removeCollection(deleteShelfInfo.id);
+            setDeleteShelfInfo(null);
         }
     };
 
@@ -661,6 +710,17 @@ export function ShelvesPage() {
                 shelf={editingShelf}
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSaveShelf}
+            />
+
+            <ConfirmDialog
+                isOpen={!!deleteShelfInfo}
+                title="Delete Shelf"
+                message={deleteShelfInfo ? `Are you sure you want to delete "${deleteShelfInfo.name}"? Books in this shelf will remain in your library.` : ""}
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                variant="danger"
+                onConfirm={handleDeleteShelfConfirm}
+                onCancel={() => setDeleteShelfInfo(null)}
             />
         </div>
     );

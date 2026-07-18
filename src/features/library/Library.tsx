@@ -7,7 +7,7 @@ import { buildFallbackCoverSvg, shouldUseExtractedTitle, shouldUseExtractedAutho
 import { ensureFilenameForFormat, extractFilenameFromPath, importBooksIncremental, pickAndImportBooksIncremental, scanFolderForBooks } from "../../core/lib/import";
 import { pickLibraryFolderMobile, scanLibraryFolderMobile } from "../../core/lib/mobile-folder-scan";
 import { isMobile, isTauri } from "../../core/lib/env";
-import { confirmDeleteBook, showOpenDirectoryDialog } from "../../core/lib/dialogs";
+import { showOpenDirectoryDialog } from "../../core/lib/dialogs";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core/store";
 import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "../../core/types";
 import { FORMAT_DISPLAY_NAMES } from "../../core/types";
@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { ContextMenu } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
-import { Modal, ModalBody, ModalFooter } from "../../ui";
+import { Modal, ModalHeader, ModalBody, ModalFooter, ConfirmDialog, AlertDialog } from "../../ui";
 import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
 import { sqliteSearchBooks } from "../../core/lib/sqlite-storage";
@@ -67,6 +67,7 @@ export const BookCard = memo(function BookCard({
     onDeleteBook,
     onShowInfo,
     onAddToShelf,
+    onRename,
     onMarkAsRead,
     onMarkAsUnread,
     isSelecting,
@@ -80,6 +81,7 @@ export const BookCard = memo(function BookCard({
     onDeleteBook: (bookId: string) => void;
     onShowInfo: (book: Book) => void;
     onAddToShelf: (bookId: string) => void;
+    onRename: (book: Book) => void;
     onMarkAsRead: (bookId: string) => void;
     onMarkAsUnread: (bookId: string) => void;
     isSelecting?: boolean;
@@ -90,7 +92,8 @@ export const BookCard = memo(function BookCard({
     const clickCountRef = useRef(0);
     const isCompleted = isBookMarkedRead(book);
 
-    const bookShelves = useLibraryStore.getState().collections.filter((c) => c.bookIds.includes(book.id));
+    const collections = useLibraryStore((state) => state.collections);
+    const bookShelves = collections.filter((c) => c.bookIds.includes(book.id));
 
     const handleCardClick = () => {
         if (isSelecting && onToggleSelect) {
@@ -152,7 +155,7 @@ export const BookCard = memo(function BookCard({
             id: `shelf-${shelf.id}`,
             label: `Remove from "${shelf.name}"`,
             icon: <BookMarked className="w-4 h-4" />,
-            onClick: () => useLibraryStore.getState().removeBookFromCollection(shelf.id, book.id),
+            onClick: () => useLibraryStore.getState().removeBookFromCollection(book.id, shelf.id),
         })),
         {
             id: "separator1",
@@ -169,12 +172,7 @@ export const BookCard = memo(function BookCard({
             id: "rename",
             label: "Rename",
             icon: <Pencil className="w-4 h-4" />,
-            onClick: () => {
-                const newTitle = prompt("Enter new title:", book.title);
-                if (newTitle && newTitle.trim() !== "" && newTitle !== book.title) {
-                    useLibraryStore.getState().updateBook(book.id, { title: newTitle.trim() });
-                }
-            },
+            onClick: () => onRename(book),
         },
         {
             id: "separator2",
@@ -777,6 +775,86 @@ export function AddToShelfModal({
     );
 }
 
+export function RenameBookModal({
+    isOpen,
+    book,
+    onClose,
+    onSave,
+}: {
+    isOpen: boolean;
+    book: Book | null;
+    onClose: () => void;
+    onSave: (bookId: string, newTitle: string) => void;
+}) {
+    const [title, setTitle] = useState("");
+
+    useEffect(() => {
+        if (isOpen && book) {
+            setTitle(book.title);
+        }
+    }, [isOpen, book]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (title.trim() && book) {
+            onSave(book.id, title.trim());
+            onClose();
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            if (title.trim() && book) {
+                onSave(book.id, title.trim());
+                onClose();
+            }
+        }
+    };
+
+    if (!book) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} size="sm" showCloseButton={true}>
+            <form onSubmit={handleSubmit}>
+                <ModalHeader title="Rename Book" onClose={onClose} showCloseButton={true} />
+                <ModalBody>
+                    <div>
+                        <label htmlFor="rename-title" className="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1.5">
+                            Title
+                        </label>
+                        <input
+                            id="rename-title"
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            className="ui-input"
+                            autoFocus
+                        />
+                    </div>
+                </ModalBody>
+                <ModalFooter>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="ui-btn-ghost"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={!title.trim() || title.trim() === book.title}
+                        className="ui-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Save
+                    </button>
+                </ModalFooter>
+            </form>
+        </Modal>
+    );
+}
+
 export function LibraryPage() {
     const books = useLibraryStore((state) => state.books);
     const collections = useLibraryStore((state) => state.collections);
@@ -811,6 +889,10 @@ export function LibraryPage() {
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
     const [addToShelfBookId, setAddToShelfBookId] = useState<string | null>(null);
     const [isAddToShelfModalOpen, setIsAddToShelfModalOpen] = useState(false);
+    const [renameBook, setRenameBook] = useState<Book | null>(null);
+    const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+    const [alertInfo, setAlertInfo] = useState<{ title: string; message: string } | null>(null);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ bookId?: string; title: string; batch?: boolean } | null>(null);
 
     const extractedBookIdsRef = useRef<Set<string>>(new Set());
     const pendingImportMetadataQueueRef = useRef<Book[]>([]);
@@ -1037,6 +1119,7 @@ export function LibraryPage() {
         settings.librarySortBy,
         settings.librarySortOrder,
         showFavoritesOnly,
+        ftsSearchIds,
     ]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -1274,16 +1357,17 @@ export function LibraryPage() {
                 .slice(0, 3)
                 .map((failure) => `- ${failure.source}: ${failure.message}`)
                 .join('\n');
-            window.alert(
-                `Some books failed to import (${failedImports.length}).\n\n${preview}` +
-                (failedImports.length > 3 ? `\n\n(+${failedImports.length - 3} more)` : ''),
-            );
+            setAlertInfo({
+                title: "Import Errors",
+                message: `Some books failed to import (${failedImports.length}).\n\n${preview}` +
+                    (failedImports.length > 3 ? `\n\n(+${failedImports.length - 3} more)` : ''),
+            });
         }
     }, [addBook, extractImportedBookMetadata]);
 
     const importDiscoveredBooks = useCallback(async (bookPaths: string[]) => {
         if (bookPaths.length === 0) {
-            alert("No supported books were found in the selected folder.");
+            setAlertInfo({ title: "No Books Found", message: "No supported books were found in the selected folder." });
             return;
         }
 
@@ -1307,10 +1391,11 @@ export function LibraryPage() {
                 .slice(0, 3)
                 .map((failure) => `- ${failure.source}: ${failure.message}`)
                 .join('\n');
-            window.alert(
-                `Some books failed to import (${failedImports.length}).\n\n${preview}` +
-                (failedImports.length > 3 ? `\n\n(+${failedImports.length - 3} more)` : ''),
-            );
+            setAlertInfo({
+                title: "Import Errors",
+                message: `Some books failed to import (${failedImports.length}).\n\n${preview}` +
+                    (failedImports.length > 3 ? `\n\n(+${failedImports.length - 3} more)` : ''),
+            });
         }
     }, [addBook, extractImportedBookMetadata, setLastScannedAt]);
 
@@ -1326,7 +1411,7 @@ export function LibraryPage() {
 
     const handleScanFolder = useCallback(async () => {
         if (!isTauri()) {
-            alert('Folder scanning requires the desktop app.');
+            setAlertInfo({ title: "Not Available", message: "Folder scanning requires the desktop app." });
             return;
         }
 
@@ -1374,7 +1459,7 @@ export function LibraryPage() {
             setIsScanning(true);
             await scanAndImportFolder(normalizedFolderPath);
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Failed to scan selected folder.');
+            setAlertInfo({ title: "Scan Error", message: err instanceof Error ? err.message : 'Failed to scan selected folder.' });
         } finally {
             setIsScanning(false);
         }
@@ -1402,25 +1487,15 @@ export function LibraryPage() {
         toggleFavorite(bookId);
     }, [toggleFavorite]);
 
-    const handleDeleteBook = useCallback(async (bookId: string) => {
+    const handleDeleteBook = useCallback((bookId: string) => {
         const book = books.find(b => b.id === bookId);
-        const confirmed = await confirmDeleteBook(book?.title || "this book");
-        if (confirmed) {
-            removeBook(bookId);
-        }
-    }, [removeBook, books]);
+        setDeleteConfirm({ bookId, title: book?.title || "this book", batch: false });
+    }, [books]);
 
-    const handleBatchDelete = useCallback(async () => {
+    const handleBatchDelete = useCallback(() => {
         if (selectedBooks.length === 0) return;
-        const confirmed = await confirmDeleteBook(`${selectedBooks.length} selected book(s)`);
-        if (confirmed) {
-            for (const id of selectedBooks) {
-                removeBook(id);
-            }
-            clearSelection();
-            setIsSelecting(false);
-        }
-    }, [selectedBooks, removeBook, clearSelection]);
+        setDeleteConfirm({ title: `${selectedBooks.length} selected book(s)`, batch: true });
+    }, [selectedBooks]);
 
     const handleBatchAddToShelf = useCallback(() => {
         setAddToShelfBookId(null); 
@@ -1447,6 +1522,17 @@ export function LibraryPage() {
         setInfoModalBook(book);
         setIsInfoModalOpen(true);
     }, []);
+
+    const handleRename = useCallback((book: Book) => {
+        setRenameBook(book);
+        setIsRenameModalOpen(true);
+    }, []);
+
+    const handleRenameSave = useCallback((bookId: string, newTitle: string) => {
+        updateBook(bookId, { title: newTitle });
+        setRenameBook(null);
+        setIsRenameModalOpen(false);
+    }, [updateBook]);
 
     const handleAddToShelf = useCallback((bookId: string) => {
         setAddToShelfBookId(bookId);
@@ -1693,6 +1779,7 @@ export function LibraryPage() {
                                             onDeleteBook: handleDeleteBook,
                                             onShowInfo: handleShowInfo,
                                             onAddToShelf: handleAddToShelf,
+                                            onRename: handleRename,
                                             onMarkAsRead: handleMarkAsRead,
                                             onMarkAsUnread: handleMarkAsUnread,
                                             isSelecting,
@@ -1899,6 +1986,48 @@ export function LibraryPage() {
                 collections={collections}
                 onAddToShelf={handleAddBookToShelf}
                 onCreateShelf={handleCreateShelf}
+            />
+
+            <RenameBookModal
+                isOpen={isRenameModalOpen}
+                book={renameBook}
+                onClose={() => {
+                    setIsRenameModalOpen(false);
+                    setRenameBook(null);
+                }}
+                onSave={handleRenameSave}
+            />
+
+            {alertInfo && (
+                <AlertDialog
+                    isOpen={!!alertInfo}
+                    title={alertInfo.title}
+                    message={alertInfo.message}
+                    okLabel="OK"
+                    onClose={() => setAlertInfo(null)}
+                />
+            )}
+
+            <ConfirmDialog
+                isOpen={!!deleteConfirm}
+                title={deleteConfirm?.batch ? "Delete Books" : "Delete Book"}
+                message={deleteConfirm ? `Are you sure you want to delete "${deleteConfirm.title}"? This action cannot be undone.` : ""}
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                variant="danger"
+                onConfirm={() => {
+                    if (deleteConfirm?.batch) {
+                        for (const id of selectedBooks) {
+                            removeBook(id);
+                        }
+                        clearSelection();
+                        setIsSelecting(false);
+                    } else if (deleteConfirm?.bookId) {
+                        removeBook(deleteConfirm.bookId);
+                    }
+                    setDeleteConfirm(null);
+                }}
+                onCancel={() => setDeleteConfirm(null)}
             />
         </div>
     );
