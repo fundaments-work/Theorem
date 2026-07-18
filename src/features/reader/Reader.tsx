@@ -2084,50 +2084,6 @@ const BookReaderPage = memo(function BookReaderPage() {
         );
     }
 
-    useEffect(() => {
-        return registerShortcuts("reader", [
-            {
-                label: "Find in book",
-                keys: "Ctrl+F",
-                category: "Reader",
-                handler: () => setActivePanel((prev) => prev === "search" ? null : "search"),
-            },
-            {
-                label: "Toggle bookmark",
-                keys: "Ctrl+D",
-                category: "Reader",
-                handler: () => {
-                    if (isPdfFormat) handlePdfAddBookmark();
-                    else handleAddPageBookmark();
-                },
-            },
-            {
-                label: "Toggle fullscreen",
-                keys: "F11",
-                category: "Reader",
-                handler: () => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen }),
-            },
-            {
-                label: "Table of contents",
-                keys: "Ctrl+T",
-                category: "Reader",
-                handler: () => setActivePanel((prev) => prev === "toc" ? null : "toc"),
-            },
-            {
-                label: "Reader settings",
-                keys: "Ctrl+S",
-                category: "Reader",
-                handler: () => setActivePanel((prev) => prev === "settings" ? null : "settings"),
-            },
-            {
-                label: "Annotations panel",
-                keys: "Ctrl+A",
-                category: "Reader",
-                handler: () => setActivePanel((prev) => prev === "bookmarks" ? null : "bookmarks"),
-            },
-        ], "reader");
-    }, [isPdfFormat, settings.readerSettings.fullscreen, updateReaderSettings, handlePdfAddBookmark, handleAddPageBookmark]);
-
     return (
         <div
             className={cn(
