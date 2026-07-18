@@ -256,7 +256,7 @@ export interface SyncConflict {
     label?: string;
 }
 
-export type DictionaryProvider = "stardict";
+export type DictionaryProvider = "stardict" | "free-dictionary-api";
 
 export interface VocabularySettings {
     vocabularyEnabled: boolean;

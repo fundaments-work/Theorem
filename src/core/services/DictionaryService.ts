@@ -5,6 +5,8 @@ import type {
 } from "../types";
 import { lookupInStarDictDictionaries } from "./StarDictService";
 
+const FREE_DICTIONARY_API_BASE = "https://api.dictionaryapi.dev/api/v2/entries/en";
+
 export interface DictionaryLookupInput {
     term: string;
     language?: string;
@@ -19,6 +21,31 @@ export interface DictionaryLookupResult {
     audioUrl?: string;
     meanings: VocabularyMeaning[];
     providersUsed: DictionaryProvider[];
+}
+
+interface FreeDictPhonetic {
+    text?: string;
+    audio?: string;
+}
+
+interface FreeDictDefinition {
+    definition: string;
+    example?: string;
+    synonyms?: string[];
+    antonyms?: string[];
+}
+
+interface FreeDictMeaning {
+    partOfSpeech: string;
+    definitions: FreeDictDefinition[];
+}
+
+interface FreeDictEntry {
+    word: string;
+    phonetic?: string;
+    phonetics?: FreeDictPhonetic[];
+    origin?: string;
+    meanings: FreeDictMeaning[];
 }
 
 function dedupeDefinitions(meanings: VocabularyMeaning[]): VocabularyMeaning[] {
@@ -71,6 +98,55 @@ async function lookupWithStarDict(
     return { meanings };
 }
 
+async function lookupWithFreeDictionaryApi(
+    term: string,
+): Promise<{ meanings: VocabularyMeaning[]; phonetic?: string; audioUrl?: string } | null> {
+    try {
+        const response = await fetch(`${FREE_DICTIONARY_API_BASE}/${encodeURIComponent(term)}`);
+        if (!response.ok) return null;
+
+        const entries: FreeDictEntry[] = await response.json();
+        if (!entries || entries.length === 0) return null;
+
+        const entry = entries[0];
+        const meanings: VocabularyMeaning[] = [];
+
+        for (const m of entry.meanings) {
+            const definitions: string[] = [];
+            const examples: string[] = [];
+            const synonyms: string[] = [];
+            const antonyms: string[] = [];
+
+            for (const d of m.definitions) {
+                definitions.push(d.definition);
+                if (d.example) examples.push(d.example);
+                if (d.synonyms) synonyms.push(...d.synonyms);
+                if (d.antonyms) antonyms.push(...d.antonyms);
+            }
+
+            meanings.push({
+                partOfSpeech: m.partOfSpeech,
+                definitions,
+                examples: examples.length > 0 ? examples : undefined,
+                synonyms: synonyms.length > 0 ? synonyms : undefined,
+                antonyms: antonyms.length > 0 ? antonyms : undefined,
+                provider: "free-dictionary-api",
+            });
+        }
+
+        const phonetic = entry.phonetics?.find((p) => p.text)?.text || entry.phonetic;
+        const audioUrl = entry.phonetics?.find((p) => p.audio)?.audio || undefined;
+
+        return {
+            meanings,
+            phonetic,
+            audioUrl: audioUrl ? (audioUrl.startsWith("//") ? `https:${audioUrl}` : audioUrl) : undefined,
+        };
+    } catch {
+        return null;
+    }
+}
+
 export async function lookupDictionaryTerm(
     input: DictionaryLookupInput,
 ): Promise<DictionaryLookupResult | null> {
@@ -78,28 +154,53 @@ export async function lookupDictionaryTerm(
     if (!normalizedTerm) return null;
 
     const language = input.language || "en";
+
     const installedIds = input.installedDictionaryIds || [];
-    if (installedIds.length === 0) return null;
+    const providersUsed: DictionaryProvider[] = [];
+
+    let phonetic: string | undefined;
+    let audioUrl: string | undefined;
+    let allMeanings: VocabularyMeaning[] = [];
 
     try {
-        const stardictResult = await lookupWithStarDict(normalizedTerm, installedIds);
-        if (!stardictResult) return null;
+        const stardictResult = installedIds.length > 0
+            ? await lookupWithStarDict(normalizedTerm, installedIds)
+            : null;
 
-        const normalizedMeanings = dedupeDefinitions(stardictResult.meanings).filter(
-            (item) => item.definitions.length > 0,
-        );
-        if (normalizedMeanings.length === 0) return null;
-
-        return {
-            term: input.term.trim(),
-            normalizedTerm,
-            language,
-            meanings: normalizedMeanings,
-            providersUsed: ["stardict"],
-        };
-    } catch (error) {
-        return null;
+        if (stardictResult) {
+            allMeanings.push(...stardictResult.meanings);
+            providersUsed.push("stardict");
+        }
+    } catch {
     }
+
+    try {
+        const onlineResult = await lookupWithFreeDictionaryApi(normalizedTerm);
+        if (onlineResult) {
+            allMeanings.push(...onlineResult.meanings);
+            providersUsed.push("free-dictionary-api");
+            if (onlineResult.phonetic && !phonetic) phonetic = onlineResult.phonetic;
+            if (onlineResult.audioUrl && !audioUrl) audioUrl = onlineResult.audioUrl;
+        }
+    } catch {
+    }
+
+    if (allMeanings.length === 0) return null;
+
+    const normalizedMeanings = dedupeDefinitions(allMeanings).filter(
+        (item) => item.definitions.length > 0,
+    );
+    if (normalizedMeanings.length === 0) return null;
+
+    return {
+        term: input.term.trim(),
+        normalizedTerm,
+        language,
+        phonetic,
+        audioUrl,
+        meanings: normalizedMeanings,
+        providersUsed,
+    };
 }
 
 export function vocabularyTermFromLookup(result: DictionaryLookupResult): VocabularyTerm {
