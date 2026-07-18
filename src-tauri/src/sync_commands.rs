@@ -722,7 +722,7 @@ pub async fn docs_get_all_entries(
     let mut per_key: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
 
-    for (_, device) in devices.iter() {
+    for device in devices.values() {
         if device.sync_doc_id.is_empty() {
             continue;
         }
