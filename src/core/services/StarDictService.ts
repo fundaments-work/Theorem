@@ -348,6 +348,31 @@ async function ensureLoadedDictionary(id: string): Promise<LoadedStarDict | null
     }
 }
 
+async function importStarDictCommon(
+    ifoBuffer: ArrayBuffer,
+    idxBuffer: ArrayBuffer,
+    dictBuffer: ArrayBuffer,
+    synBuffer: ArrayBuffer | undefined,
+    sizeBytes: number,
+    name: string,
+    language: string,
+): Promise<InstalledDictionary> {
+    const id = crypto.randomUUID();
+
+    await writeManifest({ id, name, language, sizeBytes, hasSyn: Boolean(synBuffer) });
+    await writeDictionaryPart(id, "ifo", ifoBuffer);
+    await writeDictionaryPart(id, "idx", idxBuffer);
+    await writeDictionaryPart(id, "dict", dictBuffer);
+    if (synBuffer) {
+        await writeDictionaryPart(id, "syn", synBuffer);
+    }
+
+    const runtime = await createRuntimeDictionary({ ifo: ifoBuffer, idx: idxBuffer, dict: dictBuffer, syn: synBuffer });
+    loadedDictionaries.set(id, runtime);
+
+    return { id, name, language, format: "stardict" as const, sizeBytes, importedAt: new Date() };
+}
+
 export async function importStarDictDictionary(
     files: FileList | File[],
 ): Promise<InstalledDictionary> {
@@ -368,47 +393,16 @@ export async function importStarDictDictionary(
         throw new Error("Dictionary import requires .idx (or .index) and .dict.dz files.");
     }
 
-    const ifoBuffer = await ifoFile.arrayBuffer();
-    const idxBuffer = await idxFile.arrayBuffer();
-    const dictBuffer = await dictFile.arrayBuffer();
-    const synBuffer = synFile ? await synFile.arrayBuffer() : undefined;
-
-    const parsed = parseIfoContent(textDecoder.decode(ifoBuffer));
-    const id = crypto.randomUUID();
-    const sizeBytes = ifoFile.size + idxFile.size + dictFile.size + (synFile?.size || 0);
-
-    const manifest: StoredStarDictManifest = {
-        id,
-        name: parsed.name,
-        language: parsed.language,
-        sizeBytes,
-        hasSyn: Boolean(synBuffer),
-    };
-
-    await writeManifest(manifest);
-    await writeDictionaryPart(id, "ifo", ifoBuffer);
-    await writeDictionaryPart(id, "idx", idxBuffer);
-    await writeDictionaryPart(id, "dict", dictBuffer);
-    if (synBuffer) {
-        await writeDictionaryPart(id, "syn", synBuffer);
-    }
-
-    const runtime = await createRuntimeDictionary({
-        ifo: ifoBuffer,
-        idx: idxBuffer,
-        dict: dictBuffer,
-        syn: synBuffer,
-    });
-    loadedDictionaries.set(id, runtime);
-
-    return {
-        id,
-        name: parsed.name,
-        language: parsed.language,
-        format: "stardict",
-        sizeBytes,
-        importedAt: new Date(),
-    };
+    const parsed = parseIfoContent(textDecoder.decode(await ifoFile.arrayBuffer()));
+    return importStarDictCommon(
+        await ifoFile.arrayBuffer(),
+        await idxFile.arrayBuffer(),
+        await dictFile.arrayBuffer(),
+        synFile ? await synFile.arrayBuffer() : undefined,
+        ifoFile.size + idxFile.size + dictFile.size + (synFile?.size || 0),
+        parsed.name,
+        parsed.language,
+    );
 }
 
 export async function importStarDictFromBytes(
@@ -417,47 +411,17 @@ export async function importStarDictFromBytes(
     dictBytes: Uint8Array,
     synBytes?: Uint8Array,
 ): Promise<InstalledDictionary> {
-    const ifoBuffer = ifoBytes.buffer.slice(ifoBytes.byteOffset, ifoBytes.byteOffset + ifoBytes.byteLength) as ArrayBuffer;
-    const idxBuffer = idxBytes.buffer.slice(idxBytes.byteOffset, idxBytes.byteOffset + idxBytes.byteLength) as ArrayBuffer;
-    const dictBuffer = dictBytes.buffer.slice(dictBytes.byteOffset, dictBytes.byteOffset + dictBytes.byteLength) as ArrayBuffer;
-    const synBuffer = synBytes ? synBytes.buffer.slice(synBytes.byteOffset, synBytes.byteOffset + synBytes.byteLength) as ArrayBuffer | undefined : undefined;
-
-    const parsed = parseIfoContent(textDecoder.decode(ifoBuffer));
-    const id = crypto.randomUUID();
-    const sizeBytes = ifoBytes.byteLength + idxBytes.byteLength + dictBytes.byteLength + (synBytes?.byteLength || 0);
-
-    const manifest: StoredStarDictManifest = {
-        id,
-        name: parsed.name,
-        language: parsed.language,
-        sizeBytes,
-        hasSyn: Boolean(synBuffer),
-    };
-
-    await writeManifest(manifest);
-    await writeDictionaryPart(id, "ifo", ifoBuffer);
-    await writeDictionaryPart(id, "idx", idxBuffer);
-    await writeDictionaryPart(id, "dict", dictBuffer);
-    if (synBuffer) {
-        await writeDictionaryPart(id, "syn", synBuffer);
-    }
-
-    const runtime = await createRuntimeDictionary({
-        ifo: ifoBuffer,
-        idx: idxBuffer,
-        dict: dictBuffer,
-        syn: synBuffer,
-    });
-    loadedDictionaries.set(id, runtime);
-
-    return {
-        id,
-        name: parsed.name,
-        language: parsed.language,
-        format: "stardict",
-        sizeBytes,
-        importedAt: new Date(),
-    };
+    const toBuffer = (bytes: Uint8Array) => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const parsed = parseIfoContent(textDecoder.decode(toBuffer(ifoBytes)));
+    return importStarDictCommon(
+        toBuffer(ifoBytes),
+        toBuffer(idxBytes),
+        toBuffer(dictBytes),
+        synBytes ? toBuffer(synBytes) : undefined,
+        ifoBytes.byteLength + idxBytes.byteLength + dictBytes.byteLength + (synBytes?.byteLength || 0),
+        parsed.name,
+        parsed.language,
+    );
 }
 
 export async function removeStarDictDictionary(id: string): Promise<void> {
