@@ -9,99 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Comprehensive feature documentation** — 16 docs covering reader, sync, library, annotations, vocabulary, feeds, persistence, settings, TTS, EPUB pre-parser, vault sync, and more. See `docs/`.
-- **Internationalization** — English, Spanish, and French UI translations via i18next. Language selection in Settings → General.
-- **Daily highlight on Library** — A featured highlight from your collection is shown on the library page. Can be dismissed. Settings toggle in Customization.
-- **Speed Read (RSVP) mode** — Rapid Serial Visual Presentation for focused reading. Toggle in reader settings. Speed adjustable.
-- **Semantic highlight colors** — Each color has a named purpose label in the picker. Color picker uses compact badges.
-- **Reading streaks in sidebar** — Current streak length displayed with a flame icon. Also visible in the collapsed sidebar view.
-- **Stats share cards** — Redesigned shareable image cards with badge-style stats and progress bars. Share from Statistics page.
-- **Clipboard permissions** — Ctrl+C in reader iframe works properly via sandbox attribute.
-- **Custom QUIC stream handler for file transfer** — Replaced iroh-blobs for P2P book transfer with a custom QUIC stream handler using ALPN `theorem-file/v1`. Simpler, fewer dependencies, faster connection setup.
-- **On-demand book download** — Books received via sync are download-on-demand rather than eagerly. Reader opens immediately after metadata sync; file downloads in background when user opens the book.
-- **Batch cover download after sync** — Cover images are synced in parallel batches (concurrency 8) after metadata sync completes.
-- **Rust integration tests** — 43 tests covering SQLite CRUD, KV store, blob store, FTS5, book metadata, annotations, and storage stats.
+- **On-demand download progress** — Reader shows a real progress bar with file size (e.g., `12.5 MB / 45.3 MB (28%)`) instead of an indeterminate spinner when downloading synced books. Progress events emitted from Rust in 1MB chunks, throttled to percentage changes.
+- **Memorized reader state** — Reader now persists `downloadingBookId` and `downloadProgress` across renders. "Try Again" button on all error screens.
 
 ### Changed
 
-- **Design system overhaul** — Contrast-safe accent colors, card deck view, consistent shell styling. Normalized heading scale. Removed section borders. Used `PageHeader` component everywhere.
-- **Reader settings redesigned** — Sliders, theme swatches, tabbed layout, larger touch targets.
-- **Settings consolidated** — Customization section groups reader appearance, copy behavior, and daily highlight.
-- **Filter sidebar simplified** — Library filter shows only Collections panel. "Recent" books added to Quick panel.
-- **Sync: legacy sync-daemon removed** — The standalone sync-daemon binary (sidecar with embedded HTTP server) has been removed. All sync now runs in-process via iroh-docs CRDT. No more sidecar lifecycle management, port conflicts, or stale daemon state.
-- **Sync: legacy LWW merge removed** — Last-Write-Wins merge path and `DeviceIdentity` crypto removed in favor of unified iroh-docs CRDT merge. All domains (books, annotations, settings, vocabulary, RSS) use the same merge pipeline.
-- **Sync: iroh-docs store path fixed on Android** — JNI docs store was using `blobs_path` instead of `docs_path`, causing "Replica not found" errors on Android.
-- **Cover images stored as SQLite BLOB** — Binary cover data stored alongside the data URL column. Used for binary transfer in sync and exported bundles.
-- **Database migration runs every startup** — Schema changes are applied on every app boot, not just first install. Future-proof for rolling updates.
-- **Reader bookmark UX** — Redesigned to match AnnotationCard styling with consistent borders, dropdown menu, and serif blockquotes.
-
-### Fixed (Sync)
-
-- **Sync freezing UI** — Fixed broken retry loop (unbounded reconnect attempts pinned the Rust async runtime), state feedback loop (successful save re-triggered sync), and O(n) re-provisioning (every sync round re-serialized all 10 domains even when nothing changed). Sync is now event-driven with dirty tracking.
-- **Peer offline detection** — `docs_sync_now` returned Ok even when peer was unreachable. Now detects offline peers via event tracking and shows "Peer offline" instead of "Already in sync".
-- **Gossip settle too early** — Live doc events were being collected before the initial sync finished, causing data loss. Fixed by using signal-based settle (3 signals: content-ready, sync-finished, timeout).
-- **Progressive book download** — Books received in batches during sync were not visible until the final batch arrived. Added progressive book flushing (200ms debounce) so books appear incrementally.
-- **Blob content retry** — `docs_get_all_entries` failed silently on large entries. Added retry with exponential backoff.
-- **Database corruption recovery** — iroh redb database exceeding 100MB is automatically wiped and re-provisioned. Corrupted databases (detected on open failure) trigger re-provisioning.
-- **Doc event subscription restoration** — Live listeners were lost on iroh restart. Restored via re-subscription in `startAutoSync`.
-- **Re-provision after pairing** — Newly paired devices didn't have the local data until the next sync cycle. Now provisions immediately on pair.
-- **Mutation sync dropped during active sync** — Changes made while a sync round was in flight were silently dropped. Fixed via `_dataDirty` flag that triggers a follow-up sync.
-- **Peer relay URLs not exchanged** — Blob downloads failed after restart because relay URLs were not persisted. Now stored and exchanged during pairing.
-- **Stale LAN IP reconnection** — Cached LAN IP from last session was used for peer address, causing connection failures. Now checks reachability before connecting.
-- **Sync cancelled flag not reset** — `_syncCancelled` remained true after a cancelled sync, preventing future syncs. Reset at the start of each `runDeviceSync`.
-- **Blob download timeout** — File downloads had no timeout. Added 20s timeout to `docs_sync_now`.
-- **Offline settings merge** — Settings LWW timestamp comparison was missing the local side. Local `settingsLastModifiedAt` now used correctly.
-- **Vocab tombstones not propagated** — Deleted vocabulary terms were missing from sync tombstones. Added to tombstone generation.
-- **Pending entries cap** — `_pendingDocsEntries` grew unbounded during live sync. Capped at 2000 entries with immediate flush.
-- **QUIC warmup connect** — Pre-connecting a QUIC stream before blob download doubled latency. Removed warmup.
-- **Reader lazy chunk prewarming** — Reader chunk loaded on book open, causing 2-3s delay. Now prewarmed on book tap in library.
-- **Reader download flow** — On-demand book download showed loading flash before reader appeared. Now downloads in background, opens reader seamlessly after file arrives.
-- **Cover download filter** — Covers with `data:` paths or missing `coverBlobHash` were being fetched. Filtered out, only downloading blob-referenced covers.
-- **SyncedWithoutFile dedup** — Multiple devices syncing the same book created duplicate entries. Dedup safety check using contentHash/blobHash prevents duplicates.
-- **14 sync bugs resolved** — Comprehensive audit fixed data loss on progressive downloads, false "synced" status, missing unpair confirmation, cancel button not stopping file downloads, and more.
-
-### Fixed (General)
-
-- **Reader scroll mode not rendering** — Fixed theme not applied on book open.
-- **Library scroll container** — Removed `content-visibility` from virtualized container (was breaking virtualization).
-- **Color picker button sizing** — Restored original styling, reduced to `text-xs`.
-- **Duplicate left bar in Annotations** — Removed duplicate, standardized filter button sizing.
-- **Settings toggle/button heights** — All buttons standardized to `py-2`.
-- **All 54 codebase audit issues** — Security (unvalidated user input in sync paths), type safety (missing null checks in annotation selectors), and UX (inconsistent button sizing, missing loading states).
-- **FTS5 search index population** — Library search was returning empty results because FTS5 index was not populated on import. Now indexed at import time and re-indexed on batch operations.
-- **Android iroh-docs "Replica not found"** — JNI docs store path was incorrectly pointing to blobs directory instead of docs directory. Fixed path construction.
-- **Android Worker lifecycle** — Background sync worker retained stale in-memory state after app restart. Now uses persistent KV cache for incoming sync data.
-- **Database PRAGMAs missing** — Schema migration was setting PRAGMAs on a raw connection but the pool connections didn't inherit WAL mode. Now applies per-connection PRAGMAs via `connection_customizer`.
+- **File transfer: streaming writes with no IPC** — `download_book_file` writes received data directly to `book-cache/{id}.book` from Rust in 1MB chunks. Zero bytes pass through the Tauri IPC bridge. Previously, the entire file was returned via IPC as JSON `number[]`, causing 360MB+ allocations that crashed Android with OOM (heap limit 256MB).
+- **File transfer: 120s timeouts** — All I/O operations (connect, open_bi, read_line, read_exact) now have 120s timeouts. Previously, `request_book_file` could hang indefinitely on unreachable peers.
+- **File transfer: SQLite fallback** — `FileTransferHandler` falls back to reading from SQLite `books` table when the file is not in `book-cache`. Previously only served from `book-cache`, meaning locally-imported books (stored in SQLite) were unavailable to peers.
+- **Sync: gossip-based bidirectional auto-sync** — `NeighborUp` events now properly trigger `runDeviceSync` on the peer via `docs-peer-online`. The `iroh_node_id` field was missing from `PairedDeviceInfo`, making the peer-matching `d.irohNodeId === nodeId` always fail. Auto-sync when a peer comes online was completely dead.
+- **Sync: settle threshold fixed** — `signalSettle()` checks `>= 2` instead of `>= 3`. Only 2 events (`docs-pending-content-ready` + `docs-sync-finished`) ever call signalSettle, so the threshold of 3 was never reached — every sync round waited the full 30s timeout.
+- **Sync: event subscription on doc recovery** — `subscribe_doc_events` is now called after re-importing a sync doc from ticket in `docs_sync_now`. Previously, doc subscriptions were lost during recovery, causing no live events to flow.
+- **Sync: `_bridgePaused` guard for all stores** — Vocabulary, RSS, and settings store subscriptions now check `_bridgePaused` during provisioning, preventing writes during initial data sync.
+- **Reader: shortcuts useEffect moved before early returns** — The keyboard shortcuts registration useEffect is now called before all early-return guards (downloading, error, syncedWithoutFile). Previously, the shortcuts useEffect was duplicated — one copy before and one after the early returns — causing "Rendered more hooks than during the previous render" errors when transitioning from the download screen to the reader.
+- **Reader: polling loop timeout** — The `while (syncedWithoutFile)` polling loop now has a 120-second timeout. Previously it hung forever if the download failed.
+- **Annotations page: fully responsive card view** — Touch swipe navigation, icon-based mobile toolbars, clipped dot indicators, `touch-manipulation` on all interactive elements.
 
 ### Performance
 
-- **Sync: event-driven, not timer-based** — All three sync layers (JS orchestrator, Rust background, mutation triggers) use dirty tracking. Periodic 2-minute sync becomes a no-op when nothing changed. Mutation-triggered sync debounces to 2 seconds. Previously: every sync round re-serialized all 10 domains unconditionally.
-- **Sync: removed expensive poll loop** — Live doc events used a 500ms polling loop to check for new entries. Replaced with gossip-based event push. CPU usage during background sync dropped to near-zero.
-- **Sync: O(n) → O(1) provisioning** — `provisionToIrohDocs` serialized all domains every sync round even when unchanged. Now uses dirty tracking — only mutated domains are re-provisioned.
-- **Removed 5 dead npm dependencies** — `@mozilla/readability`, `@tauri-controls/react`, `class-variance-authority`, `@zip.js/zip.js` (moved to devDep), `@tauri-apps/plugin-http`/`plugin-os` npm packages. Saves ~100KB from install.
-- **Local fonts, no Google Fonts request** — EB Garamond is now bundled locally. Eliminates an external blocking request on every app launch.
-- **Deferred sync imports** — `sync-orchestrator` and `device-sync` (~72KB) moved from eager imports to dynamic imports in `App.tsx`. Only loaded when sync is active.
-- **Guarded console.log** — All 16 sync debug logs wrapped behind `import.meta.env.DEV`. No log output in production.
-- **DB pool max_size 1→4** — r2d2 connection pool increased from 1 to 4 connections. WAL mode supports concurrent readers — previously all DB operations were serialized.
-- **Batch FTS indexing in transaction** — Indexing 10,000 books now uses a single WAL checkpoint instead of 10,000 individual ones. Wrapped in `unchecked_transaction()`.
-- **Virtual scrolling on all list pages** — Library, Shelves, Annotations, Bookmarks, Vocabulary use `@tanstack/react-virtual`. DOM node count reduced by 85-98%.
-- **Memoized list item components** — `BookCard`, `ShelfCard`, `AnnotationCard`, `BookmarkCard` wrapped in `React.memo` with custom comparators.
-- **`content-visibility: auto` on 17 scroll containers** — Deferred off-screen rendering across every panel and list.
-- **`useShallow` for annotation selectors** — Prevents re-render when unrelated annotations change.
-- **Cover-to-BLOB migration** — Cover images stored as SQLite BLOBs instead of being re-decoded from base64 data URLs on every read. Binary data used for sync and export bundles.
-- **Custom QUIC file transfer** — Replaced iroh-blobs FsStore with custom QUIC stream handler. Eliminates iroh-blobs overhead (FsStore file locking, redb journal) for on-demand book downloads.
-- **Reader chunk prewarm on tap** — Reader JS chunk starts loading on book card tap (not on navigation), eliminating 2-3s perceived delay.
+- **Memory: eliminate unnecessary Blob copy** — When the MIME type already matches, use the blob directly instead of `new Blob([blob], type)`, which duplicated the entire book in JS memory. Saves one full copy (50-100MB for large EPUBs).
+- **Memory: call EPUB.destroy() on engine teardown** — `FoliateEngine.destroy()` now calls `EPUB.destroy()`, which revokes all blob URLs created for sections, CSS, images, and fonts. Previously, blob URLs accumulated until page refresh.
+- **Memory: unload previous fixed-layout spreads** — `goToSpread()` now calls `unload()` on the previous spread's sections. Fixed-layout books (children's books, comics) were leaking all visited spreads' blob URLs.
+- **Memory: cover extraction early-return before file re-read** — The `hasRealCover && coverExtractionDone` check now runs BEFORE `getBookData()`, avoiding a full re-read of the book from storage when cover is already extracted.
+- **Memory: metadata-only EPUB prefetch** — Rust `prefetch_zip_metadata` no longer pre-decodes all EPUB section HTML files (up to 100 sections, ~3-6MB of JS strings). Only metadata files (container.xml, OPF, NAV, NCX, encryption) are prefetched. Sections load lazily via zip.js.
+- **Binary size: removed unused Rust dependencies** — `read_zip_entry` wrapper removed after section prefetch elimination.
 
-### Removed
+### Fixed (Sync)
 
-- **Biome linter** — Was check-only with no auto-fix. Generated 640 pre-existing errors. Removed along with `biome.json`.
-- **Legacy sync-daemon** — Standalone sidecar binary (sync-daemon crate), Android foreground service (SyncForegroundService.kt, SyncWorker.kt, SyncWorkerPlugin.kt), JNI bridge code, and all related permissions. The daemon's embedded HTTP server, fixed port (43935), and sidecar lifecycle management are no longer needed — all sync runs in-process via iroh.
-- **Legacy LWW merge** — Last-Write-Wins merge path for sync removed. All domains now use the same iroh-docs CRDT merge pipeline.
-- **Legacy DeviceIdentity crypto** — Removed ChaCha20-Poly1305 encryption, ED25519 signing, and device identity exchange from sync-core. iroh handles transport security.
-- **Android sync worker plugin** — `android-sync-worker` Tauri plugin (5 Rust commands, Kotlin foreground service, WorkManager integration) removed. Android sync now uses the same in-process iroh path as desktop.
-- **Dead Rust crates** — `axum`, `tower-http`, `local-ip-address`, `qrcode` (moved to sync-core), `sync-daemon` workspace member.
-- **Dead Vite asset** — `src/assets/react.svg`.
-- **Unused Rust imports** — Stale `iroh::endpoint` and `iroh::protocol::Router` imports in `lib.rs`.
+- **Duplicate pairing by iroh_node_id** — The dedup check only matched by `fingerprint`, which is empty on Android (and often empty on desktop). Added `iroh_node_id`-based dedup in both `handle_pair_req` and `submit_pairing_code`.
+- **Frontend duplicate device list** — `DeviceSync.tsx` filtered by `deviceId` before appending, preventing duplicate entries in the local React state.
+
+### Fixed (General)
+
+- **Stuck "Downloading Book" screen** — Added 120s timeout, clears `downloadingBookId` on timeout, shows "Book download timed out" error with retry.
+- **Broken reader state after download failure** — New guard renders "Book File Not Available" screen when `syncedWithoutFile` is true but not currently downloading, instead of showing a broken reader view.
+- **"Rendered more hooks than during the previous render"** — Removed duplicate shortcuts useEffect that was left after the move. When transitioning from "Downloading" screen (early return fired, 1 shortcuts hook) to reader (no early return, 2 shortcuts hooks), React detected the mismatch and threw.
 
 ## [1.0.6] - 2026-07-06
 
