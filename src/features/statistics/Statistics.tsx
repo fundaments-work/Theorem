@@ -1,6 +1,7 @@
 
 import { useState, useMemo, memo } from "react";
 import { cn, normalizeAuthor, formatReadingTime } from "../../core/lib/utils";
+import { HIGHLIGHT_SOLID_COLORS } from "../../core/lib/design-tokens";
 import { PageHeader } from "../../ui";
 import { useLibraryStore, useSettingsStore, useUIStore } from "../../core/store";
 import type { DailyReadingActivity } from "../../core/types";
@@ -482,6 +483,31 @@ export function StatisticsPage() {
                                         </div>
                                     </button>
                                 ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {annotations.filter(a => a.type !== "bookmark").length > 0 && (
+                        <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
+                            <div className="flex items-center gap-3 mb-4 sm:mb-5">
+                                <div className="p-2 bg-[var(--color-surface-muted)]">
+                                    <Highlighter className="w-5 h-5 text-[color:var(--color-text-primary)]" />
+                                </div>
+                                <h2 className="font-semibold text-[color:var(--color-text-primary)]">Highlights</h2>
+                            </div>
+                            <div className="space-y-2">
+                                {(["yellow", "green", "blue", "red", "orange", "purple"] as const).map((color) => {
+                                    const count = annotations.filter((a) => a.type !== "bookmark" && a.color === color).length;
+                                    if (count === 0) return null;
+                                    const label = color === "yellow" ? "Important" : color === "green" ? "Key Idea" : color === "blue" ? "Interesting" : color === "red" ? "Critical" : color === "orange" ? "Action" : "Beautiful";
+                                    return (
+                                        <div key={color} className="flex items-center gap-2">
+                                            <span className="w-3 h-3 border border-[var(--color-border-subtle)]" style={{ backgroundColor: HIGHLIGHT_SOLID_COLORS[color] }} />
+                                            <span className="flex-1 text-sm text-[color:var(--color-text-primary)]">{label}</span>
+                                            <span className="text-sm font-medium text-[color:var(--color-text-secondary)]">{count}</span>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </section>
                     )}

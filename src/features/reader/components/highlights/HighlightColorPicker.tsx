@@ -569,7 +569,7 @@ export function HighlightColorPicker({
                                     className={cn(
                                         "h-9 min-w-0",
                                         "flex items-center justify-center",
-                                        "border transition-[background-color,border-color,color] duration-150",
+                                        "border transition-[background-color,border-color] duration-150",
                                         selectedColor === color
                                             ? "border-[color:var(--color-text-primary)]"
                                             : "border-[var(--color-overlay-subtle)] hover:border-[color:color-mix(in_srgb,var(--color-accent)_30%,var(--color-border))]",
@@ -581,7 +581,7 @@ export function HighlightColorPicker({
                                             : HIGHLIGHT_PICKER_COLORS[color],
                                     }}
                                     title={`${label} (Shortcut: ${COLOR_OPTIONS.findIndex(c => c.color === color) + 1})`}
-                                    aria-label={`Select ${label} highlight color`}
+                                    aria-label={`Select ${label}`}
                                 >
                                     {selectedColor === color && (
                                         <Check className="w-3.5 h-3.5 text-[color:var(--color-overlay-strong)]" strokeWidth={3} />
@@ -589,37 +589,23 @@ export function HighlightColorPicker({
                                 </button>
                             ))}
                         </div>
-
-                        <div className="mt-3 grid gap-1.5">
+                        <div className="mt-3 flex items-center gap-1">
                             {onCopy && (
-                                <button
-                                    onClick={() => {
-                                        onCopy();
-                                        handleClose();
-                                    }}
-                                    className={PICKER_ACTION_BUTTON_CLASS}
-                                >
-                                    <Copy className="w-4 h-4 mr-2" />
-                                    Copy
+                                <button onClick={() => { onCopy(); handleClose(); }}
+                                    className="flex items-center justify-center h-8 flex-1 border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors text-[11px] font-medium gap-1"
+                                    title="Copy text">
+                                    <Copy className="w-3.5 h-3.5" /> Copy
                                 </button>
                             )}
-                            <button
-                                onClick={() => {
-                                    onAddNote();
-                                    handleClose();
-                                }}
-                                className={PICKER_ACTION_BUTTON_CLASS}
-                            >
+                            <button onClick={() => { onAddNote(); handleClose(); }}
+                                className="flex items-center justify-center h-8 flex-1 border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors text-[11px] font-medium"
+                                title="Add a note to this highlight">
                                 Add Note
                             </button>
-
-                            <button
-                                onClick={() => {
-                                    onDefine?.();
-                                }}
-                                className={PICKER_ACTION_BUTTON_CLASS}
+                            <button onClick={() => onDefine?.()}
+                                className="flex items-center justify-center h-8 flex-1 border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors text-[11px] font-medium disabled:opacity-40"
                                 disabled={!onDefine}
-                            >
+                                title="Look up definition">
                                 Define
                             </button>
                         </div>

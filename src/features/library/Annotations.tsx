@@ -15,15 +15,6 @@ import {
 } from "lucide-react";
 import { ShareMenu } from "./components/ShareMenu";
 
-function ColorBadge({ color }: { color: HighlightColor }) {
-    return (
-        <span
-            className="inline-block w-2.5 h-2.5 border border-[var(--color-border)]"
-            style={{ backgroundColor: HIGHLIGHT_SOLID_COLORS[color] }}
-        />
-    );
-}
-
 function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" }) {
     const icons = {
         all: Highlighter,
@@ -91,9 +82,13 @@ const AnnotationCard = memo(function AnnotationCard({
     onShare,
 }: AnnotationCardProps) {
     const [showMenu, setShowMenu] = useState(false);
+    const borderColor = annotation.color ? HIGHLIGHT_SOLID_COLORS[annotation.color] : "var(--color-border)";
 
     return (
-        <div className="group border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-accent)]">
+        <div
+            className="group bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-accent)]"
+            style={{ borderLeft: `3px solid ${borderColor}` }}
+        >
             
             <div className="flex items-start justify-between mb-4">
                 <div className="min-w-0">
@@ -104,7 +99,7 @@ const AnnotationCard = memo(function AnnotationCard({
                         <span className="font-sans text-[11px] text-[color:var(--color-text-secondary)]">
                             {new Date(annotation.createdAt).toISOString().slice(0, 10)}
                         </span>
-                        {annotation.color && <ColorBadge color={annotation.color} />}
+
                     </div>
                     <div className="mt-2 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
                         {book?.title || "Unknown source"} | {book?.author || "Unknown author"}
