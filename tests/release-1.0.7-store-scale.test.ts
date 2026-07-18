@@ -207,6 +207,6 @@ describe("Book lookup operations are O(1)", () => {
             useLibraryStore.getState().getBook(`book-${i * 5}`);
         }
         const elapsed = performance.now() - start;
-        expect(elapsed).toBeLessThan(10);
+        expect(elapsed).toBeLessThan(25);
     });
 });

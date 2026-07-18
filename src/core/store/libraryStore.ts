@@ -283,7 +283,9 @@ function cleanupDiscardedImportedBook(book: Book): void {
         return;
     }
 
-    deleteBookStorage(book.id).catch(e => console.error("[catch]", e));
+    if (isTauri()) {
+        deleteBookStorage(book.id).catch(e => console.error("[catch]", e));
+    }
 }
 
 function normalizePersistedBook(book: Book): Book {
@@ -645,8 +647,10 @@ export const useLibraryStore = create<LibraryStore>()(
                         : { books: nextBooks },
                 );
                 scheduleMutationSync();
-                for (const book of nextBooks) {
-                    sqliteSaveBookMetadata(book.id, JSON.stringify(book)).catch(e => console.error("[catch]", e));
+                if (isTauri()) {
+                    for (const book of nextBooks) {
+                        sqliteSaveBookMetadata(book.id, JSON.stringify(book)).catch(e => console.error("[catch]", e));
+                    }
                 }
                 if (isTauri() && incomingBooks.length > 0) {
                     const ftsEntries: Array<[string, string, string]> = incomingBooks.map(b => [b.id, b.title, b.author]);
@@ -658,7 +662,9 @@ export const useLibraryStore = create<LibraryStore>()(
                 const book = get().books.find((b) => b.id === bookId);
 
                 if (book && !book.syncedWithoutFile) {
-                    deleteBookStorage(bookId).catch(e => console.error("[catch]", e));
+                    if (isTauri()) {
+                        deleteBookStorage(bookId).catch(e => console.error("[catch]", e));
+                    }
                 }
 
                 const now = new Date().toISOString();
@@ -1033,10 +1039,12 @@ export const useLibraryStore = create<LibraryStore>()(
                 set((state) => ({ annotations: [...state.annotations, annotation] }));
                 queueVaultSync(annotation);
                 scheduleMutationSync();
-                sqliteSaveBookAnnotations(
-                    annotation.bookId,
-                    get().annotations.filter(a => a.bookId === annotation.bookId).map(a => JSON.stringify(a))
-                ).catch(e => console.error("[catch]", e));
+                if (isTauri()) {
+                    sqliteSaveBookAnnotations(
+                        annotation.bookId,
+                        get().annotations.filter(a => a.bookId === annotation.bookId).map(a => JSON.stringify(a))
+                    ).catch(e => console.error("[catch]", e));
+                }
             },
 
             addHighlightWithNote: (cfi, text, color, note) => {
