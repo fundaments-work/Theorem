@@ -52,7 +52,7 @@ export function ReaderToolbar({
         if (!location) return null;
         
         if (location.pageInfo) {
-            return `Page ${location.pageInfo.currentPage}${location.pageInfo.totalPages ? ` / $location.pageInfo.totalPages}` : ''}`;
+            return `Page ${location.pageInfo.currentPage}${location.pageInfo.totalPages ? ` / ${location.pageInfo.totalPages}` : ''}`;
         }
         
         if (location.pageItem?.label) {

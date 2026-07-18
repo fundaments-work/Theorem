@@ -833,7 +833,7 @@ export const SettingsPage = memo(function SettingsPage() {
                         </SettingRow>
                     </Section>
 
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center justify-end mb-8">
                         <button
                             onClick={() => setShowResetConfirm(true)}
                             className="ui-btn-danger"

@@ -228,7 +228,7 @@ class View {
             width: '100%', height: '100%',
         })
         
-        this.#iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts')
+        this.#iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-clipboard-write allow-popups')
         this.#iframe.setAttribute('scrolling', 'no')
     }
     get element() {
