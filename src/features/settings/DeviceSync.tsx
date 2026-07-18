@@ -378,7 +378,7 @@ export function DeviceSyncSection() {
         } catch (e: any) {
             setError(e?.message || String(e));
         }
-    }, []);
+    }, [unpairDeviceId]);
 
     const handleSyncNow = useCallback(
         async (deviceId: string) => {
