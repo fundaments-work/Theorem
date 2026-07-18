@@ -1034,53 +1034,6 @@ async fn set_android_fingerprint(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "android")]
-#[no_mangle]
-pub extern "C" fn Java_work_fundamentals_theorem_MainActivity_initNdkContext(
-    mut env: jni::JNIEnv,
-    _class: jni::objects::JClass,
-) {
-    let jvm = match env.get_java_vm() {
-        Ok(vm) => vm,
-        Err(e) => {
-            eprintln!("[ndk-context] Failed to get JavaVM: {e}");
-            return;
-        }
-    };
-    let jvm_ptr = jvm.get_java_vm_pointer() as *mut std::ffi::c_void;
-
-    let context = match get_application_context(&mut env) {
-        Some(ctx) => ctx,
-        None => {
-            eprintln!("[ndk-context] Failed to get application context");
-            return;
-        }
-    };
-
-    unsafe {
-        ndk_context::initialize_android_context(jvm_ptr, context);
-    }
-    eprintln!("[ndk-context] Initialized via JNI");
-}
-
-#[cfg(target_os = "android")]
-fn get_application_context(env: &mut jni::JNIEnv) -> Option<*mut std::ffi::c_void> {
-    let activity_thread = env.find_class("android/app/ActivityThread").ok()?;
-    let current_app = env
-        .call_static_method(
-            activity_thread,
-            "currentApplication",
-            "()Landroid/app/Application;",
-            &[],
-        )
-        .ok()?;
-    let app_obj = current_app.l().ok()?;
-    let global_ref = env.new_global_ref(app_obj).ok()?;
-    let raw_ptr = global_ref.as_raw() as *mut std::ffi::c_void;
-    std::mem::forget(global_ref);
-    Some(raw_ptr)
-}
-
 #[tauri::command]
 fn hide_to_tray(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
