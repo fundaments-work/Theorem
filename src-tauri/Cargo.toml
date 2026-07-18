@@ -76,8 +76,6 @@ iroh-mdns-address-lookup = "0.4.0"
 unrar-ng = "0.7.7"
 
 [target.'cfg(target_os = "android")'.dependencies]
-jni = "0.21"
-ndk-context = "0.1.1"
 
 # Optimize for release (reduces binary size significantly)
 [profile.release]
@@ -85,7 +83,6 @@ opt-level = "s"         # Optimize for size
 strip = "symbols"       # Strip all symbols
 lto = true              # Enable Link Time Optimization
 codegen-units = 1       # Maximize optimization (takes longer to compile)
-panic = "abort"         # Remove unwinding tables (~1.3 MB saved for C++ deps like unrar-ng)
 
 # Dev profile: keep debug builds fast
 [profile.dev]
