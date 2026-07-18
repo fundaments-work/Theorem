@@ -24,7 +24,7 @@ export function ArticleReaderInfoPanel({
                 <button
                     onClick={onClose}
                     className="reader-chip w-8 h-8 inline-flex items-center justify-center transition-colors hover:opacity-80"
-                    title="Close"
+                    aria-label="Close"
                 >
                     <X className="w-4 h-4" />
                 </button>

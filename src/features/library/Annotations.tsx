@@ -121,6 +121,9 @@ function AnnotationCard({
                         <>
                             <div
                                 className="fixed inset-0 z-10"
+                                role="button"
+                                tabIndex={-1}
+                                aria-label="Close menu"
                                 onClick={() => setShowMenu(false)}
                             />
                             <div className="absolute right-0 top-full z-20 mt-1 w-40 border border-[var(--color-border)] bg-[var(--color-surface)] py-1">
@@ -158,6 +161,9 @@ function AnnotationCard({
                         <>
                             <div
                                 className="fixed inset-0 z-10"
+                                role="button"
+                                tabIndex={-1}
+                                aria-label="Close menu"
                                 onClick={() => onShare(null)}
                             />
                             <ShareMenu

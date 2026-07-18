@@ -120,6 +120,9 @@ export function ReaderAnnotationsPanel({
     const renderBookmarkItem = (bookmark: Annotation) => (
         <div
             key={bookmark.id}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNavigate(bookmark); } }}
             className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-[var(--color-accent)]"
             onClick={() => handleNavigate(bookmark)}
         >
@@ -142,13 +145,13 @@ export function ReaderAnnotationsPanel({
                     </button>
                     {menuId === bookmark.id && (
                         <>
-                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); closeMenu(); }} />
+                            <div className="fixed inset-0 z-10" role="button" tabIndex={-1} aria-label="Close menu" onClick={(e) => { e.stopPropagation(); closeMenu(); }} />
                             {renderContextMenu(bookmark)}
                         </>
                     )}
                     {sharingId === bookmark.id && (
                         <>
-                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setSharingId(null); }} />
+                            <div className="fixed inset-0 z-10" role="button" tabIndex={-1} aria-label="Close menu" onClick={(e) => { e.stopPropagation(); setSharingId(null); }} />
                             <ShareMenu annotation={bookmark} book={getBook(bookmark.bookId)} onClose={() => setSharingId(null)} />
                         </>
                     )}
@@ -167,6 +170,9 @@ export function ReaderAnnotationsPanel({
     const renderHighlightItem = (highlight: Annotation) => (
         <div
             key={highlight.id}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNavigate(highlight); } }}
             className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-[var(--color-accent)]"
             onClick={() => handleNavigate(highlight)}
         >
@@ -218,13 +224,13 @@ export function ReaderAnnotationsPanel({
                     </button>
                     {menuId === highlight.id && (
                         <>
-                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); closeMenu(); }} />
+                            <div className="fixed inset-0 z-10" role="button" tabIndex={-1} aria-label="Close menu" onClick={(e) => { e.stopPropagation(); closeMenu(); }} />
                             {renderContextMenu(highlight)}
                         </>
                     )}
                     {sharingId === highlight.id && (
                         <>
-                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setSharingId(null); }} />
+                            <div className="fixed inset-0 z-10" role="button" tabIndex={-1} aria-label="Close menu" onClick={(e) => { e.stopPropagation(); setSharingId(null); }} />
                             <ShareMenu annotation={highlight} book={getBook(highlight.bookId)} onClose={() => setSharingId(null)} />
                         </>
                     )}
