@@ -109,7 +109,7 @@ src/
     statistics/                 # Reading stats
     onboarding/                 # First-run onboarding flow
 src-tauri/
-  Cargo.toml                    # Workspace root (members: theorem, theorem-sync-core, sync-daemon)
+  Cargo.toml                    # Workspace root (members: theorem, theorem-sync-core)
   src/
     lib.rs                      # Tauri commands + runtime bootstrap
     main.rs                     # Entry point (calls theorem_lib::run())
@@ -119,7 +119,7 @@ src-tauri/
     sync_commands.rs          # All sync Tauri commands
   crates/
     theorem-sync-core/          # Shared sync library (crypto, protocol, embedded HTTP server)
-    sync-daemon/                # Standalone background sync daemon (sidecar)
+
   tauri.conf.json               # Window config, CSP, bundling resources
 docs/
   PERFORMANCE_SYNC_AUDIT.md     # Full performance + sync audit with scale analysis + fixes
@@ -265,20 +265,13 @@ Notes:
   - `theorem-feeds:show-mobile-list`
 
 ## Tauri backend rules
-- Tauri commands are in `src-tauri/src/lib.rs`.
-- Frontend relies on command names:
-  - `read_file`
-  - `read_pdf_file`
-  - `read_pdf_file_size`
-  - `read_pdf_range`
-  - `get_pdf_metadata`
-  - `take_pending_open_files`
-  - `fetch_rss_feed`
-  - `fetch_url_content`
-  - `fetch_binary_content`
-  - `prefetch_zip_metadata`
-  - `update_sync_notification`
-- SQLite-backed persistence (desktop Tauri only) uses `database::sqlite_*` commands, channeled through `src/core/lib/sqlite-storage.ts`.
+- All Tauri commands are registered in `src-tauri/src/` using `#[tauri::command]`.
+- Key command modules:
+  - `src-tauri/src/lib.rs` — file read, PDF, EPUB pre-parser, RSS fetch, CBR conversion, Stardict import, platform utilities
+  - `src-tauri/src/database.rs` — SQLite-backed persistence (`sqlite_*` commands, 25+), channeled through `src/core/lib/sqlite-storage.ts`
+  - `src-tauri/src/sync_commands.rs` — iroh sync lifecycle (`iroh_*`, `docs_*`, pairing, device identity)
+  - `src-tauri/src/file_transfer.rs` — `request_book_file` for peer-to-peer book transfer
+- To find the full list: `grep -r '#\[tauri::command\]' src-tauri/src/`
 - If command payload/return changes, update both Rust and TS call sites together.
 - Run `cargo fmt` after Rust changes (required before every commit, see Quality Gates above).
 - Run `cargo clippy` after Rust changes (required before every commit, zero warnings allowed).
