@@ -1,30 +1,26 @@
 const parseViewport = str => str
-    ?.split(/[,;\s]/) // NOTE: technically, only the comma is valid
+    ?.split(/[,;\s]/) 
     ?.filter(x => x)
     ?.map(x => x.split('=').map(x => x.trim()))
 
 const getViewport = (doc, viewport) => {
-    // use `viewBox` for SVG
+    
     if (doc.documentElement.localName === 'svg') {
         const [, , width, height] = doc.documentElement
             .getAttribute('viewBox')?.split(/\s/) ?? []
         return { width, height }
     }
 
-    // get `viewport` `meta` element
     const meta = parseViewport(doc.querySelector('meta[name="viewport"]')
         ?.getAttribute('content'))
     if (meta) return Object.fromEntries(meta)
 
-    // fallback to book's viewport
     if (typeof viewport === 'string') return parseViewport(viewport)
     if (viewport?.width && viewport.height) return viewport
 
-    // if no viewport (possibly with image directly in spine), get image size
     const img = doc.querySelector('img')
     if (img) return { width: img.naturalWidth, height: img.naturalHeight }
 
-    // just show *something*, i guess...
     console.warn(new Error('Missing viewport properties'))
     return { width: 1000, height: 2000 }
 }
@@ -81,8 +77,7 @@ export class FixedLayout extends HTMLElement {
             display: 'none',
             overflow: 'hidden',
         })
-        // `allow-scripts` is needed for events because of WebKit bug
-        // https://bugs.webkit.org/show_bug.cgi?id=218086
+        
         iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts')
         iframe.setAttribute('scrolling', 'no')
         iframe.setAttribute('part', 'filter')
@@ -287,7 +282,7 @@ export class FixedLayout extends HTMLElement {
     }
     async select(target) {
         await this.goTo(target)
-        // TODO
+        
     }
     async goTo(target) {
         const { book } = this
@@ -308,7 +303,7 @@ export class FixedLayout extends HTMLElement {
     getContents() {
         return Array.from(this.#root.querySelectorAll('iframe'), frame => ({
             doc: frame.contentDocument,
-            // TODO: index, overlayer
+            
         }))
     }
     destroy() {

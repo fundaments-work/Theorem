@@ -1,7 +1,3 @@
-/**
- * ReaderAnnotationsPanel Component
- * Unified panel for Bookmarks and Highlights with tabs
- */
 
 import { useMemo, useState } from 'react';
 import { Bookmark, X, Trash2, ExternalLink, Highlighter, MoreVertical, Pencil, Share2 } from 'lucide-react';
@@ -47,7 +43,6 @@ export function ReaderAnnotationsPanel({
     const removeAnnotationAction = useLibraryStore((state) => state.removeAnnotation);
     const updateAnnotation = useLibraryStore((state) => state.updateAnnotation);
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
-    const books = useLibraryStore((state) => state.books);
 
     const bookmarks = useMemo(
         () => annotations.filter((annotation) => annotation.type === 'bookmark'),
@@ -92,7 +87,7 @@ export function ReaderAnnotationsPanel({
 
     const closeMenu = () => setMenuId(null);
 
-    const getBook = (bookId: string) => books.find((b) => b.id === bookId);
+    const getBook = (bookId: string) => useLibraryStore.getState().getBook(bookId);
 
     const renderContextMenu = (annotation: Annotation) => (
         <div className="absolute right-0 top-full z-20 mt-1 w-40 border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-lg">
@@ -125,7 +120,10 @@ export function ReaderAnnotationsPanel({
     const renderBookmarkItem = (bookmark: Annotation) => (
         <div
             key={bookmark.id}
-            className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-black"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNavigate(bookmark); } }}
+            className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-[var(--color-accent)]"
             onClick={() => handleNavigate(bookmark)}
         >
             <div className="flex items-start justify-between gap-3">
@@ -147,13 +145,13 @@ export function ReaderAnnotationsPanel({
                     </button>
                     {menuId === bookmark.id && (
                         <>
-                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); closeMenu(); }} />
+                            <div className="fixed inset-0 z-10" role="button" tabIndex={-1} aria-label="Close menu" onClick={(e) => { e.stopPropagation(); closeMenu(); }} />
                             {renderContextMenu(bookmark)}
                         </>
                     )}
                     {sharingId === bookmark.id && (
                         <>
-                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setSharingId(null); }} />
+                            <div className="fixed inset-0 z-10" role="button" tabIndex={-1} aria-label="Close menu" onClick={(e) => { e.stopPropagation(); setSharingId(null); }} />
                             <ShareMenu annotation={bookmark} book={getBook(bookmark.bookId)} onClose={() => setSharingId(null)} />
                         </>
                     )}
@@ -172,12 +170,15 @@ export function ReaderAnnotationsPanel({
     const renderHighlightItem = (highlight: Annotation) => (
         <div
             key={highlight.id}
-            className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-black"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNavigate(highlight); } }}
+            className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-[var(--color-accent)]"
             onClick={() => handleNavigate(highlight)}
         >
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2 flex-1 min-w-0">
-                    {/* Color indicator */}
+                    
                     <div 
                         className="mt-0.5 h-3 w-3 flex-shrink-0 border border-[var(--color-border)]"
                         style={{ 
@@ -223,13 +224,13 @@ export function ReaderAnnotationsPanel({
                     </button>
                     {menuId === highlight.id && (
                         <>
-                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); closeMenu(); }} />
+                            <div className="fixed inset-0 z-10" role="button" tabIndex={-1} aria-label="Close menu" onClick={(e) => { e.stopPropagation(); closeMenu(); }} />
                             {renderContextMenu(highlight)}
                         </>
                     )}
                     {sharingId === highlight.id && (
                         <>
-                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setSharingId(null); }} />
+                            <div className="fixed inset-0 z-10" role="button" tabIndex={-1} aria-label="Close menu" onClick={(e) => { e.stopPropagation(); setSharingId(null); }} />
                             <ShareMenu annotation={highlight} book={getBook(highlight.bookId)} onClose={() => setSharingId(null)} />
                         </>
                     )}
@@ -277,7 +278,7 @@ export function ReaderAnnotationsPanel({
             <Backdrop visible={visible} onClick={onClose} />
 
             <FloatingPanel visible={visible} className={cn("overflow-hidden", className)}>
-                {/* Header with Tabs */}
+                
                 <div className="reader-panel-header flex flex-col">
                     <div className="flex items-center justify-between p-4">
                         <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">Annotations</h2>
@@ -293,7 +294,6 @@ export function ReaderAnnotationsPanel({
                         {vaultStatusText}
                     </div>
 
-                    {/* Tabs */}
                     <div className="grid grid-cols-2 gap-2 px-4 pb-3">
                         <button
                             onClick={() => setActiveTab('bookmarks')}
@@ -322,8 +322,7 @@ export function ReaderAnnotationsPanel({
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 min-h-0 overflow-y-auto p-4 custom-scrollbar">
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 custom-scrollbar [content-visibility:auto] overscroll-contain">
                     {currentItems.length === 0 ? (
                         emptyState
                     ) : (

@@ -98,6 +98,11 @@ export async function sqliteGetKv(key: string): Promise<string | null> {
     return invoke('sqlite_get_kv', { key }) as Promise<string | null>;
 }
 
+export async function sqliteBatchGetKv(keys: string[]): Promise<Array<[string, string]>> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_batch_get_kv', { keys }) as Promise<Array<[string, string]>>;
+}
+
 export async function sqliteSetKv(key: string, value: string): Promise<void> {
     const invoke = await getInvoke();
     await invoke('sqlite_set_kv', { key, value });
@@ -147,4 +152,44 @@ export async function sqliteGetBlobStats(prefix?: string): Promise<SqliteBlobSta
     return invoke('sqlite_get_blob_stats', {
         prefix: prefix ?? null,
     }) as Promise<SqliteBlobStats>;
+}
+
+export interface SqliteBookSearchResult {
+    book_id: string;
+    title: string;
+}
+
+export async function sqliteSearchBooks(query: string, limit: number = 20): Promise<SqliteBookSearchResult[]> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_search_books', { query, limit }) as Promise<SqliteBookSearchResult[]>;
+}
+
+export async function sqliteIndexBookFts(bookId: string, title: string, author: string): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_index_book_fts', { bookId, title, author });
+}
+
+export async function sqliteIndexBooksFtsBatch(entries: Array<[string, string, string]>): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_index_books_fts_batch', { entries });
+}
+
+export async function sqliteSaveBookMetadata(bookId: string, metadataJson: string): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_save_book_metadata', { bookId, metadataJson });
+}
+
+export async function sqliteGetBookMetadata(bookId: string): Promise<string | null> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_get_book_metadata', { bookId }) as Promise<string | null>;
+}
+
+export async function sqliteSaveBookAnnotations(bookId: string, annotationsJson: string[]): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_save_book_annotations', { bookId, annotationsJson });
+}
+
+export async function sqliteGetBookAnnotations(bookId: string): Promise<string[]> {
+    const invoke = await getInvoke();
+    return invoke('sqlite_get_book_annotations', { bookId }) as Promise<string[]>;
 }

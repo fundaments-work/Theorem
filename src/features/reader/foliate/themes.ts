@@ -1,7 +1,3 @@
-/**
- * Themes - 3 themes only (Light, Sepia, Dark)
- * Ported from Foliate GTK app
- */
 
 import { getThemeColors } from "../../../core/lib/design-tokens";
 import type { ReaderTheme } from "../../../core/types";

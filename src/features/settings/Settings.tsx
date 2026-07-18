@@ -1,21 +1,17 @@
-/**
- * Settings Page
- * App configuration and preferences
- */
 
-import { useRef, useState, useEffect, memo, type ChangeEvent } from "react";
-import { cn, normalizeFilePath, formatFileSize } from "../../core/lib/utils";
+import { useRef, useState, useEffect, memo, lazy, Suspense, type ChangeEvent } from "react";
+import { PageHeader } from "../../ui";
+import { cn, formatFileSize } from "../../core/lib/utils";
 import { isMobile, isTauri, isTauriDesktop } from "../../core/lib/env";
 import { getAllShortcuts, formatShortcutKeys } from "../../core/lib/keyboard-shortcuts";
 import {
     showOpenDirectoryDialog,
     showSaveFileDialog,
-    confirmClearAllData,
-    confirmRemoveDictionary,
 } from "../../core/lib/dialogs";
+import { ConfirmDialog, AlertDialog } from "../../ui";
 import { syncVaultMarkdownSnapshot } from "../../core/lib/vault-sync";
 import { exportUnifiedSyncBundle, estimateSyncBundleSizeBytes } from "../../core/lib/sync-bundle";
-import { pickLibraryFolderMobile } from "../../core/lib/mobile-folder-scan";
+
 import {
     useVocabularyStore,
     useLibraryStore,
@@ -24,11 +20,9 @@ import {
     useUIStore,
 } from "../../core/store";
 import { clearAllApplicationStorage, getRssStorageStats } from "../../core/lib/storage-manager";
-import { DeviceSyncSection } from "./DeviceSync";
+const DeviceSyncSection = lazy(() => import("./DeviceSync").then(m => ({ default: m.DeviceSyncSection })));
 import { DictionaryDownloadModal } from "./DictionaryDownloadModal";
-import { Dropdown } from "../../ui";
 import {
-    Layout,
     Database,
     RotateCcw,
     Trash2,
@@ -40,11 +34,8 @@ import {
     Rss,
     Download,
     Globe,
-    RefreshCw,
     WifiOff,
     Sun,
-    BookOpenCheck,
-    Headphones,
     Target,
     AlertCircle,
     Keyboard,
@@ -60,7 +51,6 @@ type PersistableStore = {
     };
 };
 
-// Section component
 interface SectionProps {
     title: string;
     description?: string;
@@ -70,8 +60,8 @@ interface SectionProps {
 
 function Section({ title, description, icon, children }: SectionProps) {
     return (
-        <section className="border border-[var(--color-border)] bg-[var(--color-surface)]">
-            <div className="border-b border-[var(--color-border)] px-5 py-3">
+        <section className="bg-[var(--color-surface)]">
+            <div className="border-b border-[var(--color-border-subtle)] px-5 py-3">
                 {icon && <span className="sr-only">{icon}</span>}
                 <h2 className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
                     {title}
@@ -87,7 +77,6 @@ function Section({ title, description, icon, children }: SectionProps) {
     );
 }
 
-// Setting row component
 interface SettingRowProps {
     label: string;
     description?: string;
@@ -97,7 +86,7 @@ interface SettingRowProps {
 
 function SettingRow({ label, description, htmlFor, children }: SettingRowProps) {
     return (
-        <div className="grid gap-3 border-b border-[var(--color-border-subtle)] py-4 first:pt-0 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="grid gap-3 py-4 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div className="w-full sm:flex-1 sm:pr-4">
                 <label htmlFor={htmlFor} className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
                     {label}
@@ -117,7 +106,6 @@ function normalizeHighlightsExportName(value: string): string {
     return value.replace(/\.md$/i, "").trim();
 }
 
-// Toggle component
 function Toggle({
     checked,
     onChange,
@@ -130,7 +118,7 @@ function Toggle({
             <button
                 onClick={() => onChange(true)}
                 className={cn(
-                    "px-3 py-1.5 font-sans text-[11px] font-medium",
+                    "px-3 py-2 font-sans text-[11px] font-medium",
                     checked
                         ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                         : "text-[color:var(--color-text-secondary)]"
@@ -141,7 +129,7 @@ function Toggle({
             <button
                 onClick={() => onChange(false)}
                 className={cn(
-                    "border-l border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium",
+                    "border-l border-[var(--color-border)] px-3 py-2 font-sans text-[11px] font-medium",
                     !checked
                         ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                         : "text-[color:var(--color-text-secondary)]"
@@ -153,7 +141,6 @@ function Toggle({
     );
 }
 
-// Button select component
 function ButtonSelect<T extends string>({
     options,
     value,
@@ -170,7 +157,7 @@ function ButtonSelect<T extends string>({
                     key={opt.value}
                     onClick={() => onChange(opt.value)}
                     className={cn(
-                        "border border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium transition-colors",
+                        "border border-[var(--color-border)] px-3 py-2 font-sans text-[11px] font-medium transition-colors",
                         value === opt.value
                             ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                             : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
@@ -314,8 +301,7 @@ const StorageTab = memo(function StorageTab({ onClearData, onExportData }: { onC
     );
 });
 
-// Main page component
-export function SettingsPage() {
+export const SettingsPage = memo(function SettingsPage() {
     const settings = useSettingsStore((state) => state.settings);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const updateVocabularySettings = useSettingsStore((state) => state.updateVocabularySettings);
@@ -324,7 +310,6 @@ export function SettingsPage() {
     const stats = useSettingsStore((state) => state.stats);
     const updateStats = useSettingsStore((state) => state.updateStats);
     const highlightsExportName = normalizeHighlightsExportName(settings.vault.highlightsFileName);
-    const primaryLibraryFolder = settings.scanFolders[0] || "";
     const isMobilePlatform = isMobile();
     const setVaultSyncStatus = useUIStore((state) => state.setVaultSyncStatus);
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
@@ -343,6 +328,7 @@ export function SettingsPage() {
             persisted === "dictionary" ||
             persisted === "integrations" ||
             persisted === "storage" ||
+            persisted === "shortcuts" ||
             persisted === "about"
         ) {
             return persisted;
@@ -350,18 +336,20 @@ export function SettingsPage() {
         return "general";
     });
 
+    const [visitedTabs, setVisitedTabs] = useState<Set<SettingsTab>>(
+        () => new Set([activeTab]),
+    );
+    useEffect(() => {
+        setVisitedTabs((prev) => (prev.has(activeTab) ? prev : new Set([...prev, activeTab])));
+    }, [activeTab]);
+
     const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
     const [showDictDownloadModal, setShowDictDownloadModal] = useState(false);
     const [dictionaryRemovedName, setDictionaryRemovedName] = useState<string | null>(null);
-
-    // ── TTS system voices ──
-    const [availableVoices, setAvailableVoices] = useState<Array<{ name: string; lang: string }>>([]);
-
-    useEffect(() => {
-        import("../../features/reader/audio/ImmersionPlayer").then(({ ImmersionPlayer }) => {
-            ImmersionPlayer.loadVoices().then(setAvailableVoices);
-        });
-    }, []);
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
+    const [removeDictionaryInfo, setRemoveDictionaryInfo] = useState<{ id: string; name: string } | null>(null);
+    const [alertInfo, setAlertInfo] = useState<{ title: string; message: string } | null>(null);
 
     useEffect(() => {
         if (!dictionaryRemovedName) return;
@@ -379,7 +367,6 @@ export function SettingsPage() {
         window.sessionStorage.setItem(SETTINGS_TAB_SESSION_KEY, activeTab);
     }, [activeTab]);
 
-    // Persistent download progress listener (survives modal close)
     useEffect(() => {
         if (!isTauri()) return;
         let unlisten: (() => void) | undefined;
@@ -424,10 +411,12 @@ export function SettingsPage() {
         });
     }, [activeTab]);
 
-    const handleClearData = async () => {
-        const confirmed = await confirmClearAllData();
-        if (!confirmed) return;
+    const handleClearData = () => {
+        setShowClearDataConfirm(true);
+    };
 
+    const handleClearDataConfirm = async () => {
+        setShowClearDataConfirm(false);
         try {
             await clearAllApplicationStorage();
 
@@ -459,7 +448,6 @@ export function SettingsPage() {
         };
         const hasVaultPath = nextVault.vaultPath.trim().length > 0;
 
-        // Keep markdown-export UX simple: configured folder means export is enabled.
         if (!("enabled" in updates)) {
             nextVault.enabled = hasVaultPath;
         }
@@ -475,12 +463,12 @@ export function SettingsPage() {
 
     const handlePickVaultDirectory = async () => {
         if (isMobilePlatform) {
-            alert("Folder selection is not supported on mobile. Configure the Obsidian vault folder on desktop.");
+            setAlertInfo({ title: "Not Available", message: "Folder selection is not supported on mobile. Configure the export folder on desktop." });
             return;
         }
 
         const selectedPath = await showOpenDirectoryDialog({
-            title: "Choose Obsidian Vault Folder",
+            title: "Choose Export Folder",
             defaultPath: settings.vault.vaultPath || undefined,
         });
 
@@ -494,31 +482,6 @@ export function SettingsPage() {
         });
     };
 
-    const handlePickLibraryFolder = async () => {
-        if (isMobilePlatform) {
-            const selectedUri = await pickLibraryFolderMobile();
-            if (!selectedUri) {
-                return;
-            }
-            updateSettings({ scanFolders: [selectedUri] });
-            return;
-        }
-
-        const selectedPath = await showOpenDirectoryDialog({
-            title: "Choose Library Folder",
-            defaultPath: primaryLibraryFolder || undefined,
-        });
-
-        if (!selectedPath) {
-            return;
-        }
-
-        const normalizedPath = normalizeFilePath(selectedPath);
-        updateSettings({
-            scanFolders: normalizedPath ? [normalizedPath] : [],
-        });
-    };
-
     const handleDictionaryImport = async (event: ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) {
@@ -528,7 +491,7 @@ export function SettingsPage() {
         try {
             await importStarDict(files);
         } catch (error) {
-            alert(error instanceof Error ? error.message : "Failed to import dictionary files.");
+            setAlertInfo({ title: "Import Error", message: error instanceof Error ? error.message : "Failed to import dictionary files." });
         } finally {
             event.target.value = "";
         }
@@ -536,7 +499,7 @@ export function SettingsPage() {
 
     const handleExportMarkdownNow = async () => {
         if (!settings.vault.vaultPath.trim()) {
-            setVaultSyncStatus("idle", "Pick an Obsidian vault folder first.");
+            setVaultSyncStatus("idle", "Set an export folder first.");
             return;
         }
 
@@ -596,7 +559,7 @@ export function SettingsPage() {
                 try {
                     saved = await saveViaTauri();
                 } catch {
-                    // Save dialog may fail on some platforms — fall through to browser download.
+                    
                 }
             }
 
@@ -615,9 +578,9 @@ export function SettingsPage() {
             const warningSuffix = warnings.length > 0
                 ? ` Warnings: ${warnings.length} missing binary item(s).`
                 : "";
-            alert(`Backup saved (${formatFileSize(bundleSize)}).${warningSuffix}`);
+            setAlertInfo({ title: "Backup Saved", message: `Backup saved (${formatFileSize(bundleSize)}).${warningSuffix}` });
         } catch (error) {
-            alert(error instanceof Error ? error.message : "Failed to save backup.");
+            setAlertInfo({ title: "Backup Error", message: error instanceof Error ? error.message : "Failed to save backup." });
         }
     };
 
@@ -633,28 +596,21 @@ export function SettingsPage() {
     return (
         <>
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-10">
-                <div>
-                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
-                        Settings
-                    </h1>
-                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
-                        Customize your reading experience
-                    </p>
-                </div>
-            </div>
+            
+            <PageHeader
+                title="Settings"
+                description="Customize your reading experience"
+            />
 
-            {/* Tabs */}
             <div className="mb-8 space-y-3">
                 <div className="sm:hidden -mx-1 px-1">
-                    <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory">
+                    <div className="flex gap-2 overflow-x-auto pb-1">
                         {tabButtons.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={cn(
-                                    "snap-start flex min-w-[10rem] items-center justify-center border border-[var(--color-border)] px-3 py-2.5 font-sans text-[11px] font-medium transition-colors",
+                                    "flex min-w-[10rem] items-center justify-center border border-[var(--color-border)] px-3 py-2.5 font-sans text-[11px] font-medium transition-colors",
                                     activeTab === tab.id
                                         ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                                         : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)]"
@@ -684,101 +640,7 @@ export function SettingsPage() {
                 </div>
             </div>
 
-            {/* General Settings */}
-            {activeTab === "general" && (
-                <div className="space-y-8">
-                    <Section
-                        title="Library"
-                        description="Library display and organization preferences"
-                        icon={<Layout className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Library View"
-                            description="Choose how books are displayed"
-                        >
-                            <ButtonSelect
-                                options={[
-                                    { value: "grid", label: "Grid" },
-                                    { value: "list", label: "List" },
-                                    { value: "compact", label: "Compact" },
-                                ]}
-                                value={settings.libraryViewMode}
-                                onChange={(v) => updateSettings({ libraryViewMode: v })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Sort By"
-                            description="Default sorting for library"
-                        >
-                            <Dropdown
-                                value={settings.librarySortBy}
-                                onChange={(value) =>
-                                    updateSettings({ librarySortBy: value as typeof settings.librarySortBy })
-                                }
-                                options={[
-                                    { value: "lastRead", label: "Last Read" },
-                                    { value: "title", label: "Title" },
-                                    { value: "author", label: "Author" },
-                                    { value: "dateAdded", label: "Date Added" },
-                                    { value: "progress", label: "Progress" },
-                                    { value: "rating", label: "Rating" },
-                                ]}
-                                variant="filled"
-                                size="sm"
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Sort Order"
-                            description="Ascending or descending order"
-                        >
-                            <ButtonSelect
-                                options={[
-                                    { value: "asc", label: "Ascending" },
-                                    { value: "desc", label: "Descending" },
-                                ]}
-                                value={settings.librarySortOrder}
-                                onChange={(v) => updateSettings({ librarySortOrder: v })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Library Folder"
-                            description={
-                                isMobilePlatform
-                                    ? "Pick a documents folder (SAF) for mobile folder scanning."
-                                    : "Default folder used when scanning books from the Library page"
-                            }
-                        >
-                            <div className="flex flex-wrap items-center gap-2">
-                                <input
-                                    type="text"
-                                    value={primaryLibraryFolder}
-                                    readOnly
-                                    placeholder="Not configured"
-                                    className={cn("ui-input", "min-w-[20rem] sm:w-[28rem]")}
-                                />
-                                <button
-                                    onClick={() => {
-                                        void handlePickLibraryFolder();
-                                    }}
-                                    className="ui-btn"
-                                >
-                                    Pick folder
-                                </button>
-                                {primaryLibraryFolder && (
-                                    <button
-                                        onClick={() => updateSettings({ scanFolders: [] })}
-                                        className="ui-btn"
-                                    >
-                                        Clear
-                                    </button>
-                                )}
-                            </div>
-                        </SettingRow>
-                    </Section>
-
+            {(activeTab === "general" || visitedTabs.has("general")) && <div className={activeTab === "general" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Reading Goals"
                         description="Set your daily and yearly reading targets"
@@ -841,7 +703,7 @@ export function SettingsPage() {
                             </div>
                             <div className="mt-2 h-2 bg-[var(--color-surface-muted)] overflow-hidden">
                                 <div
-                                    className="h-full bg-[var(--color-accent)] transition-all duration-500"
+                                    className="h-full bg-[var(--color-accent)] transition-[width] duration-500"
                                     style={{ width: `${Math.min(100, (stats.booksReadThisYear / Math.max(1, stats.yearlyBookGoal)) * 100)}%` }}
                                 />
                             </div>
@@ -849,10 +711,69 @@ export function SettingsPage() {
                     </Section>
 
                     <Section
-                        title="Appearance"
-                        description="Customize the look and feel"
+                        title="Customization"
+                        description="Customize the look, feel, and reading preferences"
                         icon={<Sun className="w-5 h-5" />}
                     >
+                        <SettingRow
+                            label="Theme"
+                            description="Choose your app theme"
+                        >
+                            <ButtonSelect
+                                options={[
+                                    { value: "system", label: "System" },
+                                    { value: "light", label: "Light" },
+                                    { value: "dark", label: "Dark" },
+                                ]}
+                                value={settings.theme}
+                                onChange={(v) => updateSettings({ theme: v as typeof settings.theme })}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Accent Color"
+                            description="Pick a color for interactive elements"
+                        >
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-1.5">
+                                    {["#2d6a6e", "#5b5b5b", "#9e5a4a", "#3d6b4a", "#6b4a7a", "#4a6b9e", "#1c1c1c", "#9e6b4a"].map((color) => (
+                                        <button
+                                            key={color}
+                                            onClick={() => updateSettings({ accentColor: color })}
+                                            className="w-5 h-5 border transition-colors duration-100"
+                                            style={{
+                                                backgroundColor: color,
+                                                borderColor: settings.accentColor === color ? "var(--color-accent-contrast)" : "var(--color-border)",
+                                                outline: settings.accentColor === color ? "2px solid var(--color-accent)" : "none",
+                                                outlineOffset: "1px",
+                                            }}
+                                            aria-label={`Set accent to ${color}`}
+                                        />
+                                    ))}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <label className="sr-only" htmlFor="accent-hex">Custom color hex</label>
+                                    <div className="flex items-center border border-[var(--color-border)] bg-[var(--color-surface)]">
+                                        <span className="pl-2 text-[11px] text-[color:var(--color-text-muted)]">#</span>
+                                        <input
+                                            id="accent-hex"
+                                            type="text"
+                                            value={settings.accentColor.replace("#", "")}
+                                            onChange={(e) => {
+                                                const raw = e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 6);
+                                                if (raw.length === 6) {
+                                                    updateSettings({ accentColor: "#" + raw.toLowerCase() });
+                                                }
+                                            }}
+                                            maxLength={6}
+                                            placeholder="2d6a6e"
+                                            className="w-20 border-none bg-transparent px-2 py-1 text-[11px] font-mono text-[color:var(--color-text-primary)] outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </SettingRow>
+
                         <SettingRow
                             label="Sidebar Collapsed"
                             description="Start with the sidebar collapsed"
@@ -864,28 +785,28 @@ export function SettingsPage() {
                         </SettingRow>
 
                         <SettingRow
-                            label="Dark Mode"
-                            description="Use dark theme throughout the app"
+                            label="Daily Highlight"
+                            description="Show a random past highlight on the Library page"
                         >
-                            <ButtonSelect
-                                options={[
-                                    { value: "light", label: "Light" },
-                                    { value: "dark", label: "Dark" },
-                                ]}
-                                value={settings.theme === "system" ? "light" : settings.theme}
-                                onChange={(v) => updateSettings({ theme: v })}
+                            <Toggle
+                                checked={settings.showDailyHighlight}
+                                onChange={(checked) => updateSettings({ showDailyHighlight: checked })}
                             />
                         </SettingRow>
-                    </Section>
 
-                    <Section
-                        title="Text-to-Speech"
-                        description="Read aloud using your device's built-in voice"
-                        icon={<Headphones className="w-5 h-5" />}
-                    >
                         <SettingRow
-                            label="Enable Text-to-Speech"
-                            description={isTauri() ? "Use system voice to read books aloud" : "Not available in web browser"}
+                            label="Speed Read"
+                            description="Enable RSVP speed reading mode in the reader"
+                        >
+                            <Toggle
+                                checked={settings.speedReadEnabled}
+                                 onChange={(checked) => updateSettings({ speedReadEnabled: checked })}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Text-to-Speech"
+                            description={isTauri() ? "Read aloud using your device's built-in voice" : "Not available in web browser"}
                         >
                             {isTauri() ? (
                                 <Toggle
@@ -897,30 +818,9 @@ export function SettingsPage() {
                             )}
                         </SettingRow>
 
-                        {availableVoices.length > 0 && (
-                            <SettingRow
-                                label="Voice"
-                                description="Your system's text-to-speech voice"
-                            >
-                                <Dropdown
-                                    value={settings.tts.voice}
-                                    onChange={(v) => updateTtsSettings({ voice: v })}
-                                    options={availableVoices.map(v => ({ value: v.name, label: v.name }))}
-                                    variant="filled"
-                                    size="sm"
-                                />
-                            </SettingRow>
-                        )}
-                    </Section>
-
-                    <Section
-                        title="Vocabulary"
-                        description="Vocabulary capture controls"
-                        icon={<BookOpenCheck className="w-5 h-5" />}
-                    >
                         <SettingRow
-                            label="Enable Vocabulary Builder"
-                            description="Track words you look up while reading"
+                            label="Vocabulary Lookup"
+                            description="Save words you look up while reading"
                         >
                             <Toggle
                                 checked={settings.vocabulary.vocabularyEnabled}
@@ -929,48 +829,18 @@ export function SettingsPage() {
                         </SettingRow>
                     </Section>
 
-                    <Section
-                        title="Sync"
-                        description="Background device synchronization"
-                        icon={<RefreshCw className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Auto-sync"
-                            description="Periodically sync with paired devices in the background"
-                        >
-                            <Toggle
-                                checked={settings.deviceSync.autoSyncEnabled}
-                                onChange={(checked) =>
-                                    updateSettings({
-                                        deviceSync: {
-                                            ...settings.deviceSync,
-                                            autoSyncEnabled: checked,
-                                        },
-                                    })
-                                }
-                            />
-                        </SettingRow>
-                    </Section>
-
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center justify-end mb-8">
                         <button
-                            onClick={() => {
-                                if (confirm("Reset all settings to default?")) {
-                                    resetSettings();
-                                }
-                            }}
+                            onClick={() => setShowResetConfirm(true)}
                             className="ui-btn-danger"
                         >
                             <RotateCcw className="w-4 h-4" />
                             Reset to Defaults
                         </button>
                     </div>
-                </div>
-            )}
+                </div>}
 
-            {/* Dictionary Settings */}
-            {activeTab === "dictionary" && (
-                <div className="space-y-8">
+            {(activeTab === "dictionary" || visitedTabs.has("dictionary")) && <div className={activeTab === "dictionary" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Dictionary"
                         description="Install and manage offline dictionaries"
@@ -989,12 +859,12 @@ export function SettingsPage() {
 
                     <Section
                         title="Installed Dictionaries"
-                        description="StarDict dictionaries for offline word lookup"
+                        description="Offline dictionary files for word lookup"
                         icon={<WifiOff className="w-5 h-5" />}
                     >
                         <SettingRow
-                            label="Import StarDict"
-                            description="Select .ifo, .idx, and .dict.dz files"
+                            label="Import Dictionary"
+                            description="Add offline dictionary files"
                         >
                             <div className="flex flex-wrap items-center gap-2">
                                 <input
@@ -1015,7 +885,7 @@ export function SettingsPage() {
                                     onClick={() => setShowDictDownloadModal(true)}
                                     className="ui-btn text-[11px] whitespace-nowrap"
                                 >
-                                    <Download className="w-4 h-4" /> Browse Dictionaries
+                                    <Download className="w-4 h-4" /> Download Dictionary
                                 </button>
                                 <span className="text-xs text-[color:var(--color-text-muted)]">
                                     {installedDictionaries.length} installed
@@ -1041,12 +911,7 @@ export function SettingsPage() {
                                 description={`${dictionary.language} • StarDict • ${formatFileSize(dictionary.sizeBytes)}`}
                             >
                                 <button
-                                    onClick={async () => {
-                                        const confirmed = await confirmRemoveDictionary(dictionary.name);
-                                        if (!confirmed) return;
-                                        await removeDictionary(dictionary.id);
-                                        setDictionaryRemovedName(dictionary.name);
-                                    }}
+                                    onClick={() => setRemoveDictionaryInfo({ id: dictionary.id, name: dictionary.name })}
                                     className="ui-btn-danger"
                                 >
                                     Remove
@@ -1063,33 +928,27 @@ export function SettingsPage() {
                             </span>
                         </SettingRow>
                     </Section>
-                </div>
-            )}
+                </div>}
 
-
-            {/* Integrations Settings */}
-            {activeTab === "integrations" && (
-                <div className="space-y-8">
+            {(activeTab === "integrations" || visitedTabs.has("integrations")) && <div className={activeTab === "integrations" ? "space-y-8" : "hidden"}>
                     <div ref={deviceSyncSectionRef}>
-                        <DeviceSyncSection />
+                        <Suspense fallback={null}>
+                            <DeviceSyncSection />
+                        </Suspense>
                     </div>
 
                     <div ref={markdownExportSectionRef}>
                         <Section
-                            title="Obsidian Markdown Export"
-                            description="Writes markdown files for highlights and vocabulary. This does not sync app data between devices."
+                            title="Markdown Export"
+                            description="Export highlights and vocabulary as markdown files"
                             icon={<BookOpen className="w-5 h-5" />}
                         >
-                            <div className="mb-4 border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-xs text-[color:var(--color-text-secondary)]">
-                                Use Device Sync above for real device-to-device sync. Use this section only for Obsidian markdown export.
-                            </div>
-
                             <SettingRow
-                                label="Obsidian Vault Folder"
+                                label="Export Folder"
                                 description={
                                     isMobilePlatform
-                                        ? "Folder selection is unavailable on mobile. Configure vault folder on desktop."
-                                        : "Choose the Obsidian vault folder where markdown files will be exported"
+                                        ? "Folder selection is unavailable on mobile. Configure on desktop."
+                                        : "Choose a folder for your exported markdown files"
                                 }
                             >
                                 <div className="flex flex-wrap items-center gap-2">
@@ -1099,7 +958,7 @@ export function SettingsPage() {
                                         onChange={(e) => updateVaultSettings({
                                             vaultPath: e.target.value,
                                         })}
-                                        placeholder="/Users/you/Documents/ObsidianVault"
+                                        placeholder="/Users/you/Documents/MarkdownExport"
                                         className={cn(
                                             "ui-input",
                                             "min-w-[20rem] sm:w-[28rem]"
@@ -1151,10 +1010,10 @@ export function SettingsPage() {
                                 description="Latest markdown export status"
                             >
                                 <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 font-sans text-[11px] font-medium text-[color:var(--color-text-primary)]">
-                                    {vaultSyncStatus === "synced" && "Status: Export complete"}
-                                    {vaultSyncStatus === "syncing" && "Status: Exporting markdown files"}
-                                    {vaultSyncStatus === "error" && "Status: Export error"}
-                                    {vaultSyncStatus === "idle" && "Status: Idle"}
+                                    {vaultSyncStatus === "synced" && "Export complete"}
+                                    {vaultSyncStatus === "syncing" && "Exporting..."}
+                                    {vaultSyncStatus === "error" && "Export error"}
+                                    {vaultSyncStatus === "idle" && "Ready"}
                                     {vaultSyncMessage ? ` | ${vaultSyncMessage}` : ""}
                                     {vaultSyncAt ? ` | ${new Date(vaultSyncAt).toLocaleTimeString()}` : ""}
                                 </div>
@@ -1162,16 +1021,13 @@ export function SettingsPage() {
 
                             <details className="border border-[var(--color-border)] bg-[var(--color-surface-muted)]">
                                 <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-[color:var(--color-text-primary)]">
-                                    Advanced export file names
+                                    File names
                                 </summary>
                                 <div className="space-y-3 border-t border-[var(--color-border)] p-3">
                                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                                         <div>
                                             <p className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
-                                                Highlights folder name
-                                            </p>
-                                            <p className="mt-1 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
-                                                Base name for generated highlights pages (for example, `theorem-highlights-books`).
+                                                Highlights folder
                                             </p>
                                         </div>
                                         <input
@@ -1189,10 +1045,7 @@ export function SettingsPage() {
                                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                                         <div>
                                             <p className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
-                                                Vocabulary file name
-                                            </p>
-                                            <p className="mt-1 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
-                                                Markdown file name for vocabulary export in your vault folder.
+                                                Vocabulary file
                                             </p>
                                         </div>
                                         <input
@@ -1207,14 +1060,13 @@ export function SettingsPage() {
                             </details>
                         </Section>
                     </div>
-                </div>
-            )}
+                </div>}
 
-            {/* Storage Settings */}
-            {activeTab === "storage" && <StorageTab onClearData={handleClearData} onExportData={handleExportData} />}
+            {(activeTab === "storage" || visitedTabs.has("storage")) && <div className={activeTab === "storage" ? "" : "hidden"}>
+                <StorageTab onClearData={handleClearData} onExportData={handleExportData} />
+            </div>}
 
-            {activeTab === "shortcuts" && (
-                <div className="space-y-8">
+            {(activeTab === "shortcuts" || visitedTabs.has("shortcuts")) && <div className={activeTab === "shortcuts" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Keyboard Shortcuts"
                         description="Available shortcuts throughout the app"
@@ -1240,11 +1092,9 @@ export function SettingsPage() {
                             })()}
                         </div>
                     </Section>
-                </div>
-            )}
+                </div>}
 
-            {activeTab === "about" && (
-                <div className="space-y-8">
+            {(activeTab === "about" || visitedTabs.has("about")) && <div className={activeTab === "about" ? "space-y-8" : "hidden"}>
                     <Section
                         title="Theorem"
                         description="Local-first reader for PDFs, EPUBs, and RSS"
@@ -1282,7 +1132,7 @@ export function SettingsPage() {
                                 href="https://github.com/fundaments-work/theorem"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-accent)] transition-colors"
                             >
                                 <BookOpen className="w-4 h-4" />
                                 <span>GitHub Repository</span>
@@ -1291,7 +1141,7 @@ export function SettingsPage() {
                                 href="https://github.com/fundaments-work/theorem/releases/latest"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-accent)] transition-colors"
                             >
                                 <Download className="w-4 h-4" />
                                 <span>Download Latest Release</span>
@@ -1300,21 +1150,72 @@ export function SettingsPage() {
                                 href="https://github.com/fundaments-work/theorem/issues"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-accent)] transition-colors"
                             >
                                 <AlertCircle className="w-4 h-4" />
                                 <span>Report an Issue</span>
                             </a>
                         </div>
                     </Section>
-                </div>
-            )}
+                </div>}
         </div>
 
         <DictionaryDownloadModal
             isOpen={showDictDownloadModal}
             onClose={() => setShowDictDownloadModal(false)}
         />
+
+        <ConfirmDialog
+            isOpen={showResetConfirm}
+            title="Reset Settings"
+            message="Reset all settings to default?"
+            confirmLabel="Reset"
+            cancelLabel="Cancel"
+            variant="danger"
+            onConfirm={() => {
+                resetSettings();
+                setShowResetConfirm(false);
+            }}
+            onCancel={() => setShowResetConfirm(false)}
+        />
+
+        <ConfirmDialog
+            isOpen={showClearDataConfirm}
+            title="Clear All Data"
+            message="This will permanently delete all your books, highlights, notes, vocabulary, shelves, and settings. This action cannot be undone."
+            confirmLabel="Clear Everything"
+            cancelLabel="Cancel"
+            variant="danger"
+            onConfirm={handleClearDataConfirm}
+            onCancel={() => setShowClearDataConfirm(false)}
+        />
+
+        <ConfirmDialog
+            isOpen={!!removeDictionaryInfo}
+            title="Remove Dictionary"
+            message={removeDictionaryInfo ? `Remove "${removeDictionaryInfo.name}"? Offline word lookups from this dictionary will stop working.` : ""}
+            confirmLabel="Remove"
+            cancelLabel="Cancel"
+            variant="danger"
+            onConfirm={async () => {
+                if (removeDictionaryInfo) {
+                    await removeDictionary(removeDictionaryInfo.id);
+                    setDictionaryRemovedName(removeDictionaryInfo.name);
+                    setRemoveDictionaryInfo(null);
+                }
+            }}
+            onCancel={() => setRemoveDictionaryInfo(null)}
+        />
+
+        {alertInfo && (
+            <AlertDialog
+                isOpen={!!alertInfo}
+                title={alertInfo.title}
+                message={alertInfo.message}
+                okLabel="OK"
+                onClose={() => setAlertInfo(null)}
+            />
+        )}
         </>
     );
-}
+});

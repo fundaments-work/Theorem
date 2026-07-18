@@ -39,7 +39,6 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .build()
 }
 
-/// Speak text using the Android TTS engine.
 #[cfg(target_os = "android")]
 pub fn tts_speak<R: Runtime>(
     app: &AppHandle<R>,
@@ -66,7 +65,6 @@ pub fn tts_speak<R: Runtime>(
     Ok(())
 }
 
-/// Stop current TTS playback.
 #[cfg(target_os = "android")]
 pub fn tts_stop<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = get_audio_state(app)?;
@@ -82,7 +80,6 @@ pub fn tts_stop<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
     Ok(())
 }
 
-/// Get available TTS voices.
 #[cfg(target_os = "android")]
 pub fn tts_get_voices<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<serde_json::Value>, String> {
     let state = get_audio_state(app)?;

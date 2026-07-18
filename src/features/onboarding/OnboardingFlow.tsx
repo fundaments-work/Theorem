@@ -14,8 +14,6 @@ interface OnboardingFlowProps {
     onComplete: () => void;
 }
 
-/* ─── Inline SVG Illustrations ─── */
-
 function LibraryIllustration() {
     return (
         <svg
@@ -25,7 +23,7 @@ function LibraryIllustration() {
             className="w-full max-w-[320px] h-auto"
             aria-hidden="true"
         >
-            {/* Sidebar */}
+            
             <rect x="0" y="0" width="60" height="220" fill="var(--color-surface-variant)" stroke="var(--color-border)" strokeWidth="1" />
             <rect x="12" y="16" width="36" height="4" fill="var(--color-text-primary)" />
             <rect x="12" y="32" width="36" height="3" fill="var(--color-text-muted)" />
@@ -33,7 +31,6 @@ function LibraryIllustration() {
             <rect x="12" y="56" width="36" height="3" fill="var(--color-text-muted)" />
             <rect x="12" y="68" width="36" height="3" fill="var(--color-text-muted)" />
 
-            {/* Book grid */}
             {[0, 1, 2].map((col) =>
                 [0, 1].map((row) => {
                     const x = 76 + col * 82;
@@ -57,7 +54,7 @@ function LibraryIllustration() {
                                 stroke="var(--color-border)"
                                 strokeWidth="1"
                             />
-                            {/* Text lines on covers */}
+                            
                             <rect x={x + 10} y={y + 60} width="48" height="3" fill="var(--color-surface)" opacity="0.6" />
                             <rect x={x + 10} y={y + 68} width="32" height="2" fill="var(--color-surface)" opacity="0.4" />
                         </g>
@@ -77,10 +74,9 @@ function ReaderIllustration() {
             className="w-full max-w-[320px] h-auto"
             aria-hidden="true"
         >
-            {/* Page background */}
+            
             <rect x="20" y="10" width="280" height="200" fill="var(--color-surface)" stroke="var(--color-border)" strokeWidth="1" />
 
-            {/* Text lines */}
             {Array.from({ length: 12 }).map((_, i) => (
                 <rect
                     key={`line-${i}`}
@@ -93,13 +89,11 @@ function ReaderIllustration() {
                 />
             ))}
 
-            {/* Highlighted passage */}
             <rect x="40" y="72" width="240" height="14" fill="var(--highlight-yellow-soft)" />
             <rect x="40" y="72" width="240" height="3" fill="var(--highlight-yellow)" opacity="0.8" />
             <rect x="40" y="86" width="160" height="14" fill="var(--highlight-yellow-soft)" />
             <rect x="40" y="86" width="160" height="3" fill="var(--highlight-yellow)" opacity="0.8" />
 
-            {/* Floating toolbar */}
             <rect x="90" y="12" width="140" height="24" fill="var(--color-text-primary)" />
             <circle cx="110" cy="24" r="4" fill="var(--color-surface)" />
             <circle cx="130" cy="24" r="4" fill="var(--highlight-yellow)" />
@@ -120,7 +114,7 @@ function FormatsIllustration() {
             className="w-full max-w-[320px] h-auto"
             aria-hidden="true"
         >
-            {/* Format cards arranged in a fan */}
+            
             {[
                 { label: "PDF", x: 30, y: 40, fill: "var(--color-text-primary)" },
                 { label: "EPUB", x: 90, y: 25, fill: "var(--color-text-secondary)" },
@@ -129,9 +123,9 @@ function FormatsIllustration() {
             ].map(({ label, x, y, fill }) => (
                 <g key={label}>
                     <rect x={x} y={y} width="72" height="100" fill={fill} stroke="var(--color-border)" strokeWidth="1" />
-                    {/* Format label bar */}
+                    
                     <rect x={x} y={y + 80} width="72" height="20" fill="var(--color-surface)" />
-                    {/* Abstract text indicating format */}
+                    
                     <text
                         x={x + 36}
                         y={y + 94}
@@ -144,7 +138,7 @@ function FormatsIllustration() {
                     >
                         {label}
                     </text>
-                    {/* Lines on cover */}
+                    
                     <rect x={x + 12} y={y + 16} width="48" height="2" fill="var(--color-surface)" opacity="0.5" />
                     <rect x={x + 12} y={y + 24} width="36" height="2" fill="var(--color-surface)" opacity="0.3" />
                     <rect x={x + 12} y={y + 32} width="48" height="2" fill="var(--color-surface)" opacity="0.5" />
@@ -152,11 +146,9 @@ function FormatsIllustration() {
                 </g>
             ))}
 
-            {/* Arrow connecting to unified reader */}
             <path d="M160 150 L160 170" stroke="var(--color-text-primary)" strokeWidth="2" />
             <polygon points="155,170 165,170 160,178" fill="var(--color-text-primary)" />
 
-            {/* Unified reader bar */}
             <rect x="80" y="182" width="160" height="28" fill="var(--color-text-primary)" />
             <text
                 x="160"
@@ -183,7 +175,7 @@ function VaultIllustration() {
             className="w-full max-w-[320px] h-auto"
             aria-hidden="true"
         >
-            {/* Book with highlights on left */}
+            
             <rect x="20" y="40" width="90" height="130" fill="var(--color-text-primary)" stroke="var(--color-border)" strokeWidth="1" />
             <rect x="30" y="56" width="70" height="3" fill="var(--color-surface)" opacity="0.5" />
             <rect x="30" y="66" width="70" height="3" fill="var(--color-surface)" opacity="0.5" />
@@ -196,16 +188,14 @@ function VaultIllustration() {
             <rect x="30" y="128" width="45" height="10" fill="var(--highlight-green-soft)" />
             <rect x="30" y="128" width="45" height="3" fill="var(--highlight-green)" />
 
-            {/* Arrow */}
             <path d="M125 105 L185 105" stroke="var(--color-text-primary)" strokeWidth="2" strokeDasharray="6 3" />
             <polygon points="185,100 185,110 195,105" fill="var(--color-text-primary)" />
 
-            {/* Markdown file on right */}
             <rect x="205" y="30" width="95" height="160" fill="var(--color-surface)" stroke="var(--color-border)" strokeWidth="1" />
-            {/* MD header */}
+            
             <rect x="215" y="42" width="8" height="8" fill="var(--color-text-primary)" />
             <rect x="228" y="44" width="60" height="4" fill="var(--color-text-primary)" />
-            {/* Highlight entries */}
+            
             <rect x="215" y="60" width="4" height="4" fill="var(--highlight-yellow)" />
             <rect x="224" y="61" width="64" height="2" fill="var(--color-text-muted)" />
             <rect x="224" y="67" width="48" height="2" fill="var(--color-text-muted)" opacity="0.5" />
@@ -218,10 +208,8 @@ function VaultIllustration() {
             <rect x="224" y="97" width="60" height="2" fill="var(--color-text-muted)" />
             <rect x="224" y="103" width="52" height="2" fill="var(--color-text-muted)" opacity="0.5" />
 
-            {/* Separator */}
             <rect x="215" y="116" width="75" height="1" fill="var(--color-border)" />
 
-            {/* Vocabulary section */}
             <rect x="215" y="126" width="8" height="8" fill="var(--color-text-primary)" />
             <rect x="228" y="128" width="50" height="4" fill="var(--color-text-primary)" />
             <rect x="215" y="142" width="4" height="4" fill="var(--color-text-secondary)" />
@@ -229,7 +217,6 @@ function VaultIllustration() {
             <rect x="215" y="154" width="4" height="4" fill="var(--color-text-secondary)" />
             <rect x="224" y="155" width="44" height="2" fill="var(--color-text-muted)" />
 
-            {/* Obsidian / Logseq labels */}
             <text
                 x="252"
                 y="204"
@@ -253,8 +240,6 @@ function WelcomeIllustration() {
         </div>
     );
 }
-
-/* ─── Onboarding Step Data ─── */
 
 interface OnboardingStep {
     id: string;
@@ -313,8 +298,6 @@ const steps: OnboardingStep[] = [
     },
 ];
 
-/* ─── Onboarding Flow Component ─── */
-
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     const [currentStep, setCurrentStep] = useState(0);
     const step = steps[currentStep];
@@ -349,7 +332,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     "bg-[var(--color-surface)]",
                 )}
             >
-                {/* Skip button */}
+                
                 {!isLast && (
                     <div className="flex justify-end px-6 pt-4 md:pt-5">
                         <button
@@ -361,9 +344,8 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     </div>
                 )}
 
-                {/* Content area */}
                 <div className="flex-1 flex flex-col items-center justify-center px-8 md:px-16 py-8 min-h-0">
-                    {/* Illustration */}
+                    
                     <div
                         className={cn(
                             "w-full flex items-center justify-center mb-10",
@@ -374,7 +356,6 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                         {step.illustration}
                     </div>
 
-                    {/* Icon + Title */}
                     <div className="flex items-center gap-3 mb-3">
                         <span className="text-[color:var(--color-text-primary)]">
                             {step.icon}
@@ -384,20 +365,17 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                         </h1>
                     </div>
 
-                    {/* Subtitle */}
                     <p className="text-[13px] tracking-[0.04em] font-semibold text-[color:var(--color-text-secondary)] mb-4 text-center">
                         {step.subtitle}
                     </p>
 
-                    {/* Description */}
                     <p className="text-[13px] leading-[1.7] text-[color:var(--color-text-muted)] text-center max-w-[420px]">
                         {step.description}
                     </p>
                 </div>
 
-                {/* Footer: Progress + Navigation */}
                 <div className="border-t border-[var(--color-border)] px-8 md:px-16 py-5">
-                    {/* Step indicator */}
+                    
                     <div className="flex items-center justify-center gap-2 mb-5">
                         {steps.map((_, index) => (
                             <button
@@ -405,7 +383,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                                 onClick={() => setCurrentStep(index)}
                                 aria-label={`Go to step ${index + 1}`}
                                 className={cn(
-                                    "h-[3px] transition-all duration-[var(--duration-normal)]",
+                                    "h-[3px] transition-colors duration-[var(--duration-normal)]",
                                     index === currentStep
                                         ? "w-8 bg-[var(--color-text-primary)]"
                                         : "w-3 bg-[var(--color-border)] hover:bg-[var(--color-text-muted)]",
@@ -414,7 +392,6 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                         ))}
                     </div>
 
-                    {/* Back / Next buttons */}
                     <div className="flex items-center justify-between gap-4">
                         <button
                             onClick={handleBack}

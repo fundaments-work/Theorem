@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/theorem-sync-core", "crates/sync-daemon"]
+members = ["crates/theorem-sync-core"]
 resolver = "2"
 
 [package]
@@ -32,44 +32,44 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-os = "2"
-tauri-plugin-app = "2.0.0-alpha.1"
+tauri-plugin-app = "2.0.0-alpha.2"
 tauri-plugin-barcode-scanner = "2"
 tauri-plugin-http = { version = "2", features = ["rustls-tls"] }
 tauri-plugin-mobile-folder-scan = { path = "plugins/mobile-folder-scan" }
-tauri-plugin-android-sync-worker = { path = "plugins/android-sync-worker" }
 tauri-plugin-android-tts-audio = { path = "plugins/android-tts-audio" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls", "cookies", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "cookies", "stream"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.25"
 
 # ── LAN Device Sync ──
 theorem-sync-core = { path = "crates/theorem-sync-core" }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros", "process"] }
-axum = "0.7"
-tower-http = { version = "0.5", features = ["compression-gzip", "decompression-gzip"] }
 futures = "0.3"
-local-ip-address = "0.6"
 
-# Cryptography (RustCrypto, NCC Group audited)
-chacha20poly1305 = "0.10"
-x25519-dalek = { version = "2", features = ["static_secrets"] }
-hkdf = "0.12"
-sha2 = "0.10"
-rand = "0.8"
-
-# QR code generation + encoding utilities
-qrcode = { version = "0.14", default-features = false, features = ["svg"] }
-base64 = "0.22"
 hex = "0.4"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
 bzip2 = "0.4"
 tar = "0.4"
-zip = "0.6"
+zip = "2"
 walkdir = "2"
+tempfile = "3"
+
+# Crypto provider for rustls (iroh's reqwest v0.13 uses rustls-no-provider;
+# this installs the ring-based default provider so TLS doesn't panic).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 
 # EPUB pre-parser: streaming XML (replaces regex) + percent-encoded path fallback
 quick-xml = "0.36"
 percent-encoding = "2"
+iroh = "1.0.2"
+iroh-docs = "0.101.0"
+iroh-blobs = { version = "0.103.0", features = ["fs-store"] }
+iroh-gossip = "0.101.0"
+iroh-mdns-address-lookup = "0.4.0"
 
 # Platform-specific
 [target.'cfg(not(target_os = "android"))'.dependencies]
@@ -77,6 +77,7 @@ unrar-ng = "0.7.7"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
+ndk-context = "0.1"
 
 # Optimize for release (reduces binary size significantly)
 [profile.release]

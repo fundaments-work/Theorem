@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-07-18
+
+### Added
+
+- **Comprehensive feature documentation** — 16 docs covering reader, sync, library, annotations, vocabulary, feeds, persistence, settings, TTS, EPUB pre-parser, vault sync, and more. See `docs/`.
+- **Internationalization** — English, Spanish, and French UI translations via i18next. Language selection in Settings → General.
+- **Daily highlight on Library** — A featured highlight from your collection is shown on the library page. Can be dismissed. Settings toggle in Customization.
+- **Speed Read (RSVP) mode** — Rapid Serial Visual Presentation for focused reading. Toggle in reader settings. Speed adjustable.
+- **Semantic highlight colors** — Each color has a named purpose label in the picker. Color picker uses compact badges.
+- **Reading streaks in sidebar** — Current streak length displayed with a flame icon. Also visible in the collapsed sidebar view.
+- **Stats share cards** — Redesigned shareable image cards with badge-style stats and progress bars. Share from Statistics page.
+- **Clipboard permissions** — Ctrl+C in reader iframe works properly via sandbox attribute.
+
+### Changed
+
+- **Design system overhaul** — Contrast-safe accent colors, card deck view, consistent shell styling. Normalized heading scale. Removed section borders. Used `PageHeader` component everywhere.
+- **Reader settings redesigned** — Sliders, theme swatches, tabbed layout, larger touch targets.
+- **Settings consolidated** — Customization section groups reader appearance, copy behavior, and daily highlight.
+- **Filter sidebar simplified** — Library filter shows only Collections panel. "Recent" books added to Quick panel.
+
+### Fixed
+
+- **Reader scroll mode not rendering** — Fixed theme not applied on book open.
+- **Library scroll container** — Removed `content-visibility` from virtualized container (was breaking virtualization).
+- **Color picker button sizing** — Restored original styling, reduced to `text-xs`.
+- **Duplicate left bar in Annotations** — Removed duplicate, standardized filter button sizing.
+- **Settings toggle/button heights** — All buttons standardized to `py-2`.
+
+### Performance
+
+- **Removed 5 dead npm dependencies** — `@mozilla/readability`, `@tauri-controls/react`, `class-variance-authority`, `@zip.js/zip.js` (moved to devDep), `@tauri-apps/plugin-http`/`plugin-os` npm packages. Saves ~100KB from install.
+- **Local fonts, no Google Fonts request** — EB Garamond is now bundled locally. Eliminates an external blocking request on every app launch.
+- **Deferred sync imports** — `sync-orchestrator` and `device-sync` (~72KB) moved from eager imports to dynamic imports in `App.tsx`. Only loaded when sync is active.
+- **Guarded console.log** — All 16 sync debug logs wrapped behind `import.meta.env.DEV`. No log output in production.
+- **DB pool max_size 1→4** — r2d2 connection pool increased from 1 to 4 connections. WAL mode supports concurrent readers — previously all DB operations were serialized.
+- **Batch FTS indexing in transaction** — Indexing 10,000 books now uses a single WAL checkpoint instead of 10,000 individual ones. Wrapped in `unchecked_transaction()`.
+- **Cover images stored as BLOB** — Binary cover data stored in SQLite BLOB column alongside the data URL. Enables more efficient data transfer in sync.
+- **Virtual scrolling on all list pages** — Library, Shelves, Annotations, Bookmarks, Vocabulary use `@tanstack/react-virtual`. DOM node count reduced by 85-98%.
+- **Memoized list item components** — `BookCard`, `ShelfCard`, `AnnotationCard`, `BookmarkCard` wrapped in `React.memo` with custom comparators.
+- **`content-visibility: auto` on 17 scroll containers** — Deferred off-screen rendering across every panel and list.
+- **`useShallow` for annotation selectors** — Prevents re-render when unrelated annotations change.
+
+### Removed
+
+- **Biome linter** — Was check-only with no auto-fix. Generated 640 pre-existing errors. Removed along with `biome.json`.
+- **Dead Vite asset** — `src/assets/react.svg`.
+- **Unused Rust imports** — Stale `iroh::endpoint` and `iroh::protocol::Router` imports in `lib.rs`.
+
 ## [1.0.6] - 2026-07-06
 
 ### Added

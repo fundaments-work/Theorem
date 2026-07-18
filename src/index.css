@@ -1,9 +1,26 @@
-@import url("https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap");
 @import "tailwindcss";
 @import "./core/styles/design-tokens.css";
+
+@font-face {
+    font-family: 'EB Garamond';
+    font-style: normal;
+    font-weight: 400 600;
+    font-display: swap;
+    src: url('/fonts/eb-garamond-latin-400.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'EB Garamond';
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/eb-garamond-latin-400italic.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 @source "./";
 
-/* Base styles */
+
 html {
     color-scheme: light;
     font-family: var(--font-sans);
@@ -61,7 +78,7 @@ button {
     letter-spacing: normal;
 }
 
-/* Swiss UI typography normalization */
+
 .uppercase {
     text-transform: none !important;
 }
@@ -74,7 +91,7 @@ button:disabled {
     cursor: not-allowed;
 }
 
-/* Global minimalist enforcement */
+
 :where(.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-full) {
     border-radius: var(--radius-sm) !important;
 }
@@ -92,7 +109,7 @@ button:disabled {
     box-shadow: none !important;
 }
 
-/* Reader/article content remains serif while UI remains sans-serif. */
+
 .rss-article-content,
 [data-reading-mode] article,
 [data-reading-mode] .book-content,
@@ -102,7 +119,7 @@ button:disabled {
     text-transform: none;
 }
 
-/* Scrollbar Styling - Uses CSS Variables */
+
 ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -132,19 +149,19 @@ button:disabled {
     border-radius: var(--radius-full);
 }
 
-/* Selection - Uses CSS Variables */
+
 ::selection {
     background-color: var(--color-accent-light);
     color: var(--color-text-primary);
 }
 
-/* Focus ring */
+
 :focus-visible {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
 }
 
-/* Dark theme scrollbar */
+
 .theme-dark ::-webkit-scrollbar-thumb {
     background: var(--app-border);
     border-color: var(--app-bg);
@@ -154,7 +171,7 @@ button:disabled {
     background: var(--app-text-muted);
 }
 
-/* Sepia theme scrollbar */
+
 .theme-sepia ::-webkit-scrollbar-thumb {
     background: var(--app-border);
 }
@@ -163,22 +180,24 @@ button:disabled {
     background: var(--app-text-muted);
 }
 
-/* Animations */
-@keyframes fade-in {
-    from {
-        opacity: 0;
+
+@media (prefers-reduced-motion: no-preference) {
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
     }
 
-    to {
-        opacity: 1;
+    .animate-fade-in {
+        animation: fade-in var(--transition-normal) ease-out;
     }
 }
 
-.animate-fade-in {
-    animation: fade-in var(--transition-normal) ease-out;
-}
 
-/* Book Cover Placeholder */
 .book-cover-placeholder {
     background-color: var(--color-border-subtle);
     display: flex;
@@ -201,11 +220,16 @@ button:disabled {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
+
+    
+    .animate-spin,
+    #root:empty::after {
+        animation-duration: 0.8s !important;
+        animation-iteration-count: infinite !important;
+    }
 }
 
-/* ===============================
-   INPUT RANGE STYLING
-   =============================== */
+
 
 input[type=range] {
     -webkit-appearance: none;
@@ -242,9 +266,7 @@ input[type=range]::-webkit-slider-thumb:active {
     transform: scale(1.1);
 }
 
-/* ===============================
-   FOLIATE VIEW STYLING
-   =============================== */
+
 
 foliate-view {
     display: block;
@@ -268,7 +290,7 @@ foliate-view iframe {
     height: 100%;
 }
 
-/* Ensure proper sizing in flex containers */
+
 foliate-paginator,
 foliate-fxl {
     display: block;
@@ -276,58 +298,53 @@ foliate-fxl {
     height: 100%;
 }
 
-/* Performance optimization */
+
 foliate-view * {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* Reader Viewport - Strict no-scroll policy */
-/* Prevent all scrolling in reader context */
+
+
 [data-reading-mode="paged"] {
     overflow: hidden !important;
 }
 
-/* Disable text selection during navigation */
+
 .navigating {
     user-select: none !important;
 }
 
-/* ===============================
-   READER VIEWPORT STYLES
-   =============================== */
+
 
 .reader-viewport {
-    filter: brightness(var(--reader-brightness, 100%));
     transition: filter 0.05s ease;
 }
 
-/* ===============================
-   FULL READER THEME APPLICATION
-   =============================== */
 
-/* When theme is applied to reader wrapper, override app colors */
+
+
 .theme-light,
 .theme-sepia,
 .theme-dark {
-    /* Ensure the theme bg fills the entire screen */
+    
     background-color: var(--reader-bg);
 }
 
-/* Reader mode surface colors; semantic token remap lives in design-tokens.css */
+
 [data-reading-mode] {
     background-color: var(--reader-bg);
     color: var(--reader-fg);
 }
 
-/* Panels in reader mode */
+
 [data-reading-mode] .reader-panel {
     background-color: var(--color-surface);
     color: var(--color-text-primary);
     border-color: var(--color-border);
 }
 
-/* Toolbar in reader mode */
+
 [data-reading-mode] .reader-toolbar {
     background-color: var(--color-surface);
     border-bottom-color: var(--color-border);

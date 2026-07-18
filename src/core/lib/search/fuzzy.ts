@@ -16,9 +16,6 @@ export interface RankedFuzzyItem<T> {
     score: number;
 }
 
-/**
- * Applies fuzzy ranking and returns items ordered by relevance.
- */
 export function rankByFuzzyQuery<T>(
     items: T[],
     query: string,

@@ -6,6 +6,7 @@ import type {
     RssArticle,
 } from "../../../core/types";
 import type { ArticleHeading } from "./types";
+import { setElementHtml } from "../../../core/lib/sanitize";
 import { formatArticleDate, sanitizeArticleHtml } from "./utils";
 
 interface ArticleReaderContentProps {
@@ -21,10 +22,7 @@ interface ArticleReaderContentProps {
     scrollContainerRef: RefObject<HTMLDivElement | null>;
     onTextSelect: (text: string, position: { x: number; y: number; height?: number }, range: Range) => void;
     onHeadingsChange: (headings: ArticleHeading[]) => void;
-    /** Pre-sanitized HTML string. When provided, the component skips internal
-     *  sanitization and uses this value directly. This allows the parent to
-     *  control exactly when the HTML blob changes so that DOM-inserted
-     *  highlight marks are not destroyed by unnecessary innerHTML resets. */
+    
     sanitizedContent?: string;
 }
 
@@ -64,13 +62,10 @@ export function ArticleReaderContent({
 
     const sanitizedContent = sanitizedContentProp ?? sanitizedContentFallback;
 
-    // Check if the article HTML content already contains the featured image.
-    // RSS feeds often include the hero image both as a separate field AND
-    // inline in the content HTML — we deduplicate to avoid showing it twice.
     const contentHasImage = useMemo(() => {
         if (!article.imageUrl) return false;
         const temp = document.createElement("div");
-        temp.innerHTML = sanitizedContent;
+        setElementHtml(temp, sanitizedContent);
         const firstImg = temp.querySelector("img");
         if (!firstImg) return false;
         try {
@@ -82,9 +77,6 @@ export function ArticleReaderContent({
         }
     }, [sanitizedContent, article.imageUrl, article.url]);
 
-    // Track the last HTML string we wrote to innerHTML so we never reset the
-    // DOM when the content hasn't actually changed.  This is the key guard
-    // that prevents highlight <mark> elements from being destroyed.
     const appliedHtmlRef = useRef<string | null>(null);
 
     useEffect(() => {
@@ -93,12 +85,11 @@ export function ArticleReaderContent({
             return;
         }
 
-        // Only write innerHTML when the sanitized content has actually changed.
         if (appliedHtmlRef.current === sanitizedContent) {
             return;
         }
 
-        contentElement.innerHTML = sanitizedContent;
+        setElementHtml(contentElement, sanitizedContent);
         appliedHtmlRef.current = sanitizedContent;
     }, [contentRef, sanitizedContent]);
 
@@ -160,8 +151,6 @@ export function ArticleReaderContent({
         }, range.cloneRange());
     }, [contentRef, onTextSelect]);
 
-    // Reset the applied-HTML ref when the article itself changes so the
-    // new article content is written on mount.
     const articleIdRef = useRef(article.id);
     useEffect(() => {
         if (articleIdRef.current !== article.id) {
@@ -173,7 +162,7 @@ export function ArticleReaderContent({
     return (
         <div
             ref={scrollContainerRef}
-            className="h-full min-h-0 flex-1 overflow-y-auto custom-scrollbar"
+            className="h-full min-h-0 flex-1 overflow-y-auto custom-scrollbar [content-visibility:auto] overscroll-contain"
             style={{
                 WebkitOverflowScrolling: "touch",
                 overscrollBehaviorY: "contain",

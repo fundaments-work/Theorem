@@ -1,20 +1,14 @@
-/**
- * Bookmarks Page
- * View and manage all bookmarks across books
- */
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "../../core/store";
-import { confirmDeleteBookmark } from "../../core/lib/dialogs";
-import { Dropdown } from "../../ui";
+import { Dropdown, ConfirmDialog } from "../../ui";
 import {
     Bookmark,
     MoreVertical,
 } from "lucide-react";
 
-// Empty state component
 function EmptyBookmarks() {
     return (
         <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
@@ -31,7 +25,6 @@ function EmptyBookmarks() {
     );
 }
 
-// Bookmark card component
 interface BookmarkCardProps {
     bookmark: {
         id: string;
@@ -46,15 +39,15 @@ interface BookmarkCardProps {
         author: string;
         coverPath?: string;
     } | undefined;
-    onDelete: (id: string) => Promise<void>;
+    onDelete: (id: string) => void;
     onGoToBookmark: (bookId: string, location: string) => void;
 }
 
-function BookmarkCard({ bookmark, book, onDelete, onGoToBookmark }: BookmarkCardProps) {
+const BookmarkCard = memo(function BookmarkCard({ bookmark, book, onDelete, onGoToBookmark }: BookmarkCardProps) {
     const [showMenu, setShowMenu] = useState(false);
 
     return (
-        <div className="group border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-black">
+        <div className="group border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-accent)]">
             <div className="flex items-start justify-between mb-4">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -78,7 +71,7 @@ function BookmarkCard({ bookmark, book, onDelete, onGoToBookmark }: BookmarkCard
                     </button>
                     {showMenu && (
                         <>
-                            <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                            <div className="fixed inset-0 z-10" role="button" tabIndex={-1} aria-label="Close menu" onClick={() => setShowMenu(false)} />
                             <div className="absolute right-0 top-full z-20 mt-1 w-40 border border-[var(--color-border)] bg-[var(--color-surface)] py-1">
                                 <button
                                     onClick={() => { book && onGoToBookmark(bookmark.bookId, bookmark.location); setShowMenu(false); }}
@@ -100,7 +93,7 @@ function BookmarkCard({ bookmark, book, onDelete, onGoToBookmark }: BookmarkCard
 
             <div className="space-y-3">
                 {bookmark.selectedText && (
-                    <blockquote className="border-l-2 border-black pl-3 font-serif text-[17px] leading-relaxed text-[color:var(--color-text-primary)]">
+                    <blockquote className="pl-3 font-serif text-[17px] leading-relaxed text-[color:var(--color-text-primary)]">
                         {bookmark.selectedText}
                     </blockquote>
                 )}
@@ -112,9 +105,8 @@ function BookmarkCard({ bookmark, book, onDelete, onGoToBookmark }: BookmarkCard
             </div>
         </div>
     );
-}
+});
 
-// Main page component
 export function BookmarksPage() {
     const annotations = useLibraryStore((state) => state.annotations);
     const books = useLibraryStore((state) => state.books);
@@ -127,16 +119,13 @@ export function BookmarksPage() {
         [books],
     );
 
-    // Get only bookmark annotations
     const bookmarks = useMemo(() => {
         return annotations.filter((a) => a.type === "bookmark");
     }, [annotations]);
 
-    // Filter and sort
     const filteredBookmarks = useMemo(() => {
         let filtered = [...bookmarks];
 
-        // Apply search filter from global search
         if (searchQuery.trim()) {
             const rankedBookmarks = rankByFuzzyQuery(
                 filtered.map((bookmark) => {
@@ -160,7 +149,6 @@ export function BookmarksPage() {
             return rankedBookmarks.map(({ item }) => item.bookmark);
         }
 
-        // Sort
         filtered.sort((a, b) => {
             switch (sortBy) {
                 case "newest": {
@@ -193,10 +181,16 @@ export function BookmarksPage() {
         measureElement: (el) => el.getBoundingClientRect().height,
     });
 
-    const handleDelete = async (id: string) => {
-        const confirmed = await confirmDeleteBookmark();
-        if (confirmed) {
-            removeAnnotation(id);
+    const [deleteBookmarkId, setDeleteBookmarkId] = useState<string | null>(null);
+
+    const handleDelete = (id: string) => {
+        setDeleteBookmarkId(id);
+    };
+
+    const handleDeleteConfirm = () => {
+        if (deleteBookmarkId) {
+            removeAnnotation(deleteBookmarkId);
+            setDeleteBookmarkId(null);
         }
     };
 
@@ -218,7 +212,7 @@ export function BookmarksPage() {
 
     return (
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
-            {/* Header */}
+            
             <div className="flex items-start justify-between mb-10">
                 <div>
                     <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
@@ -231,7 +225,6 @@ export function BookmarksPage() {
                 </div>
             </div>
 
-            {/* Toolbar */}
             <div className="flex items-center justify-between gap-4 mb-8">
                 <Dropdown
                     value={sortBy}
@@ -244,7 +237,17 @@ export function BookmarksPage() {
                 />
             </div>
 
-            {/* Bookmarks Display */}
+            <ConfirmDialog
+                isOpen={!!deleteBookmarkId}
+                title="Delete Bookmark"
+                message="Are you sure you want to delete this bookmark?"
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                variant="danger"
+                onConfirm={handleDeleteConfirm}
+                onCancel={() => setDeleteBookmarkId(null)}
+            />
+
             {filteredBookmarks.length === 0 ? (
                 <div className="text-center py-16">
                     <p className="text-[color:var(--color-text-muted)]">

@@ -1,10 +1,8 @@
-/**
- * Statistics Page
- * User statistics, reading progress, and achievements
- */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import { cn, normalizeAuthor, formatReadingTime } from "../../core/lib/utils";
+import { HIGHLIGHT_SOLID_COLORS } from "../../core/lib/design-tokens";
+import { PageHeader } from "../../ui";
 import { useLibraryStore, useSettingsStore, useUIStore } from "../../core/store";
 import type { DailyReadingActivity } from "../../core/types";
 import {
@@ -20,9 +18,8 @@ import {
     Highlighter,
     Share2,
 } from "lucide-react";
-import { ShareStatsStudioModal } from "./ShareStatsStudioModal";
+import { ShareCardModal } from "../share/ShareCardModal";
 
-// Stat card component
 interface StatCardProps {
     icon: React.ReactNode;
     label: string;
@@ -50,7 +47,6 @@ function StatCard({ icon, label, value, subtext }: StatCardProps) {
     );
 }
 
-// Progress bar component
 function ProgressBar({
     current,
     target,
@@ -72,7 +68,7 @@ function ProgressBar({
             </div>
             <div className="h-2 bg-[var(--color-surface-muted)] overflow-hidden">
                 <div
-                    className="h-full bg-[var(--color-accent)] transition-all duration-500"
+                    className="h-full bg-[var(--color-accent)] transition-colors duration-500"
                     style={{ width: `${percentage}%` }}
                 />
             </div>
@@ -87,7 +83,6 @@ function getDateTimestamp(dateValue: unknown): number {
     return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-// Recent book card
 interface RecentBookCardProps {
     book: {
         id: string;
@@ -100,7 +95,7 @@ interface RecentBookCardProps {
     onClick: () => void;
 }
 
-function RecentBookCard({ book, onClick }: RecentBookCardProps) {
+const RecentBookCard = memo(function RecentBookCard({ book, onClick }: RecentBookCardProps) {
     return (
         <button
             onClick={onClick}
@@ -139,9 +134,8 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
             <ChevronRight className="w-4 h-4 text-[color:var(--color-text-muted)] shrink-0" />
         </button>
     );
-}
+});
 
-// Activity heatmap — scrolls horizontally inside its own container
 function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivity[] | undefined }) {
     const weeks = useMemo(() => {
         const data: { level: number; dateStr: string }[][] = [];
@@ -193,7 +187,7 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivit
                 <span className="text-sm font-medium text-[color:var(--color-text-primary)]">Reading Activity</span>
                 <span className="text-xs text-[color:var(--color-text-muted)]">Last 12 weeks</span>
             </div>
-            {/* Scroll container: heatmap uses full width with larger cells */}
+            
             <div className="overflow-x-auto -mx-1 px-1 pb-1">
                 <div className="flex gap-[3px] w-full justify-between" style={{ minWidth: "max-content" }}>
                     {weeks.map((week, weekIndex) => (
@@ -225,7 +219,6 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivit
     );
 }
 
-// Main page component
 export function StatisticsPage() {
     const books = useLibraryStore((state) => state.books);
     const annotations = useLibraryStore((state) => state.annotations);
@@ -240,7 +233,6 @@ export function StatisticsPage() {
             return !!book.completedAt || book.progress >= 0.99;
         });
 
-        // Most recently read book that is still in progress
         const currentlyReading = [...books]
             .filter((b) => b.lastReadAt && b.progress > 0 && b.progress < 0.99 && b.manualCompletionState !== "read")
             .sort((a, b) => getDateTimestamp(b.lastReadAt) - getDateTimestamp(a.lastReadAt))[0];
@@ -271,11 +263,11 @@ export function StatisticsPage() {
     }
 
     const totalBooks = books.length;
-    const completedBooks = books.filter((book) => isBookCompleted(book)).length;
-    const inProgressBooks = books.filter((book) => !isBookCompleted(book) && book.progress > 0).length;
-    const totalHighlights = annotations.filter((a) => a.type === "highlight").length;
-    const totalNotes = annotations.filter((a) => a.type === "note").length;
-    const totalBookmarks = annotations.filter((a) => a.type === "bookmark").length;
+    const completedBooks = useMemo(() => books.filter((book) => isBookCompleted(book)).length, [books]);
+    const inProgressBooks = useMemo(() => books.filter((book) => !isBookCompleted(book) && book.progress > 0).length, [books]);
+    const totalHighlights = useMemo(() => annotations.filter((a) => a.type === "highlight").length, [annotations]);
+    const totalNotes = useMemo(() => annotations.filter((a) => a.type === "note").length, [annotations]);
+    const totalBookmarks = useMemo(() => annotations.filter((a) => a.type === "bookmark").length, [annotations]);
 
     const recentBooks = useMemo(() => {
         return [...books]
@@ -294,26 +286,20 @@ export function StatisticsPage() {
 
     return (
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in overflow-x-hidden">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8 sm:mb-10">
-                <div>
-                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
-                        Statistics
-                    </h1>
-                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
-                        Track your reading progress and achievements
-                    </p>
-                </div>
+            
+            <PageHeader
+                title="Statistics"
+                description="Track your reading progress and achievements"
+            >
                 <button
                     onClick={() => setShowShareModal(true)}
-                    className="ui-btn flex items-center justify-center gap-2 text-xs font-semibold px-3.5 py-2 w-full sm:w-auto hover:bg-[color:var(--color-surface-muted)] active:scale-95 transition-all"
+                    className="ui-btn flex items-center justify-center gap-2 text-xs font-semibold px-3.5 py-2 w-full sm:w-auto hover:bg-[color:var(--color-surface-muted)] active:scale-95 transition-colors"
                 >
                     <Share2 className="w-3.5 h-3.5 text-[color:var(--color-text-secondary)]" />
                     <span>Share Stats</span>
                 </button>
-            </div>
+            </PageHeader>
 
-            {/* Stats Grid — 2 cols on mobile, 4 on md+ */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-10">
                 <StatCard
                     icon={<BookOpen className="w-5 h-5" />}
@@ -341,11 +327,50 @@ export function StatisticsPage() {
                 />
             </div>
 
-            {/* Main Content Grid — single col on mobile, 3 cols on lg+ */}
+            {(() => {
+                const now = new Date();
+                const weekAgo = new Date(now);
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                const weekAgoStr = weekAgo.toISOString().split("T")[0];
+                const thisWeek = (stats.dailyActivity || []).filter((d) => d.date >= weekAgoStr);
+                const weekMinutes = thisWeek.reduce((s, d) => s + d.minutes, 0);
+                const prevWeekEnd = new Date(weekAgo);
+                prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
+                const prevWeekStart = new Date(prevWeekEnd);
+                prevWeekStart.setDate(prevWeekStart.getDate() - 6);
+                const prevWeek = (stats.dailyActivity || []).filter((d) => d.date >= prevWeekStart.toISOString().split("T")[0] && d.date <= prevWeekEnd.toISOString().split("T")[0]);
+                const prevMinutes = prevWeek.reduce((s, d) => s + d.minutes, 0);
+                const change = prevMinutes > 0 ? Math.round((weekMinutes - prevMinutes) / prevMinutes * 100) : 0;
+
+                if (weekMinutes === 0 && prevMinutes === 0) return null;
+
+                return (
+                    <section className="mb-6 bg-[var(--color-surface)]">
+                        <div className="px-5 py-4 flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div>
+                                    <div className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider">This Week</div>
+                                    <div className="text-2xl font-semibold text-[color:var(--color-text-primary)] mt-1">{formatReadingTime(weekMinutes * 60)}</div>
+                                </div>
+                                {prevMinutes > 0 && (
+                                    <div className={`text-xs font-medium ${change >= 0 ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}`}>
+                                        {change >= 0 ? '↑' : '↓'} {Math.abs(change)}%
+                                    </div>
+                                )}
+                            </div>
+                            <div className="text-xs text-[color:var(--color-text-secondary)] text-right leading-relaxed">
+                                <div>{thisWeek.filter((d) => d.minutes > 0).length} days read</div>
+                                {stats.booksCompleted > 0 && <div>{stats.booksCompleted} book{stats.booksCompleted !== 1 ? 's' : ''}</div>}
+                            </div>
+                        </div>
+                    </section>
+                );
+            })()}
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-                {/* Left Column */}
+                
                 <div className="lg:col-span-2 space-y-6 sm:space-y-8">
-                    {/* Reading Goals */}
+                    
                     <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
                         <div className="flex items-center gap-3 mb-5 sm:mb-6">
                             <div className="p-2 bg-[var(--color-surface-muted)]">
@@ -367,12 +392,10 @@ export function StatisticsPage() {
                         </div>
                     </section>
 
-                    {/* Activity Heatmap */}
                     <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
                         <ActivityHeatmap dailyActivity={stats.dailyActivity} />
                     </section>
 
-                    {/* Recently Read */}
                     {recentBooks.length > 0 && (
                         <section>
                             <div className="flex items-center justify-between mb-4">
@@ -398,9 +421,8 @@ export function StatisticsPage() {
                     )}
                 </div>
 
-                {/* Right Column */}
                 <div className="space-y-6 sm:space-y-8">
-                    {/* Annotations Summary */}
+                    
                     <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
                         <div className="flex items-center gap-3 mb-5 sm:mb-6">
                             <div className="p-2 bg-[var(--color-surface-muted)]">
@@ -425,7 +447,6 @@ export function StatisticsPage() {
                         </div>
                     </section>
 
-                    {/* Favorites */}
                     {favoriteBooks.length > 0 && (
                         <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
                             <div className="flex items-center gap-3 mb-5 sm:mb-6">
@@ -466,7 +487,31 @@ export function StatisticsPage() {
                         </section>
                     )}
 
-                    {/* Achievements */}
+                    {annotations.filter(a => a.type !== "bookmark").length > 0 && (
+                        <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
+                            <div className="flex items-center gap-3 mb-4 sm:mb-5">
+                                <div className="p-2 bg-[var(--color-surface-muted)]">
+                                    <Highlighter className="w-5 h-5 text-[color:var(--color-text-primary)]" />
+                                </div>
+                                <h2 className="font-semibold text-[color:var(--color-text-primary)]">Highlights</h2>
+                            </div>
+                            <div className="space-y-2">
+                                {(["yellow", "green", "blue", "red", "orange", "purple"] as const).map((color) => {
+                                    const count = annotations.filter((a) => a.type !== "bookmark" && a.color === color).length;
+                                    if (count === 0) return null;
+                                    const label = color === "yellow" ? "Important" : color === "green" ? "Key Idea" : color === "blue" ? "Interesting" : color === "red" ? "Critical" : color === "orange" ? "Action" : "Beautiful";
+                                    return (
+                                        <div key={color} className="flex items-center gap-2">
+                                            <span className="w-3 h-3 border border-[var(--color-border-subtle)]" style={{ backgroundColor: HIGHLIGHT_SOLID_COLORS[color] }} />
+                                            <span className="flex-1 text-sm text-[color:var(--color-text-primary)]">{label}</span>
+                                            <span className="text-sm font-medium text-[color:var(--color-text-secondary)]">{count}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    )}
+
                     <section className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
                         <div className="flex items-center gap-3 mb-5 sm:mb-6">
                             <div className="p-2 bg-[var(--color-surface-muted)]">
@@ -529,7 +574,8 @@ export function StatisticsPage() {
                 </div>
             </div>
             {showShareModal && (
-                <ShareStatsStudioModal
+                <ShareCardModal
+                    kind="stats"
                     statsData={shareStatsData}
                     onClose={() => setShowShareModal(false)}
                 />

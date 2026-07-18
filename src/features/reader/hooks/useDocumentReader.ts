@@ -1,7 +1,3 @@
-/**
- * useDocumentReader hook
- * React-friendly interface for the document engine - optimized for performance
- */
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { FoliateEngine } from '../engines';
@@ -43,7 +39,6 @@ export interface UseDocumentReaderReturn {
     canGoBack: boolean;
     canGoForward: boolean;
 
-    // Actions
     open: (source: File | Blob | ArrayBuffer | string, filename?: string, initialLocation?: string, layout?: PageLayout, savedLocations?: string, flow?: ReadingFlow, zoom?: number, margins?: number, format?: BookFormat, nativeFilePath?: string) => Promise<void>;
     goTo: (target: string | number) => Promise<void>;
     goToFraction: (fraction: number) => Promise<void>;
@@ -54,68 +49,44 @@ export interface UseDocumentReaderReturn {
     goBack: () => void;
     goForward: () => void;
 
-    // Annotations
     addHighlight: (cfi: string, text: string, color: HighlightColor) => Promise<Annotation>;
     addAnnotation: (annotation: Annotation) => Promise<void>;
     removeHighlight: (id: string) => Promise<void>;
     loadAnnotations: (annotations: Annotation[]) => Promise<void>;
     goToAnnotation: (annotation: Annotation) => Promise<void>;
     
-    // Text selection & TTS
     getSelection: () => { text: string; cfi: string } | null;
     clearSelection: () => void;
     getVisibleTextForTts: () => { text: string; startWordId: string } | null;
     getNextPageTextForTts: () => { text: string; startWordId: string } | null;
 
-    // Search
     search: (query: string) => AsyncGenerator<SearchResult | { progress: number } | 'done'>;
     clearSearch: () => void;
 
-    // Settings
     setLayout: (layout: PageLayout) => void;
     setFlow: (flow: ReadingFlow) => void;
     setZoom: (zoom: number) => void;
     setMargins: (margins: number) => void;
     applyTheme: (settings: ThemeSettings) => void;
 
-    // Cleanup
     close: () => void;
 
-    // Get engine instance for advanced usage
     getEngine: () => FoliateEngine | null;
 
-    // Force location update - useful for keyboard navigation
     forceLocationUpdate: () => void;
 }
 
-// Stable empty array to avoid re-renders
 const EMPTY_TOC: TocItem[] = [];
 const EMPTY_ANNOTATIONS: Annotation[] = [];
 const EMPTY_FRACTIONS: number[] = [];
 
-/**
- * React hook for document reading 
- * 
- * Features:
- * - Lazy engine initialization
- * - Batched state updates
- * - Automatic cleanup
- * - Minimal re-renders through stable references
- */
-/**
- * React hook for document reading.
- * Provides a React-friendly interface for the document engine with performance optimizations.
- */
 export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDocumentReaderReturn {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const engineRef = useRef<FoliateEngine | null>(null);
 
-    // Store callbacks in ref to avoid re-renders when options change.
-    // Assigning during render avoids an extra effect commit on every render.
     const callbacksRef = useRef(options);
     callbacksRef.current = options;
 
-    // State - grouped by update frequency for optimal render performance
     const [initState, setInitState] = useState({
         isInitialized: false,
         isReady: false,
@@ -135,13 +106,11 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         canGoForward: false,
     });
 
-    // Ref for throttling location updates to prevent excessive re-renders
     const locationUpdatePendingRef = useRef(false);
     const pendingLocationRef = useRef<DocLocation | null>(null);
 
     const [error, setError] = useState<Error | null>(null);
 
-    // Mounted ref for cleanup
     const mountedRef = useRef(true);
     useEffect(() => {
         return () => {
@@ -149,12 +118,10 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         };
     }, []);
 
-    // Initialize engine
     useEffect(() => {
         const container = containerRef.current;
         if (!container || engineRef.current) return;
 
-        // Prevent double init
         const containerKey = '__theoremReaderInit';
         if ((container as any)[containerKey]) return;
         (container as any)[containerKey] = true;
@@ -213,7 +180,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
 
         let isCancelled = false;
 
-        // Initialize
         engine.init(container)
             .then(() => {
                 if (mountedRef.current && !isCancelled) {
@@ -241,11 +207,9 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         };
     }, []);
 
-    // Track open operations
     const openAbortRef = useRef<AbortController | null>(null);
     const loadingDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Open document - with full settings support
     const open = useCallback(async (
         source: File | Blob | ArrayBuffer | string,
         filename: string = 'document.epub',
@@ -264,16 +228,12 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
             return;
         }
 
-        // Abort previous open
         openAbortRef.current?.abort();
         const abortController = new AbortController();
         openAbortRef.current = abortController;
 
-        // Reset state
         setInitState({ isInitialized: true, isLoading: false, isReady: false });
-        // Grace period: only show loading indicator if the book takes more
-        // than 200ms to open. With the Rust prefetch + section text cache
-        // most books open in <50ms, so the spinner should rarely appear.
+        
         if (loadingDelayRef.current !== null) clearTimeout(loadingDelayRef.current);
         loadingDelayRef.current = setTimeout(() => {
             loadingDelayRef.current = null;
@@ -314,7 +274,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         }
     }, []);
 
-    // Navigation - stable references
     const goTo = useCallback(async (target: string | number) => {
         await engineRef.current?.goTo(target);
     }, []);
@@ -354,7 +313,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         await engineRef.current?.goForward();
     }, []);
 
-    // Annotations
     const addHighlight = useCallback(async (cfi: string, text: string, color: HighlightColor) => {
         const engine = engineRef.current;
         if (!engine) throw new Error('Engine not initialized');
@@ -392,7 +350,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         await engineRef.current?.goToAnnotation(annotation);
     }, []);
 
-    // Text selection
     const getSelection = useCallback(() => {
         return engineRef.current?.getSelectionFromDocument() || null;
     }, []);
@@ -409,7 +366,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         return engineRef.current?.getNextPageTextForTts() || null;
     }, []);
 
-    // Search
     const search = useCallback(async function* (query: string) {
         const engine = engineRef.current;
         if (!engine) return;
@@ -421,7 +377,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         engineRef.current?.clearSearch();
     }, []);
 
-    // Settings methods
     const setLayout = useCallback((layout: PageLayout) => {
         engineRef.current?.setLayout(layout);
     }, []);
@@ -442,7 +397,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         engineRef.current?.applyTheme(settings);
     }, []);
 
-    // Cleanup
     const close = useCallback(() => {
         openAbortRef.current?.abort();
         openAbortRef.current = null;
@@ -463,12 +417,10 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
 
     const getEngine = useCallback(() => engineRef.current, []);
 
-    // Force location update - useful for keyboard navigation
     const forceLocationUpdate = useCallback(() => {
         const engine = engineRef.current;
         if (!engine) return;
 
-        // Get current location directly from engine
         const loc = engine.getCurrentLocation();
         if (loc) {
             setLocationState(prev => ({
@@ -481,7 +433,6 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
         }
     }, []);
 
-    // Memoized return value - minimal dependencies
     return useMemo(() => ({
         containerRef,
         isLoading: initState.isLoading,

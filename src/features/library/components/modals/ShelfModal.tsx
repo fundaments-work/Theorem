@@ -18,7 +18,6 @@ export function ShelfModal({ isOpen, shelf, onClose, onSave }: ShelfModalProps) 
     const [description, setDescription] = useState(shelf?.description || "");
     const isEditing = !!shelf;
 
-    // Reset form when modal opens/closes or shelf changes
     useEffect(() => {
         if (isOpen) {
             setName(shelf?.name || "");

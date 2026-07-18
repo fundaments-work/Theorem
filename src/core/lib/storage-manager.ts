@@ -1,11 +1,3 @@
-/**
- * Storage management utilities.
- *
- * Tauri runtime:
- * - books/covers/state are handled by SQLite commands.
- * Web fallback:
- * - IndexedDB key scanning.
- */
 
 import { get, del, keys } from 'idb-keyval';
 import { isTauri } from './env';
@@ -313,6 +305,13 @@ export async function cleanupOrphanedStorage(existingBookIds: string[]): Promise
 export async function clearAllApplicationStorage(): Promise<void> {
     if (isTauri()) {
         await sqliteClearAllStorage();
+        
+        try {
+            const { invoke } = await import("@tauri-apps/api/core");
+            await invoke("clear_sync_databases");
+        } catch {
+            
+        }
     } else {
         await Promise.all([
             clearAllBookBinaries(),

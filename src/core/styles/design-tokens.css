@@ -1,8 +1,8 @@
-/* Theorem Design Tokens */
-/* Canonical source of design token values for themes/highlights/shelves. */
+
+
 
 @theme {
-    /* App semantic colors */
+    
     --color-background: var(--app-bg, #ffffff);
     --color-surface: var(--app-surface, #ffffff);
     --color-surface-elevated: var(--app-surface-elevated, #ffffff);
@@ -29,12 +29,12 @@
     --color-overlay-strong: var(--app-overlay-strong, color-mix(in srgb, #000000 25%, transparent));
     --color-overlay-strong-hover: var(--app-overlay-strong-hover, color-mix(in srgb, #000000 33%, transparent));
 
-    /* Compatibility aliases */
+    
     --color-text: var(--color-text-primary);
     --color-panel: var(--color-surface);
     --color-panel-muted: var(--color-surface-muted);
 
-    /* Reader variables */
+    
     --reader-bg: var(--reader-bg-override, #ffffff);
     --reader-fg: var(--reader-fg-override, #1a1a1a);
     --reader-link: var(--reader-link-override, #1a1a1a);
@@ -45,7 +45,7 @@
     --reader-brightness: 100%;
     --reader-zoom: 1;
 
-    /* Spacing scale */
+    
     --spacing-xxs: 0.15rem;
     --spacing-xs: 0.3rem;
     --spacing-sm: 0.6rem;
@@ -56,7 +56,7 @@
     --spacing-3xl: 4.8rem;
     --spacing-4xl: 6rem;
 
-    /* Radius scale - Swiss design (no rounding) */
+    
     --radius-xs: 0;
     --radius-sm: 0;
     --radius-md: 0;
@@ -65,7 +65,7 @@
     --radius-2xl: 0;
     --radius-full: 0;
 
-    /* Elevation scale */
+    
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -73,16 +73,16 @@
     --shadow-premium: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
 
-    /* Glassmorphism */
+    
     --glass-blur: 12px;
     --glass-opacity: 0.7;
     --glass-border: rgba(255, 255, 255, 0.1);
 
-    /* Typography */
+    
     --font-sans: "Helvetica Neue", Helvetica, Arial, "Nimbus Sans L", "Liberation Sans", sans-serif;
     --font-serif: "EB Garamond", "Lora", Georgia, serif;
-    --font-mono: "Helvetica Neue", Helvetica, Arial, "Nimbus Sans L", "Liberation Sans", sans-serif;
-    --font-playfair: "Helvetica Neue", Helvetica, Arial, "Nimbus Sans L", "Liberation Sans", sans-serif;
+    --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", "Consolas", monospace;
+    --font-serif-display: "EB Garamond", "Lora", Georgia, serif;
     --font-merriweather: "EB Garamond", "Lora", Georgia, serif;
     --font-size-4xs: 0.5625rem;
     --font-size-3xs: 0.625rem;
@@ -112,7 +112,7 @@
     --letter-spacing-wide: 0.02em;
     --letter-spacing-wider: 0.04em;
 
-    /* Motion */
+    
     --duration-fast: 150ms;
     --duration-normal: 220ms;
     --duration-slow: 320ms;
@@ -120,7 +120,7 @@
     --transition-normal: var(--duration-normal) cubic-bezier(0.22, 1, 0.36, 1);
     --transition-slow: var(--duration-slow) cubic-bezier(0.22, 1, 0.36, 1);
 
-    /* Z-index scale */
+    
     --z-backdrop: 40;
     --z-dropdown: 50;
     --z-sticky: 100;
@@ -129,7 +129,7 @@
     --z-popover: 300;
     --z-tooltip: 400;
 
-    /* Layout scale */
+    
     --container-width-sm: 40rem;
     --container-width-md: 48rem;
     --container-width-lg: 64rem;
@@ -140,9 +140,9 @@
     --layout-content-readable-width: 72ch;
     --layout-content-inline-padding: var(--spacing-xl);
     --layout-content-inline-padding-mobile: var(--spacing-lg);
-    --layout-sidebar-width: 19.25rem;
-    --layout-sidebar-collapsed-width: 5rem;
-    --layout-sidebar-header-height: 4rem;
+    --layout-sidebar-width: 16rem;
+    --layout-sidebar-collapsed-width: 4.5rem;
+    --layout-sidebar-header-height: 2.75rem;
     --layout-sidebar-item-height: 2.75rem;
     --layout-sidebar-toggle-width: 3rem;
     --layout-header-height: 4rem;
@@ -180,7 +180,7 @@
     --layout-floating-panel-width: min(var(--layout-reader-panel-width), calc(100vw - 2.5rem));
     --effect-backdrop-blur-sm: 1px;
 
-    /* Form controls */
+    
     --control-height-sm: 2rem;
     --control-height-md: 2.5rem;
     --control-height-lg: 2.875rem;
@@ -201,29 +201,30 @@
     --border-width-interactive: 1px;
 }
 
-/* Theme tokens (app + reader) */
+
 .theme-light,
 :root {
-    --app-bg: #ffffff;
-    --app-surface: #ffffff;
+    --app-bg: #faf9f7;
+    --app-surface: #f4f3f0;
     --app-surface-elevated: #ffffff;
-    --app-surface-muted: #fafafa;
-    --app-surface-variant: #f4f4f4;
-    --app-surface-hover: #f0f0f0;
-    --app-text-primary: #1a1a1a;
-    --app-text-secondary: #666666;
-    --app-text-muted: #666666;
+    --app-surface-muted: #e8e7e2;
+    --app-surface-variant: #e0dfda;
+    --app-surface-hover: #d9d8d3;
+    --app-text-primary: #1c1c1c;
+    --app-text-secondary: #6b6b6b;
+    --app-text-muted: #9c9c9c;
     --app-text-inverse: #ffffff;
-    --app-border: #e5e5e5;
-    --app-border-subtle: #e5e5e5;
-    --app-accent: #1a1a1a;
-    --app-accent-hover: #000000;
-    --app-accent-light: #f4f4f4;
+    --app-border: #d4d3ce;
+    --app-border-subtle: #e2e1dd;
+    --app-accent: #2d6a6e;
+    --app-accent-hover: #25595c;
+    --app-accent-light: color-mix(in srgb, #2d6a6e 15%, #ffffff);
     --app-accent-contrast: #ffffff;
-    --app-success: #1a1a1a;
-    --app-warning: #1a1a1a;
-    --app-error: #000000;
-    --app-info: #666666;
+    --app-success: #2d6a6e;
+    --app-warning: #2d6a6e;
+    --app-error: #d32f2f;
+    --app-info: #6b6b6b;
+    --app-focus-ring: color-mix(in srgb, #2d6a6e 58%, transparent);
     --app-overlay-subtle: color-mix(in srgb, #000000 8%, transparent);
     --app-overlay-medium: color-mix(in srgb, #000000 14%, transparent);
     --app-overlay-strong: color-mix(in srgb, #000000 25%, transparent);
@@ -234,30 +235,6 @@
 }
 
 .theme-sepia {
-    --app-bg: #ffffff;
-    --app-surface: #ffffff;
-    --app-surface-elevated: #ffffff;
-    --app-surface-muted: #fafafa;
-    --app-surface-variant: #f4f4f4;
-    --app-surface-hover: #f0f0f0;
-    --app-text-primary: #1a1a1a;
-    --app-text-secondary: #666666;
-    --app-text-muted: #666666;
-    --app-text-inverse: #ffffff;
-    --app-border: #e5e5e5;
-    --app-border-subtle: #e5e5e5;
-    --app-accent: #1a1a1a;
-    --app-accent-hover: #000000;
-    --app-accent-light: #f4f4f4;
-    --app-accent-contrast: #ffffff;
-    --app-success: #1a1a1a;
-    --app-warning: #1a1a1a;
-    --app-error: #000000;
-    --app-info: #666666;
-    --app-overlay-subtle: color-mix(in srgb, #000000 8%, transparent);
-    --app-overlay-medium: color-mix(in srgb, #000000 14%, transparent);
-    --app-overlay-strong: color-mix(in srgb, #000000 25%, transparent);
-    --app-overlay-strong-hover: color-mix(in srgb, #000000 33%, transparent);
     --reader-bg-override: #f4ecd8;
     --reader-fg-override: #3d3025;
     --reader-link-override: #3d3025;
@@ -265,36 +242,37 @@
 
 .theme-dark {
     color-scheme: dark;
-    --app-bg: #000000;
-    --app-surface: #000000;
-    --app-surface-elevated: #111111;
-    --app-surface-muted: #1a1a1a;
-    --app-surface-variant: #222222;
-    --app-surface-hover: #2a2a2a;
-    --app-text-primary: #ffffff;
-    --app-text-secondary: #b0b0b0;
-    --app-text-muted: #808080;
-    --app-text-inverse: #000000;
-    --app-border: #333333;
-    --app-border-subtle: #2a2a2a;
-    --app-accent: #ffffff;
-    --app-accent-hover: #e0e0e0;
-    --app-accent-light: #1a1a1a;
-    --app-accent-contrast: #000000;
-    --app-success: #ffffff;
-    --app-warning: #ffffff;
+    --app-bg: #141416;
+    --app-surface: #1c1c20;
+    --app-surface-elevated: #28282c;
+    --app-surface-muted: #353539;
+    --app-surface-variant: #3d3d42;
+    --app-surface-hover: #454549;
+    --app-text-primary: #e8e6e1;
+    --app-text-secondary: #9a9a9a;
+    --app-text-muted: #7a7a7a;
+    --app-text-inverse: #141416;
+    --app-border: #3d3d42;
+    --app-border-subtle: #323236;
+    --app-accent: #6bcdd1;
+    --app-accent-hover: #7dd7db;
+    --app-accent-light: color-mix(in srgb, #6bcdd1 16%, #141416);
+    --app-accent-contrast: #141416;
+    --app-success: #4ade80;
+    --app-warning: #fbbf24;
     --app-error: #ef5350;
-    --app-info: #b0b0b0;
-    --app-overlay-subtle: color-mix(in srgb, #ffffff 8%, transparent);
-    --app-overlay-medium: color-mix(in srgb, #ffffff 14%, transparent);
-    --app-overlay-strong: color-mix(in srgb, #000000 65%, transparent);
-    --app-overlay-strong-hover: color-mix(in srgb, #000000 75%, transparent);
+    --app-info: #9a9a9a;
+    --app-focus-ring: color-mix(in srgb, #6bcdd1 58%, transparent);
+    --app-overlay-subtle: color-mix(in srgb, #ffffff 10%, transparent);
+    --app-overlay-medium: color-mix(in srgb, #ffffff 16%, transparent);
+    --app-overlay-strong: color-mix(in srgb, #000000 60%, transparent);
+    --app-overlay-strong-hover: color-mix(in srgb, #000000 70%, transparent);
     --reader-bg-override: #000000;
     --reader-fg-override: #ffffff;
     --reader-link-override: #ffffff;
 }
 
-/* Reader mode remaps app semantic tokens to reader palette values. */
+
 [data-reading-mode] {
     --color-background: var(--reader-bg);
     --color-surface: var(--reader-bg);
@@ -310,12 +288,12 @@
     --color-accent: var(--reader-link);
     --color-accent-hover: color-mix(in srgb, var(--reader-link) 85%, var(--reader-bg));
     --color-accent-light: color-mix(in srgb, var(--reader-link) 16%, var(--reader-bg));
-    /* Keep active button labels legible when reader accent flips between dark/light themes. */
+    
     --color-accent-contrast: var(--reader-bg);
     --color-focus-ring: color-mix(in srgb, var(--reader-link) 58%, transparent);
 }
 
-/* Highlight token palette */
+
 :root {
     --highlight-yellow: #f4b400;
     --highlight-yellow-soft: rgba(244, 180, 0, 0.26);
@@ -343,9 +321,9 @@
     --highlight-purple-picker-active: #ba68c8;
 }
 
-/* Shelf colors are generated at runtime in design-tokens.ts. */
 
-/* Shared UI primitive classes */
+
+
 .ui-btn,
 .ui-btn-primary,
 .ui-btn-ghost,
@@ -516,6 +494,70 @@
     transition: background-color var(--transition-normal), border-color var(--transition-normal), color var(--transition-normal), box-shadow var(--transition-normal);
 }
 
+.ui-reader-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 2px;
+    background: var(--color-border);
+    outline: none;
+    cursor: pointer;
+}
+
+.ui-reader-slider::-webkit-slider-runnable-track {
+    height: 2px;
+    background: var(--color-border);
+}
+
+.ui-reader-slider::-moz-range-track {
+    height: 2px;
+    background: var(--color-border);
+    border: none;
+}
+
+.ui-reader-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--color-text-primary);
+    border: 2px solid var(--color-surface);
+    box-shadow: 0 0 0 1px var(--color-border);
+    margin-top: -6px;
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.ui-reader-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--color-text-primary);
+    border: 2px solid var(--color-surface);
+    box-shadow: 0 0 0 1px var(--color-border);
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.ui-reader-slider:hover::-webkit-slider-thumb {
+    transform: scale(1.2);
+    box-shadow: 0 0 0 2px var(--color-text-primary);
+}
+
+.ui-reader-slider:hover::-moz-range-thumb {
+    transform: scale(1.2);
+    box-shadow: 0 0 0 2px var(--color-text-primary);
+}
+
+.ui-reader-slider:active::-webkit-slider-thumb {
+    transform: scale(0.9);
+}
+
+.ui-reader-slider:active::-moz-range-thumb {
+    transform: scale(0.9);
+}
+
 .ui-input::placeholder {
     color: var(--color-text-muted);
 }
@@ -530,7 +572,7 @@
     outline-offset: 0;
 }
 
-/* Shell navigation primitives */
+
 .ui-sidebar-nav-item {
     position: relative;
     display: flex;
@@ -621,7 +663,7 @@
     letter-spacing: var(--letter-spacing-wider);
 }
 
-/* Reader theme previews */
+
 .theme-preview[data-theme="light"] {
     --reader-bg: #ffffff;
     --reader-fg: #1a1a1a;
@@ -637,7 +679,7 @@
     --reader-fg: #ffffff;
 }
 
-/* Page-level utility classes */
+
 .ui-page-title {
     font-size: 1.45rem;
     font-weight: var(--font-weight-semibold);
@@ -667,7 +709,7 @@
     color: var(--color-text-inverse);
 }
 
-/* Dictionary definition HTML content (StarDict / reader-dict.com) */
+
 .dict-definition {
     overflow-wrap: break-word;
     word-break: break-word;
@@ -752,7 +794,7 @@
     margin: 0.5em 0;
 }
 
-/* Focus visible utility */
+
 .ui-focus-ring:focus-visible {
     outline: calc(var(--border-width-interactive) * 2) solid var(--color-focus-ring);
     outline-offset: 2px;

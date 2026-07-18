@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     BookOpenText,
@@ -7,6 +7,7 @@ import {
     ChevronLeft,
 } from "lucide-react";
 import { cn } from "../../core/lib/utils";
+import { sanitizeHtmlForDisplay } from "../../core/lib/sanitize";
 import { useVocabularyStore, useUIStore } from "../../core/store";
 import type { VocabularyTerm } from "../../core/types";
 
@@ -61,7 +62,7 @@ export function VocabularyPage() {
         selectedTermId ? filteredTerms.find((t) => t.id === selectedTermId) || null : null
     ), [filteredTerms, selectedTermId]);
 
-    useMemo(() => {
+    useEffect(() => {
         if (selectedTermId && !filteredTerms.some((t) => t.id === selectedTermId)) {
             setSelectedTermId(null);
         }
@@ -99,10 +100,10 @@ export function VocabularyPage() {
 
     return (
         <div className="h-full w-full flex overflow-hidden bg-[var(--color-background)]">
-            {/* ── Left sidebar: Term list ── */}
+            
             <div className={cn(
                 "flex-col bg-[var(--color-background)]",
-                "h-full flex-shrink-0 transition-all duration-300",
+                "h-full flex-shrink-0 transition-colors duration-300",
                 showMobileList ? "flex w-full" : "hidden",
                 "md:flex md:w-64 md:border-r md:border-[var(--color-border-subtle)]",
             )}>
@@ -115,7 +116,7 @@ export function VocabularyPage() {
                     </div>
                 </header>
 
-                <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-12">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-12 [content-visibility:auto] overscroll-contain">
                     {filteredTerms.length > 0 ? (
                         <div style={{ height: `${termsVirtualizer.getTotalSize()}px`, position: "relative" }}>
                             <div style={{ paddingTop: `${termsVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>
@@ -163,17 +164,16 @@ export function VocabularyPage() {
                 </div>
             </div>
 
-            {/* ── Right content: detail or empty ── */}
             <div className={cn(
                 "flex-col min-w-0 bg-[var(--color-background)]",
-                "h-full flex-1 transition-all duration-300",
+                "h-full flex-1 transition-colors duration-300",
                 !showMobileList ? "flex" : "hidden",
                 "md:flex",
             )}>
                 <div className="flex-1 flex min-h-0 overflow-hidden">
                     {selectedTerm ? (
                         <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-                            <div className="flex flex-col h-full overflow-y-auto animate-fade-in">
+                            <div className="flex flex-col h-full overflow-y-auto animate-fade-in [content-visibility:auto] overscroll-contain">
                                 <div className="p-6 md:p-8 lg:p-10 max-w-full">
                                     <button
                                         onClick={handleBackToSources}
@@ -223,7 +223,7 @@ export function VocabularyPage() {
                                                             {isHtml(def) ? (
                                                                 <div
                                                                     className="dict-definition min-w-0 break-words"
-                                                                    dangerouslySetInnerHTML={{ __html: def }}
+                                                                    dangerouslySetInnerHTML={sanitizeHtmlForDisplay(def)}
                                                                 />
                                                             ) : (
                                                                 <span className="min-w-0 break-words">{def}</span>

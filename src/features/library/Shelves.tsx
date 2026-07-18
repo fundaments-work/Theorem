@@ -1,19 +1,17 @@
-/**
- * Shelves Page
- * Organize books into collections/shelves
- */
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core/lib/utils";
 import { getShelfColor, getShelfInitials } from "../../core/lib/design-tokens";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core/store";
-import { confirmDeleteBook } from "../../core/lib/dialogs";
 import { ShelfModal } from "./components/modals/ShelfModal";
-import { MemoizedBookCard, BookInfoModal, AddToShelfModal } from "./Library";
+import { ConfirmDialog } from "../../ui";
+import { MemoizedBookCard, BookInfoModal, AddToShelfModal, RenameBookModal } from "./Library";
 import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
+import { sqliteSearchBooks } from "../../core/lib/sqlite-storage";
+import { isTauri } from "../../core/lib/env";
 import {
     FolderOpen,
     Plus,
@@ -28,14 +26,12 @@ import {
 } from "lucide-react";
 import type { Book, Collection, LibraryViewMode } from "../../core/types";
 
-// View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
     grid: <LayoutGrid className="w-4 h-4" />,
     list: <List className="w-4 h-4" />,
     compact: <Grid3X3 className="w-4 h-4" />,
 };
 
-// Empty state component
 function EmptyShelves({ onCreate }: { onCreate: () => void }) {
     return (
         <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
@@ -63,7 +59,6 @@ function EmptyShelves({ onCreate }: { onCreate: () => void }) {
     );
 }
 
-// Empty shelf detail state
 function EmptyShelfDetail({ shelfName, onAddBooks }: { shelfName: string; onAddBooks: () => void }) {
     return (
         <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
@@ -91,9 +86,6 @@ function EmptyShelfDetail({ shelfName, onAddBooks }: { shelfName: string; onAddB
     );
 }
 
-// Book Card Component removed in favor of MemoizedBookCard from Library.tsx
-
-// Shelf card component
 interface ShelfCardProps {
     shelf: Collection;
     books: Book[];
@@ -103,14 +95,14 @@ interface ShelfCardProps {
     onDelete: () => void;
 }
 
-function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }: ShelfCardProps) {
+const ShelfCard = memo(function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }: ShelfCardProps) {
     const [showMenu, setShowMenu] = useState(false);
     const [menuUpward, setMenuUpward] = useState(false);
     const displayBooks = books.slice(0, 4);
 
     return (
         <div className="group relative border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-text-muted)] transition-colors">
-            {/* Cover Grid Preview */}
+            
             <button onClick={onClick} className="block w-full">
                 <div className="aspect-[16/10] bg-[var(--color-surface-muted)] p-4">
                     {displayBooks.length > 0 ? (
@@ -137,7 +129,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                                     )}
                                 </div>
                             ))}
-                            {/* Fill empty slots */}
+                            
                             {Array.from({ length: Math.max(0, 4 - displayBooks.length) }).map((_, i) => (
                                 <div
                                     key={`empty-${i}`}
@@ -154,10 +146,9 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                 </div>
             </button>
 
-            {/* Info */}
             <div className="p-4">
                 <div className="flex items-center gap-3">
-                    {/* Colored Shelf Avatar */}
+                    
                     <div
                         className="w-10 h-10 flex items-center justify-center text-sm font-semibold flex-shrink-0 shadow-sm"
                         style={{
@@ -179,7 +170,6 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
                         </p>
                     </div>
 
-                    {/* Menu - Always visible on mobile, hover on desktop */}
                     <div className="relative flex-shrink-0">
                         <button
                             onClick={(e) => {
@@ -233,9 +223,8 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
             </div>
         </div>
     );
-}
+});
 
-// Shelf Detail View
 interface ShelfDetailProps {
     shelf: Collection;
     onBack: () => void;
@@ -248,6 +237,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     const addBookToCollection = useLibraryStore((state) => state.addBookToCollection);
     const removeBook = useLibraryStore((state) => state.removeBook);
     const toggleFavorite = useLibraryStore((state) => state.toggleFavorite);
+    const updateBook = useLibraryStore((state) => state.updateBook);
     const markBookCompleted = useLibraryStore((state) => state.markBookCompleted);
     const markBookUnread = useLibraryStore((state) => state.markBookUnread);
 
@@ -257,11 +247,13 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     
     const [viewMode, setViewMode] = useState<LibraryViewMode>("grid");
 
-    // Modal states
     const [infoModalBook, setInfoModalBook] = useState<Book | null>(null);
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
     const [addToShelfBookId, setAddToShelfBookId] = useState<string | null>(null);
     const [isAddToShelfModalOpen, setIsAddToShelfModalOpen] = useState(false);
+    const [renameBook, setRenameBook] = useState<Book | null>(null);
+    const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+    const [deleteBookInfo, setDeleteBookInfo] = useState<{ bookId: string; title: string } | null>(null);
 
     const handleCreateShelf = (name: string) => {
         addCollection({
@@ -273,8 +265,31 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
         });
     };
 
-    // Get actual books that exist in the library, filtered and sorted
+    const handleRename = useCallback((book: Book) => {
+        setRenameBook(book);
+        setIsRenameModalOpen(true);
+    }, []);
+
+    const handleRenameSave = useCallback((bookId: string, newTitle: string) => {
+        updateBook(bookId, { title: newTitle });
+        setRenameBook(null);
+        setIsRenameModalOpen(false);
+    }, [updateBook]);
+
     const debouncedSearchQuery = useDebounce(searchQuery, 250);
+
+    const [ftsSearchIds, setFtsSearchIds] = useState<string[] | undefined>(undefined);
+    useEffect(() => {
+        if (!isTauri() || !debouncedSearchQuery.trim()) {
+            setFtsSearchIds(undefined);
+            return;
+        }
+        let cancelled = false;
+        sqliteSearchBooks(debouncedSearchQuery.trim(), 200).then((results) => {
+            if (!cancelled) setFtsSearchIds(results.map((r) => r.book_id));
+        });
+        return () => { cancelled = true; };
+    }, [debouncedSearchQuery]);
 
     const shelfBooks = useMemo(() => {
         const shelfBookIdsSet = new Set(shelf.bookIds);
@@ -285,8 +300,9 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             showFavoritesOnly: false,
             sortBy: settings.librarySortBy,
             sortOrder: settings.librarySortOrder,
+            ftsSearchIds,
         });
-    }, [shelf.bookIds, books, debouncedSearchQuery, settings.librarySortBy, settings.librarySortOrder]);
+    }, [shelf.bookIds, books, debouncedSearchQuery, settings.librarySortBy, settings.librarySortOrder, ftsSearchIds]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const isListView = viewMode === "list";
@@ -343,25 +359,25 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
         measureElement: (el) => el.getBoundingClientRect().height,
     });
 
-    // Unused remove handler removed
     const handleOpenBook = (book: Book) => {
+        import("../../features/reader"); 
         if (book.syncedWithoutFile) {
-            window.alert(
-                "This book was synced from another device but the file hasn't been transferred yet. " +
-                "Please sync again with the source device to download the book file."
-            );
+            useUIStore.getState().setDownloadingBook(book.id);
+            setRoute("reader", book.id);
+            import("../../core/lib/sync-orchestrator").then(({ downloadBookOnDemand }) => {
+                downloadBookOnDemand(book.id).catch(() => {});
+            });
             return;
         }
         setRoute("reader", book.id);
     };
 
     const handleGoToLibrary = () => {
-        // Store the shelf ID in session storage so Library page can filter by it
+        
         sessionStorage.setItem("theorem-selected-shelf", shelf.id);
         setRoute("library");
     };
 
-    // Cycle through view modes
     const cycleViewMode = () => {
         const modes: LibraryViewMode[] = ["grid", "list", "compact"];
         const currentIndex = modes.indexOf(viewMode);
@@ -375,7 +391,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
 
     return (
         <div className="animate-fade-in">
-            {/* Header */}
+            
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
                     <button
@@ -384,7 +400,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
-                    {/* Colored Shelf Avatar */}
+                    
                     <div
                         className="w-12 h-12 flex items-center justify-center text-lg font-semibold flex-shrink-0 shadow-sm"
                         style={{
@@ -404,7 +420,6 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                     </div>
                 </div>
 
-                {/* View Toggle */}
                 <button
                     onClick={cycleViewMode}
                     className={cn(
@@ -419,8 +434,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                 </button>
             </div>
 
-            {/* Books Display */}
-            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" style={{ height: "calc(100vh - 12rem)" }}>
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto [content-visibility:auto] overscroll-contain" style={{ height: "calc(100vh - 12rem)" }}>
                 <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
                     <div style={{ paddingTop: `${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>
                         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -437,10 +451,11 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                                 onToggleFavorite: toggleFavorite,
                                 onDeleteBook: (id: string) => {
                                     const book = shelfBooks.find(b => b.id === id);
-                                    if (book) confirmDeleteBook(book.title).then((c) => { if (c) removeBook(id); });
+                                    if (book) setDeleteBookInfo({ bookId: book.id, title: book.title });
                                 },
                                 onShowInfo: (b: Book) => { setInfoModalBook(b); setIsInfoModalOpen(true); },
                                 onAddToShelf: (id: string) => { setAddToShelfBookId(id); setIsAddToShelfModalOpen(true); },
+                                onRename: handleRename,
                                 onMarkAsRead: markBookCompleted,
                                 onMarkAsUnread: markBookUnread,
                             };
@@ -490,11 +505,36 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                 }}
                 onCreateShelf={handleCreateShelf}
             />
+
+            <RenameBookModal
+                isOpen={isRenameModalOpen}
+                book={renameBook}
+                onClose={() => {
+                    setIsRenameModalOpen(false);
+                    setRenameBook(null);
+                }}
+                onSave={handleRenameSave}
+            />
+
+            <ConfirmDialog
+                isOpen={!!deleteBookInfo}
+                title="Delete Book"
+                message={deleteBookInfo ? `Are you sure you want to delete "${deleteBookInfo.title}"? This action cannot be undone.` : ""}
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                variant="danger"
+                onConfirm={() => {
+                    if (deleteBookInfo) {
+                        removeBook(deleteBookInfo.bookId);
+                        setDeleteBookInfo(null);
+                    }
+                }}
+                onCancel={() => setDeleteBookInfo(null)}
+            />
         </div>
     );
 }
 
-// Main page component
 export function ShelvesPage() {
     const collections = useLibraryStore((state) => state.collections);
     const books = useLibraryStore((state) => state.books);
@@ -507,7 +547,6 @@ export function ShelvesPage() {
     const [editingShelf, setEditingShelf] = useState<{ id: string; name: string; description?: string } | undefined>();
     const generalCollections = useMemo(() => collections, [collections]);
 
-    // O(1) book lookup map to avoid O(N*M) find() in loops
     const bookLookup = useMemo(
         () => new Map(books.map((book) => [book.id, book])),
         [books],
@@ -515,7 +554,6 @@ export function ShelvesPage() {
 
     const debouncedSearchQuery = useDebounce(searchQuery, 250);
 
-    // Filter shelves by search query
     const filteredShelves = useMemo(() => {
         if (!debouncedSearchQuery.trim()) {
             return generalCollections;
@@ -538,12 +576,10 @@ export function ShelvesPage() {
         return rankedShelves.map(({ item }) => item.shelf);
     }, [generalCollections, debouncedSearchQuery]);
 
-    // Helper to get actual books count (excluding deleted books)
     const getActualBookCount = (bookIds: string[]) => {
         return bookIds.filter((id) => bookLookup.has(id)).length;
     };
 
-    // Helper to get actual books for display
     const getShelfBooks = (bookIds: string[]): Book[] => {
         return bookIds
             .map((id) => bookLookup.get(id))
@@ -576,13 +612,19 @@ export function ShelvesPage() {
         setIsModalOpen(false);
     };
 
+    const [deleteShelfInfo, setDeleteShelfInfo] = useState<{ id: string; name: string } | null>(null);
+
     const handleDeleteShelf = (shelfId: string, shelfName: string) => {
-        if (confirm(`Are you sure you want to delete "${shelfName}"?`)) {
-            removeCollection(shelfId);
+        setDeleteShelfInfo({ id: shelfId, name: shelfName });
+    };
+
+    const handleDeleteShelfConfirm = () => {
+        if (deleteShelfInfo) {
+            removeCollection(deleteShelfInfo.id);
+            setDeleteShelfInfo(null);
         }
     };
 
-    // Show shelf detail view
     if (selectedShelfId) {
         const shelf = generalCollections.find((s) => s.id === selectedShelfId);
         if (shelf) {
@@ -594,7 +636,6 @@ export function ShelvesPage() {
         }
     }
 
-    // Show shelves list
     if (generalCollections.length === 0) {
         return (
             <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -611,7 +652,7 @@ export function ShelvesPage() {
 
     return (
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
-            {/* Header */}
+            
             <div className="flex items-center justify-between mb-10">
                 <div>
                     <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
@@ -636,7 +677,6 @@ export function ShelvesPage() {
                 </button>
             </div>
 
-            {/* Shelves Grid */}
             {filteredShelves.length === 0 ? (
                 <div className="text-center py-16">
                     <p className="text-[color:var(--color-text-muted)]">
@@ -665,12 +705,22 @@ export function ShelvesPage() {
                 </div>
             )}
 
-            {/* Modal */}
             <ShelfModal
                 isOpen={isModalOpen}
                 shelf={editingShelf}
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSaveShelf}
+            />
+
+            <ConfirmDialog
+                isOpen={!!deleteShelfInfo}
+                title="Delete Shelf"
+                message={deleteShelfInfo ? `Are you sure you want to delete "${deleteShelfInfo.name}"? Books in this shelf will remain in your library.` : ""}
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                variant="danger"
+                onConfirm={handleDeleteShelfConfirm}
+                onCancel={() => setDeleteShelfInfo(null)}
             />
         </div>
     );

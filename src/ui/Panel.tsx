@@ -1,8 +1,3 @@
-/**
- * Panel Component
- * Reusable sliding panel with consistent animations
- * Theme-aware - adapts to reader theme colors
- */
 
 import { cn } from '../core/lib/utils';
 import { ReactNode } from 'react';
@@ -74,17 +69,19 @@ export function FloatingPanel({
     const isBottom = anchor === 'bottom';
     return (
         <div
+            role="dialog"
+            aria-modal="true"
             className={cn(
                 'fixed z-[var(--z-dropdown)] flex flex-col reader-sheet border-2',
-                // Mobile: bottom sheet (all anchors)
+                
                 'left-0 right-0 bottom-0 max-h-[var(--layout-floating-panel-max-height)]',
-                // Desktop: position by anchor
+                
                 isBottom
                     ? 'sm:top-auto sm:bottom-5 sm:left-auto sm:right-5 sm:max-h-[var(--layout-floating-panel-max-height-desktop)] sm:w-[var(--layout-floating-panel-width)]'
                     : 'sm:bottom-auto sm:top-[var(--layout-floating-panel-top-offset)] sm:max-h-[var(--layout-floating-panel-max-height-desktop)] sm:w-[var(--layout-floating-panel-width)]',
                 !isBottom && anchor === 'top-right' && 'sm:left-auto sm:right-5',
                 !isBottom && anchor === 'top-left' && 'sm:left-5 sm:right-auto',
-                // Animation
+                
                 'transform transition-[transform,opacity] duration-240 ease-[cubic-bezier(0.22,1,0.36,1)]',
                 visible
                     ? 'translate-y-0 opacity-100'
@@ -98,5 +95,3 @@ export function FloatingPanel({
         </div>
     );
 }
-
-export default Panel;

@@ -1,5 +1,3 @@
-// TTS via spd-say (speech-dispatcher CLI) on Linux — always works.
-
 use std::process::{Command, Stdio};
 
 pub fn linux_tts_speak(text: &str) -> Result<(), String> {

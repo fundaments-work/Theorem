@@ -2,28 +2,17 @@
 name = "theorem-sync-core"
 version = "1.0.5"
 edition = "2021"
-description = "Theorem LAN sync core library — crypto, protocol, and embedded HTTP server"
+description = "Theorem sync core library — device identity, QR pairing, and sync protocol types"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt", "net", "sync", "macros", "time"] }
-axum = "0.7"
-tower-http = { version = "0.5", features = ["compression-gzip", "decompression-gzip"] }
-futures = "0.3"
-local-ip-address = "0.6"
-
-# Cryptography (RustCrypto, NCC Group audited)
-chacha20poly1305 = "0.10"
-x25519-dalek = { version = "2", features = ["static_secrets"] }
-hkdf = "0.12"
 sha2 = "0.10"
-rand = "0.8"
 
 # QR code generation + encoding utilities
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
-base64 = "0.22"
 hex = "0.4"
 
-# Database
-rusqlite = { version = "0.32", features = ["bundled"] }
+# Timestamp formatting (replaces manual ISO 8601 calendar math)
+time = { version = "0.3", features = ["formatting"] }

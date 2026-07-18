@@ -1,7 +1,3 @@
-/**
- * Feeds Page
- * RSS feed subscription management and article browsing
- */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -19,8 +15,7 @@ import { AddFeedModal } from "./AddFeedModal";
 import { ContextMenu } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
 import { sanitizeArticleHtml } from "../reader/article-reader/utils";
-
-// ── Helper ──
+import { sanitizeHtmlForDisplay } from "../../core/lib/sanitize";
 
 const FEEDS_SELECTED_FEED_STORAGE_KEY = "theorem-feeds:selected-feed-id";
 const FEEDS_MOBILE_LIST_STORAGE_KEY = "theorem-feeds:show-mobile-list";
@@ -71,8 +66,6 @@ function useTouchVisibleActions(): boolean {
     return touchVisibleActions;
 }
 
-// ── Feed List Item ──
-
 function FeedListItem({
     feed,
     isSelected,
@@ -86,8 +79,7 @@ function FeedListItem({
     onDelete: () => void;
     showTouchActions: boolean;
 }) {
-    // Unused state removed
-
+    
     return (
         <div
             onClick={onSelect}
@@ -99,7 +91,7 @@ function FeedListItem({
                 "active:bg-[var(--color-surface-muted)]"
             )}
         >
-            {/* Feed Icon */}
+            
             <div className={cn(
                 "w-6 h-6 flex items-center justify-center flex-shrink-0 overlay",
                 isSelected
@@ -120,7 +112,6 @@ function FeedListItem({
                 )}
             </div>
 
-            {/* Feed Info */}
             <div className="flex-1 min-w-0">
                 <p className={cn(
                     "text-sm font-medium truncate",
@@ -129,7 +120,6 @@ function FeedListItem({
                 </p>
             </div>
 
-            {/* Unread badge */}
             {feed.unreadCount > 0 && (
                 <span className={cn(
                     "text-[10px] font-bold px-1.5 py-0.5 flex-shrink-0",
@@ -161,8 +151,6 @@ function FeedListItem({
         </div>
     );
 }
-
-// ── Article Card ──
 
 function ArticleCard({
     article,
@@ -212,7 +200,7 @@ function ArticleCard({
             label: "Copy Link",
             icon: <Link2 className="w-4 h-4" />,
             onClick: () => {
-                navigator.clipboard.writeText(article.url || "").catch(() => {});
+                navigator.clipboard.writeText(article.url || "").catch(e => console.error("[catch]", e));
             },
         },
         ...(onToggleRead ? [{
@@ -240,7 +228,7 @@ function ArticleCard({
             <div
                 onClick={onRead}
                 className={cn(
-                    "group p-4 sm:p-5 border transition-all duration-200 cursor-pointer",
+                    "group p-4 sm:p-5 border transition-colors duration-200 cursor-pointer",
                     article.isRead
                         ? "border-transparent bg-[var(--color-surface-muted)]/30 opacity-70 hover:opacity-100"
                         : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]/30 hover:shadow-sm",
@@ -248,9 +236,9 @@ function ArticleCard({
                 )}
             >
                 <div className="flex gap-4 sm:gap-5">
-                    {/* Article Content */}
+                    
                     <div className="flex-1 min-w-0">
-                        {/* Meta line */}
+                        
                         <div className="flex items-center gap-2 mb-2">
                             {feedTitle && (
                                 <span className="text-[10px] uppercase font-bold tracking-wider text-[color:var(--color-accent)]">
@@ -267,7 +255,6 @@ function ArticleCard({
                             )}
                         </div>
 
-                        {/* Title */}
                         <h3 className={cn(
                             "text-base font-semibold line-clamp-2 mb-2 leading-tight",
                             article.isRead
@@ -277,15 +264,13 @@ function ArticleCard({
                             {article.title}
                         </h3>
 
-                        {/* Summary */}
                         {summaryHtml && (
                             <div
                                 className="text-sm text-[color:var(--color-text-muted)] line-clamp-2 leading-relaxed [&_p]:inline [&_a]:text-[color:var(--color-accent)] [&_a]:underline [&_strong]:font-bold [&_em]:italic [&_img]:hidden [&_figure]:hidden"
-                                dangerouslySetInnerHTML={{ __html: summaryHtml }}
+                                dangerouslySetInnerHTML={sanitizeHtmlForDisplay(summaryHtml)}
                             />
                         )}
 
-                        {/* Actions */}
                         <div className="flex items-center gap-2 mt-4">
                             {article.url && (
                                 <button
@@ -308,7 +293,6 @@ function ArticleCard({
                         </div>
                     </div>
 
-                    {/* Thumbnail */}
                     {article.imageUrl && (
                         <div className="hidden sm:block w-24 h-24 flex-shrink-0 overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)]">
                             <img
@@ -327,8 +311,6 @@ function ArticleCard({
         </ContextMenu>
     );
 }
-
-// ── Empty States ──
 
 function EmptyFeeds({ onAddFeed }: { onAddFeed: () => void }) {
     return (
@@ -373,8 +355,6 @@ function EmptyArticles({ feedTitle }: { feedTitle?: string }) {
     );
 }
 
-// ── Main Page ──
-
 export function FeedsPage() {
     const feeds = useRssStore((s) => s.feeds);
     const articles = useRssStore((s) => s.articles);
@@ -400,7 +380,6 @@ export function FeedsPage() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // Mobile View State: 'feeds' (sidebar) or 'articles' (content)
     const [showMobileList, setShowMobileList] = useState(() => {
         if (typeof window === "undefined") {
             return true;
@@ -492,7 +471,6 @@ export function FeedsPage() {
         articleVirtualizer.measure();
     }, [articleVirtualizer, displayedArticles.length, selectedFeedId, showMobileList]);
 
-    // Feed title lookup for article cards
     const feedTitleById = useMemo(() => {
         const map = new Map<string, string>();
         for (const feed of feeds) {
@@ -507,16 +485,16 @@ export function FeedsPage() {
             if (result) {
                 setIsAddModalOpen(false);
                 setSelectedFeedId(result.id);
-                setShowMobileList(false); // Switch to articles view on mobile
+                setShowMobileList(false); 
             }
         } catch (e) {
-            // Error handling in store
+            
         }
     }, [addFeed]);
 
     const handleSelectFeed = useCallback((id: string | null) => {
         setSelectedFeedId(id);
-        setShowMobileList(false); // Switch to articles view on mobile
+        setShowMobileList(false); 
     }, []);
 
     const handleRefreshAll = useCallback(async () => {
@@ -528,17 +506,15 @@ export function FeedsPage() {
     const handleDeleteFeed = useCallback((feedId: string) => {
         if (selectedFeedId === feedId) {
             setSelectedFeedId(null);
-            setShowMobileList(true); // Go back to list if current feed deleted
+            setShowMobileList(true); 
         }
         removeFeed(feedId);
     }, [removeFeed, selectedFeedId]);
 
-    // Back handler for mobile
     const handleBackToFeeds = () => {
         setShowMobileList(true);
     };
 
-    // Initial Empty State
     if (feeds.length === 0 && !isLoading) {
         return (
             <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
@@ -556,17 +532,16 @@ export function FeedsPage() {
 
     return (
         <div className="h-full w-full flex overflow-hidden bg-[var(--color-background)]">
-            {/* Left Sidebar: Feed List */}
-            {/* Functional check: show if desktop OR (mobile and showMobileList is true) */}
+            
             <div className={cn(
-                "flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]/50",
-                "h-full flex-shrink-0 transition-all duration-300",
-                // Mobile: full width if visible, else hidden
+                "flex-col border-r border-[var(--color-border)] bg-[var(--color-background)]",
+                "h-full flex-shrink-0 transition-colors duration-300",
+                
                 showMobileList ? "flex w-full" : "hidden",
-                // Desktop: always flex, fixed width
+                
                 "md:flex md:w-64"
             )}>
-                {/* Sidebar Header (Simplified) */}
+                
                 <div className="px-4 pt-8 pb-4 flex items-center justify-between">
                     <h2 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">
                         Subscriptions
@@ -580,8 +555,7 @@ export function FeedsPage() {
                     </button>
                 </div>
 
-                {/* Feed List */}
-                <div ref={feedListScrollRef} className="flex-1 overflow-y-auto">
+                <div ref={feedListScrollRef} className="flex-1 overflow-y-auto [content-visibility:auto] overscroll-contain">
                     <div className="p-2">
                         <div
                             className="relative w-full"
@@ -640,20 +614,18 @@ export function FeedsPage() {
                 </div>
             </div>
 
-            {/* Right Content: Articles */}
-            {/* Functional check: show if desktop OR (mobile and showMobileList is false) */}
             <div className={cn(
                 "flex-col min-w-0 bg-[var(--color-background)]",
-                "h-full flex-1 transition-all duration-300",
-                // Mobile: full width if visible, else hidden
+                "h-full flex-1 transition-colors duration-300",
+                
                 !showMobileList ? "flex" : "hidden",
-                // Desktop: always flex
+                
                 "md:flex"
             )}>
-                {/* Page Header Area */}
+                
                 <header className="shrink-0 px-4 sm:px-6 pt-8 pb-4 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                        {/* Mobile Back Button */}
+                        
                         <button
                             onClick={handleBackToFeeds}
                             className="md:hidden -ml-2 p-1.5 shrink-0 text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
@@ -685,8 +657,7 @@ export function FeedsPage() {
                     </button>
                 </header>
 
-                {/* Scrollable Article List */}
-                <div ref={articleListScrollRef} className="flex-1 overflow-y-auto">
+                <div ref={articleListScrollRef} className="flex-1 overflow-y-auto [content-visibility:auto] overscroll-contain">
                     {isLoading && feeds.length === 0 ? (
                         <div className="flex items-center justify-center h-full">
                             <Loader2 className="w-6 h-6 animate-spin text-[color:var(--color-text-muted)]" />

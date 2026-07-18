@@ -97,7 +97,6 @@ src/features/reader/foliate-js/vendor/pdfjs/
 # TTS model files (large binaries, not tracked in git)
 src-tauri/models/
 *.wav
-*.onnx
 
 # AppImage extraction artifacts
 *.AppImage

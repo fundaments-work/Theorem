@@ -1,26 +1,32 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { RouteErrorBoundary, KeyboardShortcutsHelp, ContextMenuRoot } from "./ui";
+import { RouteErrorBoundary, KeyboardShortcutsHelp, AlertDialog } from "./ui";
 import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
 import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
 import { initReaderStyles } from "./core/lib/design-tokens";
-import { ensureResponderSyncReady, startAutoSync, stopAutoSync } from "./core/lib/sync-orchestrator";
 import { importBooksIncremental, getBookFormat, isImportFormatSupported } from "./core/lib/import";
 import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
 import { initI18n } from "./core/lib/i18n";
-import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
-import { prewarmFoliateRuntime } from "./core/lib/foliate-runtime";
 import { OnboardingFlow } from "./features/onboarding";
+import { Toaster } from "sonner";
 
 const LibraryPage = lazy(() =>
     import("./features/library").then((module) => ({ default: module.LibraryPage })),
 );
 const loadReaderPage = () => import("./features/reader");
+let _readerChunkPromise: Promise<typeof import("./features/reader")> | null = null;
+function getReaderChunk(): Promise<typeof import("./features/reader")> {
+    if (!_readerChunkPromise) _readerChunkPromise = loadReaderPage();
+    return _readerChunkPromise;
+}
 const ReaderPage = lazy(() =>
-    loadReaderPage().then((module) => ({ default: module.ReaderPage })),
+    getReaderChunk().then((module) => ({ default: module.ReaderPage })),
 );
+export function prewarmReaderChunk(): void {
+    void getReaderChunk();
+}
 const VocabularyPage = lazy(() =>
     import("./features/vocabulary").then((module) => ({ default: module.VocabularyPage })),
 );
@@ -47,8 +53,8 @@ const DESKTOP_STARTUP_MIN_HEIGHT = 720;
 
 function PageFallback() {
     return (
-        <div className="flex h-full w-full items-center justify-center text-[color:var(--color-text-secondary)]">
-            Loading...
+        <div className="flex h-full w-full items-center justify-center">
+            <div className="w-8 h-8 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
         </div>
     );
 }
@@ -68,14 +74,46 @@ function App() {
     const mainScrollRef = useRef<HTMLElement>(null);
     const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
     const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
-    const hasCompletedOnboarding = useSettingsStore((state) => state.settings.hasCompletedOnboarding);
     const autoSyncEnabled = useSettingsStore((state) => state.settings.deviceSync?.autoSyncEnabled ?? true);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+    const [alertInfo, setAlertInfo] = useState<{ title: string; message: string } | null>(null);
+
+    const [storesHydrated, setStoresHydrated] = useState(() =>
+        useSettingsStore.persist.hasHydrated(),
+    );
+
+    useEffect(() => {
+        if (storesHydrated) return;
+        let cancelled = false;
+        const done = () => { if (!cancelled) setStoresHydrated(true); };
+        const timeout = setTimeout(done, 3000);
+        const unsub = useSettingsStore.subscribe(() => {
+            if (cancelled) return;
+            if (useSettingsStore.persist.hasHydrated()) {
+                clearTimeout(timeout);
+                done();
+            }
+        });
+        return () => {
+            cancelled = true;
+            clearTimeout(timeout);
+            unsub();
+        };
+    }, [storesHydrated]);
+
+    const hasCompletedOnboardingStore = useSettingsStore(
+        (state) => state.settings.hasCompletedOnboarding,
+    );
+    
+    const hasCompletedOnboarding =
+        typeof localStorage !== "undefined" &&
+        localStorage.getItem("theorem-onboarding-complete") === "true"
+            ? true
+            : hasCompletedOnboardingStore;
 
     useKeyboardShortcuts(currentRoute);
 
-    // Register app-level keyboard shortcuts
     useEffect(() => {
         return registerShortcuts("app", [
             {
@@ -84,7 +122,7 @@ function App() {
                 category: "App",
                 handler: () => setShowShortcutsHelp((prev) => !prev),
             },
-            // Navigation
+            
             { label: "Go to Library",       keys: "Ctrl+1", category: "Navigation", handler: () => setRoute("library") },
             { label: "Go to Shelves",       keys: "Ctrl+2", category: "Navigation", handler: () => setRoute("shelves") },
             { label: "Go to Feeds",         keys: "Ctrl+3", category: "Navigation", handler: () => setRoute("feeds") },
@@ -93,18 +131,18 @@ function App() {
             { label: "Go to Workbench",     keys: "Ctrl+6", category: "Navigation", handler: () => setRoute("annotations") },
             { label: "Go to Bookmarks",     keys: "Ctrl+7", category: "Navigation", handler: () => setRoute("bookmarks") },
             { label: "Go to Settings",      keys: "Ctrl+,", category: "Navigation", handler: () => setRoute("settings") },
-            // Search & Filter
+            
             { label: "Find / Search",       keys: "Ctrl+F", category: "Search",     handler: () => {
                 const route = useUIStore.getState().currentRoute;
-                if (route === "reader") return; // handled by reader engine
+                if (route === "reader") return; 
                 const searchInput = document.querySelector<HTMLInputElement>('input[placeholder*="Search"]');
                 if (searchInput) { searchInput.focus(); searchInput.select(); }
             }},
-            // Sidebar
+            
             { label: "Toggle sidebar",      keys: "Ctrl+B", category: "App",        handler: () => {
                 useUIStore.getState().toggleSidebar();
             }},
-            // Library actions
+            
             { label: "Select all",          keys: "Ctrl+A", category: "Library",    handler: () => {
                 const route = useUIStore.getState().currentRoute;
                 if (route !== "library" && route !== "shelves" && route !== "bookmarks") return;
@@ -116,6 +154,9 @@ function App() {
 
     const handleOnboardingComplete = useCallback(() => {
         updateSettings({ hasCompletedOnboarding: true });
+        if (typeof localStorage !== "undefined") {
+            localStorage.setItem("theorem-onboarding-complete", "true");
+        }
     }, [updateSettings]);
 
     useEffect(() => {
@@ -124,29 +165,26 @@ function App() {
         }
     }, [currentRoute, setRoute, vocabularyEnabled]);
 
-    // Handle system back button / browser history
     useEffect(() => {
         if (typeof window === "undefined") return;
 
-        // Initialize history state for the initial landing page
         window.history.replaceState({ route: currentRoute, bookId: useUIStore.getState().currentBookId }, "");
 
         const handlePopState = (event: PopStateEvent) => {
             const state = event.state;
             const currentUIState = useUIStore.getState();
 
-            // Ignore our internal back interceptor states
             if (state && state.__theorem_back) {
                 return;
             }
 
             if (state && state.route) {
-                // Only update if the route or book has actually changed
+                
                 if (state.route !== currentUIState.currentRoute || state.bookId !== currentUIState.currentBookId) {
                     setRoute(state.route, state.bookId, false);
                 }
             } else if (!state) {
-                // If we land on a null state (beginning of history), default to library
+                
                 if (currentUIState.currentRoute !== "library") {
                     setRoute("library", undefined, false);
                 }
@@ -155,9 +193,8 @@ function App() {
 
         window.addEventListener("popstate", handlePopState);
         return () => window.removeEventListener("popstate", handlePopState);
-    }, [setRoute]); // Only setup once, but include setRoute in deps for safety
+    }, [setRoute]); 
 
-    // Handle desktop file associations ("Open With Theorem") via Tauri.
     useEffect(() => {
         if (!isTauri() || typeof window === "undefined") {
             return;
@@ -218,7 +255,7 @@ function App() {
                 if (importedBook) {
                     useUIStore.getState().setRoute("reader", importedBook.id);
                 } else if (failures.length > 0) {
-                    window.alert(`Failed to open file.\n\n${failures[0]?.source}\n${failures[0]?.message}`);
+                    setAlertInfo({ title: "Open File Error", message: `Failed to open file.\n\n${failures[0]?.source}\n${failures[0]?.message}` });
                 } else {
                 }
             }
@@ -259,108 +296,57 @@ function App() {
         };
     }, []);
 
-    // Initialize reader styles on app load
     useEffect(() => {
         initReaderStyles(useSettingsStore.getState().settings.readerSettings);
-    }, []); // Only on mount - the store's onRehydrate will handle persisted settings
+    }, []);
 
-    // Initialize i18n on app load
     useEffect(() => {
         void initI18n();
     }, []);
 
-    useEffect(() => {
-        if (typeof window === "undefined") {
-            return;
-        }
-
-        type IdleCapableWindow = Window & typeof globalThis & {
-            requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
-            cancelIdleCallback?: (handle: number) => void;
-        };
-
-        const idleWindow = window as IdleCapableWindow;
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
-        let idleHandle: number | null = null;
-        let cancelled = false;
-
-        const warmPdfRuntime = () => {
-            if (cancelled) {
-                return;
-            }
-            void prewarmPdfJsRuntime();
-            void prewarmFoliateRuntime();
-            void loadReaderPage();
-        };
-
-        if (idleWindow.requestIdleCallback) {
-            idleHandle = idleWindow.requestIdleCallback(
-                () => warmPdfRuntime(),
-                { timeout: 1800 },
-            );
-        } else {
-            timeoutId = setTimeout(warmPdfRuntime, 900);
-        }
-
-        return () => {
-            cancelled = true;
-            if (idleHandle !== null && idleWindow.cancelIdleCallback) {
-                idleWindow.cancelIdleCallback(idleHandle);
-            }
-            if (timeoutId !== null) {
-                clearTimeout(timeoutId);
-            }
-        };
-    }, []);
-
-    // On Android, initialize the device fingerprint (ANDROID_ID) for stable
-    // device identity across installs. No-op on desktop where machine-id is used.
     useEffect(() => {
         if (!isTauri()) {
             return;
         }
         const initFingerprint = async () => {
             const { invoke } = await import("@tauri-apps/api/core");
-            await invoke("set_android_fingerprint").catch(() => {});
+            await invoke("set_android_fingerprint").catch(e => console.error("[catch]", e));
         };
         void initFingerprint();
     }, []);
 
-    // Start the sync server + auto-sync scheduler when auto-sync is enabled.
-    // The sync server is also started on-demand from DeviceSync.tsx when the
-    // user opens the sync settings page (for pairing/manual sync).
     useEffect(() => {
         if (!isTauri() || !hasCompletedOnboarding) {
             return;
         }
 
         let cancelled = false;
+        let bridgeCleanup: (() => void) | null = null;
+        let cleanupStopSync: (() => void) | null = null;
         const bootstrap = async () => {
-            if (cancelled || !autoSyncEnabled) {
+            if (cancelled) return;
+
+            const syncModule = await import("./core/lib/sync-orchestrator");
+
+            if (!autoSyncEnabled) {
+                syncModule.stopAutoSync();
                 return;
             }
-            // Step 1: Start sync server so peers can push data to us.
+
             try {
-                await ensureResponderSyncReady();
-            } catch {
-                // Sync server unavailable on this device.
-            }
+                await syncModule.ensureResponderSyncReady();
+            } catch {}
             if (cancelled) return;
-            // Step 2: Start JS-based auto-sync scheduler.
+
             try {
-                await startAutoSync();
-            } catch {
-                // Auto-sync scheduling unavailable.
-            }
-            // Step 3: Start Rust background sync loop.
-            if (!cancelled) {
-                try {
-                    const { startBackgroundSync } = await import("./core/lib/device-sync");
-                    await startBackgroundSync(300);
-                } catch {
-                    // Background sync not available on this platform.
-                }
-            }
+                bridgeCleanup = syncModule.subscribeZustandToIrohDocs();
+            } catch {}
+
+            try {
+                await syncModule.startAutoSync();
+            } catch {}
+
+            cleanupStopSync = syncModule.stopAutoSync;
         };
 
         const timer = setTimeout(() => {
@@ -370,14 +356,12 @@ function App() {
         return () => {
             cancelled = true;
             clearTimeout(timer);
-            stopAutoSync();
-            import("./core/lib/device-sync").then((mod) => {
-                mod.stopBackgroundSync().catch(() => {});
-            }).catch(() => {});
+            bridgeCleanup?.();
+            cleanupStopSync?.();
+            import("./core/lib/device-sync").then(m => m.irohStop()).catch(() => {});
         };
     }, [hasCompletedOnboarding, autoSyncEnabled]);
 
-    // Ensure the desktop window doesn't start in a mobile-like size.
     useEffect(() => {
         if (!isTauriDesktop()) {
             return;
@@ -408,10 +392,8 @@ function App() {
         };
     }, []);
 
-    // Check if we're in reader mode (full screen, no sidebar)
     const isReaderMode = currentRoute === "reader";
 
-    // Reset scroll position when navigating between non-reader pages.
     useEffect(() => {
         if (isReaderMode) {
             return;
@@ -444,8 +426,10 @@ function App() {
         }
     };
 
-    // Reader mode: full screen without sidebar
-    // Onboarding flow for first-time users
+    if (!storesHydrated) {
+        return <PageFallback />;
+    }
+
     if (!hasCompletedOnboarding) {
         return <OnboardingFlow onComplete={handleOnboardingComplete} />;
     }
@@ -463,18 +447,17 @@ function App() {
     const isMobileDevice = isMobile();
 
     return (
+        <>
         <div className="flex h-screen min-h-[100dvh] bg-[var(--color-background)]">
-            {/* Sidebar - Shows on md screens and up (tablets and laptops) */}
+            
             <div className="hidden md:block">
                 <Sidebar isMobile={isMobileDevice} />
             </div>
 
-            {/* Main Content */}
             <div className="relative flex-1 flex flex-col min-w-0">
                 <AppTitlebar title="Theorem" />
 
-                {/* Page Content */}
-                <main id="app-main" ref={mainScrollRef} className="flex-1 overflow-y-auto pb-16 md:pb-0 md:px-8 md:py-6 custom-scrollbar">
+                <main id="app-main" ref={mainScrollRef} className="flex flex-1 flex-col overflow-y-auto pb-16 md:pb-0 md:px-8 md:py-6 custom-scrollbar overscroll-contain">
                     <RouteErrorBoundary>
                         <Suspense fallback={<PageFallback />}>
                             {renderPage()}
@@ -483,7 +466,6 @@ function App() {
                 </main>
             </div>
 
-            {/* Mobile Navigation - outside overflow container for reliable fixed positioning on all mobile browsers */}
             <BottomNav />
 
             <KeyboardShortcutsHelp
@@ -491,8 +473,19 @@ function App() {
                 onClose={() => setShowShortcutsHelp(false)}
             />
             
-            <ContextMenuRoot />
         </div>
+            <Toaster position="bottom-right" />
+
+            {alertInfo && (
+                <AlertDialog
+                    isOpen={!!alertInfo}
+                    title={alertInfo.title}
+                    message={alertInfo.message}
+                    okLabel="OK"
+                    onClose={() => setAlertInfo(null)}
+                />
+            )}
+        </>
     );
 }
 

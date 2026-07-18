@@ -1,5 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+
+import { useState } from "react";
 import { ChevronDown, Check } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { cn } from "../core/lib/utils";
 
 export interface DropdownOption<T = string> {
@@ -24,22 +26,18 @@ export interface DropdownProps<T = string> {
     showCheckmark?: boolean;
 }
 
-const sizeClasses = {
+const sizeClasses: Record<string, string> = {
     sm: "px-3 py-1.5 text-sm",
     md: "px-4 py-2 text-sm",
     lg: "px-4 py-2.5 text-base",
 };
 
-const variantClasses = {
+const variantClasses: Record<string, string> = {
     default: "bg-[var(--color-surface)] border-2 border-[var(--color-border)]",
     filled: "bg-[var(--color-surface-muted)] border-2 border-[var(--color-border)]",
     outlined: "bg-transparent border-2 border-[var(--color-border)]",
 };
 
-/**
- * Custom Dropdown Component
- * Replaces native <select> with styled dropdown matching the app's design system
- */
 export function Dropdown<T extends string = string>({
     options,
     value,
@@ -55,140 +53,74 @@ export function Dropdown<T extends string = string>({
     openUp = false,
     showCheckmark = true,
 }: DropdownProps<T>) {
-    const [isOpen, setIsOpen] = useState(false);
     const [internalValue, setInternalValue] = useState<T | undefined>(defaultValue);
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    const isControlled = value !== undefined;
-    const selectedValue = isControlled ? value : internalValue;
+    const selectedValue = value !== undefined ? value : internalValue;
     const selectedOption = options.find((opt) => opt.value === selectedValue);
 
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-
-        if (isOpen) {
-            document.addEventListener("mousedown", handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [isOpen]);
-
-    // Close on escape key
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "Escape") {
-                setIsOpen(false);
-            }
-        };
-
-        if (isOpen) {
-            document.addEventListener("keydown", handleKeyDown);
-        }
-
-        return () => {
-            document.removeEventListener("keydown", handleKeyDown);
-        };
-    }, [isOpen]);
-
-    const handleSelect = (optionValue: T) => {
-        const option = options.find((opt) => opt.value === optionValue);
-        if (option?.disabled) return;
-
-        if (!isControlled) {
-            setInternalValue(optionValue);
-        }
-        onChange?.(optionValue);
-        setIsOpen(false);
-    };
-
     return (
-        <div ref={containerRef} className={cn("relative inline-block", className)}>
-            {/* Trigger Button */}
-            <button
-                type="button"
-                onClick={() => !disabled && setIsOpen(!isOpen)}
-                disabled={disabled}
-                className={cn(
-                    "flex items-center justify-between gap-2 w-full cursor-pointer focus-visible:outline-2 focus-visible:outline-[color:var(--color-focus-ring)] focus-visible:outline-offset-2",
-                    "text-[color:var(--color-text-primary)]",
-                    "transition-colors duration-200",
-                    "disabled:opacity-50 disabled:cursor-not-allowed",
-                    sizeClasses[size],
-                    variantClasses[variant],
-                    isOpen && "ring-2 ring-[var(--color-accent)]/50"
-                )}
-            >
-                <span className={cn("truncate", !selectedOption && "text-[color:var(--color-text-muted)]")}>
-                    {selectedOption?.label || placeholder}
-                </span>
-                <ChevronDown
+        <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild disabled={disabled}>
+                <button
+                    type="button"
                     className={cn(
-                        "w-4 h-4 text-[color:var(--color-text-muted)] flex-shrink-0 transition-transform duration-200",
-                        isOpen && "rotate-180"
+                        "flex items-center justify-between gap-2 w-full cursor-pointer",
+                        "focus-visible:outline-2 focus-visible:outline-[color:var(--color-focus-ring)] focus-visible:outline-offset-2",
+                        "text-[color:var(--color-text-primary)]",
+                        "transition-colors duration-200",
+                        "disabled:opacity-50 disabled:cursor-not-allowed",
+                        sizeClasses[size],
+                        variantClasses[variant],
+                        className,
                     )}
-                />
-            </button>
+                >
+                    <span className={cn("truncate", !selectedOption && "text-[color:var(--color-text-muted)]")}>
+                        {selectedOption?.label || placeholder}
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-[color:var(--color-text-muted)] flex-shrink-0 transition-transform duration-200 data-[state=open]:rotate-180" />
+                </button>
+            </DropdownMenu.Trigger>
 
-            {/* Dropdown Menu */}
-            {isOpen && (
-                <>
-                    {/* Backdrop for mobile/click-outside */}
-                    <div
-                        className="fixed inset-0 z-[var(--z-dropdown)]"
-                        onClick={() => setIsOpen(false)}
-                    />
-
-                    {/* Menu */}
-                    <div
-                        className={cn(
-                            "absolute z-[calc(var(--z-dropdown)+1)] min-w-full w-max",
-                            "border border-[var(--color-border)] bg-[var(--color-surface)]",
-                            "py-1 max-h-60 overflow-y-auto",
-                            openUp ? "bottom-full mb-1" : "top-full mt-1",
-                            align === "right" ? "right-0" : "left-0",
-                            dropdownClassName
-                        )}
-                    >
-                        {options.map((option) => {
-                            const isSelected = selectedValue === option.value;
-                            return (
-                                <button
-                                    key={String(option.value)}
-                                    type="button"
-                                    onClick={() => handleSelect(option.value)}
-                                    disabled={option.disabled}
-                                    className={cn(
-                                        "flex items-center justify-between gap-3 w-full px-3 py-2 text-left",
-                                        "text-sm transition-colors",
-                                        "disabled:opacity-40 disabled:cursor-not-allowed",
-                                        isSelected
-                                            ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
-                                            : "text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
-                                    )}
-                                >
-                                    <span className="truncate">{option.label}</span>
-                                    {showCheckmark && isSelected && (
-                                        <Check className="w-4 h-4 flex-shrink-0" />
-                                    )}
-                                </button>
-                            );
-                        })}
-
-                        {options.length === 0 && (
-                            <div className="px-3 py-2 text-sm text-[color:var(--color-text-muted)]">
-                                No options available
-                            </div>
-                        )}
-                    </div>
-                </>
-            )}
-        </div>
+            <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                    side={openUp ? "top" : "bottom"}
+                    align={align === "right" ? "end" : "start"}
+                    sideOffset={4}
+                    className={cn(
+                        "z-[calc(var(--z-dropdown)+1)] min-w-[--radix-dropdown-menu-trigger-width]",
+                        "border border-[var(--color-border)] bg-[var(--color-surface)]",
+                        "py-1 max-h-60 overflow-y-auto",
+                        dropdownClassName,
+                    )}
+                >
+                    {options.map((option) => {
+                        const isSelected = selectedValue === option.value;
+                        return (
+                            <DropdownMenu.Item
+                                key={String(option.value)}
+                                disabled={option.disabled}
+                                onSelect={() => {
+                                    if (!(value !== undefined)) setInternalValue(option.value);
+                                    onChange?.(option.value);
+                                }}
+                                className={cn(
+                                    "flex items-center justify-between gap-3 px-3 py-2 text-left text-sm",
+                                    "outline-none cursor-pointer transition-colors",
+                                    "data-[disabled]:opacity-40 data-[disabled]:cursor-not-allowed",
+                                    isSelected
+                                        ? "bg-[var(--color-accent-light)] text-[color:var(--color-accent)]"
+                                        : "text-[color:var(--color-text-secondary)] data-[highlighted]:bg-[var(--color-surface-muted)] data-[highlighted]:text-[color:var(--color-text-primary)]",
+                                )}
+                            >
+                                <span className="truncate">{option.label}</span>
+                                {showCheckmark && isSelected && <Check className="w-4 h-4 flex-shrink-0" />}
+                            </DropdownMenu.Item>
+                        );
+                    })}
+                    {options.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-[color:var(--color-text-muted)]">No options available</div>
+                    )}
+                </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+        </DropdownMenu.Root>
     );
 }

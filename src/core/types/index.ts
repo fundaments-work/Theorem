@@ -1,24 +1,15 @@
-/**
- * Theorem Type Definitions
- */
 
-// Book format types used in library metadata.
-// Note: "cbr" is kept for backward compatibility with previously imported entries.
 export type BookFormat = "epub" | "mobi" | "azw" | "azw3" | "fb2" | "cbz" | "cbr" | "pdf";
 
-// Format categories for UI behavior
 export const FIXED_LAYOUT_FORMATS: BookFormat[] = ["cbz", "cbr", "pdf"];
 export const REFLOWABLE_FORMATS: BookFormat[] = ["epub", "mobi", "azw", "azw3", "fb2"];
 
-// Helper to check if format has fixed layout (no font/size controls, uses zoom instead)
 export const isFixedLayout = (format: BookFormat): boolean =>
     FIXED_LAYOUT_FORMATS.includes(format);
 
-// Helper to check if format is reflowable (supports font/size controls)
 export const isReflowable = (format: BookFormat): boolean =>
     REFLOWABLE_FORMATS.includes(format);
 
-// Format display names
 export const FORMAT_DISPLAY_NAMES: Record<BookFormat, string> = {
     epub: 'EPUB',
     mobi: 'MOBI',
@@ -30,7 +21,6 @@ export const FORMAT_DISPLAY_NAMES: Record<BookFormat, string> = {
     pdf: 'PDF',
 };
 
-// Format icons or colors could be added here
 export const FORMAT_COLORS: Record<BookFormat, string> = {
     epub: "#111111",
     mobi: "#2b2b2b",
@@ -42,7 +32,6 @@ export const FORMAT_COLORS: Record<BookFormat, string> = {
     pdf: "#7a7a7a",
 };
 
-// Highlight Colors type - values are defined in design-tokens
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'red' | 'orange' | 'purple';
 
 export type PdfZoomMode = "custom" | "page-fit" | "width-fit";
@@ -54,13 +43,12 @@ export interface PdfViewState {
     zoomMode: PdfZoomMode;
 }
 
-// Book Entity
 export interface Book {
     id: string;
     title: string;
     author: string;
     filePath: string;
-    storagePath?: string; // Internal storage path for Tauri
+    storagePath?: string; 
     format: BookFormat;
     contentHash?: string;
     coverPath?: string;
@@ -73,10 +61,10 @@ export interface Book {
     fileSize: number;
     addedAt: Date;
     lastReadAt?: Date;
-    progress: number; // 0-1
-    currentLocation?: string; // EPUB CFI
-    lastClickFraction?: number; // 0-1 - last position clicked on progress bar for visual consistency
-    // Page-based progress (stored for instant correct display on reopen)
+    progress: number; 
+    currentLocation?: string; 
+    lastClickFraction?: number; 
+    
     pageProgress?: {
         currentPage: number;
         endPage?: number;
@@ -84,35 +72,35 @@ export interface Book {
         range: string;
     };
     pdfViewState?: PdfViewState;
-    locations?: string; // Serialized locations JSON string
+    locations?: string; 
     category?: string;
     tags: string[];
-    rating?: number; // 1-5
+    rating?: number; 
     isFavorite: boolean;
-    // Explicit user override for read status.
-    // "read"/"unread" takes precedence over automatic completion derived from progress.
+    
     manualCompletionState?: "read" | "unread";
-    // Snapshot of progress before the latest finished state, restored on "unfinish".
+    
     progressBeforeFinish?: number;
-    // Statistics
-    readingTime: number; // in minutes
-    completedAt?: Date; // When the book was marked completed (auto or manual)
-    // Sync metadata: set when this book arrived from a peer device without a local file.
-    // The book's filePath/storagePath point to the remote device's paths and are not usable locally.
+    
+    readingTime: number; 
+    completedAt?: Date; 
+    
     syncedWithoutFile?: boolean;
+    
+    blobHash?: string;
+    
+    coverBlobHash?: string;
 }
 
-// Reading Progress
 export interface ReadingProgress {
     bookId: string;
     location: string;
     percentage: number;
     lastUpdated: Date;
-    readingTime: number; // in minutes
+    readingTime: number; 
     pagesRead: number;
 }
 
-// Annotation Types
 export interface Annotation {
     id: string;
     bookId: string;
@@ -124,7 +112,7 @@ export interface Annotation {
     color?: HighlightColor;
     createdAt: Date;
     updatedAt?: Date;
-    // PDF-specific
+    
     pageNumber?: number;
     pdfAnnotationType?: 'highlight' | 'drawing' | 'textNote';
     drawingData?: string;
@@ -134,7 +122,6 @@ export interface Annotation {
     strokeWidth?: number;
 }
 
-// Collection Types
 export interface Collection {
     id: string;
     name: string;
@@ -145,22 +132,17 @@ export interface Collection {
     updatedAt?: Date;
 }
 
-// Deletion Tombstone — records that an entity was intentionally deleted so
-// peer devices can honour the deletion during sync instead of re-creating
-// the entity from their own copy.  Tombstones are kept for a bounded period
-// (default 90 days) and then garbage-collected.
-export type TombstoneEntity = "book" | "annotation" | "collection" | "feed" | "rss_article";
+export type TombstoneEntity = "book" | "annotation" | "collection" | "feed" | "rss_article" | "vocabulary" | "collection_book";
 
 export interface DeletionTombstone {
-    /** ID of the deleted entity (book.id / annotation.id / collection.id). */
+    
     entityId: string;
-    /** What kind of entity was deleted. */
+    
     entityType: TombstoneEntity;
-    /** ISO-8601 timestamp of when the deletion happened. */
+    
     deletedAt: string;
 }
 
-// Reader Settings
 export type ReaderTheme = "light" | "sepia" | "dark";
 export type FontFamily = "original" | "serif" | "sans" | "mono";
 export type ReadingFlow = "paged" | "scroll" | "auto";
@@ -170,79 +152,89 @@ export type PageAnimation = "slide" | "fade" | "instant";
 export interface ReaderSettings {
     theme: ReaderTheme;
     fontFamily: FontFamily;
-    fontSize: number; // 12-36
-    lineHeight: number; // 1.0-2.5
-    letterSpacing: number; // -0.05 to 0.2
-    paragraphSpacing: number; // 0-2
+    fontSize: number; 
+    lineHeight: number; 
+    letterSpacing: number; 
+    paragraphSpacing: number; 
     textAlign: "left" | "justify" | "center";
     hyphenation: boolean;
-    margins: number; // percentage 0-35
+    margins: number; 
     flow: ReadingFlow;
     layout: PageLayout;
-    brightness: number; // 0-100
+    brightness: number; 
     fullscreen: boolean;
     pageAnimation: PageAnimation;
     toolbarAutoHide: boolean;
-    autoHideDelay: number; // seconds
-    zoom: number; // 50-200, percentage
-    wordSpacing: number; // 0-0.5em
-    forcePublisherStyles: boolean; // Override book's CSS
-    // Performance settings
-    prefetchDistance: number; // Number of sections to prefetch (1-3)
+    autoHideDelay: number; 
+    zoom: number; 
+    wordSpacing: number; 
+    forcePublisherStyles: boolean; 
+    
+    prefetchDistance: number; 
     enableAnimations: boolean;
-    virtualScrolling: boolean; // For very long documents
+    virtualScrolling: boolean; 
 }
 
-// Library Settings Types
 export type LibraryViewMode = "grid" | "list" | "compact";
 export type LibrarySortBy = "title" | "author" | "dateAdded" | "lastRead" | "progress" | "rating";
 export type LibrarySortOrder = "asc" | "desc";
 
-// App Settings
 export interface AppSettings {
     sidebarCollapsed: boolean;
     libraryViewMode: LibraryViewMode;
     librarySortBy: LibrarySortBy;
     librarySortOrder: LibrarySortOrder;
     scanFolders: string[];
-    cacheSize: number; // MB
+    cacheSize: number; 
     theme: "light" | "dark" | "system";
+    accentColor: string;
     readerSettings: ReaderSettings;
     vocabulary: VocabularySettings;
     tts: TtsSettings;
     vault: VaultIntegrationSettings;
     deviceSync: DeviceSyncSettings;
     hasCompletedOnboarding: boolean;
+    showDailyHighlight: boolean;
+    speedReadEnabled: boolean;
 }
-
-// ─── LAN Device Sync ───
 
 export interface PairedDevice {
     deviceId: string;
     deviceName: string;
+    
+    irohNodeId: string;
     lastIp: string;
     lastPort: number;
     pairedAt: string;
     lastSyncAt?: string;
+    
+    fingerprint?: string;
+    
+    peerRelayUrl?: string;
+    
+    syncDocId?: string;
+    
+    syncDocTicket?: string;
 }
 
 export interface DeviceSyncSettings {
-    /** This device's unique ID (generated once at first sync setup). */
+    
     deviceId: string;
-    /** Human-readable name for this device. */
+    
     deviceName: string;
-    /** List of paired peer devices. */
+    
     pairedDevices: PairedDevice[];
-    /** Auto-sync when peer is discovered on the network. */
+    
     syncOnConnect: boolean;
-    /** Enable periodic background auto-sync. */
+    
     autoSyncEnabled: boolean;
 }
 
 export interface DeviceIdentityInfo {
-    device_id: string;
-    device_name: string;
-    public_key_hex: string;
+    deviceId: string;
+    deviceName: string;
+    publicKeyHex: string;
+    fingerprint?: string;
 }
 
 export interface SyncServerInfo {
@@ -252,13 +244,22 @@ export interface SyncServerInfo {
 }
 
 export interface PairingQrData {
-    qr_svg: string;
-    pairing_code: string;
+    qrSvg: string;
+    pairingCode: string;
 }
 
 export type DeviceSyncStatus = "idle" | "hosting" | "pairing" | "connecting" | "syncing" | "synced" | "error";
 
-export type DictionaryProvider = "stardict";
+export interface SyncConflict {
+    entityType: string;
+    entityId: string;
+    
+    winner: "local" | "remote";
+    
+    label?: string;
+}
+
+export type DictionaryProvider = "stardict" | "free-dictionary-api";
 
 export interface VocabularySettings {
     vocabularyEnabled: boolean;
@@ -276,8 +277,7 @@ export interface VaultIntegrationSettings {
     enabled: boolean;
     vaultPath: string;
     autoExportHighlights: boolean;
-    // Legacy key name kept for persisted-settings compatibility.
-    // Stores the highlights export base name used for `<name>-books`.
+    
     highlightsFileName: string;
     vocabularyFileName: string;
 }
@@ -316,33 +316,30 @@ export interface InstalledDictionary {
     importedAt: Date;
 }
 
-// Daily reading activity entry
 export interface DailyReadingActivity {
-    date: string; // ISO date string YYYY-MM-DD
+    date: string; 
     minutes: number;
-    booksRead: string[]; // book IDs read that day
+    booksRead: string[]; 
 }
 
-// Reading Statistics
 export interface ReadingStats {
-    totalReadingTime: number; // minutes
+    totalReadingTime: number; 
     booksCompleted: number;
-    averageReadingSpeed: number; // words per minute
-    currentStreak: number; // days
-    longestStreak: number; // days
-    dailyGoal: number; // minutes
+    averageReadingSpeed: number; 
+    currentStreak: number; 
+    longestStreak: number; 
+    dailyGoal: number; 
     yearlyBookGoal: number;
     booksReadThisYear: number;
-    dailyActivity: DailyReadingActivity[]; // Last 84 days (12 weeks) for heatmap
-    lastReadDate?: string; // ISO date of last reading session
+    dailyActivity: DailyReadingActivity[]; 
+    lastReadDate?: string; 
 }
 
-// ── RSS Types ──
 export interface RssFeed {
     id: string;
     title: string;
-    url: string;           // Feed URL
-    siteUrl?: string;      // Website URL
+    url: string;           
+    siteUrl?: string;      
     description?: string;
     iconUrl?: string;
     lastFetched?: Date;
@@ -356,8 +353,8 @@ export interface RssArticle {
     feedId: string;
     title: string;
     author?: string;
-    url: string;           // Article link
-    content: string;       // HTML content
+    url: string;           
+    content: string;       
     summary?: string;
     imageUrl?: string;
     publishedAt?: Date;
@@ -366,10 +363,8 @@ export interface RssArticle {
     isFavorite: boolean;
 }
 
-// Navigation
 export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds";
 
-// UI State
 export interface UIState {
     currentRoute: AppRoute;
     currentBookId?: string;
@@ -387,9 +382,12 @@ export interface UIState {
     deviceSyncStatus: DeviceSyncStatus;
     deviceSyncMessage?: string;
     deviceSyncAt?: string;
+    
+    downloadingBookId?: string;
+    
+    hasHydrated: boolean;
 }
 
-// Document Engine Types
 export interface DocLocation {
     cfi: string;
     percentage: number;
@@ -400,13 +398,13 @@ export interface DocLocation {
     pageItem?: {
         label: string;
     };
-    // Page-based location for accurate progress display
+    
     pageInfo?: {
-        currentPage: number;      // First visible page number
-        endPage?: number;         // Last visible page number (for spread view)
-        totalPages: number;       // Total pages in book
-        range?: string;           // Formatted range like "5-6"
-        isEstimated?: boolean;    // True if using byte-based estimation (not exact locations)
+        currentPage: number;      
+        endPage?: number;         
+        totalPages: number;       
+        range?: string;           
+        isEstimated?: boolean;    
     };
 }
 
@@ -432,11 +430,10 @@ export interface SearchResult {
     excerpt: string;
 }
 
-// Book Section for progress bar
 export interface BookSection {
     label: string;
     href: string;
-    fraction: number; // 0-1 position in book
+    fraction: number; 
     index: number;
 }
 
@@ -459,5 +456,4 @@ export interface ThemeSettings {
     forcePublisherStyles?: boolean;
 }
 
-// Re-export for backward compatibility
 export type { ThemeSettings as ReaderThemeSettings };

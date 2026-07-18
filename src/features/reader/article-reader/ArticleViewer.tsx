@@ -1,4 +1,5 @@
 import {
+    memo,
     useCallback,
     useEffect,
     useMemo,
@@ -9,6 +10,7 @@ import { cn } from "../../../core/lib/utils";
 import { HIGHLIGHT_COLOR_TOKENS } from "../../../core/lib/design-tokens";
 import { vocabularyTermFromLookup, type DictionaryLookupResult } from "../../../core/services/DictionaryService";
 import { useVocabularyStore, useLibraryStore, useSettingsStore } from "../../../core/store";
+import { useShallow } from "zustand/shallow";
 import type { Annotation, DocLocation, DocMetadata, HighlightColor, RssArticle, TocItem, ReaderSettings as ReaderSettingsState } from "../../../core/types";
 import { Backdrop } from "../../../ui";
 import {
@@ -25,7 +27,6 @@ import { ArticleReaderContent } from "./ArticleReaderContent";
 import { ArticleReaderInfoPanel } from "./ArticleReaderInfoPanel";
 import type { ArticleHeading, ArticleReaderPanel } from "./types";
 import { buildArticleDescription, formatArticleDate, sanitizeArticleHtml } from "./utils";
-
 
 interface ArticleViewerProps {
     article: RssArticle | null;
@@ -463,27 +464,30 @@ function applyHighlightToRange(
     const mark = createHighlightMark(highlightId, color);
 
     try {
-        // Fast path for simple inline selections.
+        
         workingRange.surroundContents(mark);
         return true;
     } catch {
-        // Fallback for complex multi-node selections.
+        
         return applyHighlightAcrossTextNodes(workingRange, contentRoot, highlightId, color);
     }
 }
 
-export function ArticleViewer({
+export const ArticleViewer = memo(function ArticleViewer({
     article,
     feedTitle,
     isOpen,
     onClose,
 }: ArticleViewerProps) {
+    const articleAnnotationBookId = article ? `rss:${article.id}` : "";
     const globalReaderSettings = useSettingsStore((state) => state.settings.readerSettings);
     const updateReaderSettings = useSettingsStore((state) => state.updateReaderSettings);
     const learningSettings = useSettingsStore((state) => state.settings.vocabulary);
     const lookupTerm = useVocabularyStore((state) => state.lookupTerm);
     const saveVocabularyTerm = useVocabularyStore((state) => state.saveVocabularyTerm);
-    const articleAnnotations = useLibraryStore((state) => state.annotations);
+    const annotations = useLibraryStore(useShallow(
+        (state) => state.getBookAnnotations(articleAnnotationBookId),
+    ));
     const addAnnotation = useLibraryStore((state) => state.addAnnotation);
     const updateAnnotation = useLibraryStore((state) => state.updateAnnotation);
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
@@ -521,14 +525,8 @@ export function ArticleViewer({
     const toolbarContainerRef = useRef<HTMLDivElement>(null);
     const selectedRangeRef = useRef<Range | null>(null);
     const selectionSnapshotRef = useRef<TextSelectionSnapshot | null>(null);
-    // Tracks which annotation IDs have already been backfilled with offset
-    // data so the backfill effect doesn't re-trigger itself via store updates.
+    
     const backfilledIdsRef = useRef<Set<string>>(new Set());
-    const articleAnnotationBookId = article ? `rss:${article.id}` : "";
-    const annotations = useMemo(
-        () => articleAnnotations.filter((entry) => entry.bookId === articleAnnotationBookId),
-        [articleAnnotationBookId, articleAnnotations],
-    );
     const bookmarkAnnotations = useMemo(
         () => annotations.filter((entry) => entry.type === "bookmark"),
         [annotations],
@@ -538,10 +536,6 @@ export function ArticleViewer({
         [annotations],
     );
 
-    // Stable sanitized HTML for the article body.  Lifted here so that
-    // both <ArticleReaderContent> and the restore effect share the exact
-    // same string reference, preventing unnecessary innerHTML resets
-    // that would destroy DOM-inserted highlight marks.
     const sanitizedContent = useMemo(
         () => sanitizeArticleHtml(article?.content || article?.summary || ""),
         [article?.content, article?.summary],
@@ -593,8 +587,6 @@ export function ArticleViewer({
             container.removeEventListener("scroll", handleScroll);
         };
     }, [article?.id, isOpen]);
-
-    // No auto-hide — chrome manually toggled via content tap
 
     const updateReaderSetting = useCallback((updates: Partial<ReaderSettingsState>) => {
         updateReaderSettings(updates);
@@ -850,7 +842,7 @@ export function ArticleViewer({
                 selection.removeAllRanges();
                 selection.addRange(resolvedRange);
             } catch {
-                // Ignore transient selection restoration errors.
+                
             }
         });
 
@@ -1124,20 +1116,12 @@ export function ArticleViewer({
         }
     }, []);
 
-    // ── Restore highlight marks ──
-    // This effect re-applies any missing <mark> wrappers whenever the
-    // article content or annotation list changes.  It intentionally does
-    // NOT backfill location offsets – that is handled by a separate,
-    // once-per-article effect below to avoid the infinite
-    // update → re-render → restore → update loop that was causing
-    // highlight disappearances.
     useEffect(() => {
         const contentRoot = contentRef.current;
         if (!contentRoot) {
             return;
         }
 
-        // Sync colours on marks that already exist in the DOM.
         const existingMarks = contentRoot.querySelectorAll<HTMLElement>("mark.article-highlight[data-highlight-id]");
         existingMarks.forEach((mark) => {
             const highlightId = mark.dataset.highlightId;
@@ -1151,7 +1135,6 @@ export function ArticleViewer({
             }
         });
 
-        // Re-insert marks for any annotations that are *missing* from the DOM.
         highlightAnnotations.forEach((annotation) => {
             restoreHighlightMark(annotation);
         });
@@ -1162,12 +1145,6 @@ export function ArticleViewer({
         restoreHighlightMark,
     ]);
 
-    // ── Backfill legacy highlight locations (runs once per annotation) ──
-    // Legacy annotations may lack start/end offsets in their location string.
-    // We compute the offsets from the rendered marks and persist them so that
-    // future restores are robust.  The backfilledIdsRef ensures each
-    // annotation is processed at most once per article session, preventing
-    // store updates from re-triggering this effect.
     useEffect(() => {
         const contentRoot = contentRef.current;
         if (!contentRoot) {
@@ -1208,7 +1185,6 @@ export function ArticleViewer({
             });
         });
 
-        // Log for debugging (no-op in production).
         if (didUpdate) {
         }
     }, [
@@ -1278,7 +1254,7 @@ export function ArticleViewer({
                     range.surroundContents(mark);
                     isHighlighted = true;
                 } catch {
-                    // Cross-node matches are skipped.
+                    
                 }
 
                 cursor = matchIndex + normalizedQuery.length;
@@ -1292,7 +1268,6 @@ export function ArticleViewer({
                     });
                 }
 
-                // Wrapping a text node mutates DOM structure; re-run search on next node.
                 break;
             }
 
@@ -1344,8 +1319,6 @@ export function ArticleViewer({
             saved: false,
         });
 
-        // Yield to the browser so React renders the spinner before the
-        // potentially-long first dictionary index parse blocks the UI.
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         try {
@@ -1580,4 +1553,4 @@ export function ArticleViewer({
             />
         </div>
     );
-}
+});

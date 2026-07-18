@@ -1,7 +1,3 @@
-/**
- * Library Page
- * Book management and import with right-click context menu, filtering, and sorting
- */
 
 import { useState, useCallback, useEffect, useRef, useMemo, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -11,7 +7,7 @@ import { buildFallbackCoverSvg, shouldUseExtractedTitle, shouldUseExtractedAutho
 import { ensureFilenameForFormat, extractFilenameFromPath, importBooksIncremental, pickAndImportBooksIncremental, scanFolderForBooks } from "../../core/lib/import";
 import { pickLibraryFolderMobile, scanLibraryFolderMobile } from "../../core/lib/mobile-folder-scan";
 import { isMobile, isTauri } from "../../core/lib/env";
-import { confirmDeleteBook, showOpenDirectoryDialog } from "../../core/lib/dialogs";
+import { showOpenDirectoryDialog } from "../../core/lib/dialogs";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core/store";
 import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "../../core/types";
 import { FORMAT_DISPLAY_NAMES } from "../../core/types";
@@ -20,13 +16,13 @@ import {
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
     ChevronDown, Star, Check, CloudOff, Pencil
 } from "lucide-react";
-import { ContextMenu } from "../../ui";
+import { ContextMenu, PageHeader } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
-import { Modal, ModalBody, ModalFooter } from "../../ui";
+import { Modal, ModalHeader, ModalBody, ModalFooter, ConfirmDialog, AlertDialog } from "../../ui";
 import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
+import { sqliteSearchBooks } from "../../core/lib/sqlite-storage";
 
-// View mode icons
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
     grid: <LayoutGrid className="w-4 h-4" />,
     list: <List className="w-4 h-4" />,
@@ -63,8 +59,16 @@ function isBookMarkedRead(book: Book): boolean {
     return !!book.completedAt;
 }
 
-// Book Card Component with Context Menu
-export function BookCard({
+function sanitizeHtml(html: string): string {
+    return html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+        .replace(/on\w+\s*=\s*"[^"]*"/gi, "")
+        .replace(/on\w+\s*=\s*'[^']*'/gi, "");
+}
+
+
+export const BookCard = memo(function BookCard({
     book,
     viewMode,
     onOpenBook,
@@ -72,6 +76,7 @@ export function BookCard({
     onDeleteBook,
     onShowInfo,
     onAddToShelf,
+    onRename,
     onMarkAsRead,
     onMarkAsUnread,
     isSelecting,
@@ -85,6 +90,7 @@ export function BookCard({
     onDeleteBook: (bookId: string) => void;
     onShowInfo: (book: Book) => void;
     onAddToShelf: (bookId: string) => void;
+    onRename: (book: Book) => void;
     onMarkAsRead: (bookId: string) => void;
     onMarkAsUnread: (bookId: string) => void;
     isSelecting?: boolean;
@@ -94,11 +100,10 @@ export function BookCard({
     const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const clickCountRef = useRef(0);
     const isCompleted = isBookMarkedRead(book);
-    const updateBook = useLibraryStore((state) => state.updateBook);
-    const collections = useLibraryStore((state) => state.collections);
-    const removeBookFromCollection = useLibraryStore((state) => state.removeBookFromCollection);
 
-    const bookShelves = collections.filter((c) => c.bookIds.includes(book.id));
+    const collections = useLibraryStore((state) => state.collections);
+    const collectionSets = useMemo(() => collections.map(c => ({ ...c, bookIdSet: new Set(c.bookIds) })), [collections]);
+    const bookShelves = collectionSets.filter((c) => c.bookIdSet.has(book.id));
 
     const handleCardClick = () => {
         if (isSelecting && onToggleSelect) {
@@ -123,7 +128,6 @@ export function BookCard({
         }
     };
 
-    // Build context menu items
     const contextMenuItems: ContextMenuItem[] = [
         {
             id: "open",
@@ -156,12 +160,12 @@ export function BookCard({
             icon: <BookMarked className="w-4 h-4" />,
             onClick: () => onAddToShelf(book.id),
         },
-        // Show which shelves this book belongs to with one-click removal (#26)
+        
         ...bookShelves.map((shelf) => ({
             id: `shelf-${shelf.id}`,
             label: `Remove from "${shelf.name}"`,
             icon: <BookMarked className="w-4 h-4" />,
-            onClick: () => removeBookFromCollection(shelf.id, book.id),
+            onClick: () => useLibraryStore.getState().removeBookFromCollection(book.id, shelf.id),
         })),
         {
             id: "separator1",
@@ -178,12 +182,7 @@ export function BookCard({
             id: "rename",
             label: "Rename",
             icon: <Pencil className="w-4 h-4" />,
-            onClick: () => {
-                const newTitle = prompt("Enter new title:", book.title);
-                if (newTitle && newTitle.trim() !== "" && newTitle !== book.title) {
-                    updateBook(book.id, { title: newTitle.trim() });
-                }
-            },
+            onClick: () => onRename(book),
         },
         {
             id: "separator2",
@@ -199,7 +198,6 @@ export function BookCard({
         },
     ];
 
-    // Grid view
     if (viewMode === "grid") {
         return (
             <ContextMenu items={contextMenuItems}>
@@ -216,12 +214,12 @@ export function BookCard({
                         }
                     }}
                 >
-                    {/* Cover Image */}
+                    
                     <div
                         className={cn(
                             "relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-3 overflow-hidden",
                             "border border-[var(--color-border)]",
-                            "transition-all duration-300 group-hover:shadow-lg group-hover:-translate-y-1 cursor-pointer"
+                            "transition-colors duration-300 group-hover:shadow-lg group-hover:-translate-y-1 cursor-pointer"
                         )}
                     >
                         {book.coverPath ? (
@@ -238,10 +236,9 @@ export function BookCard({
                             </div>
                         )}
 
-                        {/* Selection Checkbox */}
                         {isSelecting && (
                             <div className={cn(
-                                "absolute top-2 left-2 w-6 h-6 flex items-center justify-center transition-all duration-200 z-10",
+                                "absolute top-2 left-2 w-6 h-6 flex items-center justify-center transition-colors duration-200 z-10",
                                 isSelected
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] scale-100"
                                     : "bg-white/80 text-[color:var(--color-text-secondary)] scale-100 border border-[var(--color-border)]"
@@ -250,20 +247,18 @@ export function BookCard({
                             </div>
                         )}
 
-                        {/* Progress Bar */}
                         {book.progress > 0 && (
                             <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
                                 <div
-                                    className="h-full bg-[var(--color-accent)] transition-all duration-500"
+                                    className="h-full bg-[var(--color-accent)] transition-colors duration-500"
                                     style={{ width: `${book.progress * 100}%` }}
                                 />
                             </div>
                         )}
 
-                        {/* Favorite Badge */}
                         <div
                             className={cn(
-                                "absolute top-2 right-2 w-6 h-6 flex items-center justify-center transition-all duration-300 pointer-events-none",
+                                "absolute top-2 right-2 w-6 h-6 flex items-center justify-center transition-colors duration-300 pointer-events-none",
                                 book.isFavorite
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] scale-100"
                                     : "bg-white/90 text-[color:var(--color-text-secondary)] scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100"
@@ -272,7 +267,6 @@ export function BookCard({
                             <Heart className={cn("w-3 h-3", book.isFavorite ? "fill-current" : "")} />
                         </div>
 
-                        {/* Synced Without File Badge */}
                         {book.syncedWithoutFile && (
                             <div className="absolute top-2 left-2 w-6 h-6 flex items-center justify-center text-white rounded-sm pointer-events-none" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
                                 <CloudOff className="w-3 h-3" />
@@ -280,7 +274,6 @@ export function BookCard({
                         )}
                     </div>
 
-                    {/* Book Info */}
                     <div className="px-0.5">
                         <h3 className="font-bold text-[11px] uppercase tracking-wide text-[color:var(--color-text-primary)] line-clamp-3 mb-0.5 transition-colors group-hover:text-[color:var(--color-accent)] break-words">
                             {book.title}
@@ -294,7 +287,6 @@ export function BookCard({
         );
     }
 
-    // List view
     if (viewMode === "list") {
         return (
             <ContextMenu items={contextMenuItems}>
@@ -311,7 +303,7 @@ export function BookCard({
                         }
                     }}
                 >
-                    {/* Cover Image */}
+                    
                     <div className={cn(
                         "relative w-12 h-16 flex-shrink-0 bg-[var(--color-surface-muted)] overflow-hidden",
                         "border border-[var(--color-border)]"
@@ -331,7 +323,6 @@ export function BookCard({
                         )}
                     </div>
 
-                    {/* Book Info */}
                     <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-sm text-[color:var(--color-text-primary)] line-clamp-2 break-words">
                             {book.title}
@@ -370,7 +361,6 @@ export function BookCard({
                         )}
                     </div>
 
-                    {/* Progress */}
                     <div className="hidden text-right sm:block">
                         {book.progress > 0 ? (
                             <p className="text-sm text-[color:var(--color-text-secondary)]">
@@ -385,12 +375,11 @@ export function BookCard({
         );
     }
 
-    // Compact view
     return (
         <ContextMenu items={contextMenuItems}>
             <div
                 onClick={handleCardClick}
-                className="group relative aspect-[2/3] bg-[var(--color-surface-muted)] overflow-hidden border border-[var(--color-border)] hover:shadow-lg transition-all duration-200 w-full cursor-pointer select-none"
+                className="group relative aspect-[2/3] bg-[var(--color-surface-muted)] overflow-hidden border border-[var(--color-border)] hover:shadow-lg transition-colors duration-200 w-full cursor-pointer select-none"
                 role="button"
                 tabIndex={0}
                 aria-label={`Open ${book.title}`}
@@ -415,7 +404,6 @@ export function BookCard({
                     </div>
                 )}
 
-                {/* Progress Bar */}
                 {book.progress > 0 && (
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
                         <div
@@ -425,7 +413,6 @@ export function BookCard({
                     </div>
                 )}
 
-                {/* Favorite Badge */}
                 <div
                     className={cn(
                         "absolute top-1 right-1 w-5 h-5 flex items-center justify-center transition-colors pointer-events-none",
@@ -437,7 +424,6 @@ export function BookCard({
                     <Heart className={cn("w-2.5 h-2.5 fill-current")} />
                 </div>
 
-                {/* Synced Without File Badge */}
                 {book.syncedWithoutFile && (
                     <div className="absolute top-1 left-1 w-5 h-5 flex items-center justify-center text-white rounded-sm pointer-events-none" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
                         <CloudOff className="w-2.5 h-2.5" />
@@ -446,19 +432,21 @@ export function BookCard({
             </div>
         </ContextMenu>
     );
-}
+});
 
 export const MemoizedBookCard = memo(BookCard, (prev, next) => {
     return prev.book.id === next.book.id &&
         prev.book.progress === next.book.progress &&
         prev.book.isFavorite === next.book.isFavorite &&
         prev.book.coverPath === next.book.coverPath &&
+        prev.book.title === next.book.title &&
+        prev.book.author === next.book.author &&
+        prev.book.syncedWithoutFile === next.book.syncedWithoutFile &&
         prev.viewMode === next.viewMode &&
         prev.isSelecting === next.isSelecting &&
         prev.isSelected === next.isSelected;
 });
 
-// Empty State Component
 function EmptyLibrary({
     onAddBooks,
     onScanFolder,
@@ -514,7 +502,6 @@ function EmptyLibrary({
     );
 }
 
-// Import Button Component
 function ImportButton({
     onImport,
     isLoading
@@ -539,7 +526,6 @@ function ImportButton({
     );
 }
 
-// Book Info Modal using Portal
 export function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: boolean; onClose: () => void }) {
     if (!book) return null;
 
@@ -586,9 +572,10 @@ export function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; is
                         {book.description && (
                             <div>
                                 <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Description</p>
-                                <p className="text-sm text-[color:var(--color-text-secondary)] mt-1 line-clamp-4">
-                                    {book.description}
-                                </p>
+                                <div
+                                    className="text-sm text-[color:var(--color-text-secondary)] mt-1 [&_a]:text-[var(--color-accent)] [&_a]:underline prose prose-sm max-w-none"
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(book.description) }}
+                                />
                             </div>
                         )}
                         <div className="grid grid-cols-2 gap-3">
@@ -671,7 +658,6 @@ export function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; is
     );
 }
 
-// Add to Shelf Modal using Portal
 export function AddToShelfModal({
     isOpen,
     onClose,
@@ -745,7 +731,7 @@ export function AddToShelfModal({
                     )}
 
                     {collections.length > 0 ? (
-                        <div className="max-h-48 sm:max-h-60 overflow-y-auto space-y-0.5 -mx-1 px-1">
+                        <div className="max-h-48 sm:max-h-60 overflow-y-auto space-y-0.5 -mx-1 px-1 [content-visibility:auto] overscroll-contain">
                             {filteredShelves.map((shelf) => renderShelfItem(shelf))}
                             {filteredShelves.length === 0 && (
                                 <p className="text-sm text-[color:var(--color-text-muted)] text-center py-3">
@@ -800,10 +786,90 @@ export function AddToShelfModal({
     );
 }
 
-// Main Library Page
+export function RenameBookModal({
+    isOpen,
+    book,
+    onClose,
+    onSave,
+}: {
+    isOpen: boolean;
+    book: Book | null;
+    onClose: () => void;
+    onSave: (bookId: string, newTitle: string) => void;
+}) {
+    const [title, setTitle] = useState("");
+
+    useEffect(() => {
+        if (isOpen && book) {
+            setTitle(book.title);
+        }
+    }, [isOpen, book]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (title.trim() && book) {
+            onSave(book.id, title.trim());
+            onClose();
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            if (title.trim() && book) {
+                onSave(book.id, title.trim());
+                onClose();
+            }
+        }
+    };
+
+    if (!book) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} size="sm" showCloseButton={true}>
+            <form onSubmit={handleSubmit}>
+                <ModalHeader title="Rename Book" onClose={onClose} showCloseButton={true} />
+                <ModalBody>
+                    <div>
+                        <label htmlFor="rename-title" className="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1.5">
+                            Title
+                        </label>
+                        <input
+                            id="rename-title"
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            className="ui-input"
+                            autoFocus
+                        />
+                    </div>
+                </ModalBody>
+                <ModalFooter>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="ui-btn-ghost"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={!title.trim() || title.trim() === book.title}
+                        className="ui-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Save
+                    </button>
+                </ModalFooter>
+            </form>
+        </Modal>
+    );
+}
+
 export function LibraryPage() {
     const books = useLibraryStore((state) => state.books);
     const collections = useLibraryStore((state) => state.collections);
+    const annotations = useLibraryStore((state) => state.annotations);
     const coversHydrated = useLibraryStore((state) => state.coversHydrated);
     const addBook = useLibraryStore((state) => state.addBook);
     const removeBook = useLibraryStore((state) => state.removeBook);
@@ -828,19 +894,21 @@ export function LibraryPage() {
     const [isExtractingCovers, setIsExtractingCovers] = useState(false);
     const [isSelecting, setIsSelecting] = useState(false);
 
-    // Filter dropdown state
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+    const [dismissedHighlight, setDismissedHighlight] = useState(
+        () => sessionStorage.getItem("theorem-dismiss-highlight") === new Date().toISOString().split("T")[0]
+    );
     const filterDropdownRef = useRef<HTMLDivElement>(null);
 
-
-
-    // Modal states
     const [infoModalBook, setInfoModalBook] = useState<Book | null>(null);
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
     const [addToShelfBookId, setAddToShelfBookId] = useState<string | null>(null);
     const [isAddToShelfModalOpen, setIsAddToShelfModalOpen] = useState(false);
+    const [renameBook, setRenameBook] = useState<Book | null>(null);
+    const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+    const [alertInfo, setAlertInfo] = useState<{ title: string; message: string } | null>(null);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ bookId?: string; title: string; batch?: boolean } | null>(null);
 
-    // Tracks cover extraction jobs currently in progress.
     const extractedBookIdsRef = useRef<Set<string>>(new Set());
     const pendingImportMetadataQueueRef = useRef<Book[]>([]);
     const queuedImportMetadataIdsRef = useRef<Set<string>>(new Set());
@@ -877,7 +945,7 @@ export function LibraryPage() {
             }
 
             if (!data) {
-                // Book data unavailable — generate fallback cover from existing metadata
+                
                 if (!latestBook.coverPath) {
                     const fallbackSvg = buildFallbackCoverSvg(
                         latestBook.title,
@@ -978,8 +1046,7 @@ export function LibraryPage() {
             extractedBookIdsRef.current.add(nextBook.id);
 
             void performImportedBookMetadataExtraction(nextBook)
-                .catch(() => {
-                })
+                .catch(e => console.error("[catch]", e))
                 .finally(() => {
                     activeImportMetadataTasksRef.current = Math.max(0, activeImportMetadataTasksRef.current - 1);
                     extractedBookIdsRef.current.delete(nextBook.id);
@@ -1005,12 +1072,10 @@ export function LibraryPage() {
         pumpImportMetadataQueue();
     }, [pumpImportMetadataQueue]);
 
-    // Selected shelf state (safely initialized from session storage)
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
 
-    // Favorites filter state
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-    // Initialize selected shelf from session storage on mount
+    
     useEffect(() => {
         const shelfId = sessionStorage.getItem("theorem-selected-shelf");
         if (shelfId) {
@@ -1039,6 +1104,19 @@ export function LibraryPage() {
 
     const debouncedSearchQuery = useDebounce(searchQuery, 250);
 
+    const [ftsSearchIds, setFtsSearchIds] = useState<string[] | undefined>(undefined);
+    useEffect(() => {
+        if (!isTauri() || !debouncedSearchQuery.trim()) {
+            setFtsSearchIds(undefined);
+            return;
+        }
+        let cancelled = false;
+        sqliteSearchBooks(debouncedSearchQuery.trim(), 200).then((results) => {
+            if (!cancelled) setFtsSearchIds(results.map((r) => r.book_id));
+        });
+        return () => { cancelled = true; };
+    }, [debouncedSearchQuery]);
+
     const sortedBooks = useMemo(() => {
         return getFilteredAndSortedBooks({
             books,
@@ -1047,6 +1125,7 @@ export function LibraryPage() {
             showFavoritesOnly,
             sortBy: settings.librarySortBy,
             sortOrder: settings.librarySortOrder,
+            ftsSearchIds,
         });
     }, [
         books,
@@ -1055,6 +1134,7 @@ export function LibraryPage() {
         settings.librarySortBy,
         settings.librarySortOrder,
         showFavoritesOnly,
+        ftsSearchIds,
     ]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -1113,8 +1193,6 @@ export function LibraryPage() {
         measureElement: (el) => el.getBoundingClientRect().height,
     });
 
-    // Lightweight fallback cover generation for books that need covers.
-    // Real cover/metadata extraction happens when books are opened in the reader.
     useEffect(() => {
         if (!coversHydrated || isExtractingCovers || books.length === 0) {
             return;
@@ -1153,7 +1231,7 @@ export function LibraryPage() {
                     extractedBookIdsRef.current.add(book.id);
 
                     try {
-                        // Only try to read data for books with accessible file paths
+                        
                         const isContentUri = book.filePath.startsWith("content://");
                         const hasOriginalFilePath = (
                             !book.filePath.startsWith('browser://')
@@ -1172,7 +1250,7 @@ export function LibraryPage() {
                         }
 
                         if (data) {
-                            // File available — do real extraction
+                            
                             const filename = ensureFilenameForFormat(
                                 extractFilenameFromPath(book.filePath),
                                 book.format,
@@ -1188,7 +1266,7 @@ export function LibraryPage() {
                             if (metadata.coverDataUrl) {
                                 updates.coverPath = metadata.coverDataUrl;
                             }
-                            // Use the same title-upgrade heuristic as Path A
+                            
                             if (shouldUseExtractedTitle(book.title, metadata.title, book.filePath)) {
                                 updates.title = normalizeMetadataText(metadata.title);
                             }
@@ -1223,7 +1301,7 @@ export function LibraryPage() {
                                 if (!isCancelled) updateBook(book.id, updates);
                             }
                         } else {
-                            // Data unavailable — generate fallback from existing metadata
+                            
                             const fallbackSvg = buildFallbackCoverSvg(
                                 book.title,
                                 book.author || 'Unknown Author',
@@ -1253,7 +1331,6 @@ export function LibraryPage() {
         return () => { isCancelled = true; };
     }, [coversHydrated, books, updateBook]);
 
-    // Close filter dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
@@ -1270,9 +1347,6 @@ export function LibraryPage() {
         };
     }, [showFilterDropdown]);
 
-
-
-    // Handle importing books (works in both Tauri and browser)
     const handleAddBooks = useCallback(async () => {
         setIsImporting(true);
         const failedImports: Array<{ source: string; message: string }> = [];
@@ -1298,16 +1372,17 @@ export function LibraryPage() {
                 .slice(0, 3)
                 .map((failure) => `- ${failure.source}: ${failure.message}`)
                 .join('\n');
-            window.alert(
-                `Some books failed to import (${failedImports.length}).\n\n${preview}` +
-                (failedImports.length > 3 ? `\n\n(+${failedImports.length - 3} more)` : ''),
-            );
+            setAlertInfo({
+                title: "Import Errors",
+                message: `Some books failed to import (${failedImports.length}).\n\n${preview}` +
+                    (failedImports.length > 3 ? `\n\n(+${failedImports.length - 3} more)` : ''),
+            });
         }
     }, [addBook, extractImportedBookMetadata]);
 
     const importDiscoveredBooks = useCallback(async (bookPaths: string[]) => {
         if (bookPaths.length === 0) {
-            alert("No supported books were found in the selected folder.");
+            setAlertInfo({ title: "No Books Found", message: "No supported books were found in the selected folder." });
             return;
         }
 
@@ -1331,10 +1406,11 @@ export function LibraryPage() {
                 .slice(0, 3)
                 .map((failure) => `- ${failure.source}: ${failure.message}`)
                 .join('\n');
-            window.alert(
-                `Some books failed to import (${failedImports.length}).\n\n${preview}` +
-                (failedImports.length > 3 ? `\n\n(+${failedImports.length - 3} more)` : ''),
-            );
+            setAlertInfo({
+                title: "Import Errors",
+                message: `Some books failed to import (${failedImports.length}).\n\n${preview}` +
+                    (failedImports.length > 3 ? `\n\n(+${failedImports.length - 3} more)` : ''),
+            });
         }
     }, [addBook, extractImportedBookMetadata, setLastScannedAt]);
 
@@ -1348,10 +1424,9 @@ export function LibraryPage() {
         await importDiscoveredBooks(bookPaths);
     }, [importDiscoveredBooks]);
 
-    // Handle scanning folder (Tauri only)
     const handleScanFolder = useCallback(async () => {
         if (!isTauri()) {
-            alert('Folder scanning requires the desktop app.');
+            setAlertInfo({ title: "Not Available", message: "Folder scanning requires the desktop app." });
             return;
         }
 
@@ -1359,8 +1434,6 @@ export function LibraryPage() {
             if (isMobile()) {
                 setIsScanning(true);
 
-                // Always show picker on mobile so user can confirm or change folder.
-                // SAF remembers the last location, so re-picking the same folder is quick.
                 const pickedFolder = await pickLibraryFolderMobile();
                 if (!pickedFolder) {
                     setIsScanning(false);
@@ -1373,7 +1446,7 @@ export function LibraryPage() {
                     const bookUris = await scanLibraryFolderMobile(pickedFolder);
                     await importDiscoveredBooks(bookUris);
                 } catch (err) {
-                    // Clear saved folder on failure so picker shows again next time
+                    
                     updateSettings({ scanFolders: [] });
                     throw err;
                 }
@@ -1401,7 +1474,7 @@ export function LibraryPage() {
             setIsScanning(true);
             await scanAndImportFolder(normalizedFolderPath);
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Failed to scan selected folder.');
+            setAlertInfo({ title: "Scan Error", message: err instanceof Error ? err.message : 'Failed to scan selected folder.' });
         } finally {
             setIsScanning(false);
         }
@@ -1412,13 +1485,14 @@ export function LibraryPage() {
         updateSettings,
     ]);
 
-    // Book actions
     const handleOpenBook = useCallback((book: Book) => {
+        import("../../features/reader"); 
         if (book.syncedWithoutFile) {
-            window.alert(
-                "This book was synced from another device but the file hasn't been transferred yet. " +
-                "Please sync again with the source device to download the book file."
-            );
+            useUIStore.getState().setDownloadingBook(book.id);
+            setRoute("reader", book.id);
+            import("../../core/lib/sync-orchestrator").then(({ downloadBookOnDemand }) => {
+                downloadBookOnDemand(book.id).catch(() => {});
+            });
             return;
         }
         setRoute("reader", book.id);
@@ -1428,28 +1502,18 @@ export function LibraryPage() {
         toggleFavorite(bookId);
     }, [toggleFavorite]);
 
-    const handleDeleteBook = useCallback(async (bookId: string) => {
-        const book = books.find(b => b.id === bookId);
-        const confirmed = await confirmDeleteBook(book?.title || "this book");
-        if (confirmed) {
-            removeBook(bookId);
-        }
-    }, [removeBook, books]);
+    const handleDeleteBook = useCallback((bookId: string) => {
+        const book = useLibraryStore.getState().getBook(bookId);
+        setDeleteConfirm({ bookId, title: book?.title || "this book", batch: false });
+    }, []);
 
-    const handleBatchDelete = useCallback(async () => {
+    const handleBatchDelete = useCallback(() => {
         if (selectedBooks.length === 0) return;
-        const confirmed = await confirmDeleteBook(`${selectedBooks.length} selected book(s)`);
-        if (confirmed) {
-            for (const id of selectedBooks) {
-                removeBook(id);
-            }
-            clearSelection();
-            setIsSelecting(false);
-        }
-    }, [selectedBooks, removeBook, clearSelection]);
+        setDeleteConfirm({ title: `${selectedBooks.length} selected book(s)`, batch: true });
+    }, [selectedBooks]);
 
     const handleBatchAddToShelf = useCallback(() => {
-        setAddToShelfBookId(null); // null means add all selected
+        setAddToShelfBookId(null); 
         setIsAddToShelfModalOpen(true);
     }, []);
 
@@ -1474,6 +1538,17 @@ export function LibraryPage() {
         setIsInfoModalOpen(true);
     }, []);
 
+    const handleRename = useCallback((book: Book) => {
+        setRenameBook(book);
+        setIsRenameModalOpen(true);
+    }, []);
+
+    const handleRenameSave = useCallback((bookId: string, newTitle: string) => {
+        updateBook(bookId, { title: newTitle });
+        setRenameBook(null);
+        setIsRenameModalOpen(false);
+    }, [updateBook]);
+
     const handleAddToShelf = useCallback((bookId: string) => {
         setAddToShelfBookId(bookId);
         setIsAddToShelfModalOpen(true);
@@ -1491,7 +1566,7 @@ export function LibraryPage() {
         if (bookId) {
             addBookToCollection(bookId, shelfId);
         } else {
-            // Batch mode: add all selected books
+            
             for (const id of selectedBooks) {
                 addBookToCollection(id, shelfId);
             }
@@ -1517,7 +1592,19 @@ export function LibraryPage() {
         }
     }, [addCollection, addToShelfBookId, isSelecting, selectedBooks, clearSelection]);
 
-    // Toggle view mode
+    const cardProps = useMemo(() => ({
+        onOpenBook: handleOpenBook,
+        onToggleFavorite: handleToggleFavorite,
+        onDeleteBook: handleDeleteBook,
+        onShowInfo: handleShowInfo,
+        onAddToShelf: handleAddToShelf,
+        onRename: handleRename,
+        onMarkAsRead: handleMarkAsRead,
+        onMarkAsUnread: handleMarkAsUnread,
+        isSelecting,
+        onToggleSelect: toggleBookSelection,
+    }), [handleOpenBook, handleToggleFavorite, handleDeleteBook, handleShowInfo, handleAddToShelf, handleRename, handleMarkAsRead, handleMarkAsUnread, isSelecting, toggleBookSelection]);
+
     const toggleViewMode = () => {
         const modes: LibraryViewMode[] = ["grid", "list", "compact"];
         const currentIndex = modes.indexOf(settings.libraryViewMode);
@@ -1537,34 +1624,27 @@ export function LibraryPage() {
     }
 
     return (
-        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
-            {/* Header */}
-            <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                    <h1 className="m-0 break-words font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
-                        {selectedShelf ? selectedShelf.name : showFavoritesOnly ? "Favorites" : "Library"}
-                    </h1>
-                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
-                        {sortedBooks.length} {sortedBooks.length === 1 ? 'book' : 'books'}
-                        {(selectedShelf || showFavoritesOnly) && (
-                            <button
-                                onClick={() => {
-                                    sessionStorage.removeItem("theorem-selected-shelf");
-                                    setSelectedShelfId(null);
-                                    setShowFavoritesOnly(false);
-                                }}
-                                className="ml-2 text-[color:var(--color-accent)] hover:underline"
-                            >
-                                Clear filter
-                            </button>
-                        )}
-                    </p>
-                </div>
+        <div className="mx-auto flex h-full w-full max-w-[var(--layout-content-max-width)] flex-col px-4 py-6 pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
+            
+            <PageHeader
+                title={selectedShelf ? selectedShelf.name : showFavoritesOnly ? "Favorites" : "Library"}
+                description={`${sortedBooks.length} ${sortedBooks.length === 1 ? 'book' : 'books'}${(selectedShelf || showFavoritesOnly) ? '' : ''}`}
+            >
+                {(selectedShelf || showFavoritesOnly) && (
+                    <button
+                        onClick={() => {
+                            sessionStorage.removeItem("theorem-selected-shelf");
+                            setSelectedShelfId(null);
+                            setShowFavoritesOnly(false);
+                        }}
+                        className="text-xs font-medium text-[color:var(--color-accent)] hover:underline"
+                    >
+                        Clear filter
+                    </button>
+                )}
+                <ImportButton onImport={handleAddBooks} isLoading={isImporting} />
 
                 <div className="flex items-center gap-2 sm:gap-4 ml-auto">
-                    {/* Import and View Mode grouped left */}
-                    <ImportButton onImport={handleAddBooks} isLoading={isImporting} />
-
                     <button
                         onClick={() => {
                             if (isSelecting) {
@@ -1591,7 +1671,6 @@ export function LibraryPage() {
 
                     <div className="h-6 w-px bg-[var(--color-border)]" />
 
-                    {/* Folder opening then Filter */}
                     {isTauri() && (
                         <button
                             onClick={handleScanFolder}
@@ -1607,7 +1686,7 @@ export function LibraryPage() {
                     <button
                         onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                         className={cn(
-                            "ui-btn h-10 px-3 sm:px-5 transition-all duration-200 border-2",
+                            "ui-btn h-10 px-3 sm:px-5 transition-colors duration-200 border-2",
                             showFilterDropdown
                                 ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
                                 : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-[var(--color-border)] hover:border-[var(--color-text-primary)]"
@@ -1618,18 +1697,53 @@ export function LibraryPage() {
                         <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-300", showFilterDropdown && "rotate-180")} />
                     </button>
                 </div>
-            </div>
+            </PageHeader>
 
-            <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-start mt-8 relative">
-                <div className="flex-1 w-full">
-                    {/* Mobile Only: Inline Filter Drawer */}
+            {(() => {
+                if (dismissedHighlight || !settings.showDailyHighlight) return null;
+                const nonBookmarks = annotations.filter((a) => a.type !== "bookmark" && a.selectedText);
+                if (nonBookmarks.length === 0 || selectedShelf || showFavoritesOnly || isSelecting) return null;
+                const daySeed = new Date().toISOString().split("T")[0].split("-").reduce((a, b) => a + parseInt(b), 0);
+                const hl = nonBookmarks[daySeed % nonBookmarks.length];
+                const hlBook = books.find((b) => b.id === hl.bookId);
+                if (!hl) return null;
+                return (
+                    <div className="mb-6 border-l-[3px] border-[var(--color-accent)] bg-[var(--color-surface)] pl-4 pr-4 py-4 flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                            <div className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider mb-1.5">
+                                From your highlights
+                            </div>
+                            <p className="font-serif text-[14px] leading-relaxed text-[color:var(--color-text-primary)] mb-1.5">
+                                &ldquo;{hl.selectedText}&rdquo;
+                            </p>
+                            <div className="text-[11px] text-[color:var(--color-text-secondary)]">
+                                — {hlBook?.title || "Unknown source"}
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => {
+                                sessionStorage.setItem("theorem-dismiss-highlight", new Date().toISOString().split("T")[0]);
+                                setDismissedHighlight(true);
+                            }}
+                            className="shrink-0 mt-0.5 p-1 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition-colors"
+                            aria-label="Dismiss highlight"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                );
+            })()}
+
+            <div className="flex min-h-0 flex-1 flex-col md:flex-row gap-6 md:gap-10 mt-2 relative">
+                <div className="flex min-h-0 flex-1 flex-col w-full">
+                    
                     <div className={cn(
-                        "md:hidden overflow-hidden transition-all duration-300",
+                        "md:hidden overflow-hidden transition-colors duration-300",
                         showFilterDropdown ? "max-h-[800px] mb-8 opacity-100" : "max-h-0 opacity-0 mb-0"
                     )}>
                         <div className="w-full border-t-2 border-b-2 border-[var(--color-border)] bg-[var(--color-surface-muted)]">
                             <div className="grid grid-cols-1 divide-y divide-[var(--color-border)]">
-                                {/* Sort Field */}
+                                
                                 <div className="p-4">
                                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-3">Sort By</h3>
                                     <div className="grid grid-cols-2 gap-1">
@@ -1643,7 +1757,7 @@ export function LibraryPage() {
                                                 key={option.id}
                                                 onClick={() => updateSettings({ librarySortBy: option.id as LibrarySortBy })}
                                                 className={cn(
-                                                    "flex items-center justify-between px-3 py-2 text-xs font-bold transition-all border",
+                                                    "flex items-center justify-between px-3 py-2 text-xs font-bold transition-colors border",
                                                     settings.librarySortBy === option.id
                                                         ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
                                                         : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-surface)]"
@@ -1656,7 +1770,6 @@ export function LibraryPage() {
                                     </div>
                                 </div>
 
-                                {/* Order & Filters Group */}
                                 <div className="grid grid-cols-2 divide-x divide-[var(--color-border)]">
                                     <div className="p-4">
                                         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-3">Order</h3>
@@ -1666,7 +1779,7 @@ export function LibraryPage() {
                                                     key={id}
                                                     onClick={() => updateSettings({ librarySortOrder: id as LibrarySortOrder })}
                                                     className={cn(
-                                                        "px-3 py-2 text-[10px] font-bold border transition-all",
+                                                        "px-3 py-2 text-[10px] font-bold border transition-colors",
                                                         settings.librarySortOrder === id ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
                                                     )}
                                                 >
@@ -1681,11 +1794,17 @@ export function LibraryPage() {
                                             <button
                                                 onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
                                                 className={cn(
-                                                    "px-3 py-2 text-[10px] font-bold border transition-all",
+                                                    "px-3 py-2 text-[10px] font-bold border transition-colors",
                                                     showFavoritesOnly ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
                                                 )}
                                             >
-                                                FAVS
+                                                Favorites
+                                            </button>
+                                            <button
+                                                onClick={() => updateSettings({ librarySortBy: "lastRead", librarySortOrder: "desc" })}
+                                                className="px-3 py-2 text-[10px] font-bold border transition-colors text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                            >
+                                                Recent
                                             </button>
                                         </div>
                                     </div>
@@ -1694,8 +1813,7 @@ export function LibraryPage() {
                         </div>
                     </div>
 
-                    {/* Books Grid/List/Compact */}
-                    <section ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
+                    <section ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-smooth">
                         {sortedBooks.length === 0 ? (
                             <div className="text-center py-16 border-2 border-dashed border-[var(--color-border)]">
                                 <p className="text-[color:var(--color-text-muted)] font-bold uppercase text-xs tracking-widest">No documents match criteria</p>
@@ -1716,18 +1834,6 @@ export function LibraryPage() {
                                         const rowItems = isListView
                                             ? [sortedBooks[virtualRow.index]]
                                             : sortedBooks.slice(rowStart, rowStart + itemsInRow);
-
-                                        const cardProps = {
-                                            onOpenBook: handleOpenBook,
-                                            onToggleFavorite: handleToggleFavorite,
-                                            onDeleteBook: handleDeleteBook,
-                                            onShowInfo: handleShowInfo,
-                                            onAddToShelf: handleAddToShelf,
-                                            onMarkAsRead: handleMarkAsRead,
-                                            onMarkAsUnread: handleMarkAsUnread,
-                                            isSelecting,
-                                            onToggleSelect: toggleBookSelection,
-                                        };
 
                                         return (
                                             <div key={virtualRow.key} data-index={virtualRow.index} ref={rowVirtualizer.measureElement}>
@@ -1766,118 +1872,84 @@ export function LibraryPage() {
                     </section>
                 </div>
 
-                {/* Desktop: Filter Overlay */}
                 {showFilterDropdown && (
                     <>
                         <div className="hidden md:block fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
-                        <aside className="hidden md:block w-72 absolute right-0 top-0 z-40 border-2 border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl animate-in slide-in-from-right-4 duration-200 max-h-[80vh] overflow-y-auto">
-                        <div className="divide-y-2 divide-[var(--color-border)]">
-                            {/* Sort */}
-                            <div className="p-5">
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Sort Criteria</h3>
-                                <div className="flex flex-col gap-1">
-                                    {[
-                                        { id: "title", label: "Title" },
-                                        { id: "author", label: "Author" },
-                                        { id: "dateAdded", label: "Date Added" },
-                                        { id: "lastRead", label: "Last Read" },
-                                    ].map((option) => (
-                                        <button
-                                            key={option.id}
-                                            onClick={() => updateSettings({ librarySortBy: option.id as LibrarySortBy })}
-                                            className={cn(
-                                                "flex items-center justify-between px-4 py-2.5 text-xs font-bold border-2 transition-all",
-                                                settings.librarySortBy === option.id
-                                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
-                                                    : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
-                                            )}
-                                        >
-                                            {option.label.toUpperCase()}
-                                            {settings.librarySortBy === option.id && <Check className="w-3.5 h-3.5" />}
-                                        </button>
-                                    ))}
+                        <aside className="hidden md:block w-72 absolute right-0 top-0 z-40 border-2 border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl animate-in slide-in-from-right-4 duration-200 max-h-[80vh] overflow-y-auto [content-visibility:auto] overscroll-contain">
+                            <div className="divide-y-2 divide-[var(--color-border)]">
+                                <div className="p-4">
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-3">Sort</h3>
+                                    <div className="grid grid-cols-2 gap-1">
+                                        {[
+                                            { id: "title", label: "Title" },
+                                            { id: "author", label: "Author" },
+                                            { id: "dateAdded", label: "Added" },
+                                            { id: "lastRead", label: "Read" },
+                                        ].map((option) => (
+                                            <button
+                                                key={option.id}
+                                                onClick={() => updateSettings({ librarySortBy: option.id as LibrarySortBy })}
+                                                className={cn(
+                                                    "px-2.5 py-1.5 text-[10px] font-bold border transition-colors",
+                                                    settings.librarySortBy === option.id
+                                                        ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                                        : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                                )}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-
-                            {/* Order */}
-                            <div className="p-5">
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Direction</h3>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {[
-                                        { id: "asc", label: "ASC" },
-                                        { id: "desc", label: "DESC" },
-                                    ].map((option) => (
-                                        <button
-                                            key={option.id}
-                                            onClick={() => updateSettings({ librarySortOrder: option.id as LibrarySortOrder })}
-                                            className={cn(
-                                                "py-2 text-[10px] font-black border-2 transition-all",
-                                                settings.librarySortOrder === option.id
-                                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
-                                                    : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
-                                            )}
-                                        >
-                                            {option.label}
-                                        </button>
-                                    ))}
+                                <div className="grid grid-cols-2 divide-x divide-[var(--color-border)]">
+                                    <div className="p-4">
+                                        <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-3">Order</h3>
+                                        <div className="flex flex-col gap-1">
+                                            {["asc", "desc"].map((id) => (
+                                                <button
+                                                    key={id}
+                                                    onClick={() => updateSettings({ librarySortOrder: id as LibrarySortOrder })}
+                                                    className={cn(
+                                                        "px-2.5 py-1.5 text-[10px] font-bold border transition-colors",
+                                                        settings.librarySortOrder === id
+                                                            ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                                            : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                                    )}
+                                                >
+                                                    {id === "asc" ? "ASC" : "DESC"}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="p-4">
+                                        <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-3">Quick</h3>
+                                        <div className="flex flex-col gap-1">
+                                            <button
+                                                onClick={() => setShowFavoritesOnly((prev) => !prev)}
+                                                className={cn(
+                                                    "w-full px-2.5 py-1.5 text-[10px] font-bold border transition-colors",
+                                                    showFavoritesOnly
+                                                        ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                                        : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                                )}
+                                            >
+                                                Favorites
+                                            </button>
+                                            <button
+                                                onClick={() => updateSettings({ librarySortBy: "lastRead", librarySortOrder: "desc" })}
+                                                className="w-full px-2.5 py-1.5 text-[10px] font-bold border transition-colors bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                            >
+                                                Recent
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-
-                            {/* Quick Filters */}
-                            <div className="p-5">
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Quick</h3>
-                                <button
-                                    onClick={() => setShowFavoritesOnly((previous) => !previous)}
-                                    className={cn(
-                                        "w-full py-2 text-[10px] font-black border-2 transition-all",
-                                        showFavoritesOnly
-                                            ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
-                                            : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
-                                    )}
-                                >
-                                    FAVORITES
-                                </button>
-                            </div>
-
-                            {/* Shelf Filter */}
-                            <div className="p-5">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)]">Collections</h3>
-                                    <button onClick={() => setRoute("shelves")} className="text-[10px] font-bold text-[color:var(--color-accent)] hover:underline">EDIT</button>
-                                </div>
-                                <div className="flex flex-col gap-1 max-h-64 overflow-y-auto custom-scrollbar pr-1">
-                                    <button
-                                        onClick={() => setSelectedShelfId(null)}
-                                        className={cn(
-                                            "flex items-center gap-3 px-4 py-2.5 text-xs font-bold border-2 transition-all",
-                                            !selectedShelfId ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
-                                        )}
-                                    >
-                                        <LayoutGrid className="w-3.5 h-3.5" />
-                                        ALL DOCUMENTS
-                                    </button>
-                                    {collections.map((shelf) => (
-                                        <button
-                                            key={shelf.id}
-                                            onClick={() => setSelectedShelfId(shelf.id)}
-                                            className={cn(
-                                                "flex items-center justify-between px-4 py-2.5 text-xs font-bold border-2 transition-all",
-                                                selectedShelfId === shelf.id ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
-                                            )}
-                                        >
-                                            <span className="truncate">{shelf.name.toUpperCase()}</span>
-                                            {selectedShelfId === shelf.id && <Check className="w-3.5 h-3.5" />}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
                         </div>
                     </aside>
                     </>
                 )}
             </div>
 
-            {/* Batch Action Bar */}
             {isSelecting && selectedBooks.length > 0 && (
                 <div className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t-2 border-[var(--color-accent)] shadow-[0_-8px_32px_rgba(0,0,0,0.15)] px-4 py-3 flex items-center gap-3 justify-center flex-wrap">
                     <span className="text-sm font-bold text-[color:var(--color-text-primary)] mr-2">
@@ -1915,7 +1987,6 @@ export function LibraryPage() {
                 </div>
             )}
 
-            {/* Book Info Modal */}
             <BookInfoModal
                 book={infoModalBook}
                 isOpen={isInfoModalOpen}
@@ -1925,7 +1996,6 @@ export function LibraryPage() {
                 }}
             />
 
-            {/* Add to Shelf Modal */}
             <AddToShelfModal
                 isOpen={isAddToShelfModalOpen}
                 onClose={() => {
@@ -1936,6 +2006,48 @@ export function LibraryPage() {
                 collections={collections}
                 onAddToShelf={handleAddBookToShelf}
                 onCreateShelf={handleCreateShelf}
+            />
+
+            <RenameBookModal
+                isOpen={isRenameModalOpen}
+                book={renameBook}
+                onClose={() => {
+                    setIsRenameModalOpen(false);
+                    setRenameBook(null);
+                }}
+                onSave={handleRenameSave}
+            />
+
+            {alertInfo && (
+                <AlertDialog
+                    isOpen={!!alertInfo}
+                    title={alertInfo.title}
+                    message={alertInfo.message}
+                    okLabel="OK"
+                    onClose={() => setAlertInfo(null)}
+                />
+            )}
+
+            <ConfirmDialog
+                isOpen={!!deleteConfirm}
+                title={deleteConfirm?.batch ? "Delete Books" : "Delete Book"}
+                message={deleteConfirm ? `Are you sure you want to delete "${deleteConfirm.title}"? This action cannot be undone.` : ""}
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                variant="danger"
+                onConfirm={() => {
+                    if (deleteConfirm?.batch) {
+                        for (const id of selectedBooks) {
+                            removeBook(id);
+                        }
+                        clearSelection();
+                        setIsSelecting(false);
+                    } else if (deleteConfirm?.bookId) {
+                        removeBook(deleteConfirm.bookId);
+                    }
+                    setDeleteConfirm(null);
+                }}
+                onCancel={() => setDeleteConfirm(null)}
             />
         </div>
     );

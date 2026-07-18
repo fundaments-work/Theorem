@@ -1,13 +1,3 @@
-/**
- * Theorem – Sync Import / Merge Module
- *
- * Provides per-domain merge functions that implement a last-write-wins (LWW)
- * strategy for importing data received from a paired peer device during
- * LAN sync.
- *
- * Every merge function is pure (no side-effects) and returns the merged array
- * so the caller can persist the result into the relevant Zustand store.
- */
 
 import type {
     Book,
@@ -23,12 +13,8 @@ import type {
     DailyReadingActivity,
 } from "../types";
 
-// ─── Helpers ───
-
-/** Default tombstone retention period: 90 days in milliseconds. */
 const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
-/** Build a Set of entity IDs from tombstones filtered by entity type. */
 function tombstoneIdSet(
     tombstones: DeletionTombstone[],
     entityType: TombstoneEntity,
@@ -40,7 +26,6 @@ function tombstoneIdSet(
     return ids;
 }
 
-/** Parse a date value (Date | string | undefined) into epoch-ms; 0 if invalid. */
 function toEpoch(d: Date | string | undefined | null): number {
     if (!d) return 0;
     const ms =
@@ -48,15 +33,6 @@ function toEpoch(d: Date | string | undefined | null): number {
     return Number.isNaN(ms) ? 0 : ms;
 }
 
-// ─── Deletion Tombstones ───
-
-/**
- * Merge incoming tombstones with local tombstones.
- *
- * Deduplicates by (entityId, entityType) keeping the earliest `deletedAt` to
- * maximise the suppression window.  Also garbage-collects tombstones older
- * than `TOMBSTONE_TTL_MS` (default 90 days) to prevent unbounded growth.
- */
 export function mergeTombstones(
     incoming: DeletionTombstone[],
     existing: DeletionTombstone[],
@@ -76,7 +52,6 @@ export function mergeTombstones(
         }
     }
 
-    // Garbage-collect expired tombstones.
     const cutoff = Date.now() - TOMBSTONE_TTL_MS;
     const result: DeletionTombstone[] = [];
     for (const t of byKey.values()) {
@@ -88,47 +63,36 @@ export function mergeTombstones(
     return result;
 }
 
-// ─── Books ───
-
-/**
- * Merge incoming books with existing books.
- *
- * - Deduplicate by `contentHash` where available, otherwise by `id`.
- * - For duplicates keep the richer metadata set and latest reading progress.
- * - Books whose ID appears in `tombstones` (with entityType "book") are
- *   excluded from the result — they were intentionally deleted locally or
- *   on a peer and should not be resurrected.
- */
 export function mergeBooks(
     incoming: Book[],
     existing: Book[],
     tombstones: DeletionTombstone[] = [],
 ): Book[] {
     const deletedBookIds = tombstoneIdSet(tombstones, "book");
-    // Build lookup maps — skip locally-tombstoned books so they stay deleted.
     const byId = new Map<string, Book>();
     const byHash = new Map<string, Book>();
+    const byBlobHash = new Map<string, Book>();
 
     for (const book of existing) {
         if (deletedBookIds.has(book.id)) continue;
         byId.set(book.id, book);
         if (book.contentHash) byHash.set(book.contentHash, book);
+        if (book.blobHash) byBlobHash.set(book.blobHash, book);
     }
 
     for (const inc of incoming) {
-        // Skip incoming books that have been tombstoned (deleted on either device).
+        
         if (deletedBookIds.has(inc.id)) continue;
 
-        // Try to match by contentHash first (same file on both devices).
         const match =
             (inc.contentHash ? byHash.get(inc.contentHash) : undefined) ??
+            (inc.blobHash ? byBlobHash.get(inc.blobHash) : undefined) ??
             byId.get(inc.id);
 
         if (!match) {
-            // New book from remote — flag it as having no local file.
+            
             const localPlaceholderPath = `sqlite://${inc.id}`;
-            // Preserve cover data URL from the peer so it displays immediately
-            // without waiting for file transfer + re-extraction.
+            
             const incomingCover = (typeof inc.coverPath === "string" && inc.coverPath.startsWith("data:"))
                 ? inc.coverPath
                 : undefined;
@@ -142,18 +106,15 @@ export function mergeBooks(
             };
             byId.set(inc.id, remoteBook);
             if (inc.contentHash) byHash.set(inc.contentHash, remoteBook);
+            if (inc.blobHash) byBlobHash.set(inc.blobHash, remoteBook);
             continue;
         }
 
-        // Merge: keep the existing id, merge metadata.
-        // Start with all local fields via spread (preserves fields not explicitly
-        // handled below, such as publishedDate, pageProgress, pdfViewState,
-        // locations, category, manualCompletionState, progressBeforeFinish,
-        // completedAt, lastClickFraction, contentHash, etc.).
-        // Then selectively override with richer/newer remote values.
+        const remoteIsNewer = toEpoch(inc.lastReadAt) > toEpoch(match.lastReadAt);
+
         const merged: Book = {
             ...match,
-            // Prefer richer title/author.
+            
             title:
                 (inc.title && inc.title.length > (match.title?.length ?? 0))
                     ? inc.title
@@ -168,32 +129,26 @@ export function mergeBooks(
             isbn: match.isbn || inc.isbn,
             publishedDate: match.publishedDate || inc.publishedDate,
             category: match.category || inc.category,
-            // Keep higher progress.
-            progress: Math.max(match.progress ?? 0, inc.progress ?? 0),
-            // Keep later reading time.
-            lastReadAt:
-                toEpoch(inc.lastReadAt) > toEpoch(match.lastReadAt)
-                    ? inc.lastReadAt
-                    : match.lastReadAt,
-            currentLocation:
-                toEpoch(inc.lastReadAt) > toEpoch(match.lastReadAt)
-                    ? inc.currentLocation ?? match.currentLocation
-                    : match.currentLocation,
-            // Reading time: take max (idempotent, monotonic counter — see TS IMP 7).
+            
+            progress: remoteIsNewer
+                ? (inc.progress ?? match.progress)
+                : Math.max(match.progress ?? 0, inc.progress ?? 0),
+            lastReadAt: remoteIsNewer ? inc.lastReadAt : match.lastReadAt,
+            currentLocation: remoteIsNewer
+                ? inc.currentLocation ?? match.currentLocation
+                : match.currentLocation,
+            
             readingTime: Math.max(match.readingTime ?? 0, inc.readingTime ?? 0),
-            // Keep favorite if either flagged.
+            
             isFavorite: match.isFavorite || inc.isFavorite,
-            // Merge tags.
+            
             tags: [...new Set([...(match.tags ?? []), ...(inc.tags ?? [])])],
-            // Keep higher rating.
+            
             rating:
                 (match.rating ?? 0) >= (inc.rating ?? 0)
                     ? match.rating
                     : inc.rating,
-            // Preserve local paths — never overwrite with remote paths.
-            // If an old synced record is missing filePath/storagePath, repair it
-            // with a local sqlite placeholder path so downstream consumers that
-            // call `startsWith` do not crash.
+            
             filePath: match.filePath || match.storagePath || `sqlite://${match.id}`,
             storagePath: match.storagePath || match.filePath || `sqlite://${match.id}`,
             coverPath: match.coverPath || (
@@ -201,31 +156,26 @@ export function mergeBooks(
                     ? inc.coverPath
                     : match.coverPath
             ),
-            // Fill in contentHash if local is missing.
+            
             contentHash: match.contentHash || inc.contentHash,
-            // If local has a file, keep current sync flag.
+            
             syncedWithoutFile: match.syncedWithoutFile,
-            // Completion state: adopt remote if local has no completion.
+            
+            blobHash: inc.blobHash || match.blobHash,
+            coverBlobHash: inc.coverBlobHash || match.coverBlobHash,
+            
             completedAt: match.completedAt || inc.completedAt,
             manualCompletionState: match.manualCompletionState ?? inc.manualCompletionState,
             progressBeforeFinish: match.progressBeforeFinish ?? inc.progressBeforeFinish,
         };
 
         byId.set(match.id, merged);
+        if (merged.blobHash) byBlobHash.set(merged.blobHash, merged);
     }
 
     return [...byId.values()];
 }
 
-// ─── Annotations ───
-
-/**
- * Merge annotations using LWW by `updatedAt` (or `createdAt` as fallback)
- * per annotation ID.
- *
- * Annotations whose ID (or whose parent bookId) appears in `tombstones` are
- * excluded — they were part of a book or annotation deletion.
- */
 export function mergeAnnotations(
     incoming: Annotation[],
     existing: Annotation[],
@@ -248,12 +198,11 @@ export function mergeAnnotations(
 
         const match = byId.get(inc.id);
         if (!match) {
-            // New annotation.
+            
             byId.set(inc.id, inc);
             continue;
         }
 
-        // LWW: keep the one with the latest updatedAt (falling back to createdAt).
         const localTs = toEpoch(match.updatedAt) || toEpoch(match.createdAt);
         const remoteTs = toEpoch(inc.updatedAt) || toEpoch(inc.createdAt);
 
@@ -265,16 +214,6 @@ export function mergeAnnotations(
     return [...byId.values()];
 }
 
-// ─── Collections ───
-
-/**
- * Merge collections by ID.
- * - Same ID → union of bookIds, keep later name/description.
- * - Different IDs → add as new.
- * - Collections whose ID appears in `tombstones` are excluded.
- * - Book IDs that have been tombstoned are stripped from the merged bookIds
- *   so deleted books don't linger as dangling references in collections.
- */
 export function mergeCollections(
     incoming: Collection[],
     existing: Collection[],
@@ -282,6 +221,16 @@ export function mergeCollections(
 ): Collection[] {
     const deletedCollectionIds = tombstoneIdSet(tombstones, "collection");
     const deletedBookIds = tombstoneIdSet(tombstones, "book");
+
+    const removedCollectionBookPairs = new Set<string>();
+    for (const t of tombstones) {
+        if (t.entityType === "collection_book") {
+            removedCollectionBookPairs.add(t.entityId); 
+        }
+    }
+
+    const isBookRemovedFromCollection = (collectionId: string, bookId: string) =>
+        removedCollectionBookPairs.has(`${collectionId}:${bookId}`);
 
     const byId = new Map<string, Collection>();
 
@@ -299,8 +248,6 @@ export function mergeCollections(
             continue;
         }
 
-        // Merge: union of bookIds, keep later name/description.
-        // Prefer updatedAt for LWW timestamp; fall back to createdAt.
         const incTs = toEpoch(inc.updatedAt) || toEpoch(inc.createdAt);
         const matchTs = toEpoch(match.updatedAt) || toEpoch(match.createdAt);
         const merged: Collection = {
@@ -310,11 +257,11 @@ export function mergeCollections(
                 incTs > matchTs
                     ? inc.description ?? match.description
                     : match.description ?? inc.description,
-            // bookIds: grow-only set union, then strip tombstoned book IDs.
+            
             bookIds: [...new Set([...match.bookIds, ...inc.bookIds])].filter(
-                (id) => !deletedBookIds.has(id),
+                (id) => !deletedBookIds.has(id) && !isBookRemovedFromCollection(match.id, id),
             ),
-            // Keep the latest updatedAt from either side.
+            
             updatedAt:
                 incTs > matchTs ? inc.updatedAt ?? inc.createdAt : match.updatedAt ?? match.createdAt,
         };
@@ -322,11 +269,11 @@ export function mergeCollections(
         byId.set(match.id, merged);
     }
 
-    // Also strip tombstoned book IDs from collections that weren't touched
-    // by the incoming set (i.e. local-only collections).
-    if (deletedBookIds.size > 0) {
+    if (deletedBookIds.size > 0 || removedCollectionBookPairs.size > 0) {
         for (const [id, col] of byId) {
-            const filtered = col.bookIds.filter((bId) => !deletedBookIds.has(bId));
+            const filtered = col.bookIds.filter((bId) =>
+                !deletedBookIds.has(bId) && !isBookRemovedFromCollection(id, bId)
+            );
             if (filtered.length !== col.bookIds.length) {
                 byId.set(id, { ...col, bookIds: filtered });
             }
@@ -336,26 +283,23 @@ export function mergeCollections(
     return [...byId.values()];
 }
 
-// ─── Vocabulary ───
-
-/**
- * Merge vocabulary terms by normalized term + language key.
- * - Same key → merge meanings; keep later updatedAt.
- * - Different keys → add as new.
- */
 export function mergeVocabulary(
     incoming: VocabularyTerm[],
     existing: VocabularyTerm[],
+    tombstones: DeletionTombstone[] = [],
 ): VocabularyTerm[] {
+    const deletedTermIds = tombstoneIdSet(tombstones, "vocabulary");
     const byKey = new Map<string, VocabularyTerm>();
 
     const key = (t: VocabularyTerm) => `${t.normalizedTerm}::${t.language}`;
 
     for (const term of existing) {
+        if (deletedTermIds.has(term.id)) continue;
         byKey.set(key(term), term);
     }
 
     for (const inc of incoming) {
+        if (deletedTermIds.has(inc.id)) continue;
         const k = key(inc);
         const match = byKey.get(k);
         if (!match) {
@@ -407,23 +351,11 @@ function mergeMeanings(
         if (!byProvider.has(m.provider)) {
             byProvider.set(m.provider, m);
         }
-        // Same provider → keep existing (no way to determine "newer")
+        
     }
     return [...byProvider.values()];
 }
 
-// ─── RSS ───
-
-/**
- * Merge RSS feeds by URL.
- *
- * Uses the canonical `RssFeed` type directly to avoid type mismatch issues.
- *
- * Returns the merged feed list and a feedIdMap (remote ID → local ID) for any
- * feeds that were deduplicated by URL but had different IDs. Callers should pass
- * this map to `mergeRssArticles` so that incoming articles referencing the
- * remote feed ID are remapped to the surviving local feed ID.
- */
 export function mergeRssFeeds(
     incoming: RssFeed[],
     existing: RssFeed[],
@@ -447,13 +379,10 @@ export function mergeRssFeeds(
             continue;
         }
 
-        // Same feed URL but different IDs — record the remap so articles
-        // referencing the incoming ID can be redirected to the local ID.
         if (inc.id !== match.id) {
             feedIdMap.set(inc.id, match.id);
         }
 
-        // Keep later lastFetched, merge metadata.
         const merged: RssFeed = {
             ...match,
             title: inc.title || match.title,
@@ -470,12 +399,6 @@ export function mergeRssFeeds(
     return { feeds: [...byUrl.values()], feedIdMap };
 }
 
-/**
- * Merge RSS articles by ID.
- * - OR read/favorite states (if either marked, it stays marked).
- * - Optionally remaps incoming feedId references using the feedIdMap from
- *   `mergeRssFeeds`, so articles from deduplicated feeds point to the correct ID.
- */
 export function mergeRssArticles(
     incoming: RssArticle[],
     existing: RssArticle[],
@@ -491,8 +414,7 @@ export function mergeRssArticles(
     }
 
     for (const inc of incoming) {
-        // Remap feedId if this article references a remote feed that was
-        // deduplicated into a local feed with a different ID.
+        
         const remappedFeedId = feedIdMap?.get(inc.feedId) ?? inc.feedId;
         if (deletedFeedIds.has(remappedFeedId)) continue;
 
@@ -504,12 +426,11 @@ export function mergeRssArticles(
             continue;
         }
 
-        // Merge: OR read/favorite states.
         const merged: RssArticle = {
             ...match,
             isRead: match.isRead || remapped.isRead,
             isFavorite: match.isFavorite || remapped.isFavorite,
-            // If the existing article still had the old feedId, update it
+            
             feedId: remappedFeedId,
         };
         byId.set(remapped.id, merged);
@@ -518,18 +439,6 @@ export function mergeRssArticles(
     return [...byId.values()];
 }
 
-// ─── Settings ───
-
-/**
- * Merge incoming app settings with local settings.
- *
- * Strategy:
- * - Device-specific settings (`deviceSync`) are NEVER overwritten by the peer.
- * - Reader preferences, vocabulary settings, vault settings, and library view
- *   prefs are synced using a whole-object LWW based on an explicit
- *   `settingsUpdatedAt` timestamp passed alongside the settings object.
- * - If no timestamp is available, prefer local settings (conservative).
- */
 export function mergeSettings(
     incoming: AppSettings,
     existing: AppSettings,
@@ -539,47 +448,28 @@ export function mergeSettings(
     const remoteTs = toEpoch(incomingUpdatedAt);
     const localTs = toEpoch(localUpdatedAt);
 
-    // If remote is strictly newer, take remote settings (except device-specific).
-    // If equal or local is newer, keep local.
+    const deviceSync = existing.deviceSync;
+
     if (remoteTs > localTs) {
         return {
+            ...existing,
             ...incoming,
-            // Always preserve local device sync settings — they're device-specific.
-            deviceSync: existing.deviceSync,
+            deviceSync,
         };
     }
 
     return {
+        ...incoming,
         ...existing,
-        // If both have same timestamp or local is newer, keep local.
-        // But still merge in any vault/vocabulary fields that are empty locally
-        // but populated remotely (fill gaps, don't overwrite).
-        vault: {
-            ...incoming.vault,
-            ...existing.vault,
-            // Keep local paths always.
-            vaultPath: existing.vault.vaultPath,
-        },
+        deviceSync,
     };
 }
 
-// ─── Reading Stats ───
-
-/**
- * Merge reading statistics from two devices.
- *
- * Strategy:
- * - Cumulative counters (`totalReadingTime`, `booksCompleted`): take max.
- * - Streaks: take max for longest, recalculate current from merged daily data.
- * - Daily activity: union by date, max minutes, union book IDs.
- * - Goals: take the higher value (user-set targets).
- * - `booksReadThisYear`: take max.
- */
 export function mergeReadingStats(
     incoming: ReadingStats,
     existing: ReadingStats,
 ): ReadingStats {
-    // Merge daily activity by date key.
+    
     const activityByDate = new Map<string, DailyReadingActivity>();
     for (const entry of existing.dailyActivity ?? []) {
         activityByDate.set(entry.date, entry);
@@ -597,23 +487,19 @@ export function mergeReadingStats(
         }
     }
 
-    // Sort by date descending, keep last 84 days (12 weeks for heatmap).
     const mergedActivity = [...activityByDate.values()]
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 84);
 
-    // Recalculate current streak from merged daily activity.
     const currentStreak = calculateCurrentStreak(mergedActivity);
 
-    // Determine the latest read date.
     const lastReadDate = [existing.lastReadDate, incoming.lastReadDate]
         .filter(Boolean)
         .sort()
         .pop();
 
     return {
-        // Cumulative counters: take max (idempotent — both devices independently
-        // increment, so max gives the best approximation without double-counting).
+        
         totalReadingTime: Math.max(existing.totalReadingTime, incoming.totalReadingTime),
         booksCompleted: Math.max(existing.booksCompleted, incoming.booksCompleted),
         averageReadingSpeed: Math.max(existing.averageReadingSpeed, incoming.averageReadingSpeed),
@@ -627,22 +513,15 @@ export function mergeReadingStats(
     };
 }
 
-/**
- * Calculate current reading streak from daily activity data.
- * Counts consecutive days backwards from the most recent activity day.
- */
 function calculateCurrentStreak(
     sortedActivity: DailyReadingActivity[],
 ): number {
     if (sortedActivity.length === 0) return 0;
 
-    // Local date formatter — avoids UTC conversion that toISOString() does,
-    // which can shift the date by ±1 day near midnight in non-UTC timezones.
     const pad = (n: number) => String(n).padStart(2, "0");
     const toLocalDateStr = (d: Date) =>
         `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-    // sortedActivity is sorted date descending.
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = toLocalDateStr(today);
@@ -650,13 +529,11 @@ function calculateCurrentStreak(
     yesterdayDate.setDate(yesterdayDate.getDate() - 1);
     const yesterdayStr = toLocalDateStr(yesterdayDate);
 
-    // The streak only counts if the most recent activity is today or yesterday.
     const mostRecent = sortedActivity[0].date;
     if (mostRecent !== todayStr && mostRecent !== yesterdayStr) {
         return 0;
     }
 
-    // Build a set of active dates for fast lookup.
     const activeDates = new Set(sortedActivity.map((a) => a.date));
 
     let streak = 0;

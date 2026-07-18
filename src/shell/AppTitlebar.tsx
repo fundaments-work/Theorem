@@ -1,7 +1,3 @@
-/**
- * AppTitlebar Component
- * Frameless window title bar with navigation, search, and window controls
- */
 
 import { useState, useEffect, memo } from "react";
 import type { KeyboardEvent } from "react";
@@ -72,21 +68,27 @@ export const AppTitlebar = memo(function AppTitlebar({
                 const maximized = await win.isMaximized();
                 setIsMaximized(maximized);
             } catch (err) {
-                // Fallback to window size detection if Tauri API fails
+                
                 const isMax = window.innerWidth === window.screen.availWidth &&
                     window.innerHeight === window.screen.availHeight;
                 setIsMaximized(isMax);
             }
         };
 
+        let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+
         const handleResize = () => {
-            updateMaximizedState();
+            if (resizeTimer) clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(updateMaximizedState, 150);
         };
 
         window.addEventListener("resize", handleResize);
         updateMaximizedState();
 
-        return () => window.removeEventListener("resize", handleResize);
+        return () => {
+            window.removeEventListener("resize", handleResize);
+            if (resizeTimer) clearTimeout(resizeTimer);
+        };
     }, [showDesktopWindowControls]);
 
     useEffect(() => {
@@ -192,14 +194,6 @@ export const AppTitlebar = memo(function AppTitlebar({
         }
     };
 
-    const openDeviceSyncSettings = () => {
-        if (typeof window !== "undefined") {
-            window.sessionStorage.setItem("theorem-settings:active-tab", "integrations");
-            window.sessionStorage.setItem("theorem-settings:focus-section", "device-sync");
-        }
-        setRoute("settings");
-    };
-
     const handleQuickSync = async () => {
         if (isQuickSyncing || deviceSyncStatus === "syncing") {
             return;
@@ -216,33 +210,13 @@ export const AppTitlebar = memo(function AppTitlebar({
             const pairedDevices = await getPairedDevices();
 
             if (pairedDevices.length === 0) {
-                setDeviceSyncStatus("idle", "No paired devices yet. Pair one in Settings > Device Sync.");
-                openDeviceSyncSettings();
+                setDeviceSyncStatus("idle", "No paired devices. Open Settings > Integrations to pair.");
                 return;
             }
 
-            if (pairedDevices.length > 1) {
-                setDeviceSyncStatus("idle", "Multiple devices found. Choose one in Settings > Device Sync.");
-                openDeviceSyncSettings();
-                return;
+            for (const device of pairedDevices) {
+                await runDeviceSync(device.deviceId);
             }
-
-            const target = pairedDevices[0];
-            setDeviceSyncStatus(
-                "syncing",
-                `Syncing with ${target.deviceName || target.deviceId}...`,
-            );
-
-            const result = await runDeviceSync(target.deviceId);
-            if (result.success) {
-                const summary = result.domainsUpdated.length > 0
-                    ? `Updated ${result.domainsUpdated.length} domain(s)`
-                    : "Already in sync";
-                setDeviceSyncStatus("synced", summary);
-                return;
-            }
-
-            setDeviceSyncStatus("error", result.error || "Sync failed");
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             setDeviceSyncStatus("error", message);
@@ -265,7 +239,7 @@ export const AppTitlebar = memo(function AppTitlebar({
                 className="flex h-12 items-center justify-between gap-3 sm:gap-4 lg:h-11"
                 data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
             >
-                {/* Left side - Menu + Title */}
+                
                 <div
                     className="flex items-center gap-2 shrink-0 min-w-0"
                     data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
@@ -279,7 +253,7 @@ export const AppTitlebar = memo(function AppTitlebar({
                             }
                         }}
                         className="sm:hidden inline-flex items-center p-1 -ml-1"
-                        title="Go to Library"
+                        aria-label="Go to Library"
                     >
                         <div>
                             <TheoremLogo size={24} />
@@ -291,14 +265,15 @@ export const AppTitlebar = memo(function AppTitlebar({
                     </h1>
                 </div>
 
-                {/* Center - Search (desktop) */}
                 {isSearchVisible && (
                     <div
                         className="hidden lg:flex lg:flex-1 lg:min-w-[18rem] lg:max-w-3xl"
                         data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
                     >
                         <div className="relative w-full">
+                            <label htmlFor="app-search" className="sr-only">Search</label>
                             <input
+                                id="app-search"
                                 type="text"
                                 placeholder={searchPlaceholder}
                                 value={searchQuery}
@@ -323,7 +298,6 @@ export const AppTitlebar = memo(function AppTitlebar({
                     </div>
                 )}
 
-                {/* Right side - Stats button + Window controls */}
                 <div
                     className={cn(
                         "flex items-center shrink-0",
@@ -337,7 +311,7 @@ export const AppTitlebar = memo(function AppTitlebar({
                                 "sm:!hidden",
                                 TITLEBAR_ICON_BUTTON
                             )}
-                            title={isMobileSearchOpen ? "Hide search" : "Search"}
+                            aria-label={isMobileSearchOpen ? "Hide search" : "Search"}
                             data-active={isMobileSearchOpen ? "true" : undefined}
                             aria-pressed={isMobileSearchOpen}
                         >
@@ -397,7 +371,7 @@ export const AppTitlebar = memo(function AppTitlebar({
                     <button
                         onClick={() => setRoute("statistics")}
                         className={TITLEBAR_ICON_BUTTON}
-                        title="Statistics"
+                        aria-label="Statistics"
                         data-active={currentRoute === "statistics" ? "true" : undefined}
                         aria-pressed={currentRoute === "statistics"}
                     >
@@ -432,7 +406,6 @@ export const AppTitlebar = memo(function AppTitlebar({
                 </div>
             </div>
 
-            {/* Search - Mobile (toggle from icon) */}
             {isSearchVisible && isMobileSearchOpen && (
                 <div className="mt-1.5 sm:hidden">
                     <div className="relative w-full">
@@ -449,7 +422,10 @@ export const AppTitlebar = memo(function AppTitlebar({
                             )}
                         />
                         <button
-                            onClick={() => setIsMobileSearchOpen(false)}
+                            onClick={() => {
+                                useUIStore.getState().clearSearch();
+                                setIsMobileSearchOpen(false);
+                            }}
                             className={cn(
                                 "absolute right-2 top-1/2 -translate-y-1/2 !h-7 !w-7",
                                 "ui-icon-btn"
@@ -462,7 +438,6 @@ export const AppTitlebar = memo(function AppTitlebar({
                 </div>
             )}
 
-            {/* Search - Tablet layouts (hidden on phone sizes) */}
             {isSearchVisible && (
                 <div className="mt-1.5 hidden sm:block lg:hidden">
                     <div className="relative w-full">

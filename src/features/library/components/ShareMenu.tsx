@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import type { Annotation, Book } from "../../../core/types";
 import { shareOnX, buildShareText } from "../../../core/lib/share";
 import { ExternalLink, Image, AlertCircle } from "lucide-react";
-import { ShareStudioModal } from "./ShareStudioModal";
+import { ShareCardModal } from "../../share/ShareCardModal";
 
 interface ShareMenuProps {
     annotation: Annotation;
@@ -26,7 +26,8 @@ export function ShareMenu({ annotation, book, onClose }: ShareMenuProps) {
 
     if (showStudio) {
         return (
-            <ShareStudioModal
+            <ShareCardModal
+                kind="annotation"
                 annotation={annotation}
                 book={book}
                 onClose={onClose}
@@ -36,7 +37,7 @@ export function ShareMenu({ annotation, book, onClose }: ShareMenuProps) {
 
     return (
         <>
-            {/* Main share menu */}
+            
             <div className="absolute right-0 top-full z-20 mt-1 w-48 border border-[var(--color-border)] bg-[var(--color-surface)] py-1">
                 {toast && (
                     <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs text-[var(--color-error)] border-b border-[var(--color-border)]">

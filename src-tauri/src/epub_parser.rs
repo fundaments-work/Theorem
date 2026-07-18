@@ -5,27 +5,33 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-// ── Helpers ──
-
-fn read_zip_entry(archive: &mut zip::ZipArchive<File>, path: &str) -> Option<String> {
-    // First try the path as-is
-    if let Some(text) = read_zip_by_name(archive, path) {
+fn read_zip_entry_inner<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    path: &str,
+) -> Option<String> {
+    if let Some(text) = read_zip_by_name_inner(archive, path) {
         return Some(text);
     }
-    // Fall back to percent-decoded path (OPF hrefs may be percent-encoded
-    // while the zip stores decoded bytes, or vice versa)
+
     let decoded = percent_encoding::percent_decode(path.as_bytes()).decode_utf8_lossy();
     if decoded.as_ref() != path {
-        return read_zip_by_name(archive, decoded.as_ref());
+        return read_zip_by_name_inner(archive, decoded.as_ref());
     }
     None
 }
 
-fn read_zip_by_name(archive: &mut zip::ZipArchive<File>, name: &str) -> Option<String> {
+fn read_zip_by_name_inner<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    name: &str,
+) -> Option<String> {
     let mut file = archive.by_name(name).ok()?;
     let mut buf = Vec::with_capacity(file.size() as usize);
     file.read_to_end(&mut buf).ok()?;
     String::from_utf8(buf).ok()
+}
+
+fn read_zip_entry(archive: &mut zip::ZipArchive<File>, path: &str) -> Option<String> {
+    read_zip_entry_inner(archive, path)
 }
 
 fn resolve_relative(base: &str, target: &str) -> String {
@@ -37,7 +43,6 @@ fn resolve_relative(base: &str, target: &str) -> String {
         .to_string()
 }
 
-/// Strip a leading UTF-8 or UTF-16 BOM from XML bytes.
 fn strip_xml_bom(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
     use std::borrow::Cow;
     if bytes.len() >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF {
@@ -72,17 +77,11 @@ fn local_name(bytes: &[u8]) -> &[u8] {
     }
 }
 
-// ── OPF toc-source location (streaming quick-xml) ──
-
 struct LocatedTocSources {
     nav_href: Option<String>,
     ncx_href: Option<String>,
 }
 
-/// Single-pass streaming scan of the OPF to find the nav document href
-/// and NCX href. Mirrors foliate-js Resources logic:
-///   - nav: first manifest <item> whose `properties` contains the token "nav"
-///   - ncx: any <item> with media-type `application/x-dtbncx+xml`
 fn locate_toc_sources(opf_bytes: &[u8]) -> Result<LocatedTocSources, String> {
     let normalized = strip_xml_bom(opf_bytes);
     let mut reader = Reader::from_reader(normalized.as_ref());
@@ -160,8 +159,10 @@ fn locate_toc_sources(opf_bytes: &[u8]) -> Result<LocatedTocSources, String> {
     Ok(LocatedTocSources { nav_href, ncx_href })
 }
 
-fn read_rootfile_path(archive: &mut zip::ZipArchive<File>) -> Option<String> {
-    let bytes_str = read_zip_entry(archive, "META-INF/container.xml")?;
+fn read_rootfile_path_inner<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> Option<String> {
+    let bytes_str = read_zip_entry_inner(archive, "META-INF/container.xml")?;
     let normalized = strip_xml_bom(bytes_str.as_bytes());
     let mut reader = Reader::from_reader(normalized.as_ref());
     reader.config_mut().trim_text(true);
@@ -186,7 +187,6 @@ fn read_rootfile_path(archive: &mut zip::ZipArchive<File>) -> Option<String> {
     None
 }
 
-/// Pre-decoded EPUB metadata: container, OPF, nav, NCX, encryption text.
 struct EpubMeta {
     container: Option<String>,
     opf_path: String,
@@ -198,11 +198,14 @@ struct EpubMeta {
     encryption: Option<String>,
 }
 
-fn read_epub_metadata(archive: &mut zip::ZipArchive<File>) -> Option<EpubMeta> {
-    let container_text = read_zip_entry(archive, "META-INF/container.xml")?;
-    let opf_rel = read_rootfile_path(archive)?;
-    let opf_path = resolve_relative("META-INF/container.xml", &opf_rel);
-    let opf_text = read_zip_entry(archive, &opf_path)?;
+fn read_epub_metadata_inner<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> Option<EpubMeta> {
+    let container_text = read_zip_entry_inner(archive, "META-INF/container.xml")?;
+    let opf_rel = read_rootfile_path_inner(archive)?;
+
+    let opf_path = opf_rel;
+    let opf_text = read_zip_entry_inner(archive, &opf_path)?;
 
     let LocatedTocSources { nav_href, ncx_href } = locate_toc_sources(opf_text.as_bytes()).ok()?;
 
@@ -213,9 +216,13 @@ fn read_epub_metadata(archive: &mut zip::ZipArchive<File>) -> Option<EpubMeta> {
         .as_ref()
         .map(|href| resolve_relative(&opf_path, href));
 
-    let nav = nav_path.as_ref().and_then(|p| read_zip_entry(archive, p));
-    let ncx = ncx_path.as_ref().and_then(|p| read_zip_entry(archive, p));
-    let encryption = read_zip_entry(archive, "META-INF/encryption.xml");
+    let nav = nav_path
+        .as_ref()
+        .and_then(|p| read_zip_entry_inner(archive, p));
+    let ncx = ncx_path
+        .as_ref()
+        .and_then(|p| read_zip_entry_inner(archive, p));
+    let encryption = read_zip_entry_inner(archive, "META-INF/encryption.xml");
 
     Some(EpubMeta {
         container: Some(container_text),
@@ -227,6 +234,10 @@ fn read_epub_metadata(archive: &mut zip::ZipArchive<File>) -> Option<EpubMeta> {
         ncx,
         encryption,
     })
+}
+
+fn read_epub_metadata(archive: &mut zip::ZipArchive<File>) -> Option<EpubMeta> {
+    read_epub_metadata_inner(archive)
 }
 
 #[derive(serde::Serialize)]
@@ -253,13 +264,6 @@ pub struct ZipPrefetch {
     pub sections: HashMap<String, String>,
 }
 
-/// Opens a zip file in Rust and returns:
-///   - an uncompressed-size map of every entry
-///   - EPUB-specific: pre-decoded text for container, OPF, nav, NCX,
-///     encryption.xml, plus ALL HTML/XHTML sections
-///
-/// The operation runs on the blocking thread pool so 4 concurrent
-/// JS `invoke()` calls get true parallelism.
 #[tauri::command]
 pub async fn prefetch_zip_metadata(
     app: tauri::AppHandle,
@@ -279,7 +283,6 @@ fn prefetch_sync(_app: &tauri::AppHandle, path: &str) -> Result<ZipPrefetch, Str
     let file = File::open(file_path).map_err(|e| format!("Cannot open {path}: {e}"))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Not a valid zip: {e}"))?;
 
-    // 1. Build uncompressed-size map for every zip entry
     let mut sizes: HashMap<String, u64> = HashMap::with_capacity(archive.len());
     for i in 0..archive.len() {
         if let Ok(f) = archive.by_index(i) {
@@ -287,10 +290,8 @@ fn prefetch_sync(_app: &tauri::AppHandle, path: &str) -> Result<ZipPrefetch, Str
         }
     }
 
-    // 2. EPUB-specific: container → OPF → nav/NCX → encryption
     let epub = read_epub_metadata(&mut archive);
 
-    // 3. Pre-load HTML/XHTML section content so JS never touches zip for text
     let mut sections: HashMap<String, String> = HashMap::new();
     let section_exts = [".html", ".htm", ".xhtml", ".xml"];
     for name in sizes.keys() {
@@ -298,7 +299,7 @@ fn prefetch_sync(_app: &tauri::AppHandle, path: &str) -> Result<ZipPrefetch, Str
         if !section_exts.iter().any(|e| lower.ends_with(e)) {
             continue;
         }
-        // Skip already-read metadata files
+
         if epub.as_ref().is_some_and(|e| {
             e.nav_path.as_deref() == Some(name.as_str())
                 || e.ncx_path.as_deref() == Some(name.as_str())
@@ -329,4 +330,272 @@ fn prefetch_sync(_app: &tauri::AppHandle, path: &str) -> Result<ZipPrefetch, Str
         sizes,
         sections,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+    use std::io::Write;
+
+    fn create_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let buf = std::io::Cursor::new(Vec::new());
+        let mut zip = zip::ZipWriter::new(buf);
+        let options = zip::write::FileOptions::<()>::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        for (name, data) in entries {
+            zip.start_file(*name, options.clone()).unwrap();
+            zip.write_all(data).unwrap();
+        }
+        let buf = zip.finish().unwrap();
+        buf.into_inner()
+    }
+
+    fn create_container_xml(rootfile_path: &str) -> Vec<u8> {
+        format!(
+            r#"<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="{}" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#,
+            rootfile_path
+        )
+        .into_bytes()
+    }
+
+    fn create_simple_opf(title: &str, author: &str) -> Vec<u8> {
+        format!(
+            r#"<?xml version="1.0"?>
+<package xmlns="http:
+  <metadata>
+    <dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">{}</dc:title>
+    <dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">{}</dc:creator>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="ch1"/>
+  </spine>
+</package>"#,
+            title, author
+        )
+        .into_bytes()
+    }
+
+    #[test]
+    fn test_strip_bom_utf8() {
+        let bom: &[u8] = &[0xEF, 0xBB, 0xBF];
+        let input = [bom, b"<root/>" as &[u8]].concat();
+        let result = strip_xml_bom(&input);
+        assert_eq!(result.as_ref(), b"<root/>");
+    }
+
+    #[test]
+    fn test_strip_bom_none() {
+        let input = b"<root/>";
+        let result = strip_xml_bom(input);
+        assert_eq!(result.as_ref(), b"<root/>");
+    }
+
+    #[test]
+    fn test_strip_bom_utf16_be() {
+        let bom: &[u8] = &[0xFE, 0xFF];
+        let content = {
+            let mut v = Vec::new();
+            for b in "<root/>".encode_utf16() {
+                v.extend_from_slice(&b.to_be_bytes());
+            }
+            v
+        };
+        let input = [bom, content.as_slice()].concat();
+        let result = strip_xml_bom(&input);
+        let s = String::from_utf8(result.into_owned()).unwrap();
+        assert_eq!(s, "<root/>");
+    }
+
+    #[test]
+    fn test_strip_bom_utf16_le() {
+        let bom: &[u8] = &[0xFF, 0xFE];
+        let content = {
+            let mut v = Vec::new();
+            for b in "<root/>".encode_utf16() {
+                v.extend_from_slice(&b.to_le_bytes());
+            }
+            v
+        };
+        let input = [bom, content.as_slice()].concat();
+        let result = strip_xml_bom(&input);
+        let s = String::from_utf8(result.into_owned()).unwrap();
+        assert_eq!(s, "<root/>");
+    }
+
+    #[test]
+    fn test_local_name_no_namespace() {
+        assert_eq!(local_name(b"root"), b"root");
+    }
+
+    #[test]
+    fn test_local_name_with_namespace() {
+        assert_eq!(local_name(b"ns:root"), b"root");
+    }
+
+    #[test]
+    fn test_resolve_relative_same_dir() {
+        assert_eq!(
+            resolve_relative("OEBPS/content.opf", "nav.xhtml"),
+            "OEBPS/nav.xhtml"
+        );
+    }
+
+    #[test]
+    fn test_resolve_relative_root() {
+        assert_eq!(
+            resolve_relative("META-INF/container.xml", "OEBPS/content.opf"),
+            "META-INF/OEBPS/content.opf"
+        );
+    }
+
+    #[test]
+    fn test_resolve_relative_subdir() {
+        assert_eq!(
+            resolve_relative("OEBPS/content.opf", "sub/file.xhtml"),
+            "OEBPS/sub/file.xhtml"
+        );
+    }
+
+    #[test]
+    fn test_resolve_relative_with_query() {
+        assert_eq!(
+            resolve_relative("OEBPS/content.opf", "nav.xhtml?foo=bar"),
+            "OEBPS/nav.xhtml"
+        );
+    }
+
+    #[test]
+    fn test_resolve_relative_with_fragment() {
+        assert_eq!(
+            resolve_relative("OEBPS/content.opf", "nav.xhtml#section1"),
+            "OEBPS/nav.xhtml"
+        );
+    }
+
+    #[test]
+    fn test_read_rootfile_path_valid() {
+        let zip_data = create_zip(&[
+            (
+                "META-INF/container.xml",
+                &create_container_xml("OEBPS/content.opf"),
+            ),
+            ("OEBPS/content.opf", &create_simple_opf("Test", "Author")),
+        ]);
+        let cursor = Cursor::new(zip_data);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let result = read_rootfile_path_inner(&mut archive);
+        assert_eq!(result, Some("OEBPS/content.opf".to_string()));
+    }
+
+    #[test]
+    fn test_read_rootfile_path_percent_encoded() {
+        // Create container.xml with percent-encoded path
+        let container = format!(
+            r#"<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content%20file.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#
+        );
+        let zip_data = create_zip(&[
+            ("META-INF/container.xml", container.as_bytes()),
+            (
+                "OEBPS/content file.opf",
+                &create_simple_opf("Test", "Author"),
+            ),
+        ]);
+        let cursor = Cursor::new(zip_data);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let result = read_rootfile_path_inner(&mut archive);
+        assert_eq!(result, Some("OEBPS/content%20file.opf".to_string()));
+    }
+
+    #[test]
+    fn test_read_rootfile_path_no_container() {
+        let zip_data = create_zip(&[]);
+        let cursor = Cursor::new(zip_data);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let result = read_rootfile_path_inner(&mut archive);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_locate_toc_sources() {
+        let opf = create_simple_opf("Test", "Author");
+        let result = locate_toc_sources(&opf).unwrap();
+        assert_eq!(result.nav_href, Some("nav.xhtml".to_string()));
+        assert_eq!(result.ncx_href, Some("toc.ncx".to_string()));
+    }
+
+    #[test]
+    fn test_locate_toc_sources_no_nav() {
+        let opf = br#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+</package>"#;
+        let result = locate_toc_sources(opf).unwrap();
+        assert_eq!(result.nav_href, None);
+        assert_eq!(result.ncx_href, None);
+    }
+
+    #[test]
+    fn test_read_epub_metadata_full() {
+        let nav_bytes =
+            b"<html><body><nav><ol><li><a href=\"ch1.xhtml\">Ch1</a></li></ol></nav></body></html>";
+        let ncx_bytes = b"<?xml version=\"1.0\"?><ncx></ncx>";
+        let opf = create_simple_opf("Test Book", "Test Author");
+        let zip_data = create_zip(&[
+            (
+                "META-INF/container.xml",
+                &create_container_xml("OEBPS/content.opf"),
+            ),
+            ("OEBPS/content.opf", &opf),
+            ("OEBPS/nav.xhtml", nav_bytes),
+            ("OEBPS/toc.ncx", ncx_bytes),
+            (
+                "OEBPS/chapter1.xhtml",
+                b"<html><body><p>Hello</p></body></html>",
+            ),
+        ]);
+        let cursor = Cursor::new(zip_data);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let meta = read_epub_metadata_inner(&mut archive);
+        assert!(meta.is_some());
+        let meta = meta.unwrap();
+        assert_eq!(meta.opf_path, "OEBPS/content.opf");
+        assert_eq!(meta.nav_path, Some("OEBPS/nav.xhtml".to_string()));
+        assert_eq!(meta.ncx_path, Some("OEBPS/toc.ncx".to_string()));
+        assert!(meta.nav.unwrap().contains("nav"));
+        assert!(meta.ncx.unwrap().contains("ncx"));
+    }
+
+    #[test]
+    fn test_read_zip_entry_percent_decoded_fallback() {
+        let zip_data = create_zip(&[
+            (
+                "META-INF/container.xml",
+                &create_container_xml("OEBPS/content.opf"),
+            ),
+            ("OEBPS/content.opf", &create_simple_opf("Test", "Author")),
+        ]);
+        let cursor = Cursor::new(zip_data);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+
+        let result = read_zip_entry_inner(&mut archive, "nonexistent/path.html");
+        assert_eq!(result, None);
+    }
 }

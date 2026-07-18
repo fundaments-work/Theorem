@@ -36,7 +36,7 @@ export const BottomNav = memo(function BottomNav() {
     );
     
     return (
-        <nav className="ui-bottom-nav fixed bottom-0 left-0 right-0 z-[var(--z-nav)] pb-[env(safe-area-inset-bottom)] md:hidden">
+        <nav aria-label="Primary navigation" className="ui-bottom-nav fixed bottom-0 left-0 right-0 z-[var(--z-nav)] pb-[env(safe-area-inset-bottom)] md:hidden">
             <ul className="ui-bottom-nav-list px-2">
                 {navItems.map((item) => {
                     const isActive = currentRoute === item.id;

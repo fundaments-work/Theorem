@@ -1,7 +1,3 @@
-/**
- * Backdrop Component
- * Reusable backdrop for panels and modals
- */
 
 import { cn } from '../core/lib/utils';
 
@@ -27,4 +23,4 @@ export function Backdrop({ visible, onClick, className, blur = false }: Backdrop
     );
 }
 
-export default Backdrop;
+

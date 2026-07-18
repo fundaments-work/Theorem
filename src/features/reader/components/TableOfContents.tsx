@@ -1,10 +1,5 @@
-/**
- * TableOfContents Component
- * Side panel displaying the book's table of contents
- * Swiss Design Standard - Grid-based, clear hierarchy, full-height
- */
 
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect, memo } from "react";
 import { ChevronDown, ChevronRight, X, List } from "lucide-react";
 import { cn } from "../../../core/lib/utils";
 import type { TocItem } from "../../../core/types";
@@ -29,13 +24,12 @@ interface TocItemComponentProps {
     totalItems: number;
 }
 
-function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: TocItemComponentProps) {
+const TocItemComponent = memo(function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: TocItemComponentProps) {
     const [isExpanded, setIsExpanded] = useState(true);
     const hasChildren = item.subitems && item.subitems.length > 0;
     const isActive = currentHref === item.href;
     const itemRef = useRef<HTMLDivElement>(null);
 
-    // Auto-scroll active item into view
     useEffect(() => {
         if (isActive && itemRef.current) {
             itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -47,36 +41,33 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
         setIsExpanded((prev) => !prev);
     }, []);
 
-    // Swiss grid system: 8px base unit
-    const indentSize = depth * 24; // 24px = 3 × 8px grid unit
+    const indentSize = depth * 24; 
 
     return (
         <div ref={itemRef} className="group/item">
             <div
                 className={cn(
-                    // Swiss design: clear grid, minimal decoration
+                    
                     "relative flex cursor-pointer items-center py-3 px-4",
-                    "transition-all duration-200 ease-out",
+                    "transition-colors duration-200 ease-out",
                     "hover:bg-[var(--color-surface-muted)]",
                     isActive && "bg-[var(--color-accent-light)]"
                 )}
                 data-active={isActive}
                 onClick={() => onNavigate(item.href)}
             >
-                {/* Active indicator - geometric, left-aligned */}
+                
                 <div
                     className={cn(
-                        "absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-200",
+                        "absolute left-0 top-0 bottom-0 w-0.5 transition-colors duration-200",
                         isActive 
                             ? "bg-[var(--color-accent)]" 
                             : "bg-transparent group-hover/item:bg-[var(--color-border)]"
                     )}
                 />
 
-                {/* Indent spacer */}
                 <div style={{ width: indentSize }} className="shrink-0" />
 
-                {/* Expand/collapse button or bullet */}
                 {hasChildren ? (
                     <button
                         onClick={handleToggle}
@@ -96,7 +87,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
                     <div className="shrink-0 mr-3 w-6 flex items-center justify-center">
                         <div
                             className={cn(
-                                "w-1.5 h-1.5 transition-all duration-200",
+                                "w-1.5 h-1.5 transition-colors duration-200",
                                 isActive 
                                     ? "bg-[var(--color-accent)] scale-125" 
                                     : "bg-[var(--color-text-muted)] opacity-40 group-hover/item:opacity-70"
@@ -105,7 +96,6 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
                     </div>
                 )}
 
-                {/* Label - : clean, readable */}
                 <span 
                     className={cn(
                         "flex-1 truncate text-sm leading-relaxed",
@@ -119,7 +109,6 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
                 </span>
             </div>
 
-            {/* Children */}
             {hasChildren && isExpanded && (
                 <div>
                     {item.subitems!.map((child: TocItem, index: number) => (
@@ -136,7 +125,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
             )}
         </div>
     );
-}
+});
 
 export function TableOfContents({
     toc,
@@ -158,7 +147,6 @@ export function TableOfContents({
         onClose();
     }, [onNavigate, onClose]);
 
-    // Calculate total items including nested
     const totalItems = useMemo(() => {
         const countItems = (items: TocItem[]): number => {
             return items.reduce((acc, item) => {
@@ -176,34 +164,30 @@ export function TableOfContents({
         <>
             <Backdrop visible={visible} onClick={onClose} className="z-[155]" />
 
-            {/* Panel - Swiss design: grid-based, full-height on desktop */}
             <div
                 className={cn(
-                    // Mobile: bottom sheet (70% height)
+                    
                     "fixed inset-x-0 bottom-0 z-[160]",
                     "h-[70vh] max-h-[70vh]",
                     
-                    // Desktop: full-height side panel
                     "sm:inset-y-0 sm:left-0 sm:right-auto sm:top-0 sm:bottom-0",
                     "sm:h-screen sm:max-h-screen",
                     "sm:w-[360px] sm:max-w-[min(360px,40vw)]",
                     
-                    // Design system
                     "flex flex-col overflow-hidden",
                     "bg-[var(--color-surface)]",
                     "border-r border-[var(--color-border)]",
                     "shadow-2xl shadow-black/10",
                     
-                    // Visibility (no animation)
                     visible ? "flex" : "hidden",
                     
                     className,
                 )}
             >
-                {/* Header - Swiss grid layout */}
+                
                 <header className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
                     <div className="flex items-center justify-between px-5 py-4">
-                        {/* Left: Icon and title */}
+                        
                         <div className="flex items-center gap-4">
                             <div className="flex h-10 w-10 items-center justify-center border border-[var(--color-border)] bg-[var(--color-surface)]">
                                 <List className="w-5 h-5 text-[var(--color-text-primary)]" />
@@ -218,14 +202,13 @@ export function TableOfContents({
                             </div>
                         </div>
 
-                        {/* Right: Close button */}
                         <button
                             onClick={onClose}
                             className={cn(
                                 "flex h-10 w-10 items-center justify-center",
                                 "border border-[var(--color-border)]",
                                 "text-[var(--color-text-secondary)]",
-                                "transition-all duration-200",
+                                "transition-colors duration-200",
                                 "hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]",
                                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2"
                             )}
@@ -236,7 +219,6 @@ export function TableOfContents({
                     </div>
                 </header>
 
-                {/* TOC Items - Scrollable content area */}
                 <div className="flex-1 overflow-y-auto overscroll-contain">
                     {tocItems.length === 0 ? (
                         <div className="flex h-full flex-col items-center justify-center px-8 py-16 text-center">
@@ -253,7 +235,7 @@ export function TableOfContents({
                             </p>
                         </div>
                     ) : (
-                        <nav className="py-2">
+                        <nav aria-label="Table of contents" className="py-2">
                             {tocItems.map((item, index) => (
                                 <TocItemComponent
                                     key={`toc-${index}`}
@@ -268,7 +250,6 @@ export function TableOfContents({
                     )}
                 </div>
 
-                {/* Footer - Swiss design: minimal info bar */}
                 <footer className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-3">
                     <div className="flex items-center justify-between text-xs text-[var(--color-text-muted)]">
                         <span className="font-medium">

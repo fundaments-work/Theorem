@@ -10,10 +10,6 @@ interface State {
     errorInfo?: React.ErrorInfo;
 }
 
-/**
- * Error Boundary component to catch and display runtime errors
- * instead of showing a blank white screen
- */
 export class ErrorBoundary extends Component<Props, State> {
     constructor(props: Props) {
         super(props);

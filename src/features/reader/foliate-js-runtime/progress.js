@@ -1,4 +1,4 @@
-// assign a unique ID for each TOC item
+
 const assignIDs = toc => {
     let id = 0
     const assignID = item => {
@@ -70,7 +70,7 @@ export class SectionProgress {
         for (const size of this.sizes) results.push((sum += size) / sizeTotal)
         return results
     }
-    // get progress given index of and fractions within a section
+    
     getProgress(index, fractionInSection, pageFraction = 0) {
         const { sizes, sizePerLoc, sizePerTimeUnit, sizeTotal } = this
         const sizeInSection = sizes[index] ?? 0
@@ -96,8 +96,7 @@ export class SectionProgress {
             },
         }
     }
-    // the inverse of `getProgress`
-    // get index of and fraction in section based on total fraction
+    
     getSection(fraction) {
         if (fraction <= 0) return [0, 0]
         if (fraction >= 1) return [this.sizes.length - 1, 1]

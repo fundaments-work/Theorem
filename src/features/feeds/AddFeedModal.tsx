@@ -1,7 +1,3 @@
-/**
- * Add Feed Modal
- * Modal for subscribing to a new RSS feed
- */
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Modal, ModalBody, ModalFooter } from "../../ui";
@@ -30,7 +26,6 @@ export function AddFeedModal({ isOpen, onClose, onSubmit, isLoading, error }: Ad
         const trimmed = url.trim();
         if (!trimmed) return;
 
-        // Basic URL validation
         let feedUrl = trimmed;
         if (!feedUrl.startsWith("http://") && !feedUrl.startsWith("https://")) {
             feedUrl = "https://" + feedUrl;
@@ -66,10 +61,11 @@ export function AddFeedModal({ isOpen, onClose, onSubmit, isLoading, error }: Ad
 
                     <div className="space-y-3">
                         <div>
-                            <label className="block text-xs text-[color:var(--color-text-muted)] uppercase mb-1.5">
+                            <label htmlFor="feed-url" className="block text-xs text-[color:var(--color-text-muted)] uppercase mb-1.5">
                                 Feed URL
                             </label>
                             <input
+                                id="feed-url"
                                 ref={inputRef}
                                 type="url"
                                 value={url}

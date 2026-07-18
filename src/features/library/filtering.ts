@@ -10,6 +10,8 @@ export interface LibraryFilterOptions {
     showFavoritesOnly: boolean;
     sortBy: LibrarySortBy;
     sortOrder: LibrarySortOrder;
+    
+    ftsSearchIds?: string[];
 }
 
 import Fuse from "fuse.js";
@@ -23,43 +25,47 @@ export function getFilteredAndSortedBooks({
     showFavoritesOnly,
     sortBy,
     sortOrder,
+    ftsSearchIds,
 }: LibraryFilterOptions): Book[] {
     let searchResults = books;
     const trimmedQuery = searchQuery.trim();
 
-    // 1. Search (using cached Fuse instance over ALL books to prevent redundant index building)
     if (trimmedQuery) {
-        let fuse = booksFuseCache.get(books);
-        if (!fuse) {
-            const searchableItems = books.map((book) => ({
-                book,
-                title: book.title,
-                author: normalizeAuthor(book.author),
-                tags: book.tags.join(" "),
-                format: `${FORMAT_DISPLAY_NAMES[book.format]} ${book.format}`,
-            }));
-            
-            fuse = new Fuse(searchableItems, {
-                keys: [
-                    { name: "title", weight: 0.45 },
-                    { name: "author", weight: 0.3 },
-                    { name: "tags", weight: 0.15 },
-                    { name: "format", weight: 0.1 },
-                ],
-                threshold: 0.34,
-                ignoreLocation: true,
-                includeScore: true,
-                shouldSort: true,
-                minMatchCharLength: 2,
-            });
-            booksFuseCache.set(books, fuse);
+        if (ftsSearchIds && ftsSearchIds.length > 0) {
+            const idSet = new Set(ftsSearchIds);
+            searchResults = books.filter((b) => idSet.has(b.id));
+        } else {
+            let fuse = booksFuseCache.get(books);
+            if (!fuse) {
+                const searchableItems = books.map((book) => ({
+                    book,
+                    title: book.title,
+                    author: normalizeAuthor(book.author),
+                    tags: book.tags.join(" "),
+                    format: `${FORMAT_DISPLAY_NAMES[book.format]} ${book.format}`,
+                }));
+
+                fuse = new Fuse(searchableItems, {
+                    keys: [
+                        { name: "title", weight: 0.45 },
+                        { name: "author", weight: 0.3 },
+                        { name: "tags", weight: 0.15 },
+                        { name: "format", weight: 0.1 },
+                    ],
+                    threshold: 0.34,
+                    ignoreLocation: true,
+                    includeScore: true,
+                    shouldSort: true,
+                    minMatchCharLength: 2,
+                });
+                booksFuseCache.set(books, fuse);
+            }
+
+            const rawResults = fuse.search(trimmedQuery);
+            searchResults = rawResults.map((r) => r.item.book);
         }
-        
-        const rawResults = fuse.search(trimmedQuery);
-        searchResults = rawResults.map((r) => r.item.book);
     }
 
-    // 2. Filter
     let result = searchResults;
 
     if (selectedShelfBookIds) {
@@ -72,8 +78,6 @@ export function getFilteredAndSortedBooks({
         result = result.filter((book) => book.isFavorite);
     }
 
-    // If there was a search query, Fuse already sorted by relevance, 
-    // so we only apply the manual sort if there's no active search.
     if (trimmedQuery) {
         return result;
     }

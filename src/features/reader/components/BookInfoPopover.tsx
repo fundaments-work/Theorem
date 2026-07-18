@@ -1,7 +1,3 @@
-/**
- * BookInfoPopover Component
- * Displays book metadata and additional document information
- */
 
 import { X, Info, Calendar, Hash, Globe, FileText, User } from 'lucide-react';
 import type { DocMetadata } from '../../../core/types';
@@ -44,7 +40,7 @@ export function BookInfoPopover({
             <Backdrop visible={visible} onClick={onClose} />
 
             <FloatingPanel visible={visible} className={cn("overflow-hidden", className)}>
-                {/* Header */}
+                
                 <div className="reader-panel-header flex items-center justify-between p-4 sm:p-5">
                     <div className="flex items-center gap-2.5">
                         <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-1.5 text-[color:var(--color-accent)]">
@@ -60,8 +56,8 @@ export function BookInfoPopover({
                     </button>
                 </div>
 
-                <div className="p-5 sm:p-6 space-y-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-                    {/* Cover & Title */}
+                <div className="p-5 sm:p-6 space-y-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar [content-visibility:auto] overscroll-contain">
+                    
                     <div className="flex gap-4">
                         {metadata.cover ? (
                             <img
@@ -84,7 +80,6 @@ export function BookInfoPopover({
                         </div>
                     </div>
 
-                    {/* Metadata List */}
                     <div className="space-y-4">
                         {sections.map(({ label, value, Icon }, idx) => (
                             <div key={idx} className="flex flex-col gap-1.5">
@@ -99,7 +94,6 @@ export function BookInfoPopover({
                         ))}
                     </div>
 
-                    {/* Description */}
                     {metadata.description && (
                         <div className="space-y-2 pt-2 border-t border-[var(--color-border-subtle)]">
                             <span className="text-[var(--font-size-3xs)] font-bold text-[color:var(--color-text-muted)] uppercase tracking-wider">
@@ -116,4 +110,4 @@ export function BookInfoPopover({
     );
 }
 
-export default BookInfoPopover;
+

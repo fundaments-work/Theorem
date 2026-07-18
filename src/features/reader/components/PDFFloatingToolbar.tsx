@@ -56,26 +56,26 @@ export function PDFFloatingToolbar({
 
     return (
         <div className={cn("fixed z-[100] flex flex-col items-end gap-4 pointer-events-none", className)}>
-            {/* Toolbar Container */}
+            
             <div
                 className={cn(
-                    "flex flex-col gap-2 transition-all duration-300 ease-out origin-bottom-right pointer-events-auto",
+                    "flex flex-col gap-2 transition-colors duration-300 ease-out origin-bottom-right pointer-events-auto",
                     isOpen ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 translate-y-8 pointer-events-none"
                 )}
             >
-                {/* Tools */}
+                
                 <div className="flex flex-col items-center gap-2 p-2 bg-[var(--color-surface)]/90 backdrop-blur-xl border border-[var(--color-border)] shadow-2xl">
-                    {/* Tool Buttons */}
+                    
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'highlight' ? 'none' : 'highlight')}
                             className={cn(
-                                "relative w-10 h-10 flex items-center justify-center transition-all duration-200",
+                                "relative w-10 h-10 flex items-center justify-center transition-colors duration-200",
                                 annotationMode === 'highlight'
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
-                            title="Highlight"
+                            aria-label="Highlight"
                         >
                             <Highlighter className="w-5 h-5" />
                         </button>
@@ -83,12 +83,12 @@ export function PDFFloatingToolbar({
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'pen' ? 'none' : 'pen')}
                             className={cn(
-                                "relative w-10 h-10 flex items-center justify-center transition-all duration-200",
+                                "relative w-10 h-10 flex items-center justify-center transition-colors duration-200",
                                 annotationMode === 'pen'
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
-                            title="Pen"
+                            aria-label="Pen"
                         >
                             <Pencil className="w-5 h-5" />
                         </button>
@@ -96,12 +96,12 @@ export function PDFFloatingToolbar({
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'text' ? 'none' : 'text')}
                             className={cn(
-                                "relative w-10 h-10 flex items-center justify-center transition-all duration-200",
+                                "relative w-10 h-10 flex items-center justify-center transition-colors duration-200",
                                 annotationMode === 'text'
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
-                            title="Text"
+                            aria-label="Text"
                         >
                             <Type className="w-5 h-5" />
                         </button>
@@ -109,18 +109,17 @@ export function PDFFloatingToolbar({
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'erase' ? 'none' : 'erase')}
                             className={cn(
-                                "relative w-10 h-10 flex items-center justify-center transition-all duration-200",
+                                "relative w-10 h-10 flex items-center justify-center transition-colors duration-200",
                                 annotationMode === 'erase'
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
-                            title="Eraser"
+                            aria-label="Eraser"
                         >
                             <Eraser className="w-5 h-5" />
                         </button>
                     </div>
 
-                    {/* Color Picker (Conditional) */}
                     {(annotationMode === 'highlight' || annotationMode === 'pen') && (
                         <div className="w-full h-px bg-[var(--color-border)]/50 my-1" />
                     )}
@@ -144,11 +143,10 @@ export function PDFFloatingToolbar({
                 </div>
             </div>
 
-            {/* Main FAB Toggle */}
             <button
                 onClick={toggleOpen}
                 className={cn(
-                    "pointer-events-auto flex items-center justify-center w-14 h-14 shadow-xl transition-all duration-300",
+                    "pointer-events-auto flex items-center justify-center w-14 h-14 shadow-xl transition-colors duration-300",
                     isOpen
                         ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rotate-90"
                         : "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] hover:scale-105 hover:shadow-2xl hover:-translate-y-0.5"
@@ -165,4 +163,4 @@ export function PDFFloatingToolbar({
     );
 }
 
-export default PDFFloatingToolbar;
+

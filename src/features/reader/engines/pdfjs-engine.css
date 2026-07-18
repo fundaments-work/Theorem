@@ -1,8 +1,6 @@
-/**
- * PDF.js Engine Styles
- */
 
-/* Zoom container */
+
+
 .pdf-zoom-container {
     width: 100%;
 }
@@ -12,11 +10,11 @@
     margin: 0 auto;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    /* Keep scrolling smooth for long PDF stacks (avoid per-page shadow repaint cost). */
+    
     box-shadow: none;
 }
 
-/* Page container */
+
 .pdf-page-container {
     position: relative;
     overflow: hidden;
@@ -24,7 +22,7 @@
     margin: 0;
 }
 
-/* Text layer follows PDF.js viewer defaults for accurate hit-testing/selection */
+
 .textLayer {
     position: absolute;
     text-align: initial;
@@ -131,13 +129,13 @@
     display: none;
 }
 
-/* Ensure canvas is below text layer */
+
 .pdf-page-container canvas {
     position: absolute;
     z-index: 1;
 }
 
-/* Theme support */
+
 .theme-dark .pdf-page-wrapper {
     background: var(--color-surface);
     border-color: var(--color-border);
@@ -156,7 +154,7 @@
     }
 }
 
-/* Loading spinner */
+
 @keyframes pdfjs-spin {
     to {
         transform: rotate(360deg);

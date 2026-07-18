@@ -158,42 +158,28 @@ const KNOWN_POS = new Set([
     "Root", "Stem", "Combining form",
 ]);
 
-/**
- * Parses Wiktionary-derived StarDict Pango "m" format:
- *     (Noun) * definition text (Verb) *: another definition
- *     (Noun) definition without bullet
- *
- * Returns definitions grouped by part-of-speech label, with
- * cross-references, citation stubs, and formatting artifacts removed.
- */
 function parseWiktionaryDefinitions(raw: string): WiktionaryParseGroup[] {
-    // 1. Strip HTML comments and XML/Pango tags
+    
     let text = raw.replace(/<!--.*?-->/gs, " ");
     text = text.replace(/<[^>]*>/g, " ");
 
-    // 2. Clean cross-references: "hello#Interjection|Hello!" → "Hello!"
     text = text.replace(/\w+#\w+\|/g, "");
     text = text.replace(/#\w+/g, "");
 
-    // 3. Clean Pango formatting artifacts
     text = text.replace(/\|/g, " ");
     text = text.replace(/\\"/g, '"');
     text = text.replace(/\s*["""]\s*/g, " ");
     text = text.replace(/\s*[―–—]\s*/g, " — ");
     text = text.replace(/[\[\]{}]/g, " ");
 
-    // 4. Strip leading/trailing parenthetical junk from segments later
     text = text.replace(/\s+/g, " ").trim();
 
-    // 5. Split on parenthetical labels that start with uppercase (potential POS markers)
-    //    Skip "public domain", "publication" etc. since they start with lowercase.
     const rawSegments = text.split(/(?=\([A-Z][A-Za-z ]*\))/).filter(Boolean);
 
-    // 6. Group definitions by POS
     const groups = new Map<string, string[]>();
 
     for (const segment of rawSegments) {
-        // Extract POS label — handle "Label) * def", "Label) *: def", and "Label) def"
+        
         const posMatch = segment.match(/^\(([A-Za-z ]+)\)\s*(?:\*:?)?\s*/);
         if (!posMatch) continue;
 
@@ -202,21 +188,17 @@ function parseWiktionaryDefinitions(raw: string): WiktionaryParseGroup[] {
 
         let def = segment.slice(posMatch[0].length);
 
-        // Clean up remaining artifacts
         def = def.replace(/\|/g, " ");
         def = def.replace(/\s*["""]\s*/g, " ");
         def = def.replace(/\s+/g, " ").trim();
 
-        // Quality filters
         if (!def || def.length < 4) continue;
         if (/^[\w/:#@.%\-'·\s]+$/.test(def)) continue;
         if (/^\d{4},?\s/.test(def)) continue;
         if (/^[:.…·]+$/.test(def)) continue;
 
-        // Skip sub-label markers and citations
         if (/^\([A-Za-z]/.test(def)) continue;
 
-        // Append to POS group (handles repeated POS labels across entries)
         const existing = groups.get(pos);
         if (existing) {
             existing.push(def);
@@ -225,7 +207,6 @@ function parseWiktionaryDefinitions(raw: string): WiktionaryParseGroup[] {
         }
     }
 
-    // 7. Convert to array, deduplicate within each group
     const result: WiktionaryParseGroup[] = [];
     for (const [pos, defs] of groups) {
         const seen = new Set<string>();
@@ -296,9 +277,6 @@ async function createRuntimeDictionary(buffers: {
 
     await dictionary.loadIfo(new Blob([buffers.ifo]));
 
-    // DictZip stores each chunk as an independent gzip member.
-    // We must use Gunzip (not Inflate) because the chunks carry gzip
-    // headers, and we must signal final=true so fflate flushes all output.
     const inflateChunk = (data: Uint8Array): Uint8Array => {
         const outputs: Uint8Array[] = [];
         const gunzipper = new Gunzip({});
@@ -365,13 +343,36 @@ async function ensureLoadedDictionary(id: string): Promise<LoadedStarDict | null
         loadedDictionaries.set(id, runtime);
         return runtime;
     } catch (error) {
+        console.warn("[StarDict] Failed to load dictionary:", error);
         return null;
     }
 }
 
-/**
- * Imports StarDict files and persists them for offline lookups.
- */
+async function importStarDictCommon(
+    ifoBuffer: ArrayBuffer,
+    idxBuffer: ArrayBuffer,
+    dictBuffer: ArrayBuffer,
+    synBuffer: ArrayBuffer | undefined,
+    sizeBytes: number,
+    name: string,
+    language: string,
+): Promise<InstalledDictionary> {
+    const id = crypto.randomUUID();
+
+    await writeManifest({ id, name, language, sizeBytes, hasSyn: Boolean(synBuffer) });
+    await writeDictionaryPart(id, "ifo", ifoBuffer);
+    await writeDictionaryPart(id, "idx", idxBuffer);
+    await writeDictionaryPart(id, "dict", dictBuffer);
+    if (synBuffer) {
+        await writeDictionaryPart(id, "syn", synBuffer);
+    }
+
+    const runtime = await createRuntimeDictionary({ ifo: ifoBuffer, idx: idxBuffer, dict: dictBuffer, syn: synBuffer });
+    loadedDictionaries.set(id, runtime);
+
+    return { id, name, language, format: "stardict" as const, sizeBytes, importedAt: new Date() };
+}
+
 export async function importStarDictDictionary(
     files: FileList | File[],
 ): Promise<InstalledDictionary> {
@@ -392,105 +393,37 @@ export async function importStarDictDictionary(
         throw new Error("Dictionary import requires .idx (or .index) and .dict.dz files.");
     }
 
-    const ifoBuffer = await ifoFile.arrayBuffer();
-    const idxBuffer = await idxFile.arrayBuffer();
-    const dictBuffer = await dictFile.arrayBuffer();
-    const synBuffer = synFile ? await synFile.arrayBuffer() : undefined;
-
-    const parsed = parseIfoContent(textDecoder.decode(ifoBuffer));
-    const id = crypto.randomUUID();
-    const sizeBytes = ifoFile.size + idxFile.size + dictFile.size + (synFile?.size || 0);
-
-    const manifest: StoredStarDictManifest = {
-        id,
-        name: parsed.name,
-        language: parsed.language,
-        sizeBytes,
-        hasSyn: Boolean(synBuffer),
-    };
-
-    await writeManifest(manifest);
-    await writeDictionaryPart(id, "ifo", ifoBuffer);
-    await writeDictionaryPart(id, "idx", idxBuffer);
-    await writeDictionaryPart(id, "dict", dictBuffer);
-    if (synBuffer) {
-        await writeDictionaryPart(id, "syn", synBuffer);
-    }
-
-    const runtime = await createRuntimeDictionary({
-        ifo: ifoBuffer,
-        idx: idxBuffer,
-        dict: dictBuffer,
-        syn: synBuffer,
-    });
-    loadedDictionaries.set(id, runtime);
-
-    return {
-        id,
-        name: parsed.name,
-        language: parsed.language,
-        format: "stardict",
-        sizeBytes,
-        importedAt: new Date(),
-    };
+    const parsed = parseIfoContent(textDecoder.decode(await ifoFile.arrayBuffer()));
+    return importStarDictCommon(
+        await ifoFile.arrayBuffer(),
+        await idxFile.arrayBuffer(),
+        await dictFile.arrayBuffer(),
+        synFile ? await synFile.arrayBuffer() : undefined,
+        ifoFile.size + idxFile.size + dictFile.size + (synFile?.size || 0),
+        parsed.name,
+        parsed.language,
+    );
 }
 
-/**
- * Import a StarDict dictionary from raw byte arrays.
- * Useful for programmatic imports (e.g., downloaded dictionaries).
- */
 export async function importStarDictFromBytes(
     ifoBytes: Uint8Array,
     idxBytes: Uint8Array,
     dictBytes: Uint8Array,
     synBytes?: Uint8Array,
 ): Promise<InstalledDictionary> {
-    const ifoBuffer = ifoBytes.buffer.slice(ifoBytes.byteOffset, ifoBytes.byteOffset + ifoBytes.byteLength) as ArrayBuffer;
-    const idxBuffer = idxBytes.buffer.slice(idxBytes.byteOffset, idxBytes.byteOffset + idxBytes.byteLength) as ArrayBuffer;
-    const dictBuffer = dictBytes.buffer.slice(dictBytes.byteOffset, dictBytes.byteOffset + dictBytes.byteLength) as ArrayBuffer;
-    const synBuffer = synBytes ? synBytes.buffer.slice(synBytes.byteOffset, synBytes.byteOffset + synBytes.byteLength) as ArrayBuffer | undefined : undefined;
-
-    const parsed = parseIfoContent(textDecoder.decode(ifoBuffer));
-    const id = crypto.randomUUID();
-    const sizeBytes = ifoBytes.byteLength + idxBytes.byteLength + dictBytes.byteLength + (synBytes?.byteLength || 0);
-
-    const manifest: StoredStarDictManifest = {
-        id,
-        name: parsed.name,
-        language: parsed.language,
-        sizeBytes,
-        hasSyn: Boolean(synBuffer),
-    };
-
-    await writeManifest(manifest);
-    await writeDictionaryPart(id, "ifo", ifoBuffer);
-    await writeDictionaryPart(id, "idx", idxBuffer);
-    await writeDictionaryPart(id, "dict", dictBuffer);
-    if (synBuffer) {
-        await writeDictionaryPart(id, "syn", synBuffer);
-    }
-
-    const runtime = await createRuntimeDictionary({
-        ifo: ifoBuffer,
-        idx: idxBuffer,
-        dict: dictBuffer,
-        syn: synBuffer,
-    });
-    loadedDictionaries.set(id, runtime);
-
-    return {
-        id,
-        name: parsed.name,
-        language: parsed.language,
-        format: "stardict",
-        sizeBytes,
-        importedAt: new Date(),
-    };
+    const toBuffer = (bytes: Uint8Array) => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const parsed = parseIfoContent(textDecoder.decode(toBuffer(ifoBytes)));
+    return importStarDictCommon(
+        toBuffer(ifoBytes),
+        toBuffer(idxBytes),
+        toBuffer(dictBytes),
+        synBytes ? toBuffer(synBytes) : undefined,
+        ifoBytes.byteLength + idxBytes.byteLength + dictBytes.byteLength + (synBytes?.byteLength || 0),
+        parsed.name,
+        parsed.language,
+    );
 }
 
-/**
- * Removes an imported StarDict dictionary from storage and memory.
- */
 export async function removeStarDictDictionary(id: string): Promise<void> {
     loadedDictionaries.delete(id);
     await Promise.all([
@@ -512,9 +445,6 @@ export interface ExportedStarDictDictionary {
     };
 }
 
-/**
- * Exports an installed StarDict package including raw files for sync/backup.
- */
 export async function exportStarDictDictionary(
     id: string,
 ): Promise<ExportedStarDictDictionary | null> {
@@ -543,9 +473,6 @@ export async function exportStarDictDictionary(
     };
 }
 
-/**
- * Looks up a term in a specific imported StarDict dictionary.
- */
 export async function lookupInStarDictDictionary(
     id: string,
     term: string,
@@ -562,13 +489,11 @@ export async function lookupInStarDictDictionary(
         }
         return parseDictionaryEntries(entries, "stardict");
     } catch (error) {
+        console.warn("[StarDict] Lookup failed for dictionary:", error);
         return [];
     }
 }
 
-/**
- * Looks up a term in all provided StarDict dictionary IDs.
- */
 export async function lookupInStarDictDictionaries(
     dictionaryIds: string[],
     term: string,
@@ -582,6 +507,7 @@ export async function lookupInStarDictDictionaries(
                 combined.push(...meanings);
             }
         } catch (error) {
+            console.warn("[StarDict] Lookup failed for dictionary", id, error);
         }
     }
 

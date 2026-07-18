@@ -1,5 +1,7 @@
 mod database;
 mod epub_parser;
+mod file_transfer;
+mod iroh_sync;
 mod sync_commands;
 #[cfg(target_os = "linux")]
 mod tts_linux;
@@ -7,9 +9,7 @@ mod tts_linux;
 use reqwest::blocking::Client;
 use serde::Serialize;
 use std::env;
-/**
- * Tauri Library Module
- */
+
 use std::fs;
 #[cfg(not(target_os = "android"))]
 use std::io::{Cursor, Write};
@@ -87,7 +87,6 @@ fn file_uri_to_path(candidate: &str) -> Option<String> {
 
     let decoded = decode_percent_escapes(rest);
 
-    // Windows file URL shape: file:///C:/Users/...
     if decoded.starts_with('/') {
         let bytes = decoded.as_bytes();
         if bytes.len() > 3 && bytes[2] == b':' {
@@ -118,7 +117,6 @@ fn normalize_open_path(candidate: &str, cwd: Option<&str>) -> Option<String> {
         return None;
     }
 
-    // Ignore non-file scheme arguments.
     if trimmed.contains("://") && !trimmed.starts_with("file://") {
         return None;
     }
@@ -163,9 +161,6 @@ fn enqueue_open_paths(app: &tauri::AppHandle, paths: Vec<String>, emit_event: bo
     if emit_event {
         let _ = app.emit("theorem://open-files", paths);
     }
-
-    // Window management is handled by the frontend
-    // The window should already be visible when the app starts
 }
 
 #[tauri::command]
@@ -174,9 +169,6 @@ fn take_pending_open_files(state: tauri::State<PendingOpenFiles>) -> Vec<String>
     guard.drain(..).collect()
 }
 
-/**
- * Metadata structure for PDF documents.
- */
 #[derive(Serialize)]
 struct PdfMetadata {
     title: Option<String>,
@@ -188,32 +180,15 @@ struct PdfMetadata {
     modification_date: Option<String>,
 }
 
-/**
- * Reads a file from the given path and returns its contents as bytes.
- * Used for loading PDF and other document files.
- *
- * # Arguments
- * * `path` - The absolute path to the file to read
- *
- * # Returns
- * * `Ok(Vec<u8>)` - The file contents as bytes
- * * `Err(String)` - Error message if reading fails
- */
 #[tauri::command]
-fn read_file(path: String) -> Result<Vec<u8>, String> {
-    fs::read(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))
+fn read_file(path: String) -> Result<Response, String> {
+    let data = fs::read(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))?;
+    Ok(Response::new(data))
 }
 
-/// Reads a CBR (RAR comic archive) file and converts it to CBZ (ZIP) format
-/// in memory. The resulting ZIP bytes can be passed to the existing CBZ
-/// reading pipeline unchanged.
-///
-/// CBR conversion requires the unrar-ng crate which bundles native C++
-/// unrar code — this does not cross-compile for the Android NDK, so the
-/// command is a no-op on Android (CBR must be pre-converted before transfer).
 #[tauri::command]
 #[allow(unused_variables)]
-fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
+fn read_cbr_as_cbz(path: String) -> Result<Response, String> {
     #[cfg(target_os = "android")]
     return Err("CBR conversion is not supported on Android".into());
     #[cfg(not(target_os = "android"))]
@@ -224,7 +199,7 @@ fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
         let mut zip_buffer = Cursor::new(Vec::new());
         {
             let mut zip_writer = zip::ZipWriter::new(&mut zip_buffer);
-            let options = zip::write::FileOptions::default()
+            let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
             let mut archive = archive;
             loop {
@@ -254,33 +229,12 @@ fn read_cbr_as_cbz(path: String) -> Result<Vec<u8>, String> {
                 .finish()
                 .map_err(|e| format!("Failed to finalize ZIP: {}", e))?;
         }
-        Ok(zip_buffer.into_inner())
+        Ok(Response::new(zip_buffer.into_inner()))
     }
 }
 
-/**
- * Reads a PDF file from the given path and returns its contents as bytes.
- * Supports both absolute paths and app storage paths.
- *
- * The storage path in the frontend is constructed as:
- * `${appDataDir}/books/${id}.book`
- *
- * Since the Tauri FS plugin on the frontend side handles scoped permissions,
- * this command just needs to use standard fs::read for the resolved paths.
- *
- * # Arguments
- * * `path` - The file path (can be absolute or from app storage)
- *
- * # Returns
- * * `Ok(Vec<u8>)` - The PDF file contents as bytes
- * * `Err(String)` - Error message if reading fails
- */
 #[tauri::command]
 fn read_pdf_file(path: String) -> Result<Response, String> {
-    // Try to read the file directly using standard fs
-    // The Tauri FS plugin's scope permissions are checked on the frontend side
-    // when reading from app storage, so by the time we get here, the path
-    // should be accessible.
     let data = fs::read(&path).map_err(|e| format!("Failed to read PDF file '{}': {}", path, e))?;
     Ok(Response::new(data))
 }
@@ -325,23 +279,13 @@ fn read_pdf_range(path: String, offset: u64, length: u64) -> Result<Response, St
     Ok(Response::new(buffer))
 }
 
-/**
- * Extracts metadata from a PDF file.
- *
- * # Arguments
- * * `path` - The absolute path to the PDF file
- *
- * # Returns
- * * `Ok(PdfMetadata)` - The extracted PDF metadata
- * * `Err(String)` - Error message if reading fails
- */
 #[tauri::command]
 fn get_pdf_metadata(path: String) -> Result<PdfMetadata, String> {
     let metadata = fs::metadata(&path)
         .map_err(|e| format!("Failed to read PDF file metadata '{}': {}", path, e))?;
     let file_size = metadata.len();
 
-    const HEAD_SIZE: u64 = 65536; // 64KB for header + Info dict
+    const HEAD_SIZE: u64 = 65536;
     let first_chunk_size = HEAD_SIZE.min(file_size);
 
     let mut file =
@@ -353,8 +297,6 @@ fn get_pdf_metadata(path: String) -> Result<PdfMetadata, String> {
 
     let metadata = extract_pdf_metadata(&first_bytes);
 
-    // If no title found in the first 64KB, the Info dict might be near the end.
-    // Try the last 64KB as a fallback.
     if metadata.title.is_none() && file_size > HEAD_SIZE {
         let tail_size = HEAD_SIZE.min(file_size);
         let tail_offset = file_size.saturating_sub(tail_size);
@@ -391,14 +333,9 @@ fn get_pdf_metadata(path: String) -> Result<PdfMetadata, String> {
     Ok(metadata)
 }
 
-/**
- * Extracts metadata from PDF bytes by parsing the document structure.
- * This is a basic parser that extracts info from the PDF header and Info dictionary.
- */
 fn extract_pdf_metadata(bytes: &[u8]) -> PdfMetadata {
     let content = String::from_utf8_lossy(bytes);
 
-    // Extract page count by counting /Type /Page occurrences (approximation)
     let pages = content
         .matches("/Type /Page")
         .count()
@@ -406,7 +343,6 @@ fn extract_pdf_metadata(bytes: &[u8]) -> PdfMetadata {
         .ok()
         .filter(|&n: &u32| n > 0);
 
-    // Try to extract fields from the Info dictionary
     let title = extract_pdf_string(&content, "/Title");
     let author = extract_pdf_string(&content, "/Author");
     let creator = extract_pdf_string(&content, "/Creator");
@@ -425,16 +361,11 @@ fn extract_pdf_metadata(bytes: &[u8]) -> PdfMetadata {
     }
 }
 
-/**
- * Extracts a string value for a given key from PDF content.
- * Handles PDF string literals (both parentheses and angle bracket encodings).
- */
 fn extract_pdf_string(content: &str, key: &str) -> Option<String> {
     if let Some(pos) = content.find(key) {
         let after_key = &content[pos + key.len()..];
         let trimmed = after_key.trim_start();
 
-        // Handle parenthesis-enclosed strings: (value)
         if let Some(rest) = trimmed.strip_prefix('(') {
             if let Some(end_pos) = find_closing_paren(rest) {
                 let value = &rest[..end_pos];
@@ -442,7 +373,6 @@ fn extract_pdf_string(content: &str, key: &str) -> Option<String> {
             }
         }
 
-        // Handle hex strings: <hexvalue>
         if let Some(rest) = trimmed.strip_prefix('<') {
             if let Some(end_pos) = rest.find('>') {
                 let hex = &rest[..end_pos];
@@ -453,9 +383,6 @@ fn extract_pdf_string(content: &str, key: &str) -> Option<String> {
     None
 }
 
-/**
- * Finds the position of the closing parenthesis, handling escaped parentheses.
- */
 fn find_closing_paren(s: &str) -> Option<usize> {
     let mut depth = 1;
     let mut escaped = false;
@@ -481,9 +408,6 @@ fn find_closing_paren(s: &str) -> Option<usize> {
     None
 }
 
-/**
- * Decodes a PDF string literal, handling escape sequences.
- */
 fn decode_pdf_string(s: &str) -> String {
     let mut result = String::new();
     let mut chars = s.chars().peekable();
@@ -496,9 +420,8 @@ fn decode_pdf_string(s: &str) -> String {
                 Some('t') => result.push('\t'),
                 Some('b') => result.push('\x08'),
                 Some('f') => result.push('\x0c'),
-                Some('\n') => {} // Line continuation, skip
+                Some('\n') => {}
                 Some(d) if d.is_ascii_digit() => {
-                    // Octal escape sequence
                     let mut octal = String::new();
                     octal.push(d);
                     for _ in 0..2 {
@@ -525,9 +448,6 @@ fn decode_pdf_string(s: &str) -> String {
     result
 }
 
-/**
- * Decodes a hex-encoded PDF string.
- */
 fn decode_hex_string(hex: &str) -> Option<String> {
     let cleaned: String = hex.chars().filter(|c| !c.is_whitespace()).collect();
 
@@ -541,17 +461,6 @@ fn decode_hex_string(hex: &str) -> Option<String> {
         .and_then(|bytes| String::from_utf8(bytes).ok())
 }
 
-/**
- * Fetches RSS feed content from a URL using native HTTP client.
- * This bypasses browser CORS restrictions.
- *
- * # Arguments
- * * `url` - The URL of the RSS feed to fetch
- *
- * # Returns
- * * `Ok(String)` - The feed content as a string
- * * `Err(String)` - Error message if fetching fails
- */
 #[tauri::command]
 fn fetch_rss_feed(url: String) -> Result<String, String> {
     let response = shared_http_client()
@@ -575,17 +484,6 @@ fn fetch_rss_feed(url: String) -> Result<String, String> {
         .map_err(|e| format!("Failed to read response: {}", e))
 }
 
-/**
- * Fetches generic URL content using native HTTP client.
- * Primarily used to fetch full article HTML for RSS items.
- *
- * # Arguments
- * * `url` - The URL to fetch
- *
- * # Returns
- * * `Ok(String)` - The response body as text
- * * `Err(String)` - Error message if fetching fails
- */
 #[tauri::command]
 fn fetch_url_content(url: String) -> Result<String, String> {
     let parsed_url =
@@ -674,12 +572,8 @@ fn fetch_url_content(url: String) -> Result<String, String> {
     Err(last_error.unwrap_or_else(|| "Failed to fetch URL content".to_string()))
 }
 
-/**
- * Fetches binary URL content (for example PDF files) using native HTTP client.
- * Returns raw bytes so the frontend can store the document in app storage.
- */
 #[tauri::command]
-fn fetch_binary_content(url: String) -> Result<Vec<u8>, String> {
+fn fetch_binary_content(url: String) -> Result<Response, String> {
     let parsed_url =
         reqwest::Url::parse(&url).map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
     let referer = {
@@ -715,7 +609,7 @@ fn fetch_binary_content(url: String) -> Result<Vec<u8>, String> {
     let bytes = response
         .bytes()
         .map_err(|e| format!("Failed to read binary response: {}", e))?;
-    Ok(bytes.to_vec())
+    Ok(Response::new(bytes.to_vec()))
 }
 
 #[tauri::command]
@@ -789,7 +683,6 @@ fn scan_library_folder_desktop(folder_path: String) -> Result<Vec<String>, Strin
             }
         }
 
-        // Sort for deterministic order
         book_files.sort();
         Ok(book_files)
     }
@@ -831,8 +724,6 @@ async fn materialize_android_content_uri(
 
 #[cfg(target_os = "linux")]
 fn apply_linux_webkit_workarounds() {
-    // Allow advanced users to disable these workarounds for troubleshooting:
-    // THEOREM_WEBKIT_WORKAROUNDS=0
     if env::var("THEOREM_WEBKIT_WORKAROUNDS")
         .map(|value| value == "0")
         .unwrap_or(false)
@@ -840,12 +731,10 @@ fn apply_linux_webkit_workarounds() {
         return;
     }
 
-    // WebKitGTK fallback for known Linux compositor/acceleration regressions.
     if env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
         env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
     }
 
-    // Helps with fractional-scaling blur regressions in GTK/WebKit paths.
     let existing_gdk_debug = env::var("GDK_DEBUG").unwrap_or_default();
     if existing_gdk_debug
         .split(',')
@@ -859,9 +748,6 @@ fn apply_linux_webkit_workarounds() {
         env::set_var("GDK_DEBUG", merged);
     }
 }
-
-// ─── TTS Commands ───
-// Linux: spd-say CLI. macOS: say command. Windows: PowerShell SAPI. Android: plugin.
 
 #[tauri::command]
 #[allow(unused_variables, unreachable_code)]
@@ -944,11 +830,12 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     apply_linux_webkit_workarounds();
 
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let builder = tauri::Builder::default()
         .manage(PendingOpenFiles::default())
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Hide to tray instead of closing — user must use tray "Quit"
                 let _ = window.hide();
                 api.prevent_close();
             }
@@ -960,15 +847,13 @@ pub fn run() {
         .plugin(tauri_plugin_app::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_mobile_folder_scan::init())
-        .plugin(tauri_plugin_android_sync_worker::init())
         .plugin(tauri_plugin_android_tts_audio::init());
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
-        // Called when a secondary instance is invoked (e.g. "Open With" or relaunch).
         let paths = collect_open_paths(argv, Some(&cwd));
         enqueue_open_paths(app, paths, true);
-        // Show and focus the existing window (it may be hidden to tray).
+
         if let Some(window) = app.get_webview_window("main") {
             let _ = window.show();
             let _ = window.set_focus();
@@ -980,14 +865,15 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            // Initialize LAN sync subsystem.
-            // On Android, app_data_dir can fail to resolve, so we try
-            // multiple fallback paths before giving up.
             let app_data_dir = app
                 .path()
                 .app_data_dir()
                 .or_else(|_| app.path().app_cache_dir())
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
+
+            if let Err(e) = database::run_schema_migrations(app.handle()) {
+                eprintln!("[database] Schema migration failed: {e}");
+            }
 
             let device_name = std::env::var("HOSTNAME")
                 .or_else(|_| std::env::var("COMPUTERNAME"))
@@ -1001,60 +887,13 @@ pub fn run() {
                 }
                 Err(e) => {
                     eprintln!("[theorem] Warning: Failed to initialize sync: {}", e);
-                    // Sync features will be unavailable but the app won't crash
-                    // — sync commands use get_sync_state() which returns a
-                    // clean error instead of panicking.
                 }
             }
 
-            // Manage background sync handle (used by Android ForegroundService
-            // and desktop background scheduler).
-            use sync_commands::BackgroundSyncHandle;
-            app.manage(BackgroundSyncHandle {
-                cancel: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
-                running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-                data_version: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
-                wake: std::sync::Arc::new(tokio::sync::Notify::new()),
-            });
-
-            // Collect any file association / CLI open targets at startup so the frontend can
-            // import and open them once it is ready.
             let startup_args: Vec<String> = std::env::args().skip(1).collect();
             let open_paths = collect_open_paths(startup_args, None);
             enqueue_open_paths(app.handle(), open_paths, false);
 
-            // ── Launch sync-daemon (Linux only) ──
-            // The daemon runs the sync HTTP server and periodic auto-sync
-            // independently of the GUI. It's installed by the install script
-            // at ~/.local/lib/theorem/sync-daemon and managed by systemd.
-            // If the binary is not found, this is a no-op — the in-app
-            // sync server takes over.
-            #[cfg(target_os = "linux")]
-            {
-                let daemon_data_dir = daemon_data_dir.clone();
-                tauri::async_runtime::spawn(async move {
-                    let daemon_path = std::env::var("HOME")
-                        .map(|h| std::path::PathBuf::from(h).join(".local/lib/theorem/sync-daemon"))
-                        .ok();
-                    let daemon_path = match daemon_path {
-                        Some(p) if p.exists() => p,
-                        _ => return, // daemon not installed, no-op
-                    };
-                    match tokio::process::Command::new(&daemon_path)
-                        .arg(daemon_data_dir.to_string_lossy().as_ref())
-                        .spawn()
-                    {
-                        Ok(child) => {
-                            eprintln!("[sync-daemon] launched (pid={})", child.id().unwrap_or(0));
-                        }
-                        Err(e) => {
-                            eprintln!("[sync-daemon] spawn failed: {e}");
-                        }
-                    }
-                });
-            }
-
-            // ── System tray (desktop only) ──
             #[cfg(desktop)]
             {
                 let show = MenuItemBuilder::with_id("show", "Show Theorem").build(app)?;
@@ -1133,6 +972,7 @@ pub fn run() {
             database::sqlite_cleanup_orphaned_storage,
             database::sqlite_clear_all_storage,
             database::sqlite_get_kv,
+            database::sqlite_batch_get_kv,
             database::sqlite_set_kv,
             database::sqlite_delete_kv,
             database::sqlite_count_kv_by_prefix,
@@ -1142,31 +982,30 @@ pub fn run() {
             database::sqlite_delete_blob,
             database::sqlite_delete_blobs_by_prefix,
             database::sqlite_get_blob_stats,
-            // LAN sync commands
-            sync_commands::start_sync_server,
-            sync_commands::stop_sync_server,
+            database::sqlite_index_book_fts,
+            database::sqlite_index_books_fts_batch,
+            database::sqlite_search_books,
+            database::sqlite_save_book_metadata,
+            database::sqlite_get_book_metadata,
+            database::sqlite_save_book_annotations,
+            database::sqlite_get_book_annotations,
+            sync_commands::iroh_start,
+            sync_commands::iroh_stop,
+            sync_commands::iroh_pair,
             sync_commands::generate_pairing_qr,
             sync_commands::submit_pairing_code,
             sync_commands::get_device_identity,
             sync_commands::set_device_fingerprint,
             sync_commands::get_paired_devices,
             sync_commands::unpair_device,
-            sync_commands::set_sync_data,
-            sync_commands::get_incoming_sync_data,
-            sync_commands::update_peer_address,
-            sync_commands::discover_peer,
-            sync_commands::initiate_sync,
-            sync_commands::pull_book_files,
-            sync_commands::pull_book_covers,
-            sync_commands::start_background_sync,
-            sync_commands::stop_background_sync,
-            sync_commands::wake_background_sync,
+            sync_commands::docs_create_sync_doc,
+            sync_commands::docs_import_sync_doc,
+            sync_commands::docs_set_entry,
+            sync_commands::docs_get_all_entries,
+            sync_commands::docs_sync_now,
+            file_transfer::request_book_file,
+            sync_commands::clear_sync_databases,
             set_android_fingerprint,
-            start_android_sync_worker,
-            stop_android_sync_worker,
-            update_sync_notification,
-            schedule_sync_work,
-            cancel_sync_work,
             hide_to_tray,
             download_and_extract_stardict,
         ])
@@ -1174,8 +1013,6 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// On Android, reads ANDROID_ID via the mobile-folder-scan plugin and
-/// sets it as the device fingerprint. No-op on other platforms.
 #[tauri::command]
 async fn set_android_fingerprint(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
@@ -1186,7 +1023,6 @@ async fn set_android_fingerprint(app: tauri::AppHandle) -> Result<(), String> {
                 eprintln!("[sync] Android fingerprint set from ANDROID_ID");
             }
             _ => {
-                // Fallback: generate a placeholder fingerprint.
                 theorem_sync_core::sync_crypto::set_fingerprint_from_frontend("android:unknown");
             }
         }
@@ -1198,171 +1034,53 @@ async fn set_android_fingerprint(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Start the Android sync ForegroundService (keeps process alive for
-/// background sync). On non-Android platforms this is a no-op.
-#[tauri::command]
-async fn start_android_sync_worker(app: tauri::AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    {
-        tauri_plugin_android_sync_worker::start_worker(
-            &app,
-            "Theorem Sync Active",
-            "Syncing data with paired devices",
-            300,
-        )?;
-        eprintln!("[sync] Android sync worker started");
-    }
-    let _ = &app;
-    Ok(())
-}
-
-/// Stop the Android sync ForegroundService.
-#[tauri::command]
-async fn stop_android_sync_worker(app: tauri::AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    {
-        tauri_plugin_android_sync_worker::stop_worker(&app)?;
-        eprintln!("[sync] Android sync worker stopped");
-    }
-    let _ = &app;
-    Ok(())
-}
-
-/// Update the Android sync notification text.
-#[tauri::command]
-async fn update_sync_notification(app: tauri::AppHandle, text: String) -> Result<(), String> {
-    tauri_plugin_android_sync_worker::update_notification(&app, &text)?;
-    Ok(())
-}
-
-/// Schedule periodic WorkManager background sync (Android).
-#[tauri::command]
-async fn schedule_sync_work(app: tauri::AppHandle) -> Result<(), String> {
-    tauri_plugin_android_sync_worker::schedule_periodic_sync(&app)?;
-    eprintln!("[sync] Periodic WorkManager sync scheduled");
-    Ok(())
-}
-
-/// Cancel periodic WorkManager background sync (Android).
-#[tauri::command]
-async fn cancel_sync_work(app: tauri::AppHandle) -> Result<(), String> {
-    tauri_plugin_android_sync_worker::cancel_periodic_sync(&app)?;
-    eprintln!("[sync] Periodic WorkManager sync cancelled");
-    Ok(())
-}
-
-/// Standalone background sync round — called from WorkManager via JNI.
-/// Uses the proper JNI naming convention so Android can find it.
-/// Runs without the Tauri runtime: loads sync identity, starts the
-/// sync server, waits for incoming syncs for 3 min, then shuts down.
 #[cfg(target_os = "android")]
 #[no_mangle]
-pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgroundSync(
+pub extern "C" fn Java_work_fundamentals_theorem_MainActivity_initNdkContext(
     mut env: jni::JNIEnv,
     _class: jni::objects::JClass,
-    j_data_dir: jni::objects::JString,
-) -> jni::sys::jboolean {
-    let data_dir_str: String = match env.get_string(&j_data_dir) {
-        Ok(s) => s.into(),
-        Err(_) => ".".to_string(),
-    };
-
-    let data_dir = std::path::PathBuf::from(&data_dir_str);
-    eprintln!("[background-sync] JNI sync round in {}", data_dir_str);
-
-    let rt = match tokio::runtime::Runtime::new() {
-        Ok(rt) => rt,
+) {
+    let jvm = match env.get_java_vm() {
+        Ok(vm) => vm,
         Err(e) => {
-            eprintln!("[background-sync] Failed to create runtime: {}", e);
-            return 0;
+            eprintln!("[ndk-context] Failed to get JavaVM: {e}");
+            return;
+        }
+    };
+    let jvm_ptr = jvm.get_java_vm_pointer() as *mut std::ffi::c_void;
+
+    let context = match get_application_context(&mut env) {
+        Some(ctx) => ctx,
+        None => {
+            eprintln!("[ndk-context] Failed to get application context");
+            return;
         }
     };
 
-    let result = rt.block_on(async {
-        let identity =
-            match theorem_sync_core::sync_crypto::DeviceIdentity::load_or_create(&data_dir) {
-                Ok(id) => id,
-                Err(e) => {
-                    eprintln!("[background-sync] Failed to load identity: {}", e);
-                    return false;
-                }
-            };
-
-        let paired_devices = theorem_sync_core::sync_server::load_paired_devices(&data_dir);
-
-        let server_state = std::sync::Arc::new(theorem_sync_core::sync_server::SyncServerState {
-            identity,
-            device_name: "Theorem Device".to_string(),
-            paired_devices: tokio::sync::Mutex::new(paired_devices),
-            app_data_dir: data_dir,
-            pending_pairing: tokio::sync::Mutex::new(None),
-            sync_data: tokio::sync::Mutex::new(None),
-            event_emitter: None,
-        });
-
-        let handle = match theorem_sync_core::sync_server::start_server(server_state.clone()).await
-        {
-            Ok(h) => {
-                eprintln!("[background-sync] Server listening on {}", h.addr);
-                h
-            }
-            Err(e) => {
-                eprintln!("[background-sync] Failed to start server: {}", e);
-                return false;
-            }
-        };
-
-        tokio::time::sleep(std::time::Duration::from_secs(180)).await;
-
-        handle.shutdown_notify.notify_one();
-
-        // Persist any incoming data received from peers during this window.
-        // Without this, data pushed by peers while the app was killed is lost
-        // when the ephemeral tokio runtime is dropped.
-        let incoming_cache_path = server_state.app_data_dir.join("sync-incoming-cache.json");
-        let sync_data = server_state.sync_data.lock().await;
-        if let Some(ref snapshot) = *sync_data {
-            let incoming: std::collections::HashMap<String, String> = snapshot
-                .domains
-                .iter()
-                .filter(|(k, _)| k.starts_with("incoming_"))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
-            if !incoming.is_empty() {
-                if let Ok(json) = serde_json::to_string_pretty(&incoming) {
-                    if let Err(e) = std::fs::write(&incoming_cache_path, &json) {
-                        eprintln!("[background-sync] Failed to persist incoming data cache: {e}");
-                    } else {
-                        eprintln!(
-                            "[background-sync] Persisted {} incoming domain(s) to {}",
-                            incoming.len(),
-                            incoming_cache_path.display()
-                        );
-                    }
-                }
-            }
-        }
-        drop(sync_data);
-
-        eprintln!("[background-sync] JNI sync round complete");
-        true
-    });
-
-    if result {
-        1
-    } else {
-        0
+    unsafe {
+        ndk_context::initialize_android_context(jvm_ptr, context);
     }
+    eprintln!("[ndk-context] Initialized via JNI");
 }
 
-#[cfg(not(target_os = "android"))]
-#[no_mangle]
-pub extern "C" fn Java_work_fundamentals_theorem_syncworker_SyncWorker_runBackgroundSync() -> u8 {
-    0
+#[cfg(target_os = "android")]
+fn get_application_context(env: &mut jni::JNIEnv) -> Option<*mut std::ffi::c_void> {
+    let activity_thread = env.find_class("android/app/ActivityThread").ok()?;
+    let current_app = env
+        .call_static_method(
+            activity_thread,
+            "currentApplication",
+            "()Landroid/app/Application;",
+            &[],
+        )
+        .ok()?;
+    let app_obj = current_app.l().ok()?;
+    let global_ref = env.new_global_ref(app_obj).ok()?;
+    let raw_ptr = global_ref.as_raw() as *mut std::ffi::c_void;
+    std::mem::forget(global_ref);
+    Some(raw_ptr)
 }
 
-/// Hide the main window to the system tray.
-/// The app continues running in the background with the sync server alive.
 #[tauri::command]
 fn hide_to_tray(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
@@ -1374,11 +1092,6 @@ fn hide_to_tray(app: tauri::AppHandle) -> Result<(), String> {
     }
 }
 
-/// Download and extract a StarDict dictionary from a URL.
-/// Supports both .tar.bz2 and .zip archives.
-/// Writes extracted files directly to SQLite blob storage and returns
-/// dictionary metadata so the frontend never handles large blobs over IPC.
-/// Runs the download on a blocking thread so the UI stays responsive.
 #[tauri::command]
 async fn download_and_extract_stardict(
     app: AppHandle,
@@ -1441,7 +1154,6 @@ async fn download_and_extract_stardict(
     .map_err(|e| format!("Extraction task failed: {e}"))?
     .map_err(|e| format!("Extraction failed: {e}"))?;
 
-    // Parse .ifo to get dictionary metadata
     let ifo_text = String::from_utf8_lossy(&ifo);
     let mut name = String::from("Unknown Dictionary");
     let mut lang = String::from("en");
@@ -1450,17 +1162,16 @@ async fn download_and_extract_stardict(
         if let Some(value) = trimmed.strip_prefix("bookname=") {
             name = value.trim().to_string();
         } else if trimmed.starts_with("sametypesequence=") {
-            // Dictionary format indicator — captured for info, not needed elsewhere
         }
     }
-    // Derive language from URL (e.g., .../file/en/dict-en-en.zip)
+
     if let Some(segments) = url.split('/').nth(4) {
         if segments.len() == 2 {
             lang = segments.to_string();
         }
     }
 
-    let id = uuid_v4();
+    let id = uuid::Uuid::new_v4().to_string();
     let size_bytes =
         (ifo.len() + idx.len() + dict.len() + syn.as_ref().map_or(0, |s| s.len())) as u64;
 
@@ -1491,22 +1202,6 @@ async fn download_and_extract_stardict(
         "language": lang,
         "sizeBytes": size_bytes,
     }))
-}
-
-fn uuid_v4() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let random_part: u128 = now.as_nanos();
-    format!(
-        "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
-        (random_part >> 96) as u32,
-        ((random_part >> 80) & 0xFFFF) as u16,
-        ((random_part >> 64) & 0x0FFF) as u16,
-        ((random_part >> 48) & 0xFFFF) as u16,
-        random_part & 0xFFFFFFFFFFFF,
-    )
 }
 
 type StardictParts = (Vec<u8>, Vec<u8>, Vec<u8>, Option<Vec<u8>>);

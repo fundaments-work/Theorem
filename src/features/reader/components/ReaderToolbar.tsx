@@ -1,8 +1,3 @@
-/**
- * ReaderToolbar Component
- * Auto-hiding top toolbar with navigation and controls
- * Swiss Design Standard - Consistent across PDF, EPUB, and Article readers
- */
 
 import {
     ArrowLeft,
@@ -50,10 +45,9 @@ export function ReaderToolbar({
     onToggleFullscreen,
     className,
 }: ReaderToolbarProps) {
-    // Get current chapter title from location
+    
     const currentChapter = location?.tocItem?.label || location?.pageItem?.label;
     
-    // Format location display (e.g., "Page 42 / 300" or "Loc. 123 / 500")
     const formatLocation = () => {
         if (!location) return null;
         
@@ -65,7 +59,6 @@ export function ReaderToolbar({
             return location.pageItem.label;
         }
         
-        // Fallback to percentage
         const percentage = Math.round((location.percentage || 0) * 100);
         return `${percentage}%`;
     };
@@ -77,7 +70,7 @@ export function ReaderToolbar({
                 className
             )}
         >
-            {/* Left Section: Back + Navigation */}
+            
             <div className="flex items-center gap-1">
                 <button
                     onClick={onBack}
@@ -89,7 +82,6 @@ export function ReaderToolbar({
                 </button>
             </div>
 
-            {/* Center: Book Title, Chapter & Location */}
             <div className="flex-1 mx-4 text-center overflow-hidden">
                 <h1 className="truncate text-sm font-medium text-[color:var(--color-text-primary)]">
                     {metadata?.title || 'Loading...'}
@@ -112,9 +104,8 @@ export function ReaderToolbar({
                 </div>
             </div>
 
-            {/* Right Section */}
             <div className="flex items-center gap-1">
-                {/* Table of Contents */}
+                
                 <button
                     onClick={onToggleToc}
                     className={READER_BUTTON_CLASS}
@@ -125,7 +116,6 @@ export function ReaderToolbar({
                     <List className="w-5 h-5" />
                 </button>
 
-                {/* Search */}
                 <button
                     onClick={onToggleSearch}
                     className={READER_BUTTON_CLASS}
@@ -136,7 +126,6 @@ export function ReaderToolbar({
                     <Search className="w-5 h-5" />
                 </button>
 
-                {/* Add Bookmark - Quick add current page */}
                 {onAddBookmark && (
                     <button
                         onClick={onAddBookmark}
@@ -148,7 +137,6 @@ export function ReaderToolbar({
                     </button>
                 )}
 
-                {/* Bookmarks Panel Toggle */}
                 <button
                     onClick={onToggleBookmarks}
                     className={READER_BUTTON_CLASS}
@@ -159,7 +147,6 @@ export function ReaderToolbar({
                     <BookmarkIcon className="w-5 h-5 fill-current" />
                 </button>
 
-                {/* Settings (Aa) */}
                 <button
                     onClick={onToggleSettings}
                     className={cn(READER_BUTTON_CLASS, "min-w-[var(--control-icon-button-size)]")}
@@ -170,7 +157,6 @@ export function ReaderToolbar({
                     <span className="text-base font-serif font-bold">Aa</span>
                 </button>
 
-                {/* Fullscreen */}
                 <button
                     onClick={onToggleFullscreen}
                     className={READER_BUTTON_CLASS}
@@ -181,10 +167,8 @@ export function ReaderToolbar({
                     {fullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
                 </button>
 
-                {/* Divider */}
                 <div className="w-px h-6 bg-[var(--color-border)] mx-1" />
 
-                {/* More Options */}
                 <button
                     onClick={onToggleInfo}
                     className={READER_BUTTON_CLASS}
