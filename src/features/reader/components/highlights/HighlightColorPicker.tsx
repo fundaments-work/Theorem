@@ -446,7 +446,7 @@ export function HighlightColorPicker({
                                 </p>
                             ) : null}
                         </div>
-                        <div className="max-h-60 overflow-y-auto px-1 py-1">
+                        <div className="max-h-60 overflow-y-auto px-1 py-1 [content-visibility:auto] overscroll-contain">
                             {dictionary.loading && (
                                 <div className="flex items-center gap-2 text-sm text-[color:var(--color-text-secondary)]">
                                     <Loader2 className="h-4 w-4 animate-spin" />

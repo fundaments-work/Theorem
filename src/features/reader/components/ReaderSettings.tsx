@@ -271,7 +271,7 @@ export function ReaderSettings({
                     </div>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 [content-visibility:auto] overscroll-contain">
                     {activeTab === "themes" && (
                         <div className="space-y-6">
                             <div className="space-y-3">

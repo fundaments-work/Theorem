@@ -30,7 +30,7 @@ export function ArticleReaderInfoPanel({
                 </button>
             </div>
 
-            <div className="p-5 space-y-5 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+            <div className="p-5 space-y-5 flex-1 min-h-0 overflow-y-auto custom-scrollbar [content-visibility:auto] overscroll-contain">
                 <div>
                     <h3 className="font-serif text-xl font-semibold text-[color:var(--color-text-primary)] leading-tight">
                         {article.title}

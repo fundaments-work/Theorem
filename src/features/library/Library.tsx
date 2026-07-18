@@ -731,7 +731,7 @@ export function AddToShelfModal({
                     )}
 
                     {collections.length > 0 ? (
-                        <div className="max-h-48 sm:max-h-60 overflow-y-auto space-y-0.5 -mx-1 px-1">
+                        <div className="max-h-48 sm:max-h-60 overflow-y-auto space-y-0.5 -mx-1 px-1 [content-visibility:auto] overscroll-contain">
                             {filteredShelves.map((shelf) => renderShelfItem(shelf))}
                             {filteredShelves.length === 0 && (
                                 <p className="text-sm text-[color:var(--color-text-muted)] text-center py-3">
@@ -1588,6 +1588,19 @@ export function LibraryPage() {
         }
     }, [addCollection, addToShelfBookId, isSelecting, selectedBooks, clearSelection]);
 
+    const cardProps = useMemo(() => ({
+        onOpenBook: handleOpenBook,
+        onToggleFavorite: handleToggleFavorite,
+        onDeleteBook: handleDeleteBook,
+        onShowInfo: handleShowInfo,
+        onAddToShelf: handleAddToShelf,
+        onRename: handleRename,
+        onMarkAsRead: handleMarkAsRead,
+        onMarkAsUnread: handleMarkAsUnread,
+        isSelecting,
+        onToggleSelect: toggleBookSelection,
+    }), [handleOpenBook, handleToggleFavorite, handleDeleteBook, handleShowInfo, handleAddToShelf, handleRename, handleMarkAsRead, handleMarkAsUnread, isSelecting, toggleBookSelection]);
+
     const toggleViewMode = () => {
         const modes: LibraryViewMode[] = ["grid", "list", "compact"];
         const currentIndex = modes.indexOf(settings.libraryViewMode);
@@ -1784,19 +1797,6 @@ export function LibraryPage() {
                                             ? [sortedBooks[virtualRow.index]]
                                             : sortedBooks.slice(rowStart, rowStart + itemsInRow);
 
-                                        const cardProps = {
-                                            onOpenBook: handleOpenBook,
-                                            onToggleFavorite: handleToggleFavorite,
-                                            onDeleteBook: handleDeleteBook,
-                                            onShowInfo: handleShowInfo,
-                                            onAddToShelf: handleAddToShelf,
-                                            onRename: handleRename,
-                                            onMarkAsRead: handleMarkAsRead,
-                                            onMarkAsUnread: handleMarkAsUnread,
-                                            isSelecting,
-                                            onToggleSelect: toggleBookSelection,
-                                        };
-
                                         return (
                                             <div key={virtualRow.key} data-index={virtualRow.index} ref={rowVirtualizer.measureElement}>
                                                 {isListView ? (
@@ -1837,7 +1837,7 @@ export function LibraryPage() {
                 {showFilterDropdown && (
                     <>
                         <div className="hidden md:block fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
-                        <aside className="hidden md:block w-72 absolute right-0 top-0 z-40 border-2 border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl animate-in slide-in-from-right-4 duration-200 max-h-[80vh] overflow-y-auto">
+                        <aside className="hidden md:block w-72 absolute right-0 top-0 z-40 border-2 border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl animate-in slide-in-from-right-4 duration-200 max-h-[80vh] overflow-y-auto [content-visibility:auto] overscroll-contain">
                         <div className="divide-y-2 divide-[var(--color-border)]">
                             
                             <div className="p-5">
@@ -1909,7 +1909,7 @@ export function LibraryPage() {
                                     <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)]">Collections</h3>
                                     <button onClick={() => setRoute("shelves")} className="text-[10px] font-bold text-[color:var(--color-accent)] hover:underline">EDIT</button>
                                 </div>
-                                <div className="flex flex-col gap-1 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                                <div className="flex flex-col gap-1 max-h-64 overflow-y-auto custom-scrollbar pr-1 [content-visibility:auto] overscroll-contain">
                                     <button
                                         onClick={() => setSelectedShelfId(null)}
                                         className={cn(

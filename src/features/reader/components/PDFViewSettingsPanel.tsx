@@ -64,7 +64,7 @@ export function PDFViewSettingsPanel({
                     </button>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-5">
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-5 [content-visibility:auto] overscroll-contain">
                     <section className="space-y-3">
                         <div className="flex items-center justify-between">
                             <p className="text-xs font-medium text-[color:var(--color-text-muted)]">Zoom</p>
