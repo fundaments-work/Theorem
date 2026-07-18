@@ -118,7 +118,7 @@ function Toggle({
             <button
                 onClick={() => onChange(true)}
                 className={cn(
-                    "px-3 py-1.5 font-sans text-[11px] font-medium",
+                    "px-3 py-2 font-sans text-[11px] font-medium",
                     checked
                         ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                         : "text-[color:var(--color-text-secondary)]"
@@ -129,7 +129,7 @@ function Toggle({
             <button
                 onClick={() => onChange(false)}
                 className={cn(
-                    "border-l border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium",
+                    "border-l border-[var(--color-border)] px-3 py-2 font-sans text-[11px] font-medium",
                     !checked
                         ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                         : "text-[color:var(--color-text-secondary)]"
@@ -157,7 +157,7 @@ function ButtonSelect<T extends string>({
                     key={opt.value}
                     onClick={() => onChange(opt.value)}
                     className={cn(
-                        "border border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium transition-colors",
+                        "border border-[var(--color-border)] px-3 py-2 font-sans text-[11px] font-medium transition-colors",
                         value === opt.value
                             ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                             : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
