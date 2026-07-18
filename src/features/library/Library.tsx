@@ -1909,7 +1909,7 @@ export function LibraryPage() {
                                             key={option.id}
                                             onClick={() => updateSettings({ librarySortOrder: option.id as LibrarySortOrder })}
                                             className={cn(
-                                                "py-2 text-[10px] font-black border-2 transition-colors",
+                                                    "py-2.5 text-[10px] font-black border-2 transition-colors",
                                                 settings.librarySortOrder === option.id
                                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
                                                     : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
@@ -1926,7 +1926,7 @@ export function LibraryPage() {
                                 <button
                                     onClick={() => setShowFavoritesOnly((previous) => !previous)}
                                     className={cn(
-                                        "w-full py-2 text-[10px] font-black border-2 transition-colors",
+                                        "w-full py-2.5 text-[10px] font-black border-2 transition-colors",
                                         showFavoritesOnly
                                             ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
                                             : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
