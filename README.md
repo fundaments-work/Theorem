@@ -217,6 +217,12 @@ Read PDFs, EPUBs, MOBI, FB2, CBZ, CBR, and RSS feeds — all in one workspace. H
 - All from a single TypeScript + Rust codebase
 - Shared rendering engines and state management across platforms
 
+<p align="center">
+  <img src="./Screenshots/phone-screens.png" alt="Theorem on mobile — reader, library, and settings" width="700">
+  <br>
+  <em>Theorem mobile — reader, library, and settings on Android</em>
+</p>
+
 ### First-Run Experience
 - Step-by-step onboarding flow covering library, reader, annotations, and sync
 - Persisted completion state — auto-dismisses on subsequent launches
