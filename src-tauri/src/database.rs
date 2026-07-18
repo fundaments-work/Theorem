@@ -104,7 +104,7 @@ fn init_db_pool(db_path: &Path) -> Result<&DbPool, String> {
 
     let manager = SqliteConnectionManager::file(db_path);
     let pool = Pool::builder()
-        .max_size(1)
+        .max_size(4)
         .connection_customizer(Box::new(SqlitePerConnectionPragmas))
         .build(manager)
         .map_err(|error| format!("Failed to create SQLite connection pool: {error}"))?;
@@ -779,13 +779,15 @@ pub fn sqlite_index_books_fts_batch_inner(
     connection: &Connection,
     entries: &[(String, String, String)],
 ) -> rusqlite::Result<()> {
+    let tx = connection.unchecked_transaction()?;
     for (id, title, author) in entries {
-        connection.execute("DELETE FROM books_fts WHERE id = ?1", params![id])?;
-        connection.execute(
+        tx.execute("DELETE FROM books_fts WHERE id = ?1", params![id])?;
+        tx.execute(
             "INSERT INTO books_fts(id, title, author) VALUES(?1, ?2, ?3)",
             params![id, title, author],
         )?;
     }
+    tx.commit()?;
     Ok(())
 }
 
