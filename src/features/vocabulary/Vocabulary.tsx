@@ -116,7 +116,7 @@ export function VocabularyPage() {
                     </div>
                 </header>
 
-                <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-12">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-12 [content-visibility:auto] overscroll-contain">
                     {filteredTerms.length > 0 ? (
                         <div style={{ height: `${termsVirtualizer.getTotalSize()}px`, position: "relative" }}>
                             <div style={{ paddingTop: `${termsVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>

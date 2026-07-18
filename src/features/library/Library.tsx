@@ -1762,7 +1762,7 @@ export function LibraryPage() {
                         </div>
                     </div>
 
-                    <section ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
+                    <section ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto [content-visibility:auto] overscroll-contain">
                         {sortedBooks.length === 0 ? (
                             <div className="text-center py-16 border-2 border-dashed border-[var(--color-border)]">
                                 <p className="text-[color:var(--color-text-muted)] font-bold uppercase text-xs tracking-widest">No documents match criteria</p>

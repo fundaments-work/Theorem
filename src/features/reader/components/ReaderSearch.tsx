@@ -243,7 +243,7 @@ export function ReaderSearch({
                     </div>
                 )}
 
-                <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 custom-scrollbar">
+                <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 custom-scrollbar [content-visibility:auto] overscroll-contain">
                     {!query && !isSearching && results.length === 0 && (
                         <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center opacity-50">
                             <Search className="w-8 h-8 mb-3" />

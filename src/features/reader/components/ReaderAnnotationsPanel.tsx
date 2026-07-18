@@ -322,7 +322,7 @@ export function ReaderAnnotationsPanel({
                     </div>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-y-auto p-4 custom-scrollbar">
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 custom-scrollbar [content-visibility:auto] overscroll-contain">
                     {currentItems.length === 0 ? (
                         emptyState
                     ) : (

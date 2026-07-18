@@ -1,5 +1,5 @@
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core/lib/utils";
 import { getShelfColor, getShelfInitials } from "../../core/lib/design-tokens";
@@ -95,7 +95,7 @@ interface ShelfCardProps {
     onDelete: () => void;
 }
 
-function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }: ShelfCardProps) {
+const ShelfCard = memo(function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }: ShelfCardProps) {
     const [showMenu, setShowMenu] = useState(false);
     const [menuUpward, setMenuUpward] = useState(false);
     const displayBooks = books.slice(0, 4);
@@ -223,7 +223,7 @@ function ShelfCard({ shelf, books, actualBookCount, onClick, onEdit, onDelete }:
             </div>
         </div>
     );
-}
+});
 
 interface ShelfDetailProps {
     shelf: Collection;
@@ -434,7 +434,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                 </button>
             </div>
 
-            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" style={{ height: "calc(100vh - 12rem)" }}>
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto [content-visibility:auto] overscroll-contain" style={{ height: "calc(100vh - 12rem)" }}>
                 <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
                     <div style={{ paddingTop: `${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>
                         {rowVirtualizer.getVirtualItems().map((virtualRow) => {

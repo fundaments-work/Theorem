@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect, memo } from "react";
 import { ChevronDown, ChevronRight, X, List } from "lucide-react";
 import { cn } from "../../../core/lib/utils";
 import type { TocItem } from "../../../core/types";
@@ -24,7 +24,7 @@ interface TocItemComponentProps {
     totalItems: number;
 }
 
-function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: TocItemComponentProps) {
+const TocItemComponent = memo(function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: TocItemComponentProps) {
     const [isExpanded, setIsExpanded] = useState(true);
     const hasChildren = item.subitems && item.subitems.length > 0;
     const isActive = currentHref === item.href;
@@ -125,7 +125,7 @@ function TocItemComponent({ item, depth, onNavigate, currentHref, totalItems }: 
             )}
         </div>
     );
-}
+});
 
 export function TableOfContents({
     toc,

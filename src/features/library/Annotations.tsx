@@ -1,5 +1,5 @@
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core/lib/utils";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
@@ -82,7 +82,7 @@ interface AnnotationCardProps {
     onShare: (id: string | null) => void;
 }
 
-function AnnotationCard({
+const AnnotationCard = memo(function AnnotationCard({
     annotation,
     book,
     shareId,
@@ -190,7 +190,7 @@ function AnnotationCard({
             </div>
         </div>
     );
-}
+});
 
 const filterTabs = [
     { id: "all" as const, label: "All", icon: Highlighter },

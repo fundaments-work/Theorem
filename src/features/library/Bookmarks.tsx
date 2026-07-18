@@ -1,5 +1,5 @@
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "../../core/store";
@@ -43,7 +43,7 @@ interface BookmarkCardProps {
     onGoToBookmark: (bookId: string, location: string) => void;
 }
 
-function BookmarkCard({ bookmark, book, onDelete, onGoToBookmark }: BookmarkCardProps) {
+const BookmarkCard = memo(function BookmarkCard({ bookmark, book, onDelete, onGoToBookmark }: BookmarkCardProps) {
     const [showMenu, setShowMenu] = useState(false);
 
     return (
@@ -105,7 +105,7 @@ function BookmarkCard({ bookmark, book, onDelete, onGoToBookmark }: BookmarkCard
             </div>
         </div>
     );
-}
+});
 
 export function BookmarksPage() {
     const annotations = useLibraryStore((state) => state.annotations);

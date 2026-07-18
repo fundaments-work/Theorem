@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import { cn, normalizeAuthor, formatReadingTime } from "../../core/lib/utils";
 import { useLibraryStore, useSettingsStore, useUIStore } from "../../core/store";
 import type { DailyReadingActivity } from "../../core/types";
@@ -93,7 +93,7 @@ interface RecentBookCardProps {
     onClick: () => void;
 }
 
-function RecentBookCard({ book, onClick }: RecentBookCardProps) {
+const RecentBookCard = memo(function RecentBookCard({ book, onClick }: RecentBookCardProps) {
     return (
         <button
             onClick={onClick}
@@ -132,7 +132,7 @@ function RecentBookCard({ book, onClick }: RecentBookCardProps) {
             <ChevronRight className="w-4 h-4 text-[color:var(--color-text-muted)] shrink-0" />
         </button>
     );
-}
+});
 
 function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivity[] | undefined }) {
     const weeks = useMemo(() => {
