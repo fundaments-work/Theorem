@@ -251,7 +251,7 @@ Notes:
 
 ## Data/format contracts you must preserve
 - Book formats in `BookFormat`: `epub`, `mobi`, `azw`, `azw3`, `fb2`, `cbz`, `cbr`, `pdf`.
-- Import is intentionally blocked for `cbr`.
+- CBR is converted to CBZ on-the-fly via `unrar-ng` at import time.
 - Storage paths may be:
   - external FS path
   - app data `.book` path

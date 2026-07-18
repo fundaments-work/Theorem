@@ -16,5 +16,24 @@
 			"quoteStyle": "double",
 			"semicolons": "always"
 		}
-	}
+	},
+	"files": {
+		"includes": [
+			"src/**"
+		]
+	},
+	"overrides": [
+		{
+			"includes": [
+				"src/features/reader/foliate-js/**",
+				"src/features/reader/foliate-js-runtime/vendor/**"
+			],
+			"linter": {
+				"enabled": false
+			},
+			"formatter": {
+				"enabled": false
+			}
+		}
+	]
 }

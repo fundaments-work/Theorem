@@ -21,11 +21,6 @@ use tauri::AppHandle;
 use tauri::Emitter;
 use tauri::Manager;
 
-#[cfg(target_os = "android")]
-use iroh::endpoint::{presets::N0, RelayMode};
-#[cfg(target_os = "android")]
-use iroh::protocol::Router;
-
 fn shared_http_client() -> &'static Client {
     static CLIENT: OnceLock<Client> = OnceLock::new();
     CLIENT.get_or_init(|| {

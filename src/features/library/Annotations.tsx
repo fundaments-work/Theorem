@@ -579,7 +579,7 @@ export function AnnotationsPage() {
                                                         <button
                                                             key={i}
                                                             onClick={() => setCardIndex(i)}
-                                                            className="w-1.5 h-1.5 rounded-full border-0 p-0 transition-all duration-200"
+                                                            className="w-1.5 h-1.5 rounded-full border-0 p-0 transition-[transform,background-color] duration-200"
                                                             style={{
                                                                 backgroundColor: i === cardIndex ? 'var(--color-accent)' : 'var(--color-border)',
                                                                 transform: i === cardIndex ? 'scale(1.4)' : 'scale(1)',

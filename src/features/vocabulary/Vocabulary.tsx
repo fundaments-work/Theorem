@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     BookOpenText,
@@ -62,7 +62,7 @@ export function VocabularyPage() {
         selectedTermId ? filteredTerms.find((t) => t.id === selectedTermId) || null : null
     ), [filteredTerms, selectedTermId]);
 
-    useMemo(() => {
+    useEffect(() => {
         if (selectedTermId && !filteredTerms.some((t) => t.id === selectedTermId)) {
             setSelectedTermId(null);
         }

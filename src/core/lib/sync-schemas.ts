@@ -327,7 +327,7 @@ export function validateSyncPayloads(
             if (incomingCount !== data.length) {
                 console.warn(`[sync-validation] ${domain}: ${incomingCount} incoming, ${data.length} valid (${incomingCount - data.length} filtered)`);
             } else {
-                console.log(`[sync-validation] ${domain}: ${data.length} items passed validation`);
+                if (import.meta.env.DEV) console.log(`[sync-validation] ${domain}: ${data.length} items passed validation`);
             }
         }
     }

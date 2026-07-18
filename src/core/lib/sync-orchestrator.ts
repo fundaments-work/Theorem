@@ -25,13 +25,14 @@ import {
 import { isTauri } from "./env";
 import { saveCoverImage } from "./storage";
 
+const debug: (...args: unknown[]) => void = import.meta.env.DEV ? console.log : () => {};
+
 function setStatus(status: DeviceSyncStatus, msg?: string) {
     useUIStore.getState().setDeviceSyncStatus(
         status,
         msg,
         status === "synced" ? new Date().toISOString() : undefined,
     );
-    
 }
 
 let _docsLiveUnlisten: (() => void) | null = null;
@@ -166,11 +167,11 @@ async function mergeIncomingData(
                 : [];
             const incoming = [...domainBooks, ...perEntityBooks];
             if (incoming.length > 0) {
-                console.log(`[sync-merge] books: ${incoming.length} incoming (${domainBooks.length} domain + ${perEntityBooks.length} per-entity), ${currentLibState.books.length} existing`);
+                debug(`[sync-merge] books: ${incoming.length} incoming (${domainBooks.length} domain + ${perEntityBooks.length} per-entity), ${currentLibState.books.length} existing`);
                 const beforeBookMap = new Map(currentLibState.books.map(b => [b.id, b]));
                 const incomingBookMap = new Map(incoming.map(b => [b.id, b]));
                 const merged = mergeBooks(incoming, currentLibState.books, allTombstones);
-                console.log(`[sync-merge] books: ${merged.length} after merge (lost ${incoming.length + currentLibState.books.length - merged.length})`);
+                debug(`[sync-merge] books: ${merged.length} after merge (lost ${incoming.length + currentLibState.books.length - merged.length})`);
                 if (merged !== currentLibState.books) {
                     
                     const hashToLocalId = new Map<string, string>();
@@ -187,7 +188,7 @@ async function mergeIncomingData(
                         const localId = (b.contentHash && hashToLocalId.get(b.contentHash))
                             ?? (b.blobHash && hashToLocalId.get(b.blobHash));
                         if (localId && localId !== b.id) {
-                            console.log(`[sync-merge] Dedup safety: removing syncedWithoutFile duplicate "${b.title}" (${b.id.substring(0,8)}...) — matches local book ${localId.substring(0,8)}...`);
+                            debug(`[sync-merge] Dedup safety: removing syncedWithoutFile duplicate "${b.title}" (${b.id.substring(0,8)}...) — matches local book ${localId.substring(0,8)}...`);
                             return false;
                         }
                         return true;
@@ -337,9 +338,9 @@ async function mergeIncomingData(
             const incoming = JSON.parse(safeMap["rss_feeds"]);
             if (Array.isArray(incoming)) {
                 const currentFeeds = useRssStore.getState().feeds;
-                console.log(`[sync-merge] rss_feeds: ${incoming.length} incoming, ${currentFeeds.length} existing`);
+                debug(`[sync-merge] rss_feeds: ${incoming.length} incoming, ${currentFeeds.length} existing`);
                 const result = mergeRssFeeds(incoming, currentFeeds, allTombstones);
-                console.log(`[sync-merge] rss_feeds: ${result.feeds.length} after merge`);
+                debug(`[sync-merge] rss_feeds: ${result.feeds.length} after merge`);
                 if (JSON.stringify(result.feeds) !== JSON.stringify(currentFeeds)) {
                     useRssStore.setState({ feeds: result.feeds });
                     markUpdated("rss_feeds");
@@ -355,9 +356,9 @@ async function mergeIncomingData(
             const incoming = JSON.parse(safeMap["rss_articles"]);
             if (Array.isArray(incoming)) {
                 const currentArticles = useRssStore.getState().articles;
-                console.log(`[sync-merge] rss_articles: ${incoming.length} incoming, ${currentArticles.length} existing`);
+                debug(`[sync-merge] rss_articles: ${incoming.length} incoming, ${currentArticles.length} existing`);
                 const merged = mergeRssArticles(incoming, currentArticles, feedIdMap, allTombstones);
-                console.log(`[sync-merge] rss_articles: ${merged.length} after merge`);
+                debug(`[sync-merge] rss_articles: ${merged.length} after merge`);
                 if (JSON.stringify(merged) !== JSON.stringify(currentArticles)) {
                     useRssStore.setState({ articles: merged });
                     markUpdated("rss_articles");
@@ -468,7 +469,7 @@ export async function ensureResponderSyncReady(): Promise<void> {
                     _bridgePaused = false;
                 }
             } else {
-                console.log("[sync] Already provisioned — skipping re-provision");
+                debug("[sync] Already provisioned — skipping re-provision");
             }
             _initialProvisionDone = true;
             _bridgePaused = false;  
@@ -544,12 +545,12 @@ export async function runDeviceSync(
             const { listen: evListen } = await import("@tauri-apps/api/event");
             contentReadyUnlisten = await evListen("docs-pending-content-ready", () => {
                 _syncActivityDetected = true;
-                console.log(`[sync] Received docs-pending-content-ready`);
+                debug(`[sync] Received docs-pending-content-ready`);
                 signalSettle();
             });
             syncFinishedUnlisten = await evListen("docs-sync-finished", () => {
                 _syncActivityDetected = true;
-                console.log("[sync] Received docs-sync-finished");
+                debug("[sync] Received docs-sync-finished");
                 signalSettle();
             });
         } catch {}
@@ -601,7 +602,7 @@ export async function runDeviceSync(
         _flushProgressiveBooks();
 
         const postWaitBooks = useLibraryStore.getState().books.length;
-        console.log(`[sync] After wait: ${postWaitBooks} books`);
+        debug(`[sync] After wait: ${postWaitBooks} books`);
 
         if (_syncCancelled) {
             log("Sync cancelled after metadata sync");
@@ -701,7 +702,7 @@ export function cancelRunningSync(): void {
     _progressiveBookBatch = [];
     useUIStore.getState().setDownloadingBook(undefined);
     setStatus("idle", "Sync cancelled");
-    console.log("[sync] Cancel requested — _syncCancelled = true");
+    debug("[sync] Cancel requested — _syncCancelled = true");
 }
 
 export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
@@ -863,7 +864,7 @@ function _flushProgressiveBooks() {
     for (const book of batch) {
         const added = merged.find((b: any) => b.id === book.id);
         if (added && !added.blobHash) {
-            console.log(`[sync] No blobHash for: ${book.title || book.id} — peer hasn't provisioned this blob`);
+            debug(`[sync] No blobHash for: ${book.title || book.id} — peer hasn't provisioned this blob`);
         }
     }
 }
@@ -1101,7 +1102,7 @@ export async function startAutoSync(): Promise<() => void> {
                     const devices = await getPairedDevices();
                     const matched = devices.find(d => d.irohNodeId === nodeId);
                     if (matched) {
-                        console.log(`[sync] Peer ${matched.deviceName} (${matched.deviceId}) came online — auto-syncing`);
+                        debug(`[sync] Peer ${matched.deviceName} (${matched.deviceId}) came online — auto-syncing`);
                         void runDeviceSync(matched.deviceId);
                     }
                 } catch {
@@ -1118,7 +1119,7 @@ export async function startAutoSync(): Promise<() => void> {
         try {
             const { listen } = await import("@tauri-apps/api/event");
             const docReimportedUnlisten = await listen("doc-reimported", () => {
-                console.log("[sync] Doc re-imported from ticket — marking provisioning needed");
+                debug("[sync] Doc re-imported from ticket — marking provisioning needed");
                 markProvisioningNeeded();
                 void autoSyncRound(true);
             });

@@ -313,7 +313,7 @@ export function ReaderSettings({
                                                 key={theme.id}
                                                 onClick={() => onUpdate({ theme: theme.id })}
                                                 className={cn(
-                                                    "relative border transition-all",
+                                                    "relative border transition-colors",
                                                     active
                                                         ? "border-[var(--color-text-primary)]"
                                                         : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
@@ -358,7 +358,7 @@ export function ReaderSettings({
                                                 key={font.id}
                                                 onClick={() => onUpdate({ fontFamily: font.id })}
                                                 className={cn(
-                                                    "relative px-3 py-2.5 text-left border transition-all",
+                                                    "relative px-3 py-2.5 text-left border transition-colors",
                                                     active
                                                         ? "border-[var(--color-text-primary)]"
                                                         : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
@@ -449,7 +449,7 @@ export function ReaderSettings({
                                                     key={id}
                                                     onClick={() => onUpdate({ textAlign: id })}
                                                     className={cn(
-                                                        "relative py-2.5 text-center border transition-all",
+                                                        "relative py-2.5 text-center border transition-colors",
                                                         settings.textAlign === id
                                                             ? "border-[var(--color-text-primary)]"
                                                             : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
@@ -520,7 +520,7 @@ export function ReaderSettings({
                                             key={preset.id}
                                             onClick={() => onUpdate({ zoom: preset.value })}
                                             className={cn(
-                                                "py-2.5 text-center border text-[11px] font-medium transition-all",
+                                                "py-2.5 text-center border text-[11px] font-medium transition-colors",
                                                 settings.zoom === preset.value
                                                     ? "border-[var(--color-text-primary)]"
                                                     : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
@@ -553,7 +553,7 @@ export function ReaderSettings({
                                                 key={id}
                                                 onClick={() => onUpdate({ flow: id })}
                                                 className={cn(
-                                                    "relative py-4 text-center border transition-all",
+                                                    "relative py-4 text-center border transition-colors",
                                                     disabled && "opacity-30 pointer-events-none",
                                                     active
                                                         ? "border-[var(--color-text-primary)]"

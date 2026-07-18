@@ -5,8 +5,6 @@ import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
 import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
 import { initReaderStyles } from "./core/lib/design-tokens";
-import { ensureResponderSyncReady, startAutoSync, stopAutoSync } from "./core/lib/sync-orchestrator";
-import { irohStop } from "./core/lib/device-sync";
 import { importBooksIncremental, getBookFormat, isImportFormatSupported } from "./core/lib/import";
 import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
@@ -324,36 +322,31 @@ function App() {
 
         let cancelled = false;
         let bridgeCleanup: (() => void) | null = null;
+        let cleanupStopSync: (() => void) | null = null;
         const bootstrap = async () => {
-            if (cancelled) {
-                return;
-            }
+            if (cancelled) return;
+
+            const syncModule = await import("./core/lib/sync-orchestrator");
 
             if (!autoSyncEnabled) {
-                
-                stopAutoSync();
+                syncModule.stopAutoSync();
                 return;
             }
 
             try {
-                await ensureResponderSyncReady();
-            } catch {
-                
-            }
+                await syncModule.ensureResponderSyncReady();
+            } catch {}
             if (cancelled) return;
 
             try {
-                const { subscribeZustandToIrohDocs } = await import("./core/lib/sync-orchestrator");
-                bridgeCleanup = subscribeZustandToIrohDocs();
-            } catch {
-                
-            }
+                bridgeCleanup = syncModule.subscribeZustandToIrohDocs();
+            } catch {}
 
             try {
-                await startAutoSync();
-            } catch {
-                
-            }
+                await syncModule.startAutoSync();
+            } catch {}
+
+            cleanupStopSync = syncModule.stopAutoSync;
         };
 
         const timer = setTimeout(() => {
@@ -364,8 +357,8 @@ function App() {
             cancelled = true;
             clearTimeout(timer);
             bridgeCleanup?.();
-            stopAutoSync();
-            irohStop().catch(() => {});
+            cleanupStopSync?.();
+            import("./core/lib/device-sync").then(m => m.irohStop()).catch(() => {});
         };
     }, [hasCompletedOnboarding, autoSyncEnabled]);
 

@@ -740,7 +740,7 @@ export const SettingsPage = memo(function SettingsPage() {
                                         <button
                                             key={color}
                                             onClick={() => updateSettings({ accentColor: color })}
-                                            className="w-5 h-5 border transition-all duration-100"
+                                            className="w-5 h-5 border transition-colors duration-100"
                                             style={{
                                                 backgroundColor: color,
                                                 borderColor: settings.accentColor === color ? "var(--color-accent-contrast)" : "var(--color-border)",
