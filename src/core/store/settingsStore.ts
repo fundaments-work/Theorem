@@ -82,6 +82,7 @@ const defaultAppSettings: AppSettings = {
     deviceSync: defaultDeviceSyncSettings,
     hasCompletedOnboarding: false,
     showDailyHighlight: true,
+    speedReadEnabled: true,
 };
 
 const defaultReadingStats: ReadingStats = {
@@ -201,7 +202,7 @@ export const useSettingsStore = create<SettingsStore>()(
         }),
         {
             name: "theorem-settings",
-            version: 8,
+            version: 9,
             storage: createJSONStorage(() => theoremPersistStorage),
             partialize: (state) => ({
                 settings: state.settings,
@@ -253,6 +254,12 @@ export const useSettingsStore = create<SettingsStore>()(
                 if (version < 8) {
                     if (state.settings && state.settings.showDailyHighlight === undefined) {
                         state.settings.showDailyHighlight = true;
+                    }
+                }
+
+                if (version < 9) {
+                    if (state.settings && state.settings.speedReadEnabled === undefined) {
+                        state.settings.speedReadEnabled = true;
                     }
                 }
 

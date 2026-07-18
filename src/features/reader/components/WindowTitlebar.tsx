@@ -12,6 +12,7 @@ import {
     Type,
     Info,
     Headphones,
+    Zap,
 } from "lucide-react";
 import { cn } from "../../../core/lib/utils";
 import { isMobile, isTauri } from "../../../core/lib/env";
@@ -312,7 +313,7 @@ export function WindowTitlebar({
                             title={speedReadMode ? "Exit Speed Read" : "Speed Read"}
                             aria-label={speedReadMode ? "Exit Speed Read" : "Speed Read"}
                         >
-                            <span className="text-[10px] font-bold tracking-wider" style={speedReadMode ? {} : { opacity: 0.6 }}>RSVP</span>
+                            <Zap className="w-5 h-5" />
                         </ToolbarButton>
                     )}
 

@@ -195,6 +195,7 @@ export interface AppSettings {
     deviceSync: DeviceSyncSettings;
     hasCompletedOnboarding: boolean;
     showDailyHighlight: boolean;
+    speedReadEnabled: boolean;
 }
 
 export interface PairedDevice {

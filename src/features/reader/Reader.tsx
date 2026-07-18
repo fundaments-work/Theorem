@@ -2011,7 +2011,7 @@ const BookReaderPage = memo(function BookReaderPage() {
                     immersionMode={immersionMode}
                     onToggleImmersion={ttsEnabled ? () => setImmersionMode(v => !v) : undefined}
                     speedReadMode={speedReadMode}
-                    onToggleSpeedRead={() => {
+                    onToggleSpeedRead={settings.speedReadEnabled ? () => {
                         if (speedReadMode) {
                             setSpeedReadMode(false);
                             setSpeedReadText("");
@@ -2020,12 +2020,12 @@ const BookReaderPage = memo(function BookReaderPage() {
                             if (engine && typeof engine.getVisibleTextForTts === "function") {
                                 const result = engine.getVisibleTextForTts();
                                 if (result?.text) {
-                                    setSpeedReadText(result.text);
+                                    setSpeedReadText(result.text.replace(/\s+/g, " ").trim());
                                     setSpeedReadMode(true);
                                 }
                             }
                         }
-                    }}
+                    } : undefined}
                 />
             </div>
 
@@ -2142,6 +2142,18 @@ const BookReaderPage = memo(function BookReaderPage() {
                         isOpen={speedReadMode}
                         text={speedReadText}
                         onClose={() => { setSpeedReadMode(false); setSpeedReadText(""); }}
+                        onAutoNext={() => {
+                            const engine = readerRef.current;
+                            if (engine && typeof engine.next === "function") {
+                                engine.next();
+                                setTimeout(() => {
+                                    if (engine && typeof engine.getVisibleTextForTts === "function") {
+                                        const result = engine.getVisibleTextForTts();
+                                        if (result?.text) setSpeedReadText(result.text.replace(/\s+/g, " ").trim());
+                                    }
+                                }, 600);
+                            }
+                        }}
                         theme={settings.readerSettings.theme}
                     />
                     

@@ -795,6 +795,16 @@ export const SettingsPage = memo(function SettingsPage() {
                                 onChange={(checked) => updateSettings({ showDailyHighlight: checked })}
                             />
                         </SettingRow>
+
+                        <SettingRow
+                            label="Speed Read"
+                            description="Enable RSVP speed reading mode in the reader"
+                        >
+                            <Toggle
+                                checked={settings.speedReadEnabled}
+                                onChange={(checked) => updateSettings({ speedReadEnabled: checked })}
+                            />
+                        </SettingRow>
                     </Section>
 
                     <Section
