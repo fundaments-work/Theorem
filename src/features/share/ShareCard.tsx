@@ -140,61 +140,75 @@ export function ShareCard({ kind, annotation, book, statsData, format, theme, sh
             </div>
         </div>
     ) : statsData ? (
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "system-ui, -apple-system, sans-serif", padding: isStory ? "40px 48px" : "48px 56px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32 }}>
-                <div style={{ width: 32, height: 32, borderRadius: "50%", background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
-                    {statsData.completedBooks || "–"}
-                </div>
+        <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "system-ui, -apple-system, sans-serif", padding: isStory ? "40px 44px" : "48px 56px", position: "relative" }}>
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: isStory ? 120 : 100, background: colors.accent, opacity: 0.06 }} />
+
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: isStory ? 8 : 12, position: "relative" }}>
+                <span style={{ fontSize: 10, fontWeight: 600, color: colors.accent, textTransform: "uppercase", letterSpacing: "0.15em" }}>Reading</span>
+                <span style={{ fontSize: 10, color: colors.fg, opacity: 0.3 }}>{new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+            </div>
+
+            <div style={{ fontSize: isStory ? 56 : 64, fontWeight: 700, color: colors.fg, letterSpacing: "-0.04em", lineHeight: 1, marginBottom: 4, position: "relative" }}>
+                {statsData.totalReadingTime > 0 ? formatTime(statsData.totalReadingTime) : "0m"}
+            </div>
+            <div style={{ fontSize: 13, color: colors.fg, opacity: 0.4, marginBottom: isStory ? 28 : 36, position: "relative" }}>
+                Total reading time
+            </div>
+
+            <div style={{ display: "flex", gap: isStory ? 16 : 24, marginBottom: isStory ? 20 : 28, position: "relative" }}>
                 <div>
-                    <div style={{ fontSize: 11, fontWeight: 500, color: colors.fg, opacity: 0.45, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                        My Reading
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: colors.fg, marginTop: 1 }}>
-                        {statsData.totalReadingTime > 0 ? `${formatTime(statsData.totalReadingTime)} total` : "Just getting started"}
-                    </div>
+                    <div style={{ fontSize: isStory ? 26 : 30, fontWeight: 600, color: colors.fg, lineHeight: 1.1 }}>{statsData.completedBooks}</div>
+                    <div style={{ fontSize: 11, color: colors.fg, opacity: 0.4, marginTop: 2 }}>Books</div>
+                </div>
+                <div style={{ width: 1, background: `${colors.fg}15` }} />
+                <div>
+                    <div style={{ fontSize: isStory ? 26 : 30, fontWeight: 600, color: colors.fg, lineHeight: 1.1 }}>{statsData.currentStreak}d</div>
+                    <div style={{ fontSize: 11, color: colors.fg, opacity: 0.4, marginTop: 2 }}>Streak</div>
+                </div>
+                <div style={{ width: 1, background: `${colors.fg}15` }} />
+                <div>
+                    <div style={{ fontSize: isStory ? 26 : 30, fontWeight: 600, color: colors.fg, lineHeight: 1.1 }}>{statsData.booksReadThisYear}/{statsData.yearlyBookGoal}</div>
+                    <div style={{ fontSize: 11, color: colors.fg, opacity: 0.4, marginTop: 2 }}>Year</div>
                 </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: isStory ? 12 : 16, marginBottom: isStory ? 24 : 32 }}>
-                {[
-                    { label: "Books read", value: String(statsData.completedBooks) },
-                    { label: "Day streak", value: `${statsData.currentStreak}` },
-                    { label: "This year", value: `${statsData.booksReadThisYear}/${statsData.yearlyBookGoal}` },
-                    { label: "Highlights", value: String(statsData.totalHighlights) },
-                ].map((stat) => (
-                    <div key={stat.label} style={{
-                        background: `${colors.accent}0D`,
-                        borderRadius: 8,
-                        padding: isStory ? "14px 16px" : "18px 20px",
-                        display: "flex",
-                        flexDirection: "column",
-                    }}>
-                        <div style={{ fontSize: isStory ? 24 : 28, fontWeight: 600, color: colors.fg, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{stat.value}</div>
-                        <div style={{ fontSize: 11, color: colors.fg, opacity: 0.5, marginTop: 4 }}>{stat.label}</div>
+            {statsData.longestStreak > 0 && (
+                <div style={{ marginBottom: isStory ? 16 : 20, position: "relative" }}>
+                    <div style={{ fontSize: 11, color: colors.fg, opacity: 0.35, marginBottom: 6 }}>
+                        Best streak <span style={{ fontWeight: 600, color: colors.accent }}>{statsData.longestStreak}d</span> · {statsData.totalHighlights} highlights
                     </div>
-                ))}
-            </div>
+                    <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                        {Array.from({ length: Math.min(statsData.currentStreak, 30) }).map((_, i) => (
+                            <div key={i} style={{ width: Math.max(4, isStory ? 6 : 8), height: Math.max(4, isStory ? 6 : 8), borderRadius: "50%", background: colors.accent, opacity: 0.3 + (i / Math.min(statsData.currentStreak, 30)) * 0.7 }} />
+                        ))}
+                        {statsData.currentStreak > 30 && <span style={{ fontSize: 10, color: colors.fg, opacity: 0.3, marginLeft: 4 }}>+{statsData.currentStreak - 30}</span>}
+                    </div>
+                </div>
+            )}
 
             {statsData.yearlyBookGoal > 0 && (
-                <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: colors.fg, opacity: 0.5, marginBottom: 6 }}>
-                        <span>Yearly goal</span>
-                        <span>{statsData.booksReadThisYear} / {statsData.yearlyBookGoal}</span>
-                    </div>
-                    <div style={{ height: 4, background: `${colors.fg}15`, borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ marginBottom: isStory ? 16 : 20, position: "relative" }}>
+                    <div style={{ height: 4, background: `${colors.fg}10`, borderRadius: 2, overflow: "hidden" }}>
                         <div style={{ height: "100%", width: `${Math.min(100, (statsData.booksReadThisYear / Math.max(1, statsData.yearlyBookGoal)) * 100)}%`, background: colors.accent, borderRadius: 2 }} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: colors.fg, opacity: 0.35, marginTop: 4 }}>
+                        <span>{statsData.booksReadThisYear} of {statsData.yearlyBookGoal} books this year</span>
                     </div>
                 </div>
             )}
 
             {statsData.recentlyReading && (
-                <div style={{ marginTop: isStory ? 16 : 24, paddingTop: isStory ? 20 : 24, borderTop: `1px solid ${colors.fg}12` }}>
-                    <div style={{ fontSize: 10, color: colors.fg, opacity: 0.4, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
-                        Currently reading
+                <div style={{ marginTop: "auto", paddingTop: 14, borderTop: `1px solid ${colors.fg}10`, display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
+                    <div style={{ width: 3, height: 28, background: colors.accent, borderRadius: 2, flexShrink: 0 }} />
+                    <div style={{ fontSize: 12, color: colors.fg, opacity: 0.5 }}>
+                        <span style={{ opacity: 1, color: colors.fg }}>{statsData.recentlyReading.title}</span>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: colors.fg }}>{statsData.recentlyReading.title}</div>
                 </div>
             )}
+
+            <div style={{ position: "absolute", bottom: isStory ? 28 : 32, right: isStory ? 32 : 36, fontSize: 10, color: colors.fg, opacity: 0.2, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Theorem
+            </div>
         </div>
     ) : null;
 

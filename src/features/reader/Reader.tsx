@@ -61,6 +61,7 @@ import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
 import { registerShortcuts } from "../../core/lib/keyboard-shortcuts";
 const ImmersionBar = lazy(() => import("./audio/ImmersionBar"));
 import { immersionPlayer } from "./audio/ImmersionPlayer";
+import { SpeedReader } from "./components/SpeedReader";
 
 const MOBILE_READER_MEDIA_QUERY = '(max-width: 768px)';
 const MIN_READER_ZOOM = 50;
@@ -223,6 +224,8 @@ const BookReaderPage = memo(function BookReaderPage() {
     const ttsEnabled = settings.tts.enabled;
     const [immersionMode, setImmersionMode] = useState(false);
     const immersionModeRef = useRef(immersionMode);
+    const [speedReadMode, setSpeedReadMode] = useState(false);
+    const [speedReadText, setSpeedReadText] = useState("");
     // Keep ref in sync
     useEffect(() => { immersionModeRef.current = immersionMode; }, [immersionMode]);
     // Exit immersion mode if TTS is disabled while active
@@ -2007,6 +2010,22 @@ const BookReaderPage = memo(function BookReaderPage() {
                     onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
                     immersionMode={immersionMode}
                     onToggleImmersion={ttsEnabled ? () => setImmersionMode(v => !v) : undefined}
+                    speedReadMode={speedReadMode}
+                    onToggleSpeedRead={() => {
+                        if (speedReadMode) {
+                            setSpeedReadMode(false);
+                            setSpeedReadText("");
+                        } else {
+                            const engine = readerRef.current;
+                            if (engine && typeof engine.getVisibleTextForTts === "function") {
+                                const result = engine.getVisibleTextForTts();
+                                if (result?.text) {
+                                    setSpeedReadText(result.text);
+                                    setSpeedReadMode(true);
+                                }
+                            }
+                        }
+                    }}
                 />
             </div>
 
@@ -2118,6 +2137,13 @@ const BookReaderPage = memo(function BookReaderPage() {
                             </div>
                         </div>
                     )}
+
+                    <SpeedReader
+                        isOpen={speedReadMode}
+                        text={speedReadText}
+                        onClose={() => { setSpeedReadMode(false); setSpeedReadText(""); }}
+                        theme={settings.readerSettings.theme}
+                    />
                     
                     <ReaderNavbar
                         location={location}

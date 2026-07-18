@@ -37,6 +37,8 @@ interface WindowTitlebarProps {
     onToggleFullscreen?: () => void;
     immersionMode?: boolean;
     onToggleImmersion?: () => void;
+    speedReadMode?: boolean;
+    onToggleSpeedRead?: () => void;
     className?: string;
     
     hideReaderControls?: boolean;
@@ -161,6 +163,8 @@ export function WindowTitlebar({
     onToggleFullscreen,
     immersionMode,
     onToggleImmersion,
+    speedReadMode,
+    onToggleSpeedRead,
     className,
 }: WindowTitlebarProps) {
     const [isMaximized, setIsMaximized] = useState(false);
@@ -299,6 +303,16 @@ export function WindowTitlebar({
                             aria-label={immersionMode ? "Exit Immersion Reading" : "Immersion Reading"}
                         >
                             <Headphones className={cn("w-5 h-5", immersionMode && "fill-current")} />
+                        </ToolbarButton>
+                    )}
+                    {onToggleSpeedRead && (
+                        <ToolbarButton
+                            onClick={onToggleSpeedRead}
+                            active={speedReadMode}
+                            title={speedReadMode ? "Exit Speed Read" : "Speed Read"}
+                            aria-label={speedReadMode ? "Exit Speed Read" : "Speed Read"}
+                        >
+                            <span className="text-[10px] font-bold tracking-wider" style={speedReadMode ? {} : { opacity: 0.6 }}>RSVP</span>
                         </ToolbarButton>
                     )}
 
