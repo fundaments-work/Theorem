@@ -117,7 +117,7 @@ describe("Cancel sync functionality", () => {
 describe("Unpair confirmation", () => {
     it("handleUnpair shows confirm dialog", () => {
         const content = readSource("src/features/settings/DeviceSync.tsx");
-        expect(content).toContain("window.confirm");
+        expect(content).toContain("ConfirmDialog");
         expect(content).toContain("Are you sure you want to unpair");
     });
 });

@@ -6,9 +6,8 @@ import { getAllShortcuts, formatShortcutKeys } from "../../core/lib/keyboard-sho
 import {
     showOpenDirectoryDialog,
     showSaveFileDialog,
-    confirmClearAllData,
-    confirmRemoveDictionary,
 } from "../../core/lib/dialogs";
+import { ConfirmDialog, AlertDialog } from "../../ui";
 import { syncVaultMarkdownSnapshot } from "../../core/lib/vault-sync";
 import { exportUnifiedSyncBundle, estimateSyncBundleSizeBytes } from "../../core/lib/sync-bundle";
 import { pickLibraryFolderMobile } from "../../core/lib/mobile-folder-scan";
@@ -351,6 +350,10 @@ export const SettingsPage = memo(function SettingsPage() {
     const dictionaryFileInputRef = useRef<HTMLInputElement>(null);
     const [showDictDownloadModal, setShowDictDownloadModal] = useState(false);
     const [dictionaryRemovedName, setDictionaryRemovedName] = useState<string | null>(null);
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
+    const [removeDictionaryInfo, setRemoveDictionaryInfo] = useState<{ id: string; name: string } | null>(null);
+    const [alertInfo, setAlertInfo] = useState<{ title: string; message: string } | null>(null);
 
     useEffect(() => {
         if (!dictionaryRemovedName) return;
@@ -412,10 +415,12 @@ export const SettingsPage = memo(function SettingsPage() {
         });
     }, [activeTab]);
 
-    const handleClearData = async () => {
-        const confirmed = await confirmClearAllData();
-        if (!confirmed) return;
+    const handleClearData = () => {
+        setShowClearDataConfirm(true);
+    };
 
+    const handleClearDataConfirm = async () => {
+        setShowClearDataConfirm(false);
         try {
             await clearAllApplicationStorage();
 
@@ -462,7 +467,7 @@ export const SettingsPage = memo(function SettingsPage() {
 
     const handlePickVaultDirectory = async () => {
         if (isMobilePlatform) {
-            alert("Folder selection is not supported on mobile. Configure the export folder on desktop.");
+            setAlertInfo({ title: "Not Available", message: "Folder selection is not supported on mobile. Configure the export folder on desktop." });
             return;
         }
 
@@ -515,7 +520,7 @@ export const SettingsPage = memo(function SettingsPage() {
         try {
             await importStarDict(files);
         } catch (error) {
-            alert(error instanceof Error ? error.message : "Failed to import dictionary files.");
+            setAlertInfo({ title: "Import Error", message: error instanceof Error ? error.message : "Failed to import dictionary files." });
         } finally {
             event.target.value = "";
         }
@@ -602,9 +607,9 @@ export const SettingsPage = memo(function SettingsPage() {
             const warningSuffix = warnings.length > 0
                 ? ` Warnings: ${warnings.length} missing binary item(s).`
                 : "";
-            alert(`Backup saved (${formatFileSize(bundleSize)}).${warningSuffix}`);
+            setAlertInfo({ title: "Backup Saved", message: `Backup saved (${formatFileSize(bundleSize)}).${warningSuffix}` });
         } catch (error) {
-            alert(error instanceof Error ? error.message : "Failed to save backup.");
+            setAlertInfo({ title: "Backup Error", message: error instanceof Error ? error.message : "Failed to save backup." });
         }
     };
 
@@ -900,11 +905,7 @@ export const SettingsPage = memo(function SettingsPage() {
 
                     <div className="flex items-center justify-end">
                         <button
-                            onClick={() => {
-                                if (confirm("Reset all settings to default?")) {
-                                    resetSettings();
-                                }
-                            }}
+                            onClick={() => setShowResetConfirm(true)}
                             className="ui-btn-danger"
                         >
                             <RotateCcw className="w-4 h-4" />
@@ -984,12 +985,7 @@ export const SettingsPage = memo(function SettingsPage() {
                                 description={`${dictionary.language} • StarDict • ${formatFileSize(dictionary.sizeBytes)}`}
                             >
                                 <button
-                                    onClick={async () => {
-                                        const confirmed = await confirmRemoveDictionary(dictionary.name);
-                                        if (!confirmed) return;
-                                        await removeDictionary(dictionary.id);
-                                        setDictionaryRemovedName(dictionary.name);
-                                    }}
+                                    onClick={() => setRemoveDictionaryInfo({ id: dictionary.id, name: dictionary.name })}
                                     className="ui-btn-danger"
                                 >
                                     Remove
@@ -1242,6 +1238,58 @@ export const SettingsPage = memo(function SettingsPage() {
             isOpen={showDictDownloadModal}
             onClose={() => setShowDictDownloadModal(false)}
         />
+
+        <ConfirmDialog
+            isOpen={showResetConfirm}
+            title="Reset Settings"
+            message="Reset all settings to default?"
+            confirmLabel="Reset"
+            cancelLabel="Cancel"
+            variant="danger"
+            onConfirm={() => {
+                resetSettings();
+                setShowResetConfirm(false);
+            }}
+            onCancel={() => setShowResetConfirm(false)}
+        />
+
+        <ConfirmDialog
+            isOpen={showClearDataConfirm}
+            title="Clear All Data"
+            message="This will permanently delete all your books, highlights, notes, vocabulary, shelves, and settings. This action cannot be undone."
+            confirmLabel="Clear Everything"
+            cancelLabel="Cancel"
+            variant="danger"
+            onConfirm={handleClearDataConfirm}
+            onCancel={() => setShowClearDataConfirm(false)}
+        />
+
+        <ConfirmDialog
+            isOpen={!!removeDictionaryInfo}
+            title="Remove Dictionary"
+            message={removeDictionaryInfo ? `Remove "${removeDictionaryInfo.name}"? Offline word lookups from this dictionary will stop working.` : ""}
+            confirmLabel="Remove"
+            cancelLabel="Cancel"
+            variant="danger"
+            onConfirm={async () => {
+                if (removeDictionaryInfo) {
+                    await removeDictionary(removeDictionaryInfo.id);
+                    setDictionaryRemovedName(removeDictionaryInfo.name);
+                    setRemoveDictionaryInfo(null);
+                }
+            }}
+            onCancel={() => setRemoveDictionaryInfo(null)}
+        />
+
+        {alertInfo && (
+            <AlertDialog
+                isOpen={!!alertInfo}
+                title={alertInfo.title}
+                message={alertInfo.message}
+                okLabel="OK"
+                onClose={() => setAlertInfo(null)}
+            />
+        )}
         </>
     );
 });

@@ -7,7 +7,7 @@ import { useLibraryStore, useUIStore } from "../../core/store";
 import { HIGHLIGHT_SOLID_COLORS } from "../../core/lib/design-tokens";
 import type { HighlightColor } from "../../core/types";
 import { EditNoteModal } from "./components/modals/EditNoteModal";
-import { Dropdown } from "../../ui";
+import { Dropdown, ConfirmDialog } from "../../ui";
 import {
     Highlighter,
     StickyNote,
@@ -278,9 +278,16 @@ export function AnnotationsPage() {
         measureElement: (el) => el.getBoundingClientRect().height,
     });
 
+    const [deleteAnnotationId, setDeleteAnnotationId] = useState<string | null>(null);
+
     const handleDelete = (id: string) => {
-        if (confirm("Are you sure you want to delete this annotation?")) {
-            removeAnnotation(id);
+        setDeleteAnnotationId(id);
+    };
+
+    const handleDeleteConfirm = () => {
+        if (deleteAnnotationId) {
+            removeAnnotation(deleteAnnotationId);
+            setDeleteAnnotationId(null);
         }
     };
 
@@ -388,6 +395,17 @@ export function AnnotationsPage() {
                         setEditContent("");
                     }
                 }}
+            />
+
+            <ConfirmDialog
+                isOpen={!!deleteAnnotationId}
+                title="Delete Annotation"
+                message="Are you sure you want to delete this annotation?"
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                variant="danger"
+                onConfirm={handleDeleteConfirm}
+                onCancel={() => setDeleteAnnotationId(null)}
             />
 
             {filteredAnnotations.length === 0 ? (

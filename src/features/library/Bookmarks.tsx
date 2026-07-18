@@ -3,8 +3,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore } from "../../core/store";
-import { confirmDeleteBookmark } from "../../core/lib/dialogs";
-import { Dropdown } from "../../ui";
+import { Dropdown, ConfirmDialog } from "../../ui";
 import {
     Bookmark,
     MoreVertical,
@@ -40,7 +39,7 @@ interface BookmarkCardProps {
         author: string;
         coverPath?: string;
     } | undefined;
-    onDelete: (id: string) => Promise<void>;
+    onDelete: (id: string) => void;
     onGoToBookmark: (bookId: string, location: string) => void;
 }
 
@@ -182,10 +181,16 @@ export function BookmarksPage() {
         measureElement: (el) => el.getBoundingClientRect().height,
     });
 
-    const handleDelete = async (id: string) => {
-        const confirmed = await confirmDeleteBookmark();
-        if (confirmed) {
-            removeAnnotation(id);
+    const [deleteBookmarkId, setDeleteBookmarkId] = useState<string | null>(null);
+
+    const handleDelete = (id: string) => {
+        setDeleteBookmarkId(id);
+    };
+
+    const handleDeleteConfirm = () => {
+        if (deleteBookmarkId) {
+            removeAnnotation(deleteBookmarkId);
+            setDeleteBookmarkId(null);
         }
     };
 
@@ -231,6 +236,17 @@ export function BookmarksPage() {
                     ]}
                 />
             </div>
+
+            <ConfirmDialog
+                isOpen={!!deleteBookmarkId}
+                title="Delete Bookmark"
+                message="Are you sure you want to delete this bookmark?"
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                variant="danger"
+                onConfirm={handleDeleteConfirm}
+                onCancel={() => setDeleteBookmarkId(null)}
+            />
 
             {filteredBookmarks.length === 0 ? (
                 <div className="text-center py-16">

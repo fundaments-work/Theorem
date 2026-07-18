@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { RouteErrorBoundary, KeyboardShortcutsHelp } from "./ui";
+import { RouteErrorBoundary, KeyboardShortcutsHelp, AlertDialog } from "./ui";
 import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
 import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
@@ -79,6 +79,7 @@ function App() {
     const autoSyncEnabled = useSettingsStore((state) => state.settings.deviceSync?.autoSyncEnabled ?? true);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+    const [alertInfo, setAlertInfo] = useState<{ title: string; message: string } | null>(null);
 
     const [storesHydrated, setStoresHydrated] = useState(() =>
         useSettingsStore.persist.hasHydrated(),
@@ -256,7 +257,7 @@ function App() {
                 if (importedBook) {
                     useUIStore.getState().setRoute("reader", importedBook.id);
                 } else if (failures.length > 0) {
-                    window.alert(`Failed to open file.\n\n${failures[0]?.source}\n${failures[0]?.message}`);
+                    setAlertInfo({ title: "Open File Error", message: `Failed to open file.\n\n${failures[0]?.source}\n${failures[0]?.message}` });
                 } else {
                 }
             }
@@ -481,6 +482,16 @@ function App() {
             
         </div>
             <Toaster position="bottom-right" />
+
+            {alertInfo && (
+                <AlertDialog
+                    isOpen={!!alertInfo}
+                    title={alertInfo.title}
+                    message={alertInfo.message}
+                    okLabel="OK"
+                    onClose={() => setAlertInfo(null)}
+                />
+            )}
         </>
     );
 }
