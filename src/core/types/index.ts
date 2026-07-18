@@ -187,6 +187,7 @@ export interface AppSettings {
     scanFolders: string[];
     cacheSize: number; 
     theme: "light" | "dark" | "system";
+    accentColor: string;
     readerSettings: ReaderSettings;
     vocabulary: VocabularySettings;
     tts: TtsSettings;

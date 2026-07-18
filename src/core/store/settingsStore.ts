@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { applyReaderStyles, initReaderStyles } from "../lib/design-tokens";
+import { applyAppTheme, applyReaderStyles, initReaderStyles } from "../lib/design-tokens";
 import { theoremPersistStorage } from "../lib/persist-storage";
 import { scheduleMutationSync } from "../lib/sync-orchestrator";
 import type {
@@ -64,6 +64,8 @@ const defaultTtsSettings: TtsSettings = {
     speed: 1.0,
 };
 
+const DEFAULT_ACCENT_COLOR = "#2d6a6e";
+
 const defaultAppSettings: AppSettings = {
     sidebarCollapsed: false,
     libraryViewMode: "grid",
@@ -72,6 +74,7 @@ const defaultAppSettings: AppSettings = {
     scanFolders: [],
     cacheSize: 500,
     theme: "system",
+    accentColor: DEFAULT_ACCENT_COLOR,
     readerSettings: defaultReaderSettings,
     vocabulary: defaultVocabularySettings,
     tts: defaultTtsSettings,
@@ -115,6 +118,12 @@ export const useSettingsStore = create<SettingsStore>()(
             settingsLastModifiedAt: new Date(0).toISOString(),
 
             updateSettings: (updates) => {
+                const needsThemeApply = "theme" in updates || "accentColor" in updates;
+                if (needsThemeApply) {
+                    const resolved = { ...get().settings, ...updates };
+                    applyAppTheme(resolved.theme, resolved.accentColor);
+                }
+
                 set((state) => ({
                     settings: { ...state.settings, ...updates },
                     settingsLastModifiedAt: new Date().toISOString(),
@@ -191,7 +200,7 @@ export const useSettingsStore = create<SettingsStore>()(
         }),
         {
             name: "theorem-settings",
-            version: 6,
+            version: 7,
             storage: createJSONStorage(() => theoremPersistStorage),
             partialize: (state) => ({
                 settings: state.settings,
@@ -231,6 +240,12 @@ export const useSettingsStore = create<SettingsStore>()(
                 if (version < 6) {
                     if (state.settings?.tts && state.settings.tts.enabled === undefined) {
                         state.settings.tts.enabled = defaultTtsSettings.enabled;
+                    }
+                }
+
+                if (version < 7) {
+                    if (state.settings && !state.settings.accentColor) {
+                        state.settings.accentColor = DEFAULT_ACCENT_COLOR;
                     }
                 }
 
@@ -285,8 +300,11 @@ export const useSettingsStore = create<SettingsStore>()(
                 return state;
             },
             onRehydrateStorage: () => (state) => {
-                if (state?.settings.readerSettings) {
-                    initReaderStyles(state.settings.readerSettings);
+                if (state?.settings) {
+                    if (state.settings.readerSettings) {
+                        initReaderStyles(state.settings.readerSettings);
+                    }
+                    applyAppTheme(state.settings.theme, state.settings.accentColor);
                 }
 
                 if (state && !state.settings.vocabulary) {

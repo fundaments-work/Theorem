@@ -14,6 +14,39 @@ interface RgbColor {
     b: number;
 }
 
+export const DEFAULT_ACCENT_COLOR = "#2d6a6e";
+
+const APP_THEME_COLORS: Record<string, Record<string, string>> = {
+    light: {
+        "--app-bg": "#faf9f7",
+        "--app-surface": "#f4f3f0",
+        "--app-surface-elevated": "#ffffff",
+        "--app-surface-muted": "#eeede9",
+        "--app-surface-variant": "#e8e7e2",
+        "--app-surface-hover": "#e4e3de",
+        "--app-text-primary": "#1c1c1c",
+        "--app-text-secondary": "#6b6b6b",
+        "--app-text-muted": "#9c9c9c",
+        "--app-text-inverse": "#ffffff",
+        "--app-border": "#e2e1dd",
+        "--app-border-subtle": "#eeede9",
+    },
+    dark: {
+        "--app-bg": "#141416",
+        "--app-surface": "#1c1c20",
+        "--app-surface-elevated": "#242428",
+        "--app-surface-muted": "#2a2a2e",
+        "--app-surface-variant": "#303034",
+        "--app-surface-hover": "#36363a",
+        "--app-text-primary": "#e8e6e1",
+        "--app-text-secondary": "#8b8b8b",
+        "--app-text-muted": "#6b6b6b",
+        "--app-text-inverse": "#141416",
+        "--app-border": "#2c2c30",
+        "--app-border-subtle": "#252529",
+    },
+};
+
 interface ShelfColorToken {
     bg: string;
     text: string;
@@ -64,6 +97,144 @@ const FALLBACK_THEME_COLORS: Record<ReaderTheme, Record<ThemeColorSlot, string>>
         link: "#ffffff",
     },
 };
+
+let systemThemeMediaQuery: MediaQueryList | null = null;
+let systemThemeChangeHandler: (() => void) | null = null;
+
+function hexToRgb(hex: string): RgbColor | null {
+    const normalized = hex.trim().toLowerCase();
+    const match = normalized.match(/^#?([0-9a-f]{6})$/i);
+    if (!match) return null;
+    return {
+        r: parseInt(match[1].slice(0, 2), 16),
+        g: parseInt(match[1].slice(2, 4), 16),
+        b: parseInt(match[1].slice(4, 6), 16),
+    };
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+    const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+    return `#${clamp(r).toString(16).padStart(2, "0")}${clamp(g).toString(16).padStart(2, "0")}${clamp(b).toString(16).padStart(2, "0")}`;
+}
+
+function mixColors(hex1: string, hex2: string, weight: number): string {
+    const c1 = hexToRgb(hex1);
+    const c2 = hexToRgb(hex2);
+    if (!c1 || !c2) return hex1;
+    const w = Math.max(0, Math.min(1, weight));
+    return rgbToHex(
+        c1.r * (1 - w) + c2.r * w,
+        c1.g * (1 - w) + c2.g * w,
+        c1.b * (1 - w) + c2.b * w,
+    );
+}
+
+function darkenColor(hex: string, amount: number): string {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+    return rgbToHex(rgb.r * (1 - amount), rgb.g * (1 - amount), rgb.b * (1 - amount));
+}
+
+function lightenColor(hex: string, amount: number): string {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+    return rgbToHex(
+        rgb.r + (255 - rgb.r) * amount,
+        rgb.g + (255 - rgb.g) * amount,
+        rgb.b + (255 - rgb.b) * amount,
+    );
+}
+
+function resolveSystemTheme(preference: string): "light" | "dark" {
+    if (preference === "system") {
+        if (typeof window !== "undefined" && window.matchMedia) {
+            return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        return "light";
+    }
+    return preference as "light" | "dark";
+}
+
+export function resolveAccentContrastColor(accentHex: string): string {
+    const rgb = hexToRgb(accentHex);
+    if (!rgb) return "#ffffff";
+    const luminance = relativeLuminance(rgb);
+    return luminance > 0.45 ? "#141416" : "#ffffff";
+}
+
+export function computeAccentVariants(accentHex: string, isDark: boolean): {
+    hover: string;
+    light: string;
+    contrast: string;
+} {
+    return {
+        hover: isDark ? lightenColor(accentHex, 0.15) : darkenColor(accentHex, 0.12),
+        light: isDark
+            ? mixColors(accentHex, "#141416", 0.75)
+            : mixColors(accentHex, "#ffffff", 0.85),
+        contrast: resolveAccentContrastColor(accentHex),
+    };
+}
+
+export function applyAppTheme(theme: "light" | "dark" | "system", accentColor: string): void {
+    if (typeof document === "undefined") return;
+
+    const resolved = resolveSystemTheme(theme);
+    const root = document.documentElement;
+    const isDark = resolved === "dark";
+
+    document.body.classList.remove("theme-light", "theme-dark", "theme-sepia");
+    document.body.classList.add(`theme-${resolved}`);
+
+    const appColors = APP_THEME_COLORS[resolved];
+    for (const [key, value] of Object.entries(appColors)) {
+        root.style.setProperty(key, value);
+    }
+
+    const accent = accentColor || DEFAULT_ACCENT_COLOR;
+    const variants = computeAccentVariants(accent, isDark);
+
+    root.style.setProperty("--app-accent", accent);
+    root.style.setProperty("--app-accent-hover", variants.hover);
+    root.style.setProperty("--app-accent-light", variants.light);
+    root.style.setProperty("--app-accent-contrast", variants.contrast);
+
+    root.style.colorScheme = isDark ? "dark" : "light";
+
+    if (isDark) {
+        root.style.setProperty("--app-success", "#4ade80");
+        root.style.setProperty("--app-warning", "#fbbf24");
+        root.style.setProperty("--app-error", "#ef5350");
+        root.style.setProperty("--app-info", "#8b8b8b");
+        root.style.setProperty("--app-focus-ring", `color-mix(in srgb, ${accent} 58%, transparent)`);
+        root.style.setProperty("--app-overlay-subtle", `color-mix(in srgb, #ffffff 8%, transparent)`);
+        root.style.setProperty("--app-overlay-medium", `color-mix(in srgb, #ffffff 14%, transparent)`);
+    } else {
+        root.style.setProperty("--app-success", accent);
+        root.style.setProperty("--app-warning", accent);
+        root.style.setProperty("--app-error", "#d32f2f");
+        root.style.setProperty("--app-info", "#6b6b6b");
+        root.style.setProperty("--app-focus-ring", `color-mix(in srgb, ${accent} 58%, transparent)`);
+        root.style.setProperty("--app-overlay-subtle", `color-mix(in srgb, #000000 8%, transparent)`);
+        root.style.setProperty("--app-overlay-medium", `color-mix(in srgb, #000000 14%, transparent)`);
+    }
+}
+
+export function initAppTheme(settings: { theme: "light" | "dark" | "system"; accentColor: string }): void {
+    applyAppTheme(settings.theme, settings.accentColor);
+}
+
+export function watchSystemTheme(onChange: (isDark: boolean) => void): () => void {
+    if (typeof window === "undefined" || !window.matchMedia) return () => {};
+
+    systemThemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => onChange(e.matches);
+    systemThemeMediaQuery.addEventListener("change", handler);
+    return () => {
+        systemThemeMediaQuery?.removeEventListener("change", handler);
+        systemThemeMediaQuery = null;
+    };
+}
 
 const FONT_FAMILY_VALUES: Record<FontFamily, string> = {
     original: "var(--font-merriweather), Georgia, serif",
@@ -205,18 +376,6 @@ function resolveAccessibleAccentContrast(accentCssColor: string): string {
     const blackContrast = getContrastRatio(accentLuminance, 0);
 
     return whiteContrast >= blackContrast ? "#ffffff" : "#000000";
-}
-
-function syncAccentContrastToken(root: HTMLElement): void {
-    const styles = getComputedStyle(root);
-    const accent = styles.getPropertyValue("--color-accent").trim();
-    if (!accent) {
-        return;
-    }
-
-    const contrast = resolveAccessibleAccentContrast(accent);
-    root.style.setProperty("--app-accent-contrast", contrast);
-    root.style.setProperty("--color-accent-contrast", contrast);
 }
 
 function resolveThemeColors(theme: ReaderTheme): Record<ThemeColorSlot, string> {
@@ -426,7 +585,6 @@ export function applyReaderStyles(settings: ReaderSettings): void {
 
     const root = document.documentElement;
     const colors = getThemeColors(settings.theme);
-    const isDark = settings.theme === "dark";
 
     root.style.setProperty("--reader-bg", colors.bg);
     root.style.setProperty("--reader-fg", colors.fg);
@@ -445,12 +603,6 @@ export function applyReaderStyles(settings: ReaderSettings): void {
     root.style.setProperty("--reader-brightness", `${settings.brightness}%`);
     root.style.setProperty("--reader-zoom", `${settings.zoom / 100}`);
     root.style.setProperty("--reader-flow", settings.flow);
-
-    document.body.classList.remove("theme-light", "theme-sepia", "theme-dark");
-    document.body.classList.add(`theme-${settings.theme}`);
-
-    syncAccentContrastToken(root);
-    root.style.colorScheme = isDark ? "dark" : "light";
 
     notifyEnginesOfStyleChange();
 }

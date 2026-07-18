@@ -81,8 +81,8 @@
     
     --font-sans: "Helvetica Neue", Helvetica, Arial, "Nimbus Sans L", "Liberation Sans", sans-serif;
     --font-serif: "EB Garamond", "Lora", Georgia, serif;
-    --font-mono: "Helvetica Neue", Helvetica, Arial, "Nimbus Sans L", "Liberation Sans", sans-serif;
-    --font-playfair: "Helvetica Neue", Helvetica, Arial, "Nimbus Sans L", "Liberation Sans", sans-serif;
+    --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", "Consolas", monospace;
+    --font-serif-display: "EB Garamond", "Lora", Georgia, serif;
     --font-merriweather: "EB Garamond", "Lora", Georgia, serif;
     --font-size-4xs: 0.5625rem;
     --font-size-3xs: 0.625rem;
