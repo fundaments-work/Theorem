@@ -93,12 +93,6 @@ uninstall_rpm_package() {
     printf "Removed RPM package: %s\n" "$pkg"
 }
 
-stop_daemon_service() {
-    systemctl --user disable --now theorem-daemon 2>/dev/null || true
-    systemctl --user daemon-reload 2>/dev/null || true
-    printf "Stopped and disabled theorem-daemon service\n"
-}
-
 remove_local_install() {
     local app_dir="$HOME/.local/lib/theorem"
     local bin_link="$HOME/.local/bin/theorem"
@@ -193,9 +187,6 @@ case "$bundle" in
         exit 1
         ;;
 esac
-
-# Stop daemon before removing files
-stop_daemon_service
 
 remove_local_install
 

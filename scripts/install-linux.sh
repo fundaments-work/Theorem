@@ -22,61 +22,6 @@ GH_REPO="fundaments-work/Theorem"
 # ── Paths ──
 APP_DIR="$HOME/.local/lib/theorem"
 BIN_DIR="$HOME/.local/bin"
-DAEMON_DIR="$APP_DIR"
-DAEMON_BIN="$DAEMON_DIR/sync-daemon"
-SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
-SYSTEMD_SERVICE="theorem-daemon.service"
-
-install_systemd_service() {
-    local daemon_path="$(command -v theorem-daemon 2>/dev/null || realpath "$DAEMON_BIN" 2>/dev/null)"
-    if [[ -z "$daemon_path" || ! -x "$daemon_path" ]]; then
-        daemon_path="$DAEMON_BIN"
-    fi
-
-    mkdir -p "$SYSTEMD_USER_DIR"
-    cat > "$SYSTEMD_USER_DIR/$SYSTEMD_SERVICE" <<EOF
-[Unit]
-Description=Theorem Sync Daemon — 24/7 LAN device sync
-Documentation=https://github.com/$GH_REPO
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=$daemon_path
-Restart=on-failure
-RestartSec=5
-Environment=THEOREM_CONFIG_DIR=%h/.local/share/theorem
-
-[Install]
-WantedBy=default.target
-EOF
-
-    systemctl --user daemon-reload
-    systemctl --user enable --now "$SYSTEMD_SERVICE" 2>/dev/null || true
-    printf "Installed systemd user service: $SYSTEMD_SERVICE\n"
-}
-
-stop_systemd_service() {
-    systemctl --user disable --now "$SYSTEMD_SERVICE" 2>/dev/null || true
-}
-
-install_daemon() {
-    local daemon_url="https://github.com/$GH_REPO/releases/download/v${VERSION}/sync-daemon"
-    local daemon_dest="$DAEMON_BIN"
-
-    mkdir -p "$DAEMON_DIR"
-
-    printf "Downloading sync-daemon from %s ...\n" "$daemon_url"
-    if curl -fsSL "$daemon_url" -o "$daemon_dest"; then
-        chmod +x "$daemon_dest"
-        ln -sf "$daemon_dest" "$BIN_DIR/theorem-daemon" 2>/dev/null || true
-        printf "Installed sync-daemon to %s\n" "$daemon_dest"
-    else
-        printf "Warning: sync-daemon not available in this release.\n" >&2
-        printf "Only the app was installed. Background sync will use the in-app timer.\n" >&2
-    fi
-}
 
 # ── Download latest release ──
 download_release() {
@@ -201,8 +146,6 @@ Usage: ./scripts/install-linux.sh [--version VERSION] [--bundle deb|rpm|appimage
 
 Downloads the latest Theorem release from GitHub and installs it with:
   - App binary + desktop launcher
-  - sync-daemon binary (for 24/7 background sync)
-  - systemd user service (auto-starts on login)
 
 If --version is omitted, the latest release is auto-detected.
 EOF
@@ -241,9 +184,6 @@ printf "Installing Theorem v%s (%s) for %s\n" "$VERSION" "$bundle" "$ARCH"
 need_cmd curl
 need_cmd bsdtar
 
-# Stop existing daemon if running
-stop_systemd_service
-
 # Download
 download_release "$bundle"
 
@@ -276,13 +216,5 @@ case "$bundle" in
         ;;
 esac
 
-# Install daemon + systemd service
-printf "\n--- Setting up sync-daemon ---\n"
-install_daemon
-install_systemd_service
-
 printf "\n✅ Theorem v%s installed successfully!\n" "$VERSION"
 printf "   App:    %s\n" "$BIN_DIR/theorem"
-printf "   Daemon: %s\n" "$DAEMON_BIN"
-printf "   Status: systemctl --user status theorem-daemon\n"
-printf "\nThe sync daemon is running in the background.\n"

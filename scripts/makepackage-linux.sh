@@ -131,13 +131,6 @@ if [[ ! -d "$repo_root/node_modules" ]]; then
     pnpm install --frozen-lockfile
 fi
 
-# Build the sync-daemon (separate binary, uploaded as release asset).
-printf "Building sync-daemon...\n"
-cd "$repo_root/src-tauri"
-cargo build -p sync-daemon --release --target x86_64-unknown-linux-gnu
-printf "sync-daemon built at src-tauri/target/x86_64-unknown-linux-gnu/release/sync-daemon\n"
-cd "$repo_root"
-
 if ! pnpm tauri build --bundles "${bundles[@]}" "${tauri_args[@]}"; then
     cat >&2 <<'EOF'
 Linux packaging failed.
