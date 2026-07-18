@@ -59,6 +59,15 @@ function isBookMarkedRead(book: Book): boolean {
     return !!book.completedAt;
 }
 
+function sanitizeHtml(html: string): string {
+    return html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+        .replace(/on\w+\s*=\s*"[^"]*"/gi, "")
+        .replace(/on\w+\s*=\s*'[^']*'/gi, "");
+}
+
+
 export const BookCard = memo(function BookCard({
     book,
     viewMode,
@@ -562,9 +571,10 @@ export function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; is
                         {book.description && (
                             <div>
                                 <p className="text-xs text-[color:var(--color-text-muted)] uppercase">Description</p>
-                                <p className="text-sm text-[color:var(--color-text-secondary)] mt-1 line-clamp-4">
-                                    {book.description}
-                                </p>
+                                <div
+                                    className="text-sm text-[color:var(--color-text-secondary)] mt-1 [&_a]:text-[var(--color-accent)] [&_a]:underline prose prose-sm max-w-none"
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(book.description) }}
+                                />
                             </div>
                         )}
                         <div className="grid grid-cols-2 gap-3">
