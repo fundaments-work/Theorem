@@ -1,6 +1,6 @@
 
 import { useRef, useState, useEffect, memo, lazy, Suspense, type ChangeEvent } from "react";
-import { cn, normalizeFilePath, formatFileSize } from "../../core/lib/utils";
+import { cn, formatFileSize } from "../../core/lib/utils";
 import { isMobile, isTauri, isTauriDesktop } from "../../core/lib/env";
 import { getAllShortcuts, formatShortcutKeys } from "../../core/lib/keyboard-shortcuts";
 import {
@@ -10,7 +10,7 @@ import {
 import { ConfirmDialog, AlertDialog } from "../../ui";
 import { syncVaultMarkdownSnapshot } from "../../core/lib/vault-sync";
 import { exportUnifiedSyncBundle, estimateSyncBundleSizeBytes } from "../../core/lib/sync-bundle";
-import { pickLibraryFolderMobile } from "../../core/lib/mobile-folder-scan";
+
 import {
     useVocabularyStore,
     useLibraryStore,
@@ -21,9 +21,7 @@ import {
 import { clearAllApplicationStorage, getRssStorageStats } from "../../core/lib/storage-manager";
 const DeviceSyncSection = lazy(() => import("./DeviceSync").then(m => ({ default: m.DeviceSyncSection })));
 import { DictionaryDownloadModal } from "./DictionaryDownloadModal";
-import { Dropdown } from "../../ui";
 import {
-    Layout,
     Database,
     RotateCcw,
     Trash2,
@@ -313,7 +311,6 @@ export const SettingsPage = memo(function SettingsPage() {
     const stats = useSettingsStore((state) => state.stats);
     const updateStats = useSettingsStore((state) => state.updateStats);
     const highlightsExportName = normalizeHighlightsExportName(settings.vault.highlightsFileName);
-    const primaryLibraryFolder = settings.scanFolders[0] || "";
     const isMobilePlatform = isMobile();
     const setVaultSyncStatus = useUIStore((state) => state.setVaultSyncStatus);
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
@@ -486,31 +483,6 @@ export const SettingsPage = memo(function SettingsPage() {
         });
     };
 
-    const handlePickLibraryFolder = async () => {
-        if (isMobilePlatform) {
-            const selectedUri = await pickLibraryFolderMobile();
-            if (!selectedUri) {
-                return;
-            }
-            updateSettings({ scanFolders: [selectedUri] });
-            return;
-        }
-
-        const selectedPath = await showOpenDirectoryDialog({
-            title: "Choose Library Folder",
-            defaultPath: primaryLibraryFolder || undefined,
-        });
-
-        if (!selectedPath) {
-            return;
-        }
-
-        const normalizedPath = normalizeFilePath(selectedPath);
-        updateSettings({
-            scanFolders: normalizedPath ? [normalizedPath] : [],
-        });
-    };
-
     const handleDictionaryImport = async (event: ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) {
@@ -677,98 +649,6 @@ export const SettingsPage = memo(function SettingsPage() {
 
             {(activeTab === "general" || visitedTabs.has("general")) && <div className={activeTab === "general" ? "space-y-8" : "hidden"}>
                     <Section
-                        title="Library"
-                        description="Library display and organization preferences"
-                        icon={<Layout className="w-5 h-5" />}
-                    >
-                        <SettingRow
-                            label="Library View"
-                            description="Choose how books are displayed"
-                        >
-                            <ButtonSelect
-                                options={[
-                                    { value: "grid", label: "Grid" },
-                                    { value: "list", label: "List" },
-                                    { value: "compact", label: "Compact" },
-                                ]}
-                                value={settings.libraryViewMode}
-                                onChange={(v) => updateSettings({ libraryViewMode: v })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Sort By"
-                            description="Default sorting for library"
-                        >
-                            <Dropdown
-                                value={settings.librarySortBy}
-                                onChange={(value) =>
-                                    updateSettings({ librarySortBy: value as typeof settings.librarySortBy })
-                                }
-                                options={[
-                                    { value: "lastRead", label: "Last Read" },
-                                    { value: "title", label: "Title" },
-                                    { value: "author", label: "Author" },
-                                    { value: "dateAdded", label: "Date Added" },
-                                    { value: "progress", label: "Progress" },
-                                    { value: "rating", label: "Rating" },
-                                ]}
-                                variant="filled"
-                                size="sm"
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Sort Order"
-                            description="Ascending or descending order"
-                        >
-                            <ButtonSelect
-                                options={[
-                                    { value: "asc", label: "Ascending" },
-                                    { value: "desc", label: "Descending" },
-                                ]}
-                                value={settings.librarySortOrder}
-                                onChange={(v) => updateSettings({ librarySortOrder: v })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Library Folder"
-                            description={
-                                isMobilePlatform
-                                    ? "Pick a documents folder (SAF) for mobile folder scanning."
-                                    : "Default folder used when scanning books from the Library page"
-                            }
-                        >
-                            <div className="flex flex-wrap items-center gap-2">
-                                <input
-                                    type="text"
-                                    value={primaryLibraryFolder}
-                                    readOnly
-                                    placeholder="Not configured"
-                                    className={cn("ui-input", "min-w-[20rem] sm:w-[28rem]")}
-                                />
-                                <button
-                                    onClick={() => {
-                                        void handlePickLibraryFolder();
-                                    }}
-                                    className="ui-btn"
-                                >
-                                    Pick folder
-                                </button>
-                                {primaryLibraryFolder && (
-                                    <button
-                                        onClick={() => updateSettings({ scanFolders: [] })}
-                                        className="ui-btn"
-                                    >
-                                        Clear
-                                    </button>
-                                )}
-                            </div>
-                        </SettingRow>
-                    </Section>
-
-                    <Section
                         title="Reading Goals"
                         description="Set your daily and yearly reading targets"
                         icon={<Target className="w-5 h-5" />}
@@ -843,26 +723,71 @@ export const SettingsPage = memo(function SettingsPage() {
                         icon={<Sun className="w-5 h-5" />}
                     >
                         <SettingRow
+                            label="Theme"
+                            description="Choose your app theme"
+                        >
+                            <ButtonSelect
+                                options={[
+                                    { value: "system", label: "System" },
+                                    { value: "light", label: "Light" },
+                                    { value: "dark", label: "Dark" },
+                                ]}
+                                value={settings.theme}
+                                onChange={(v) => updateSettings({ theme: v as typeof settings.theme })}
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Accent Color"
+                            description="Pick a color for interactive elements"
+                        >
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-1.5">
+                                    {["#2d6a6e", "#5b5b5b", "#9e5a4a", "#3d6b4a", "#6b4a7a", "#4a6b9e", "#1c1c1c", "#9e6b4a"].map((color) => (
+                                        <button
+                                            key={color}
+                                            onClick={() => updateSettings({ accentColor: color })}
+                                            className="w-5 h-5 border transition-all duration-100"
+                                            style={{
+                                                backgroundColor: color,
+                                                borderColor: settings.accentColor === color ? "var(--color-accent-contrast)" : "var(--color-border)",
+                                                outline: settings.accentColor === color ? "2px solid var(--color-accent)" : "none",
+                                                outlineOffset: "1px",
+                                            }}
+                                            aria-label={`Set accent to ${color}`}
+                                        />
+                                    ))}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <label className="sr-only" htmlFor="accent-hex">Custom color hex</label>
+                                    <div className="flex items-center border border-[var(--color-border)] bg-[var(--color-surface)]">
+                                        <span className="pl-2 text-[11px] text-[color:var(--color-text-muted)]">#</span>
+                                        <input
+                                            id="accent-hex"
+                                            type="text"
+                                            value={settings.accentColor.replace("#", "")}
+                                            onChange={(e) => {
+                                                const raw = e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 6);
+                                                if (raw.length === 6) {
+                                                    updateSettings({ accentColor: "#" + raw.toLowerCase() });
+                                                }
+                                            }}
+                                            maxLength={6}
+                                            placeholder="2d6a6e"
+                                            className="w-20 border-none bg-transparent px-2 py-1 text-[11px] font-mono text-[color:var(--color-text-primary)] outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </SettingRow>
+
+                        <SettingRow
                             label="Sidebar Collapsed"
                             description="Start with the sidebar collapsed"
                         >
                             <Toggle
                                 checked={settings.sidebarCollapsed}
                                 onChange={(checked) => updateSettings({ sidebarCollapsed: checked })}
-                            />
-                        </SettingRow>
-
-                        <SettingRow
-                            label="Dark Mode"
-                            description="Use dark theme throughout the app"
-                        >
-                            <ButtonSelect
-                                options={[
-                                    { value: "light", label: "Light" },
-                                    { value: "dark", label: "Dark" },
-                                ]}
-                                value={settings.theme === "system" ? "light" : settings.theme}
-                                onChange={(v) => updateSettings({ theme: v })}
                             />
                         </SettingRow>
                     </Section>
@@ -1206,7 +1131,7 @@ export const SettingsPage = memo(function SettingsPage() {
                                 href="https://github.com/fundaments-work/theorem"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-accent)] transition-colors"
                             >
                                 <BookOpen className="w-4 h-4" />
                                 <span>GitHub Repository</span>
@@ -1215,7 +1140,7 @@ export const SettingsPage = memo(function SettingsPage() {
                                 href="https://github.com/fundaments-work/theorem/releases/latest"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-accent)] transition-colors"
                             >
                                 <Download className="w-4 h-4" />
                                 <span>Download Latest Release</span>
@@ -1224,7 +1149,7 @@ export const SettingsPage = memo(function SettingsPage() {
                                 href="https://github.com/fundaments-work/theorem/issues"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-accent)] transition-colors"
                             >
                                 <AlertCircle className="w-4 h-4" />
                                 <span>Report an Issue</span>

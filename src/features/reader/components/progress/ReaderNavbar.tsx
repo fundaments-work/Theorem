@@ -248,22 +248,18 @@ export const ReaderNavbar = memo(function ReaderNavbar({
         <div
             className={cn(
                 "flex flex-col gap-1 px-3 py-1.5 sm:px-4",
-                "font-mono",
+                "border-t border-[var(--color-border)] bg-[var(--color-surface)]",
                 className
             )}
             style={{
                 paddingBottom: "max(0.375rem, env(safe-area-inset-bottom))",
-                backgroundColor: 'color-mix(in srgb, var(--reader-bg, var(--color-surface)) 85%, transparent)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                borderTop: '1px solid color-mix(in srgb, var(--reader-fg, var(--color-text)) 10%, transparent)',
             }}
         >
             
             <div className="flex items-center gap-2">
                 <button
                     onClick={onToggleToc}
-                    className="flex items-center justify-center p-2 -ml-1 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors min-h-[44px] min-w-[44px]"
+                    className="flex items-center justify-center p-2 -ml-1 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors h-9 w-9"
                     aria-label="Table of Contents"
                 >
                     <List size={18} />

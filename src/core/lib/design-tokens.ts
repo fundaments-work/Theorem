@@ -21,29 +21,29 @@ const APP_THEME_COLORS: Record<string, Record<string, string>> = {
         "--app-bg": "#faf9f7",
         "--app-surface": "#f4f3f0",
         "--app-surface-elevated": "#ffffff",
-        "--app-surface-muted": "#eeede9",
-        "--app-surface-variant": "#e8e7e2",
-        "--app-surface-hover": "#e4e3de",
+        "--app-surface-muted": "#e8e7e2",
+        "--app-surface-variant": "#e0dfda",
+        "--app-surface-hover": "#d9d8d3",
         "--app-text-primary": "#1c1c1c",
         "--app-text-secondary": "#6b6b6b",
         "--app-text-muted": "#9c9c9c",
         "--app-text-inverse": "#ffffff",
-        "--app-border": "#e2e1dd",
-        "--app-border-subtle": "#eeede9",
+        "--app-border": "#d4d3ce",
+        "--app-border-subtle": "#e2e1dd",
     },
     dark: {
         "--app-bg": "#141416",
         "--app-surface": "#1c1c20",
-        "--app-surface-elevated": "#242428",
-        "--app-surface-muted": "#2a2a2e",
-        "--app-surface-variant": "#303034",
-        "--app-surface-hover": "#36363a",
+        "--app-surface-elevated": "#28282c",
+        "--app-surface-muted": "#353539",
+        "--app-surface-variant": "#3d3d42",
+        "--app-surface-hover": "#454549",
         "--app-text-primary": "#e8e6e1",
-        "--app-text-secondary": "#8b8b8b",
-        "--app-text-muted": "#6b6b6b",
+        "--app-text-secondary": "#9a9a9a",
+        "--app-text-muted": "#7a7a7a",
         "--app-text-inverse": "#141416",
-        "--app-border": "#2c2c30",
-        "--app-border-subtle": "#252529",
+        "--app-border": "#3d3d42",
+        "--app-border-subtle": "#323236",
     },
 };
 
@@ -99,7 +99,6 @@ const FALLBACK_THEME_COLORS: Record<ReaderTheme, Record<ThemeColorSlot, string>>
 };
 
 let systemThemeMediaQuery: MediaQueryList | null = null;
-let systemThemeChangeHandler: (() => void) | null = null;
 
 function hexToRgb(hex: string): RgbColor | null {
     const normalized = hex.trim().toLowerCase();
@@ -162,17 +161,59 @@ export function resolveAccentContrastColor(accentHex: string): string {
     return luminance > 0.45 ? "#141416" : "#ffffff";
 }
 
-export function computeAccentVariants(accentHex: string, isDark: boolean): {
+function ensureContrastRatio(accentHex: string, bgHex: string, minRatio: number): string {
+    const accent = hexToRgb(accentHex);
+    const bg = hexToRgb(bgHex);
+    if (!accent || !bg) return accentHex;
+
+    const accentLum = relativeLuminance(accent);
+    const bgLum = relativeLuminance(bg);
+    const ratio = getContrastRatio(accentLum, bgLum);
+    if (ratio >= minRatio) return accentHex;
+
+    const isDarkBg = bgLum < 0.2;
+    const target = isDarkBg ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
+
+    let low = 0;
+    let high = 1;
+    let result = accentHex;
+
+    for (let i = 0; i < 12; i++) {
+        const mid = (low + high) / 2;
+        const blended = rgbToHex(
+            accent.r + (target.r - accent.r) * mid,
+            accent.g + (target.g - accent.g) * mid,
+            accent.b + (target.b - accent.b) * mid,
+        );
+        const bRgb = hexToRgb(blended);
+        if (!bRgb) break;
+        const bLum = relativeLuminance(bRgb);
+        const newRatio = getContrastRatio(bLum, bgLum);
+
+        if (newRatio >= minRatio) {
+            result = blended;
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+    return result;
+}
+
+export function computeAccentVariants(accentHex: string, isDark: boolean, bgHex: string): {
+    safe: string;
     hover: string;
     light: string;
     contrast: string;
 } {
+    const safe = ensureContrastRatio(accentHex, bgHex, 4.5);
     return {
-        hover: isDark ? lightenColor(accentHex, 0.15) : darkenColor(accentHex, 0.12),
+        safe,
+        hover: isDark ? lightenColor(safe, 0.15) : darkenColor(safe, 0.12),
         light: isDark
-            ? mixColors(accentHex, "#141416", 0.75)
-            : mixColors(accentHex, "#ffffff", 0.85),
-        contrast: resolveAccentContrastColor(accentHex),
+            ? mixColors(safe, bgHex, 0.75)
+            : mixColors(safe, "#ffffff", 0.85),
+        contrast: resolveAccentContrastColor(safe),
     };
 }
 
@@ -191,10 +232,11 @@ export function applyAppTheme(theme: "light" | "dark" | "system", accentColor: s
         root.style.setProperty(key, value);
     }
 
+    const bgHex = appColors["--app-bg"];
     const accent = accentColor || DEFAULT_ACCENT_COLOR;
-    const variants = computeAccentVariants(accent, isDark);
+    const variants = computeAccentVariants(accent, isDark, bgHex);
 
-    root.style.setProperty("--app-accent", accent);
+    root.style.setProperty("--app-accent", variants.safe);
     root.style.setProperty("--app-accent-hover", variants.hover);
     root.style.setProperty("--app-accent-light", variants.light);
     root.style.setProperty("--app-accent-contrast", variants.contrast);
@@ -206,15 +248,15 @@ export function applyAppTheme(theme: "light" | "dark" | "system", accentColor: s
         root.style.setProperty("--app-warning", "#fbbf24");
         root.style.setProperty("--app-error", "#ef5350");
         root.style.setProperty("--app-info", "#8b8b8b");
-        root.style.setProperty("--app-focus-ring", `color-mix(in srgb, ${accent} 58%, transparent)`);
+        root.style.setProperty("--app-focus-ring", `color-mix(in srgb, ${variants.safe} 58%, transparent)`);
         root.style.setProperty("--app-overlay-subtle", `color-mix(in srgb, #ffffff 8%, transparent)`);
         root.style.setProperty("--app-overlay-medium", `color-mix(in srgb, #ffffff 14%, transparent)`);
     } else {
-        root.style.setProperty("--app-success", accent);
-        root.style.setProperty("--app-warning", accent);
+        root.style.setProperty("--app-success", variants.safe);
+        root.style.setProperty("--app-warning", variants.safe);
         root.style.setProperty("--app-error", "#d32f2f");
         root.style.setProperty("--app-info", "#6b6b6b");
-        root.style.setProperty("--app-focus-ring", `color-mix(in srgb, ${accent} 58%, transparent)`);
+        root.style.setProperty("--app-focus-ring", `color-mix(in srgb, ${variants.safe} 58%, transparent)`);
         root.style.setProperty("--app-overlay-subtle", `color-mix(in srgb, #000000 8%, transparent)`);
         root.style.setProperty("--app-overlay-medium", `color-mix(in srgb, #000000 14%, transparent)`);
     }
@@ -363,19 +405,6 @@ function getContrastRatio(a: number, b: number): number {
     const lighter = Math.max(a, b);
     const darker = Math.min(a, b);
     return (lighter + 0.05) / (darker + 0.05);
-}
-
-function resolveAccessibleAccentContrast(accentCssColor: string): string {
-    const rgb = parseCssColorToRgb(accentCssColor);
-    if (!rgb) {
-        return "#ffffff";
-    }
-
-    const accentLuminance = relativeLuminance(rgb);
-    const whiteContrast = getContrastRatio(accentLuminance, 1);
-    const blackContrast = getContrastRatio(accentLuminance, 0);
-
-    return whiteContrast >= blackContrast ? "#ffffff" : "#000000";
 }
 
 function resolveThemeColors(theme: ReaderTheme): Record<ThemeColorSlot, string> {

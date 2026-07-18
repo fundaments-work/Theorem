@@ -1620,7 +1620,7 @@ export function LibraryPage() {
     }
 
     return (
-        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
+        <div className="mx-auto flex h-full w-full max-w-[var(--layout-content-max-width)] flex-col px-4 py-6 pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             
             <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
@@ -1702,8 +1702,8 @@ export function LibraryPage() {
                 </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-start mt-8 relative">
-                <div className="flex-1 w-full">
+            <div className="flex min-h-0 flex-1 flex-col md:flex-row gap-6 md:gap-10 mt-8 relative">
+                <div className="flex min-h-0 flex-1 flex-col w-full">
                     
                     <div className={cn(
                         "md:hidden overflow-hidden transition-colors duration-300",
@@ -1775,7 +1775,7 @@ export function LibraryPage() {
                         </div>
                     </div>
 
-                    <section ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+                    <section ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-smooth">
                         {sortedBooks.length === 0 ? (
                             <div className="text-center py-16 border-2 border-dashed border-[var(--color-border)]">
                                 <p className="text-[color:var(--color-text-muted)] font-bold uppercase text-xs tracking-widest">No documents match criteria</p>

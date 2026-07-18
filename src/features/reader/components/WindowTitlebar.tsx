@@ -43,7 +43,7 @@ interface WindowTitlebarProps {
     pdfControls?: any;
 }
 
-const ICON_BUTTON_CLASS = "inline-flex h-8 w-8 shrink-0 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
+const ICON_BUTTON_CLASS = "inline-flex h-9 w-9 shrink-0 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
 const ICON_BUTTON_ACTIVE_CLASS = "border-[var(--color-text-primary)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]";
 const ICON_BUTTON_INACTIVE_CLASS = "border-transparent text-[color:var(--color-text-secondary)]";
 
@@ -70,7 +70,6 @@ function ToolbarButton({
                 active ? ICON_BUTTON_ACTIVE_CLASS : ICON_BUTTON_INACTIVE_CLASS,
                 className,
             )}
-            style={{ color: "var(--reader-fg)" }}
             title={title}
             {...rest}
         >
@@ -106,11 +105,7 @@ function MobileMenu({ isOpen, onClose, items, triggerRef: _triggerRef }: MenuPro
                 }}
             />
             <div
-                className="absolute right-2 top-full mt-1 z-[161] min-w-[12rem] max-w-[calc(100vw-1rem)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg backdrop-blur-md"
-                style={{
-                    backgroundColor: 'var(--reader-bg, var(--color-surface))',
-                    borderColor: 'color-mix(in srgb, var(--reader-fg, var(--color-text)) 15%, transparent)',
-                }}
+                className="absolute right-2 top-full mt-1 z-[161] min-w-[12rem] max-w-[calc(100vw-1rem)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
             >
                 <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] px-3 py-1.5">
                     <span className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider">Menu</span>
@@ -130,14 +125,13 @@ function MobileMenu({ isOpen, onClose, items, triggerRef: _triggerRef }: MenuPro
                             item.onClick();
                         }}
                         disabled={item.disabled}
-                        className={cn(
-                            "flex w-full items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors",
-                            item.active
-                                ? "bg-[color:color-mix(in_srgb,var(--reader-fg,var(--color-text))_10%,transparent)] font-medium"
-                                : "hover:bg-[color:color-mix(in_srgb,var(--reader-fg,var(--color-text))_5%,transparent)]",
-                            item.disabled && "opacity-50 cursor-not-allowed"
-                        )}
-                        style={{ color: 'var(--reader-fg, var(--color-text))' }}
+                    className={cn(
+                        "flex w-full items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors text-[color:var(--color-text-primary)]",
+                        item.active
+                            ? "bg-[var(--color-surface-muted)] font-medium"
+                            : "hover:bg-[var(--color-surface-muted)]",
+                        item.disabled && "opacity-50 cursor-not-allowed"
+                    )}
                     >
                         <span className="w-5 h-5 flex items-center justify-center opacity-70">{item.icon}</span>
                         {item.label}
@@ -231,8 +225,8 @@ export function WindowTitlebar({
         active?: boolean;
         disabled?: boolean;
     }> = [
-            { label: "Annotations & Notes", icon: <BookmarkIcon className="w-4 h-4" />, onClick: onToggleBookmarks, active: activePanel === "bookmarks" },
-            { label: "Book Info", icon: <Info className="w-4 h-4" />, onClick: onToggleInfo, active: activePanel === "info" },
+            { label: "Annotations & Notes", icon: <BookmarkIcon className="w-5 h-5" />, onClick: onToggleBookmarks, active: activePanel === "bookmarks" },
+            { label: "Book Info", icon: <Info className="w-5 h-5" />, onClick: onToggleInfo, active: activePanel === "info" },
         ];
 
     if (onToggleFullscreen) {
@@ -248,18 +242,13 @@ export function WindowTitlebar({
         <div
             className={cn(
                 "w-full z-[150] select-none reader-toolbar relative",
+                "border-b border-[var(--color-border)] bg-[var(--color-surface)]",
                 "pt-[max(env(safe-area-inset-top,0px),2px)] lg:pt-0",
                 className
             )}
-            style={{
-                backgroundColor: 'color-mix(in srgb, var(--reader-bg, var(--color-surface)) 85%, transparent)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                borderBottom: '1px solid color-mix(in srgb, var(--reader-fg, var(--color-text)) 10%, transparent)',
-            }}
             onDoubleClick={showDesktopWindowControls ? handleMaximize : undefined}
         >
-            <div className="h-10 lg:h-9 flex items-center gap-1 pl-3 pr-2">
+            <div className="h-12 lg:h-11 flex items-center gap-1 pl-3 pr-2">
                 
                 <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none lg:max-w-[400px]">
                     <button
@@ -268,7 +257,7 @@ export function WindowTitlebar({
                         style={{ color: 'var(--reader-fg, var(--color-text))' }}
                         aria-label="Back"
                     >
-                        <ArrowLeft className="w-4 h-4" />
+                        <ArrowLeft className="w-5 h-5" />
                     </button>
 
                     <div className="flex-1 min-w-0 text-left overflow-hidden pr-2">
@@ -288,7 +277,7 @@ export function WindowTitlebar({
 
                 <div className="flex items-center gap-0.5 mr-0.5">
                     <ToolbarButton onClick={onToggleSearch} active={activePanel === "search"} title="Search" aria-label="Search">
-                        <Search className="w-4 h-4" />
+                        <Search className="w-5 h-5" />
                     </ToolbarButton>
 
                     {onAddBookmark && (
@@ -298,7 +287,7 @@ export function WindowTitlebar({
                             title={isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark"}
                             aria-label={isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark"}
                         >
-                            <BookmarkIcon className={cn("w-4 h-4", isCurrentPageBookmarked ? "fill-current" : "")} />
+                            <BookmarkIcon className={cn("w-5 h-5", isCurrentPageBookmarked ? "fill-current" : "")} />
                         </ToolbarButton>
                     )}
 
@@ -309,12 +298,12 @@ export function WindowTitlebar({
                             title={immersionMode ? "Exit Immersion Reading" : "Immersion Reading"}
                             aria-label={immersionMode ? "Exit Immersion Reading" : "Immersion Reading"}
                         >
-                            <Headphones className={cn("w-4 h-4", immersionMode && "fill-current")} />
+                            <Headphones className={cn("w-5 h-5", immersionMode && "fill-current")} />
                         </ToolbarButton>
                     )}
 
                     <ToolbarButton onClick={onToggleSettings} active={activePanel === "settings"} title="Reading Settings" aria-label="Reading Settings">
-                        <Type className="w-4 h-4" />
+                        <Type className="w-5 h-5" />
                     </ToolbarButton>
                 </div>
 
@@ -325,7 +314,7 @@ export function WindowTitlebar({
                     style={{ color: 'var(--reader-fg)' }}
                     aria-label="More options"
                 >
-                    <EllipsisVertical className="w-4 h-4" />
+                    <EllipsisVertical className="w-5 h-5" />
                 </button>
 
                 <MobileMenu
@@ -337,9 +326,9 @@ export function WindowTitlebar({
 
                 {showDesktopWindowControls && (
                     <div className="hidden lg:flex items-center gap-1 ml-2 pl-2 border-l border-[var(--color-border)]">
-                        <button onClick={handleMinimize} className={ICON_BUTTON_CLASS} aria-label="Minimize"><Minus className="w-4 h-4" /></button>
-                        <button onClick={handleMaximize} className={ICON_BUTTON_CLASS} aria-label={isMaximized ? "Restore" : "Maximize"}><Maximize2 className="w-4 h-4" /></button>
-                        <button onClick={handleClose} className={cn(ICON_BUTTON_CLASS, "hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]")} aria-label="Close"><X className="w-4 h-4" /></button>
+                        <button onClick={handleMinimize} className={ICON_BUTTON_CLASS} aria-label="Minimize"><Minus className="w-5 h-5" /></button>
+                        <button onClick={handleMaximize} className={ICON_BUTTON_CLASS} aria-label={isMaximized ? "Restore" : "Maximize"}><Maximize2 className="w-5 h-5" /></button>
+                        <button onClick={handleClose} className={cn(ICON_BUTTON_CLASS, "hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]")} aria-label="Close"><X className="w-5 h-5" /></button>
                     </div>
                 )}
             </div>
