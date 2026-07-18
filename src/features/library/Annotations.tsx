@@ -173,7 +173,7 @@ const AnnotationCard = memo(function AnnotationCard({
 
             <div className="space-y-3">
                 {annotation.selectedText && (
-                    <blockquote className="border-l-2 border-black pl-3 font-serif text-[17px] leading-relaxed text-[color:var(--color-text-primary)]">
+                    <blockquote className="pl-3 font-serif text-[17px] leading-relaxed text-[color:var(--color-text-primary)]">
                         {annotation.selectedText}
                     </blockquote>
                 )}
@@ -407,7 +407,7 @@ export function AnnotationsPage() {
                             key={tab.id}
                             onClick={() => setActiveFilter(tab.id)}
                             className={cn(
-                                "border border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium transition-colors",
+                                "border border-[var(--color-border)] px-3 py-2 font-sans text-xs font-medium transition-colors",
                                 activeFilter === tab.id
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                                     : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
@@ -422,7 +422,7 @@ export function AnnotationsPage() {
                     <button
                         onClick={() => setViewMode(viewMode === "list" ? "cards" : "list")}
                         className={cn(
-                            "border border-[var(--color-border)] px-3 py-1.5 font-sans text-[11px] font-medium transition-colors",
+                            "border border-[var(--color-border)] px-3 py-2 font-sans text-xs font-medium transition-colors",
                             viewMode === "cards"
                                 ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                                 : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"

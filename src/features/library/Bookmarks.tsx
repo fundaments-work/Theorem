@@ -93,7 +93,7 @@ const BookmarkCard = memo(function BookmarkCard({ bookmark, book, onDelete, onGo
 
             <div className="space-y-3">
                 {bookmark.selectedText && (
-                    <blockquote className="border-l-2 border-black pl-3 font-serif text-[17px] leading-relaxed text-[color:var(--color-text-primary)]">
+                    <blockquote className="pl-3 font-serif text-[17px] leading-relaxed text-[color:var(--color-text-primary)]">
                         {bookmark.selectedText}
                     </blockquote>
                 )}
