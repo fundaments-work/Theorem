@@ -36,8 +36,6 @@ import {
     Globe,
     WifiOff,
     Sun,
-    BookOpenCheck,
-    Headphones,
     Target,
     AlertCircle,
     Keyboard,
@@ -713,8 +711,8 @@ export const SettingsPage = memo(function SettingsPage() {
                     </Section>
 
                     <Section
-                        title="Appearance"
-                        description="Customize the look and feel"
+                        title="Customization"
+                        description="Customize the look, feel, and reading preferences"
                         icon={<Sun className="w-5 h-5" />}
                     >
                         <SettingRow
@@ -802,19 +800,13 @@ export const SettingsPage = memo(function SettingsPage() {
                         >
                             <Toggle
                                 checked={settings.speedReadEnabled}
-                                onChange={(checked) => updateSettings({ speedReadEnabled: checked })}
+                                 onChange={(checked) => updateSettings({ speedReadEnabled: checked })}
                             />
                         </SettingRow>
-                    </Section>
 
-                    <Section
-                        title="Text-to-Speech"
-                        description="Read aloud using your device's built-in voice"
-                        icon={<Headphones className="w-5 h-5" />}
-                    >
                         <SettingRow
-                            label="Enable Text-to-Speech"
-                            description={isTauri() ? "Use system voice to read books aloud" : "Not available in web browser"}
+                            label="Text-to-Speech"
+                            description={isTauri() ? "Read aloud using your device's built-in voice" : "Not available in web browser"}
                         >
                             {isTauri() ? (
                                 <Toggle
@@ -825,13 +817,7 @@ export const SettingsPage = memo(function SettingsPage() {
                                 <span className="text-[11px] font-medium text-[color:var(--color-text-muted)]">Off</span>
                             )}
                         </SettingRow>
-                    </Section>
 
-                    <Section
-                            title="Vocabulary"
-                            description="Track words you look up"
-                        icon={<BookOpenCheck className="w-5 h-5" />}
-                    >
                         <SettingRow
                             label="Vocabulary Lookup"
                             description="Save words you look up while reading"

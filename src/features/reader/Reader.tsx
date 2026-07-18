@@ -2258,6 +2258,11 @@ const BookReaderPage = memo(function BookReaderPage() {
                         currentColor={activeAnnotation?.color}
                         onSelectColor={handleColorSelect}
                         onAddNote={handleAddNote}
+                        onCopy={() => {
+                            const text = selectedText || activeAnnotation?.selectedText;
+                            if (text) navigator.clipboard.writeText(text).catch(() => {});
+                            setShowColorPicker(false);
+                        }}
                         onDefine={handleDefineSelection}
                         onBookmark={handleBookmarkFromSelection}
                         onDelete={editingHighlightId ? handleDeleteFromColorPicker : undefined}

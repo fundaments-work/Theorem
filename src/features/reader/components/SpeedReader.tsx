@@ -130,7 +130,7 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext, theme = "dark" 
                         }}>
                         {currentWord || "—"}
                     </div>
-                    <div style={{ color: colors.fg, opacity: 0.08, fontSize: 10, marginTop: 20, letterSpacing: "0.25em", textTransform: "uppercase" }}>
+                    <div style={{ color: colors.fg, opacity: 0.25, fontSize: 10, marginTop: 20, letterSpacing: "0.25em", textTransform: "uppercase" }}>
                         {isPlaying ? "Reading" : "Paused"}
                     </div>
                 </div>
@@ -171,7 +171,7 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext, theme = "dark" 
                 </div>
 
                 <div className="flex items-center justify-center gap-3"
-                    style={{ color: colors.fg, opacity: 0.1, fontSize: 9, letterSpacing: "0.06em" }}>
+                    style={{ color: colors.fg, opacity: 0.35, fontSize: 10, letterSpacing: "0.08em" }}>
                     <span>Space</span><span>·</span><span>↑↓</span><span>·</span><span>←→</span><span>·</span><span>F</span>
                 </div>
             </div>

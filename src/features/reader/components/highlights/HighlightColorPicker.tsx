@@ -1,7 +1,7 @@
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Loader2, ArrowLeft } from 'lucide-react';
+import { Check, Copy, Loader2, ArrowLeft } from 'lucide-react';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { cn } from "../../../../core/lib/utils";
 import {
@@ -31,6 +31,7 @@ interface HighlightColorPickerProps {
     currentColor?: HighlightColor | null;
     onSelectColor: (color: HighlightColor) => void;
     onAddNote: () => void;
+    onCopy?: () => void;
     onDefine?: () => void;
     onBookmark: () => void;
     onDelete?: () => void;
@@ -112,6 +113,7 @@ export function HighlightColorPicker({
     currentColor,
     onSelectColor,
     onAddNote,
+    onCopy,
     onDefine,
     onBookmark: _onBookmark,
     onDelete,
@@ -589,6 +591,18 @@ export function HighlightColorPicker({
                         </div>
 
                         <div className="mt-3 grid gap-1.5">
+                            {onCopy && (
+                                <button
+                                    onClick={() => {
+                                        onCopy();
+                                        handleClose();
+                                    }}
+                                    className={PICKER_ACTION_BUTTON_CLASS}
+                                >
+                                    <Copy className="w-4 h-4 mr-2" />
+                                    Copy
+                                </button>
+                            )}
                             <button
                                 onClick={() => {
                                     onAddNote();
