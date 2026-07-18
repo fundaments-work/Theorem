@@ -589,23 +589,20 @@ export function HighlightColorPicker({
                                 </button>
                             ))}
                         </div>
-                        <div className="mt-3 flex items-center gap-1">
+                        <div className="mt-3 grid gap-1.5">
                             {onCopy && (
                                 <button onClick={() => { onCopy(); handleClose(); }}
-                                    className="flex items-center justify-center h-8 flex-1 border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors text-[11px] font-medium gap-1"
-                                    title="Copy text">
-                                    <Copy className="w-3.5 h-3.5" /> Copy
+                                    className={PICKER_ACTION_BUTTON_CLASS}>
+                                    <Copy className="w-4 h-4 mr-2" /> Copy
                                 </button>
                             )}
                             <button onClick={() => { onAddNote(); handleClose(); }}
-                                className="flex items-center justify-center h-8 flex-1 border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors text-[11px] font-medium"
-                                title="Add a note to this highlight">
+                                className={PICKER_ACTION_BUTTON_CLASS}>
                                 Add Note
                             </button>
                             <button onClick={() => onDefine?.()}
-                                className="flex items-center justify-center h-8 flex-1 border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors text-[11px] font-medium disabled:opacity-40"
-                                disabled={!onDefine}
-                                title="Look up definition">
+                                className={PICKER_ACTION_BUTTON_CLASS}
+                                disabled={!onDefine}>
                                 Define
                             </button>
                         </div>
