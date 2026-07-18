@@ -60,12 +60,12 @@ type ThemeColorSlot = "bg" | "fg" | "link";
 const HIGHLIGHT_COLORS_ORDER: HighlightColor[] = ["yellow", "green", "blue", "red", "orange", "purple"];
 
 const HIGHLIGHT_LABELS: Record<HighlightColor, string> = {
-    yellow: "Yellow",
-    green: "Green",
-    blue: "Blue",
-    red: "Red",
-    orange: "Orange",
-    purple: "Purple",
+    yellow: "Important",
+    green: "Key Idea",
+    blue: "Interesting",
+    red: "Critical",
+    orange: "Action",
+    purple: "Beautiful",
 };
 
 const THEME_CLASS_NAMES: Record<ReaderTheme, string> = {
