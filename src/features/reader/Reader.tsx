@@ -218,6 +218,7 @@ const BookReaderPage = memo(function BookReaderPage() {
     type ReaderPanel = 'toc' | 'settings' | 'bookmarks' | 'search' | 'info' | 'menu' | null;
     const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [loadAttempt, setLoadAttempt] = useState(0);
     const [initialLocation, setInitialLocation] = useState<string | undefined>(undefined);
     const [initialFraction, setInitialFraction] = useState<number | undefined>(undefined);
     const [ttsData, setTtsData] = useState<{ text: string; startWordId: string } | null>(null);
@@ -501,9 +502,16 @@ const BookReaderPage = memo(function BookReaderPage() {
                         downloadBookOnDemand(downloadId).catch(() => {});
                     });
                 }
-                // Wait for the download to complete by polling the book's state.
-                
+
+                const DOWNLOAD_TIMEOUT_MS = 120_000;
+                const startTime = Date.now();
                 while (book.syncedWithoutFile) {
+                    if (Date.now() - startTime > DOWNLOAD_TIMEOUT_MS) {
+                        setLoadError('Book download timed out. The file may not be available on any paired device. You can try reopening later.');
+                        loadedBookIdRef.current = null;
+                        useUIStore.getState().setDownloadingBook(undefined);
+                        return;
+                    }
                     await new Promise<void>(r => setTimeout(r, 200));
                     if (isCancelled) return;
                     const current = getBook(currentBookId);
@@ -627,7 +635,7 @@ const BookReaderPage = memo(function BookReaderPage() {
             
             loadedBookIdRef.current = null;
         };
-    }, [currentBookId, getBook]);
+    }, [currentBookId, getBook, loadAttempt]);
 
     useEffect(() => {
         if (!currentBookId) {
@@ -1885,12 +1893,13 @@ const BookReaderPage = memo(function BookReaderPage() {
     if (loadError) {
         const displayLoadError = loadError.replace(/\s+/g, " ").trim();
         const isSyncedWithoutFile = displayLoadError.includes('synced from another device');
+        const isDownloadTimeout = displayLoadError.includes('timed out') || displayLoadError.includes('download');
 
         return (
             <div className="fixed inset-0 flex items-center justify-center bg-[var(--color-background)] px-4 sm:px-8 py-8">
                 <div className="mx-auto w-full max-w-[26rem] min-w-0 flex flex-col items-center text-center">
-                    <div className={`w-16 h-16 flex items-center justify-center mb-6 ${isSyncedWithoutFile ? 'bg-[var(--color-warning)]/10 text-[color:var(--color-warning)]' : 'bg-[var(--color-error)]/10 text-[color:var(--color-error)]'}`}>
-                        {isSyncedWithoutFile ? (
+                    <div className={`w-16 h-16 flex items-center justify-center mb-6 ${isSyncedWithoutFile || isDownloadTimeout ? 'bg-[var(--color-warning)]/10 text-[color:var(--color-warning)]' : 'bg-[var(--color-error)]/10 text-[color:var(--color-error)]'}`}>
+                        {isSyncedWithoutFile || isDownloadTimeout ? (
                             <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
@@ -1901,7 +1910,7 @@ const BookReaderPage = memo(function BookReaderPage() {
                         )}
                     </div>
                     <h2 className="w-full break-words text-balance text-xl font-semibold text-[color:var(--color-text-primary)] mb-2">
-                        {isSyncedWithoutFile ? 'Book Not Yet Transferred' : 'Failed to Load Book'}
+                        {isSyncedWithoutFile ? 'Book Not Yet Transferred' : isDownloadTimeout ? 'Book Unavailable' : 'Failed to Load Book'}
                     </h2>
                     <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-secondary)] mb-8 leading-relaxed">
                         {displayLoadError}
@@ -1913,6 +1922,16 @@ const BookReaderPage = memo(function BookReaderPage() {
                         >
                             Back to Library
                         </button>
+                        <button
+                            onClick={() => {
+                                setLoadError(null);
+                                loadedBookIdRef.current = null;
+                                setLoadAttempt(v => v + 1);
+                            }}
+                            className="ui-btn-secondary"
+                        >
+                            Try Again
+                        </button>
                         {isSyncedWithoutFile && (
                             <button
                                 onClick={() => setRoute('settings')}
@@ -1921,6 +1940,44 @@ const BookReaderPage = memo(function BookReaderPage() {
                                 Go to Sync Settings
                             </button>
                         )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (currentBook?.syncedWithoutFile && downloadingBookId !== currentBookId) {
+        return (
+            <div className="fixed inset-0 flex items-center justify-center bg-[var(--color-background)] px-4 sm:px-8 py-8">
+                <div className="mx-auto w-full max-w-[26rem] min-w-0 flex flex-col items-center text-center">
+                    <div className="w-16 h-16 flex items-center justify-center mb-6 bg-[var(--color-warning)]/10 text-[color:var(--color-warning)]">
+                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </div>
+                    <h2 className="w-full break-words text-balance text-xl font-semibold text-[color:var(--color-text-primary)] mb-2">
+                        Book File Not Available
+                    </h2>
+                    <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-secondary)] mb-8 leading-relaxed">
+                        This book was synced from another device, but its file could not be downloaded. Try pairing with the source device or reopening later.
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => setRoute('library')}
+                            className="ui-btn-primary"
+                        >
+                            Back to Library
+                        </button>
+                        <button
+                            onClick={() => {
+                                setLoadError(null);
+                                loadedBookIdRef.current = null;
+                                setLoadAttempt(v => v + 1);
+                            }}
+                            className="ui-btn-secondary"
+                        >
+                            Try Again
+                        </button>
                     </div>
                 </div>
             </div>

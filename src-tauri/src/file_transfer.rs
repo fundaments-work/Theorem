@@ -20,7 +20,7 @@ impl std::fmt::Debug for FileTransferHandler {
 }
 
 impl FileTransferHandler {
-    async fn read_cover(data_dir: &Path, book_id: &str) -> Result<Vec<u8>, String> {
+    fn open_read_db(data_dir: &Path) -> Result<rusqlite::Connection, String> {
         let db_path = data_dir.join("theorem.db");
         let conn = rusqlite::Connection::open(&db_path).map_err(|e| format!("open db: {e}"))?;
         conn.execute_batch(
@@ -30,7 +30,11 @@ impl FileTransferHandler {
              PRAGMA foreign_keys = ON;",
         )
         .map_err(|e| format!("pragma: {e}"))?;
+        Ok(conn)
+    }
 
+    async fn read_cover(data_dir: &Path, book_id: &str) -> Result<Vec<u8>, String> {
+        let conn = Self::open_read_db(data_dir)?;
         let cover_key = format!("cover:{}", book_id);
         let mut stmt = conn
             .prepare("SELECT value FROM blob_store WHERE key = ?1")
@@ -39,6 +43,17 @@ impl FileTransferHandler {
             .query_row(rusqlite::params![cover_key], |row| row.get(0))
             .map_err(|_| format!("cover not found: {book_id}"))?;
         Ok(cover_blob)
+    }
+
+    async fn read_book_data(data_dir: &Path, book_id: &str) -> Result<Vec<u8>, String> {
+        let conn = Self::open_read_db(data_dir)?;
+        let mut stmt = conn
+            .prepare("SELECT data FROM books WHERE id = ?1 AND data IS NOT NULL")
+            .map_err(|e| format!("prepare: {e}"))?;
+        let book_data: Vec<u8> = stmt
+            .query_row(rusqlite::params![book_id], |row| row.get(0))
+            .map_err(|_| format!("book data not found in sqlite: {book_id}"))?;
+        Ok(book_data)
     }
 }
 
@@ -64,7 +79,12 @@ impl ProtocolHandler for FileTransferHandler {
                     .data_dir
                     .join("book-cache")
                     .join(format!("{}.book", request));
-                tokio::fs::read(&path).await.map_err(|e| e.to_string())
+                match tokio::fs::read(&path).await {
+                    Ok(data) => Ok(data),
+                    Err(fs_err) => Self::read_book_data(&self.data_dir, &request)
+                        .await
+                        .map_err(|_| format!("book not found in book-cache or sqlite: {fs_err}")),
+                }
             };
 
             match result {

@@ -684,6 +684,15 @@ async fn handle_pair_req(
     };
 
     let mut devices = state.paired_devices.lock().await;
+    if !paired.iroh_node_id.is_empty() {
+        let existing_by_key = devices
+            .values()
+            .find(|d| d.iroh_node_id == paired.iroh_node_id && d.device_id != paired.device_id)
+            .map(|d| d.device_id.clone());
+        if let Some(id) = existing_by_key {
+            devices.remove(&id);
+        }
+    }
     if !paired.fingerprint.is_empty() {
         let old_id = devices
             .values()

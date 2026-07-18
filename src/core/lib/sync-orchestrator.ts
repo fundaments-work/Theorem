@@ -534,8 +534,7 @@ export async function runDeviceSync(
         let settleSignals = 0;
         const signalSettle = () => {
             settleSignals++;
-            
-            if (settleSignals >= 3) settle();
+            if (settleSignals >= 2) settle();
         };
 
         log("Syncing with peer via iroh-docs...");
@@ -748,6 +747,7 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
                 ),
             }));
             useUIStore.getState().setDownloadingBook(undefined);
+            setStatus("synced", "Book downloaded");
             return true;
         } catch (e) {
             console.error(`[file-xfer] write failed for ${bookId}: ${e}`);
@@ -1437,6 +1437,7 @@ export function subscribeZustandToIrohDocs(): () => void {
 
     let prevVocab = useVocabularyStore.getState().vocabularyTerms;
     unsubs.push(useVocabularyStore.subscribe((state) => {
+        if (_bridgePaused) return;
         if (state.vocabularyTerms !== prevVocab) {
             prevVocab = state.vocabularyTerms;
             scheduleDocsWrite("vocabulary", () => docsSetEntry("vocabulary", JSON.stringify(state.vocabularyTerms)), "vocabulary");
@@ -1446,6 +1447,7 @@ export function subscribeZustandToIrohDocs(): () => void {
     let prevFeeds = useRssStore.getState().feeds;
     let prevArticles = useRssStore.getState().articles;
     unsubs.push(useRssStore.subscribe((state) => {
+        if (_bridgePaused) return;
         if (state.feeds !== prevFeeds) {
             prevFeeds = state.feeds;
             scheduleDocsWrite("rss_feeds", () => docsSetEntry("rss_feeds", JSON.stringify(state.feeds)), "rss_feeds");
@@ -1459,6 +1461,7 @@ export function subscribeZustandToIrohDocs(): () => void {
     let prevSettings = useSettingsStore.getState().settings;
     let prevStats = useSettingsStore.getState().stats;
     unsubs.push(useSettingsStore.subscribe((state) => {
+        if (_bridgePaused) return;
         if (state.settings !== prevSettings) {
             prevSettings = state.settings;
             scheduleDocsWrite("settings", () => docsSetEntry("settings", JSON.stringify({

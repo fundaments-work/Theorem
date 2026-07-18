@@ -99,6 +99,10 @@ pub struct PairedDevice {
 pub struct PairedDeviceInfo {
     pub device_id: String,
     pub device_name: String,
+
+    #[serde(default)]
+    pub iroh_node_id: String,
+
     pub last_ip: String,
     pub last_port: u16,
     pub paired_at: String,
@@ -122,6 +126,7 @@ impl From<&PairedDevice> for PairedDeviceInfo {
         Self {
             device_id: device.device_id.clone(),
             device_name: device.device_name.clone(),
+            iroh_node_id: device.iroh_node_id.clone(),
             last_ip: device.last_ip.clone(),
             last_port: device.last_port,
             paired_at: device.paired_at.clone(),

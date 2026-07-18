@@ -416,6 +416,18 @@ pub async fn submit_pairing_code(
 
     {
         let mut devices = sync_state.transport_state.paired_devices.lock().await;
+        if !paired_device.iroh_node_id.is_empty() {
+            let existing_by_key: Option<String> = devices
+                .values()
+                .find(|d| {
+                    d.iroh_node_id == paired_device.iroh_node_id
+                        && d.device_id != paired_device.device_id
+                })
+                .map(|d| d.device_id.clone());
+            if let Some(old_device_id) = existing_by_key {
+                devices.remove(&old_device_id);
+            }
+        }
         if !paired_device.fingerprint.is_empty() {
             let old_id: Option<String> = devices
                 .values()
@@ -866,6 +878,9 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
                                     &devices,
                                 );
                             }
+                            if let Ok(blobs) = get_blobs_store(&app) {
+                                iroh_sync::subscribe_doc_events(app.clone(), doc.clone(), blobs);
+                            }
                             new_doc_id_str
                                 .parse()
                                 .map_err(|e| format!("parse recovered doc id: {e}"))?
@@ -914,6 +929,9 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
                                 &sync_state.transport_state.app_data_dir,
                                 &devices,
                             );
+                        }
+                        if let Ok(blobs) = get_blobs_store(&app) {
+                            iroh_sync::subscribe_doc_events(app.clone(), imported.clone(), blobs);
                         }
                         imported
                     }

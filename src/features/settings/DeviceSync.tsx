@@ -286,7 +286,10 @@ export function DeviceSyncSection() {
             try {
                 const device = await submitPairingCode(trimmedCode);
                 pairUnlisten?.();
-                setPairedDevices((prev) => [...prev, device]);
+                setPairedDevices((prev) => {
+                    const filtered = prev.filter(d => d.deviceId !== device.deviceId);
+                    return [...filtered, device];
+                });
                 setPairingCode("");
                 setSuccessMessage(
                     `Paired with ${device.deviceName || device.deviceId}`,
