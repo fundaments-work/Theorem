@@ -7214,6 +7214,8 @@ dependencies = [
  "iroh-docs",
  "iroh-gossip",
  "iroh-mdns-address-lookup",
+ "jni 0.21.1",
+ "ndk-context",
  "percent-encoding",
  "quick-xml 0.36.2",
  "r2d2",
