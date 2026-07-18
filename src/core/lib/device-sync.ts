@@ -90,3 +90,8 @@ export async function requestBookFile(peerDeviceId: string, bookId: string): Pro
         return null;
     }
 }
+
+export async function downloadBookFile(peerDeviceId: string, bookId: string, destPath: string): Promise<void> {
+    if (!isTauri()) return;
+    await invoke("download_book_file", { peerDeviceId, bookId, destPath });
+}

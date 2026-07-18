@@ -219,6 +219,11 @@ const BookReaderPage = memo(function BookReaderPage() {
     const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [loadAttempt, setLoadAttempt] = useState(0);
+    const [downloadProgress, setDownloadProgress] = useState<{
+        progress: number;
+        downloaded: number;
+        total: number;
+    } | null>(null);
     const [initialLocation, setInitialLocation] = useState<string | undefined>(undefined);
     const [initialFraction, setInitialFraction] = useState<number | undefined>(undefined);
     const [ttsData, setTtsData] = useState<{ text: string; startWordId: string } | null>(null);
@@ -455,6 +460,34 @@ const BookReaderPage = memo(function BookReaderPage() {
     }, []);
 
     const downloadingBookId = useUIStore((s) => s.downloadingBookId);
+
+    useEffect(() => {
+        if (!downloadingBookId) {
+            setDownloadProgress(null);
+            return;
+        }
+        setDownloadProgress(null);
+        let cancelled = false;
+        import("@tauri-apps/api/event").then(({ listen }) => {
+            if (cancelled) return;
+            listen<{ book_id: string; progress: number; downloaded: number; total: number }>(
+                "download-progress",
+                (event) => {
+                    if (event.payload.book_id === downloadingBookId) {
+                        setDownloadProgress({
+                            progress: event.payload.progress,
+                            downloaded: event.payload.downloaded,
+                            total: event.payload.total,
+                        });
+                    }
+                },
+            ).catch(() => {});
+        }).catch(() => {});
+        return () => {
+            cancelled = true;
+            setDownloadProgress(null);
+        };
+    }, [downloadingBookId]);
 
     // Load book file
     useEffect(() => {
@@ -1866,7 +1899,59 @@ const BookReaderPage = memo(function BookReaderPage() {
         }
     }, [currentBookId, saveBookLocations]);
 
+    useEffect(() => {
+        return registerShortcuts("reader", [
+            {
+                label: "Find in book",
+                keys: "Ctrl+F",
+                category: "Reader",
+                handler: () => setActivePanel((prev) => prev === "search" ? null : "search"),
+            },
+            {
+                label: "Toggle bookmark",
+                keys: "Ctrl+D",
+                category: "Reader",
+                handler: () => {
+                    if (isPdfFormat) handlePdfAddBookmark();
+                    else handleAddPageBookmark();
+                },
+            },
+            {
+                label: "Toggle fullscreen",
+                keys: "F11",
+                category: "Reader",
+                handler: () => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen }),
+            },
+            {
+                label: "Table of contents",
+                keys: "Ctrl+T",
+                category: "Reader",
+                handler: () => setActivePanel((prev) => prev === "toc" ? null : "toc"),
+            },
+            {
+                label: "Reader settings",
+                keys: "Ctrl+S",
+                category: "Reader",
+                handler: () => setActivePanel((prev) => prev === "settings" ? null : "settings"),
+            },
+            {
+                label: "Annotations panel",
+                keys: "Ctrl+A",
+                category: "Reader",
+                handler: () => setActivePanel((prev) => prev === "bookmarks" ? null : "bookmarks"),
+            },
+        ], "reader");
+    }, [isPdfFormat, settings.readerSettings.fullscreen, updateReaderSettings, handlePdfAddBookmark, handleAddPageBookmark]);
+
     if (downloadingBookId === currentBookId) {
+        const pct = downloadProgress?.progress ?? 0;
+        const hasProgress = downloadProgress !== null;
+        const fmt = (bytes: number) => {
+            if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+            if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+            return `${bytes} B`;
+        };
+
         return (
             <div className="fixed inset-0 flex items-center justify-center bg-[var(--color-background)] px-4 sm:px-8 py-8">
                 <div className="mx-auto w-full max-w-[26rem] min-w-0 flex flex-col items-center text-center">
@@ -1879,12 +1964,27 @@ const BookReaderPage = memo(function BookReaderPage() {
                     <h2 className="w-full break-words text-balance text-xl font-semibold text-[color:var(--color-text-primary)] mb-2">
                         Downloading Book
                     </h2>
-                    <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-secondary)] mb-8 leading-relaxed">
+                    <p className="mx-auto w-full max-w-[24rem] break-words text-[color:var(--color-text-secondary)] mb-6 leading-relaxed">
                         This book was synced from another device. Downloading from paired device...
                     </p>
-                    <div className="w-full max-w-xs h-1.5 bg-[var(--color-surface-muted)] overflow-hidden">
-                        <div className="h-full bg-[var(--color-accent)] animate-pulse rounded-full" style={{ width: "60%" }} />
+                    <div className="w-full max-w-xs mb-2">
+                        <div className="h-2 bg-[var(--color-surface-muted)] rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-[var(--color-accent)] rounded-full transition-[width] duration-300"
+                                style={{ width: `${hasProgress ? Math.max(pct, 2) : 60}%` }}
+                            />
+                        </div>
                     </div>
+                    {hasProgress && (
+                        <p className="text-xs text-[color:var(--color-text-muted)]">
+                            {fmt(downloadProgress.downloaded)} / {fmt(downloadProgress.total)} ({Math.round(pct)}%)
+                        </p>
+                    )}
+                    {!hasProgress && (
+                        <p className="text-xs text-[color:var(--color-text-muted)] animate-pulse">
+                            Connecting to peer...
+                        </p>
+                    )}
                 </div>
             </div>
         );

@@ -31,12 +31,16 @@ Reader.tsx
 ```
 
 **Loading flow:**
-1. `FoliateEngine.load(book)` opens the file (as `ArrayBuffer` via Tauri `read_file`)
-2. Passes buffer to `makeZipLoader()` (handles both ZIP and non-ZIP formats)
-3. EPUBS: Rust `prefetch_zip_metadata` runs in parallel with zip.js — if the cache populates first, zip.js skips `getEntries()`
-4. `foliate-js view.js` creates a `FoliateView` web component in an iframe
-5. The iframe is mounted inside `ReaderViewport`'s shadow DOM
-6. `paginator.js` measures `#container` (grid-determined, no layout settle needed) and columnizes
+1. `Reader.tsx` checks `book.syncedWithoutFile` — if true, triggers `downloadBookOnDemand(bookId)`
+2. Download: Rust `download_book_file` streams from peer to `book-cache/{id}.book` (1MB chunks, no IPC)
+3. Progress: `download-progress` Tauri events update the UI bar (throttled to percentage changes)
+4. Once file is ready, `getBookBlob(id, storagePath)` reads the file
+5. Passes buffer to FoliateEngine or PDFReader
+6. EPUBS: `makeZipLoader()` (handles both ZIP and non-ZIP formats)
+7. Rust `prefetch_zip_metadata` runs in parallel with zip.js — if the cache populates first, zip.js skips `getEntries()`
+8. `foliate-js view.js` creates a `FoliateView` web component in an iframe
+9. The iframe is mounted inside `ReaderViewport`'s shadow DOM
+10. `paginator.js` measures `#container` (grid-determined, no layout settle needed) and columnizes
 
 **Zoom:** Applied to the iframe document before column calculation. `applyZoomToDocument()` runs inside the `load` event handler, before `beforeRender()` and `columnize()`. After navigation, `applyZoomSync()` re-applies zoom as a safety net (harmless redundancy).
 

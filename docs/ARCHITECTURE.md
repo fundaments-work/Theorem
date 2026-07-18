@@ -76,14 +76,15 @@ Device A                              Device B
   │  (serializes all store state          │
   │   into iroh-docs entries)             │
   │                                       │
-  │  docsSetEntry("books", ...)           │
+  │  docsSetEntry("book:{id}", ...)       │
   │  docsSetEntry("annotations", ...)     │
   │  docsSetEntry("settings", ...)        │
   │  ...                                  │
   │                                       │
   │  docsSyncNow(peerDeviceId) ──────────►│
-  │  (iroh-docs CRDT sync)                │
+  │  (iroh-docs CRDT sync via gossip)     │
   │                                       │
+  │◄──── docs-entry-changed (events) ─────│
   │◄──── docs-sync-finished (event) ──────│
   │                                       │
   │  hydrateFromIrohDocs()                │
@@ -92,8 +93,12 @@ Device A                              Device B
   │   ├─ mergeAnnotations()               │
   │   └─ mergeSettings()                  │
   │                                       │
-  │  requestBookFile(blobHash) ──────────►│
-  │◄──── book data (stream) ──────────────│
+  │  Open synced book:                    │
+  │  download_book_file(peerId,           │
+  │    bookId, destPath) ────────────────►│
+  │  (direct-to-disk, no IPC)             │
+  │◄──── progress events ────────────────│
+  │◄──── OK/ERR (status only) ───────────│
 ```
 
 ### Reader Rendering
@@ -126,7 +131,8 @@ All state lives in 5 Zustand stores. Each store is persisted to SQLite via Tauri
 uiStore (ephemeral)
   ├─ currentRoute, currentBookId
   ├─ sidebarOpen, searchQuery
-  └─ vaultSyncStatus, deviceSyncStatus
+  ├─ vaultSyncStatus, deviceSyncStatus
+  └─ downloadingBookId (set while syncing a book file on-demand)
 
 libraryStore (persisted, version 6)
   ├─ books: Book[]
@@ -188,15 +194,17 @@ Three protocols, one per concern:
 | Protocol | Purpose | Crate |
 |----------|---------|-------|
 | iroh-docs | CRDT-based structured data sync (books, annotations, settings) | `iroh-docs` |
-| iroh-blobs | BLAKE3-verified content-addressed file transfer | `iroh-blobs` |
 | iroh-gossip | Live peer discovery and event propagation | `iroh-gossip` |
+| iroh-blobs | CRDT entry content storage (for iroh-docs internal use) | `iroh-blobs` |
 | iroh-mdns | LAN peer discovery via mDNS | `iroh-mdns-address-lookup` |
+| theorem-file/v1 | Custom QUIC protocol for book file transfer (not iroh-blobs) | `file_transfer.rs` |
 
 Sync lifecycle:
-1. **Start**: `iroh_start` initializes iroh endpoint, attaches to docs+blobs+gossip
+1. **Start**: `iroh_start` initializes iroh endpoint, attaches to docs+gossip+blobs
 2. **Pair**: QR code exchange → bidirectional key registration → doc import
-3. **Provision**: All store state serialized into per-key iroh-docs entries
-4. **Sync**: `docs_sync_now` triggers CRDT reconciliation with a peer
-5. **Merge**: Incoming data validated via Zod schemas, merged with Last-Write-Wins CRDT semantics
-6. **Live**: `docs-entry-changed` events stream real-time changes during sync session
-7. **File transfer**: Blob hashes exchanged → `request_book_file` streams book files via QUIC
+3. **Accept loop**: Subscribes to each paired device's doc, establishes gossip mesh via `doc.start_sync()`
+4. **Provision**: All store state serialized into per-key iroh-docs entries
+5. **Sync**: `docs_sync_now` triggers CRDT reconciliation with a peer (15s timeout)
+6. **Merge**: Incoming data merged with CRDT Last-Write-Wins and domain-specific conflict resolution
+7. **Live**: `docs-entry-changed` events stream real-time changes during sync; gossip `NeighborUp` triggers auto-sync
+8. **File transfer**: On-demand `download_book_file` writes directly to `book-cache/` from Rust (no IPC), with progress events

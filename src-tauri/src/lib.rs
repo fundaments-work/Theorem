@@ -1004,6 +1004,7 @@ pub fn run() {
             sync_commands::docs_get_all_entries,
             sync_commands::docs_sync_now,
             file_transfer::request_book_file,
+            file_transfer::download_book_file,
             sync_commands::clear_sync_databases,
             set_android_fingerprint,
             hide_to_tray,

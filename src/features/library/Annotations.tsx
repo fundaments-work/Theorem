@@ -12,6 +12,13 @@ import {
     Highlighter,
     StickyNote,
     MoreVertical,
+    Pencil,
+    BookOpen,
+    Trash2,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
 } from "lucide-react";
 import { ShareMenu } from "./components/ShareMenu";
 
@@ -101,8 +108,8 @@ const AnnotationCard = memo(function AnnotationCard({
                         </span>
 
                     </div>
-                    <div className="mt-2 font-sans text-[11px] text-[color:var(--color-text-secondary)]">
-                        {book?.title || "Unknown source"} | {book?.author || "Unknown author"}
+                    <div className="mt-2 font-sans text-[11px] text-[color:var(--color-text-secondary)] truncate">
+                        {book?.title || "Unknown source"} <span className="text-[color:var(--color-text-muted)]">|</span> {book?.author || "Unknown author"}
                     </div>
                 </div>
                 <div className="relative">
@@ -209,6 +216,10 @@ export function AnnotationsPage() {
     const [viewMode, setViewMode] = useState<"list" | "cards">("list");
     const [cardIndex, setCardIndex] = useState(0);
     const [groupIndex, setGroupIndex] = useState(0);
+
+    const cardTouchStartX = useRef(0);
+    const cardTouchStartY = useRef(0);
+
     const bookTitleLookup = useMemo(
         () => new Map(books.map((book) => [book.id, book.title])),
         [books],
@@ -299,6 +310,25 @@ export function AnnotationsPage() {
             title: bookTitleLookup.get(bookId) || "Unknown source",
         }));
     }, [filteredAnnotations, bookTitleLookup]);
+
+    const handleCardTouchStart = useCallback((e: React.TouchEvent) => {
+        cardTouchStartX.current = e.touches[0].clientX;
+        cardTouchStartY.current = e.touches[0].clientY;
+    }, []);
+    const handleCardTouchEnd = useCallback((e: React.TouchEvent) => {
+        const dx = e.changedTouches[0].clientX - cardTouchStartX.current;
+        const dy = e.changedTouches[0].clientY - cardTouchStartY.current;
+        if (Math.abs(dx) < 30 || Math.abs(dx) < Math.abs(dy)) return;
+        const group = annotationGroups[groupIndex];
+        if (!group) return;
+        if (dx > 0) {
+            if (cardIndex > 0) setCardIndex(i => i - 1);
+            else if (groupIndex > 0) { setGroupIndex(g => g - 1); setCardIndex(0); }
+        } else {
+            if (cardIndex < group.annotations.length - 1) setCardIndex(i => i + 1);
+            else if (groupIndex < annotationGroups.length - 1) { setGroupIndex(g => g + 1); setCardIndex(0); }
+        }
+    }, [cardIndex, groupIndex, annotationGroups]);
 
     const annotationsVirtualizer = useVirtualizer({
         count: filteredAnnotations.length,
@@ -476,7 +506,7 @@ export function AnnotationsPage() {
                     </p>
                 </div>
             ) : viewMode === "cards" ? (
-                <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center">
                     <div className="w-full max-w-[42rem]">
                         {annotationGroups.length === 0 ? (
                             <div className="text-center py-16">
@@ -484,17 +514,17 @@ export function AnnotationsPage() {
                             </div>
                         ) : (
                             <>
-                                <div className="mb-6 flex items-center justify-between px-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider">
+                                <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 px-1">
+                                    <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
+                                        <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider whitespace-nowrap">
                                             Deck {groupIndex + 1} of {annotationGroups.length}
                                         </span>
-                                        <span className="text-[color:var(--color-border)]">|</span>
-                                        <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider">
+                                        <span className="text-[color:var(--color-border)] hidden sm:inline shrink-0">|</span>
+                                        <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider truncate min-w-0">
                                             {annotationGroups[groupIndex].title}
                                         </span>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1 self-end sm:self-auto">
                                         <button
                                             onClick={() => {
                                                 if (groupIndex > 0) {
@@ -503,9 +533,11 @@ export function AnnotationsPage() {
                                                 }
                                             }}
                                             disabled={groupIndex === 0}
-                                            className="text-[10px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] uppercase tracking-wider disabled:opacity-30 transition-colors"
+                                            className="inline-flex items-center gap-1 px-2 py-1.5 text-[10px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] uppercase tracking-wider disabled:opacity-30 transition-colors touch-manipulation"
+                                            aria-label="Previous book"
                                         >
-                                            ← Prev Book
+                                            <ChevronsLeft className="w-3.5 h-3.5 sm:hidden" />
+                                            <span className="hidden sm:inline">← Prev Book</span>
                                         </button>
                                         <button
                                             onClick={() => {
@@ -515,9 +547,11 @@ export function AnnotationsPage() {
                                                 }
                                             }}
                                             disabled={groupIndex >= annotationGroups.length - 1}
-                                            className="text-[10px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] uppercase tracking-wider disabled:opacity-30 transition-colors"
+                                            className="inline-flex items-center gap-1 px-2 py-1.5 text-[10px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] uppercase tracking-wider disabled:opacity-30 transition-colors touch-manipulation"
+                                            aria-label="Next book"
                                         >
-                                            Next Book →
+                                            <span className="hidden sm:inline">Next Book →</span>
+                                            <ChevronsRight className="w-3.5 h-3.5 sm:hidden" />
                                         </button>
                                     </div>
                                 </div>
@@ -526,9 +560,14 @@ export function AnnotationsPage() {
                                     const group = annotationGroups[groupIndex];
                                     const ann = group.annotations[cardIndex];
                                     const book = group.book;
+
                                     return (
-                                        <div className="border border-[var(--color-border)] bg-[var(--color-surface)]">
-                                            <div className="px-6 sm:px-8 pt-6 sm:pt-8 pb-4 border-b border-[var(--color-border-subtle)] flex items-center justify-between">
+                                        <div
+                                            className="border border-[var(--color-border)] bg-[var(--color-surface)]"
+                                            onTouchStart={handleCardTouchStart}
+                                            onTouchEnd={handleCardTouchEnd}
+                                        >
+                                            <div className="px-4 sm:px-8 pt-4 sm:pt-8 pb-3 sm:pb-4 border-b border-[var(--color-border-subtle)] flex items-center justify-between min-h-0">
                                                 <div className="flex items-center gap-2 text-[11px] text-[color:var(--color-text-secondary)] font-medium min-w-0">
                                                     {ann.color && (
                                                         <span className="w-2.5 h-2.5 shrink-0 border border-[var(--color-border)]" style={{ backgroundColor: HIGHLIGHT_SOLID_COLORS[ann.color] }} />
@@ -538,10 +577,10 @@ export function AnnotationsPage() {
                                                 </div>
                                             </div>
 
-                                            <div className="px-6 sm:px-8 py-8 sm:py-10">
+                                            <div className="px-4 sm:px-8 py-6 sm:py-10">
                                                 {ann.selectedText && (
                                                     <blockquote
-                                                        className="pl-5 leading-relaxed font-serif text-[1.15rem] sm:text-[1.25rem] text-[color:var(--color-text-primary)] border-l-[3px]"
+                                                        className="pl-4 sm:pl-5 leading-relaxed font-serif text-[1.05rem] sm:text-[1.25rem] text-[color:var(--color-text-primary)] border-l-[3px]"
                                                         style={{ borderColor: ann.color ? HIGHLIGHT_SOLID_COLORS[ann.color] : 'var(--color-accent)' }}
                                                     >
                                                         {ann.selectedText}
@@ -550,15 +589,15 @@ export function AnnotationsPage() {
 
                                                 {ann.noteContent && (
                                                     <>
-                                                        {ann.selectedText && <div className="my-6 border-t border-[var(--color-border-subtle)]" />}
-                                                        <p className="font-sans text-[13px] leading-relaxed text-[color:var(--color-text-secondary)] whitespace-pre-wrap">
+                                                        {ann.selectedText && <div className="my-4 sm:my-6 border-t border-[var(--color-border-subtle)]" />}
+                                                        <p className="font-sans text-[12px] sm:text-[13px] leading-relaxed text-[color:var(--color-text-secondary)] whitespace-pre-wrap">
                                                             {ann.noteContent}
                                                         </p>
                                                     </>
                                                 )}
                                             </div>
 
-                                            <div className="px-6 sm:px-8 py-3 border-t border-[var(--color-border-subtle)] flex items-center justify-between">
+                                            <div className="px-4 sm:px-8 py-2.5 sm:py-3 border-t border-[var(--color-border-subtle)] flex items-center justify-between gap-1">
                                                 <button
                                                     onClick={() => {
                                                         if (cardIndex > 0) {
@@ -569,24 +608,31 @@ export function AnnotationsPage() {
                                                         }
                                                     }}
                                                     disabled={groupIndex === 0 && cardIndex === 0}
-                                                    className="ui-btn text-[11px] disabled:opacity-30"
+                                                    className="inline-flex items-center gap-1 ui-btn text-[11px] disabled:opacity-30 touch-manipulation"
+                                                    aria-label="Previous card"
                                                 >
-                                                    ← Previous
+                                                    <ChevronLeft className="w-4 h-4 sm:hidden" />
+                                                    <span className="hidden sm:inline">← Previous</span>
                                                 </button>
 
-                                                <div className="flex items-center gap-1.5">
-                                                    {group.annotations.slice(0, Math.min(group.annotations.length, 20)).map((_, i) => (
-                                                        <button
-                                                            key={i}
-                                                            onClick={() => setCardIndex(i)}
-                                                            className="w-1.5 h-1.5 rounded-full border-0 p-0 transition-[transform,background-color] duration-200"
-                                                            style={{
-                                                                backgroundColor: i === cardIndex ? 'var(--color-accent)' : 'var(--color-border)',
-                                                                transform: i === cardIndex ? 'scale(1.4)' : 'scale(1)',
-                                                            }}
-                                                            aria-label={`Go to card ${i + 1}`}
-                                                        />
-                                                    ))}
+                                                <div className="flex items-center gap-1 sm:gap-1.5 px-1 overflow-hidden">
+                                                    {group.annotations.slice(0, Math.min(group.annotations.length, 20)).map((_, i) => {
+                                                        const distance = Math.abs(i - cardIndex);
+                                                        if (distance > 4 && group.annotations.length > 9) return null;
+                                                        return (
+                                                            <button
+                                                                key={i}
+                                                                onClick={() => setCardIndex(i)}
+                                                                className="rounded-full border-0 p-0 transition-[transform,background-color] duration-200 touch-manipulation"
+                                                                style={{
+                                                                    width: i === cardIndex ? '10px' : '6px',
+                                                                    height: i === cardIndex ? '10px' : '6px',
+                                                                    backgroundColor: i === cardIndex ? 'var(--color-accent)' : 'var(--color-border)',
+                                                                }}
+                                                                aria-label={`Go to card ${i + 1}`}
+                                                            />
+                                                        );
+                                                    })}
                                                 </div>
 
                                                 <button
@@ -599,33 +645,42 @@ export function AnnotationsPage() {
                                                         }
                                                     }}
                                                     disabled={groupIndex === annotationGroups.length - 1 && cardIndex >= group.annotations.length - 1}
-                                                    className="ui-btn text-[11px] disabled:opacity-30"
+                                                    className="inline-flex items-center gap-1 ui-btn text-[11px] disabled:opacity-30 touch-manipulation"
+                                                    aria-label="Next card"
                                                 >
-                                                    Next →
+                                                    <span className="hidden sm:inline">Next →</span>
+                                                    <ChevronRight className="w-4 h-4 sm:hidden" />
                                                 </button>
                                             </div>
 
-                                            <div className="px-6 sm:px-8 py-2 border-t border-[var(--color-border-subtle)] flex items-center justify-center gap-3">
-                                                <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] tracking-wider uppercase">
-                                                    {cardIndex + 1} / {group.annotations.length} in this book
+                                            <div className="px-4 sm:px-8 py-2 border-t border-[var(--color-border-subtle)] flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+                                                <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] tracking-wider uppercase whitespace-nowrap">
+                                                    {cardIndex + 1}/{group.annotations.length}
+                                                    <span className="hidden sm:inline"> in this book</span>
                                                 </span>
                                                 <button
                                                     onClick={() => { handleEdit(ann.id); }}
-                                                    className="text-[10px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] uppercase tracking-wider transition-colors"
+                                                    className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] uppercase tracking-wider transition-colors touch-manipulation"
+                                                    aria-label="Edit"
                                                 >
-                                                    Edit
+                                                    <Pencil className="w-3 h-3 sm:hidden" />
+                                                    <span className="hidden sm:inline">Edit</span>
                                                 </button>
                                                 <button
                                                     onClick={() => handleGoToBook(ann.bookId)}
-                                                    className="text-[10px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] uppercase tracking-wider transition-colors"
+                                                    className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] uppercase tracking-wider transition-colors touch-manipulation"
+                                                    aria-label="Open book"
                                                 >
-                                                    Open Book
+                                                    <BookOpen className="w-3 h-3 sm:hidden" />
+                                                    <span className="hidden sm:inline">Open Book</span>
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(ann.id)}
-                                                    className="text-[10px] font-medium text-[color:var(--color-error)] hover:text-[color:var(--color-error)] uppercase tracking-wider transition-colors"
+                                                    className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-[color:var(--color-error)] hover:text-[color:var(--color-error)] uppercase tracking-wider transition-colors touch-manipulation"
+                                                    aria-label="Delete"
                                                 >
-                                                    Delete
+                                                    <Trash2 className="w-3 h-3 sm:hidden" />
+                                                    <span className="hidden sm:inline">Delete</span>
                                                 </button>
                                             </div>
                                         </div>

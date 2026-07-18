@@ -709,15 +709,10 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
 
     setStatus("syncing", "Downloading book...");
     useUIStore.getState().setDownloadingBook(bookId);
-    const { requestBookFile, getPairedDevices } = await import("./device-sync");
+    const { downloadBookFile, getPairedDevices } = await import("./device-sync");
     const { appDataDir } = await import("@tauri-apps/api/path");
     const appDir = await appDataDir();
     const destPath = `${appDir}/book-cache/${bookId}.book`;
-
-    const { mkdir, writeFile } = await import("@tauri-apps/plugin-fs");
-    try {
-        await mkdir(`${appDir}/book-cache`, { recursive: true });
-    } catch {}
 
     const peerIds: string[] = [];
     if (_lastSyncPeerId) peerIds.push(_lastSyncPeerId);
@@ -728,17 +723,8 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
 
     for (const peerId of peerIds) {
         if (_syncCancelled) break;
-        let data: Uint8Array | null = null;
         try {
-            data = await requestBookFile(peerId, bookId);
-        } catch (e) {
-            console.error(`[file-xfer] request failed for ${bookId}: ${e}`);
-            continue;
-        }
-        if (!data || data.byteLength === 0) continue;
-
-        try {
-            await writeFile(destPath, data);
+            await downloadBookFile(peerId, bookId, destPath);
             useLibraryStore.setState((state) => ({
                 books: state.books.map((b) =>
                     b.id === bookId
@@ -750,7 +736,7 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
             setStatus("synced", "Book downloaded");
             return true;
         } catch (e) {
-            console.error(`[file-xfer] write failed for ${bookId}: ${e}`);
+            console.error(`[file-xfer] download failed for ${bookId} from ${peerId}: ${e}`);
         }
     }
     useUIStore.getState().setDownloadingBook(undefined);

@@ -5,8 +5,8 @@
 Theorem syncs books, annotations, settings, vocabulary, and RSS data between devices with no server. The iroh stack enables this:
 
 - **iroh-docs** provides CRDT-based document sync — both sides can write concurrently, and the documents converge to the same state. This is essential for a local-first app where both devices may modify the same book's metadata while offline.
-- **iroh-blobs** provides content-addressed file transfer with BLAKE3 verification. Book files are identified by their blob hash — if both devices already have the same hash, no transfer is needed.
-- **iroh-gossip** propagates presence and sync events between connected peers.
+- **iroh-gossip** propagates presence and sync events between connected peers. Each paired device's doc joins a gossip mesh — when one peer syncs, data propagates to all mesh members automatically.
+- **iroh-blobs** is used internally by iroh-docs for CRDT entry content. (Book files use a separate custom QUIC protocol, not iroh-blobs.)
 - **iroh-mdns** discovers peers on the same LAN without configuration.
 
 Sync is always compiled (no feature gate). It's a core product feature.
@@ -37,22 +37,32 @@ Device A                          Device B
   │◄───── Connected ────────────────►│
 ```
 
-Once paired, devices are stored in SQLite `kv_store` under keys like `paired_device:{deviceId}`. Re-pairing is needed only if both devices clear their sync databases.
+Once paired, devices are stored in `sync-paired-devices.json` as a `HashMap<String, PairedDevice>` keyed by `device_id`. Deduplication by `iroh_node_id` prevents duplicates from re-pairing after data reset. Re-pairing is needed only if both devices clear their sync databases.
 
 ## Sync Lifecycle
 
 ### 1. Start (`iroh_start`)
 
 Called from `ensureResponderSyncReady()` in App.tsx. Initializes:
-- iroh `Endpoint` (QUIC-based P2P transport)
+- iroh `Endpoint` (QUIC-based P2P transport) — registers ALPNs for docs, gossip, blobs, and custom pairing/file-transfer
 - iroh-docs `DocsEngine` for CRDT documents
-- iroh-blobs `FsStore` for book file storage
+- iroh-blobs `FsStore` for CRDT content storage
 - iroh-gossip swarm for event propagation
 - mDNS discovery for LAN peers
 
 Stored in a global `SyncTransportState` managed by Tauri.
 
-### 2. Provision
+### 2. Accept Loop
+
+`start_accept_loop()` starts a long-lived tokio task that:
+- Creates the gossip overlay via `iroh_gossip::Gossip::builder().spawn()`
+- Spawns iroh-docs with gossip integration: `Docs::persistent(path).spawn(endpoint, blobs, gossip)`
+- For each paired device's sync doc: opens/imports the doc, calls `subscribe_doc_events()` to listen for live changes, and calls `doc.start_sync(vec![peer_addr])` to establish the gossip mesh
+- Sets up the router to accept connections for blobs, gossip, docs, pairing, and file-transfer
+
+The accept loop runs for the entire app lifecycle. If a doc event stream dies, it re-subscribes (up to 10 retries, capped at 3 subscribe failures).
+
+### 3. Provision
 
 `provisionToIrohDocs()` serializes all store state into the iroh-docs document as individual key-value entries:
 - `book:{bookId}` — per-book metadata (stripped of file paths and data: cover URLs)
@@ -64,16 +74,24 @@ Stored in a global `SyncTransportState` managed by Tauri.
 - `reading_stats` — reading statistics
 - `rss_feeds` / `rss_articles` — RSS data
 
-### 3. Sync
+### 4. Sync
 
-`docs_sync_now(peerDeviceId)` triggers CRDT reconciliation. The Rust backend:
-1. Connects to peer via iroh QUIC transport
-2. Exchanges doc content hashes
-3. Transfers missing entries
-4. Fires `docs-sync-finished` event on completion
-5. During sync, `docs-pending-content-ready` fires when new entries arrive
+`docs_sync_now(peerDeviceId)` triggers CRDT reconciliation with a single peer. The Rust backend:
+1. Opens the shared sync doc (re-importing from ticket if doc was lost)
+2. Calls `doc.start_sync(vec![peer_addr])` with a 15-second timeout
+3. During sync, `subscribe_doc_events` streams live `InsertRemote`/`ContentReady` events to the JS side via `docs-entry-changed` Tauri events
+4. Fires `docs-sync-finished` on completion, `docs-pending-content-ready` when content is staged
+5. `NeighborUp` gossip events propagate to all mesh members — triggering `docs-peer-online` which auto-syncs
 
-### 4. Merge
+The `runDeviceSync()` JS function orchestrates a complete sync round:
+1. `ensureResponderSyncReady()` — starts iroh and provisions
+2. `provisionToIrohDocs()` — writes local state to the shared doc
+3. Listens for `docs-pending-content-ready` and `docs-sync-finished` events (settles when BOTH fire or 30s timeout)
+4. Calls `docsSyncNow(peerDeviceId)` — triggers the Rust-side sync
+5. `hydrateFromIrohDocs()` — reads all entries from all paired docs via `docsGetAllEntries()`
+6. `mergeIncomingData()` — merges all incoming entries into local Zustand stores
+
+### 5. Merge
 
 `mergeIncomingData()` on the JS side processes all incoming entries:
 
@@ -89,14 +107,14 @@ Stored in a global `SyncTransportState` managed by Tauri.
 | RSS articles | By ID. Union of read/favorite status. |
 | Deletion tombstones | Union of all tombstones with older-than-90-day pruning. |
 
-### 5. Live Listener
+### 6. Live Listener
 
 After sync completes, `initDocsLiveListener()` subscribes to `docs-entry-changed` Tauri events. Remote changes made after the initial sync are streamed incrementally:
 - `book:` keys are batched (200ms debounce, progressive flush)
 - `annotation:` / `collection:` keys merge immediately
 - Other keys buffer (500ms debounce, max 2000 pending entries)
 
-### 6. Auto Sync
+### 7. Auto Sync
 
 `startAutoSync()` manages recurring sync:
 
@@ -105,21 +123,52 @@ After sync completes, `initDocsLiveListener()` subscribes to `docs-entry-changed
 | App startup | 5 seconds |
 | Periodic | Every 2 minutes |
 | Visibility change | 30s cooldown |
-| Peer comes online | 30s cooldown |
+| Peer comes online (`NeighborUp` → `docs-peer-online`) | 30s cooldown |
 | Tray "Sync Now" | Immediate |
 | Store mutation | 2 second debounce |
 
 ## File Transfer
 
-Books are transferred using iroh-blobs with a custom ALPN (`theorem-file/v1`):
+Books are transferred using a custom QUIC stream protocol with ALPN `theorem-file/v1`, NOT iroh-blobs. This was changed from iroh-blobs to avoid transferring 20GB+ of book data during metadata sync — books are downloaded on-demand when the user opens them.
 
-1. When a book is provisioned, its `blobHash` is stored in the book metadata
-2. On sync, both sides exchange blob hashes — books marked `syncedWithoutFile` need downloading
-3. `downloadBookOnDemand(bookId)` sends a request to each paired peer
-4. The peer's `FileTransferHandler` (`file_transfer.rs`) serves the file from the `book-cache/` directory or the blob store
-5. The file is written to the local `book-cache/` and the book is marked as having its file
+### Serving (`FileTransferHandler`)
 
-Cover images are transferred the same way using `cover:{bookId}` as the request key.
+The `FileTransferHandler` struct (in `file_transfer.rs`) implements `iroh::protocol::ProtocolHandler`. When a peer requests a file:
+1. Receives the book ID as a text line
+2. Tries to read from `book-cache/{bookId}.book` (fastest path)
+3. Falls back to reading from SQLite `books` table if not in `book-cache` (locally-imported books)
+4. Responds with `OK {size}\n{data}` or `ERR {msg}\n`
+
+Cover images use `cover:{bookId}` prefix — read from SQLite `blob_store` table.
+
+### Requesting (`download_book_file`)
+
+On the requesting device:
+1. `downloadBookOnDemand(bookId)` iterates all paired peers
+2. Calls Rust command `download_book_file(peerId, bookId, destPath)`
+3. Rust connects to peer via iroh QUIC transport, sends book ID
+4. Reads response in 1MB chunks and writes directly to `book-cache/{bookId}.book` (no data passes through IPC — avoids OOM on Android)
+5. Emits `download-progress` Tauri events as percentage changes (throttled to ~100 events max)
+6. On success: marks `syncedWithoutFile: false`, updates `filePath`/`storagePath`
+
+The `request_book_file` command (returns data through IPC) is kept only for small payloads like cover images.
+
+### Progress UI
+
+The Reader component listens for `download-progress` events:
+```
+{ book_id: string, progress: f64 (0–100), downloaded: usize, total: usize }
+```
+Shows a real progress bar with file size (e.g., "12.5 MB / 45.3 MB (28%)") instead of an indeterminate spinner. The "Connecting to peer..." message is shown until the first progress event arrives.
+
+### Timeouts
+
+All I/O operations in the file transfer path use a 120-second timeout:
+- `connect` — QUIC connection establishment
+- `open_bi` — bidirectional stream open
+- `read_line` / `read_exact` — reading status line and data chunks
+
+The Reader has an additional 120-second timeout on the polling loop. If exceeded, the user sees a "Book download timed out" message with a "Try Again" button.
 
 ## Conflict Resolution
 
