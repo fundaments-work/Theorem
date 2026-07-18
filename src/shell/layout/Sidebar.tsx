@@ -101,7 +101,7 @@ export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps
             <div
                 className={cn(
                     "flex h-[var(--layout-sidebar-header-height)] items-center border-b border-[var(--color-border)]",
-                    isMobile ? "px-6" : (isCollapsedDesktop ? "justify-center px-0" : "!px-14")
+                    isMobile ? "px-6" : (isCollapsedDesktop ? "justify-center px-0" : "!px-8")
                 )}
             >
                 <div className="flex items-center gap-4">
@@ -166,7 +166,7 @@ export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps
 
             <div className={cn(
                 "border-t border-[var(--color-border)] bg-[var(--color-surface)] mt-auto mt-4",
-                isMobile ? "py-4 px-6" : (isCollapsedDesktop ? "py-4 px-0" : "py-6 !px-14")
+                isMobile ? "py-3 px-6" : (isCollapsedDesktop ? "py-3 px-0" : "py-4 !px-8")
             )}>
                 {showDesktopFooterRow ? (
                     <div className="flex items-center justify-between gap-4">
@@ -201,8 +201,9 @@ export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps
                 ) : (
                     <div className="flex flex-col gap-4">
                         {displayStreak && (
-                            <div className="flex items-center justify-center" title={`${stats.currentStreak} day streak`}>
+                            <div className="flex items-center justify-center gap-1" title={`${stats.currentStreak} day streak`}>
                                 <Flame className="w-4 h-4 text-[var(--color-accent)]" />
+                                <span className="text-[10px] font-semibold text-[var(--color-text-primary)]">{stats.currentStreak}</span>
                             </div>
                         )}
                         <button

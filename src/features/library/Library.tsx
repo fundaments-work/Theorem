@@ -869,6 +869,7 @@ export function RenameBookModal({
 export function LibraryPage() {
     const books = useLibraryStore((state) => state.books);
     const collections = useLibraryStore((state) => state.collections);
+    const annotations = useLibraryStore((state) => state.annotations);
     const coversHydrated = useLibraryStore((state) => state.coversHydrated);
     const addBook = useLibraryStore((state) => state.addBook);
     const removeBook = useLibraryStore((state) => state.removeBook);
@@ -1694,6 +1695,28 @@ export function LibraryPage() {
                     </button>
                 </div>
             </PageHeader>
+
+            {(() => {
+                const nonBookmarks = annotations.filter((a) => a.type !== "bookmark" && a.selectedText);
+                if (nonBookmarks.length === 0 || selectedShelf || showFavoritesOnly || isSelecting) return null;
+                const daySeed = new Date().toISOString().split("T")[0].split("-").reduce((a, b) => a + parseInt(b), 0);
+                const hl = nonBookmarks[daySeed % nonBookmarks.length];
+                const hlBook = books.find((b) => b.id === hl.bookId);
+                if (!hl) return null;
+                return (
+                    <div className="mb-6 border-l-[3px] border-[var(--color-accent)] bg-[var(--color-surface)] pl-5 pr-6 py-4">
+                        <div className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider mb-1.5">
+                            From your highlights
+                        </div>
+                        <p className="font-serif text-[14px] leading-relaxed text-[color:var(--color-text-primary)] mb-1.5">
+                            &ldquo;{hl.selectedText}&rdquo;
+                        </p>
+                        <div className="text-[11px] text-[color:var(--color-text-secondary)]">
+                            — {hlBook?.title || "Unknown source"}
+                        </div>
+                    </div>
+                );
+            })()}
 
             <div className="flex min-h-0 flex-1 flex-col md:flex-row gap-6 md:gap-10 mt-8 relative">
                 <div className="flex min-h-0 flex-1 flex-col w-full">

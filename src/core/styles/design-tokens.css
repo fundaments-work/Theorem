@@ -140,9 +140,9 @@
     --layout-content-readable-width: 72ch;
     --layout-content-inline-padding: var(--spacing-xl);
     --layout-content-inline-padding-mobile: var(--spacing-lg);
-    --layout-sidebar-width: 19.25rem;
-    --layout-sidebar-collapsed-width: 5rem;
-    --layout-sidebar-header-height: 4rem;
+    --layout-sidebar-width: 16rem;
+    --layout-sidebar-collapsed-width: 4.5rem;
+    --layout-sidebar-header-height: 2.75rem;
     --layout-sidebar-item-height: 2.75rem;
     --layout-sidebar-toggle-width: 3rem;
     --layout-header-height: 4rem;
