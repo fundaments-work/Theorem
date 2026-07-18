@@ -895,6 +895,9 @@ export function LibraryPage() {
     const [isSelecting, setIsSelecting] = useState(false);
 
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+    const [dismissedHighlight, setDismissedHighlight] = useState(
+        () => sessionStorage.getItem("theorem-dismiss-highlight") === new Date().toISOString().split("T")[0]
+    );
     const filterDropdownRef = useRef<HTMLDivElement>(null);
 
     const [infoModalBook, setInfoModalBook] = useState<Book | null>(null);
@@ -1697,6 +1700,7 @@ export function LibraryPage() {
             </PageHeader>
 
             {(() => {
+                if (dismissedHighlight || !settings.showDailyHighlight) return null;
                 const nonBookmarks = annotations.filter((a) => a.type !== "bookmark" && a.selectedText);
                 if (nonBookmarks.length === 0 || selectedShelf || showFavoritesOnly || isSelecting) return null;
                 const daySeed = new Date().toISOString().split("T")[0].split("-").reduce((a, b) => a + parseInt(b), 0);
@@ -1704,21 +1708,33 @@ export function LibraryPage() {
                 const hlBook = books.find((b) => b.id === hl.bookId);
                 if (!hl) return null;
                 return (
-                    <div className="mb-6 border-l-[3px] border-[var(--color-accent)] bg-[var(--color-surface)] pl-5 pr-6 py-4">
-                        <div className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider mb-1.5">
-                            From your highlights
+                    <div className="mb-6 border-l-[3px] border-[var(--color-accent)] bg-[var(--color-surface)] pl-4 pr-4 py-4 flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                            <div className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider mb-1.5">
+                                From your highlights
+                            </div>
+                            <p className="font-serif text-[14px] leading-relaxed text-[color:var(--color-text-primary)] mb-1.5">
+                                &ldquo;{hl.selectedText}&rdquo;
+                            </p>
+                            <div className="text-[11px] text-[color:var(--color-text-secondary)]">
+                                — {hlBook?.title || "Unknown source"}
+                            </div>
                         </div>
-                        <p className="font-serif text-[14px] leading-relaxed text-[color:var(--color-text-primary)] mb-1.5">
-                            &ldquo;{hl.selectedText}&rdquo;
-                        </p>
-                        <div className="text-[11px] text-[color:var(--color-text-secondary)]">
-                            — {hlBook?.title || "Unknown source"}
-                        </div>
+                        <button
+                            onClick={() => {
+                                sessionStorage.setItem("theorem-dismiss-highlight", new Date().toISOString().split("T")[0]);
+                                setDismissedHighlight(true);
+                            }}
+                            className="shrink-0 mt-0.5 p-1 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition-colors"
+                            aria-label="Dismiss highlight"
+                        >
+                            ✕
+                        </button>
                     </div>
                 );
             })()}
 
-            <div className="flex min-h-0 flex-1 flex-col md:flex-row gap-6 md:gap-10 mt-8 relative">
+            <div className="flex min-h-0 flex-1 flex-col md:flex-row gap-6 md:gap-10 mt-2 relative">
                 <div className="flex min-h-0 flex-1 flex-col w-full">
                     
                     <div className={cn(

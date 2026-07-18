@@ -785,6 +785,16 @@ export const SettingsPage = memo(function SettingsPage() {
                                 onChange={(checked) => updateSettings({ sidebarCollapsed: checked })}
                             />
                         </SettingRow>
+
+                        <SettingRow
+                            label="Daily Highlight"
+                            description="Show a random past highlight on the Library page"
+                        >
+                            <Toggle
+                                checked={settings.showDailyHighlight}
+                                onChange={(checked) => updateSettings({ showDailyHighlight: checked })}
+                            />
+                        </SettingRow>
                     </Section>
 
                     <Section

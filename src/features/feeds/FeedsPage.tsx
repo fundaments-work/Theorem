@@ -534,7 +534,7 @@ export function FeedsPage() {
         <div className="h-full w-full flex overflow-hidden bg-[var(--color-background)]">
             
             <div className={cn(
-                "flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]/50",
+                "flex-col border-r border-[var(--color-border)] bg-[var(--color-background)]",
                 "h-full flex-shrink-0 transition-colors duration-300",
                 
                 showMobileList ? "flex w-full" : "hidden",

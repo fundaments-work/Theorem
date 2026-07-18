@@ -81,6 +81,7 @@ const defaultAppSettings: AppSettings = {
     vault: defaultVaultSettings,
     deviceSync: defaultDeviceSyncSettings,
     hasCompletedOnboarding: false,
+    showDailyHighlight: true,
 };
 
 const defaultReadingStats: ReadingStats = {
@@ -200,7 +201,7 @@ export const useSettingsStore = create<SettingsStore>()(
         }),
         {
             name: "theorem-settings",
-            version: 7,
+            version: 8,
             storage: createJSONStorage(() => theoremPersistStorage),
             partialize: (state) => ({
                 settings: state.settings,
@@ -246,6 +247,12 @@ export const useSettingsStore = create<SettingsStore>()(
                 if (version < 7) {
                     if (state.settings && !state.settings.accentColor) {
                         state.settings.accentColor = DEFAULT_ACCENT_COLOR;
+                    }
+                }
+
+                if (version < 8) {
+                    if (state.settings && state.settings.showDailyHighlight === undefined) {
+                        state.settings.showDailyHighlight = true;
                     }
                 }
 

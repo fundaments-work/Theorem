@@ -194,6 +194,7 @@ export interface AppSettings {
     vault: VaultIntegrationSettings;
     deviceSync: DeviceSyncSettings;
     hasCompletedOnboarding: boolean;
+    showDailyHighlight: boolean;
 }
 
 export interface PairedDevice {
