@@ -1870,72 +1870,6 @@ export function LibraryPage() {
                     <>
                         <div className="hidden md:block fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
                         <aside className="hidden md:block w-72 absolute right-0 top-0 z-40 border-2 border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl animate-in slide-in-from-right-4 duration-200 max-h-[80vh] overflow-y-auto [content-visibility:auto] overscroll-contain">
-                        <div className="divide-y-2 divide-[var(--color-border)]">
-                            
-                            <div className="p-5">
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Sort Criteria</h3>
-                                <div className="flex flex-col gap-1">
-                                    {[
-                                        { id: "title", label: "Title" },
-                                        { id: "author", label: "Author" },
-                                        { id: "dateAdded", label: "Date Added" },
-                                        { id: "lastRead", label: "Last Read" },
-                                    ].map((option) => (
-                                        <button
-                                            key={option.id}
-                                            onClick={() => updateSettings({ librarySortBy: option.id as LibrarySortBy })}
-                                            className={cn(
-                                                "flex items-center justify-between px-4 py-2.5 text-xs font-bold border-2 transition-colors",
-                                                settings.librarySortBy === option.id
-                                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
-                                                    : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
-                                            )}
-                                        >
-                                            {option.label.toUpperCase()}
-                                            {settings.librarySortBy === option.id && <Check className="w-3.5 h-3.5" />}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="p-5">
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Direction</h3>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {[
-                                        { id: "asc", label: "ASC" },
-                                        { id: "desc", label: "DESC" },
-                                    ].map((option) => (
-                                        <button
-                                            key={option.id}
-                                            onClick={() => updateSettings({ librarySortOrder: option.id as LibrarySortOrder })}
-                                            className={cn(
-                                                    "py-2.5 text-[10px] font-black border-2 transition-colors",
-                                                settings.librarySortOrder === option.id
-                                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
-                                                    : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
-                                            )}
-                                        >
-                                            {option.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="p-5">
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-4">Quick</h3>
-                                <button
-                                    onClick={() => setShowFavoritesOnly((previous) => !previous)}
-                                    className={cn(
-                                        "w-full py-2.5 text-[10px] font-black border-2 transition-colors",
-                                        showFavoritesOnly
-                                            ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
-                                            : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
-                                    )}
-                                >
-                                    FAVORITES
-                                </button>
-                            </div>
-
                             <div className="p-5">
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)]">Collections</h3>
@@ -1967,7 +1901,6 @@ export function LibraryPage() {
                                     ))}
                                 </div>
                             </div>
-                        </div>
                     </aside>
                     </>
                 )}
