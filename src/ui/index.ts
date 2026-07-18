@@ -9,3 +9,5 @@ export { Dropdown } from "./Dropdown";
 export type { DropdownOption, DropdownProps } from "./Dropdown";
 export { RouteErrorBoundary } from "./RouteErrorBoundary";
 export { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp";
+export { ConfirmDialog, AlertDialog } from "./ConfirmDialog";
+export type { ConfirmDialogProps, AlertDialogProps } from "./ConfirmDialog";
