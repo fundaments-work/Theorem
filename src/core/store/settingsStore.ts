@@ -64,7 +64,7 @@ const defaultTtsSettings: TtsSettings = {
     speed: 1.0,
 };
 
-const DEFAULT_ACCENT_COLOR = "#2d6a6e";
+const DEFAULT_ACCENT_COLOR = "#000000";
 
 const defaultAppSettings: AppSettings = {
     sidebarCollapsed: false,

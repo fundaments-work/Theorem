@@ -14,7 +14,7 @@ interface RgbColor {
     b: number;
 }
 
-export const DEFAULT_ACCENT_COLOR = "#2d6a6e";
+export const DEFAULT_ACCENT_COLOR = "#000000";
 
 const APP_THEME_COLORS: Record<string, Record<string, string>> = {
     light: {
