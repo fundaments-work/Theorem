@@ -9,4 +9,5 @@ export { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp";
 export { Modal, ModalHeader, ModalBody, ModalFooter } from "./Modal";
 export type { ModalProps } from "./Modal";
 export { FloatingPanel } from "./Panel";
+export { PageHeader } from "./PageHeader";
 export { RouteErrorBoundary } from "./RouteErrorBoundary";

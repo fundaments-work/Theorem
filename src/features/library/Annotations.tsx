@@ -7,7 +7,7 @@ import { useLibraryStore, useUIStore } from "../../core/store";
 import { HIGHLIGHT_SOLID_COLORS } from "../../core/lib/design-tokens";
 import type { HighlightColor } from "../../core/types";
 import { EditNoteModal } from "./components/modals/EditNoteModal";
-import { Dropdown, ConfirmDialog } from "../../ui";
+import { PageHeader, Dropdown, ConfirmDialog } from "../../ui";
 import {
     Highlighter,
     StickyNote,
@@ -384,17 +384,10 @@ export function AnnotationsPage() {
     return (
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             
-            <div className="mb-8 flex items-start justify-between">
-                <div>
-                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
-                        Workbench
-                    </h1>
-                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
-                        {filteredAnnotations.length} {filteredAnnotations.length === 1 ? "annotation" : "annotations"} across{" "}
-                        {new Set(filteredAnnotations.map((a) => a.bookId)).size} books
-                    </p>
-                </div>
-            </div>
+            <PageHeader
+                title="Workbench"
+                description={`${filteredAnnotations.length} ${filteredAnnotations.length === 1 ? "annotation" : "annotations"} across ${new Set(filteredAnnotations.map((a) => a.bookId)).size} books`}
+            />
 
             {currentBookId && (
                 <div className="mb-8 flex flex-wrap items-center gap-2 border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-sans text-[11px] font-medium">

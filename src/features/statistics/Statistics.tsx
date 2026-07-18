@@ -1,6 +1,7 @@
 
 import { useState, useMemo, memo } from "react";
 import { cn, normalizeAuthor, formatReadingTime } from "../../core/lib/utils";
+import { PageHeader } from "../../ui";
 import { useLibraryStore, useSettingsStore, useUIStore } from "../../core/store";
 import type { DailyReadingActivity } from "../../core/types";
 import {
@@ -285,15 +286,10 @@ export function StatisticsPage() {
     return (
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in overflow-x-hidden">
             
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8 sm:mb-10">
-                <div>
-                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
-                        Statistics
-                    </h1>
-                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
-                        Track your reading progress and achievements
-                    </p>
-                </div>
+            <PageHeader
+                title="Statistics"
+                description="Track your reading progress and achievements"
+            >
                 <button
                     onClick={() => setShowShareModal(true)}
                     className="ui-btn flex items-center justify-center gap-2 text-xs font-semibold px-3.5 py-2 w-full sm:w-auto hover:bg-[color:var(--color-surface-muted)] active:scale-95 transition-colors"
@@ -301,7 +297,7 @@ export function StatisticsPage() {
                     <Share2 className="w-3.5 h-3.5 text-[color:var(--color-text-secondary)]" />
                     <span>Share Stats</span>
                 </button>
-            </div>
+            </PageHeader>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-10">
                 <StatCard

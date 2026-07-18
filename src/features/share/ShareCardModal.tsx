@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { toPng } from "html-to-image";
+import { useState, useCallback, useEffect } from "react";
+import { toBlob } from "html-to-image";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "../../ui";
 import { Download, Share2, CheckCircle, AlertCircle } from "lucide-react";
 import { downloadImage, shareImageNative, buildImageFilename, shareOnX, buildShareText } from "../../core/lib/share";
@@ -21,6 +21,8 @@ type ShareCardModalProps = (AnnotationShareProps | StatsShareProps) & {
     onClose: () => void;
 };
 
+const CARD_W = 1080;
+
 export function ShareCardModal(props: ShareCardModalProps) {
     const { kind, onClose } = props;
     const annotation = kind === "annotation" ? (props as AnnotationShareProps).annotation : undefined;
@@ -34,36 +36,72 @@ export function ShareCardModal(props: ShareCardModalProps) {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
-    const cardRef = useRef<HTMLDivElement>(null);
+
+    const cardH = format === "story" ? 1920 : 1080;
 
     const captureCard = useCallback(async () => {
-        const el = cardRef.current;
-        if (!el) return;
         setIsGenerating(true);
         try {
             await document.fonts.ready;
-            const dataUrl = await toPng(el, {
-                quality: 0.92,
-                pixelRatio: 1,
+            await new Promise((r) => requestAnimationFrame(r));
+
+            const wrapper = document.createElement("div");
+            wrapper.style.position = "fixed";
+            wrapper.style.top = "0";
+            wrapper.style.left = "0";
+            wrapper.style.zIndex = "-1000";
+            wrapper.style.pointerEvents = "none";
+            document.body.appendChild(wrapper);
+
+            const inner = document.createElement("div");
+            inner.style.width = `${CARD_W}px`;
+            inner.style.height = `${cardH}px`;
+            wrapper.appendChild(inner);
+
+            const { createRoot } = await import("react-dom/client");
+            const root = createRoot(inner);
+            root.render(
+                <ShareCard
+                    kind={kind}
+                    annotation={annotation}
+                    book={book}
+                    statsData={statsData}
+                    format={format}
+                    theme={theme}
+                    showNote={kind === "annotation" ? showNote : false}
+                />
+            );
+
+            await new Promise((r) => requestAnimationFrame(r));
+            await new Promise((r) => requestAnimationFrame(r));
+
+            const blob = await toBlob(inner, {
+                quality: 0.95,
+                pixelRatio: 2,
                 cacheBust: true,
             });
-            const res = await fetch(dataUrl);
-            const blob = await res.blob();
-            setImageBlob(blob);
-            setPreviewUrl((prev) => {
-                if (prev) URL.revokeObjectURL(prev);
-                return dataUrl;
-            });
+
+            root.unmount();
+            document.body.removeChild(wrapper);
+
+            if (blob) {
+                setImageBlob(blob);
+                const url = URL.createObjectURL(blob);
+                setPreviewUrl((prev) => {
+                    if (prev) URL.revokeObjectURL(prev);
+                    return url;
+                });
+            }
         } catch {
             setToast({ type: "error", message: "Image generation failed" });
         } finally {
             setIsGenerating(false);
         }
-    }, []);
+    }, [kind, annotation, book, statsData, format, theme, showNote, cardH]);
 
     useEffect(() => {
         captureCard();
-    }, [kind, format, theme, showNote, annotation, book, statsData, captureCard]);
+    }, [captureCard]);
 
     useEffect(() => {
         return () => {
@@ -107,39 +145,21 @@ export function ShareCardModal(props: ShareCardModalProps) {
         }
     }, [kind, annotation, book, onClose]);
 
-    const previewHeight = format === "story" ? 280 : 240;
-
     return (
         <Modal isOpen={true} onClose={onClose} size="xl">
             <ModalHeader title={kind === "annotation" ? "Share Highlight" : "Share Reading Stats"} onClose={onClose} />
             <ModalBody className="flex flex-col md:flex-row gap-8">
-                <div className="flex-1 flex items-center justify-center bg-[var(--color-surface-muted)] border border-[var(--color-border)] p-4 relative min-h-[260px]">
+                <div className="flex-1 flex items-center justify-center bg-[var(--color-surface-muted)] border border-[var(--color-border)] p-4 relative min-h-[300px] overflow-hidden">
                     {isGenerating && (
                         <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--color-surface)] bg-opacity-70">
                             <div className="animate-pulse font-sans text-sm text-[var(--color-text-secondary)]">Generating preview...</div>
                         </div>
                     )}
-                    <div style={{ position: "absolute", left: -9999, top: 0 }} ref={cardRef}>
-                        <ShareCard
-                            kind={kind}
-                            annotation={annotation}
-                            book={book}
-                            statsData={statsData}
-                            format={format}
-                            theme={theme}
-                            showNote={kind === "annotation" ? showNote : false}
-                        />
-                    </div>
-                    {previewUrl && !isGenerating ? (
-                        <img
-                            src={previewUrl}
-                            alt="Share Preview"
-                            style={{ maxHeight: previewHeight, objectFit: "contain" }}
-                            className="shadow-md transition-colors duration-300"
-                        />
-                    ) : !isGenerating ? (
-                        <div className="w-full h-full bg-[var(--color-border-subtle)] animate-pulse" />
-                    ) : null}
+                    {previewUrl ? (
+                        <img src={previewUrl} alt="Preview" className="max-h-[55vh] w-auto object-contain shadow-md" />
+                    ) : (
+                        <div className="w-24 h-24 bg-[var(--color-border-subtle)] animate-pulse rounded" />
+                    )}
                 </div>
 
                 <div className="w-full md:w-64 flex flex-col gap-6 shrink-0">
@@ -167,7 +187,7 @@ export function ShareCardModal(props: ShareCardModalProps) {
                         <div>
                             <h3 className="text-[11px] uppercase tracking-wider font-semibold text-[color:var(--color-text-secondary)] mb-3">Options</h3>
                             <label className="flex items-center gap-2 cursor-pointer text-sm font-sans text-[color:var(--color-text-primary)]">
-                                <input type="checkbox" checked={showNote} onChange={(e) => setShowNote(e.target.checked)} className="w-4 h-4 accent-[var(--color-accent)]" />
+                                <input type="checkbox" checked={showNote} onChange={(e) => setShowNote(e.target.checked)} className="w-4 h-4" />
                                 Include my note
                             </label>
                         </div>

@@ -16,7 +16,7 @@ import {
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
     ChevronDown, Star, Check, CloudOff, Pencil
 } from "lucide-react";
-import { ContextMenu } from "../../ui";
+import { ContextMenu, PageHeader } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
 import { Modal, ModalHeader, ModalBody, ModalFooter, ConfirmDialog, AlertDialog } from "../../ui";
 import { getFilteredAndSortedBooks } from "./filtering";
@@ -1622,32 +1622,25 @@ export function LibraryPage() {
     return (
         <div className="mx-auto flex h-full w-full max-w-[var(--layout-content-max-width)] flex-col px-4 py-6 pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             
-            <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                    <h1 className="m-0 break-words font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
-                        {selectedShelf ? selectedShelf.name : showFavoritesOnly ? "Favorites" : "Library"}
-                    </h1>
-                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
-                        {sortedBooks.length} {sortedBooks.length === 1 ? 'book' : 'books'}
-                        {(selectedShelf || showFavoritesOnly) && (
-                            <button
-                                onClick={() => {
-                                    sessionStorage.removeItem("theorem-selected-shelf");
-                                    setSelectedShelfId(null);
-                                    setShowFavoritesOnly(false);
-                                }}
-                                className="ml-2 text-[color:var(--color-accent)] hover:underline"
-                            >
-                                Clear filter
-                            </button>
-                        )}
-                    </p>
-                </div>
+            <PageHeader
+                title={selectedShelf ? selectedShelf.name : showFavoritesOnly ? "Favorites" : "Library"}
+                description={`${sortedBooks.length} ${sortedBooks.length === 1 ? 'book' : 'books'}${(selectedShelf || showFavoritesOnly) ? '' : ''}`}
+            >
+                {(selectedShelf || showFavoritesOnly) && (
+                    <button
+                        onClick={() => {
+                            sessionStorage.removeItem("theorem-selected-shelf");
+                            setSelectedShelfId(null);
+                            setShowFavoritesOnly(false);
+                        }}
+                        className="text-xs font-medium text-[color:var(--color-accent)] hover:underline"
+                    >
+                        Clear filter
+                    </button>
+                )}
+                <ImportButton onImport={handleAddBooks} isLoading={isImporting} />
 
                 <div className="flex items-center gap-2 sm:gap-4 ml-auto">
-                    
-                    <ImportButton onImport={handleAddBooks} isLoading={isImporting} />
-
                     <button
                         onClick={() => {
                             if (isSelecting) {
@@ -1700,7 +1693,7 @@ export function LibraryPage() {
                         <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-300", showFilterDropdown && "rotate-180")} />
                     </button>
                 </div>
-            </div>
+            </PageHeader>
 
             <div className="flex min-h-0 flex-1 flex-col md:flex-row gap-6 md:gap-10 mt-8 relative">
                 <div className="flex min-h-0 flex-1 flex-col w-full">

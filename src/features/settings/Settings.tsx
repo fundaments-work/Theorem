@@ -1,5 +1,6 @@
 
 import { useRef, useState, useEffect, memo, lazy, Suspense, type ChangeEvent } from "react";
+import { PageHeader } from "../../ui";
 import { cn, formatFileSize } from "../../core/lib/utils";
 import { isMobile, isTauri, isTauriDesktop } from "../../core/lib/env";
 import { getAllShortcuts, formatShortcutKeys } from "../../core/lib/keyboard-shortcuts";
@@ -61,8 +62,8 @@ interface SectionProps {
 
 function Section({ title, description, icon, children }: SectionProps) {
     return (
-        <section className="border border-[var(--color-border)] bg-[var(--color-surface)]">
-            <div className="border-b border-[var(--color-border)] px-5 py-3">
+        <section className="bg-[var(--color-surface)]">
+            <div className="border-b border-[var(--color-border-subtle)] px-5 py-3">
                 {icon && <span className="sr-only">{icon}</span>}
                 <h2 className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
                     {title}
@@ -87,7 +88,7 @@ interface SettingRowProps {
 
 function SettingRow({ label, description, htmlFor, children }: SettingRowProps) {
     return (
-        <div className="grid gap-3 border-b border-[var(--color-border-subtle)] py-4 first:pt-0 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="grid gap-3 py-4 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div className="w-full sm:flex-1 sm:pr-4">
                 <label htmlFor={htmlFor} className="font-sans text-[12px] font-semibold text-[color:var(--color-text-primary)]">
                     {label}
@@ -598,16 +599,10 @@ export const SettingsPage = memo(function SettingsPage() {
         <>
         <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             
-            <div className="flex items-center justify-between mb-10">
-                <div>
-                    <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
-                        Settings
-                    </h1>
-                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-text-secondary)]">
-                        Customize your reading experience
-                    </p>
-                </div>
-            </div>
+            <PageHeader
+                title="Settings"
+                description="Customize your reading experience"
+            />
 
             <div className="mb-8 space-y-3">
                 <div className="sm:hidden -mx-1 px-1">

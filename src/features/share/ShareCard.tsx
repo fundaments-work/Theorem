@@ -37,7 +37,7 @@ interface ShareCardProps {
 }
 
 const CARD_WIDTH_PX = 1080;
-const CARD_RATIOS = { square: 1, story: 16 / 9 };
+const CARD_HEIGHTS = { square: 1080, story: 1920 };
 
 function formatTime(minutes: number): string {
     if (minutes < 60) return `${minutes}m`;
@@ -61,7 +61,7 @@ function getThemeStyles(theme: CardTheme, accent?: HighlightColor) {
 }
 
 export function ShareCard({ kind, annotation, book, statsData, format, theme, showNote }: ShareCardProps) {
-    const height = CARD_WIDTH_PX / CARD_RATIOS[format];
+    const height = CARD_HEIGHTS[format];
     const colors = useMemo(() => getThemeStyles(theme, annotation?.color), [theme, annotation?.color]);
 
     const cardContent = kind === "annotation" && annotation ? (
