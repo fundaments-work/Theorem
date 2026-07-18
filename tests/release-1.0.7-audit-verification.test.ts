@@ -80,7 +80,7 @@ describe("Settings migration preserves autoSyncEnabled", () => {
 describe("Progressive per-entity book sync", () => {
     it("provisionToIrohDocs writes individual book:<id> entries", () => {
         const content = readSource("src/core/lib/sync-orchestrator.ts");
-        expect(content).toContain("docsSetEntry(`book:${book.id}`");
+        expect(content).toContain('docsSetEntry("book:');
     });
 
     it("initDocsLiveListener processes book:<id> entries progressively", () => {
@@ -95,7 +95,7 @@ describe("Parallel file downloads", () => {
     it("pullMissingBookFilesAndCovers uses concurrent workers", () => {
         const content = readSource("src/core/lib/sync-orchestrator.ts");
         expect(content).toContain("CONCURRENCY");
-        expect(content).toContain("Promise.all(workers)");
+        expect(content).toContain("Array.from({ length: CONCURRENCY }");
     });
 });
 
@@ -131,12 +131,13 @@ describe("Live event retry during merge", () => {
     });
 });
 
-// ─── Fix 64: Stability detection won't settle with 0 books ───
-describe("0-book stability guard", () => {
-    it("poll loop does not increment stability with 0 books on fresh device", () => {
+// ─── Fix 64: Stability detection uses signal-based settle ───
+describe("Signal-based settle guard", () => {
+    it("runDeviceSync uses settleSignals >= 3 as stability signal", () => {
         const content = readSource("src/core/lib/sync-orchestrator.ts");
-        expect(content).toContain("_bookCountBeforeSync");
-        expect(content).toContain("booksCount > 0 || _bookCountBeforeSync > 0");
+        expect(content).toContain("settleSignals");
+        expect(content).toContain("settleSignals >= 3");
+        expect(content).toContain("_syncActivityDetected");
     });
 });
 
