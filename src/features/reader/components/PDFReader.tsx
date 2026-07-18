@@ -6,6 +6,7 @@ import {
     useCallback,
     forwardRef,
     useImperativeHandle,
+    memo,
 } from "react";
 import { AlertCircle } from "lucide-react";
 import { PDFJsEngine, type PDFJsEngineRef, type PDFDocumentInfo } from "../engines/pdfjs-engine";
@@ -98,7 +99,7 @@ function ErrorState({
     );
 }
 
-export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
+export const PDFReader = memo(forwardRef<PDFJsEngineRef, PDFReaderProps>(
     function PDFReader(
         {
             pdfPath,
@@ -273,7 +274,7 @@ export const PDFReader = forwardRef<PDFJsEngineRef, PDFReaderProps>(
             </div>
         );
     }
-);
+));
 
 export default PDFReader;
 export type { PDFReaderProps };

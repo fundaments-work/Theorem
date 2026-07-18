@@ -426,11 +426,6 @@ pub fn start_accept_loop(
 
         let docs_path = data_dir.join("iroh-docs");
 
-        if docs_path.join("db.redb").exists() {
-            eprintln!("[iroh-sync] Removing stale iroh-docs database from pre-1.0.7...");
-            let _ = std::fs::remove_dir_all(&docs_path);
-        }
-
         let _ = std::fs::create_dir_all(&docs_path);
         let blobs_store: iroh_blobs::api::Store = blobs.into();
         let blobs_for_subscribe = blobs_store.clone();

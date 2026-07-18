@@ -120,7 +120,7 @@ export function ReaderAnnotationsPanel({
     const renderBookmarkItem = (bookmark: Annotation) => (
         <div
             key={bookmark.id}
-            className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-black"
+            className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-[var(--color-accent)]"
             onClick={() => handleNavigate(bookmark)}
         >
             <div className="flex items-start justify-between gap-3">
@@ -167,7 +167,7 @@ export function ReaderAnnotationsPanel({
     const renderHighlightItem = (highlight: Annotation) => (
         <div
             key={highlight.id}
-            className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-black"
+            className="group cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-[var(--color-accent)]"
             onClick={() => handleNavigate(highlight)}
         >
             <div className="flex items-start justify-between gap-3">

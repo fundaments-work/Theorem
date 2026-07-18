@@ -343,6 +343,7 @@ async function ensureLoadedDictionary(id: string): Promise<LoadedStarDict | null
         loadedDictionaries.set(id, runtime);
         return runtime;
     } catch (error) {
+        console.warn("[StarDict] Failed to load dictionary:", error);
         return null;
     }
 }
@@ -524,6 +525,7 @@ export async function lookupInStarDictDictionary(
         }
         return parseDictionaryEntries(entries, "stardict");
     } catch (error) {
+        console.warn("[StarDict] Lookup failed for dictionary:", error);
         return [];
     }
 }
@@ -541,6 +543,7 @@ export async function lookupInStarDictDictionaries(
                 combined.push(...meanings);
             }
         } catch (error) {
+            console.warn("[StarDict] Lookup failed for dictionary", id, error);
         }
     }
 

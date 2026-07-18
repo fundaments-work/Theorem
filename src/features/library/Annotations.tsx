@@ -93,7 +93,7 @@ function AnnotationCard({
     const [showMenu, setShowMenu] = useState(false);
 
     return (
-        <div className="group border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-black">
+        <div className="group border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-accent)]">
             
             <div className="flex items-start justify-between mb-4">
                 <div className="min-w-0">
