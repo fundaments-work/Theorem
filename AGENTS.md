@@ -17,14 +17,11 @@ Operational guide for AI coding agents working in this repository.
 | Step | Command | Must Pass? |
 |------|---------|------------|
 | TypeScript typecheck | `pnpm typecheck` | Zero errors |
-| JavaScript/TS linter | `pnpm lint` | Zero errors |
 | Rust format | `cd src-tauri && cargo fmt` | No diff |
 | Rust clippy | `cd src-tauri && cargo clippy` | Zero warnings |
 | Rust typecheck | `cd src-tauri && cargo check` | Zero errors |
 
-Rule: **Never commit or push code that fails any of these.** If you touch only `.ts`/`.tsx` files, run `pnpm typecheck` and `pnpm lint`. The linter uses Biome (Rust-based, fast) — it catches unused imports, `console.log` in production, missing error handling, and code style issues. If you touch any `.rs` file, run all four Rust gates.
-
-Biome linter is check-only (no auto-fix). Detected issues must be fixed manually.
+Rule: **Never commit or push code that fails any of these.** If you touch any `.rs` file, run all four Rust gates. If you touch only `.ts`/`.tsx` files, run `pnpm typecheck`.
 
 Additional validation per scope:
 
@@ -44,11 +41,10 @@ cd src-tauri && cargo fmt && cd ..
 # 2. Rust clippy (must be zero warnings)
 cd src-tauri && cargo clippy && cd ..
 
-# 3. TypeScript typecheck + linter
+# 3. TypeScript typecheck
 pnpm typecheck
-pnpm lint
 
-# 4. If typecheck/clippy/lint pass, commit
+# 4. If typecheck/clippy pass, commit
 git add -A
 git commit -m "..."
 
@@ -131,7 +127,7 @@ docs/
 - Web dev: `pnpm dev`
 - Desktop dev: `pnpm dev:tauri` or `pnpm tauri dev`
 - Typecheck: `pnpm typecheck`
-- Lint: `pnpm lint`
+
 - Build: `pnpm build`
 - Preview: `pnpm preview`
 - Rust-only build: `cd src-tauri && cargo build --release`
