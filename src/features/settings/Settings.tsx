@@ -1104,7 +1104,7 @@ export const SettingsPage = memo(function SettingsPage() {
                             <div className="grid gap-2">
                                 <div className="flex items-center justify-between py-1.5 border-b border-[var(--color-border-subtle)]">
                                     <span className="text-[12px] text-[color:var(--color-text-secondary)]">Version</span>
-                                    <span className="text-[12px] font-medium text-[color:var(--color-text-primary)]">1.0.0</span>
+                                    <span className="text-[12px] font-medium text-[color:var(--color-text-primary)]">{__APP_VERSION__}</span>
                                 </div>
                                 <div className="flex items-center justify-between py-1.5 border-b border-[var(--color-border-subtle)]">
                                     <span className="text-[12px] text-[color:var(--color-text-secondary)]">License</span>
