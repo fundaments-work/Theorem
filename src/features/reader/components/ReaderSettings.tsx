@@ -17,7 +17,6 @@ import {
     Maximize2,
     Zap,
     Settings2,
-    ZoomIn,
 } from "lucide-react";
 import { cn } from "../../../core/lib/utils";
 import { isFixedLayout, type BookFormat, type FontFamily, type ReaderSettings as ReaderSettingsType, type ReaderTheme } from "../../../core/types";
@@ -73,11 +72,6 @@ const ALIGN_OPTIONS = [
     { id: "justify", label: "Justify", icon: AlignJustify },
     { id: "center", label: "Center", icon: AlignCenter },
 ] as const;
-
-const SECONDARY_BUTTON_CLASS = "ui-btn";
-const TAB_BUTTON_CLASS = "ui-tab-btn";
-const CHIP_CONTROL_CLASS = "ui-chip-btn";
-const ICON_CONTROL_BUTTON_CLASS = "ui-icon-btn";
 
 function useSmoothSlider(
     initialValue: number,
@@ -139,14 +133,6 @@ function useSmoothSlider(
         canDecrement,
         canIncrement,
     };
-}
-
-function sectionLabel(label: string) {
-    return <label className="text-xs font-medium leading-snug text-[color:var(--color-text-muted)]">{label}</label>;
-}
-
-function panelToggleClass(disabled = false) {
-    return cn(CHIP_CONTROL_CLASS, disabled && "pointer-events-none");
 }
 
 export function ReaderSettings({
@@ -230,35 +216,37 @@ export function ReaderSettings({
             <Backdrop visible={visible} onClick={onClose} />
 
             <FloatingPanel visible={visible} className={cn("overflow-hidden bg-[var(--color-surface)]", className)}>
-                <div className="reader-panel-header flex items-center justify-between border-b border-[var(--color-border)] p-4">
-                    <div className="flex items-center gap-2">
-                        <Settings2 className="w-5 h-5 text-[color:var(--color-text-primary)]" />
-                        <h2 className="text-base font-medium text-[color:var(--color-text-primary)]">Settings</h2>
+                <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3.5">
+                    <div className="flex items-center gap-2.5">
+                        <span className="inline-flex h-7 w-7 items-center justify-center bg-[var(--color-surface-muted)]">
+                            <Settings2 className="w-3.5 h-3.5 text-[color:var(--color-text-secondary)]" />
+                        </span>
+                        <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--color-text-primary)]">Settings</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleReset}
-                            className={cn(SECONDARY_BUTTON_CLASS, "min-h-8 px-3 py-1 text-xs")}
+                            className="relative px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition-colors"
                         >
                             Reset
                         </button>
                         <button
                             onClick={onClose}
-                            className={ICON_CONTROL_BUTTON_CLASS}
+                            className="inline-flex h-7 w-7 items-center justify-center text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                             aria-label="Close settings"
                         >
-                            <X className="w-5 h-5" />
+                            <X className="w-3.5 h-3.5" />
                         </button>
                     </div>
                 </div>
 
-                <div className="reader-panel-header border-b border-[var(--color-border)] px-4 py-3">
-                    <div className="grid grid-cols-3 gap-2">
+                <div className="px-5 pt-3.5 pb-2.5">
+                    <div className="flex border border-[var(--color-border)] divide-x divide-[var(--color-border)]">
                         {tabs.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={TAB_BUTTON_CLASS}
+                                className="flex-1 relative py-2 text-[10px] font-bold uppercase tracking-[0.08em] transition-colors text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] data-[active]:text-[color:var(--color-text-primary)]"
                                 data-active={activeTab === tab.id}
                                 aria-pressed={activeTab === tab.id}
                             >
@@ -266,29 +254,32 @@ export function ReaderSettings({
                                     {tab.icon}
                                     <span>{tab.label}</span>
                                 </span>
+                                {activeTab === tab.id && (
+                                    <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--color-text-primary)]" />
+                                )}
                             </button>
                         ))}
                     </div>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 [content-visibility:auto] overscroll-contain">
+                <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 [content-visibility:auto] overscroll-contain">
                     {activeTab === "themes" && (
-                        <div className="space-y-6">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    {sectionLabel("Brightness")}
-                                    <span className="[font-variant-numeric:tabular-nums] text-xs text-[color:var(--color-text-primary)]">
+                        <div className="space-y-5">
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Brightness</span>
+                                    <span className="[font-variant-numeric:tabular-nums] text-[11px] text-[color:var(--color-text-primary)]">
                                         {brightnessSlider.value}%
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2.5">
                                     <button
                                         onClick={brightnessSlider.decrement}
-                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Decrease brightness"
                                         disabled={!brightnessSlider.canDecrement}
                                     >
-                                        <Minus className="w-4 h-4" />
+                                        <Minus className="w-3 h-3" />
                                     </button>
                                     <input
                                         type="range"
@@ -299,22 +290,21 @@ export function ReaderSettings({
                                         onChange={brightnessSlider.handleChange}
                                         onMouseDown={brightnessSlider.handleMouseDown}
                                         onMouseUp={brightnessSlider.handleMouseUp}
-                                        className="flex-1"
-                                        style={{ accentColor: "var(--color-accent)" }}
+                                        className="ui-reader-slider flex-1"
                                     />
                                     <button
                                         onClick={brightnessSlider.increment}
-                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Increase brightness"
                                         disabled={!brightnessSlider.canIncrement}
                                     >
-                                        <Plus className="w-4 h-4" />
+                                        <Plus className="w-3 h-3" />
                                     </button>
                                 </div>
                             </div>
 
-                            <div className="space-y-3">
-                                {sectionLabel("Theme")}
+                            <div>
+                                <span className="block mb-3 text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Theme</span>
                                 <div className="grid grid-cols-3 gap-2">
                                     {THEMES.map((theme) => {
                                         const active = settings.theme === theme.id;
@@ -322,18 +312,32 @@ export function ReaderSettings({
                                             <button
                                                 key={theme.id}
                                                 onClick={() => onUpdate({ theme: theme.id })}
-                                                className={cn(CHIP_CONTROL_CLASS, "p-3 text-center")}
-                                                data-active={active}
+                                                className={cn(
+                                                    "relative border transition-all",
+                                                    active
+                                                        ? "border-[var(--color-text-primary)]"
+                                                        : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
+                                                )}
                                                 aria-pressed={active}
                                             >
-                                                <span
-                                                    className="theme-preview mx-auto mb-2 inline-flex h-9 w-9 items-center justify-center border border-[var(--color-border)]"
+                                                <div
+                                                    className="h-20 flex items-center justify-center"
                                                     data-theme={theme.id}
-                                                    style={{ backgroundColor: "var(--reader-bg)", color: "var(--reader-fg)" }}
+                                                    style={{
+                                                        backgroundColor: theme.id === 'dark' ? '#1a1a1a' : theme.id === 'sepia' ? '#fbf3e0' : '#ffffff',
+                                                        color: theme.id === 'dark' ? '#e5e5e5' : theme.id === 'sepia' ? '#5f4b32' : '#1a1a1a',
+                                                    }}
                                                 >
-                                                    {theme.icon}
-                                                </span>
-                                                <span className="block text-[10px] font-medium tracking-wide">{theme.label}</span>
+                                                    <div className="flex flex-col items-center gap-1.5 opacity-70">
+                                                        <span className="block text-lg leading-none">Aa</span>
+                                                        <span className="block text-[8px] leading-none uppercase tracking-[0.15em]">{theme.label}</span>
+                                                    </div>
+                                                </div>
+                                                {active && (
+                                                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 flex items-center justify-center bg-[var(--color-text-primary)] text-[var(--color-surface)]">
+                                                        <span className="text-[8px] leading-none">&#10003;</span>
+                                                    </span>
+                                                )}
                                             </button>
                                         );
                                     })}
@@ -343,46 +347,50 @@ export function ReaderSettings({
                     )}
 
                     {activeTab === "typography" && (
-                        <div className="space-y-5">
-                            <div className="space-y-2">
-                                {sectionLabel("Font")}
-                                <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-4.5">
+                            <div>
+                                <span className="block mb-2.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Font</span>
+                                <div className="grid grid-cols-2 gap-1.5">
                                     {FONTS.map((font) => {
                                         const active = settings.fontFamily === font.id;
                                         return (
                                             <button
                                                 key={font.id}
                                                 onClick={() => onUpdate({ fontFamily: font.id })}
-                                                className={cn(CHIP_CONTROL_CLASS, "px-3 py-2.5 text-left")}
-                                                data-active={active}
+                                                className={cn(
+                                                    "relative px-3 py-2.5 text-left border transition-all",
+                                                    active
+                                                        ? "border-[var(--color-text-primary)]"
+                                                        : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
+                                                )}
                                                 aria-pressed={active}
                                                 style={{ fontFamily: font.family }}
                                             >
                                                 <span className="block text-sm font-medium">{font.label}</span>
-                                                <span className="mt-1 block text-xs opacity-80">Aa Bb Cc</span>
+                                                <span className="mt-0.5 block text-[10px] text-[color:var(--color-text-muted)]">Aa Bb Cc</span>
                                             </button>
                                         );
                                     })}
                                 </div>
 
-                                <div className="mt-3 border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] p-3 text-center text-base text-[color:var(--color-text-primary)]" style={{ fontFamily: currentFontFamily }}>
+                                <div className="mt-3 border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-4 py-4 text-center text-base leading-relaxed text-[color:var(--color-text-primary)]" style={{ fontFamily: currentFontFamily }}>
                                     The quick brown fox jumps over the lazy dog
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    {sectionLabel("Size")}
-                                    <span className="[font-variant-numeric:tabular-nums] text-xs text-[color:var(--color-text-primary)]">{fontSizeSlider.value}</span>
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Size</span>
+                                    <span className="[font-variant-numeric:tabular-nums] text-[11px] text-[color:var(--color-text-primary)]">{fontSizeSlider.value}</span>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2.5">
                                     <button
                                         onClick={fontSizeSlider.decrement}
-                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Decrease font size"
                                         disabled={!fontSizeSlider.canDecrement}
                                     >
-                                        <Minus className="w-4 h-4" />
+                                        <Minus className="w-3 h-3" />
                                     </button>
                                     <input
                                         type="range"
@@ -393,33 +401,32 @@ export function ReaderSettings({
                                         onChange={fontSizeSlider.handleChange}
                                         onMouseDown={fontSizeSlider.handleMouseDown}
                                         onMouseUp={fontSizeSlider.handleMouseUp}
-                                        className="flex-1"
-                                        style={{ accentColor: "var(--color-accent)" }}
+                                        className="ui-reader-slider flex-1"
                                     />
                                     <button
                                         onClick={fontSizeSlider.increment}
-                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Increase font size"
                                         disabled={!fontSizeSlider.canIncrement}
                                     >
-                                        <Plus className="w-4 h-4" />
+                                        <Plus className="w-3 h-3" />
                                     </button>
                                 </div>
                             </div>
 
                             <button
                                 onClick={() => setShowAdvancedType((prev) => !prev)}
-                                className={cn(SECONDARY_BUTTON_CLASS, "w-full py-2 text-xs")}
+                                className="w-full py-2 text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition-colors"
                             >
-                                {showAdvancedType ? "Less options" : "More options"}
+                                {showAdvancedType ? "– Less options" : "+ More options"}
                             </button>
 
                             {showAdvancedType && (
-                                <div className="animate-fade-in space-y-4 border-t border-[var(--color-border)] pt-4">
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            {sectionLabel("Line spacing")}
-                                            <span className="[font-variant-numeric:tabular-nums] text-xs text-[color:var(--color-text-primary)]">{lineHeightSlider.value.toFixed(1)}</span>
+                                <div className="animate-fade-in space-y-4 pt-4 border-t border-[var(--color-border)]">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Line spacing</span>
+                                            <span className="[font-variant-numeric:tabular-nums] text-[11px] text-[color:var(--color-text-primary)]">{lineHeightSlider.value.toFixed(1)}</span>
                                         </div>
                                         <input
                                             type="range"
@@ -430,20 +437,23 @@ export function ReaderSettings({
                                             onChange={lineHeightSlider.handleChange}
                                             onMouseDown={lineHeightSlider.handleMouseDown}
                                             onMouseUp={lineHeightSlider.handleMouseUp}
-                                            className="w-full"
-                                            style={{ accentColor: "var(--color-accent)" }}
+                                            className="ui-reader-slider w-full"
                                         />
                                     </div>
 
-                                    <div className="space-y-2">
-                                        {sectionLabel("Alignment")}
-                                        <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <span className="block mb-2.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Alignment</span>
+                                        <div className="grid grid-cols-3 gap-1.5">
                                             {ALIGN_OPTIONS.map(({ id, label, icon: Icon }) => (
                                                 <button
                                                     key={id}
                                                     onClick={() => onUpdate({ textAlign: id })}
-                                                    className={panelToggleClass()}
-                                                    data-active={settings.textAlign === id}
+                                                    className={cn(
+                                                        "relative py-2.5 text-center border transition-all",
+                                                        settings.textAlign === id
+                                                            ? "border-[var(--color-text-primary)]"
+                                                            : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
+                                                    )}
                                                     aria-pressed={settings.textAlign === id}
                                                 >
                                                     <span className="flex flex-col items-center gap-1">
@@ -460,23 +470,20 @@ export function ReaderSettings({
                     )}
 
                     {activeTab === "zoom" && (
-                        <div className="space-y-5">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="inline-flex items-center gap-2 text-xs font-medium tracking-wide text-[color:var(--color-text-muted)]">
-                                        <ZoomIn className="w-4 h-4" />
-                                        Zoom level
-                                    </span>
-                                    <span className="[font-variant-numeric:tabular-nums] text-xs text-[color:var(--color-text-primary)]">{zoomSlider.value}%</span>
+                        <div className="space-y-5 pt-1">
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Zoom level</span>
+                                    <span className="[font-variant-numeric:tabular-nums] text-[11px] text-[color:var(--color-text-primary)]">{zoomSlider.value}%</span>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2.5">
                                     <button
                                         onClick={zoomSlider.decrement}
-                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Decrease zoom"
                                         disabled={!zoomSlider.canDecrement}
                                     >
-                                        <Minus className="w-4 h-4" />
+                                        <Minus className="w-3 h-3" />
                                     </button>
                                     <input
                                         type="range"
@@ -487,23 +494,22 @@ export function ReaderSettings({
                                         onChange={zoomSlider.handleChange}
                                         onMouseDown={zoomSlider.handleMouseDown}
                                         onMouseUp={zoomSlider.handleMouseUp}
-                                        className="flex-1"
-                                        style={{ accentColor: "var(--color-accent)" }}
+                                        className="ui-reader-slider flex-1"
                                     />
                                     <button
                                         onClick={zoomSlider.increment}
-                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Increase zoom"
                                         disabled={!zoomSlider.canIncrement}
                                     >
-                                        <Plus className="w-4 h-4" />
+                                        <Plus className="w-3 h-3" />
                                     </button>
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                {sectionLabel("Presets")}
-                                <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <span className="block mb-2.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Presets</span>
+                                <div className="grid grid-cols-2 gap-1.5">
                                     {[
                                         { id: "actual", label: "100%", value: 100 },
                                         { id: "125", label: "125%", value: 125 },
@@ -513,27 +519,31 @@ export function ReaderSettings({
                                         <button
                                             key={preset.id}
                                             onClick={() => onUpdate({ zoom: preset.value })}
-                                            className={panelToggleClass()}
-                                            data-active={settings.zoom === preset.value}
+                                            className={cn(
+                                                "py-2.5 text-center border text-[11px] font-medium transition-all",
+                                                settings.zoom === preset.value
+                                                    ? "border-[var(--color-text-primary)]"
+                                                    : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
+                                            )}
                                             aria-pressed={settings.zoom === preset.value}
                                         >
-                                            <span className="text-xs font-medium">{preset.label}</span>
+                                            {preset.label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] p-3 text-xs text-[color:var(--color-text-secondary)]">
+                            <div className="border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2.5 text-[10px] leading-relaxed text-[color:var(--color-text-secondary)]">
                                 This document has a fixed layout. Zoom controls replace text-size options.
                             </div>
                         </div>
                     )}
 
                     {activeTab === "layout" && (
-                        <div className="space-y-5">
-                            <div className="space-y-3">
-                                {sectionLabel("Mode")}
-                                <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-5 pt-1">
+                            <div>
+                                <span className="block mb-2.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Mode</span>
+                                <div className="grid grid-cols-2 gap-1.5">
                                     {FLOW_OPTIONS.map(({ id, label, icon: Icon }) => {
                                         const disabled = isFixed && id === "scroll";
                                         const active = !disabled && settings.flow === id;
@@ -542,14 +552,19 @@ export function ReaderSettings({
                                             <button
                                                 key={id}
                                                 onClick={() => onUpdate({ flow: id })}
-                                                className={panelToggleClass(disabled)}
-                                                data-active={active}
+                                                className={cn(
+                                                    "relative py-4 text-center border transition-all",
+                                                    disabled && "opacity-30 pointer-events-none",
+                                                    active
+                                                        ? "border-[var(--color-text-primary)]"
+                                                        : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
+                                                )}
                                                 aria-pressed={active}
                                                 disabled={disabled}
                                             >
                                                 <span className="flex flex-col items-center gap-2">
                                                     <Icon className="w-5 h-5" />
-                                                    <span className="text-xs font-medium">{label}</span>
+                                                    <span className="text-[11px] font-medium">{label}</span>
                                                 </span>
                                             </button>
                                         );
@@ -557,22 +572,19 @@ export function ReaderSettings({
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <span className="inline-flex items-center gap-2 text-xs font-medium tracking-wide text-[color:var(--color-text-muted)]">
-                                        <Zap className="w-4 h-4" />
-                                        Zoom
-                                    </span>
-                                    <span className="[font-variant-numeric:tabular-nums] text-xs text-[color:var(--color-text-primary)]">{zoomSlider.value}%</span>
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Zoom</span>
+                                    <span className="[font-variant-numeric:tabular-nums] text-[11px] text-[color:var(--color-text-primary)]">{zoomSlider.value}%</span>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2.5">
                                     <button
                                         onClick={zoomSlider.decrement}
-                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Decrease zoom"
                                         disabled={!zoomSlider.canDecrement}
                                     >
-                                        <Minus className="w-4 h-4" />
+                                        <Minus className="w-3 h-3" />
                                     </button>
                                     <input
                                         type="range"
@@ -583,16 +595,15 @@ export function ReaderSettings({
                                         onChange={zoomSlider.handleChange}
                                         onMouseDown={zoomSlider.handleMouseDown}
                                         onMouseUp={zoomSlider.handleMouseUp}
-                                        className="flex-1"
-                                        style={{ accentColor: "var(--color-accent)" }}
+                                        className="ui-reader-slider flex-1"
                                     />
                                     <button
                                         onClick={zoomSlider.increment}
-                                        className={ICON_CONTROL_BUTTON_CLASS}
+                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Increase zoom"
                                         disabled={!zoomSlider.canIncrement}
                                     >
-                                        <Plus className="w-4 h-4" />
+                                        <Plus className="w-3 h-3" />
                                     </button>
                                 </div>
                             </div>
