@@ -12,7 +12,7 @@ export function buildShareText(
     }
 
     if (book) {
-        parts.push(`— ${book.title}${book.author ? ` by $book.author}` : ""}`);
+        parts.push(`— ${book.title}${book.author ? ` by ${book.author}` : ""}`);
     }
 
     if (annotation.noteContent) {

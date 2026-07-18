@@ -16,7 +16,7 @@ import {
     Highlighter,
     Share2,
 } from "lucide-react";
-import { ShareStatsStudioModal } from "./ShareStatsStudioModal";
+import { ShareCardModal } from "../share/ShareCardModal";
 
 interface StatCardProps {
     icon: React.ReactNode;
@@ -512,7 +512,8 @@ export function StatisticsPage() {
                 </div>
             </div>
             {showShareModal && (
-                <ShareStatsStudioModal
+                <ShareCardModal
+                    kind="stats"
                     statsData={shareStatsData}
                     onClose={() => setShowShareModal(false)}
                 />
