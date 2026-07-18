@@ -4,6 +4,7 @@ import {
     Bookmark,
     ChevronLeft,
     ChevronRight,
+    Flame,
     FolderOpen,
     Highlighter,
     Library,
@@ -46,8 +47,11 @@ export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const sidebarRef = useRef<HTMLElement>(null);
     const touchStartX = useRef<number>(0);
+    const stats = useSettingsStore((state) => state.stats);
     const isCollapsedDesktop = !isMobile && !sidebarOpen;
     const showDesktopFooterRow = !isMobile && sidebarOpen;
+
+    const displayStreak = stats.currentStreak > 0;
 
     const handleToggle = useCallback(() => {
         toggleSidebar();
@@ -166,6 +170,12 @@ export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps
             )}>
                 {showDesktopFooterRow ? (
                     <div className="flex items-center justify-between gap-4">
+                        {displayStreak && (
+                            <div className="flex items-center gap-1.5" title={`${stats.currentStreak} day streak`}>
+                                <Flame className="w-4 h-4 text-[var(--color-accent)]" />
+                                <span className="text-xs font-semibold text-[var(--color-text-primary)]">{stats.currentStreak}</span>
+                            </div>
+                        )}
                         <button
                             onClick={() => {
                                 setRoute("settings");
@@ -190,6 +200,11 @@ export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps
                     </div>
                 ) : (
                     <div className="flex flex-col gap-4">
+                        {displayStreak && (
+                            <div className="flex items-center justify-center" title={`${stats.currentStreak} day streak`}>
+                                <Flame className="w-4 h-4 text-[var(--color-accent)]" />
+                            </div>
+                        )}
                         <button
                             onClick={() => {
                                 setRoute("settings");

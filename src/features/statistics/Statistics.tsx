@@ -326,6 +326,46 @@ export function StatisticsPage() {
                 />
             </div>
 
+            {(() => {
+                const now = new Date();
+                const weekAgo = new Date(now);
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                const weekAgoStr = weekAgo.toISOString().split("T")[0];
+                const thisWeek = (stats.dailyActivity || []).filter((d) => d.date >= weekAgoStr);
+                const weekMinutes = thisWeek.reduce((s, d) => s + d.minutes, 0);
+                const prevWeekEnd = new Date(weekAgo);
+                prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
+                const prevWeekStart = new Date(prevWeekEnd);
+                prevWeekStart.setDate(prevWeekStart.getDate() - 6);
+                const prevWeek = (stats.dailyActivity || []).filter((d) => d.date >= prevWeekStart.toISOString().split("T")[0] && d.date <= prevWeekEnd.toISOString().split("T")[0]);
+                const prevMinutes = prevWeek.reduce((s, d) => s + d.minutes, 0);
+                const change = prevMinutes > 0 ? Math.round((weekMinutes - prevMinutes) / prevMinutes * 100) : 0;
+
+                if (weekMinutes === 0 && prevMinutes === 0) return null;
+
+                return (
+                    <section className="mb-6 bg-[var(--color-surface)]">
+                        <div className="px-5 py-4 flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div>
+                                    <div className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider">This Week</div>
+                                    <div className="text-2xl font-semibold text-[color:var(--color-text-primary)] mt-1">{formatReadingTime(weekMinutes * 60)}</div>
+                                </div>
+                                {prevMinutes > 0 && (
+                                    <div className={`text-xs font-medium ${change >= 0 ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}`}>
+                                        {change >= 0 ? '↑' : '↓'} {Math.abs(change)}%
+                                    </div>
+                                )}
+                            </div>
+                            <div className="text-xs text-[color:var(--color-text-secondary)] text-right leading-relaxed">
+                                <div>{thisWeek.filter((d) => d.minutes > 0).length} days read</div>
+                                {stats.booksCompleted > 0 && <div>{stats.booksCompleted} book{stats.booksCompleted !== 1 ? 's' : ''}</div>}
+                            </div>
+                        </div>
+                    </section>
+                );
+            })()}
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
                 
                 <div className="lg:col-span-2 space-y-6 sm:space-y-8">

@@ -368,6 +368,13 @@ export function AnnotationsPage() {
         setSharingId(id);
     };
 
+    const dailyHighlight = useMemo(() => {
+        const nonBookmarks = annotations.filter((a) => a.type !== "bookmark" && a.selectedText);
+        if (nonBookmarks.length === 0) return null;
+        const daySeed = new Date().toISOString().split("T")[0].split("-").reduce((a, b) => a + parseInt(b), 0);
+        return nonBookmarks[daySeed % nonBookmarks.length];
+    }, [annotations]);
+
     const annotationCount = annotations.filter((a) => a.type !== "bookmark").length;
     const selectedBookTitle = currentBookId
         ? (bookTitleLookup.get(currentBookId) || "Selected reference")
@@ -388,6 +395,20 @@ export function AnnotationsPage() {
                 title="Workbench"
                 description={`${filteredAnnotations.length} ${filteredAnnotations.length === 1 ? "annotation" : "annotations"} across ${new Set(filteredAnnotations.map((a) => a.bookId)).size} books`}
             />
+
+            {dailyHighlight && viewMode === "list" && !currentBookId && (
+                <div className="mb-8 border-l-[3px] border-[var(--color-accent)] bg-[var(--color-surface)] pl-5 pr-6 py-5">
+                    <div className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider mb-2">
+                        Highlight from your library
+                    </div>
+                    <p className="font-serif text-[15px] leading-relaxed text-[color:var(--color-text-primary)] mb-2">
+                        &ldquo;{dailyHighlight.selectedText}&rdquo;
+                    </p>
+                    <div className="text-[12px] text-[color:var(--color-text-secondary)]">
+                        — {bookTitleLookup.get(dailyHighlight.bookId) || "Unknown source"}
+                    </div>
+                </div>
+            )}
 
             {currentBookId && (
                 <div className="mb-8 flex flex-wrap items-center gap-2 border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-sans text-[11px] font-medium">
