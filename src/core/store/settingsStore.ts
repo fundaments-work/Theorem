@@ -193,6 +193,11 @@ export const useSettingsStore = create<SettingsStore>()(
             name: "theorem-settings",
             version: 6,
             storage: createJSONStorage(() => theoremPersistStorage),
+            partialize: (state) => ({
+                settings: state.settings,
+                stats: state.stats,
+                settingsLastModifiedAt: state.settingsLastModifiedAt,
+            }),
             migrate: (persistedState, version) => {
                 const state = (
                     typeof persistedState === "object" && persistedState !== null

@@ -23,6 +23,13 @@ impl FileTransferHandler {
     async fn read_cover(data_dir: &Path, book_id: &str) -> Result<Vec<u8>, String> {
         let db_path = data_dir.join("theorem.db");
         let conn = rusqlite::Connection::open(&db_path).map_err(|e| format!("open db: {e}"))?;
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             PRAGMA busy_timeout = 5000;
+             PRAGMA foreign_keys = ON;",
+        )
+        .map_err(|e| format!("pragma: {e}"))?;
 
         let cover_key = format!("cover:{}", book_id);
         let mut stmt = conn

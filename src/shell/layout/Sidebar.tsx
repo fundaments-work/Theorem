@@ -110,7 +110,7 @@ export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps
                 </div>
             </div>
 
-            <nav className="flex-1 overflow-y-auto py-6 min-h-0 custom-scrollbar">
+            <nav aria-label="Main navigation" className="flex-1 overflow-y-auto py-6 min-h-0 custom-scrollbar">
                 <ul className="flex flex-col">
                     {mainNavItems
                         .filter((item) => item.id !== "vocabulary" || vocabularyEnabled)

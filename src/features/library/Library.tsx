@@ -102,7 +102,8 @@ export const BookCard = memo(function BookCard({
     const isCompleted = isBookMarkedRead(book);
 
     const collections = useLibraryStore((state) => state.collections);
-    const bookShelves = collections.filter((c) => c.bookIds.includes(book.id));
+    const collectionSets = useMemo(() => collections.map(c => ({ ...c, bookIdSet: new Set(c.bookIds) })), [collections]);
+    const bookShelves = collectionSets.filter((c) => c.bookIdSet.has(book.id));
 
     const handleCardClick = () => {
         if (isSelecting && onToggleSelect) {
@@ -1498,9 +1499,9 @@ export function LibraryPage() {
     }, [toggleFavorite]);
 
     const handleDeleteBook = useCallback((bookId: string) => {
-        const book = books.find(b => b.id === bookId);
+        const book = useLibraryStore.getState().getBook(bookId);
         setDeleteConfirm({ bookId, title: book?.title || "this book", batch: false });
-    }, [books]);
+    }, []);
 
     const handleBatchDelete = useCallback(() => {
         if (selectedBooks.length === 0) return;

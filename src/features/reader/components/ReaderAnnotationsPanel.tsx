@@ -43,7 +43,6 @@ export function ReaderAnnotationsPanel({
     const removeAnnotationAction = useLibraryStore((state) => state.removeAnnotation);
     const updateAnnotation = useLibraryStore((state) => state.updateAnnotation);
     const vaultSyncStatus = useUIStore((state) => state.vaultSyncStatus);
-    const books = useLibraryStore((state) => state.books);
 
     const bookmarks = useMemo(
         () => annotations.filter((annotation) => annotation.type === 'bookmark'),
@@ -88,7 +87,7 @@ export function ReaderAnnotationsPanel({
 
     const closeMenu = () => setMenuId(null);
 
-    const getBook = (bookId: string) => books.find((b) => b.id === bookId);
+    const getBook = (bookId: string) => useLibraryStore.getState().getBook(bookId);
 
     const renderContextMenu = (annotation: Annotation) => (
         <div className="absolute right-0 top-full z-20 mt-1 w-40 border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-lg">

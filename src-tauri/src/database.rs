@@ -80,6 +80,8 @@ pub fn run_schema_migrations(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to open database for migration: {e}"))?;
     conn.execute_batch(DB_SCHEMA_PERSISTENT_PRAGMAS)
         .map_err(|e| format!("Failed to run schema migrations: {e}"))?;
+    conn.execute_batch(DB_PER_CONNECTION_PRAGMAS)
+        .map_err(|e| format!("Failed to set connection PRAGMAs: {e}"))?;
 
     let has_data: bool = conn
         .query_row(

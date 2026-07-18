@@ -69,6 +69,8 @@ export function FloatingPanel({
     const isBottom = anchor === 'bottom';
     return (
         <div
+            role="dialog"
+            aria-modal="true"
             className={cn(
                 'fixed z-[var(--z-dropdown)] flex flex-col reader-sheet border-2',
                 
@@ -93,5 +95,3 @@ export function FloatingPanel({
         </div>
     );
 }
-
-export default Panel;

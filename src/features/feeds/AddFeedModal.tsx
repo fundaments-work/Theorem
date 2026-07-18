@@ -61,10 +61,11 @@ export function AddFeedModal({ isOpen, onClose, onSubmit, isLoading, error }: Ad
 
                     <div className="space-y-3">
                         <div>
-                            <label className="block text-xs text-[color:var(--color-text-muted)] uppercase mb-1.5">
+                            <label htmlFor="feed-url" className="block text-xs text-[color:var(--color-text-muted)] uppercase mb-1.5">
                                 Feed URL
                             </label>
                             <input
+                                id="feed-url"
                                 ref={inputRef}
                                 type="url"
                                 value={url}

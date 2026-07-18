@@ -11,7 +11,7 @@ import {
 } from "../../../../core/lib/design-tokens";
 import { isTauri } from "../../../../core/lib/env";
 import type { HighlightColor } from "../../../../core/types";
-import type { DictionaryLookupResult } from "../../../../core/services";
+import type { DictionaryLookupResult } from "../../../../core/services/DictionaryService";
 
 interface HighlightDictionaryViewState {
     term: string;

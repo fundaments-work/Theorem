@@ -7241,6 +7241,7 @@ dependencies = [
  "theorem-sync-core",
  "tokio",
  "unrar-ng",
+ "uuid",
  "walkdir",
  "zip",
 ]

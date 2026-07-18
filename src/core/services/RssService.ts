@@ -53,19 +53,8 @@ class TokenBucket {
 }
 
 const FEED_REQUESTS_PER_SECOND = 2;
-const ARTICLE_REQUESTS_PER_SECOND = 1;
 
 const feedRateLimiter = new TokenBucket(4, FEED_REQUESTS_PER_SECOND);
-const articleRateLimiter = new TokenBucket(2, ARTICLE_REQUESTS_PER_SECOND);
-
-export interface ExtractedArticleContent {
-    content: string;
-    title?: string;
-    author?: string;
-    summary?: string;
-    imageUrl?: string;
-    publishedAt?: Date;
-}
 
 interface CachedTextResponse {
     body: string;
@@ -73,9 +62,7 @@ interface CachedTextResponse {
 }
 
 const FEED_FETCH_CACHE_TTL_MS = 2 * 60 * 1000;
-const ARTICLE_FETCH_CACHE_TTL_MS = 5 * 60 * 1000;
 const feedResponseCache = new Map<string, CachedTextResponse>();
-const articleResponseCache = new Map<string, CachedTextResponse>();
 
 function str(value: unknown): string {
     if (value == null) return '';
@@ -114,22 +101,7 @@ function resolveAbsoluteUrl(value: string, baseUrl: string): string {
     }
 }
 
-function absolutizeSrcset(srcset: string, baseUrl: string): string {
-    return srcset
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean)
-        .map(candidate => {
-            const parts = candidate.split(/\s+/);
-            const resolved = resolveAbsoluteUrl(parts[0], baseUrl);
-            return parts.length === 1 ? resolved : `${resolved} ${parts.slice(1).join(' ')}`;
-        })
-        .join(', ');
-}
 
-function normalizeWhitespace(value: string): string {
-    return value.replace(/\s+/g, ' ').trim();
-}
 
 function getCachedResponse(
     cache: Map<string, CachedTextResponse>,
@@ -682,17 +654,6 @@ async function fetchWithTauri(url: string): Promise<string> {
     return body;
 }
 
-async function fetchUrlWithTauri(url: string): Promise<string> {
-    const cached = getCachedResponse(articleResponseCache, url);
-    if (cached) {
-        return cached;
-    }
-
-    const body = await invoke<string>('fetch_url_content', { url });
-    putCachedResponse(articleResponseCache, url, body, ARTICLE_FETCH_CACHE_TTL_MS);
-    return body;
-}
-
 function isCorsError(error: Error): boolean {
     const message = error.message.toLowerCase();
     return (
@@ -717,273 +678,6 @@ function isLikelyCorsRestricted(url: string): boolean {
     return corsRestrictedServices.some(service => lowerUrl.includes(service));
 }
 
-const ARTICLE_CONTAINER_SELECTORS = [
-    'article',
-    '[itemprop="articleBody"]',
-    '[data-testid*="article"]',
-    '.article-content',
-    '.article-body',
-    '.post-content',
-    '.entry-content',
-    '.story-content',
-    '.content-body',
-    'main article',
-    'main',
-    '#content',
-];
-
-const ARTICLE_REMOVE_SELECTORS = [
-    'script', 'style', 'noscript', 'template', 'svg', 'iframe', 'canvas',
-    'form', 'button', 'input', 'textarea', 'select',
-    'nav', 'aside', 'footer', 'header',
-    '[role="navigation"]', '[role="banner"]', '[role="dialog"]',
-    '[aria-hidden="true"]',
-    '[class*="cookie"]', '[id*="cookie"]',
-    '[class*="consent"]', '[id*="consent"]',
-    '[class*="ad-"]', '[class*="advert"]', '[id*="ad-"]',
-    '.advertisement', '.social-share', '.share-buttons',
-    '.related-posts', '.newsletter',
-    '.sidebar', '.widget', '.popup', '.modal',
-    '[class*="subscription"]', '[class*="paywall"]',
-    '[class*="comment"]', '[id*="comment"]',
-];
-
-const ARTICLE_META_TITLE_SELECTORS = [
-    'meta[property="og:title"]',
-    'meta[name="twitter:title"]',
-];
-const ARTICLE_META_SUMMARY_SELECTORS = [
-    'meta[name="description"]',
-    'meta[property="og:description"]',
-    'meta[name="twitter:description"]',
-];
-const ARTICLE_META_AUTHOR_SELECTORS = [
-    'meta[name="author"]',
-    'meta[property="article:author"]',
-    'meta[name="twitter:creator"]',
-];
-const ARTICLE_META_IMAGE_SELECTORS = [
-    'meta[property="og:image"]',
-    'meta[name="twitter:image"]',
-];
-const ARTICLE_META_PUBLISH_TIME_SELECTORS = [
-    'meta[property="article:published_time"]',
-    'meta[name="pubdate"]',
-    'meta[name="publish-date"]',
-    'meta[name="date"]',
-    'time[datetime]',
-];
-
-const MIN_EXTRACTED_ARTICLE_TEXT_LENGTH = 320;
-
-function stripNonContentElements(root: HTMLElement): void {
-    root.querySelectorAll(ARTICLE_REMOVE_SELECTORS.join(',')).forEach(n => n.remove());
-}
-
-function normalizeContentUrls(root: HTMLElement, baseUrl: string): void {
-    root.querySelectorAll<HTMLAnchorElement>('a[href]').forEach(link => {
-        const href = link.getAttribute('href');
-        if (href) link.setAttribute('href', resolveAbsoluteUrl(href, baseUrl));
-    });
-    root.querySelectorAll<HTMLElement>('[src]').forEach(node => {
-        const src = node.getAttribute('src');
-        if (src) node.setAttribute('src', resolveAbsoluteUrl(src, baseUrl));
-    });
-    root.querySelectorAll<HTMLElement>('[srcset]').forEach(node => {
-        const srcset = node.getAttribute('srcset');
-        if (srcset) node.setAttribute('srcset', absolutizeSrcset(srcset, baseUrl));
-    });
-}
-
-function getMetaContent(doc: Document, selectors: string[]): string | undefined {
-    for (const selector of selectors) {
-        const el = doc.querySelector(selector);
-        if (!el) continue;
-        const content = (el.getAttribute('content') || el.textContent || '').trim();
-        if (content) return content;
-    }
-    return undefined;
-}
-
-function scoreArticleCandidate(element: HTMLElement): number {
-    const clone = element.cloneNode(true) as HTMLElement;
-    stripNonContentElements(clone);
-
-    const text = normalizeWhitespace(clone.textContent || '');
-    const textLength = text.length;
-    if (textLength === 0) return 0;
-
-    const paragraphCount = clone.querySelectorAll('p').length;
-    const headingCount = clone.querySelectorAll('h1, h2, h3').length;
-    const linkTextLength = Array.from(clone.querySelectorAll('a')).reduce(
-        (total, link) => total + normalizeWhitespace(link.textContent || '').length, 0,
-    );
-    const linkDensity = textLength > 0 ? linkTextLength / textLength : 1;
-    return textLength + (paragraphCount * 120) + (headingCount * 80) - (linkDensity * 400);
-}
-
-function selectArticleRoot(doc: Document): HTMLElement | null {
-    const candidates: HTMLElement[] = [];
-    const seen = new Set<Element>();
-
-    for (const selector of ARTICLE_CONTAINER_SELECTORS) {
-        doc.querySelectorAll(selector).forEach(node => {
-            if (!(node instanceof HTMLElement) || seen.has(node)) return;
-            seen.add(node);
-            candidates.push(node);
-        });
-    }
-
-    if (doc.body && !seen.has(doc.body)) {
-        candidates.push(doc.body);
-    }
-
-    let bestCandidate: HTMLElement | null = null;
-    let bestScore = 0;
-    for (const candidate of candidates) {
-        const score = scoreArticleCandidate(candidate);
-        if (score > bestScore) {
-            bestScore = score;
-            bestCandidate = candidate;
-        }
-    }
-    return bestCandidate;
-}
-
-async function extractArticleContentWithReadability(html: string, articleUrl: string): Promise<ExtractedArticleContent | null> {
-    const { Readability } = await import('@mozilla/readability');
-    const domParser = new DOMParser();
-    const metaDoc = domParser.parseFromString(html, 'text/html');
-    const readabilityDoc = domParser.parseFromString(html, 'text/html');
-
-    if (readabilityDoc.head && !readabilityDoc.querySelector('base')) {
-        const base = readabilityDoc.createElement('base');
-        base.setAttribute('href', articleUrl);
-        readabilityDoc.head.prepend(base);
-    }
-
-    const parsed = new Readability(readabilityDoc, {
-        keepClasses: false,
-        charThreshold: MIN_EXTRACTED_ARTICLE_TEXT_LENGTH,
-    }).parse();
-
-    if (!parsed?.content) return null;
-
-    const contentDoc = domParser.parseFromString(parsed.content, 'text/html');
-    const contentRoot = contentDoc.body;
-    if (!contentRoot) return null;
-
-    stripNonContentElements(contentRoot);
-    normalizeContentUrls(contentRoot, articleUrl);
-
-    const content = contentRoot.innerHTML.trim();
-    const textLength = normalizeWhitespace(contentRoot.textContent || '').length;
-    if (!content || textLength < MIN_EXTRACTED_ARTICLE_TEXT_LENGTH) return null;
-
-    const summary = normalizeWhitespace(parsed.excerpt || '')
-        || getMetaContent(metaDoc, ARTICLE_META_SUMMARY_SELECTORS)
-        || undefined;
-    const title = normalizeWhitespace(parsed.title || '')
-        || getMetaContent(metaDoc, ARTICLE_META_TITLE_SELECTORS)
-        || normalizeWhitespace(metaDoc.title || '')
-        || undefined;
-    const author = normalizeWhitespace(parsed.byline || '')
-        || getMetaContent(metaDoc, ARTICLE_META_AUTHOR_SELECTORS)
-        || normalizeWhitespace(metaDoc.querySelector('[rel="author"], .author, .byline')?.textContent || '')
-        || undefined;
-    const imageUrl = resolveAbsoluteUrl(
-        getMetaContent(metaDoc, ARTICLE_META_IMAGE_SELECTORS)
-        || contentRoot.querySelector('img')?.getAttribute('src')
-        || '',
-        articleUrl,
-    ) || undefined;
-    const publishedAt = parseOptionalDate(
-        metaDoc.querySelector('time[datetime]')?.getAttribute('datetime')
-        || getMetaContent(metaDoc, ARTICLE_META_PUBLISH_TIME_SELECTORS),
-    );
-
-    return { content, title, summary, author, imageUrl, publishedAt };
-}
-
-function extractArticleContentFallback(html: string, articleUrl: string): ExtractedArticleContent | null {
-    const domParser = new DOMParser();
-    const doc = domParser.parseFromString(html, 'text/html');
-    const articleRoot = selectArticleRoot(doc);
-    if (!articleRoot) return null;
-
-    const contentRoot = articleRoot.cloneNode(true) as HTMLElement;
-    stripNonContentElements(contentRoot);
-    normalizeContentUrls(contentRoot, articleUrl);
-
-    const content = contentRoot.innerHTML.trim();
-    const textLength = normalizeWhitespace(contentRoot.textContent || '').length;
-    if (!content || textLength < MIN_EXTRACTED_ARTICLE_TEXT_LENGTH) return null;
-
-    const title = getMetaContent(doc, ARTICLE_META_TITLE_SELECTORS)
-        || normalizeWhitespace(doc.querySelector('h1')?.textContent || '')
-        || normalizeWhitespace(doc.title || '')
-        || undefined;
-    const summary = getMetaContent(doc, ARTICLE_META_SUMMARY_SELECTORS);
-    const author = getMetaContent(doc, ARTICLE_META_AUTHOR_SELECTORS)
-        || normalizeWhitespace(doc.querySelector('[rel="author"], .author, .byline')?.textContent || '')
-        || undefined;
-    const imageUrl = resolveAbsoluteUrl(
-        getMetaContent(doc, ARTICLE_META_IMAGE_SELECTORS)
-        || contentRoot.querySelector('img')?.getAttribute('src')
-        || '',
-        articleUrl,
-    ) || undefined;
-    const publishedAt = parseOptionalDate(
-        doc.querySelector('time[datetime]')?.getAttribute('datetime')
-        || getMetaContent(doc, ARTICLE_META_PUBLISH_TIME_SELECTORS),
-    );
-
-    return { content, title, summary, author, imageUrl, publishedAt };
-}
-
-async function fetchUrlContent(url: string): Promise<string> {
-    const cached = getCachedResponse(articleResponseCache, url);
-    if (cached) {
-        return cached;
-    }
-
-    if (isTauri()) {
-        try {
-            return await fetchUrlWithTauri(url);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            throw new Error(`Failed to fetch article content: ${message}`);
-        }
-    }
-
-    let response: Response;
-    try {
-        response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            },
-        });
-    } catch (error) {
-        const fetchError = error instanceof Error ? error : new Error(String(error));
-        if (isCorsError(fetchError)) {
-            throw new Error(
-                `CORS Error while fetching article from ${new URL(url).hostname}. ` +
-                `Use the desktop app mode or a feed source with full-text content.`,
-            );
-        }
-        throw fetchError;
-    }
-
-    if (!response.ok) {
-        throw new Error(`Failed to fetch article: ${response.status} ${response.statusText}`);
-    }
-
-    const body = await response.text();
-    putCachedResponse(articleResponseCache, url, body, ARTICLE_FETCH_CACHE_TTL_MS);
-    return body;
-}
-
 function looksLikeMarkdown(text: string): boolean {
     if (!text || text.length < 3) return false;
     return /^#{1,6}\s/m.test(text)
@@ -1005,19 +699,6 @@ export async function convertMarkdownToHtml(html: string): Promise<string> {
     } catch {
         return html;
     }
-}
-
-export async function fetchAndExtractArticleContent(articleUrl: string): Promise<ExtractedArticleContent> {
-    await articleRateLimiter.acquire();
-    const htmlText = await fetchUrlContent(articleUrl);
-    const extracted = await extractArticleContentWithReadability(htmlText, articleUrl)
-        || extractArticleContentFallback(htmlText, articleUrl);
-    if (!extracted) {
-        throw new Error('Could not extract full article content from source page.');
-    }
-    
-    extracted.content = await convertMarkdownToHtml(extracted.content);
-    return extracted;
 }
 
 export async function fetchAndParseFeed(

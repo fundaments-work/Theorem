@@ -1,6 +1,5 @@
 
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
-import { create } from "zustand";
 
 export interface ContextMenuItem {
     id: string;
@@ -18,22 +17,6 @@ interface ContextMenuProps {
     children: React.ReactNode;
     className?: string;
 }
-
-interface ContextMenuState {
-    isOpen: boolean;
-    position: { x: number; y: number };
-    items: ContextMenuItem[];
-    open: (x: number, y: number, items: ContextMenuItem[]) => void;
-    close: () => void;
-}
-
-export const useContextMenuStore = create<ContextMenuState>(() => ({
-    isOpen: false,
-    position: { x: 0, y: 0 },
-    items: [],
-    open: () => {},
-    close: () => {},
-}));
 
 export function ContextMenu({ items, children, className }: ContextMenuProps) {
     return (
@@ -78,4 +61,4 @@ export function ContextMenu({ items, children, className }: ContextMenuProps) {
     );
 }
 
-export default ContextMenu;
+

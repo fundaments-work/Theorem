@@ -253,7 +253,7 @@ export const AppTitlebar = memo(function AppTitlebar({
                             }
                         }}
                         className="sm:hidden inline-flex items-center p-1 -ml-1"
-                        title="Go to Library"
+                        aria-label="Go to Library"
                     >
                         <div>
                             <TheoremLogo size={24} />
@@ -271,7 +271,9 @@ export const AppTitlebar = memo(function AppTitlebar({
                         data-tauri-drag-region={showDesktopWindowControls ? "true" : undefined}
                     >
                         <div className="relative w-full">
+                            <label htmlFor="app-search" className="sr-only">Search</label>
                             <input
+                                id="app-search"
                                 type="text"
                                 placeholder={searchPlaceholder}
                                 value={searchQuery}
@@ -309,7 +311,7 @@ export const AppTitlebar = memo(function AppTitlebar({
                                 "sm:!hidden",
                                 TITLEBAR_ICON_BUTTON
                             )}
-                            title={isMobileSearchOpen ? "Hide search" : "Search"}
+                            aria-label={isMobileSearchOpen ? "Hide search" : "Search"}
                             data-active={isMobileSearchOpen ? "true" : undefined}
                             aria-pressed={isMobileSearchOpen}
                         >
@@ -369,7 +371,7 @@ export const AppTitlebar = memo(function AppTitlebar({
                     <button
                         onClick={() => setRoute("statistics")}
                         className={TITLEBAR_ICON_BUTTON}
-                        title="Statistics"
+                        aria-label="Statistics"
                         data-active={currentRoute === "statistics" ? "true" : undefined}
                         aria-pressed={currentRoute === "statistics"}
                     >

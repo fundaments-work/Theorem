@@ -298,21 +298,21 @@ export function getCSS({
         }
         @media screen and (prefers-color-scheme: dark) {
             ${invert ? '' : `
-            html, body 
-                color: $theme.dark.fg} !important;
+            html, body {
+                color: ${theme.dark.fg} !important;
                 background: none !important;
             }
-            body * 
+            body * {
                 color: inherit !important;
                 border-color: currentColor !important;
-                background-color: $theme.dark.bg} !important;
+                background-color: ${theme.dark.bg} !important;
             }
-            a:any-link 
-                color: $theme.dark.link} !important;
+            a:any-link {
+                color: ${theme.dark.link} !important;
             }
-            .$CSS.escape(activeClass)}, .$CSS.escape(activeClass)} * 
-                color: $theme.dark.fg} !important;
-                background: color-mix(in hsl, $theme.dark.fg}, $theme.dark.bg} 75%) !important;
+            .${CSS.escape(activeClass)}, .${CSS.escape(activeClass)} * {
+                color: ${theme.dark.fg} !important;
+                background: color-mix(in hsl, ${theme.dark.fg}, ${theme.dark.bg} 75%) !important;
             }`}
         }
         p, li, blockquote, dd {
@@ -320,6 +320,6 @@ export function getCSS({
             text-align: ${justify ? 'justify' : 'start'};
             hyphens: ${hyphenate ? 'auto' : 'none'};
         }
-        ${overrideFont ? '*  font-family: revert !important }' : ''}
+        ${overrideFont ? '* { font-family: revert !important }' : ''}
     ` + (userStylesheet || '')];
 }

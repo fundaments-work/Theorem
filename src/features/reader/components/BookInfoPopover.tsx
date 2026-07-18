@@ -110,4 +110,4 @@ export function BookInfoPopover({
     );
 }
 
-export default BookInfoPopover;
+

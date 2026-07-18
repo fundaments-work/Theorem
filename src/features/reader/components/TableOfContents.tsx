@@ -235,7 +235,7 @@ export function TableOfContents({
                             </p>
                         </div>
                     ) : (
-                        <nav className="py-2">
+                        <nav aria-label="Table of contents" className="py-2">
                             {tocItems.map((item, index) => (
                                 <TocItemComponent
                                     key={`toc-${index}`}

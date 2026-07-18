@@ -23,4 +23,4 @@ export function Backdrop({ visible, onClick, className, blur = false }: Backdrop
     );
 }
 
-export default Backdrop;
+

@@ -1175,7 +1175,7 @@ async fn download_and_extract_stardict(
         }
     }
 
-    let id = uuid_v4();
+    let id = uuid::Uuid::new_v4().to_string();
     let size_bytes =
         (ifo.len() + idx.len() + dict.len() + syn.as_ref().map_or(0, |s| s.len())) as u64;
 
@@ -1206,22 +1206,6 @@ async fn download_and_extract_stardict(
         "language": lang,
         "sizeBytes": size_bytes,
     }))
-}
-
-fn uuid_v4() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let random_part: u128 = now.as_nanos();
-    format!(
-        "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
-        (random_part >> 96) as u32,
-        ((random_part >> 80) & 0xFFFF) as u16,
-        ((random_part >> 64) & 0x0FFF) as u16,
-        ((random_part >> 48) & 0xFFFF) as u16,
-        random_part & 0xFFFFFFFFFFFF,
-    )
 }
 
 type StardictParts = (Vec<u8>, Vec<u8>, Vec<u8>, Option<Vec<u8>>);

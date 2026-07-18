@@ -211,8 +211,10 @@ export function ReaderSearch({
                         </button>
                     </div>
                     <form onSubmit={handleSearch} className="relative">
+                        <label htmlFor="reader-search" className="sr-only">Search in document</label>
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                         <input
+                            id="reader-search"
                             ref={inputRef}
                             type="text"
                             value={query}

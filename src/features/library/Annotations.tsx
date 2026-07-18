@@ -308,7 +308,7 @@ export function AnnotationsPage() {
     };
 
     const getBookInfo = (bookId: string) => {
-        return books.find((b) => b.id === bookId);
+        return useLibraryStore.getState().getBook(bookId);
     };
 
     const annotationCount = annotations.filter((a) => a.type !== "bookmark").length;

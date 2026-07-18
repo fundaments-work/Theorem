@@ -75,7 +75,7 @@ export function PDFFloatingToolbar({
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
-                            title="Highlight"
+                            aria-label="Highlight"
                         >
                             <Highlighter className="w-5 h-5" />
                         </button>
@@ -88,7 +88,7 @@ export function PDFFloatingToolbar({
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
-                            title="Pen"
+                            aria-label="Pen"
                         >
                             <Pencil className="w-5 h-5" />
                         </button>
@@ -101,7 +101,7 @@ export function PDFFloatingToolbar({
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
-                            title="Text"
+                            aria-label="Text"
                         >
                             <Type className="w-5 h-5" />
                         </button>
@@ -114,7 +114,7 @@ export function PDFFloatingToolbar({
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
                                     : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             )}
-                            title="Eraser"
+                            aria-label="Eraser"
                         >
                             <Eraser className="w-5 h-5" />
                         </button>
@@ -163,4 +163,4 @@ export function PDFFloatingToolbar({
     );
 }
 
-export default PDFFloatingToolbar;
+

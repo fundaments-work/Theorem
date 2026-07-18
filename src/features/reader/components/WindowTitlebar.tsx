@@ -53,12 +53,14 @@ function ToolbarButton({
     title,
     className,
     children,
+    ...rest
 }: {
     onClick?: () => void;
     active?: boolean;
     title: string;
     className?: string;
     children: React.ReactNode;
+    'aria-label'?: string;
 }) {
     return (
         <button
@@ -70,6 +72,7 @@ function ToolbarButton({
             )}
             style={{ color: "var(--reader-fg)" }}
             title={title}
+            {...rest}
         >
             {children}
         </button>
@@ -263,7 +266,7 @@ export function WindowTitlebar({
                         onClick={onBack}
                         className={cn(ICON_BUTTON_CLASS, "mr-1 shrink-0")}
                         style={{ color: 'var(--reader-fg, var(--color-text))' }}
-                        title="Back"
+                        aria-label="Back"
                     >
                         <ArrowLeft className="w-4 h-4" />
                     </button>
@@ -284,7 +287,7 @@ export function WindowTitlebar({
                 <div className="hidden lg:block lg:flex-1" />
 
                 <div className="flex items-center gap-0.5 mr-0.5">
-                    <ToolbarButton onClick={onToggleSearch} active={activePanel === "search"} title="Search">
+                    <ToolbarButton onClick={onToggleSearch} active={activePanel === "search"} title="Search" aria-label="Search">
                         <Search className="w-4 h-4" />
                     </ToolbarButton>
 
@@ -293,6 +296,7 @@ export function WindowTitlebar({
                             onClick={onAddBookmark}
                             active={isCurrentPageBookmarked}
                             title={isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark"}
+                            aria-label={isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark"}
                         >
                             <BookmarkIcon className={cn("w-4 h-4", isCurrentPageBookmarked ? "fill-current" : "")} />
                         </ToolbarButton>
@@ -303,12 +307,13 @@ export function WindowTitlebar({
                             onClick={onToggleImmersion}
                             active={immersionMode}
                             title={immersionMode ? "Exit Immersion Reading" : "Immersion Reading"}
+                            aria-label={immersionMode ? "Exit Immersion Reading" : "Immersion Reading"}
                         >
                             <Headphones className={cn("w-4 h-4", immersionMode && "fill-current")} />
                         </ToolbarButton>
                     )}
 
-                    <ToolbarButton onClick={onToggleSettings} active={activePanel === "settings"} title="Reading Settings">
+                    <ToolbarButton onClick={onToggleSettings} active={activePanel === "settings"} title="Reading Settings" aria-label="Reading Settings">
                         <Type className="w-4 h-4" />
                     </ToolbarButton>
                 </div>
@@ -318,6 +323,7 @@ export function WindowTitlebar({
                     onClick={onToggleMenu}
                     className={cn(ICON_BUTTON_CLASS, isMenuOpen && ICON_BUTTON_ACTIVE_CLASS)}
                     style={{ color: 'var(--reader-fg)' }}
+                    aria-label="More options"
                 >
                     <EllipsisVertical className="w-4 h-4" />
                 </button>
@@ -331,9 +337,9 @@ export function WindowTitlebar({
 
                 {showDesktopWindowControls && (
                     <div className="hidden lg:flex items-center gap-1 ml-2 pl-2 border-l border-[var(--color-border)]">
-                        <button onClick={handleMinimize} className={ICON_BUTTON_CLASS} title="Minimize"><Minus className="w-4 h-4" /></button>
-                        <button onClick={handleMaximize} className={ICON_BUTTON_CLASS} title={isMaximized ? "Restore" : "Maximize"}><Maximize2 className="w-4 h-4" /></button>
-                        <button onClick={handleClose} className={cn(ICON_BUTTON_CLASS, "hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]")} title="Close"><X className="w-4 h-4" /></button>
+                        <button onClick={handleMinimize} className={ICON_BUTTON_CLASS} aria-label="Minimize"><Minus className="w-4 h-4" /></button>
+                        <button onClick={handleMaximize} className={ICON_BUTTON_CLASS} aria-label={isMaximized ? "Restore" : "Maximize"}><Maximize2 className="w-4 h-4" /></button>
+                        <button onClick={handleClose} className={cn(ICON_BUTTON_CLASS, "hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]")} aria-label="Close"><X className="w-4 h-4" /></button>
                     </div>
                 )}
             </div>
