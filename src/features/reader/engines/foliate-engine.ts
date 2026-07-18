@@ -336,6 +336,11 @@ export class FoliateEngine {
             this.flow = flow;
             this.zoom_level = this.clampZoomLevel(zoom / 100, this.flow);
 
+            const initialSettings = getCurrentReaderSettings();
+            if (initialSettings) {
+                this.theme = initialSettings.theme;
+            }
+
             this.applySettingsSync();
             
             await this.applySettingsAsync();
@@ -686,6 +691,9 @@ export class FoliateEngine {
         if (!currentSettings) return;
         
         this.theme = currentSettings.theme;
+        if (currentSettings.flow && currentSettings.flow !== this.flow) {
+            this.flow = currentSettings.flow;
+        }
         this.zoom_level = this.clampZoomLevel(currentSettings.zoom / 100, this.flow);
         
         this.scheduleSettingsUpdate();
