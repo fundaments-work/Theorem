@@ -26,6 +26,7 @@ src-tauri/target
 
 # Cargo local configuration (machine-specific)
 .cargo/
+!.cargo/config.toml
 
 # Rust analyzer files
 *.rs.bk
