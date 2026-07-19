@@ -70,12 +70,14 @@ iroh-docs = "0.101.0"
 iroh-blobs = { version = "0.103.0", features = ["fs-store"] }
 iroh-gossip = "0.101.0"
 iroh-mdns-address-lookup = "0.4.0"
+unrar-ng = "0.7.7"
 
 # Platform-specific
 [target.'cfg(not(target_os = "android"))'.dependencies]
-unrar-ng = "0.7.7"
 
 [target.'cfg(target_os = "android")'.dependencies]
+ndk-context = "0.1.1"
+jni = { version = "0.21", default-features = false, features = ["invocation"] }
 
 # Optimize for release (reduces binary size significantly)
 [profile.release]
