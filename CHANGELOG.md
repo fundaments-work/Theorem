@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.7] - 2026-07-19
 
+### Fixed
+
+- **Production Tauri: book shows "1-2 lines and white"** — Two interrelated fixes:
+
+  **1. Invalid iframe sandbox flag** — The reader iframe had `allow-clipboard-write` in the `sandbox` attribute, which is not a valid sandbox token (it's a Permissions-Policy directive). WebKitGTK (Tauri's production WebView on Linux) rejects the entire sandbox attribute when it encounters an invalid flag, dropping the iframe into maximum sandboxing. This broke foliate-js page-positioning logic that relies on `allow-same-origin` to read iframe content dimensions and set up CSS columns. Reverted to `allow-same-origin allow-scripts`.
+
+  **2. CSP `'unsafe-inline'` ignored due to Tauri style nonce injection** — An inline `<style>` tag in `index.html` (loading spinner, added in v1.0.7) triggered Tauri's CSP processing pipeline: the build system injects `__TAURI_STYLE_NONCE__` into `<style>` elements, and at runtime replaces it with a real nonce + adds `'nonce-xxx'` to `style-src`. Per CSP spec, when a nonce source is present in a directive, `'unsafe-inline'` is ignored — so all dynamic inline styles (including foliate-js's `<style>` elements inside the reader iframe that set column-width, height, padding) were blocked. The loading spinner CSS is now in `src/index.css` (loaded via `<link>` from `'self'`), eliminating the inline `<style>` element and keeping `'unsafe-inline'` intact.
+
+  **3. Tauri IPC blocked by CSP** — The CSP `connect-src` was missing `ipc:` and `http://ipc.localhost`, causing Tauri's custom IPC protocol to fail and fall back to postMessage. Added `ipc: http://ipc.localhost` to `connect-src`.
+
+- **Production builds must not ship with devtools** — Removed `devtools` feature flag from `tauri` dependency in `Cargo.toml`.
+
 ### Added
 
 - **On-demand download progress** — Reader shows a real progress bar with file size (e.g., `12.5 MB / 45.3 MB (28%)`) instead of an indeterminate spinner when downloading synced books. Progress events emitted from Rust in 1MB chunks, throttled to percentage changes.

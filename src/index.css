@@ -1,6 +1,23 @@
 @import "tailwindcss";
 @import "./core/styles/design-tokens.css";
 
+#root:empty::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--color-border, #334155);
+    border-top-color: var(--color-accent, #6366f1);
+    border-radius: 50%;
+    animation: theorem-loader-spin 0.8s linear infinite !important;
+}
+@keyframes theorem-loader-spin {
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
 @font-face {
     font-family: 'EB Garamond';
     font-style: normal;
