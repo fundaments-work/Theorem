@@ -11,9 +11,7 @@ use serde::Serialize;
 use std::env;
 
 use std::fs;
-#[cfg(not(target_os = "android"))]
-use std::io::{Cursor, Write};
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::ipc::Response;
@@ -1033,7 +1031,7 @@ async fn set_android_fingerprint(app: tauri::AppHandle) -> Result<(), String> {
 #[cfg(target_os = "android")]
 #[no_mangle]
 pub extern "C" fn Java_work_fundamentals_theorem_MainActivity_initNdkContext(
-    mut env: jni::JNIEnv,
+    env: jni::JNIEnv,
     _class: jni::objects::JClass,
     context: jni::objects::JObject,
 ) {
