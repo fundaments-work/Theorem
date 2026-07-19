@@ -10,7 +10,7 @@ class MainActivity : TauriActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
-    initNdkContext(applicationContext)
     super.onCreate(savedInstanceState)
+    initNdkContext(applicationContext)
   }
 }
