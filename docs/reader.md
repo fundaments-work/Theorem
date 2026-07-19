@@ -36,8 +36,10 @@ Reader.tsx
 3. Progress: `download-progress` Tauri events update the UI bar (throttled to percentage changes)
 4. Once file is ready, `getBookBlob(id, storagePath)` reads the file
 5. Passes buffer to FoliateEngine or PDFReader
-6. EPUBS: `makeZipLoader()` (handles both ZIP and non-ZIP formats)
-7. Rust `prefetch_zip_metadata` runs in parallel with zip.js — if the cache populates first, zip.js skips `getEntries()`
+6. EPUBS: `FoliateEngine.open()` → `makeBook(file, prefetchPromise)` where `prefetchPromise` resolves to metadata-only cache from Rust
+7. `makeZipLoader()` creates a ZIP reader with two paths:
+   - **Metadata** (container.xml, OPF, nav, NCX, encryption) → served from Rust pre-parser cache
+   - **Sections** (chapter HTML, CSS, images, fonts) → loaded lazily via zip.js `getLazyZip()` → `getEntries()` → `entry.getData()`
 8. `foliate-js view.js` creates a `FoliateView` web component in an iframe
 9. The iframe is mounted inside `ReaderViewport`'s shadow DOM
 10. `paginator.js` measures `#container` (grid-determined, no layout settle needed) and columnizes

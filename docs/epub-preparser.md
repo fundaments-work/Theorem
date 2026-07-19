@@ -1,48 +1,45 @@
-# EPUB Pre-Parser
+# EPUB Pre-Parser (Metadata Only)
 
 ## Why Rust
 
 Opening an EPUB in the browser normally requires:
 1. ZIP traversal (list all entries) — synchronous, blocks the main thread
-2. Read container.xml, OPF, NCX, nav, and all section files — each as a separate read
+2. Read container.xml, OPF, NCX, and nav — each as a separate read
 3. Parse XML metadata
 
-This is slow for large EPUBs, especially on mobile. The Rust pre-parser (`epub_parser.rs`) does steps 1-3 in a background thread while the JS side initializes the reader UI. By the time JS needs the data, it's already cached.
+The Tauri backend (`epub_parser.rs`) does steps 1-3 in a background thread while the JS initializes the reader UI. Only metadata files are prefetched; section content (chapter HTML, CSS, images) is loaded **lazily via zip.js** on the JS side. This avoids duplicating the entire book's text content in memory as JS strings (~3-6 MB for a typical EPUB with 50 sections).
 
 ## How It Works
 
 ```
 JS (makeZipLoader)                         Rust (prefetch_zip_metadata)
   │                                             │
-  ├─ Start zip.js loading ──── parallel ────► ├─ Open ZIP file (zip crate)
+  ├─ Start zip.js ──────────────── parallel ──► ├─ Open ZIP file (zip crate)
   │                                             ├─ Parse container.xml
   │                                             ├─ Parse OPF (manifest, spine)
   │                                             ├─ Locate nav (HTML TOC) and NCX
-  │                                             ├─ Decode all OPF-referenced text files
-  │                                             │  (HTML sections, CSS, etc.)
   │                                             │
   │  ◄─────────── ZipPrefetch result ────────────┤
   │  {                                            │
-  │    container: "xml...",                       │
-  │    opf: "xml...",                             │
-  │    opf_path: "OPS/content.opf",               │
-  │    nav: "html...",                             │
-  │    ncx: "xml...",                              │
-  │    text_cache: {                               │
-  │      "OPS/ch01.xhtml": {"text": "<html>..."}, │
-  │      "OPS/style.css": {"text": "body {...}"}, │
-  │    },                                          │
+  │    container: "xml...",            ┐           │
+  │    opf: "xml...",                  │           │
+  │    opf_path: "OPS/content.opf",    ├ metadata  │
+  │    nav: "html...",                 │ only      │
+  │    ncx: "xml...",                  │           │
+  │    encryption: "xml...",          ┘           │
   │    sizes: {                                    │
-  │      "OPS/ch01.xhtml": 12345,                  │
-  │    }                                           │
-  │  }                                             │
+  │      "OPS/ch01.xhtml": 12345,       ← sizes   │
+  │      "OPS/style.css": 789,          map       │
+  │    }                               still      │
+  │  }                                 populated   │
   │                                             │
-  ├─ If text_cache is populated:
-  │   zip.js skips getEntries() entirely
-  │   All text reads come from the pre-parsed cache
+  ├─ Metadata reads → served from textCache
+  ├─ Section reads → fall through to lazy zip.js
+  │   (getLazyZip() → ZipReader.getEntries()
+  │    → entry.getData(new TextWriter()))
   │
-  └─ If text_cache is NOT populated yet:
-      zip.js falls through to normal getEntries()
+  └─ If Rust has not returned yet:
+      zip.js reads everything normally (getEntries)
 ```
 
 ## The Three-Sided Contract
@@ -61,10 +58,11 @@ The `ZipPrefetch` struct is shared between 3 files. When changing it, all 3 must
 - **OPF**: Manifest (all items with IDs, hrefs, media-types), spine (reading order), and `properties="nav"` detection for nav HTML.
 - **Nav HTML**: The EPUB3 navigation document (table of contents).
 - **NCX**: EPUB2 table of contents (`.ncx` file with `application/x-dtbncx+xml` media-type).
-- **Section files**: All text files referenced in the OPF manifest are pre-decoded. Binary files (images, fonts) are not — only their sizes are returned.
+- **encryption.xml**: DRM/encryption metadata (if present).
+- **Section sizes only**: The byte size of each file in the ZIP (sizes map). Section text is NOT prefetched.
 
 ## Performance
 
-The command runs on `tauri::async_runtime::spawn_blocking` — true parallelism with the JS thread. For a 10MB EPUB with 50 sections, the pre-parser typically completes in under 50ms, well before zip.js finishes its initialization.
+The command runs on `tauri::async_runtime::spawn_blocking` — true parallelism with the JS thread. For a 10MB EPUB with 50 sections, the metadata pre-parser completes in under 50ms.
 
-The `text_cache` is the key: it contains the decoded text for every section file. When zip.js's `readEntry()` is called for a text file, it checks the cache first. If found, it returns the pre-decoded text immediately without any ZIP seek.
+Section content loads lazily via zip.js after the initial render. The first section load triggers `ZipReader.getEntries()` once; subsequent sections read from the cached entry map. This trade-off saves ~3-6 MB of JS heap per large EPUB (no duplicate text strings) at the cost of reading each section through zip.js decompression instead of direct string lookup.

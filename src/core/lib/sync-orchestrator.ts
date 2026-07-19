@@ -1220,37 +1220,55 @@ export async function provisionToIrohDocs(): Promise<boolean> {
             });
         };
 
+        const bookErrors: string[] = [];
         for (const book of lib.books) {
             try {
                 const key = `book:${book.id}`;
                 markSelfOriginated(key);
                 await docsSetEntry(key, serializeBook(book));
             } catch (e) {
-                console.error(`[sync] Failed to provision book ${book.id} (${book.title || "unknown"}): ${e}`);
+                const msg = `book ${book.id} (${book.title || "unknown"}): ${e}`;
+                bookErrors.push(msg);
+                console.error(`[sync] Failed to provision ${msg}`);
             }
         }
-        markSelfOriginated("annotations");
-        await docsSetEntry("annotations", JSON.stringify(lib.annotations));
-        markSelfOriginated("collections");
-        await docsSetEntry("collections", JSON.stringify(lib.collections));
-        markSelfOriginated("deletion_tombstones");
-        await docsSetEntry("deletion_tombstones", JSON.stringify(lib.deletionTombstones));
-        markSelfOriginated("vocabulary");
-        await docsSetEntry("vocabulary", JSON.stringify(vocab.vocabularyTerms));
-        markSelfOriginated("settings");
-        await docsSetEntry("settings", JSON.stringify({
-            ...settings.settings,
-            _settingsUpdatedAt: settings.settingsLastModifiedAt || new Date().toISOString(),
-        }));
-        markSelfOriginated("reading_stats");
-        await docsSetEntry("reading_stats", JSON.stringify(settings.stats));
-        markSelfOriginated("rss_feeds");
-        await docsSetEntry("rss_feeds", JSON.stringify(rss.feeds));
-        markSelfOriginated("rss_articles");
-        await docsSetEntry("rss_articles", JSON.stringify(rss.articles));
+
+        const domains: Array<{ name: string; key: string; payload: string }> = [
+            { name: "annotations", key: "annotations", payload: JSON.stringify(lib.annotations) },
+            { name: "collections", key: "collections", payload: JSON.stringify(lib.collections) },
+            { name: "deletion_tombstones", key: "deletion_tombstones", payload: JSON.stringify(lib.deletionTombstones) },
+            { name: "vocabulary", key: "vocabulary", payload: JSON.stringify(vocab.vocabularyTerms) },
+            { 
+                name: "settings", key: "settings", 
+                payload: JSON.stringify({ ...settings.settings,
+                    _settingsUpdatedAt: settings.settingsLastModifiedAt || new Date().toISOString(),
+                }) 
+            },
+            { name: "reading_stats", key: "reading_stats", payload: JSON.stringify(settings.stats) },
+            { name: "rss_feeds", key: "rss_feeds", payload: JSON.stringify(rss.feeds) },
+            { name: "rss_articles", key: "rss_articles", payload: JSON.stringify(rss.articles) },
+        ];
+
+        const domainErrors: string[] = [];
+        for (const { name, key, payload } of domains) {
+            try {
+                markSelfOriginated(key);
+                await docsSetEntry(key, payload);
+            } catch (e) {
+                const msg = `${name} (${payload.length} bytes): ${e}`;
+                domainErrors.push(msg);
+                console.error(`[sync] Failed to provision ${msg}`);
+            }
+        }
+
+        if (domainErrors.length > 0 || bookErrors.length > 0) {
+            const allErrors = [...bookErrors, ...domainErrors];
+            console.error(`[sync] Provision completed with ${allErrors.length} error(s):`, allErrors);
+        }
 
         return true;
-    } catch {
+    } catch (e) {
+        console.error(`[sync] Provision failed (unexpected): ${e}`);
         return false;
     }
 }

@@ -181,11 +181,15 @@ PDF path:
 
 The foliate-js submodule at `src/features/reader/foliate-js/` is vendored upstream (johnfactotum/foliate-js). We never edit it directly. Instead, `scripts/sync-foliate-js.sh` copies the files we need into `src/features/reader/foliate-js-runtime/` and applies runtime patches. This is where our modifications live.
 
-Key patches applied by the sync script:
-- Replace vendored PDF.js import with `pdfjs-dist` from npm
-- Override paginator for `overflow:clip` and transform-based pagination
-- Add in-flight request deduplication for EPUB text loading
-- Add parallel ZIP prefetch support (Rust pre-parser integration)
+Runtime patches applied by `scripts/patches/`:
+| Patch | File | What it does |
+|-------|------|-------------|
+| `view-js-runtime.patch` | `view.js` | Injects `prefetchPromise` for parallel Rust cache, adds per-file lazy zip loading fallback |
+| `epub-js-runtime.patch` | `epub.js` | Deduplicates in-flight `loadText` calls for concurrent href fetches |
+| `paginator-js-runtime.patch` | `paginator.js` | Overrides `#container` to use `overflow:clip` (non-scrollable) and positions pages via `transform: translateX/Y` instead of scrollLeft/scrollTop; guards `#container` sizing for zero-dimension fallback |
+| `dict-js-runtime.patch` | `dict.js` | Adds gzip/dictzip decompression for StarDict dictionary files |
+
+The `scripts/sync-foliate-js.sh` script also replaces the vendored PDF.js import with `pdfjs-dist` from npm and removes unused files (PDF.js vendor, rollup config, etc.).
 
 ## Sync Architecture
 
