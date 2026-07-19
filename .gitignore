@@ -43,7 +43,8 @@ src-tauri/gen/schemas
 src-tauri/plugins/*/android/build/
 
 # Android (Tauri generated project)
-src-tauri/gen/android/
+src-tauri/gen/android/*
+!src-tauri/gen/android/**/MainActivity.kt
 
 # Android signing/package outputs
 *.jks

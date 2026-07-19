@@ -773,11 +773,9 @@ async function syncBookCovers(peerDeviceId: string): Promise<void> {
 }
 
 async function prefetchRecentBooks(peerDeviceId: string): Promise<void> {
-    const { requestBookFile } = await import("./device-sync");
+    const { downloadBookFile } = await import("./device-sync");
     const { appDataDir } = await import("@tauri-apps/api/path");
-    const { mkdir, writeFile } = await import("@tauri-apps/plugin-fs");
     const appDir = await appDataDir();
-    try { await mkdir(`${appDir}/book-cache`, { recursive: true }); } catch {}
 
     const books = useLibraryStore.getState().books
         .filter((b) => b.syncedWithoutFile && b.lastReadAt)
@@ -795,11 +793,9 @@ async function prefetchRecentBooks(peerDeviceId: string): Promise<void> {
         Array.from({ length: 3 }, async () => {
             while (index < books.length && !_syncCancelled) {
                 const book = books[index++];
-                const data = await requestBookFile(peerDeviceId, book.id);
-                if (!data || data.byteLength === 0) continue;
                 const destPath = `${appDir}/book-cache/${book.id}.book`;
                 try {
-                    await writeFile(destPath, data);
+                    await downloadBookFile(peerDeviceId, book.id, destPath);
                     useLibraryStore.setState((state) => ({
                         books: state.books.map((b) =>
                             b.id === book.id
@@ -807,7 +803,9 @@ async function prefetchRecentBooks(peerDeviceId: string): Promise<void> {
                                 : b,
                         ),
                     }));
-                } catch {}
+                } catch {
+                    // download failed silently for prefetch — will retry on-demand
+                }
             }
         }),
     );

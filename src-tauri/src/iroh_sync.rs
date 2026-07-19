@@ -401,6 +401,10 @@ pub fn start_accept_loop(
     let data_dir = state.app_data_dir.clone();
 
     tokio::spawn(async move {
+        let paired_devices = state_clone.paired_devices.lock().await;
+        let has_devices = !paired_devices.is_empty();
+        drop(paired_devices);
+
         let blobs_path = data_dir.join("iroh-blobs");
 
         let stale_docs = data_dir.join("iroh-docs").join("db.redb");
@@ -408,6 +412,26 @@ pub fn start_accept_loop(
             eprintln!("[iroh-sync] Purging stale databases from pre-1.0.7...");
             let _ = std::fs::remove_dir_all(data_dir.join("iroh-docs"));
             let _ = std::fs::remove_dir_all(&blobs_path);
+        }
+
+        if !has_devices {
+            let router = Router::builder(router_endpoint)
+                .accept(
+                    ALPN,
+                    PairingProtocolHandler {
+                        state: state_clone.clone(),
+                    },
+                )
+                .accept(
+                    crate::file_transfer::ALPN_BYTES,
+                    crate::file_transfer::FileTransferHandler {
+                        data_dir: data_dir.clone(),
+                    },
+                )
+                .spawn();
+            let _ = cancel_rx.changed().await;
+            let _ = router.shutdown().await;
+            return;
         }
 
         let _ = std::fs::create_dir_all(&blobs_path);

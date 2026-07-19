@@ -14,7 +14,6 @@ import { cn } from "../core/lib/utils";
 import { isMobile, isTauri } from "../core/lib/env";
 import { useUIStore } from "../core/store";
 import { getPairedDevices } from "../core/lib/device-sync";
-import { runDeviceSync } from "../core/lib/sync-orchestrator";
 import { getSearchPlaceholder, hasSearchDomain, resolveSearchDomain } from "../core/lib/search/domain";
 import { TheoremLogo } from "./TheoremLogo";
 
@@ -214,9 +213,8 @@ export const AppTitlebar = memo(function AppTitlebar({
                 return;
             }
 
-            for (const device of pairedDevices) {
-                await runDeviceSync(device.deviceId);
-            }
+            const { runDeviceSync } = await import("../core/lib/sync-orchestrator");
+            await runDeviceSync(pairedDevices[0].deviceId);
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             setDeviceSyncStatus("error", message);

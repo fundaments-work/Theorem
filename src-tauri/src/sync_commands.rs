@@ -756,17 +756,17 @@ pub async fn docs_get_all_entries(
                         let key = String::from_utf8_lossy(entry.key()).to_string();
                         let hash = entry.content_hash();
                         let value = 'retry: {
-                            for _ in 0..10 {
+                            for _ in 0..5 {
                                 if let Ok(content) = blobs.blobs().get_bytes(hash).await {
                                     if let Ok(v) = String::from_utf8(content.to_vec()) {
                                         doc_entries_read += 1;
                                         break 'retry v;
                                     }
                                 }
-                                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                                tokio::time::sleep(std::time::Duration::from_millis(80)).await;
                             }
                             eprintln!(
-                                "[iroh-sync] docs_get_all_entries: blob not available for key={key} (gave up after 5s)"
+                                "[iroh-sync] docs_get_all_entries: blob not available for key={key}"
                             );
                             continue 'entries;
                         };
