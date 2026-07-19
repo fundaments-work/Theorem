@@ -11,7 +11,9 @@ use serde::Serialize;
 use std::env;
 
 use std::fs;
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+#[cfg(not(target_os = "android"))]
+use std::io::{Cursor, Write};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::ipc::Response;
@@ -185,7 +187,14 @@ fn read_file(path: String) -> Result<Response, String> {
 }
 
 #[tauri::command]
-#[allow(unused_variables)]
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn read_cbr_as_cbz(path: String) -> Result<Response, String> {
+    Err(format!("CBR/RAR files are not supported on Android: {}", path))
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
 fn read_cbr_as_cbz(path: String) -> Result<Response, String> {
     let archive = unrar_ng::Archive::new(&path)
         .open_for_processing()
