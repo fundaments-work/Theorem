@@ -187,52 +187,51 @@ fn read_file(path: String) -> Result<Response, String> {
 }
 
 #[tauri::command]
-#[cfg(target_os = "android")]
-#[tauri::command]
 fn read_cbr_as_cbz(path: String) -> Result<Response, String> {
-    Err(format!("CBR/RAR files are not supported on Android: {}", path))
-}
-
-#[cfg(not(target_os = "android"))]
-#[tauri::command]
-fn read_cbr_as_cbz(path: String) -> Result<Response, String> {
-    let archive = unrar_ng::Archive::new(&path)
-        .open_for_processing()
-        .map_err(|e| format!("Failed to open CBR archive '{}': {}", path, e))?;
-    let mut zip_buffer = Cursor::new(Vec::new());
+    #[cfg(not(target_os = "android"))]
     {
-        let mut zip_writer = zip::ZipWriter::new(&mut zip_buffer);
-        let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-        let mut archive = archive;
-        loop {
-            let entry = archive
-                .read_header()
-                .map_err(|e| format!("Failed to read CBR header: {}", e))?;
-            let Some(entry) = entry else { break };
-            let filename = entry.entry().filename.to_string_lossy().to_string();
-            if entry.entry().is_file() {
-                let (data, next_archive) = entry
-                    .read()
-                    .map_err(|e| format!("Failed to extract '{}': {}", filename, e))?;
-                zip_writer
-                    .start_file(filename.clone(), options)
-                    .map_err(|e| format!("Failed to write ZIP entry '{}': {}", filename, e))?;
-                zip_writer.write_all(&data).map_err(|e| {
-                    format!("Failed to write ZIP data for '{}': {}", filename, e)
-                })?;
-                archive = next_archive;
-            } else {
-                archive = entry
-                    .skip()
-                    .map_err(|e| format!("Failed to skip entry '{}': {}", filename, e))?;
+        let archive = unrar_ng::Archive::new(&path)
+            .open_for_processing()
+            .map_err(|e| format!("Failed to open CBR archive '{}': {}", path, e))?;
+        let mut zip_buffer = Cursor::new(Vec::new());
+        {
+            let mut zip_writer = zip::ZipWriter::new(&mut zip_buffer);
+            let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            let mut archive = archive;
+            loop {
+                let entry = archive
+                    .read_header()
+                    .map_err(|e| format!("Failed to read CBR header: {}", e))?;
+                let Some(entry) = entry else { break };
+                let filename = entry.entry().filename.to_string_lossy().to_string();
+                if entry.entry().is_file() {
+                    let (data, next_archive) = entry
+                        .read()
+                        .map_err(|e| format!("Failed to extract '{}': {}", filename, e))?;
+                    zip_writer
+                        .start_file(filename.clone(), options)
+                        .map_err(|e| format!("Failed to write ZIP entry '{}': {}", filename, e))?;
+                    zip_writer.write_all(&data).map_err(|e| {
+                        format!("Failed to write ZIP data for '{}': {}", filename, e)
+                    })?;
+                    archive = next_archive;
+                } else {
+                    archive = entry
+                        .skip()
+                        .map_err(|e| format!("Failed to skip entry '{}': {}", filename, e))?;
+                }
             }
+            zip_writer
+                .finish()
+                .map_err(|e| format!("Failed to finalize ZIP: {}", e))?;
         }
-        zip_writer
-            .finish()
-            .map_err(|e| format!("Failed to finalize ZIP: {}", e))?;
+        Ok(Response::new(zip_buffer.into_inner()))
     }
-    Ok(Response::new(zip_buffer.into_inner()))
+    #[cfg(target_os = "android")]
+    {
+        Err(format!("CBR/RAR files are not supported on Android: {}", path))
+    }
 }
 
 #[tauri::command]
