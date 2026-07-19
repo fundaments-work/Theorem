@@ -1,0 +1,5 @@
+# Fix unrar-ng-sys C++ compilation on Android NDK 28+:
+# lutimes() was removed from bionic libc, utimes() is equivalent for this use case
+[env]
+CXXFLAGS_aarch64_linux_android = "-Dlutimes=utimes"
+CXXFLAGS_armv7_linux_androideabi = "-Dlutimes=utimes"
