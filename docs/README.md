@@ -13,7 +13,7 @@ pnpm dev:tauri    # desktop (full experience)
 
 | Document | What it covers |
 |----------|----------------|
-| [CONTEXT.md](CONTEXT.md) | Project context, stack choices, design rationale |
+| [CONTEXT.md](../context.md) | Project context, stack choices, design rationale |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture, data flow, module relationships |
 
 ## Features
