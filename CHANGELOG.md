@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.7] - 2026-07-18
+## [1.0.7] - 2026-07-19
 
 ### Added
 
@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory: cover extraction early-return before file re-read** — The `hasRealCover && coverExtractionDone` check now runs BEFORE `getBookData()`, avoiding a full re-read of the book from storage when cover is already extracted.
 - **Memory: metadata-only EPUB prefetch** — Rust `prefetch_zip_metadata` no longer pre-decodes all EPUB section HTML files (up to 100 sections, ~3-6MB of JS strings). Only metadata files (container.xml, OPF, NAV, NCX, encryption) are prefetched. Sections load lazily via zip.js.
 - **Binary size: removed unused Rust dependencies** — `read_zip_entry` wrapper removed after section prefetch elimination.
+
+### Fixed (Android)
+
+- **ndk_context restore** — Re-added JNI `initNdkContext` and `ndk-context` dependency. iroh's `netwatch` → `netdev` → `ndk_context::android_context()` panics if the Android JVM/context are not initialized before any iroh networking operations run. Without this, the app crashed on Android 15 at startup.
+- **ndk_context init after super.onCreate** — `initNdkContext(applicationContext)` moved after `super.onCreate()` to ensure `applicationContext` is non-null when the JNI call fires.
+- **CBR/RAR desktop-only** — `unrar-ng` (bundled UnRAR C++ source) uses `lutimes()` which was removed from Android's bionic libc in NDK 28. CBR conversion works on desktop; Android returns a clear "not supported" error to avoid compilation failure.
+- **accept loop gate** — When no paired devices exist, the accept loop registers only pairing + file_transfer handlers, skipping gossip/docs creation. This prevents the `ndk_context::android_context()` panic on fresh Android installs with no paired devices.
+- **Top-bar single-device sync** — Sync button now syncs only the first paired device instead of iterating all, preventing sequential timeouts on offline peers.
+- **Mobile safe-area padding** — All pages (Settings, Statistics, Bookmarks, Annotations, Feeds, Vocabulary, Shelves) now use `pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))]` to clear the bottom navigation on notched devices.
 
 ### Fixed (Sync)
 
