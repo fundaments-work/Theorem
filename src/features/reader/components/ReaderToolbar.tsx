@@ -28,7 +28,7 @@ interface ReaderToolbarProps {
 }
 
 const READER_BUTTON_CLASS =
-    "inline-flex h-9 w-9 items-center justify-center border border-transparent bg-transparent text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)] data-[active=true]:border-[var(--color-accent)] data-[active=true]:bg-[var(--color-accent)] data-[active=true]:text-[color:var(--color-accent-contrast)] data-[active=true]:hover:border-[var(--color-accent-hover)] data-[active=true]:hover:bg-[var(--color-accent-hover)]";
+    "inline-flex h-10 w-10 items-center justify-center border border-transparent bg-transparent text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)] data-[active=true]:border-[var(--color-accent)] data-[active=true]:bg-[var(--color-accent)] data-[active=true]:text-[color:var(--color-accent-contrast)] data-[active=true]:hover:border-[var(--color-accent-hover)] data-[active=true]:hover:bg-[var(--color-accent-hover)]";
 
 export function ReaderToolbar({
     metadata,

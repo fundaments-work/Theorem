@@ -1,6 +1,6 @@
 
 import { useCallback, useMemo, useState, useRef, memo } from "react";
-import { List } from "lucide-react";
+import { List, Play, Pause, Square, Headphones } from "lucide-react";
 import { cn } from "../../../../core/lib/utils";
 import type { TocItem, DocLocation } from "../../../../core/types";
 
@@ -12,6 +12,11 @@ interface ReaderNavbarProps {
     totalPages?: number;
     onToggleToc: () => void;
     className?: string;
+    immersionMode?: boolean;
+    ttsState?: 'idle' | 'loading' | 'playing' | 'paused';
+    onTtsPlay?: () => void;
+    onTtsPause?: () => void;
+    onTtsStop?: () => void;
 }
 
 const AVERAGE_WPM = 225;
@@ -54,6 +59,11 @@ export const ReaderNavbar = memo(function ReaderNavbar({
     totalPages,
     onToggleToc,
     className,
+    immersionMode,
+    ttsState = 'idle',
+    onTtsPlay,
+    onTtsPause,
+    onTtsStop,
 }: ReaderNavbarProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [hoverFraction, setHoverFraction] = useState<number | null>(null);
@@ -259,92 +269,145 @@ export const ReaderNavbar = memo(function ReaderNavbar({
             <div className="flex items-center gap-2">
                 <button
                     onClick={onToggleToc}
-                    className="flex items-center justify-center p-2 -ml-1 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors h-9 w-9"
+                    className="flex items-center justify-center p-2 -ml-1 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors h-10 w-10"
                     aria-label="Table of Contents"
                 >
                     <List size={18} />
                 </button>
 
-                <div className="flex-1 flex items-center justify-between gap-1 text-[10px] sm:text-xs text-[color:var(--color-text-muted)] min-w-0">
-                    <span
-                        className="truncate max-w-[50%]"
-                        title={currentSectionLabel}
-                    >
-                        {currentSectionLabel}
-                    </span>
-                    <div className="flex items-center gap-2 shrink-0">
-                        {timeRemaining && (
-                            <span className="hidden sm:inline text-[color:var(--color-text-muted)]">{timeRemaining}</span>
+                {immersionMode ? (
+                    <div className="flex-1 flex items-center gap-2 min-w-0">
+                        <Headphones className={cn(
+                            'w-4 h-4 shrink-0 transition-colors',
+                            ttsState === 'playing' || ttsState === 'loading' ? 'text-[color:var(--color-accent)]' : 'text-[color:var(--color-text-muted)]'
+                        )} />
+                        {ttsState === 'loading' && (
+                            <span className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
                         )}
-                        <span className="font-medium text-[color:var(--color-text-primary)]">
-                            {progressText}
+                        {ttsState === 'playing' && (
+                            <div className="flex items-end gap-[2px] h-4 shrink-0">
+                                {[0, 1, 2].map((i) => (
+                                    <div
+                                        key={i}
+                                        className="w-[3px] rounded-full bg-[var(--color-accent)]"
+                                        style={{
+                                            animation: `tts-bar-bounce 0.6s ease-in-out ${i * 0.12}s infinite alternate`,
+                                            height: `${50 + i * 25}%`,
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                        <span className="text-[10px] sm:text-xs text-[var(--color-text-muted)] truncate">
+                            {ttsState === 'playing' ? 'Reading aloud' : ttsState === 'paused' ? 'Paused' : ttsState === 'loading' ? 'Loading...' : 'Immersion Reading'}
                         </span>
+                        <div className="flex items-center gap-1 ml-auto shrink-0">
+                            {ttsState === 'playing' ? (
+                                <>
+                                    <button onClick={onTtsPause}
+                                        className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--color-surface-muted)] text-[var(--color-text-primary)] hover:bg-[var(--color-overlay-subtle)] active:scale-90 transition-colors"
+                                        aria-label="Pause">
+                                        <Pause className="w-3.5 h-3.5 fill-current" />
+                                    </button>
+                                    <button onClick={onTtsStop}
+                                        className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:bg-[var(--color-overlay-subtle)] hover:text-[var(--color-error)] active:scale-90 transition-colors"
+                                        aria-label="Stop">
+                                        <Square className="w-3.5 h-3.5 fill-current" />
+                                    </button>
+                                </>
+                            ) : (
+                                <button onClick={onTtsPlay} disabled={ttsState === 'loading'}
+                                    className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:bg-[var(--color-accent-hover)] active:scale-90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                    aria-label="Play">
+                                    <Play className="w-3.5 h-3.5 fill-current" />
+                                </button>
+                            )}
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="flex-1 flex items-center justify-between gap-1 text-[10px] sm:text-xs text-[var(--color-text-muted)] min-w-0">
+                        <span
+                            className="truncate max-w-[50%]"
+                            title={currentSectionLabel}
+                        >
+                            {currentSectionLabel}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                            {timeRemaining && (
+                                <span className="hidden sm:inline text-[var(--color-text-muted)]">{timeRemaining}</span>
+                            )}
+                            <span className="font-medium text-[var(--color-text-primary)]">
+                                {progressText}
+                            </span>
+                        </div>
+                    </div>
+                )}
             </div>
 
-            <div
-                ref={trackRef}
-                className={cn(
-                    "relative h-5 cursor-pointer select-none",
-                    "flex items-center",
-                    isDragging && "cursor-grabbing"
-                )}
-                onClick={handleClick}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerLeave={handlePointerLeave}
-            >
-                
-                <div className="absolute inset-x-0 h-1 bg-[var(--color-surface-variant)] overflow-hidden">
-                    
-                    <div
-                        className={cn(
-                            "h-full bg-[var(--color-accent)]",
-                            !isDragging && "transition-[width] duration-150"
-                        )}
-                        style={{ width: `${displayFraction * 100}%` }}
-                    />
-                </div>
-
-                {sectionMarkers}
-
+            {!immersionMode && (
                 <div
+                    ref={trackRef}
                     className={cn(
-                        "absolute top-1/2 -translate-y-1/2 -translate-x-1/2",
-                        "w-3 h-3",
-                        "bg-[var(--color-accent)]",
-                        "border-2 border-[var(--color-surface)]",
-                        isDragging ? "scale-125" : "transition-transform",
-                        "pointer-events-none"
+                        "relative h-5 cursor-pointer select-none",
+                        "flex items-center",
+                        isDragging && "cursor-grabbing"
                     )}
-                    style={{ left: `${displayFraction * 100}%` }}
-                />
+                    onClick={handleClick}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerLeave}
+                >
+                    
+                    <div className="absolute inset-x-0 h-1 bg-[var(--color-surface-variant)] overflow-hidden">
+                        
+                        <div
+                            className={cn(
+                                "h-full bg-[var(--color-accent)]",
+                                !isDragging && "transition-[width] duration-150"
+                            )}
+                            style={{ width: `${displayFraction * 100}%` }}
+                        />
+                    </div>
 
-                {(hoverFraction !== null || isDragging) && tooltipPosition !== null && (
-                    <div
-                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-0.5 h-3 bg-[var(--color-accent)]/50 pointer-events-none"
-                        style={{ left: `${tooltipPosition * 100}%` }}
-                    />
-                )}
+                    {sectionMarkers}
 
-                {tooltipContent && tooltipPosition !== null && (
                     <div
                         className={cn(
-                            "absolute bottom-full mb-2 -translate-x-1/2",
-                            "px-2 py-1.5",
-                            "bg-[var(--color-surface)] border border-[var(--color-border)]",
-                            "text-xs",
-                            "pointer-events-none z-50",
-                            "whitespace-nowrap"
+                            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2",
+                            "w-3 h-3",
+                            "bg-[var(--color-accent)]",
+                            "border-2 border-[var(--color-surface)]",
+                            isDragging ? "scale-125" : "transition-transform",
+                            "pointer-events-none"
                         )}
-                        style={{ left: `${tooltipPosition * 100}%` }}
-                    >
-                        {tooltipContent}
-                    </div>
-                )}
-            </div>
+                        style={{ left: `${displayFraction * 100}%` }}
+                    />
+
+                    {(hoverFraction !== null || isDragging) && tooltipPosition !== null && (
+                        <div
+                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-0.5 h-3 bg-[var(--color-accent)]/50 pointer-events-none"
+                            style={{ left: `${tooltipPosition * 100}%` }}
+                        />
+                    )}
+
+                    {tooltipContent && tooltipPosition !== null && (
+                        <div
+                            className={cn(
+                                "absolute bottom-full mb-2 -translate-x-1/2",
+                                "px-2 py-1.5",
+                                "bg-[var(--color-surface)] border border-[var(--color-border)]",
+                                "text-xs",
+                                "pointer-events-none z-50",
+                                "whitespace-nowrap"
+                            )}
+                            style={{ left: `${tooltipPosition * 100}%` }}
+                        >
+                            {tooltipContent}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 });
