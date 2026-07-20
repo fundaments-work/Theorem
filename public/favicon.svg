@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-label="Theorem">
-  <rect x="4.5" y="0" width="3" height="24" fill="#0a0a0a"/>
-  <rect x="4.5" y="10.5" width="15" height="3" fill="#0a0a0a"/>
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <title>Theorem</title>
+  <path d="M 4 4 H 20 V 8 L 14 8 V 16 H 18 V 20 H 14 L 10 20 V 8 L 4 8 V 4 Z M 10 16 H 14 V 20 H 10 V 16 Z" fill="#0a0a0a" fill-rule="evenodd"/>
 </svg>
