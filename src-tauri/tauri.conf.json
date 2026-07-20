@@ -153,7 +153,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "TODO: add public key from `pnpm tauri signer generate`",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDczRkI3NUM4NTY2MERDMEIKUldRTDNHQld5SFg3Y3ovZENJMnk3RkNvNnpxemtBTXZ4bVJNMmY2ODhiS1VzZmFoSFZxZTc3NHIK",
       "endpoints": [
         "https://github.com/fundaments-work/Theorem/releases/latest/download/latest.json"
       ]

@@ -89,10 +89,18 @@ keytool -genkey -v \
   -alias theorem-release-key
 ```
 
-You will be prompted for:
-- **Keystore password** (store password)
-- **Key password** (usually same as keystore password)
-- **Name, organization, city, country** for the self-signed certificate
+You will be prompted for (in order):
+
+1. **Keystore password** — the password protecting the keystore file itself
+2. **Key password** — usually press Enter to use the same password as keystore
+3. **First and last name** — your name or organization name
+4. **Organizational unit** — your department (can be blank)
+5. **Organization** — your organization name
+6. **City or Locality** — your city
+7. **State or Province** — your state
+8. **Country code (2 letters)** — e.g. `US`, `IN`, `GB`
+
+The CI uses the same password for both key and store (set as `ANDROID_KEY_PASSWORD`).
 
 Take note of:
 | Item | Example value |
