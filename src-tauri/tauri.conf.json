@@ -38,10 +38,11 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["deb", "appimage", "nsis", "dmg"],
     "category": "Education",
     "publisher": "Fundamentals",
-    "homepage": "https://github.com/sapienskid/theorem",
+    "homepage": "https://github.com/fundaments-work/Theorem",
     "shortDescription": "Local-first reader for PDFs, EPUBs, and RSS with markdown export.",
     "longDescription": "Theorem is a free, open-source, local-first reading app for PDFs, EPUBs and RSS. Highlight and annotate anything, capture vocabulary, and sync notes to local Markdown files for Obsidian or Logseq. No cloud account, no subscription, no vendor lock-in.",
     "copyright": "Copyright (c) 2026 Fundamentals",
@@ -148,6 +149,14 @@
     },
     "android": {
       "minSdkVersion": 24
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "TODO: add public key from `pnpm tauri signer generate`",
+      "endpoints": [
+        "https://github.com/fundaments-work/Theorem/releases/latest/download/latest.json"
+      ]
     }
   }
 }

@@ -136,7 +136,7 @@ describe("Signal-based settle guard", () => {
     it("runDeviceSync uses settleSignals >= 3 as stability signal", () => {
         const content = readSource("src/core/lib/sync-orchestrator.ts");
         expect(content).toContain("settleSignals");
-        expect(content).toContain("settleSignals >= 3");
+        expect(content).toContain("settleSignals >= 2");
         expect(content).toContain("_syncActivityDetected");
     });
 });

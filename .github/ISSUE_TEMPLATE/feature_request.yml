@@ -1,0 +1,55 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping make Theorem better.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: |
+        Is your feature request related to a problem? Describe it.
+        If not, skip to the next section.
+      placeholder: I'm frustrated when...
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like to see?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative approaches or workarounds you've tried?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Which part of Theorem does this affect?
+      options:
+        - Reader (EPUB/PDF)
+        - Library / Shelves
+        - RSS Feeds
+        - Annotations / Workbench
+        - Sync (iroh)
+        - Settings
+        - Mobile
+        - Desktop (general)
+        - Cross-cutting
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Screenshots, references, or anything else.

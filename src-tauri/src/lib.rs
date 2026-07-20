@@ -230,7 +230,10 @@ fn read_cbr_as_cbz(path: String) -> Result<Response, String> {
     }
     #[cfg(target_os = "android")]
     {
-        Err(format!("CBR/RAR files are not supported on Android: {}", path))
+        Err(format!(
+            "CBR/RAR files are not supported on Android: {}",
+            path
+        ))
     }
 }
 
@@ -847,6 +850,8 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_app::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_mobile_folder_scan::init())
         .plugin(tauri_plugin_android_tts_audio::init());
 
@@ -936,6 +941,16 @@ pub fn run() {
                         }
                     })
                     .build(app)?;
+            }
+
+            #[cfg(desktop)]
+            {
+                app.handle()
+                    .plugin(tauri_plugin_window_state::Builder::default().build())?;
+                app.handle()
+                    .plugin(tauri_plugin_global_shortcut::Builder::new().build())?;
+                app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
             }
 
             Ok(())

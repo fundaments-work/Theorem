@@ -1,0 +1,77 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of what the bug is.
+      placeholder: When I do X, Y happens instead of Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this bug?
+      placeholder: |
+        1. Open the app
+        2. Click on...
+        3. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Theorem version
+      description: Which version are you running? (Check under Settings → About)
+      placeholder: "1.0.7"
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Which platform are you on?
+      options:
+        - Linux (AppImage)
+        - Linux (Debian)
+        - Linux (RPM)
+        - macOS (DMG)
+        - Windows (MSI)
+        - Android
+        - iOS
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: |
+        If applicable, paste any error messages or attach screenshots.
+        On desktop, logs are in:
+        - Linux: `~/.local/share/work.fundamentals.theorem/logs/`
+        - macOS: `~/Library/Logs/work.fundamentals.theorem/`
+        - Windows: `%LOCALAPPDATA%\work.fundamentals.theorem\logs\`
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Anything else we should know?

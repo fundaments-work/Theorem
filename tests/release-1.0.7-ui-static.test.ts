@@ -96,11 +96,14 @@ describe("React.memo: key components are memoized", () => {
 // ─── Startup ───
 
 describe("Startup: loader HTML", () => {
-    it("index.html has inline spinner", () => {
+    it("index.html has app title", () => {
         const html = readFileSync(resolve("index.html"), "utf-8");
-        expect(html).toContain("theorem-loader-spin");
-        expect(html).toContain("root:empty");
         expect(html).toContain("Theorem");
+    });
+    it("src/index.css has spinner and root:empty", () => {
+        const css = readFileSync(resolve("src/index.css"), "utf-8");
+        expect(css).toContain("root:empty");
+        expect(css).toContain("theorem-loader-spin");
     });
 });
 

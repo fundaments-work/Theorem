@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Theorem Discussions
+    url: https://github.com/fundaments-work/Theorem/discussions
+    about: Ask questions, share ideas, or discuss usage here before opening an issue.

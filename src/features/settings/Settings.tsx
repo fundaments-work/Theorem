@@ -39,6 +39,7 @@ import {
     Target,
     AlertCircle,
     Keyboard,
+    RefreshCw,
 } from "lucide-react";
 
 type SettingsTab = "general" | "dictionary" | "integrations" | "storage" | "shortcuts" | "about";
@@ -350,6 +351,8 @@ export const SettingsPage = memo(function SettingsPage() {
     const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
     const [removeDictionaryInfo, setRemoveDictionaryInfo] = useState<{ id: string; name: string } | null>(null);
     const [alertInfo, setAlertInfo] = useState<{ title: string; message: string } | null>(null);
+    const [updateChecking, setUpdateChecking] = useState(false);
+    const [updateInfo, setUpdateInfo] = useState<{ version: string; body: string } | null>(null);
 
     useEffect(() => {
         if (!dictionaryRemovedName) return;
@@ -438,6 +441,43 @@ export const SettingsPage = memo(function SettingsPage() {
 
             window.location.reload();
         } catch (error) {
+        }
+    };
+
+    const handleCheckForUpdates = async () => {
+        if (!isTauriDesktop()) {
+            setAlertInfo({ title: "Not Available", message: "Updates can only be checked from the desktop app." });
+            return;
+        }
+        setUpdateChecking(true);
+        setUpdateInfo(null);
+        try {
+            const { check } = await import("@tauri-apps/plugin-updater");
+            const update = await check();
+            if (update) {
+                setUpdateInfo({ version: update.version, body: update.body || "" });
+            } else {
+                setAlertInfo({ title: "Up to Date", message: `Theorem ${__APP_VERSION__} is the latest version.` });
+            }
+        } catch (e) {
+            setAlertInfo({ title: "Update Check Failed", message: String(e) });
+        } finally {
+            setUpdateChecking(false);
+        }
+    };
+
+    const handleInstallUpdate = async () => {
+        if (!isTauriDesktop() || !updateInfo) return;
+        try {
+            const { check } = await import("@tauri-apps/plugin-updater");
+            const update = await check();
+            if (update) {
+                await update.downloadAndInstall(() => {});
+                setAlertInfo({ title: "Update Installed", message: "Please restart Theorem to apply the update." });
+                setUpdateInfo(null);
+            }
+        } catch (e) {
+            setAlertInfo({ title: "Update Failed", message: String(e) });
         }
     };
 
@@ -1129,14 +1169,40 @@ export const SettingsPage = memo(function SettingsPage() {
                     >
                         <div className="space-y-2">
                             <a
-                                href="https://github.com/fundaments-work/theorem"
+                                 href="https://github.com/fundaments-work/Theorem"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-2 p-3 border border-[var(--color-border)] text-[12px] text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-accent)] transition-colors"
                             >
                                 <BookOpen className="w-4 h-4" />
-                                <span>GitHub Repository</span>
-                            </a>
+                                 <span>GitHub Repository</span>
+                             </a>
+                             {updateInfo ? (
+                                 <div className="space-y-2">
+                                     <div className="p-3 border border-[var(--color-accent)]/20 bg-[var(--color-accent)]/5">
+                                         <p className="text-[12px] font-medium">Update Available: v{updateInfo.version}</p>
+                                         {updateInfo.body ? (
+                                             <p className="text-[11px] text-[color:var(--color-text-secondary)] mt-1">{updateInfo.body}</p>
+                                         ) : null}
+                                     </div>
+                                     <button
+                                         onClick={handleInstallUpdate}
+                                         className="flex items-center gap-2 p-3 w-full border border-[var(--color-accent)] text-[12px] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/5 transition-colors"
+                                     >
+                                         <Download className="w-4 h-4" />
+                                         <span>Install Update & Restart</span>
+                                     </button>
+                                 </div>
+                             ) : (
+                                 <button
+                                     onClick={handleCheckForUpdates}
+                                     disabled={updateChecking}
+                                     className="flex items-center gap-2 p-3 w-full border border-[var(--color-border)] text-[12px] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors disabled:opacity-50"
+                                 >
+                                     <RefreshCw className={updateChecking ? "w-4 h-4 animate-spin" : "w-4 h-4"} />
+                                     <span>{updateChecking ? "Checking..." : "Check for Updates"}</span>
+                                 </button>
+                             )}
                             <a
                                 href="https://github.com/fundaments-work/theorem/releases/latest"
                                 target="_blank"

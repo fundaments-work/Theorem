@@ -8,8 +8,8 @@ version = "1.0.7"
 description = "Local-first desktop reader for PDFs, EPUBs, MOBI, and RSS."
 authors = ["Fundamentals"]
 license = "MIT"
-homepage = "https://github.com/sapienskid/theorem"
-repository = "https://github.com/sapienskid/theorem"
+homepage = "https://github.com/fundaments-work/Theorem"
+repository = "https://github.com/fundaments-work/Theorem"
 edition = "2021"
 default-run = "theorem"
 
@@ -35,6 +35,11 @@ tauri-plugin-os = "2"
 tauri-plugin-app = "2.0.0-alpha.2"
 tauri-plugin-barcode-scanner = "2"
 tauri-plugin-http = { version = "2", features = ["rustls-tls"] }
+tauri-plugin-log = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-window-state = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = "2"
 tauri-plugin-mobile-folder-scan = { path = "plugins/mobile-folder-scan" }
 tauri-plugin-android-tts-audio = { path = "plugins/android-tts-audio" }
 serde = { version = "1", features = ["derive"] }

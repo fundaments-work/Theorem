@@ -1,0 +1,143 @@
+# Signing Keys
+
+This document describes how to generate and manage the two separate signing keys needed for
+Theorem distribution: the **Tauri Updater key** (Ed25519) and the **Android APK key** (JKS).
+
+---
+
+## 1. Tauri Updater Signing Key (Ed25519)
+
+The updater plugin signs AppImage, DMG, and MSI installer files so the app can verify
+that updates come from a trusted source.
+
+### Generate the keypair
+
+```bash
+pnpm tauri signer generate -w ~/.tauri/theorem.key
+```
+
+This creates two files:
+- `~/.tauri/theorem.key` — **private key** (never share, keep safe)
+- The public key is printed to stdout — copy it for `tauri.conf.json`
+
+### Set the public key in tauri.conf.json
+
+```json
+{
+  "plugins": {
+    "updater": {
+      "pubkey": "<public key from generate step>",
+      "endpoints": [
+        "https://github.com/fundaments-work/Theorem/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}
+```
+
+### Store the private key for CI
+
+Add the private key as a **GitHub Actions secret**:
+
+1. Go to GitHub repo → Settings → Secrets and variables → Actions → Secrets
+2. Create `TAURI_SIGNING_PRIVATE_KEY` with the **content** of `~/.tauri/theorem.key`
+3. Optionally, create `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if you set a password
+
+The CI job uses these at build time:
+```bash
+export TAURI_SIGNING_PRIVATE_KEY="${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
+```
+
+### Back up the key
+
+Store `~/.tauri/theorem.key` in a secure location (password manager, encrypted USB, etc.).
+**If you lose this key, existing users cannot receive future updates.**
+
+---
+
+## 2. Android APK Signing Key (JKS)
+
+Android requires all APKs to be signed with a keystore before installation or Play Store
+upload.
+
+### Generate a new keystore
+
+```bash
+keytool -genkey -v \
+  -keystore ~/theorem-android.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -alias theorem-release-key
+```
+
+You will be prompted for:
+- **Keystore password** (store password)
+- **Key password** (usually same as keystore password)
+- **Name, organization, city, country** for the self-signed certificate
+
+Take note of:
+| Item | Example value |
+|---|---|
+| Keystore file | `~/theorem-android.jks` |
+| Alias | `theorem-release-key` |
+| Keystore password | *(chosen during gen)* |
+| Key password | *(chosen during gen)* |
+
+### Encode the keystore for GitHub
+
+```bash
+base64 -w0 ~/theorem-android.jks
+```
+
+Copy the output string.
+
+### Store in GitHub repository secrets
+
+Go to GitHub repo → Settings → Secrets and variables → Actions → Secrets and add:
+
+| Secret name | Value |
+|---|---|
+| `ANDROID_KEY_BASE64` | Base64-encoded keystore string |
+| `ANDROID_KEY_ALIAS` | `theorem-release-key` |
+| `ANDROID_KEY_PASSWORD` | Key password |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password (if different from key password) |
+
+### Securely back up the keystore
+
+1. Copy `theorem-android.jks` to a secure location (Keepass, encrypted volume, etc.)
+2. Store the alias and both passwords alongside it
+3. **Losing this keystore means you cannot update your app on Google Play or on users' devices who installed from GitHub releases.** Before uploading to Play Store for the first time, ensure you have at least two backups.
+
+### Rotating keys
+
+Since Theorem is not yet on the Play Store, there is no user-base constraint on the signing
+key. If the current key is lost:
+
+1. Generate a new keystore (see above)
+2. Update the GitHub secrets with the new values
+3. Users will need to uninstall the old app before installing the new one (different signature)
+
+**After the first Play Store release**, key rotation is only possible through the
+[Play Console's key upgrade process](https://support.google.com/googleplay/android-developer/answer/9842756).
+Treat your upload keystore as irreplaceable from that point forward.
+
+---
+
+## 3. Consistency Between Local and CI Builds
+
+Both keys should **never be committed to the repository**. Use GitHub Secrets for CI and
+keep local copies secure.
+
+For local release builds, set the environment variables before running `pnpm tauri build`:
+
+```bash
+# Updater signing
+export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/theorem.key)"
+
+# Android signing (handled via keystore.properties, not env vars)
+# CI auto-creates src-tauri/gen/android/keystore.properties — for local,
+# copy that file from CI output or create it manually:
+#   storeFile=/path/to/theorem-android.jks
+#   keyAlias=theorem-release-key
+#   password=your-password
+```

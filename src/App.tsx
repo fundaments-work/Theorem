@@ -9,6 +9,7 @@ import { importBooksIncremental, getBookFormat, isImportFormatSupported } from "
 import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
 import { initI18n } from "./core/lib/i18n";
+import { initLogger } from "./core/lib/debug";
 import { OnboardingFlow } from "./features/onboarding";
 import { Toaster } from "sonner";
 
@@ -298,6 +299,24 @@ function App() {
 
     useEffect(() => {
         void initI18n();
+    }, []);
+
+    useEffect(() => {
+        void initLogger();
+    }, []);
+
+    useEffect(() => {
+        if (!isTauriDesktop()) return;
+        const registerGlobal = async () => {
+            const { register } = await import("@tauri-apps/plugin-global-shortcut");
+            await register("CommandOrControl+Shift+F", () => {
+                useUIStore.getState().setRoute("library");
+            });
+            await register("CommandOrControl+Shift+R", () => {
+                useUIStore.getState().setRoute("feeds");
+            });
+        };
+        void registerGlobal().catch(() => {});
     }, []);
 
     useEffect(() => {
