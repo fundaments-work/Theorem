@@ -59,7 +59,6 @@ import type { PDFJsEngineRef } from "./engines/pdfjs-engine";
 import type { ReaderViewportHandle } from "./components/ReaderViewport";
 import { PDFFloatingToolbar } from "./components/PDFFloatingToolbar";
 import { registerShortcuts } from "../../core/lib/keyboard-shortcuts";
-const ImmersionBar = lazy(() => import("./audio/ImmersionBar"));
 import { immersionPlayer } from "./audio/ImmersionPlayer";
 import { SpeedReader } from "./components/SpeedReader";
 
@@ -227,6 +226,7 @@ const BookReaderPage = memo(function BookReaderPage() {
     const [initialLocation, setInitialLocation] = useState<string | undefined>(undefined);
     const [initialFraction, setInitialFraction] = useState<number | undefined>(undefined);
     const [ttsData, setTtsData] = useState<{ text: string; startWordId: string } | null>(null);
+    const [ttsState, setTtsState] = useState<'idle' | 'loading' | 'playing' | 'paused'>('idle');
     const ttsEnabled = settings.tts.enabled;
     const [immersionMode, setImmersionMode] = useState(false);
     const immersionModeRef = useRef(immersionMode);
@@ -241,6 +241,12 @@ const BookReaderPage = memo(function BookReaderPage() {
             immersionPlayer.stop();
         }
     }, [ttsEnabled, immersionMode]);
+
+    useEffect(() => {
+        if (!immersionMode) return;
+        const data = readerRef.current?.getVisibleTextForTts?.();
+        if (data?.text) setTtsData(data);
+    }, [immersionMode]);
     const suppressProgressRef = useRef(false);
     const resumeTargetRef = useRef<string | null>(null);
     const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -929,6 +935,32 @@ const BookReaderPage = memo(function BookReaderPage() {
         
         immersionPlayer.speak(newData.text, settings.tts.voice);
     }, [isPdfFormat, ttsEnabled, immersionMode, settings.tts.voice]);
+
+    const handleTtsPlay = useCallback(() => {
+        const text = ttsData?.text?.trim();
+        if (!text) return;
+        immersionPlayer.speak(text, settings.tts.voice);
+    }, [ttsData, settings.tts.voice]);
+
+    const handleTtsPause = useCallback(() => {
+        immersionPlayer.pause();
+    }, []);
+
+    const handleTtsStop = useCallback(() => {
+        immersionPlayer.stop();
+        setTtsState('idle');
+    }, []);
+
+    useEffect(() => {
+        immersionPlayer.init({
+            onStateChange: (state) => {
+                setTtsState(state);
+            },
+            onError: () => setTtsState('idle'),
+            onComplete: handleTtsComplete,
+        });
+        return () => immersionPlayer.destroy();
+    }, [handleTtsComplete]);
 
     useEffect(() => {
         if (!isPdfFormat || !currentBookId || pdfTotalPages <= 0) {
@@ -2228,27 +2260,6 @@ const BookReaderPage = memo(function BookReaderPage() {
 
             {isBookReady && !isPdfFormat && (
                 <>
-                    
-                    {immersionMode && (
-                        <div className={cn(
-                            "fixed left-0 right-0 z-50 flex justify-center pointer-events-none transition-colors duration-300",
-                            "bottom-0"
-                        )}>
-                            <div className={cn(
-                                "pointer-events-auto",
-                                "w-full sm:w-auto",
-                            )}>
-                                <Suspense fallback={null}>
-                                    <ImmersionBar 
-                                        sectionText={ttsData?.text || ""}
-                                        visible={true}
-                                        onComplete={handleTtsComplete}
-                                    />
-                                </Suspense>
-                            </div>
-                        </div>
-                    )}
-
                     <SpeedReader
                         isOpen={speedReadMode}
                         text={speedReadText}
@@ -2275,10 +2286,15 @@ const BookReaderPage = memo(function BookReaderPage() {
                         onSeek={handleSeek}
                         totalPages={location?.pageInfo?.totalPages}
                         onToggleToc={() => togglePanel('toc')}
+                        immersionMode={immersionMode}
+                        ttsState={ttsState}
+                        onTtsPlay={handleTtsPlay}
+                        onTtsPause={handleTtsPause}
+                        onTtsStop={handleTtsStop}
                         className={cn(
                             "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 backdrop-blur-xl",
                             immersionMode
-                                ? "translate-y-full pointer-events-none"
+                                ? shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none"
                                 : shouldShowReaderChrome ? "translate-y-0" : "translate-y-full pointer-events-none",
                         )}
                     />
