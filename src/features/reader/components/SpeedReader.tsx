@@ -9,13 +9,7 @@ interface SpeedReaderProps {
     theme?: "light" | "sepia" | "dark";
 }
 
-const THEME_COLORS = {
-    light: { bg: "var(--reader-bg, #ffffff)", fg: "var(--reader-fg, #1a1a1a)", accent: "var(--app-accent, var(--color-accent, #2d6a6e))" },
-    sepia: { bg: "var(--reader-bg-override, #f4ecd8)", fg: "var(--reader-fg-override, #3d3025)", accent: "var(--reader-link-override, #3d3025)" },
-    dark: { bg: "var(--reader-bg, #000000)", fg: "var(--reader-fg, #ffffff)", accent: "var(--reader-link, #fbbf24)" },
-};
-
-export function SpeedReader({ isOpen, text, onClose, onAutoNext, theme = "dark" }: SpeedReaderProps) {
+export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderProps) {
     const [wpm, setWpm] = useState(400);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -23,8 +17,6 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext, theme = "dark" 
     const wordsRef = useRef<string[]>([]);
     const timerRef = useRef<number | null>(null);
     const autoPlayRef = useRef(false);
-
-    const colors = THEME_COLORS[theme] || THEME_COLORS.dark;
 
     useEffect(() => {
         if (!text) { wordsRef.current = []; return; }
@@ -92,25 +84,22 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext, theme = "dark" 
     if (!isOpen) return null;
 
     return (
-        <div style={{ background: colors.bg, color: colors.fg }}
-            className="fixed inset-0 z-[200] flex flex-col select-none">
-            <div className="flex items-center justify-between shrink-0 h-11 px-5"
-                style={{ borderBottom: `1px solid ${colors.fg}15` }}>
+        <div className="fixed inset-0 z-[200] flex flex-col select-none bg-[var(--color-background)] text-[var(--color-text-primary)] pt-[max(env(safe-area-inset-top,0px),0.5rem)] pb-[max(env(safe-area-inset-bottom,0px),1rem)]">
+            <div className="flex items-center justify-between shrink-0 min-h-11 px-5 border-b border-[var(--color-border)]">
                 <button onClick={() => { setIsPlaying(false); onClose(); }}
-                    className="flex items-center gap-1.5 text-xs font-medium"
-                    style={{ color: colors.fg, opacity: 0.45 }}>
+                    className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors min-h-[44px]">
                     <X className="w-4 h-4" /> Close
                 </button>
                 <div className="flex items-center gap-3">
-                    <span style={{ color: colors.fg, opacity: 0.25, fontSize: 11 }}>
+                    <span className="text-[11px] text-[var(--color-text-muted)]">
                         {currentIndex + 1}/{wordCount}
                     </span>
-                    <div className="w-24 h-0.5 rounded-full overflow-hidden" style={{ background: `${colors.fg}12` }}>
-                        <div className="h-full rounded-full" style={{ width: `${progress}%`, background: colors.accent }} />
+                    <div className="w-24 h-0.5 overflow-hidden bg-[var(--color-border)]">
+                        <div className="h-full bg-[var(--color-accent)]" style={{ width: `${progress}%` }} />
                     </div>
                 </div>
                 <button onClick={() => setIsFullscreen(!isFullscreen)}
-                    className="p-1" style={{ color: colors.fg, opacity: 0.45 }}
+                    className="flex items-center justify-center min-h-[44px] min-w-[44px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
                     aria-label="Fullscreen">
                     {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 </button>
@@ -120,9 +109,8 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext, theme = "dark" 
                 <div className="flex flex-col items-center justify-center w-full max-w-5xl mx-auto">
                     <div
                         key={currentIndex}
-                        className="text-center w-full px-4 leading-tight font-medium tracking-tight"
+                        className="text-center w-full px-4 leading-tight font-medium tracking-tight text-[var(--color-text-primary)]"
                         style={{
-                            color: colors.fg,
                             fontSize: "clamp(1.75rem, 5.5vw, 4.5rem)",
                             lineHeight: 1.15,
                             letterSpacing: "-0.02em",
@@ -130,48 +118,44 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext, theme = "dark" 
                         }}>
                         {currentWord || "—"}
                     </div>
-                    <div style={{ color: colors.fg, opacity: 0.25, fontSize: 10, marginTop: 20, letterSpacing: "0.25em", textTransform: "uppercase" }}>
+                    <div className="mt-5 text-[10px] tracking-[0.25em] uppercase text-[var(--color-text-muted)]">
                         {isPlaying ? "Reading" : "Paused"}
                     </div>
                 </div>
             </div>
 
-            <div className="shrink-0 px-6 pb-6 space-y-4">
-                <div className="flex items-center justify-center gap-5">
+            <div className="shrink-0 px-4 sm:px-6 pb-4 sm:pb-6 space-y-4">
+                <div className="flex items-center justify-center gap-3 sm:gap-5 flex-wrap">
                     <button onClick={() => setWpm((w) => Math.max(50, w - 25))}
-                        className="flex items-center justify-center h-9 w-9 text-sm font-medium border"
-                        style={{ borderColor: `${colors.fg}20`, color: colors.fg, opacity: 0.4 }}>
+                        className="flex items-center justify-center min-h-[44px] min-w-[44px] text-sm font-medium border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer transition-colors">
                         −
                     </button>
 
                     <div className="flex items-center gap-1.5 min-w-[3rem] justify-center">
-                        <span style={{ color: colors.fg, fontSize: 14, fontWeight: 500 }}>{wpm}</span>
-                        <span style={{ color: colors.fg, opacity: 0.3, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>wpm</span>
+                        <span className="text-sm font-medium text-[var(--color-text-primary)]">{wpm}</span>
+                        <span className="text-[9px] tracking-[0.05em] uppercase text-[var(--color-text-muted)]">wpm</span>
                     </div>
 
                     <button onClick={() => setWpm((w) => Math.min(2000, w + 25))}
-                        className="flex items-center justify-center h-9 w-9 text-sm font-medium border"
-                        style={{ borderColor: `${colors.fg}20`, color: colors.fg, opacity: 0.4 }}>
+                        className="flex items-center justify-center min-h-[44px] min-w-[44px] text-sm font-medium border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer transition-colors">
                         +
                     </button>
 
                     <button onClick={() => setIsPlaying(!isPlaying)}
-                        className="flex items-center justify-center h-10 w-10 rounded-full transition-transform active:scale-95 shadow-sm"
-                        style={{ background: colors.accent, color: colors.bg }}
+                        className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full transition-transform active:scale-95 bg-[var(--color-accent)] text-[var(--color-accent-contrast)] cursor-pointer"
                         aria-label={isPlaying ? "Pause" : "Play"}>
                         {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
                     </button>
 
-                    <div style={{ width: 64, color: colors.fg, opacity: 0.25 }}>
+                    <div className="w-28 sm:w-36 text-[var(--color-text-muted)]">
                         <input type="range" min={50} max={2000} step={10} value={wpm}
                             onChange={(e) => setWpm(Number(e.target.value))}
-                            className="w-full h-0.5" style={{ accentColor: colors.accent }}
+                            className="w-full cursor-pointer"
                             aria-label="Speed" />
                     </div>
                 </div>
 
-                <div className="flex items-center justify-center gap-3"
-                    style={{ color: colors.fg, opacity: 0.35, fontSize: 10, letterSpacing: "0.08em" }}>
+                <div className="flex items-center justify-center gap-3 text-[10px] tracking-[0.08em] text-[var(--color-text-muted)]">
                     <span>Space</span><span>·</span><span>↑↓</span><span>·</span><span>←→</span><span>·</span><span>F</span>
                 </div>
             </div>
