@@ -3,9 +3,9 @@ import { useState, useMemo, useCallback, useRef, useEffect, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core/lib/utils";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
-import { useLibraryStore, useUIStore } from "../../core/store";
+import { useLibraryStore, useUIStore, useVocabularyStore } from "../../core/store";
 import { HIGHLIGHT_SOLID_COLORS } from "../../core/lib/design-tokens";
-import type { HighlightColor } from "../../core/types";
+import type { HighlightColor, VocabularyTerm } from "../../core/types";
 import { EditNoteModal } from "./components/modals/EditNoteModal";
 import { PageHeader, Dropdown, ConfirmDialog } from "../../ui";
 import {
@@ -14,6 +14,7 @@ import {
     MoreVertical,
     Pencil,
     BookOpen,
+    BookOpenText,
     Trash2,
     ChevronLeft,
     ChevronRight,
@@ -21,6 +22,18 @@ import {
     ChevronsRight,
 } from "lucide-react";
 import { ShareMenu } from "./components/ShareMenu";
+
+function getTermPrimaryDefinition(term: VocabularyTerm): string {
+    const firstMeaning = term.meanings[0];
+    if (!firstMeaning || firstMeaning.definitions.length === 0) {
+        return "No definition";
+    }
+    return firstMeaning.definitions[0];
+}
+
+function isHtml(text: string): boolean {
+    return text.includes("<") && text.includes(">");
+}
 
 function EmptyAnnotations({ type }: { type: "all" | "highlights" | "notes" }) {
     const icons = {
@@ -198,6 +211,7 @@ const filterTabs = [
     { id: "all" as const, label: "All", icon: Highlighter },
     { id: "highlights" as const, label: "Highlights", icon: Highlighter },
     { id: "notes" as const, label: "Notes", icon: StickyNote },
+    { id: "vocabulary" as const, label: "Words", icon: BookOpenText },
 ];
 
 export function AnnotationsPage() {
@@ -208,7 +222,9 @@ export function AnnotationsPage() {
     const currentBookId = useUIStore((state) => state.currentBookId);
     const setRoute = useUIStore((state) => state.setRoute);
     const searchQuery = useUIStore((state) => state.searchQuery);
-    const [activeFilter, setActiveFilter] = useState<"all" | "highlights" | "notes">("all");
+    const vocabularyTerms = useVocabularyStore((state) => state.vocabularyTerms);
+    const deleteVocabularyTerm = useVocabularyStore((state) => state.deleteVocabularyTerm);
+    const [activeFilter, setActiveFilter] = useState<"all" | "highlights" | "notes" | "vocabulary">("all");
     const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
@@ -232,11 +248,10 @@ export function AnnotationsPage() {
             filtered = filtered.filter((annotation) => annotation.bookId === currentBookId);
         }
 
-        if (activeFilter !== "all") {
+        if (activeFilter !== "all" && activeFilter !== "vocabulary") {
             const typeMap = {
                 highlights: "highlight",
                 notes: "note",
-                all: undefined,
             };
             filtered = filtered.filter((a) => a.type === typeMap[activeFilter]);
         }
@@ -284,6 +299,25 @@ export function AnnotationsPage() {
 
         return filtered;
     }, [annotations, activeFilter, currentBookId, searchQuery, sortBy, bookTitleLookup]);
+
+    const filteredVocabularyTerms = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        return vocabularyTerms
+            .filter((term) => {
+                if (activeFilter !== "vocabulary") return false;
+                if (!query) return true;
+                if (term.term.toLowerCase().includes(query)) return true;
+                return term.meanings.some((m) =>
+                    m.definitions.some((d) => d.toLowerCase().includes(query))
+                );
+            })
+            .sort((a, b) => {
+                const updatedA = a.updatedAt ? new Date(a.updatedAt).getTime() : new Date(a.createdAt).getTime();
+                const updatedB = b.updatedAt ? new Date(b.updatedAt).getTime() : new Date(b.createdAt).getTime();
+                if (updatedA !== updatedB) return updatedB - updatedA;
+                return a.term.localeCompare(b.term);
+            });
+    }, [vocabularyTerms, activeFilter, searchQuery]);
 
     const getBookInfo = (bookId: string) => {
         return useLibraryStore.getState().getBook(bookId);
@@ -394,11 +428,12 @@ export function AnnotationsPage() {
     };
 
     const annotationCount = annotations.filter((a) => a.type !== "bookmark").length;
+    const hasAnyContent = annotationCount > 0 || vocabularyTerms.length > 0;
     const selectedBookTitle = currentBookId
         ? (bookTitleLookup.get(currentBookId) || "Selected reference")
         : null;
 
-    if (annotationCount === 0) {
+    if (!hasAnyContent) {
         return (
             <div className="mx-auto w-full max-w-[var(--layout-content-max-width)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
                 <EmptyAnnotations type="all" />
@@ -411,7 +446,9 @@ export function AnnotationsPage() {
             
             <PageHeader
                 title="Workbench"
-                description={`${filteredAnnotations.length} ${filteredAnnotations.length === 1 ? "annotation" : "annotations"} across ${new Set(filteredAnnotations.map((a) => a.bookId)).size} books`}
+                description={activeFilter === "vocabulary"
+                    ? `${filteredVocabularyTerms.length} ${filteredVocabularyTerms.length === 1 ? "term" : "terms"}`
+                    : `${filteredAnnotations.length} ${filteredAnnotations.length === 1 ? "annotation" : "annotations"} across ${new Set(filteredAnnotations.map((a) => a.bookId)).size} books`}
             />
 
             {currentBookId && (
@@ -498,7 +535,44 @@ export function AnnotationsPage() {
                 onCancel={() => setDeleteAnnotationId(null)}
             />
 
-            {filteredAnnotations.length === 0 ? (
+            {activeFilter === "vocabulary" ? (
+                filteredVocabularyTerms.length === 0 ? (
+                    <div className="text-center py-16">
+                        <p className="text-[color:var(--color-text-muted)]">
+                            No terms found{searchQuery ? " matching your search" : ""}.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {filteredVocabularyTerms.map((term) => (
+                            <div key={term.id} className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex flex-col gap-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-medium text-[color:var(--color-text-primary)] truncate">{term.term}</span>
+                                    <button
+                                        onClick={() => deleteVocabularyTerm(term.id)}
+                                        className="shrink-0 p-1 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] transition-colors"
+                                        aria-label={`Delete ${term.term}`}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                                {term.meanings[0]?.partOfSpeech && (
+                                    <span className="text-[10px] uppercase tracking-wider text-[color:var(--color-text-muted)]">{term.meanings[0].partOfSpeech}</span>
+                                )}
+                                <p className="text-xs leading-relaxed text-[color:var(--color-text-secondary)] line-clamp-2">
+                                    {(() => {
+                                        const def = getTermPrimaryDefinition(term);
+                                        return isHtml(def) ? (term.meanings[0]?.partOfSpeech || "Definition") : def;
+                                    })()}
+                                </p>
+                                {term.language && (
+                                    <span className="text-[10px] text-[color:var(--color-text-muted)] uppercase tracking-wider">{term.language}</span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )
+            ) : filteredAnnotations.length === 0 ? (
                 <div className="text-center py-16">
                     <p className="text-[color:var(--color-text-muted)]">
                         No {activeFilter === "all" ? "" : activeFilter} found
