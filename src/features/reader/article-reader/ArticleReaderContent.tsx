@@ -162,7 +162,7 @@ export function ArticleReaderContent({
     return (
         <div
             ref={scrollContainerRef}
-            className="h-full min-h-0 flex-1 overflow-y-auto custom-scrollbar [content-visibility:auto] overscroll-contain pb-[env(safe-area-inset-bottom)]"
+            className="h-full min-h-0 flex-1 overflow-y-auto custom-scrollbar [content-visibility:auto] overscroll-contain pb-[env(safe-area-inset-bottom)] select-none"
             style={{
                 WebkitOverflowScrolling: "touch",
                 overscrollBehaviorY: "contain",
@@ -172,7 +172,7 @@ export function ArticleReaderContent({
                 className="mx-auto w-full max-w-[72ch] px-6 py-12 md:px-12 md:py-20 lg:px-8"
                 onMouseUp={handleMouseUp}
             >
-                <header className="mb-10 pb-6 border-b border-[var(--color-border-subtle)]">
+                <header className="mb-10 pb-6 border-b border-[var(--color-border-subtle)] select-text">
                     <div className="mb-4 flex flex-wrap items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-[color:var(--color-text-secondary)]">
                         {feedTitle && (
                             <span className="border border-[var(--color-border)] px-2 py-1 text-[color:var(--color-text-primary)]">
@@ -184,7 +184,7 @@ export function ArticleReaderContent({
                     </div>
 
                     <h1
-                        className="font-serif font-semibold leading-tight tracking-tight"
+                        className="font-serif font-semibold leading-tight tracking-tight select-text"
                         style={{
                             fontSize: `${fontSize * 1.5}px`,
                             lineHeight: 1.2,
@@ -194,14 +194,14 @@ export function ArticleReaderContent({
                     </h1>
 
                     {article.author && (
-                        <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
+                        <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)] select-text">
                             {article.author}
                         </p>
                     )}
                 </header>
 
                 {article.imageUrl && !contentHasImage && (
-                    <figure className="mb-10">
+                    <figure className="mb-10 select-text">
                         <img
                             src={article.imageUrl}
                             alt=""
@@ -214,7 +214,7 @@ export function ArticleReaderContent({
                 <div
                     ref={contentRef}
                     className={cn(
-                        "rss-article-content max-w-none",
+                        "rss-article-content max-w-none select-text",
                         "[&_p]:my-4",
                         "[&_h1]:mt-8 [&_h1]:mb-4 [&_h1]:text-[1.9em] [&_h1]:font-semibold [&_h1]:leading-tight",
                         "[&_h2]:mt-7 [&_h2]:mb-3 [&_h2]:text-[1.45em] [&_h2]:font-semibold [&_h2]:leading-tight",
