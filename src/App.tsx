@@ -457,7 +457,7 @@ function App() {
             <div className="relative flex-1 flex flex-col min-w-0">
                 <AppTitlebar title="Theorem" />
 
-                <main id="app-main" ref={mainScrollRef} className="flex flex-1 flex-col overflow-y-auto pb-16 md:pb-0 md:px-8 md:py-6 custom-scrollbar overscroll-contain">
+                <main id="app-main" ref={mainScrollRef} className="flex flex-1 flex-col overflow-y-auto pb-[calc(4rem+var(--spacing-lg))] md:pb-0 md:px-8 md:py-6 custom-scrollbar overscroll-contain">
                     <RouteErrorBoundary>
                         <Suspense fallback={<PageFallback />}>
                             {renderPage()}
