@@ -543,7 +543,7 @@ export const ArticleViewer = memo(function ArticleViewer({
 
     useEffect(() => {
         setActivePanel(null);
-        setShowChrome(false);
+        setShowChrome(true);
         setHeadings([]);
         setReadingProgress(0);
         selectedRangeRef.current = null;
