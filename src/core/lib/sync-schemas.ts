@@ -141,7 +141,7 @@ export const VocabularyTermSchema = z.object({
     phonetic: z.string().optional(),
     audioUrl: z.string().optional(),
     meanings: z.array(VocabularyMeaningSchema),
-    providerHistory: z.array(z.enum(["stardict"])),
+    providerHistory: z.array(z.enum(["stardict", "free-dictionary-api"])),
     createdAt: dateLike,
     updatedAt: dateLike,
     lookupCount: z.number().int().nonnegative().optional(),

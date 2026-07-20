@@ -13,7 +13,7 @@ interface DictEntry {
 }
 
 const AVAILABLE_DICTS: DictEntry[] = [
-    { name: "English", language: "en", url: "https://github.com/sapienskid/wiktionary-stardict/releases/download/en-latest/dict-en-en.zip", sizeApprox: "~50 MB" },
+    { name: "English", language: "en", url: "https://github.com/fundaments-work/wiktionary-stardict/releases/download/en-latest/dict-en-en.zip", sizeApprox: "~50 MB" },
 ];
 
 interface DictionaryDownloadModalProps {

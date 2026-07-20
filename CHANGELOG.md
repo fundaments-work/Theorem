@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2026-07-20
+
+### Added
+
+- **Tauri plugins (5)** — Logging (structured file+webview), native OS notifications,
+  window state persistence, global shortcuts (Ctrl+Shift+F → Library,
+  Ctrl+Shift+R → Feeds), in-app updater.
+- **Check for Updates** — Settings → About tab has a "Check for Updates" button
+  that queries GitHub releases. Shows version info, installs & prompts restart.
+- **Issue templates** — Bug report and feature request forms at
+  `.github/ISSUE_TEMPLATE/`.
+- **Signing keys guide** — `docs/SIGNING-KEYS.md` documents Tauri Updater (Ed25519)
+  and Android APK (JKS) key setup, GitHub Secrets integration, and release workflow.
+
+### Fixed
+
+- **Vocabulary sync broken by Zod enum** — `VocabularyTermSchema.providerHistory`
+  only allowed `"stardict"`, but terms created via the free dictionary API had
+  `"free-dictionary-api"`. Sync validation silently rejected the entire vocabulary
+  domain when any term had the missing enum value. Added
+  `"free-dictionary-api"` to the enum.
+- **Repo URLs outdated** — All `sapienskid/theorem` and `sapienskid/wiktionary-stardict`
+  references updated to `fundaments-work/Theorem` and
+  `fundaments-work/wiktionary-stardict` across all source files.
+- **Tests outdated** — Two release tests fixed: spinner CSS moved from inline
+  HTML to `src/index.css`, and settle threshold changed from `>= 3` to `>= 2`.
+
+### Changed
+
+- **CI auto-publishes updater artifacts** — `release.yml` now passes
+  `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to all
+  `tauri-action` steps. `createUpdaterArtifacts: true` enables automatic
+  `latest.json` generation.
+
 ## [1.0.7] - 2026-07-19
 
 ### Fixed
