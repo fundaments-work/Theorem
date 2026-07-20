@@ -27,9 +27,7 @@ const ReaderPage = lazy(() =>
 export function prewarmReaderChunk(): void {
     void getReaderChunk();
 }
-const VocabularyPage = lazy(() =>
-    import("./features/vocabulary").then((module) => ({ default: module.VocabularyPage })),
-);
+
 const ShelvesPage = lazy(() =>
     import("./features/library").then((module) => ({ default: module.ShelvesPage })),
 );
@@ -72,8 +70,6 @@ function App() {
     const currentRoute = useUIStore((state) => state.currentRoute);
     const setRoute = useUIStore((state) => state.setRoute);
     const mainScrollRef = useRef<HTMLElement>(null);
-    const vocabularySettings = useSettingsStore((state) => state.settings.vocabulary);
-    const vocabularyEnabled = vocabularySettings?.vocabularyEnabled ?? true;
     const autoSyncEnabled = useSettingsStore((state) => state.settings.deviceSync?.autoSyncEnabled ?? true);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -126,7 +122,7 @@ function App() {
             { label: "Go to Library",       keys: "Ctrl+1", category: "Navigation", handler: () => setRoute("library") },
             { label: "Go to Shelves",       keys: "Ctrl+2", category: "Navigation", handler: () => setRoute("shelves") },
             { label: "Go to Feeds",         keys: "Ctrl+3", category: "Navigation", handler: () => setRoute("feeds") },
-            { label: "Go to Vocabulary",    keys: "Ctrl+4", category: "Navigation", handler: () => setRoute("vocabulary") },
+            { label: "Go to Workbench",    keys: "Ctrl+4", category: "Navigation", handler: () => setRoute("annotations") },
             { label: "Go to Statistics",    keys: "Ctrl+5", category: "Navigation", handler: () => setRoute("statistics") },
             { label: "Go to Workbench",     keys: "Ctrl+6", category: "Navigation", handler: () => setRoute("annotations") },
             { label: "Go to Bookmarks",     keys: "Ctrl+7", category: "Navigation", handler: () => setRoute("bookmarks") },
@@ -160,10 +156,10 @@ function App() {
     }, [updateSettings]);
 
     useEffect(() => {
-        if (currentRoute === "vocabulary" && !vocabularyEnabled) {
-            setRoute("library");
+        if (currentRoute === "vocabulary") {
+            setRoute("annotations");
         }
-    }, [currentRoute, setRoute, vocabularyEnabled]);
+    }, [currentRoute, setRoute]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -408,7 +404,7 @@ function App() {
             case "reader":
                 return <ReaderPage />;
             case "vocabulary":
-                return <VocabularyPage />;
+                return <AnnotationsPage />;
             case "shelves":
                 return <ShelvesPage />;
             case "annotations":
