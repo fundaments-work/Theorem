@@ -493,7 +493,7 @@ export const ArticleViewer = memo(function ArticleViewer({
     const removeAnnotation = useLibraryStore((state) => state.removeAnnotation);
 
     const [activePanel, setActivePanel] = useState<ArticleReaderPanel>(null);
-    const [showChrome, setShowChrome] = useState(false);
+    const [showChrome, setShowChrome] = useState(true);
     const [readingProgress, setReadingProgress] = useState(0);
     const [headings, setHeadings] = useState<ArticleHeading[]>([]);
     const [showColorPicker, setShowColorPicker] = useState(false);

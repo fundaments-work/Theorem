@@ -169,7 +169,7 @@ export function ArticleReaderContent({
             }}
         >
             <article
-                className="mx-auto w-full max-w-[74ch] px-6 py-12 md:px-12 md:py-20 lg:max-w-[104ch] lg:px-8 xl:max-w-[116ch] xl:px-6 2xl:max-w-[124ch]"
+                className="mx-auto w-full max-w-[72ch] px-6 py-12 md:px-12 md:py-20 lg:px-8"
                 onMouseUp={handleMouseUp}
             >
                 <header className="mb-10 pb-6 border-b border-[var(--color-border-subtle)]">
