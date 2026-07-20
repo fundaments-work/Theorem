@@ -1,8 +1,8 @@
 import { type ReactNode, memo } from "react";
 import {
     FolderOpen,
-    Highlighter,
     Library,
+    NotebookPen,
     Rss,
     Settings,
 } from "lucide-react";
@@ -18,7 +18,7 @@ interface NavItem {
 const baseNavItems: NavItem[] = [
     { id: "library", label: "Library", icon: <Library className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
     { id: "shelves", label: "Shelves", icon: <FolderOpen className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
-    { id: "annotations", label: "Highlights", icon: <Highlighter className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
+    { id: "annotations", label: "Workbench", icon: <NotebookPen className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
     { id: "feeds", label: "Feeds", icon: <Rss className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
     { id: "settings", label: "Settings", icon: <Settings className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
 ];

@@ -5,8 +5,8 @@ import {
     ChevronRight,
     Flame,
     FolderOpen,
-    Highlighter,
     Library,
+    NotebookPen,
     Rss,
     Settings,
 } from "lucide-react";
@@ -24,7 +24,7 @@ interface SidebarItem {
 
 const mainNavItems: SidebarItem[] = [
     { id: "library", label: "Library", icon: <Library className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
-    { id: "annotations", label: "Highlights", icon: <Highlighter className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
+    { id: "annotations", label: "Workbench", icon: <NotebookPen className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
     { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
     { id: "shelves", label: "Shelves", icon: <FolderOpen className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
     { id: "feeds", label: "Snapshots", icon: <Rss className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },

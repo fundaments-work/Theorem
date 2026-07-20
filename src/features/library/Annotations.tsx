@@ -490,6 +490,7 @@ export function AnnotationsPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {activeFilter !== "vocabulary" && (
                     <button
                         onClick={() => setViewMode(viewMode === "list" ? "cards" : "list")}
                         className={cn(
@@ -502,6 +503,7 @@ export function AnnotationsPage() {
                     >
                         {viewMode === "list" ? "Cards" : "List"}
                     </button>
+                    )}
 
                     <Dropdown
                         value={sortBy}
