@@ -162,14 +162,14 @@ export function ArticleReaderContent({
     return (
         <div
             ref={scrollContainerRef}
-            className="h-full min-h-0 flex-1 overflow-y-auto custom-scrollbar [content-visibility:auto] overscroll-contain pb-[env(safe-area-inset-bottom)] select-none"
+            className="h-full min-h-0 flex-1 overflow-y-auto custom-scrollbar [content-visibility:auto] overscroll-contain pb-[env(safe-area-inset-bottom)]"
             style={{
                 WebkitOverflowScrolling: "touch",
                 overscrollBehaviorY: "contain",
             }}
         >
             <article
-                className="mx-auto w-full max-w-[72ch] px-6 py-12 md:px-12 md:py-20 lg:px-8"
+                className="mx-auto w-full max-w-[72ch] px-6 py-12 md:px-12 md:py-20 lg:px-8 select-none"
                 onMouseUp={handleMouseUp}
             >
                 <header className="mb-10 pb-6 border-b border-[var(--color-border-subtle)] select-text">
