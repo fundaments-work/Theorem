@@ -629,7 +629,7 @@ export function ShelvesPage() {
         const shelf = generalCollections.find((s) => s.id === selectedShelfId);
         if (shelf) {
             return (
-                <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-8">
+                <div className="mx-auto w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-0 sm:px-6 lg:px-8 lg:py-8">
                     <ShelfDetail shelf={shelf} onBack={() => setSelectedShelfId(null)} />
                 </div>
             );
@@ -638,7 +638,7 @@ export function ShelvesPage() {
 
     if (generalCollections.length === 0) {
         return (
-            <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-8">
+            <div className="mx-auto w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-0 sm:px-6 lg:px-8 lg:py-8">
                 <EmptyShelves onCreate={handleCreateShelf} />
                 <ShelfModal
                     isOpen={isModalOpen}
@@ -651,7 +651,7 @@ export function ShelvesPage() {
     }
 
     return (
-        <div className="mx-auto min-h-full w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-[calc(var(--spacing-2xl)+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
+        <div className="mx-auto w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-0 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
             
             <div className="flex items-center justify-between mb-10">
                 <div>
