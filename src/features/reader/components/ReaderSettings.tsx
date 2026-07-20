@@ -218,8 +218,8 @@ export function ReaderSettings({
             <FloatingPanel visible={visible} className={cn("overflow-hidden bg-[var(--color-surface)]", className)}>
                 <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3.5">
                     <div className="flex items-center gap-2.5">
-                        <span className="inline-flex h-7 w-7 items-center justify-center bg-[var(--color-surface-muted)]">
-                            <Settings2 className="w-3.5 h-3.5 text-[color:var(--color-text-secondary)]" />
+                        <span className="inline-flex h-10 w-10 items-center justify-center bg-[var(--color-surface-muted)]">
+                            <Settings2 className="w-4 h-4 text-[color:var(--color-text-secondary)]" />
                         </span>
                         <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--color-text-primary)]">Settings</span>
                     </div>
@@ -232,10 +232,10 @@ export function ReaderSettings({
                         </button>
                         <button
                             onClick={onClose}
-                            className="inline-flex h-7 w-7 items-center justify-center text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                            className="inline-flex h-10 w-10 items-center justify-center text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                             aria-label="Close settings"
                         >
-                            <X className="w-3.5 h-3.5" />
+                            <X className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
@@ -275,11 +275,11 @@ export function ReaderSettings({
                                 <div className="flex items-center gap-2.5">
                                     <button
                                         onClick={brightnessSlider.decrement}
-                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
+                                        className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Decrease brightness"
                                         disabled={!brightnessSlider.canDecrement}
                                     >
-                                        <Minus className="w-3 h-3" />
+                                        <Minus className="w-4 h-4" />
                                     </button>
                                     <input
                                         type="range"
@@ -294,11 +294,11 @@ export function ReaderSettings({
                                     />
                                     <button
                                         onClick={brightnessSlider.increment}
-                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
+                                        className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Increase brightness"
                                         disabled={!brightnessSlider.canIncrement}
                                     >
-                                        <Plus className="w-3 h-3" />
+                                        <Plus className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
@@ -386,11 +386,11 @@ export function ReaderSettings({
                                 <div className="flex items-center gap-2.5">
                                     <button
                                         onClick={fontSizeSlider.decrement}
-                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
+                                        className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Decrease font size"
                                         disabled={!fontSizeSlider.canDecrement}
                                     >
-                                        <Minus className="w-3 h-3" />
+                                        <Minus className="w-4 h-4" />
                                     </button>
                                     <input
                                         type="range"
@@ -405,11 +405,11 @@ export function ReaderSettings({
                                     />
                                     <button
                                         onClick={fontSizeSlider.increment}
-                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
+                                        className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Increase font size"
                                         disabled={!fontSizeSlider.canIncrement}
                                     >
-                                        <Plus className="w-3 h-3" />
+                                        <Plus className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
@@ -479,11 +479,11 @@ export function ReaderSettings({
                                 <div className="flex items-center gap-2.5">
                                     <button
                                         onClick={zoomSlider.decrement}
-                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
+                                        className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Decrease zoom"
                                         disabled={!zoomSlider.canDecrement}
                                     >
-                                        <Minus className="w-3 h-3" />
+                                        <Minus className="w-4 h-4" />
                                     </button>
                                     <input
                                         type="range"
@@ -498,11 +498,11 @@ export function ReaderSettings({
                                     />
                                     <button
                                         onClick={zoomSlider.increment}
-                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
+                                        className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Increase zoom"
                                         disabled={!zoomSlider.canIncrement}
                                     >
-                                        <Plus className="w-3 h-3" />
+                                        <Plus className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
@@ -580,11 +580,11 @@ export function ReaderSettings({
                                 <div className="flex items-center gap-2.5">
                                     <button
                                         onClick={zoomSlider.decrement}
-                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
+                                        className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Decrease zoom"
                                         disabled={!zoomSlider.canDecrement}
                                     >
-                                        <Minus className="w-3 h-3" />
+                                        <Minus className="w-4 h-4" />
                                     </button>
                                     <input
                                         type="range"
@@ -599,11 +599,11 @@ export function ReaderSettings({
                                     />
                                     <button
                                         onClick={zoomSlider.increment}
-                                        className="inline-flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
+                                        className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-30"
                                         aria-label="Increase zoom"
                                         disabled={!zoomSlider.canIncrement}
                                     >
-                                        <Plus className="w-3 h-3" />
+                                        <Plus className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
