@@ -1,13 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Play, Pause, Square, Headphones, Volume2, AlertCircle } from 'lucide-react';
+import { Play, Pause, Square, Headphones, AlertCircle } from 'lucide-react';
 import { cn } from '../../../core/lib/utils';
 import { useSettingsStore } from '../../../core/store';
-import { immersionPlayer, ImmersionPlayer, type PlaybackState } from '../audio/ImmersionPlayer';
-
-interface VoiceInfo {
-    name: string;
-    lang: string;
-}
+import { immersionPlayer, type PlaybackState } from '../audio/ImmersionPlayer';
 
 interface ImmersionBarProps {
     sectionText: string;
@@ -25,11 +20,9 @@ export function ImmersionBar({
     const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
     const [hasError, setHasError] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
-    const [voices, setVoices] = useState<VoiceInfo[]>([]);
     const errorTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const initializedRef = useRef(false);
     const ttsVoice = useSettingsStore((s) => s.settings.tts.voice);
-    const updateTtsSettings = useSettingsStore((s) => s.updateTtsSettings);
 
     const showError = useCallback((msg?: string) => {
         setErrorMsg(msg || 'Unknown error');
@@ -47,10 +40,6 @@ export function ImmersionBar({
     useEffect(() => {
         onCompleteRef.current = onComplete;
     }, [onComplete]);
-
-    useEffect(() => {
-        ImmersionPlayer.loadVoices().then(setVoices);
-    }, []);
 
     useEffect(() => {
         if (initializedRef.current) return;
@@ -97,20 +86,6 @@ export function ImmersionBar({
         immersionPlayer.stop();
     }, []);
 
-    const handleTestVoice = useCallback((voiceName: string) => {
-        immersionPlayer.speak("Hello, this is a voice sample.", voiceName);
-    }, []);
-
-    const cycleVoice = useCallback(() => {
-        if (voices.length === 0) return;
-        const idx = voices.findIndex(v => v.name === ttsVoice);
-        const next = voices[(idx + 1) % voices.length];
-        if (next) updateTtsSettings({ voice: next.name });
-    }, [ttsVoice, voices, updateTtsSettings]);
-
-    const currentVoiceLabel = voices.find(v => v.name === ttsVoice)
-        ?.name?.replace(/\(.*\)/, '').trim().split(' ').slice(0, 2).join(' ') || '';
-
     const isActive = playbackState !== 'idle';
 
     return (
@@ -119,7 +94,7 @@ export function ImmersionBar({
                 className={cn(
                     'flex items-center justify-center gap-2 sm:gap-1.5 overflow-x-auto',
                     'w-full px-4 sm:w-auto sm:px-4',
-                    'py-3 sm:py-2.5',
+                    'py-3 sm:py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
                     'sm:rounded-full rounded-xl',
                     'bg-[var(--color-surface)]/95 backdrop-blur-xl',
                     'border border-[var(--color-border)]',
@@ -128,7 +103,6 @@ export function ImmersionBar({
                     !visible && 'opacity-0 pointer-events-none translate-y-4',
                     className,
                 )}
-                style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
                 <div className="flex items-center gap-2 shrink-0">
                     <Headphones
@@ -156,31 +130,6 @@ export function ImmersionBar({
                     )}
                 </div>
 
-                {voices.length > 0 && (
-                    <>
-                        <div className="w-px h-5 bg-[var(--color-border)] shrink-0" />
-
-                        <button
-                            onClick={cycleVoice}
-                            className="flex items-center justify-center h-8 sm:h-7 px-2 sm:px-1.5 rounded text-xs sm:text-[11px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors shrink-0"
-                            title="Change voice"
-                        >
-                            {currentVoiceLabel}
-                        </button>
-
-                        <button
-                            onClick={() => handleTestVoice(ttsVoice)}
-                            className="flex items-center justify-center w-8 sm:w-6 h-8 sm:h-6 rounded text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-overlay-subtle)] shrink-0"
-                            title="Test this voice"
-                            aria-label="Test voice"
-                        >
-                            <Volume2 className="w-4 sm:w-3 h-4 sm:h-3" />
-                        </button>
-                    </>
-                )}
-
-                <div className="w-px h-5 bg-[var(--color-border)] shrink-0" />
-
                 <div className="flex items-center gap-1.5 shrink-0">
                     {playbackState === 'idle' || playbackState === 'loading' ? (
                         <button
@@ -188,7 +137,7 @@ export function ImmersionBar({
                             onClick={handlePlay}
                             disabled={playbackState === 'loading' || !sectionText.trim()}
                             className={cn(
-                                'flex items-center justify-center w-10 sm:w-8 h-10 sm:h-8 rounded-full transition-colors duration-150',
+                                'flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-150',
                                 'bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]',
                                 'hover:bg-[var(--color-accent-hover)] active:scale-90',
                                 'disabled:opacity-40 disabled:cursor-not-allowed',
@@ -196,7 +145,7 @@ export function ImmersionBar({
                             title="Start immersion reading"
                             aria-label="Play"
                         >
-                            <Play className="w-4 sm:w-3.5 h-4 sm:h-3.5 fill-current" />
+                            <Play className="w-4 h-4 fill-current" />
                         </button>
                     ) : (
                         <>
@@ -204,7 +153,7 @@ export function ImmersionBar({
                                 id="tts-pause-btn"
                                 onClick={playbackState === 'playing' ? handlePause : handlePlay}
                                 className={cn(
-                                    'flex items-center justify-center w-10 sm:w-8 h-10 sm:h-8 rounded-full transition-colors duration-150',
+                                    'flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-150',
                                     'bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]',
                                     'hover:bg-[var(--color-overlay-subtle)] active:scale-90',
                                 )}
@@ -212,23 +161,23 @@ export function ImmersionBar({
                                 aria-label={playbackState === 'playing' ? 'Pause' : 'Resume'}
                             >
                                 {playbackState === 'playing' ? (
-                                    <Pause className="w-4 sm:w-3.5 h-4 sm:h-3.5 fill-current" />
+                                    <Pause className="w-4 h-4 fill-current" />
                                 ) : (
-                                    <Play className="w-4 sm:w-3.5 h-4 sm:h-3.5 fill-current" />
+                                    <Play className="w-4 h-4 fill-current" />
                                 )}
                             </button>
                             <button
                                 id="tts-stop-btn"
                                 onClick={handleStop}
                                 className={cn(
-                                    'flex items-center justify-center w-10 sm:w-8 h-10 sm:h-8 rounded-full transition-colors duration-150',
+                                    'flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-150',
                                     'bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]',
                                     'hover:bg-[var(--color-overlay-subtle)] hover:text-[color:var(--color-error)] active:scale-90',
                                 )}
                                 title="Stop"
                                 aria-label="Stop"
                             >
-                                <Square className="w-4 sm:w-3 h-4 sm:h-3 fill-current" />
+                                <Square className="w-4 h-4 fill-current" />
                             </button>
                         </>
                     )}
