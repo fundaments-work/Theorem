@@ -447,9 +447,19 @@ export const AppTitlebar = memo(function AppTitlebar({
                             onKeyDown={handleSearchKeyDown}
                             className={cn(
                                 TITLEBAR_SEARCH_INPUT,
-                                "pr-4"
+                                "pr-10"
                             )}
                         />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => useUIStore.getState().clearSearch()}
+                                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                                aria-label="Clear search"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
