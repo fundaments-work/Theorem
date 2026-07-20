@@ -46,7 +46,7 @@ interface WindowTitlebarProps {
     pdfControls?: any;
 }
 
-const ICON_BUTTON_CLASS = "inline-flex h-9 w-9 shrink-0 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
+const ICON_BUTTON_CLASS = "inline-flex h-10 w-10 shrink-0 items-center justify-center border border-transparent bg-transparent p-0 text-[color:var(--color-text-secondary)] transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]";
 const ICON_BUTTON_ACTIVE_CLASS = "border-[var(--color-text-primary)] bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]";
 const ICON_BUTTON_INACTIVE_CLASS = "border-transparent text-[color:var(--color-text-secondary)]";
 
@@ -90,6 +90,7 @@ interface MenuProps {
         onClick: () => void;
         active?: boolean;
         disabled?: boolean;
+        mobileOnly?: boolean;
     }>;
     triggerRef: React.RefObject<HTMLButtonElement | null>;
 }
@@ -133,7 +134,8 @@ function MobileMenu({ isOpen, onClose, items, triggerRef: _triggerRef }: MenuPro
                         item.active
                             ? "bg-[var(--color-surface-muted)] font-medium"
                             : "hover:bg-[var(--color-surface-muted)]",
-                        item.disabled && "opacity-50 cursor-not-allowed"
+                        item.disabled && "opacity-50 cursor-not-allowed",
+                        item.mobileOnly && "sm:hidden"
                     )}
                     >
                         <span className="w-5 h-5 flex items-center justify-center opacity-70">{item.icon}</span>
@@ -223,23 +225,46 @@ export function WindowTitlebar({
         try { await getCurrentWebviewWindow().close(); } catch (err) {  }
     };
 
-    const commonMenuItems: Array<{
+    const menuItems: Array<{
         label: string;
         icon: React.ReactNode;
         onClick: () => void;
         active?: boolean;
         disabled?: boolean;
+        mobileOnly?: boolean;
     }> = [
+            { label: "Search", icon: <Search className="w-5 h-5" />, onClick: onToggleSearch, active: activePanel === "search", mobileOnly: true },
+            { label: "Bookmark", icon: <BookmarkIcon className="w-5 h-5" />, onClick: () => onAddBookmark?.(), active: isCurrentPageBookmarked, mobileOnly: true },
+            { label: "Reading Settings", icon: <Type className="w-5 h-5" />, onClick: onToggleSettings, active: activePanel === "settings", mobileOnly: true },
             { label: "Annotations & Notes", icon: <BookmarkIcon className="w-5 h-5" />, onClick: onToggleBookmarks, active: activePanel === "bookmarks" },
             { label: "Book Info", icon: <Info className="w-5 h-5" />, onClick: onToggleInfo, active: activePanel === "info" },
         ];
 
     if (onToggleFullscreen) {
-        commonMenuItems.push({
+        menuItems.push({
             label: fullscreen ? "Exit Fullscreen" : "Fullscreen",
             icon: fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />,
             onClick: onToggleFullscreen,
             active: fullscreen,
+        });
+    }
+
+    if (onToggleImmersion) {
+        menuItems.push({
+            label: immersionMode ? "Exit Immersion" : "Immersion Reading",
+            icon: <Headphones className={cn("w-5 h-5", immersionMode && "fill-current")} />,
+            onClick: onToggleImmersion,
+            active: immersionMode,
+            mobileOnly: true,
+        });
+    }
+    if (onToggleSpeedRead) {
+        menuItems.push({
+            label: speedReadMode ? "Exit Speed Read" : "Speed Read",
+            icon: <Zap className="w-5 h-5" />,
+            onClick: onToggleSpeedRead,
+            active: speedReadMode,
+            mobileOnly: true,
         });
     }
 
@@ -280,7 +305,7 @@ export function WindowTitlebar({
 
                 <div className="hidden lg:block lg:flex-1" />
 
-                <div className="flex items-center gap-0.5 mr-0.5">
+                <div className="hidden sm:flex items-center gap-0.5 mr-0.5">
                     <ToolbarButton onClick={onToggleSearch} active={activePanel === "search"} title="Search" aria-label="Search">
                         <Search className="w-5 h-5" />
                     </ToolbarButton>
@@ -322,6 +347,12 @@ export function WindowTitlebar({
                     </ToolbarButton>
                 </div>
 
+                <div className="sm:hidden">
+                    <ToolbarButton onClick={onToggleSettings} active={activePanel === "settings"} title="Reading Settings" aria-label="Reading Settings">
+                        <Type className="w-5 h-5" />
+                    </ToolbarButton>
+                </div>
+
                 <button
                     ref={menuButtonRef}
                     onClick={onToggleMenu}
@@ -335,7 +366,7 @@ export function WindowTitlebar({
                 <MobileMenu
                     isOpen={isMenuOpen}
                     onClose={onToggleMenu}
-                    items={commonMenuItems}
+                    items={menuItems}
                     triggerRef={menuButtonRef}
                 />
 
