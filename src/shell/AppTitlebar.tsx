@@ -438,7 +438,6 @@ export const AppTitlebar = memo(function AppTitlebar({
             {isSearchVisible && (
                 <div className="mt-1.5 hidden sm:block lg:hidden">
                     <div className="relative w-full">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--color-text-muted)]" />
                         <input
                             type="text"
                             placeholder={searchPlaceholder}
@@ -447,14 +446,14 @@ export const AppTitlebar = memo(function AppTitlebar({
                             onKeyDown={handleSearchKeyDown}
                             className={cn(
                                 TITLEBAR_SEARCH_INPUT,
-                                "pr-10"
+                                "pr-12"
                             )}
                         />
                         {searchQuery && (
                             <button
                                 type="button"
                                 onClick={() => useUIStore.getState().clearSearch()}
-                                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 !h-7 !w-7 ui-icon-btn"
                                 aria-label="Clear search"
                             >
                                 <X className="w-4 h-4" />
