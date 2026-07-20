@@ -1790,7 +1790,7 @@ export function LibraryPage() {
                             const hlBook = books.find((b) => b.id === hl.bookId);
                             if (!hl) return null;
                             return (
-                                <div className="sticky top-0 z-10 mb-3 border-l-[3px] border-[var(--color-accent)] bg-[var(--color-surface)] pl-4 pr-4 py-3 flex items-start gap-3">
+                                <div className="mb-3 border-l-[3px] border-[var(--color-accent)] bg-[var(--color-surface)] pl-4 pr-4 py-3 flex items-start gap-3">
                                     <div className="flex-1 min-w-0">
                                         <div className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider mb-1.5">
                                             From your highlights
