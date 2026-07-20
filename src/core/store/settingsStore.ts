@@ -81,8 +81,8 @@ const defaultAppSettings: AppSettings = {
     vault: defaultVaultSettings,
     deviceSync: defaultDeviceSyncSettings,
     hasCompletedOnboarding: false,
-    showDailyHighlight: true,
-    speedReadEnabled: true,
+    showDailyHighlight: false,
+    speedReadEnabled: false,
 };
 
 const defaultReadingStats: ReadingStats = {
