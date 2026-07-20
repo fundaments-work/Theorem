@@ -172,6 +172,11 @@ button:disabled {
     color: var(--color-text-primary);
 }
 
+.theme-dark ::selection {
+    background-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+    color: var(--color-text-primary);
+}
+
 
 :focus-visible {
     outline: 2px solid var(--color-focus-ring);
