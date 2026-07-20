@@ -3,12 +3,10 @@ import {
     FolderOpen,
     Highlighter,
     Library,
-    BookOpenText,
     Rss,
     Settings,
 } from "lucide-react";
 import { useUIStore } from "../../core/store";
-import { useSettingsStore } from "../../core/store";
 import type { AppRoute } from "../../core/types";
 
 interface NavItem {
@@ -21,7 +19,6 @@ const baseNavItems: NavItem[] = [
     { id: "library", label: "Library", icon: <Library className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
     { id: "shelves", label: "Shelves", icon: <FolderOpen className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
     { id: "annotations", label: "Highlights", icon: <Highlighter className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
-    { id: "vocabulary", label: "Words", icon: <BookOpenText className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
     { id: "feeds", label: "Feeds", icon: <Rss className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
     { id: "settings", label: "Settings", icon: <Settings className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" /> },
 ];
@@ -29,11 +26,7 @@ const baseNavItems: NavItem[] = [
 export const BottomNav = memo(function BottomNav() {
     const currentRoute = useUIStore((state) => state.currentRoute);
     const setRoute = useUIStore((state) => state.setRoute);
-    const vocabularyEnabled = useSettingsStore((state) => state.settings.vocabulary.vocabularyEnabled);
-
-    const navItems = baseNavItems.filter(
-        (item) => item.id !== "vocabulary" || vocabularyEnabled,
-    );
+    const navItems = baseNavItems;
     
     return (
         <nav aria-label="Primary navigation" className="ui-bottom-nav fixed bottom-0 left-0 right-0 z-[var(--z-nav)] pb-[env(safe-area-inset-bottom)] md:hidden">
