@@ -583,9 +583,6 @@ export function HighlightColorPicker({
                                     title={`${label} (Shortcut: ${COLOR_OPTIONS.findIndex(c => c.color === color) + 1})`}
                                     aria-label={`Select ${label}`}
                                 >
-                                    {selectedColor === color && (
-                                        <Check className="w-3.5 h-3.5 text-[color:var(--color-overlay-strong)]" strokeWidth={3} />
-                                    )}
                                 </button>
                             ))}
                         </div>

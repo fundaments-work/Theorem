@@ -504,7 +504,7 @@ export const ArticleViewer = memo(function ArticleViewer({
     const [noteEditorPosition, setNoteEditorPosition] = useState({ x: 0, y: 0 });
     const [editingNote, setEditingNote] = useState("");
     const [editingHighlightId, setEditingHighlightId] = useState<string | null>(null);
-    const [pendingHighlightColor, setPendingHighlightColor] = useState<HighlightColor>("yellow");
+    const [pendingHighlightColor, setPendingHighlightColor] = useState<HighlightColor | null>(null);
 
     const [dictionaryState, setDictionaryState] = useState<{
         term: string;
@@ -942,7 +942,7 @@ export const ArticleViewer = memo(function ArticleViewer({
     const handleAddNote = useCallback(() => {
         let highlightId = editingHighlightId;
         if (!highlightId) {
-            highlightId = createHighlightAnnotation(pendingHighlightColor);
+            highlightId = createHighlightAnnotation(pendingHighlightColor ?? "yellow");
         }
         if (!highlightId) {
             return;

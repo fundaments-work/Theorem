@@ -1133,7 +1133,7 @@ const BookReaderPage = memo(function BookReaderPage() {
     const [showNoteEditor, setShowNoteEditor] = useState(false);
     const [noteEditorPosition, setNoteEditorPosition] = useState({ x: 0, y: 0 });
     const [editingNote, setEditingNote] = useState('');
-    const [pendingHighlightColor, setPendingHighlightColor] = useState<HighlightColor>('yellow');
+    const [pendingHighlightColor, setPendingHighlightColor] = useState<HighlightColor | null>(null);
     const [dictionaryLookupTerm, setDictionaryLookupTerm] = useState('');
     const [dictionaryLookupResult, setDictionaryLookupResult] = useState<DictionaryLookupResult | null>(null);
     const [dictionaryLookupError, setDictionaryLookupError] = useState<string | null>(null);
@@ -1810,7 +1810,7 @@ const BookReaderPage = memo(function BookReaderPage() {
                 type: noteContent ? 'note' : 'highlight',
                 location: selectedCfi,
                 selectedText,
-                color: pendingHighlightColor,
+                color: pendingHighlightColor ?? 'yellow',
                 noteContent: noteContent || undefined,
                 createdAt: new Date(),
             };
@@ -1819,7 +1819,7 @@ const BookReaderPage = memo(function BookReaderPage() {
             setAnnotations(prev => [...prev, annotation]);
 
             try {
-                await readerRef.current?.addHighlight?.(selectedCfi, selectedText, pendingHighlightColor);
+                await readerRef.current?.addHighlight?.(selectedCfi, selectedText, pendingHighlightColor ?? 'yellow');
             } catch (err) {
             }
         }
