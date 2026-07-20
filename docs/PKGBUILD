@@ -1,0 +1,41 @@
+# Maintainer: Fundamentals
+# Contributor: Your Name <your.email@example.com>
+# URL: https://github.com/fundaments-work/Theorem
+
+pkgname=theorem-bin
+pkgver=1.0.8
+pkgrel=1
+pkgdesc="Local-first desktop reader for PDFs, EPUBs, MOBI, and RSS with highlights, annotations, and Markdown export"
+arch=('x86_64' 'aarch64')
+url="https://github.com/fundaments-work/Theorem"
+license=('MIT')
+depends=(
+    'webkit2gtk-4.1'
+    'libsoup3'
+    'glib-networking'
+    'gsettings-desktop-schemas'
+    'librsvg'
+    'gtk3'
+    'libayatana-appindicator'
+)
+provides=("${pkgname}")
+conflicts=("${pkgname}")
+
+if [[ "$CARCH" == "x86_64" ]]; then
+    _arch="amd64"
+elif [[ "$CARCH" == "aarch64" ]]; then
+    _arch="arm64"
+fi
+
+source=("https://github.com/fundaments-work/Theorem/releases/download/v${pkgver}/Theorem_${pkgver}_${_arch}.deb")
+sha256sums=('SKIP')
+
+package() {
+    cd "${srcdir}"
+    # .deb is an ar archive; extract it
+    ar x "Theorem_${pkgver}_${_arch}.deb"
+    # Extract the data tarball into the package root
+    tar xf data.tar.* -C "${pkgdir}"
+    # Clean up extracted deb metadata
+    rm -f "${srcdir}/debian-binary" "${srcdir}/control.tar."* "${srcdir}/data.tar."* 2>/dev/null || true
+}

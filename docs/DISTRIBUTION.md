@@ -29,29 +29,23 @@ from GitHub Releases and installs it. Works on Linux, macOS, and Windows.
 
 ### AUR (Arch Linux — paru / yay)
 
-There is no official AUR package yet. A PKGBUILD is needed.
+There is no official AUR package yet. A [PKGBUILD](./PKGBUILD) is included in
+this repository under `docs/PKGBUILD`.
 
-If you want to create one, here is a template `PKGBUILD`:
-
+To install directly from the local PKGBUILD:
 ```bash
-# Maintainer: Your Name <email>
-pkgname=theorem-bin
-pkgver=1.0.8
-pkgrel=1
-pkgdesc="Local-first desktop reader for PDFs, EPUBs, MOBI, and RSS"
-arch=('x86_64')
-url="https://github.com/fundaments-work/Theorem"
-license=('MIT')
-source=("https://github.com/fundaments-work/Theorem/releases/download/v${pkgver}/Theorem_${pkgver}_amd64.deb")
-sha256sums=('SKIP')
-depends=('webkit2gtk' 'librsvg' 'gobject-introspection-runtime' 'libsoup3')
-
-package() {
-    tar -xf "$srcdir/Theorem_${pkgver}_amd64.deb" -C "$pkgdir"
-}
+cd docs
+makepkg -si
 ```
 
 To submit to AUR: <https://wiki.archlinux.org/title/AUR_submission_guidelines>
+
+Steps to publish:
+1. Fork the `aur` repository on Arch Linux
+2. Copy `docs/PKGBUILD` to a local checkout
+3. Replace `sha256sums` with actual hashes (run `makepkg -g` in the directory)
+4. Run `makepkg --printsrcinfo > .SRCINFO`
+5. Commit and push to the AUR
 
 ### APT (Debian / Ubuntu — apt)
 
