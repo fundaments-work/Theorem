@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, type ReactNode, memo } from "react";
 import {
-    BookOpenText,
     Bookmark,
     ChevronLeft,
     ChevronRight,
@@ -25,7 +24,6 @@ interface SidebarItem {
 
 const mainNavItems: SidebarItem[] = [
     { id: "library", label: "Library", icon: <Library className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
-    { id: "vocabulary", label: "Vocabulary", icon: <BookOpenText className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
     { id: "annotations", label: "Highlights", icon: <Highlighter className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
     { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
     { id: "shelves", label: "Shelves", icon: <FolderOpen className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
@@ -43,7 +41,6 @@ export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps
     const sidebarOpen = useUIStore((state) => state.sidebarOpen);
     const toggleSidebar = useUIStore((state) => state.toggleSidebar);
     const sidebarCollapsed = useSettingsStore((state) => state.settings.sidebarCollapsed);
-    const vocabularyEnabled = useSettingsStore((state) => state.settings.vocabulary.vocabularyEnabled);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
     const sidebarRef = useRef<HTMLElement>(null);
     const touchStartX = useRef<number>(0);
@@ -116,9 +113,7 @@ export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps
 
             <nav aria-label="Main navigation" className="flex-1 overflow-y-auto py-6 min-h-0 custom-scrollbar [content-visibility:auto] overscroll-contain">
                 <ul className="flex flex-col">
-                    {mainNavItems
-                        .filter((item) => item.id !== "vocabulary" || vocabularyEnabled)
-                        .map((item) => {
+                    {mainNavItems.map((item) => {
                             const isActive = currentRoute === item.id;
 
                             return (
