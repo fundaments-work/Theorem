@@ -3,11 +3,12 @@ import { useState, useMemo, useCallback, useRef, useEffect, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../core/lib/utils";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
+import { sanitizeHtmlForDisplay } from "../../core/lib/sanitize";
 import { useLibraryStore, useUIStore, useVocabularyStore } from "../../core/store";
 import { HIGHLIGHT_SOLID_COLORS } from "../../core/lib/design-tokens";
 import type { HighlightColor, VocabularyTerm } from "../../core/types";
 import { EditNoteModal } from "./components/modals/EditNoteModal";
-import { PageHeader, Dropdown, ConfirmDialog } from "../../ui";
+import { PageHeader, Dropdown, ConfirmDialog, Modal, ModalHeader, ModalBody } from "../../ui";
 import {
     Highlighter,
     StickyNote,
@@ -232,6 +233,7 @@ export function AnnotationsPage() {
     const [viewMode, setViewMode] = useState<"list" | "cards">("list");
     const [cardIndex, setCardIndex] = useState(0);
     const [groupIndex, setGroupIndex] = useState(0);
+    const [selectedVocabTerm, setSelectedVocabTerm] = useState<VocabularyTerm | null>(null);
 
     const cardTouchStartX = useRef(0);
     const cardTouchStartY = useRef(0);
@@ -446,9 +448,11 @@ export function AnnotationsPage() {
             
             <PageHeader
                 title="Workbench"
-                description={activeFilter === "vocabulary"
-                    ? `${filteredVocabularyTerms.length} ${filteredVocabularyTerms.length === 1 ? "term" : "terms"}`
-                    : `${filteredAnnotations.length} ${filteredAnnotations.length === 1 ? "annotation" : "annotations"} across ${new Set(filteredAnnotations.map((a) => a.bookId)).size} books`}
+                description={activeFilter === "all"
+                    ? `${filteredAnnotations.length} annotation${filteredAnnotations.length === 1 ? "" : "s"} • ${vocabularyTerms.length} term${vocabularyTerms.length === 1 ? "" : "s"}`
+                    : activeFilter === "vocabulary"
+                        ? `${filteredVocabularyTerms.length} ${filteredVocabularyTerms.length === 1 ? "term" : "terms"}`
+                        : `${filteredAnnotations.length} ${filteredAnnotations.length === 1 ? "annotation" : "annotations"} across ${new Set(filteredAnnotations.map((a) => a.bookId)).size} books`}
             />
 
             {currentBookId && (
@@ -545,11 +549,18 @@ export function AnnotationsPage() {
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {filteredVocabularyTerms.map((term) => (
-                            <div key={term.id} className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex flex-col gap-2">
+                            <div
+                                key={term.id}
+                                onClick={() => setSelectedVocabTerm(term)}
+                                className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex flex-col gap-2 cursor-pointer hover:border-[var(--color-text-muted)] transition-colors"
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedVocabTerm(term); }}
+                            >
                                 <div className="flex items-center justify-between gap-2">
                                     <span className="text-sm font-medium text-[color:var(--color-text-primary)] truncate">{term.term}</span>
                                     <button
-                                        onClick={() => deleteVocabularyTerm(term.id)}
+                                        onClick={(e) => { e.stopPropagation(); deleteVocabularyTerm(term.id); setSelectedVocabTerm(null); }}
                                         className="shrink-0 p-1 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-error)] transition-colors"
                                         aria-label={`Delete ${term.term}`}
                                     >
@@ -782,6 +793,55 @@ export function AnnotationsPage() {
                         ))}
                     </div>
                 </div>
+            )}
+
+            {selectedVocabTerm && (
+                <Modal isOpen onClose={() => setSelectedVocabTerm(null)} size="md">
+                    <ModalHeader title={selectedVocabTerm.term} onClose={() => setSelectedVocabTerm(null)} showCloseButton />
+                    <ModalBody>
+                        <div className="space-y-6">
+                            {selectedVocabTerm.phonetic && (
+                                <span className="inline-block font-mono text-sm text-[var(--color-text-secondary)] bg-[var(--color-surface-muted)] px-2 py-0.5">
+                                    /{selectedVocabTerm.phonetic}/
+                                </span>
+                            )}
+                            {selectedVocabTerm.meanings.map((meaning, idx) => (
+                                <div key={`${meaning.provider}-${idx}`}>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        {meaning.partOfSpeech && (
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2 py-0.5">
+                                                {meaning.partOfSpeech}
+                                            </span>
+                                        )}
+                                        <span className="text-[9px] uppercase text-[var(--color-text-muted)] tracking-wider font-medium">
+                                            {meaning.provider}
+                                        </span>
+                                    </div>
+                                    <ul className="space-y-2">
+                                        {meaning.definitions.slice(0, 5).map((def, i) => (
+                                            <li key={`${i}-${def.slice(0, 40)}`} className="flex gap-2.5 text-sm text-[var(--color-text-primary)] leading-relaxed">
+                                                <span className="shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] opacity-40" />
+                                                {isHtml(def) ? (
+                                                    <div className="dict-definition min-w-0 break-words" dangerouslySetInnerHTML={sanitizeHtmlForDisplay(def)} />
+                                                ) : (
+                                                    <span className="min-w-0 break-words">{def}</span>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))}
+                            <hr className="border-[var(--color-border-subtle)]" />
+                            <button
+                                onClick={() => { deleteVocabularyTerm(selectedVocabTerm.id); setSelectedVocabTerm(null); }}
+                                className="ui-btn-danger py-2.5 px-5 text-[11px] font-bold uppercase tracking-wider"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                Delete this term
+                            </button>
+                        </div>
+                    </ModalBody>
+                </Modal>
             )}
         </div>
     );
