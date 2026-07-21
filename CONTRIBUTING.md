@@ -1,3 +1,4 @@
+
 # Contributing to Theorem
 
 Thanks for your interest in contributing! Theorem is a Tauri-first desktop reader built with React 19, TypeScript, and Rust.
@@ -13,7 +14,7 @@ Thanks for your interest in contributing! Theorem is a Tauri-first desktop reade
 ### Setup
 
 ```bash
-git clone https://github.com/fundaments-work/theorem.git
+git clone --recurse-submodules https://github.com/fundaments-work/theorem.git
 cd theorem
 pnpm install
 ```
@@ -29,30 +30,91 @@ pnpm dev:tauri    # Desktop mode (Tauri window)
 
 See [AGENTS.md](./AGENTS.md) for the full repository map, import conventions, placement rules, and anti-patterns.
 
-Key concepts:
+Key architectural decisions:
 - **Navigation is store-driven** — `useUIStore.currentRoute`, not React Router
 - **No path aliases** (`@/`, `@theorem/*`) — use relative imports
-- **`src/features/reader/foliate-js/**` is vendored** — do not edit unless explicitly required
+- **`src/features/reader/foliate-js/**` is vendored upstream** — do not edit. Our wrapper lives at `src/features/reader/foliate-js-runtime/`
+- **Stores** are one file per slice in `src/core/store/`, barrel-imported from `"../../core/store"`
+- **Types** live in `src/core/types/index.ts`
+- **Platform detection** uses `isTauri()`, `isMobile()` from `src/core/lib/env.ts` — no hardcoded platform checks
 
 ## Making Changes
 
-1. Fork and create a feature branch
-2. Write your changes following existing code conventions
-3. Run `pnpm typecheck` to verify TypeScript
-4. If Rust was touched, run `cargo fmt && cargo check` in `src-tauri/`
-5. Run `pnpm test` to verify existing tests pass
-6. Commit using [conventional commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, etc.)
-7. Open a pull request against `main`
+### Branching
 
-## Commit Conventions
+- `main` is the stable release branch. All PRs target `main`.
+- Feature branches use `feature/` prefix (e.g., `feature/dark-mode-toggle`)
+- Bug fix branches use `fix/` prefix (e.g., `fix/reader-crash-on-mobile`)
+- Release branches use `release/` prefix (e.g., `release/1.0.8`)
 
-Use conventional commit prefixes:
-- `feat:` — new feature
-- `fix:` — bug fix
-- `chore:` — maintenance, deps, cleanup
-- `docs:` — documentation
-- `style:` — formatting, design tokens
-- `refactor:` — code restructuring without behavioral changes
+### Code Style
+
+- **TypeScript**: strict mode, no `any` unless absolutely necessary
+- **React**: functional components with hooks, no class components
+- **Imports**: named imports, no default exports for components
+- **CSS**: Tailwind utility classes + `cn()` from `src/core/lib/utils.ts`
+- **Animations**: `prefers-reduced-motion` guard on all animations
+
+### Commit Convention
+
+Use [conventional commits](https://www.conventionalcommits.org/):
+
+| Prefix | When to use |
+|--------|-------------|
+| `feat:` | New feature |
+| `fix:` | Bug fix |
+| `chore:` | Maintenance, dependencies, cleanup |
+| `docs:` | Documentation |
+| `style:` | Formatting, design tokens, CSS |
+| `refactor:` | Code restructuring without behavioral change |
+| `perf:` | Performance improvement |
+| `test:` | Adding or updating tests |
+| `ci:` | CI configuration |
+
+### Before Submitting
+
+Run all applicable quality gates:
+
+```bash
+pnpm typecheck                           # TypeScript — zero errors
+pnpm test                                # Vitest — all pass
+cd src-tauri && cargo fmt && cargo check # Rust — fmt no diff, check compiles
+cd src-tauri && cargo clippy             # Rust lint — zero warnings
+```
+
+### Pull Request Lifecycle
+
+1. Fork the repository and create your branch from `main`
+2. Make your changes, keeping commits atomic and well-described
+3. Run quality gates (above) and fix any issues
+4. Open a PR against `main` — the PR template will pre-fill with a checklist
+5. CI runs automatically: typecheck, tests, build, and Rust checks
+6. A maintainer reviews your PR. Expect feedback within a few days.
+7. Address review feedback with additional commits (no force-push unless requested)
+8. Once approved, a maintainer merges your PR
+
+### What to Contribute
+
+We welcome contributions in these areas:
+
+- **Bug fixes** — check the [issues](https://github.com/fundaments-work/theorem/issues) for `bug` and `good first issue` labels
+- **Reader improvements** — rendering, pagination, annotation performance
+- **Sync reliability** — edge cases in P2P sync, conflict resolution
+- **Mobile polish** — Android-specific UX, gesture handling, performance
+- **Dictionary support** — additional languages and dictionary formats
+- **Tests** — coverage is always welcome
+- **Docs** — README, screenshots, onboarding
+
+## Release Process
+
+Releases are automated via GitHub Actions. A maintainer:
+
+1. Bumps version in `package.json`, `Cargo.toml`, `tauri.conf.json`, and `theorem-sync-core/Cargo.toml`
+2. Updates `CHANGELOG.md`
+3. Registers icons from `theorem.svg`
+4. Tags `v<version>` and pushes — CI builds all targets and publishes
+
+The full procedure is documented in [AGENTS.md](./AGENTS.md) under the Release section.
 
 ## TTS / Immersion Reading Development
 
@@ -72,8 +134,14 @@ pnpm test:watch    # Watch mode
 pnpm test:coverage # With coverage report
 ```
 
-Tests live in `tests/**/*.test.ts` with setup in `tests/setup.ts`.
+Tests live in `tests/**/*.test.ts` with setup in `tests/setup.ts`. We use Vitest with jsdom for DOM-based tests. New features should include tests.
 
-## Questions?
+## Getting Help
 
-Open a [GitHub Discussion](https://github.com/fundaments-work/theorem/discussions) or [issue](https://github.com/fundaments-work/theorem/issues).
+- Open a [GitHub Discussion](https://github.com/fundaments-work/theorem/discussions) for questions and ideas
+- Open a [GitHub Issue](https://github.com/fundaments-work/theorem/issues) for bugs and feature requests
+- Security vulnerabilities: report via [GitHub Security Advisories](https://github.com/fundaments-work/theorem/security/advisories/new)
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md). By participating, you agree to uphold its standards.
