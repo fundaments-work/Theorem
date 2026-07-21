@@ -174,10 +174,12 @@ export const useSettingsStore = create<SettingsStore>()(
                     settingsLastModifiedAt: new Date().toISOString(),
                 })),
 
-            updateStats: (updates) =>
+            updateStats: (updates) => {
                 set((state) => ({
                     stats: { ...state.stats, ...updates },
-                })),
+                }));
+                scheduleMutationSync();
+            },
 
             resetSettings: () => {
                 set({

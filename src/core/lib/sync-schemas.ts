@@ -130,7 +130,7 @@ export const VocabularyMeaningSchema = z.object({
     examples: z.array(z.string()).optional(),
     synonyms: z.array(z.string()).optional(),
     antonyms: z.array(z.string()).optional(),
-    provider: z.enum(["stardict"]),
+    provider: z.enum(["stardict", "free-dictionary-api"]),
 });
 
 export const VocabularyTermSchema = z.object({

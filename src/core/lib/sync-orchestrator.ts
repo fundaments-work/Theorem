@@ -668,13 +668,13 @@ export async function runDeviceSync(
         }
 
         log(`Sync complete. ${summary}`);
-        if (!_syncActivityDetected) {
-            setStatus("error", summary);
-        } else {
+        if (_syncActivityDetected || changedDomains.size > 0) {
             setStatus("synced", summary);
             _lastSyncPeerId = peerDeviceId;
             
             void syncBookCovers(peerDeviceId).then(() => prefetchRecentBooks(peerDeviceId));
+        } else {
+            setStatus("error", summary);
         }
         _dataDirty = false;
 
