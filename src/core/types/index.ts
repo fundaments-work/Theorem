@@ -178,6 +178,7 @@ export interface ReaderSettings {
 export type LibraryViewMode = "grid" | "list" | "compact";
 export type LibrarySortBy = "title" | "author" | "dateAdded" | "lastRead" | "progress" | "rating";
 export type LibrarySortOrder = "asc" | "desc";
+export type LibraryStatusFilter = "all" | "unread" | "reading" | "completed";
 
 export interface AppSettings {
     sidebarCollapsed: boolean;
@@ -196,6 +197,9 @@ export interface AppSettings {
     hasCompletedOnboarding: boolean;
     showDailyHighlight: boolean;
     speedReadEnabled: boolean;
+    goalNotifications: boolean;
+    dailyReminderTime: string;
+    syncNotifications: boolean;
 }
 
 export interface PairedDevice {

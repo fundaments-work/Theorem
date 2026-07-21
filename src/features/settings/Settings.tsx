@@ -748,6 +748,47 @@ export const SettingsPage = memo(function SettingsPage() {
                                 />
                             </div>
                         </div>
+
+                        <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-4">
+                            <SettingRow
+                                label="Goal Notifications"
+                                description="Notify when you meet or fall short of your daily goal"
+                            >
+                                <Toggle
+                                    checked={settings.goalNotifications}
+                                    onChange={(checked) => updateSettings({ goalNotifications: checked })}
+                                />
+                            </SettingRow>
+
+                            <SettingRow
+                                label="Daily Reminder Time"
+                                description="Time for a reminder if you're behind your goal"
+                                htmlFor="reminder-time"
+                            >
+                                <input
+                                    id="reminder-time"
+                                    type="time"
+                                    value={settings.dailyReminderTime}
+                                    onChange={(e) => updateSettings({ dailyReminderTime: e.target.value })}
+                                    className={cn(
+                                        "w-32 px-3 py-1.5 text-sm",
+                                        "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]",
+                                        "border-none focus:ring-2 focus:ring-[var(--color-accent)]",
+                                        "text-center"
+                                    )}
+                                />
+                            </SettingRow>
+
+                            <SettingRow
+                                label="Sync Notifications"
+                                description="Notify when sync completes or fails"
+                            >
+                                <Toggle
+                                    checked={settings.syncNotifications}
+                                    onChange={(checked) => updateSettings({ syncNotifications: checked })}
+                                />
+                            </SettingRow>
+                        </div>
                     </Section>
 
                     <Section

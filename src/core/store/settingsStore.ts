@@ -83,6 +83,9 @@ const defaultAppSettings: AppSettings = {
     hasCompletedOnboarding: false,
     showDailyHighlight: false,
     speedReadEnabled: false,
+    goalNotifications: true,
+    dailyReminderTime: "20:00",
+    syncNotifications: true,
 };
 
 const defaultReadingStats: ReadingStats = {
@@ -204,7 +207,7 @@ export const useSettingsStore = create<SettingsStore>()(
         }),
         {
             name: "theorem-settings",
-            version: 9,
+            version: 10,
             storage: createJSONStorage(() => theoremPersistStorage),
             partialize: (state) => ({
                 settings: state.settings,
@@ -262,6 +265,20 @@ export const useSettingsStore = create<SettingsStore>()(
                 if (version < 9) {
                     if (state.settings && state.settings.speedReadEnabled === undefined) {
                         state.settings.speedReadEnabled = true;
+                    }
+                }
+
+                if (version < 10) {
+                    if (state.settings) {
+                        if (state.settings.goalNotifications === undefined) {
+                            state.settings.goalNotifications = true;
+                        }
+                        if (state.settings.dailyReminderTime === undefined) {
+                            state.settings.dailyReminderTime = "20:00";
+                        }
+                        if (state.settings.syncNotifications === undefined) {
+                            state.settings.syncNotifications = true;
+                        }
                     }
                 }
 

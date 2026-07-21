@@ -51,9 +51,22 @@ export async function notifyIfGranted(title: string, body: string) {
     await ensureBindings();
     if (_isPermissionGranted) {
         const granted = await _isPermissionGranted();
-        if (!granted) return;
-    } else if ("Notification" in window && window.Notification.permission !== "granted") {
-        return;
+        if (granted) {
+            await notify(title, body);
+        } else if (_requestPermission) {
+            const permission = await _requestPermission();
+            if (permission === "granted") {
+                await notify(title, body);
+            }
+        }
+    } else if ("Notification" in window) {
+        if (window.Notification.permission === "granted") {
+            await notify(title, body);
+        } else if (window.Notification.permission === "default") {
+            const permission = await window.Notification.requestPermission();
+            if (permission === "granted") {
+                await notify(title, body);
+            }
+        }
     }
-    await notify(title, body);
 }
