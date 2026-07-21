@@ -176,16 +176,23 @@ Treat your upload keystore as irreplaceable from that point forward.
 Both keys should **never be committed to the repository**. Use GitHub Secrets for CI and
 keep local copies secure.
 
-For local release builds, set the environment variables before running `pnpm tauri build`:
+For local release builds, use the helper script:
 
 ```bash
-# Updater signing
-export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/theorem.key)"
+# First time setup (ensures keys exist)
+bash scripts/setup-local-build.sh --init
 
-# Android signing (handled via keystore.properties, not env vars)
-# CI auto-creates src-tauri/gen/android/keystore.properties — for local,
-# copy that file from CI output or create it manually:
-#   storeFile=/path/to/theorem-android.jks
-#   keyAlias=theorem-release-key
-#   password=your-password
+# Before every local build
+source scripts/setup-local-build.sh
+
+# Then build
+pnpm tauri build
+
+# For Android specifically
+pnpm tauri android build --split-per-abi
 ```
+
+The script:
+1. Exports `TAURI_SIGNING_PRIVATE_KEY` from `~/.tauri/theorem.key`
+2. Creates `src-tauri/gen/android/keystore.properties` pointing to `~/theorem-android.jks`
+   (reads `ANDROID_KEY_PASSWORD` from environment if set, otherwise prompts)
