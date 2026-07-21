@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { isTauri } from "../../../core/lib/env";
+import { useSettingsStore } from "../../../core/store";
 import type { DailyReadingActivity, ReadingStats } from "../../../core/types";
 
 interface UseReadingTimeOptions {
@@ -7,6 +8,23 @@ interface UseReadingTimeOptions {
     addReadingTime: (bookId: string, minutes: number) => void;
     stats: ReadingStats;
     updateStats: (updates: Partial<ReadingStats>) => void;
+}
+
+async function notifyGoalMet(minutes: number) {
+    const { notifyIfGranted } = await import("../../../core/lib/notifications");
+    await notifyIfGranted("Goal Met!", `You've hit your daily reading goal of ${minutes} minutes!`);
+    const { toast } = await import("sonner");
+    toast.success("Daily goal met!");
+}
+
+async function notifyGoalShortfall(shortfall: number) {
+    const { notifyIfGranted } = await import("../../../core/lib/notifications");
+    await notifyIfGranted(
+        "Keep Going!",
+        `You're ${shortfall} min short of your daily reading goal — keep going!`,
+    );
+    const { toast } = await import("sonner");
+    toast(`${shortfall} min to go to reach your daily goal`);
 }
 
 export function useReadingTime({
@@ -18,6 +36,7 @@ export function useReadingTime({
     const readingStartTimeRef = useRef<number | null>(null);
     const readingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const statsRef = useRef(stats);
+    const notifiedGoalDateRef = useRef<string>("");
     statsRef.current = stats;
 
     useEffect(() => {
@@ -85,6 +104,17 @@ export function useReadingTime({
                         lastReadDate: today,
                     });
 
+                    const todayActivity = newDailyActivity.find(a => a.date === today);
+                    const todayMinutes = todayActivity?.minutes ?? 0;
+                    if (
+                        todayMinutes >= currentStats.dailyGoal &&
+                        useSettingsStore.getState().settings.goalNotifications &&
+                        notifiedGoalDateRef.current !== today
+                    ) {
+                        notifiedGoalDateRef.current = today;
+                        notifyGoalMet(currentStats.dailyGoal);
+                    }
+
                     readingStartTimeRef.current = Date.now();
                 }
             }
@@ -141,6 +171,19 @@ export function useReadingTime({
                 const elapsedMinutes = Math.floor((Date.now() - readingStartTimeRef.current) / 60000);
                 if (elapsedMinutes > 0) {
                     addReadingTime(currentBookId, elapsedMinutes);
+                }
+
+                const today = new Date().toISOString().split('T')[0];
+                const todayActivity = statsRef.current.dailyActivity.find(a => a.date === today);
+                const todayMinutes = (todayActivity?.minutes ?? 0) + elapsedMinutes;
+                if (
+                    todayMinutes > 0 &&
+                    todayMinutes < statsRef.current.dailyGoal &&
+                    useSettingsStore.getState().settings.goalNotifications &&
+                    notifiedGoalDateRef.current !== today
+                ) {
+                    notifiedGoalDateRef.current = today;
+                    notifyGoalShortfall(statsRef.current.dailyGoal - todayMinutes);
                 }
             }
         };
