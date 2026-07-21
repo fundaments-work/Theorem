@@ -240,6 +240,7 @@ export const useRssStore = create<RssStore>()(
                         ),
                     };
                 });
+                scheduleMutationSync();
             },
 
             toggleArticleRead: (articleId: string) => {
@@ -261,6 +262,7 @@ export const useRssStore = create<RssStore>()(
                         ),
                     };
                 });
+                scheduleMutationSync();
             },
 
             toggleArticleFavorite: (articleId: string) => {

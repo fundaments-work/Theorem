@@ -732,6 +732,7 @@ export const useLibraryStore = create<LibraryStore>()(
                     if (updatedBook) {
                         const existingCache = state.recentBooksCache.filter((book) => book.id !== bookId);
                         const newCache = [createCacheEntry(updatedBook), ...existingCache].slice(0, 20);
+                        scheduleMutationSync();
                         return { books: updatedBooks, recentBooksCache: newCache };
                     }
 
@@ -792,6 +793,8 @@ export const useLibraryStore = create<LibraryStore>()(
                         return state;
                     }
 
+                    scheduleMutationSync();
+
                     if (updatedBook) {
                         const existingCache = state.recentBooksCache.filter((book) => book.id !== bookId);
                         const newCache = [createCacheEntry(updatedBook), ...existingCache].slice(0, 20);
@@ -801,47 +804,40 @@ export const useLibraryStore = create<LibraryStore>()(
                     return { books: updatedBooks };
                 }),
 
-            toggleFavorite: (bookId) =>
-                set((state) => {
-                    const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
-                        ...book,
-                        isFavorite: !book.isFavorite,
-                    }));
-                    if (!updatedBook) {
-                        return { books };
-                    }
+            toggleFavorite: (bookId) => {
+                const state = get();
+                const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
+                    ...book,
+                    isFavorite: !book.isFavorite,
+                }));
+                if (!updatedBook) {
+                    if (books !== state.books) set({ books });
+                    return;
+                }
+                const newCache = syncRecentBooksCacheWithBook(state.recentBooksCache, updatedBook);
+                set({ books, recentBooksCache: newCache });
+                scheduleMutationSync();
+            },
 
-                    const recentBooksCache = syncRecentBooksCacheWithBook(
-                        state.recentBooksCache,
-                        updatedBook,
-                    );
-                    return recentBooksCache === state.recentBooksCache
-                        ? { books }
-                        : { books, recentBooksCache };
-                }),
+            updateBookMetadata: (bookId, metadata) => {
+                const state = get();
+                const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
+                    ...book,
+                    ...metadata,
+                }));
+                if (!updatedBook) {
+                    if (books !== state.books) set({ books });
+                    return;
+                }
 
-            updateBookMetadata: (bookId, metadata) =>
-                set((state) => {
-                    const { books, updatedBook } = updateBookById(state.books, bookId, (book) => ({
-                        ...book,
-                        ...metadata,
-                    }));
-                    if (!updatedBook) {
-                        return { books };
-                    }
+                if (isTauri() && (metadata.title !== undefined || metadata.author !== undefined)) {
+                    sqliteIndexBookFts(bookId, updatedBook.title, updatedBook.author).catch(e => console.error("[catch]", e));
+                }
 
-                    if (isTauri() && (metadata.title !== undefined || metadata.author !== undefined)) {
-                        sqliteIndexBookFts(bookId, updatedBook.title, updatedBook.author).catch(e => console.error("[catch]", e));
-                    }
-
-                    const recentBooksCache = syncRecentBooksCacheWithBook(
-                        state.recentBooksCache,
-                        updatedBook,
-                    );
-                    return recentBooksCache === state.recentBooksCache
-                        ? { books }
-                        : { books, recentBooksCache };
-                }),
+                const newCache = syncRecentBooksCacheWithBook(state.recentBooksCache, updatedBook);
+                set({ books, recentBooksCache: newCache });
+                scheduleMutationSync();
+            },
 
             saveBookLocations: (bookId, locations) => {
                 persistBookLocations(bookId, locations);
@@ -870,7 +866,7 @@ export const useLibraryStore = create<LibraryStore>()(
                     if (!updatedBook) {
                         return { books };
                     }
-
+                    scheduleMutationSync();
                     const recentBooksCache = syncRecentBooksCacheWithBook(
                         state.recentBooksCache,
                         updatedBook,
@@ -933,6 +929,7 @@ export const useLibraryStore = create<LibraryStore>()(
                             recentBooksCache: newCache,
                         };
                     });
+                    scheduleMutationSync();
                 }
 
                 return { wasAlreadyCompleted, completedYear };
@@ -973,6 +970,7 @@ export const useLibraryStore = create<LibraryStore>()(
                         recentBooksCache: newCache,
                     };
                 });
+                scheduleMutationSync();
 
                 return true;
             },
