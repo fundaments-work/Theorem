@@ -532,6 +532,66 @@ pub fn sqlite_get_kv(app: AppHandle, key: String) -> Result<Option<String>, Stri
     with_connection(&app, |connection| sqlite_get_kv_inner(connection, &key))
 }
 
+#[derive(Serialize)]
+pub struct GoalReminderData {
+    pub today_minutes: u64,
+    pub daily_goal: u64,
+}
+
+pub fn check_goal_reminder_inner(
+    connection: &Connection,
+) -> rusqlite::Result<Option<GoalReminderData>> {
+    fn parse_error(msg: impl std::fmt::Display) -> rusqlite::Error {
+        rusqlite::Error::InvalidParameterName(msg.to_string())
+    }
+
+    let json_str = match sqlite_get_kv_inner(connection, "zustand:theorem-settings")? {
+        Some(s) => s,
+        None => return Ok(None),
+    };
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&json_str).map_err(|e| parse_error(format!("Failed to parse settings JSON: {e}")))?;
+
+    let stats = &parsed["state"]["stats"];
+    let daily_goal = stats["dailyGoal"].as_u64().unwrap_or(30);
+
+    let today = {
+        let duration = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+        let secs = duration.as_secs();
+        let days = secs / 86400;
+        let z = days + 719468;
+        let era = z / 146097;
+        let doe = z - era * 146097;
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        let y = yoe + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let m = if mp < 10 { mp + 3 } else { mp - 9 };
+        let y = if m <= 2 { y + 1 } else { y };
+        format!("{:04}-{:02}-{:02}", y, m, d)
+    };
+
+    let today_minutes = stats["dailyActivity"]
+        .as_array()
+        .and_then(|arr| arr.iter().find(|a| a["date"].as_str() == Some(&today)))
+        .map(|a| a["minutes"].as_u64().unwrap_or(0))
+        .unwrap_or(0);
+
+    Ok(Some(GoalReminderData {
+        today_minutes,
+        daily_goal,
+    }))
+}
+
+#[tauri::command]
+pub fn sqlite_check_goal_reminder(app: AppHandle) -> Result<Option<GoalReminderData>, String> {
+    with_connection(&app, |connection| check_goal_reminder_inner(connection))
+}
+
 pub fn sqlite_batch_get_kv_inner(
     connection: &Connection,
     keys: &[String],
