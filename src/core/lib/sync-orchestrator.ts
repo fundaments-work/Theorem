@@ -25,6 +25,13 @@ import {
 import { isTauri } from "./env";
 import { saveCoverImage } from "./storage";
 
+async function notifySync(title: string, body?: string) {
+    const settings = useSettingsStore.getState().settings;
+    if (!settings.syncNotifications) return;
+    const { notifyIfGranted } = await import("./notifications");
+    await notifyIfGranted(title, body ?? "");
+}
+
 const debug: (...args: unknown[]) => void = import.meta.env.DEV ? console.log : () => {};
 
 function setStatus(status: DeviceSyncStatus, msg?: string) {
@@ -671,10 +678,13 @@ export async function runDeviceSync(
         if (_syncActivityDetected || changedDomains.size > 0) {
             setStatus("synced", summary);
             _lastSyncPeerId = peerDeviceId;
+
+            void notifySync("Sync Complete", summary);
             
             void syncBookCovers(peerDeviceId).then(() => prefetchRecentBooks(peerDeviceId));
         } else {
             setStatus("error", summary);
+            void notifySync("Sync Issue", summary);
         }
         _dataDirty = false;
 
@@ -683,6 +693,7 @@ export async function runDeviceSync(
         const errMsg = error instanceof Error ? error.message : String(error);
         log(`Sync failed: ${errMsg}`);
         setStatus("error", errMsg);
+        void notifySync("Sync Error", errMsg);
         return { success: false, domainsUpdated: [], error: errMsg };
     } finally {
         _isMerging = false;
