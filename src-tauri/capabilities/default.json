@@ -213,14 +213,6 @@
     "dialog:allow-ask",
     "dialog:allow-confirm",
     "dialog:allow-message",
-    "http:default",
-    {
-      "identifier": "http:allow-fetch",
-      "allow": [
-        { "url": "https://www.reader-dict.com/**" },
-        { "url": "https://github.com/**" }
-      ]
-    },
     "log:default",
     "notification:default",
     "window-state:default",
