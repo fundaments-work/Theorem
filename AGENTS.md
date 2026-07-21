@@ -74,12 +74,15 @@ CI (`ci.yml`) runs typecheck, test, build, and rust-check (fmt, clippy, check) o
 - **UI**: `src/features/reader/audio/ImmersionBar.tsx`
 - Voice availability depends on the user's system TTS configuration
 
-**Notifications**: Infrastructure is fully wired but **unused** (Sprint 3 planned):
-- Rust: `tauri-plugin-notification` registered in `lib.rs:851`
+**Notifications**: Reading goal + sync completion notifications active:
+- Rust: `tauri-plugin-notification` registered in `lib.rs:851`; `sqlite_check_goal_reminder` reads daily stats from `kv_store`
 - Frontend: `src/core/lib/notifications.ts` exports `notify()`, `notifyIfGranted()`, `requestNotificationPermission()`
-- UI: `<Toaster />` from `sonner` rendered in `App.tsx:492` but `toast()` never called
-- Android: `POST_NOTIFICATIONS` permission added to `AndroidManifest.xml`
-- Future: reading goal notifications, sync completion alerts
+- Goal met detection: `src/features/reader/hooks/useReadingTime.ts` after each flush
+- Scheduled reminder: `src/features/reader/hooks/useDailyGoalReminder.ts` — 5-min interval calling Rust command
+- Sync notifications: `src/core/lib/sync-orchestrator.ts` after sync completion/error
+- UI: `<Toaster />` from `sonner` renders sonner toasts alongside OS notifications
+- Settings: Goal Notifications toggle, Daily Reminder Time picker, Sync Notifications toggle in Settings → Reading Goals
+- Android: `POST_NOTIFICATIONS` permission added to `AndroidManifest.xml
 
 **Dictionary & Vocabulary**: Two-tier lookup system:
 - **Online**: Free Dictionary API (`api.dictionaryapi.dev`) via browser `fetch()` — used when available

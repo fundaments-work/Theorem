@@ -71,7 +71,7 @@ Reading progress is synced as part of per-book metadata entries (`book:{id}`), n
 | `dialog` | File open/save, confirm dialogs | Yes — all 5 variants |
 | `barcode-scanner` | QR code pairing (mobile) | Yes — DeviceSync |
 | `log` | Structured logging | Yes — debug.ts |
-| `notification` | Native notifications | Rust+NPM+permissions done, `notifications.ts` wired but uncalled |
+| `notification` | Native notifications | Reading goal + sync completion notifications active, `notifications.ts` called from 3 sites |
 | `window-state` | Save/restore window geometry (desktop) | Yes — Rust-only |
 | `global-shortcut` | Ctrl+Shift+F/R hotkeys (desktop) | Yes — App.tsx |
 | `updater` | Self-update (desktop) | Yes — Settings.tsx |
