@@ -96,9 +96,7 @@ uninstall_rpm_package() {
 remove_local_install() {
     local app_dir="$HOME/.local/lib/theorem"
     local bin_link="$HOME/.local/bin/theorem"
-    local daemon_link="$HOME/.local/bin/theorem-daemon"
     local desktop_entry="$HOME/.local/share/applications/theorem.desktop"
-    local systemd_service="$HOME/.config/systemd/user/theorem-daemon.service"
     local icons_root="$HOME/.local/share/icons/hicolor"
     local removed_local=false
 
@@ -110,17 +108,8 @@ remove_local_install() {
         rm -f "$bin_link"
         removed_local=true
     fi
-    if [[ -L "$daemon_link" || -f "$daemon_link" ]]; then
-        rm -f "$daemon_link"
-        removed_local=true
-    fi
     if [[ -f "$desktop_entry" ]]; then
         rm -f "$desktop_entry"
-        removed_local=true
-    fi
-    if [[ -f "$systemd_service" ]]; then
-        rm -f "$systemd_service"
-        systemctl --user daemon-reload 2>/dev/null || true
         removed_local=true
     fi
     if [[ -d "$icons_root" ]]; then
