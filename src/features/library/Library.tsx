@@ -9,7 +9,7 @@ import { pickLibraryFolderMobile, scanLibraryFolderMobile } from "../../core/lib
 import { isMobile, isTauri } from "../../core/lib/env";
 import { showOpenDirectoryDialog } from "../../core/lib/dialogs";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core/store";
-import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder } from "../../core/types";
+import type { Book, Collection, LibraryViewMode, LibrarySortBy, LibrarySortOrder, LibraryStatusFilter } from "../../core/types";
 import { FORMAT_DISPLAY_NAMES } from "../../core/types";
 import {
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
@@ -1075,6 +1075,7 @@ export function LibraryPage() {
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
 
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+    const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>("all");
     
     useEffect(() => {
         const shelfId = sessionStorage.getItem("theorem-selected-shelf");
@@ -1123,6 +1124,7 @@ export function LibraryPage() {
             searchQuery: debouncedSearchQuery,
             selectedShelfBookIds,
             showFavoritesOnly,
+            statusFilter,
             sortBy: settings.librarySortBy,
             sortOrder: settings.librarySortOrder,
             ftsSearchIds,
@@ -1134,6 +1136,7 @@ export function LibraryPage() {
         settings.librarySortBy,
         settings.librarySortOrder,
         showFavoritesOnly,
+        statusFilter,
         ftsSearchIds,
     ]);
 
@@ -1737,6 +1740,31 @@ export function LibraryPage() {
                                     </div>
                                 </div>
 
+                                <div className="p-4">
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-3">Status</h3>
+                                    <div className="grid grid-cols-4 gap-1">
+                                        {([
+                                            { id: "all", label: "All" },
+                                            { id: "unread", label: "New" },
+                                            { id: "reading", label: "Reading" },
+                                            { id: "completed", label: "Done" },
+                                        ] as const).map((option) => (
+                                            <button
+                                                key={option.id}
+                                                onClick={() => setStatusFilter(option.id as LibraryStatusFilter)}
+                                                className={cn(
+                                                    "px-2 py-2 text-[10px] font-bold border transition-colors",
+                                                    statusFilter === option.id
+                                                        ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                                        : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-surface)]"
+                                                )}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-2 divide-x divide-[var(--color-border)]">
                                     <div className="p-4">
                                         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-3">Order</h3>
@@ -1893,6 +1921,30 @@ export function LibraryPage() {
                                                 className={cn(
                                                     "px-2.5 py-1.5 text-[10px] font-bold border transition-colors",
                                                     settings.librarySortBy === option.id
+                                                        ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                                        : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                                )}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="p-4">
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-3">Status</h3>
+                                    <div className="grid grid-cols-4 gap-1">
+                                        {([
+                                            { id: "all", label: "All" },
+                                            { id: "unread", label: "New" },
+                                            { id: "reading", label: "Read" },
+                                            { id: "completed", label: "Done" },
+                                        ] as const).map((option) => (
+                                            <button
+                                                key={option.id}
+                                                onClick={() => setStatusFilter(option.id as LibraryStatusFilter)}
+                                                className={cn(
+                                                    "px-2 py-1.5 text-[10px] font-bold border transition-colors",
+                                                    statusFilter === option.id
                                                         ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
                                                         : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
                                                 )}

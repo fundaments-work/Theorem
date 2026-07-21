@@ -1,13 +1,20 @@
 import { FORMAT_DISPLAY_NAMES } from "../../core/types";
 import { normalizeAuthor } from "../../core/lib/utils";
 
-import type { Book, LibrarySortBy, LibrarySortOrder } from "../../core/types";
+import type { Book, LibrarySortBy, LibrarySortOrder, LibraryStatusFilter } from "../../core/types";
+
+export function isBookCompleted(book: Book): boolean {
+    if (book.manualCompletionState === "read") return true;
+    if (book.manualCompletionState === "unread") return false;
+    return !!book.completedAt || book.progress >= 0.99;
+}
 
 export interface LibraryFilterOptions {
     books: Book[];
     searchQuery: string;
     selectedShelfBookIds: Set<string> | null;
     showFavoritesOnly: boolean;
+    statusFilter: LibraryStatusFilter;
     sortBy: LibrarySortBy;
     sortOrder: LibrarySortOrder;
     
@@ -23,6 +30,7 @@ export function getFilteredAndSortedBooks({
     searchQuery,
     selectedShelfBookIds,
     showFavoritesOnly,
+    statusFilter,
     sortBy,
     sortOrder,
     ftsSearchIds,
@@ -76,6 +84,22 @@ export function getFilteredAndSortedBooks({
 
     if (showFavoritesOnly) {
         result = result.filter((book) => book.isFavorite);
+    }
+
+    if (statusFilter !== "all") {
+        result = result.filter((book) => {
+            const completed = isBookCompleted(book);
+            switch (statusFilter) {
+                case "completed":
+                    return completed;
+                case "reading":
+                    return !completed && book.progress > 0;
+                case "unread":
+                    return !completed && book.progress === 0;
+                default:
+                    return true;
+            }
+        });
     }
 
     if (trimmedQuery) {

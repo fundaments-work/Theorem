@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Book, LibrarySortBy, LibrarySortOrder } from "../src/core";
+import type { Book, LibrarySortBy, LibrarySortOrder, LibraryStatusFilter } from "../src/core";
 import { getFilteredAndSortedBooks } from "../src/features/library/filtering";
 
 function makeBook(overrides: Partial<Book> & Pick<Book, "id" | "title">): Book {
@@ -43,6 +43,7 @@ function runFilter({
     searchQuery = "",
     selectedShelfBookIds = null,
     showFavoritesOnly = false,
+    statusFilter = "all",
     sortBy = "title",
     sortOrder = "asc",
 }: {
@@ -50,6 +51,7 @@ function runFilter({
     searchQuery?: string;
     selectedShelfBookIds?: Set<string> | null;
     showFavoritesOnly?: boolean;
+    statusFilter?: LibraryStatusFilter;
     sortBy?: LibrarySortBy;
     sortOrder?: LibrarySortOrder;
 }) {
@@ -58,6 +60,7 @@ function runFilter({
         searchQuery,
         selectedShelfBookIds,
         showFavoritesOnly,
+        statusFilter,
         sortBy,
         sortOrder,
     });

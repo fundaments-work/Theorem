@@ -298,6 +298,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             searchQuery: debouncedSearchQuery,
             selectedShelfBookIds: shelfBookIdsSet,
             showFavoritesOnly: false,
+            statusFilter: "all",
             sortBy: settings.librarySortBy,
             sortOrder: settings.librarySortOrder,
             ftsSearchIds,
