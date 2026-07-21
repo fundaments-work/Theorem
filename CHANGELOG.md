@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] - 2026-07-21
+
+### Added
+
+- **Reading Goal Notifications** — Three-tier notification system:
+  - Real-time goal-met detection: OS notification + in-app toast when you hit your daily reading goal
+  - Session-end reminder: notifies when you close a reading session short of your goal
+  - Scheduled daily reminder: periodic Rust-side check at your configured reminder time
+- **Sync Completion Notifications** — OS notification on sync finish or error (toggleable in Settings)
+- **Notification Settings UI** — Goal Notifications toggle, Daily Reminder Time picker, Sync Notifications toggle
+- **Rust command `sqlite_check_goal_reminder`** — Reads today's reading stats from SQLite for the reminder timer
+
 ## [1.0.8] - 2026-07-20
 
 ### Added
