@@ -65,6 +65,29 @@ CI (`ci.yml`) runs typecheck, test, build, and rust-check (fmt, clippy, check) o
 
 **Sync**: P2P via iroh stack (iroh + iroh-docs + iroh-blobs + iroh-gossip). 18 Tauri commands in `sync_commands.rs`. Iroh is always compiled (no feature gate). See `docs/PERFORMANCE_SYNC_AUDIT.md`.
 
+**TTS (Immersion Reading)**: Platform-native TTS — no external models or cloud APIs. Four backends:
+- **Android**: Custom `tauri-plugin-android-tts-audio` using Android's `TextToSpeech` engine
+- **Linux**: `spd-say` via speech-dispatcher (`src-tauri/src/tts_linux.rs`)
+- **macOS**: `say` shell command
+- **Windows**: PowerShell `System.Speech` API
+- **Frontend**: `src/features/reader/audio/ImmersionPlayer.ts` orchestrates audio, voice selection, per-word highlighting via Web Audio API
+- **UI**: `src/features/reader/audio/ImmersionBar.tsx`
+- Voice availability depends on the user's system TTS configuration
+
+**Notifications**: Infrastructure is fully wired but **unused** (Sprint 3 planned):
+- Rust: `tauri-plugin-notification` registered in `lib.rs:851`
+- Frontend: `src/core/lib/notifications.ts` exports `notify()`, `notifyIfGranted()`, `requestNotificationPermission()`
+- UI: `<Toaster />` from `sonner` rendered in `App.tsx:492` but `toast()` never called
+- Android: `POST_NOTIFICATIONS` permission added to `AndroidManifest.xml`
+- Future: reading goal notifications, sync completion alerts
+
+**Dictionary & Vocabulary**: Two-tier lookup system:
+- **Online**: Free Dictionary API (`api.dictionaryapi.dev`) via browser `fetch()` — used when available
+- **Offline**: StarDict dictionaries imported by user (`.ifo`/`.idx`/`.dict.dz` files) or downloaded from GitHub (`download_and_extract_stardict` Rust command using `reqwest` + zip/tar extraction)
+- **Storage**: Dictionaries cached in SQLite BLOB columns via `sqlite-storage.ts`
+- **Frontend**: `src/core/services/StarDictService.ts` loads and queries dictionaries; `src/core/services/DictionaryService.ts` orchestrates online + offline lookups
+- **UI**: `src/features/settings/DictionaryDownloadModal.tsx` — download/install UI; vocabulary workspace in Workbench
+
 ## Tauri backend
 
 64 commands across `lib.rs` (file I/O, network, TTS, misc), `database.rs` (28 SQLite commands), `sync_commands.rs` (18 sync commands), `epub_parser.rs`, `file_transfer.rs`. To find all: `grep -r '#\[tauri::command\]' src-tauri/src/`. When signatures change, update both Rust and TS call sites.
@@ -123,6 +146,64 @@ After running `tauri android init --ci`, CI regenerates these files
 from the template. The `pnpm tauri icon theorem.svg` command
 regenerates platform PNGs but does NOT regenerate the vector drawables
 in `drawable-v24/`. These XML files are our permanent customization.
+
+## Project Management
+
+### GitHub Project Board
+
+The [Theorem Roadmap](https://github.com/orgs/fundaments-work/projects/2) board tracks all active work.
+
+**Custom fields**:
+- `Status` — Todo / In Progress / Done
+- `Priority` — Critical / High / Medium / Low
+- `Area` — Reader / Sync / Mobile / Library / RSS / TTS / Vocabulary / Settings / UI/UX / Infrastructure / Documentation
+- `Effort` — Story points (number)
+
+**Workflow**: Issues enter the board at Todo → move to In Progress when work starts → Done when merged to `main`.
+
+### Issue Labels
+
+| Label | Purpose |
+|-------|---------|
+| `bug` | Confirmed defect |
+| `enhancement` | Feature request |
+| `sync` | P2P sync related |
+| `reader` | EPUB/PDF rendering |
+| `mobile` | Android-specific |
+| `rss` | RSS feeds |
+| `tts` | Text-to-speech |
+| `library` | Library management |
+| `vocabulary` | Dictionary/words |
+| `settings` | App settings |
+| `ui/ux` | UI/UX improvements |
+| `infrastructure` | CI, build, plugins |
+| `documentation` | Docs, README |
+| `android` | Android platform |
+| `performance` | Performance |
+| `good first issue` | New contributor friendly |
+
+New issues should be labeled by `Area` + type (`bug`/`enhancement`).
+
+### Issue Templates
+
+GitHub issue forms are configured at `.github/ISSUE_TEMPLATE/`:
+- `bug_report.yml` — structured form with version, platform, logs fields
+- `feature_request.yml` — structured form with scope dropdown
+- `config.yml` — directs questions to Discussions
+
+### PR Lifecycle
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full PR process. TL;DR:
+1. Branch from `main` using `feature/` or `fix/` prefix
+2. Atomic conventional commits (`feat:`, `fix:`, `chore:`, etc.)
+3. Run quality gates before opening
+4. CI runs typecheck, tests, build, Rust checks automatically
+5. Maintainer reviews within a few days
+6. Approved PRs are merged to `main`
+
+### Release Workflow
+
+See the [Release](#release) section above. CI (`release.yml`) auto-builds and publishes on tag push.
 
 ## CSS conventions
 
