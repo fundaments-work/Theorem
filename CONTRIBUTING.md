@@ -118,13 +118,16 @@ The full procedure is documented in [AGENTS.md](./AGENTS.md) under the Release s
 
 ## TTS / Immersion Reading Development
 
-The text-to-speech system uses a Kokoro ONNX engine running in Rust via Tauri:
+The text-to-speech system uses the platform's native TTS engine — no external models or cloud APIs:
 
-- **Rust backend** (`src-tauri/src/tts.rs`, `tts_model.rs`) — sentence splitting, streaming PCM synthesis, model download/cache
-- **Frontend player** (`src/features/reader/audio/ImmersionPlayer.ts`) — Web Audio API scheduling, per-word highlighting
+- **Android**: Custom `tauri-plugin-android-tts-audio` plugin using Android's built-in `TextToSpeech` engine
+- **Linux**: `spd-say` via speech-dispatcher (`tts_linux.rs`)
+- **macOS**: `say` shell command
+- **Windows**: PowerShell `System.Speech` API
+- **Frontend** (`src/features/reader/audio/ImmersionPlayer.ts`) — orchestration, voice selection, per-word highlighting
 - **UI** (`src/features/reader/audio/ImmersionBar.tsx`) — floating playback controls
 
-**Important**: On first run, the app downloads the Kokoro model (~170MB) and 6 voice files from HuggingFace. Model files are cached locally.
+No model download or cloud dependency required. Voices available depend on the user's system TTS configuration.
 
 ## Testing
 

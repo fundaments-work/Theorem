@@ -97,8 +97,8 @@ Freehand drawing with configurable stroke width. Text notes placed anywhere on t
 ### Highlight Sharing
 Generate polished share-card images from any highlight. Multiple formats: Square (1080×1080) and Story (1080×1920). Multiple visual themes: match, dark, tinted, sepia. Download as PNG, copy to clipboard, native share via Web Share API, share to X (Twitter). Android: saves to MediaStore gallery.
 
-### Neural Text-to-Speech (Immersion Reading)
-Kokoro ONNX neural TTS engine — fully offline, no cloud API. 6 distinct voices (Bella, Nicole, Sarah, Adam, Michael, George). Gapless streaming audio with Web Audio API scheduling. Per-word highlighting synchronized with audio. Preloads next page audio for seamless page turns.
+### Text-to-Speech (Immersion Reading)
+Uses your platform's native TTS engine — no external models or cloud APIs. Android: Android TextToSpeech. Linux: speech-dispatcher (spd-say). macOS: `say`. Windows: PowerShell System.Speech. Per-word highlighting synchronized with audio. Voice selection depends on system-installed voices.
 
 ### Vocabulary Builder
 Look up words while reading with built-in dictionary. Offline StarDict dictionary support (import local .ifo/.idx/.dict.dz files). Download English Wiktionary (~50MB) from the app. Pronunciation display with optional audio. Vocabulary capture and review workspace.
@@ -153,7 +153,7 @@ Desktop: Linux (.deb, .AppImage), macOS Intel + Apple Silicon (.dmg), Windows (.
 | Mobile | Tauri 2 Android |
 | PDF | PDF.js 6 |
 | Ebook | Foliate.js (vendored) |
-| TTS | Kokoro ONNX via `kokoro-en` (Rust, misaki-lean phonemizer) |
+| TTS | Platform native (Android TTS, spd-say, say, System.Speech) |
 | Dictionary | StarDict |
 | RSS | Mozilla Readability |
 | Archive | zip.js, unrar-ng (Rust, bundled C source) |
@@ -186,7 +186,7 @@ Yes. Local-first reading, annotation, and Markdown export without a paid subscri
 
 **Is there device sync?** — Yes. Encrypted LAN pairing between Theorem installs, no cloud relay.
 
-**Does TTS work offline?** — Yes. First use downloads the model (~170MB) from HuggingFace, runs entirely on-device after that.
+**Does TTS work offline?** — Yes. It uses your system's built-in TTS engine. No downloads needed.
 
 **What formats are supported?** — EPUB, MOBI, AZW, AZW3, FB2, FBZ, CBZ, CBR, PDF, TXT, and RSS feeds.
 
