@@ -45,6 +45,10 @@ src-tauri/plugins/*/android/build/
 # Android (Tauri generated project)
 src-tauri/gen/android/*
 !src-tauri/gen/android/**/MainActivity.kt
+!src-tauri/gen/android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
+!src-tauri/gen/android/app/src/main/res/drawable/ic_launcher_background.xml
+!src-tauri/gen/android/app/src/main/res/values/ic_launcher_background.xml
+!src-tauri/gen/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
 
 # Android signing/package outputs
 *.jks
