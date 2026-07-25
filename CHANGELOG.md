@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.9] - 2026-07-21
+## [1.0.9] - 2026-07-25
 
 ### Added
 
@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sync Completion Notifications** — OS notification on sync finish or error (toggleable in Settings)
 - **Notification Settings UI** — Goal Notifications toggle, Daily Reminder Time picker, Sync Notifications toggle
 - **Rust command `sqlite_check_goal_reminder`** — Reads today's reading stats from SQLite for the reminder timer
+- **Proactive notification permission request** — Calls `requestNotificationPermission()` on app startup so the OS prompt appears immediately instead of waiting for the first lazy notification call
+- **QR scan cancel toast** — Shows a sonner toast when the native QR scanner is dismissed, instead of silently swallowing the cancel
+
+### Fixed
+
+- **Reader scroll mode blank screen on switch** — When switching from paged to scroll mode, the `overflow: hidden` from `columnize()` persisted on the iframe `<html>` element, clipping content to the viewport. `scrolled()` now sets `overflow: visible`. Additionally, the `transform: translateX/Y()` that `#setViewPosition()` applied during paginated mode was never cleared — the view element stayed positioned off-screen. `Paginator.render()` now resets the transform when entering scroll mode.
+- **Notifications never triggered** — `notifyIfGranted()` callers existed in `useReadingTime.ts`, `useDailyGoalReminder.ts`, and `sync-orchestrator.ts`, but `requestNotificationPermission()` was never called, so the OS permission prompt never appeared on Android 13+ or desktop.
+
+### Changed
+
+- **`annotations.find()` → O(1) Map lookups** — Reader hot paths (highlight tap, note save, bookmark toggle) now use `useMemo`'d `Map<string, Annotation>` lookups instead of linear array scans. The foliate engine also gained a `annotationLocations` Map for O(1) highlight-click detection.
+- **Onboarding flow text updated** — Steps 3-5 now mention TTS immersion reading, speed-reading, reading status filter, P2P LAN sync alongside markdown export. `docs/onboarding.md` rewritten to match the actual component.
 
 ## [1.0.8] - 2026-07-20
 
