@@ -16,12 +16,12 @@ App starts
 
 ## Screens
 
-The `OnboardingFlow` component (`src/features/onboarding/OnboardingFlow.tsx`) presents a sequence of screens:
+The `OnboardingFlow` component (`src/features/onboarding/OnboardingFlow.tsx`) presents 5 steps with inline SVG illustrations:
 
-1. **Welcome** — "Welcome to Theorem." Brief description of what it is.
-2. **Import books** — Prompts user to import books (opens file dialog on click).
-3. **Reader demo** — Shows annotated screenshot of the reader.
-4. **Sync intro** — If Tauri, introduces P2P sync concept.
-5. **Complete** — "You're ready."
+1. **Welcome** — "Own your reading data. Forever." — Local-first, no cloud account, no subscription.
+2. **Read Anything** — All formats (PDF, EPUB, MOBI, AZW, FB2, CBZ/CBR, RSS) in one reader.
+3. **Highlight and Annotate** — Multiple highlight colors, notes, bookmarks, dictionary lookups, TTS immersion reading, speed-reading mode.
+4. **Organize Your Library** — Shelves, format/status/favorites filters, reading statistics, daily goals.
+5. **Sync Across Devices** — P2P LAN sync for reading progress, highlights, and books. Export to Markdown vaults.
 
-The flow is sequential with "Next" / "Back" buttons. Progress is shown as dots. On completion, `settings.hasCompletedOnboarding` is set to `true`, which causes the next render to skip the onboarding and show the main app.
+The flow is sequential with "Next" / "Back" buttons. A "Skip" button is in the top-right. Progress is shown as clickable dots. On completion, `settings.hasCompletedOnboarding` and `localStorage.theorem-onboarding-complete` are set to `true`, which causes the next render to skip onboarding and show the main app.

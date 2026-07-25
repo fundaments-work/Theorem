@@ -275,7 +275,7 @@ const steps: OnboardingStep[] = [
         title: "Highlight and Annotate",
         subtitle: "Capture what matters while you read.",
         description:
-            "Select text to highlight with multiple colors. Add notes, bookmarks, and build your vocabulary with built-in dictionary lookups.",
+            "Select text to highlight with multiple colors. Add notes, bookmarks, build vocabulary with built-in dictionary lookups, and listen with immersion reading or speed-reading mode.",
         illustration: <ReaderIllustration />,
     },
     {
@@ -284,16 +284,16 @@ const steps: OnboardingStep[] = [
         title: "Organize Your Library",
         subtitle: "Shelves, tags, and smart collections.",
         description:
-            "Group books into shelves. Filter by format, reading progress, or favorites. Track your reading statistics with a daily heatmap.",
+            "Group books into shelves. Filter by format, reading status, or favorites. Track your reading statistics and set daily goals.",
         illustration: <LibraryIllustration />,
     },
     {
         id: "vault",
         icon: <FolderSync className="h-5 w-5" />,
-        title: "Sync to Markdown",
-        subtitle: "Built for you to own.",
+        title: "Sync Across Devices",
+        subtitle: "P2P sync + markdown export.",
         description:
-            "Export highlights, notes, and vocabulary to plain Markdown files in your vault. Your second brain stays in text you control.",
+            "Pair devices to sync reading progress, highlights, and books over LAN. Export to Markdown vaults for long-term ownership — no cloud required.",
         illustration: <VaultIllustration />,
     },
 ];
