@@ -352,8 +352,11 @@ export function DeviceSyncSection() {
             await submitPairingCodeValue(scannedCode);
         } catch (e: any) {
             const msg = e?.message || String(e);
-            
-            if (!/cancel|closed|dismiss/i.test(msg)) {
+
+            if (/cancel|closed|dismiss/i.test(msg)) {
+                const { toast } = await import("sonner");
+                toast("QR scan cancelled");
+            } else {
                 setError(msg);
             }
         } finally {
