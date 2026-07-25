@@ -550,8 +550,8 @@ pub fn check_goal_reminder_inner(
         None => return Ok(None),
     };
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&json_str).map_err(|e| parse_error(format!("Failed to parse settings JSON: {e}")))?;
+    let parsed: serde_json::Value = serde_json::from_str(&json_str)
+        .map_err(|e| parse_error(format!("Failed to parse settings JSON: {e}")))?;
 
     let stats = &parsed["state"]["stats"];
     let daily_goal = stats["dailyGoal"].as_u64().unwrap_or(30);
