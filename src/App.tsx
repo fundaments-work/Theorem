@@ -5,6 +5,7 @@ import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
 import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
 import { initReaderStyles } from "./core/lib/design-tokens";
+import { requestNotificationPermission } from "./core/lib/notifications";
 import { importBooksIncremental, getBookFormat, isImportFormatSupported } from "./core/lib/import";
 import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
@@ -303,6 +304,10 @@ function App() {
 
     useEffect(() => {
         void initLogger();
+    }, []);
+
+    useEffect(() => {
+        void requestNotificationPermission();
     }, []);
 
     useEffect(() => {
