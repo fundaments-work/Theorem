@@ -1132,6 +1132,22 @@ const BookReaderPage = memo(function BookReaderPage() {
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
     const [editingHighlightId, setEditingHighlightId] = useState<string | null>(null);
 
+    const annotationsById = useMemo(() => new Map(annotations.map(a => [a.id, a])), [annotations]);
+    const annotationsByLocation = useMemo(() => {
+        const m = new Map<string, Annotation>();
+        for (const a of annotations) {
+            if (a.type === 'highlight' || a.type === 'note') m.set(a.location, a);
+        }
+        return m;
+    }, [annotations]);
+    const bookmarkByPage = useMemo(() => {
+        const m = new Map<number, Annotation>();
+        for (const a of annotations) {
+            if (a.type === 'bookmark' && a.pageNumber !== undefined) m.set(a.pageNumber, a);
+        }
+        return m;
+    }, [annotations]);
+
     const [showNoteEditor, setShowNoteEditor] = useState(false);
     const [noteEditorPosition, setNoteEditorPosition] = useState({ x: 0, y: 0 });
     const [editingNote, setEditingNote] = useState('');
@@ -1377,9 +1393,7 @@ const BookReaderPage = memo(function BookReaderPage() {
         if (!currentBookId) return;
         const pageLocation = `pdf:page:${pdfCurrentPage}`;
 
-        const existing = annotations.find(a =>
-            a.type === 'bookmark' && a.pageNumber === pdfCurrentPage
-        );
+        const existing = bookmarkByPage.get(pdfCurrentPage);
 
         if (existing) {
             handlePdfAnnotationRemove(existing.id);
@@ -1395,11 +1409,9 @@ const BookReaderPage = memo(function BookReaderPage() {
             };
             handlePdfAnnotationAdd(bookmark);
         }
-    }, [annotations, currentBookId, handlePdfAnnotationAdd, handlePdfAnnotationRemove, pdfCurrentPage]);
+    }, [bookmarkByPage, currentBookId, handlePdfAnnotationAdd, handlePdfAnnotationRemove, pdfCurrentPage]);
 
-    const isPdfPageBookmarked = annotations.some(
-        a => a.type === 'bookmark' && a.pageNumber === pdfCurrentPage
-    );
+    const isPdfPageBookmarked = bookmarkByPage.has(pdfCurrentPage);
 
     const [isBookReady, setIsBookReady] = useState(false);
 
@@ -1759,21 +1771,18 @@ const BookReaderPage = memo(function BookReaderPage() {
         if (!selectedCfi || !currentBookId) return;
 
         let existingHighlight = editingHighlightId
-            ? annotations.find(a => a.id === editingHighlightId)
+            ? (annotationsById.get(editingHighlightId) ?? null)
             : null;
 
         if (!existingHighlight) {
-            existingHighlight = annotations.find(a =>
-                (a.type === 'highlight' || a.type === 'note') &&
-                a.location === selectedCfi
-            );
+            existingHighlight = annotationsByLocation.get(selectedCfi) ?? null;
         }
 
         if (!existingHighlight && selectedText) {
             existingHighlight = annotations.find(a =>
                 (a.type === 'highlight' || a.type === 'note') &&
                 a.selectedText?.trim() === selectedText.trim()
-            );
+            ) ?? null;
         }
 
         if (existingHighlight) {

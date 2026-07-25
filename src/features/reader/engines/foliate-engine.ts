@@ -63,6 +63,7 @@ export class FoliateEngine {
     private book: any = null;
     private options: FoliateEngineOptions = {};
     private annotations: Map<string, Annotation> = new Map();
+    private annotationLocations: Map<string, Annotation> = new Map();
     private currentLocation: DocLocation | null = null;
     private sectionFractions: number[] = [];
 
@@ -590,8 +591,7 @@ export class FoliateEngine {
                         e.stopPropagation();
                         e.preventDefault();
                         
-                        const clickedAnnotation = Array.from(this.annotations.values())
-                            .find(a => a.location === annotationValue);
+                        const clickedAnnotation = this.annotationLocations.get(annotationValue) ?? null;
                         
                         if (clickedAnnotation && this.options.onTextSelected) {
                             
@@ -1371,12 +1371,14 @@ export class FoliateEngine {
             );
         await Promise.all(deleteOps);
         this.annotations.clear();
+        this.annotationLocations.clear();
 
         const toRender = annotations.filter(
             (a) => a.location && (a.type === 'highlight' || a.type === 'note'),
         );
         for (const annotation of toRender) {
             this.annotations.set(annotation.id, annotation);
+            this.annotationLocations.set(annotation.location, annotation);
         }
 
         const BATCH_SIZE = 12;
