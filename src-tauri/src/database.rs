@@ -589,7 +589,7 @@ pub fn check_goal_reminder_inner(
 
 #[tauri::command]
 pub fn sqlite_check_goal_reminder(app: AppHandle) -> Result<Option<GoalReminderData>, String> {
-    with_connection(&app, |connection| check_goal_reminder_inner(connection))
+    with_connection(&app, check_goal_reminder_inner)
 }
 
 pub fn sqlite_batch_get_kv_inner(
