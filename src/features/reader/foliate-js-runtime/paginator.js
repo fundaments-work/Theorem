@@ -284,6 +284,7 @@ class View {
             'column-width': 'auto',
             'height': 'auto',
             'width': 'auto',
+            'overflow': 'visible',
         })
         setStylesImportant(doc.body, {
             [vertical ? 'max-height' : 'max-width']: `${columnWidth}px`,
@@ -743,6 +744,14 @@ export class Paginator extends HTMLElement {
             
             requestAnimationFrame(() => this.render())
             return
+        }
+        if (this.getAttribute('flow') === 'scrolled') {
+            this.#pageOffset = 0
+            const el = this.#view.element
+            if (el) {
+                el.style.transform = ''
+                el.style.transition = ''
+            }
         }
         this.#view.render(this.#beforeRender({
             vertical: this.#vertical,
