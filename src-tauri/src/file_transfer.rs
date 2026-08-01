@@ -118,18 +118,6 @@ impl FileTransferHandler {
         Ok(conn)
     }
 
-    async fn read_cover(data_dir: &Path, book_id: &str) -> Result<Vec<u8>, String> {
-        let conn = Self::open_read_db(data_dir)?;
-        let cover_key = format!("cover:{}", book_id);
-        let mut stmt = conn
-            .prepare("SELECT value FROM blob_store WHERE key = ?1")
-            .map_err(|e| format!("prepare: {e}"))?;
-        let cover_blob: Vec<u8> = stmt
-            .query_row(rusqlite::params![cover_key], |row| row.get(0))
-            .map_err(|_| format!("cover not found: {book_id}"))?;
-        Ok(cover_blob)
-    }
-
     async fn read_book_data(data_dir: &Path, book_id: &str) -> Result<Vec<u8>, String> {
         let conn = Self::open_read_db(data_dir)?;
         let mut stmt = conn
@@ -157,9 +145,7 @@ impl ProtocolHandler for FileTransferHandler {
                 Ok(_) => line.trim().to_string(),
             };
 
-            let result = if let Some(stripped) = request.strip_prefix("cover:") {
-                Self::read_cover(&self.data_dir, stripped).await
-            } else {
+            let result = {
                 let path = self
                     .data_dir
                     .join("book-cache")

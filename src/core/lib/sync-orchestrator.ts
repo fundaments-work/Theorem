@@ -681,7 +681,7 @@ export async function runDeviceSync(
 
             void notifySync("Sync Complete", summary);
             
-            void syncBookCovers(peerDeviceId).then(() => prefetchRecentBooks(peerDeviceId));
+            void prefetchRecentBooks(peerDeviceId);
         } else {
             setStatus("error", summary);
             void notifySync("Sync Issue", summary);
@@ -753,34 +753,6 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
     useUIStore.getState().setDownloadingBook(undefined);
     setStatus("idle", "Book download failed — peer not available");
     return false;
-}
-
-async function syncBookCovers(peerDeviceId: string): Promise<void> {
-    const { requestBookFile } = await import("./device-sync");
-    const { saveCoverImage } = await import("./storage");
-
-    const books = useLibraryStore.getState().books;
-    
-    const needCovers = books.filter(
-        (b) => b.coverBlobHash && b.coverPath && b.coverPath !== "data:" && b.coverPath.includes("blob:"),
-    );
-    if (needCovers.length === 0) return;
-
-    const CONCURRENCY = 8;
-    let index = 0;
-    await Promise.all(
-        Array.from({ length: CONCURRENCY }, async () => {
-            while (index < needCovers.length && !_syncCancelled) {
-                const book = needCovers[index++];
-                const data = await requestBookFile(peerDeviceId, `cover:${book.id}`);
-                if (!data || data.byteLength === 0) continue;
-                try {
-                    const blob = new Blob([data.buffer as ArrayBuffer], { type: "image/jpeg" });
-                    await saveCoverImage(book.id, blob);
-                } catch {}
-            }
-        }),
-    );
 }
 
 async function prefetchRecentBooks(peerDeviceId: string): Promise<void> {
