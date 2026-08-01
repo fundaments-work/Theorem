@@ -119,7 +119,10 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {e}"))?;
 
-    let docs_db_path = data_dir.join("iroh-docs").join("docs.db");
+    // iroh-docs 0.101 persists the CRDT replica to `docs.redb`; older releases
+    // used `db.redb` (purged separately in iroh_sync.rs). Only the current
+    // filename is size-checked so the growth cap actually fires.
+    let docs_db_path = data_dir.join("iroh-docs").join("docs.redb");
     if let Ok(meta) = std::fs::metadata(&docs_db_path) {
         const MAX_DB_BYTES: u64 = 100 * 1024 * 1024;
         if meta.len() > MAX_DB_BYTES {
