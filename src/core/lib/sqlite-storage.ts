@@ -35,6 +35,11 @@ export async function sqliteSaveBookData(id: string, data: ArrayBuffer): Promise
     return invoke('sqlite_save_book_data', { id, data: new Uint8Array(data) }) as Promise<string>;
 }
 
+export async function sqliteRegisterMaterializedBook(id: string): Promise<void> {
+    const invoke = await getInvoke();
+    await invoke('sqlite_register_materialized_book', { id });
+}
+
 export async function sqliteGetBookData(id: string): Promise<ArrayBuffer | null> {
     const invoke = await getInvoke();
     const result = await invoke('sqlite_get_book_data', { id }) as number[] | null;

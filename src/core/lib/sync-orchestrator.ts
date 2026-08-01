@@ -24,6 +24,7 @@ import {
 } from "./sync-import";
 import { isTauri } from "./env";
 import { saveCoverImage } from "./storage";
+import { sqliteRegisterMaterializedBook } from "./sqlite-storage";
 
 async function notifySync(title: string, body?: string) {
     const settings = useSettingsStore.getState().settings;
@@ -736,6 +737,11 @@ export async function downloadBookOnDemand(bookId: string): Promise<boolean> {
         if (_syncCancelled) break;
         try {
             await downloadBookFile(peerId, bookId, destPath);
+            try {
+                await sqliteRegisterMaterializedBook(bookId);
+            } catch (e) {
+                debug(`[file-xfer] failed to register ${bookId} in sqlite: ${e}`);
+            }
             useLibraryStore.setState((state) => ({
                 books: state.books.map((b) =>
                     b.id === bookId
@@ -779,6 +785,11 @@ async function prefetchRecentBooks(peerDeviceId: string): Promise<void> {
                 const destPath = `${appDir}/book-cache/${book.id}.book`;
                 try {
                     await downloadBookFile(peerDeviceId, book.id, destPath);
+                    try {
+                        await sqliteRegisterMaterializedBook(book.id);
+                    } catch (e) {
+                        debug(`[file-xfer] failed to register ${book.id} in sqlite: ${e}`);
+                    }
                     useLibraryStore.setState((state) => ({
                         books: state.books.map((b) =>
                             b.id === book.id

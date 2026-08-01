@@ -973,6 +973,7 @@ pub fn run() {
             save_share_image_mobile,
             materialize_android_content_uri,
             database::sqlite_save_book_data,
+            database::sqlite_register_materialized_book,
             database::sqlite_get_book_data,
             database::sqlite_delete_book_data,
             database::sqlite_get_materialized_book_path,

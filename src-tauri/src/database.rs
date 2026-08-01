@@ -328,6 +328,13 @@ pub fn sqlite_register_materialized_book_inner(
 }
 
 #[tauri::command]
+pub fn sqlite_register_materialized_book(app: AppHandle, id: String) -> Result<(), String> {
+    with_connection(&app, |connection| {
+        sqlite_register_materialized_book_inner(connection, &id)
+    })
+}
+
+#[tauri::command]
 pub fn sqlite_get_book_data(app: AppHandle, id: String) -> Result<Option<Vec<u8>>, String> {
     if let Ok(Some(path)) = sqlite_get_materialized_book_path(app.clone(), id.clone()) {
         let content = fs::read(&path).map_err(|e| format!("Failed to read book file: {}", e))?;
