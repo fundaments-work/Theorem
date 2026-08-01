@@ -779,7 +779,7 @@ async function prefetchRecentBooks(peerDeviceId: string): Promise<void> {
 
     let index = 0;
     await Promise.all(
-        Array.from({ length: 3 }, async () => {
+        Array.from({ length: DOWNLOAD_CONCURRENCY }, async () => {
             while (index < books.length && !_syncCancelled) {
                 const book = books[index++];
                 const destPath = `${appDir}/book-cache/${book.id}.book`;
@@ -808,6 +808,8 @@ async function prefetchRecentBooks(peerDeviceId: string): Promise<void> {
 let _docsLiveTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_PENDING_ENTRIES = 2000;
 const _pendingDocsEntries = new Map<string, string>();
+
+const DOWNLOAD_CONCURRENCY = 3;
 
 let _progressiveBookBatch: any[] = [];
 let _progressiveBookTimer: ReturnType<typeof setTimeout> | null = null;

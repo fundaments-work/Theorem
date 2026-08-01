@@ -92,10 +92,10 @@ describe("Progressive per-entity book sync", () => {
 
 // ─── Fix 57: Parallel downloads ───
 describe("Parallel file downloads", () => {
-    it("pullMissingBookFilesAndCovers uses concurrent workers", () => {
+    it("prefetchRecentBooks uses concurrent workers", () => {
         const content = readSource("src/core/lib/sync-orchestrator.ts");
-        expect(content).toContain("CONCURRENCY");
-        expect(content).toContain("Array.from({ length: CONCURRENCY }");
+        expect(content).toContain("DOWNLOAD_CONCURRENCY");
+        expect(content).toContain("Array.from({ length: DOWNLOAD_CONCURRENCY }");
     });
 });
 
