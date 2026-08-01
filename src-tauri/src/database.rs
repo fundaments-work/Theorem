@@ -54,6 +54,12 @@ fn database_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir.join(DB_FILE_NAME))
 }
 
+fn materialized_book_path_in_dir(app_data_dir: &Path, book_id: &str) -> PathBuf {
+    app_data_dir
+        .join(MATERIALIZED_BOOK_CACHE_DIR)
+        .join(format!("{book_id}.book"))
+}
+
 fn materialized_book_path(app: &AppHandle, book_id: &str) -> Result<PathBuf, String> {
     let app_data_dir = app
         .path()
@@ -64,7 +70,7 @@ fn materialized_book_path(app: &AppHandle, book_id: &str) -> Result<PathBuf, Str
         format!("Failed to create materialized cache directory '{cache_dir:?}': {error}")
     })?;
 
-    Ok(cache_dir.join(format!("{book_id}.book")))
+    Ok(materialized_book_path_in_dir(&app_data_dir, book_id))
 }
 
 fn remove_materialized_cache_file(app: &AppHandle, book_id: &str) {
@@ -75,6 +81,10 @@ fn remove_materialized_cache_file(app: &AppHandle, book_id: &str) {
 
 pub fn run_schema_migrations(app: &AppHandle) -> Result<(), String> {
     let db_path = database_path(app)?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data directory: {e}"))?;
 
     let conn = Connection::open(&db_path)
         .map_err(|e| format!("Failed to open database for migration: {e}"))?;
@@ -94,7 +104,65 @@ pub fn run_schema_migrations(app: &AppHandle) -> Result<(), String> {
         conn.execute_batch("ALTER TABLE covers ADD COLUMN data BLOB;")
             .ok();
     }
+
+    // Book bytes live in `book-cache/{id}.book`. Legacy installs also stored a
+    // full copy in `books.data`; zero those out (re-materializing the cache file
+    // first when needed) so each book is stored exactly once.
+    let reclaimed = reclaim_legacy_book_blobs(&conn, &app_data_dir)?;
+    if reclaimed > 0 {
+        eprintln!("[database] Reclaimed legacy book BLOBs for {reclaimed} books");
+        // The DB file keeps the freed pages unless we repack it. This is a one-time
+        // cost after migration; if it fails (e.g. low disk space) pages are still
+        // reused for future writes.
+        if let Err(e) = conn.execute_batch("VACUUM") {
+            eprintln!("[database] VACUUM after blob reclaim failed: {e}");
+        }
+    }
+
     Ok(())
+}
+
+fn reclaim_legacy_book_blobs(
+    connection: &Connection,
+    app_data_dir: &Path,
+) -> Result<usize, String> {
+    let legacy_rows: Vec<(String, Vec<u8>)> = {
+        let mut statement = connection
+            .prepare("SELECT id, data FROM books WHERE length(data) > 0")
+            .map_err(|e| format!("Failed to prepare legacy blob query: {e}"))?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
+            })
+            .map_err(|e| format!("Failed to query legacy book blobs: {e}"))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|e| format!("Failed to read legacy book blobs: {e}"))?
+    };
+
+    let mut reclaimed = 0;
+    for (id, blob_data) in legacy_rows {
+        if blob_data.is_empty() {
+            continue;
+        }
+        let cache_path = materialized_book_path_in_dir(app_data_dir, &id);
+        if !cache_path.exists() {
+            let cache_dir = cache_path.parent().unwrap_or(app_data_dir);
+            if let Err(e) = fs::create_dir_all(cache_dir) {
+                eprintln!("[database] Failed to create cache dir for {id}: {e}");
+                continue;
+            }
+            if let Err(e) = fs::write(&cache_path, &blob_data) {
+                eprintln!("[database] Failed to re-materialize cache file for {id}: {e}");
+                continue;
+            }
+        }
+        connection
+            .execute("UPDATE books SET data = X'' WHERE id = ?1", params![id])
+            .map_err(|e| format!("Failed to zero legacy blob for {id}: {e}"))?;
+        reclaimed += 1;
+    }
+
+    Ok(reclaimed)
 }
 
 fn init_db_pool(db_path: &Path) -> Result<&DbPool, String> {
@@ -218,31 +286,38 @@ pub fn sqlite_save_book_data(app: AppHandle, id: String, data: Vec<u8>) -> Resul
     })?;
 
     with_connection(&app, |connection| {
-        connection.execute(
-            r#"
-            INSERT INTO books (id, data, updated_at)
-            VALUES (?1, ?2, unixepoch())
-            ON CONFLICT(id) DO UPDATE SET
-                data = ?2,
-                updated_at = unixepoch()
-            "#,
-            params![id, data],
-        )?;
-
-        connection.execute(
-            r#"
-            INSERT INTO materialized_books (book_id, source_updated_at, materialized_at)
-            VALUES (?1, (SELECT updated_at FROM books WHERE id = ?1), unixepoch())
-            ON CONFLICT(book_id) DO UPDATE SET
-                source_updated_at = (SELECT updated_at FROM books WHERE id = ?1),
-                materialized_at = unixepoch()
-            "#,
-            params![id],
-        )?;
-        Ok(())
+        sqlite_register_materialized_book_inner(connection, &id)
     })?;
 
     Ok(format!("sqlite://{id}"))
+}
+
+pub fn sqlite_register_materialized_book_inner(
+    connection: &Connection,
+    id: &str,
+) -> rusqlite::Result<()> {
+    connection.execute(
+        r#"
+        INSERT INTO books (id, data, updated_at)
+        VALUES (?1, X'', unixepoch())
+        ON CONFLICT(id) DO UPDATE SET
+            data = X'',
+            updated_at = unixepoch()
+        "#,
+        params![id],
+    )?;
+
+    connection.execute(
+        r#"
+        INSERT INTO materialized_books (book_id, source_updated_at, materialized_at)
+        VALUES (?1, (SELECT updated_at FROM books WHERE id = ?1), unixepoch())
+        ON CONFLICT(book_id) DO UPDATE SET
+            source_updated_at = (SELECT updated_at FROM books WHERE id = ?1),
+            materialized_at = unixepoch()
+        "#,
+        params![id],
+    )?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -1322,5 +1397,116 @@ mod tests {
         sqlite_index_books_fts_batch_inner(&conn, &entries).unwrap();
         let results = sqlite_search_books_inner(&conn, "Book", 10).unwrap();
         assert_eq!(results.len(), 2);
+    }
+
+    fn temp_test_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "theorem-test-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    fn book_data_len(conn: &Connection, id: &str) -> i64 {
+        conn.query_row(
+            "SELECT length(data) FROM books WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_register_materialized_book_upserts_empty_blob() {
+        let conn = setup_db();
+        sqlite_register_materialized_book_inner(&conn, "book1").unwrap();
+
+        assert_eq!(book_data_len(&conn, "book1"), 0);
+        let materialized: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM materialized_books WHERE book_id = ?1",
+                params!["book1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(materialized, 1);
+    }
+
+    #[test]
+    fn test_register_materialized_book_is_idempotent() {
+        let conn = setup_db();
+        sqlite_register_materialized_book_inner(&conn, "book1").unwrap();
+        sqlite_register_materialized_book_inner(&conn, "book1").unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM books", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+        assert_eq!(book_data_len(&conn, "book1"), 0);
+    }
+
+    #[test]
+    fn test_reclaim_legacy_book_blobs_materializes_missing_file() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT INTO books (id, data) VALUES ('book1', X'deadbeef')",
+            [],
+        )
+        .unwrap();
+
+        let dir = temp_test_dir("reclaim");
+        let reclaimed = reclaim_legacy_book_blobs(&conn, &dir).unwrap();
+        assert_eq!(reclaimed, 1);
+
+        assert_eq!(book_data_len(&conn, "book1"), 0);
+        let cache_path = materialized_book_path_in_dir(&dir, "book1");
+        assert_eq!(
+            std::fs::read(&cache_path).unwrap(),
+            vec![0xde, 0xad, 0xbe, 0xef]
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_reclaim_legacy_book_blobs_keeps_existing_file() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT INTO books (id, data) VALUES ('book1', X'deadbeef')",
+            [],
+        )
+        .unwrap();
+
+        let dir = temp_test_dir("reclaim-existing");
+        let cache_path = materialized_book_path_in_dir(&dir, "book1");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        std::fs::write(&cache_path, b"already-materialized").unwrap();
+
+        let reclaimed = reclaim_legacy_book_blobs(&conn, &dir).unwrap();
+        assert_eq!(reclaimed, 1);
+
+        assert_eq!(book_data_len(&conn, "book1"), 0);
+        assert_eq!(std::fs::read(&cache_path).unwrap(), b"already-materialized");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_reclaim_legacy_book_blobs_noop_when_empty() {
+        let conn = setup_db();
+        conn.execute("INSERT INTO books (id, data) VALUES ('book1', X'')", [])
+            .unwrap();
+
+        let dir = temp_test_dir("reclaim-noop");
+        let reclaimed = reclaim_legacy_book_blobs(&conn, &dir).unwrap();
+        assert_eq!(reclaimed, 0);
+        assert_eq!(book_data_len(&conn, "book1"), 0);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
