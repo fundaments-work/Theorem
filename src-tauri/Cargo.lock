@@ -7336,7 +7336,6 @@ dependencies = [
 name = "theorem"
 version = "1.0.9"
 dependencies = [
- "base64 0.22.1",
  "bzip2 0.4.4",
  "futures",
  "hex",
