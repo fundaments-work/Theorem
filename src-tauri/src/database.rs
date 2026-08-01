@@ -105,6 +105,13 @@ pub fn run_schema_migrations(app: &AppHandle) -> Result<(), String> {
             .ok();
     }
 
+    // The covers.data column is legacy: cover bytes were mirrored there as a
+    // decoded copy of data_url, but nothing ever read it. Clear any leftover
+    // values so the base64 data_url is the single cover store.
+    if let Err(e) = conn.execute("UPDATE covers SET data = NULL WHERE data IS NOT NULL", []) {
+        eprintln!("[database] Failed to clear legacy covers.data: {e}");
+    }
+
     // Book bytes live in `book-cache/{id}.book`. Legacy installs also stored a
     // full copy in `books.data`; zero those out (re-materializing the cache file
     // first when needed) so each book is stored exactly once.
@@ -393,27 +400,18 @@ pub fn sqlite_save_cover_image_inner(
     book_id: &str,
     data_url: &str,
 ) -> rusqlite::Result<()> {
-    let cover_data = extract_base64_from_data_url(data_url).and_then(|b64| {
-        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64).ok()
-    });
-
     connection.execute(
         r#"
         INSERT INTO covers (book_id, data_url, data, updated_at)
-        VALUES (?1, ?2, ?3, unixepoch())
+        VALUES (?1, ?2, NULL, unixepoch())
         ON CONFLICT(book_id) DO UPDATE SET
             data_url = excluded.data_url,
-            data = excluded.data,
+            data = NULL,
             updated_at = unixepoch()
         "#,
-        params![book_id, data_url, cover_data],
+        params![book_id, data_url],
     )?;
     Ok(())
-}
-
-fn extract_base64_from_data_url(data_url: &str) -> Option<&str> {
-    let comma = data_url.find(',')?;
-    Some(&data_url[comma + 1..])
 }
 
 #[tauri::command]
@@ -1270,6 +1268,20 @@ mod tests {
         sqlite_delete_cover_image_inner(&conn, "book1").unwrap();
         let result = sqlite_get_cover_image_inner(&conn, "book1").unwrap();
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_cover_image_does_not_populate_legacy_data_column() {
+        let conn = setup_db();
+        sqlite_save_cover_image_inner(&conn, "book1", "data:image/png;base64,aGVsbG8=").unwrap();
+        let data: Option<Vec<u8>> = conn
+            .query_row(
+                "SELECT data FROM covers WHERE book_id = ?1",
+                params!["book1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(data.is_none());
     }
 
     #[test]
