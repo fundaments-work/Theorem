@@ -409,6 +409,13 @@ let _initialProvisionDone = false;
 let _forceReProvision = false;
 let _responderReadyPromise: Promise<void> | null = null;
 
+// Track the last successful provision so clean sync rounds don't re-write
+// every book/domain over IPC. Keyed by the serialized value; invalidated
+// when the paired-device set changes or a re-provision is forced.
+let _provisionedOnce = false;
+let _lastProvisionFingerprint = "";
+const _provisionedValues = new Map<string, string>();
+
 export function markProvisioningNeeded(): void {
     _initialProvisionDone = false;
     _forceReProvision = true;
@@ -1206,6 +1213,28 @@ export async function provisionToIrohDocs(): Promise<boolean> {
         const rss = useRssStore.getState();
         const settings = useSettingsStore.getState();
 
+        const { getPairedDevices } = await import("./device-sync");
+        const devices = await getPairedDevices().catch(() => []);
+        const fingerprint = devices.map((d) => d.deviceId).sort().join("|");
+
+        // Skip the round entirely when nothing changed since the last
+        // successful provision: no local mutations, same peer set, and no
+        // forced re-provision (e.g. after a doc re-import).
+        const needsProvision = _forceReProvision || _dataDirty || !_provisionedOnce
+            || fingerprint !== _lastProvisionFingerprint;
+        if (!needsProvision) {
+            return true;
+        }
+
+        // A new/changed peer set or a doc re-import means peers may be missing
+        // our entries, so write everything rather than only the deltas.
+        if (fingerprint !== _lastProvisionFingerprint || _forceReProvision) {
+            _provisionedValues.clear();
+        }
+        _lastProvisionFingerprint = fingerprint;
+        _provisionedOnce = true;
+        _forceReProvision = false;
+
         const serializeBook = (book: typeof lib.books[number]) => {
             const { filePath: _f, storagePath: _s, coverPath, locations: _l, ...stripped } = book;
             return JSON.stringify({
@@ -1220,8 +1249,16 @@ export async function provisionToIrohDocs(): Promise<boolean> {
         for (const book of lib.books) {
             try {
                 const key = `book:${book.id}`;
+                const serialized = serializeBook(book);
+                if (_provisionedValues.get(key) === serialized) continue;
                 markSelfOriginated(key);
-                await docsSetEntry(key, serializeBook(book));
+                const ok = await docsSetEntry(key, serialized);
+                if (ok) {
+                    _provisionedValues.set(key, serialized);
+                } else {
+                    const msg = `book ${book.id} (${book.title || "unknown"}): write failed`;
+                    bookErrors.push(msg);
+                }
             } catch (e) {
                 const msg = `book ${book.id} (${book.title || "unknown"}): ${e}`;
                 bookErrors.push(msg);
@@ -1248,8 +1285,15 @@ export async function provisionToIrohDocs(): Promise<boolean> {
         const domainErrors: string[] = [];
         for (const { name, key, payload } of domains) {
             try {
+                if (_provisionedValues.get(key) === payload) continue;
                 markSelfOriginated(key);
-                await docsSetEntry(key, payload);
+                const ok = await docsSetEntry(key, payload);
+                if (ok) {
+                    _provisionedValues.set(key, payload);
+                } else {
+                    const msg = `${name} (${payload.length} bytes): write failed`;
+                    domainErrors.push(msg);
+                }
             } catch (e) {
                 const msg = `${name} (${payload.length} bytes): ${e}`;
                 domainErrors.push(msg);
