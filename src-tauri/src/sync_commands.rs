@@ -85,7 +85,9 @@ pub(crate) async fn get_or_init_iroh(
     if guard.is_none() {
         *guard = Some(ep.clone());
     }
-    Ok(ep)
+    // Return the cached endpoint so every caller talks to the same transport
+    // the accept loop uses (a concurrently-built endpoint would be orphaned).
+    Ok(guard.as_ref().unwrap().clone())
 }
 
 pub fn get_iroh_relay_url() -> String {
@@ -249,6 +251,7 @@ pub async fn iroh_pair(
 
 #[tauri::command]
 pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData, String> {
+    let _pair_lock = IROH_START_LOCK.lock().await;
     let ep = get_or_init_iroh(&app).await?;
     let sync_state = get_sync_state(&app)?;
 
@@ -466,6 +469,9 @@ pub async fn submit_pairing_code(
     }
 
     {
+        // Serialize the check-and-spawn with iroh_start / iroh_stop so two
+        // accept loops can't be started concurrently.
+        let _pair_lock = IROH_START_LOCK.lock().await;
         let mut cancel_guard = sync_state.accept_cancel.lock().await;
         if cancel_guard.is_none() {
             let transport = sync_state.transport_state.clone();
