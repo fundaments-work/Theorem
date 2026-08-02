@@ -506,7 +506,7 @@ pub async fn submit_pairing_code(
     };
 
     if docs_ready && !pairing_response.sync_doc_ticket.is_empty() {
-        let api = get_docs_api(&app)?;
+        let api = get_docs_api(&app).await?;
         match pairing_response
             .sync_doc_ticket
             .parse::<iroh_docs::DocTicket>()
@@ -520,7 +520,7 @@ pub async fn submit_pairing_code(
                         let _ = doc.start_sync(vec![host_addr]).await;
                     }
 
-                    if let Ok(blobs) = get_blobs_store(&app) {
+                    if let Ok(blobs) = get_blobs_store(&app).await {
                         iroh_sync::subscribe_doc_events(app.clone(), doc, blobs);
                     }
                     let sync_state = get_sync_state(&app)?;
@@ -600,30 +600,26 @@ pub async fn unpair_device(app: tauri::AppHandle, device_id: String) -> Result<(
     Ok(())
 }
 
-fn get_docs_api(app: &tauri::AppHandle) -> Result<iroh_docs::api::DocsApi, String> {
-    let snapshot = get_docs_snapshot(app)?;
+async fn get_docs_api(app: &tauri::AppHandle) -> Result<iroh_docs::api::DocsApi, String> {
+    let snapshot = get_docs_snapshot(app).await?;
     Ok(snapshot.api.clone())
 }
 
-fn get_docs_author(app: &tauri::AppHandle) -> Result<iroh_docs::AuthorId, String> {
-    let snapshot = get_docs_snapshot(app)?;
+async fn get_docs_author(app: &tauri::AppHandle) -> Result<iroh_docs::AuthorId, String> {
+    let snapshot = get_docs_snapshot(app).await?;
     Ok(snapshot.author)
 }
 
-fn get_blobs_store(app: &tauri::AppHandle) -> Result<iroh_blobs::api::Store, String> {
-    let snapshot = get_docs_snapshot(app)?;
+async fn get_blobs_store(app: &tauri::AppHandle) -> Result<iroh_blobs::api::Store, String> {
+    let snapshot = get_docs_snapshot(app).await?;
     Ok(snapshot.blobs.clone())
 }
 
-fn get_docs_snapshot(app: &tauri::AppHandle) -> Result<DocsApiSnapshot, String> {
+async fn get_docs_snapshot(app: &tauri::AppHandle) -> Result<DocsApiSnapshot, String> {
     let sync_state = get_sync_state(app)?;
     for i in 0..50 {
         {
-            let guard = sync_state
-                .transport_state
-                .docs_api
-                .try_lock()
-                .map_err(|_| "docs api busy".to_string())?;
+            let guard = sync_state.transport_state.docs_api.lock().await;
             if let Some(ref snapshot) = *guard {
                 // The snapshot belongs to the current accept loop; a stale
                 // generation means its engine has been shut down. Fail fast so
@@ -640,7 +636,7 @@ fn get_docs_snapshot(app: &tauri::AppHandle) -> Result<DocsApiSnapshot, String> 
             }
         }
         if i < 49 {
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     }
     Err("iroh-docs not initialized after 5s wait".to_string())
@@ -651,8 +647,8 @@ pub async fn docs_create_sync_doc(
     app: tauri::AppHandle,
     peer_device_id: String,
 ) -> Result<String, String> {
-    let api = get_docs_api(&app)?;
-    let _author = get_docs_author(&app)?;
+    let api = get_docs_api(&app).await?;
+    let _author = get_docs_author(&app).await?;
     let doc = api.create().await.map_err(|e| format!("create doc: {e}"))?;
     let doc_id = doc.id();
     let ticket = doc
@@ -663,7 +659,7 @@ pub async fn docs_create_sync_doc(
         .await
         .map_err(|e| format!("share doc: {e}"))?;
 
-    if let Ok(blobs) = get_blobs_store(&app) {
+    if let Ok(blobs) = get_blobs_store(&app).await {
         iroh_sync::subscribe_doc_events(app.clone(), doc, blobs);
     }
 
@@ -686,7 +682,7 @@ pub async fn docs_import_sync_doc(
     peer_device_id: String,
     ticket_str: String,
 ) -> Result<(), String> {
-    let api = get_docs_api(&app)?;
+    let api = get_docs_api(&app).await?;
     let ticket: iroh_docs::DocTicket = ticket_str
         .parse()
         .map_err(|e| format!("parse ticket: {e}"))?;
@@ -696,7 +692,7 @@ pub async fn docs_import_sync_doc(
         .map_err(|e| format!("import doc: {e}"))?;
     let doc_id = doc.id();
 
-    if let Ok(blobs) = get_blobs_store(&app) {
+    if let Ok(blobs) = get_blobs_store(&app).await {
         iroh_sync::subscribe_doc_events(app.clone(), doc, blobs);
     }
 
@@ -719,8 +715,8 @@ pub async fn docs_set_entry(
     key: String,
     value: String,
 ) -> Result<(), String> {
-    let api = get_docs_api(&app)?;
-    let author = get_docs_author(&app)?;
+    let api = get_docs_api(&app).await?;
+    let author = get_docs_author(&app).await?;
     let sync_state = get_sync_state(&app)?;
 
     let targets: Vec<(iroh_docs::NamespaceId,)> = {
@@ -753,7 +749,7 @@ pub async fn docs_get_all_entries(
 ) -> Result<std::collections::HashMap<String, String>, String> {
     use futures::pin_mut;
     use futures::StreamExt;
-    let api = get_docs_api(&app)?;
+    let api = get_docs_api(&app).await?;
     let sync_state = get_sync_state(&app)?;
     let (blobs, devices) = {
         let guard = sync_state
@@ -867,14 +863,14 @@ pub async fn docs_get_all_entries(
 }
 
 async fn get_docs_api_or_init(app: &tauri::AppHandle) -> Result<iroh_docs::api::DocsApi, String> {
-    match get_docs_api(app) {
+    match get_docs_api(app).await {
         Ok(api) => Ok(api),
         Err(e) => {
             eprintln!("[iroh-sync] {e} — restarting sync endpoint with database cleanup");
 
             let _ = iroh_start(app.clone()).await;
 
-            get_docs_api(app)
+            get_docs_api(app).await
         }
     }
 }
@@ -915,7 +911,7 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
                                     &devices,
                                 );
                             }
-                            if let Ok(blobs) = get_blobs_store(&app) {
+                            if let Ok(blobs) = get_blobs_store(&app).await {
                                 iroh_sync::subscribe_doc_events(app.clone(), doc.clone(), blobs);
                             }
                             new_doc_id_str
@@ -967,7 +963,7 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
                                 &devices,
                             );
                         }
-                        if let Ok(blobs) = get_blobs_store(&app) {
+                        if let Ok(blobs) = get_blobs_store(&app).await {
                             iroh_sync::subscribe_doc_events(app.clone(), imported.clone(), blobs);
                         }
                         imported
