@@ -41,6 +41,9 @@ pub struct SyncTransportState {
     pub app_data_dir: PathBuf,
     pub paired_devices: Mutex<HashMap<String, PairedDevice>>,
     pub docs_api: Mutex<Option<DocsApiSnapshot>>,
+    /// Incremented each time an accept loop spawns; lets readers detect a
+    /// snapshot that outlived its engine (stale generation = dead actor).
+    pub docs_generation: std::sync::atomic::AtomicU64,
 }
 
 #[derive(Clone)]
@@ -48,6 +51,8 @@ pub struct DocsApiSnapshot {
     pub api: iroh_docs::api::DocsApi,
     pub author: iroh_docs::AuthorId,
     pub blobs: iroh_blobs::api::Store,
+    /// Generation of the accept loop that produced this snapshot.
+    pub generation: u64,
 }
 
 pub struct IrohSyncEndpoint {
@@ -488,10 +493,15 @@ pub fn start_accept_loop(
         };
 
         let mut docs_api_state = state_clone.docs_api.lock().await;
+        let generation = state_clone
+            .docs_generation
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
         *docs_api_state = Some(DocsApiSnapshot {
             api,
             author,
             blobs: blobs_for_cmds,
+            generation,
         });
         drop(docs_api_state);
 

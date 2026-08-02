@@ -41,6 +41,7 @@ pub fn init_sync(
         app_data_dir,
         paired_devices: Mutex::new(paired_devices),
         docs_api: Mutex::new(None),
+        docs_generation: std::sync::atomic::AtomicU64::new(0),
     });
 
     Ok(SyncState {
@@ -607,6 +608,17 @@ fn get_docs_snapshot(app: &tauri::AppHandle) -> Result<DocsApiSnapshot, String> 
                 .try_lock()
                 .map_err(|_| "docs api busy".to_string())?;
             if let Some(ref snapshot) = *guard {
+                // The snapshot belongs to the current accept loop; a stale
+                // generation means its engine has been shut down. Fail fast so
+                // get_docs_api_or_init restarts the engine instead of waiting.
+                if snapshot.generation
+                    != sync_state
+                        .transport_state
+                        .docs_generation
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                {
+                    return Err("iroh-docs engine is stale — restarting".to_string());
+                }
                 return Ok(snapshot.clone());
             }
         }
