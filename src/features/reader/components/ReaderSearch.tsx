@@ -1,9 +1,9 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Search, X, Loader2, ChevronRight } from 'lucide-react';
+import { Search, X, ChevronRight } from 'lucide-react';
 import { cn } from "../../../core/lib/utils";
-import { Backdrop, FloatingPanel } from "../../../ui";
+import { Backdrop, FloatingPanel, Spinner } from "../../../ui";
 
 export interface ReaderSearchMatch {
     cfi: string;
@@ -253,7 +253,7 @@ export function ReaderSearch({
 
                     {query && isSearching && results.length === 0 && (
                         <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center">
-                            <Loader2 className="w-6 h-6 animate-spin text-[color:var(--color-accent)] mb-3" />
+                            <Spinner size="sm" label="Scanning content" className="text-[color:var(--color-accent)] mb-3" />
                             <p className="w-full max-w-[15rem] text-xs text-[color:var(--color-text-muted)] leading-relaxed">Scanning content... {progress}%</p>
                         </div>
                     )}

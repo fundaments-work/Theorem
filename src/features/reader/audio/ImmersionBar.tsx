@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play, Pause, Square, Headphones, AlertCircle } from 'lucide-react';
 import { cn } from '../../../core/lib/utils';
+import { Spinner } from '../../../ui';
 import { useSettingsStore } from '../../../core/store';
 import { immersionPlayer, type PlaybackState } from '../audio/ImmersionPlayer';
 
@@ -112,7 +113,7 @@ export function ImmersionBar({
                         )}
                     />
                     {playbackState === 'loading' && (
-                        <span className="w-4 h-4 border-[2px] border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
+                        <Spinner size="sm" label="Preparing text-to-speech" className="shrink-0" />
                     )}
                     {playbackState === 'playing' && (
                         <div className="flex items-end gap-[3px] h-4 shrink-0">

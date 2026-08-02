@@ -16,7 +16,7 @@ import { isTauri, isWebKitBrowserEngine } from "../../../core/lib/env";
 import { configurePdfJsWorker } from "../../../core/lib/pdfjs-runtime";
 import { rankByFuzzyQuery } from "../../../core/lib/search/fuzzy";
 import * as pdfjsLib from "pdfjs-dist";
-import { Dropdown } from "../../../ui";
+import { Dropdown, PageLoader } from "../../../ui";
 import { TextLayer } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import type { Annotation, HighlightColor, PdfZoomMode, SearchResult, TocItem } from "../../../core/types";
@@ -1968,10 +1968,10 @@ export const PDFJsEngine = memo(forwardRef<PDFJsEngineRef, PDFJsEngineProps>(
         return (
             <div className={cn("relative w-full h-full", className)}>
                 {isLoading && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)]">
-                        <div className="animate-spin h-12 w-12 border-b-2 border-[var(--color-accent)]"></div>
-                        <p className="mt-4 text-[color:var(--color-text-secondary)]">Loading PDF...</p>
-                    </div>
+                    <PageLoader
+                        message="Loading PDF..."
+                        className="absolute inset-0 z-20"
+                    />
                 )}
                 {displayError && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-background)] p-8">

@@ -1,9 +1,10 @@
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Copy, Loader2, ArrowLeft } from 'lucide-react';
+import { Check, Copy, ArrowLeft } from 'lucide-react';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { cn } from "../../../../core/lib/utils";
+import { Spinner } from "../../../../ui";
 import {
     HIGHLIGHT_COLOR_TOKENS,
     HIGHLIGHT_PICKER_ACTIVE_COLORS,
@@ -451,7 +452,7 @@ export function HighlightColorPicker({
                         <div className="max-h-60 overflow-y-auto px-1 py-1 [content-visibility:auto] overscroll-contain">
                             {dictionary.loading && (
                                 <div className="flex items-center gap-2 text-sm text-[color:var(--color-text-secondary)]">
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <Spinner size="sm" label="Looking up definitions" />
                                     Looking up definitions...
                                 </div>
                             )}

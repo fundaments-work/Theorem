@@ -2,6 +2,7 @@
 import { useCallback, useMemo, useState, useRef, memo } from "react";
 import { List, Play, Pause, Square, Headphones } from "lucide-react";
 import { cn } from "../../../../core/lib/utils";
+import { Spinner } from "../../../../ui";
 import type { TocItem, DocLocation } from "../../../../core/types";
 
 interface ReaderNavbarProps {
@@ -282,7 +283,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                             ttsState === 'playing' || ttsState === 'loading' ? 'text-[color:var(--color-accent)]' : 'text-[color:var(--color-text-muted)]'
                         )} />
                         {ttsState === 'loading' && (
-                            <span className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin shrink-0" />
+                            <Spinner size="sm" label="Preparing text-to-speech" className="shrink-0" />
                         )}
                         {ttsState === 'playing' && (
                             <div className="flex items-end gap-[2px] h-4 shrink-0">
