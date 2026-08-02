@@ -626,10 +626,7 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
 
             <div
                 ref={containerRef}
-                className={cn(
-                    'absolute inset-0 transition-opacity duration-300 z-0 reader-viewport',
-                    isLoading ? 'opacity-0' : 'opacity-100',
-                )}
+                className={cn('absolute inset-0 z-0 reader-viewport')}
                 style={{ 
                     touchAction: settings.flow === 'scroll' ? 'pan-y pinch-zoom' : 'manipulation',
                     overflow: settings.flow === 'scroll' ? 'auto' : 'hidden',
