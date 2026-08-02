@@ -809,7 +809,11 @@ pub async fn docs_get_all_entries(
                         let key = String::from_utf8_lossy(entry.key()).to_string();
                         let hash = entry.content_hash();
                         let value = 'retry: {
-                            for _ in 0..5 {
+                            // Blobs usually arrive with docs_sync_now; a short
+                            // wait covers near-term arrivals, and anything still
+                            // missing is picked up via the live ContentReady path
+                            // or the next round.
+                            for _ in 0..2 {
                                 if let Ok(content) = blobs.blobs().get_bytes(hash).await {
                                     if let Ok(v) = String::from_utf8(content.to_vec()) {
                                         doc_entries_read += 1;
