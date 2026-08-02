@@ -11,6 +11,8 @@ import { normalizeFilePath } from "./core/lib/utils";
 import { registerShortcuts, useKeyboardShortcuts } from "./core/lib/keyboard-shortcuts";
 import { initI18n } from "./core/lib/i18n";
 import { initLogger } from "./core/lib/debug";
+import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
+import { prewarmFoliateRuntime } from "./core/lib/foliate-runtime";
 import { OnboardingFlow } from "./features/onboarding";
 import { Toaster } from "sonner";
 
@@ -50,6 +52,19 @@ const FeedsPage = lazy(() =>
 );
 const DESKTOP_STARTUP_MIN_WIDTH = 1024;
 const DESKTOP_STARTUP_MIN_HEIGHT = 720;
+
+function scheduleIdleTask(task: () => void, fallbackDelayMs = 1500): () => void {
+    const win = window as Window & {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+        cancelIdleCallback?: (handle: number) => void;
+    };
+    if (typeof win.requestIdleCallback === "function") {
+        const handle = win.requestIdleCallback(task, { timeout: 3000 });
+        return () => win.cancelIdleCallback?.(handle);
+    }
+    const handle = window.setTimeout(task, fallbackDelayMs);
+    return () => window.clearTimeout(handle);
+}
 
 function App() {
     const currentRoute = useUIStore((state) => state.currentRoute);
@@ -302,6 +317,17 @@ function App() {
     useEffect(() => {
         void requestNotificationPermission();
     }, []);
+
+    useEffect(() => {
+        if (!storesHydrated) return;
+        // Warm the reader, PDF.js, and foliate runtime chunks during idle after
+        // first paint so the first book open skips chunk load + engine parse.
+        return scheduleIdleTask(() => {
+            void prewarmReaderChunk();
+            void prewarmPdfJsRuntime();
+            void prewarmFoliateRuntime();
+        });
+    }, [storesHydrated]);
 
     useEffect(() => {
         if (!isTauriDesktop()) return;
