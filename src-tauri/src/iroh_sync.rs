@@ -401,6 +401,10 @@ pub fn start_accept_loop(
     let data_dir = state.app_data_dir.clone();
 
     tokio::spawn(async move {
+        // Invalidate any snapshot left by a previous accept loop so stale
+        // handles to a dead iroh-docs engine are never mistaken for ready.
+        *state_clone.docs_api.lock().await = None;
+
         let paired_devices = state_clone.paired_devices.lock().await;
         let has_devices = !paired_devices.is_empty();
         drop(paired_devices);
@@ -667,6 +671,10 @@ pub fn start_accept_loop(
         let _ = cancel_rx.changed().await;
         eprintln!("[iroh-sync] Router shutdown requested");
         let _ = router.shutdown().await;
+
+        // The engine's actor is now dead; drop the snapshot so no command
+        // calls into the shutdown engine.
+        *state_clone.docs_api.lock().await = None;
     });
 
     cancel_tx

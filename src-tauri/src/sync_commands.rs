@@ -197,10 +197,15 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
 
 #[tauri::command]
 pub async fn iroh_stop(app: tauri::AppHandle) -> Result<(), String> {
+    let _stop_lock = IROH_START_LOCK.lock().await;
     let sync_state = get_sync_state(&app)?;
     if let Some(cancel) = sync_state.accept_cancel.lock().await.take() {
         let _ = cancel.send(true);
     }
+    // The engine is shutting down; drop the docs API snapshot so nothing
+    // holds a handle to the now-dead iroh-docs actor (which would otherwise
+    // surface as "sending to iroh_docs actor failed" on the next sync).
+    *sync_state.transport_state.docs_api.lock().await = None;
     let endpoint = IROH_ENDPOINT.lock().unwrap().clone();
     if let Some(ep) = endpoint {
         ep.close().await;
