@@ -121,7 +121,7 @@ impl FileTransferHandler {
     async fn read_book_data(data_dir: &Path, book_id: &str) -> Result<Vec<u8>, String> {
         let conn = Self::open_read_db(data_dir)?;
         let mut stmt = conn
-            .prepare("SELECT data FROM books WHERE id = ?1 AND data IS NOT NULL")
+            .prepare("SELECT data FROM books WHERE id = ?1 AND length(data) > 0")
             .map_err(|e| format!("prepare: {e}"))?;
         let book_data: Vec<u8> = stmt
             .query_row(rusqlite::params![book_id], |row| row.get(0))

@@ -133,21 +133,26 @@ fn reclaim_legacy_book_blobs(
     connection: &Connection,
     app_data_dir: &Path,
 ) -> Result<usize, String> {
-    let legacy_rows: Vec<(String, Vec<u8>)> = {
+    // Collect only ids first so the BLOBs are read one at a time below; reading
+    // every legacy book into memory at once could OOM large libraries.
+    let legacy_ids: Vec<String> = {
         let mut statement = connection
-            .prepare("SELECT id, data FROM books WHERE length(data) > 0")
+            .prepare("SELECT id FROM books WHERE length(data) > 0")
             .map_err(|e| format!("Failed to prepare legacy blob query: {e}"))?;
         let rows = statement
-            .query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
-            })
+            .query_map([], |row| row.get::<_, String>(0))
             .map_err(|e| format!("Failed to query legacy book blobs: {e}"))?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(|e| format!("Failed to read legacy book blobs: {e}"))?
+            .map_err(|e| format!("Failed to read legacy book ids: {e}"))?
     };
 
     let mut reclaimed = 0;
-    for (id, blob_data) in legacy_rows {
+    for id in legacy_ids {
+        let blob_data: Vec<u8> = connection
+            .query_row("SELECT data FROM books WHERE id = ?1", params![id], |row| {
+                row.get(0)
+            })
+            .map_err(|e| format!("Failed to read legacy blob for {id}: {e}"))?;
         if blob_data.is_empty() {
             continue;
         }
@@ -344,7 +349,7 @@ pub fn sqlite_get_book_data(app: AppHandle, id: String) -> Result<Option<Vec<u8>
     with_connection(&app, |connection| {
         connection
             .query_row(
-                "SELECT data FROM books WHERE id = ?1 AND data IS NOT NULL",
+                "SELECT data FROM books WHERE id = ?1 AND length(data) > 0",
                 params![id],
                 |row| row.get::<_, Vec<u8>>(0),
             )
@@ -1467,6 +1472,25 @@ mod tests {
             .unwrap();
         assert_eq!(count, 1);
         assert_eq!(book_data_len(&conn, "book1"), 0);
+    }
+
+    #[test]
+    fn test_empty_blob_is_treated_as_absent() {
+        let conn = setup_db();
+        sqlite_register_materialized_book_inner(&conn, "book1").unwrap();
+
+        // sqlite_get_book_data and file_transfer read_book_data both guard with
+        // `length(data) > 0` so a registered book with no materialized file is
+        // reported as missing (None) instead of serving empty bytes.
+        let data: Option<Vec<u8>> = conn
+            .query_row(
+                "SELECT data FROM books WHERE id = ?1 AND length(data) > 0",
+                params!["book1"],
+                |row| row.get(0),
+            )
+            .optional()
+            .unwrap();
+        assert!(data.is_none());
     }
 
     #[test]
