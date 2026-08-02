@@ -395,17 +395,24 @@ impl ProtocolHandler for PairingProtocolHandler {
     }
 }
 
+/// Handle to a running accept loop: a cancel signal plus the task handle so
+/// callers can wait for the loop (and its iroh-docs engine) to actually stop.
+pub struct AcceptLoopHandle {
+    pub cancel: tokio::sync::watch::Sender<bool>,
+    pub join: tokio::task::JoinHandle<()>,
+}
+
 pub fn start_accept_loop(
     endpoint: Arc<IrohSyncEndpoint>,
     state: Arc<SyncTransportState>,
-) -> tokio::sync::watch::Sender<bool> {
+) -> AcceptLoopHandle {
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
 
     let router_endpoint = endpoint.endpoint.clone();
     let state_clone = state.clone();
     let data_dir = state.app_data_dir.clone();
 
-    tokio::spawn(async move {
+    let join = tokio::spawn(async move {
         // Invalidate any snapshot left by a previous accept loop so stale
         // handles to a dead iroh-docs engine are never mistaken for ready.
         *state_clone.docs_api.lock().await = None;
@@ -687,7 +694,10 @@ pub fn start_accept_loop(
         *state_clone.docs_api.lock().await = None;
     });
 
-    cancel_tx
+    AcceptLoopHandle {
+        cancel: cancel_tx,
+        join,
+    }
 }
 
 async fn handle_pair_req(

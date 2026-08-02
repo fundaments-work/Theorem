@@ -17,7 +17,7 @@ static IROH_START_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new((
 
 pub struct SyncState {
     pub transport_state: Arc<SyncTransportState>,
-    accept_cancel: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
+    accept_cancel: Mutex<Option<iroh_sync::AcceptLoopHandle>>,
 }
 
 pub fn init_sync(
@@ -148,15 +148,23 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
             if cancel_guard.is_none() {
                 let transport = sync_state.transport_state.clone();
                 let ep_clone = ep.clone();
-                let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
-                *cancel_guard = Some(cancel);
+                let handle = iroh_sync::start_accept_loop(ep_clone, transport);
+                *cancel_guard = Some(handle);
             } else if attempt > 0 {
-                *cancel_guard = None;
-                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                // The first attempt's loop is still running (it failed to
+                // initialize docs_api). Stop it and wait for its engine to
+                // fully shut down before starting a fresh loop, so the two
+                // loops can't race writing docs_api.
+                if let Some(old) = cancel_guard.take() {
+                    let _ = old.cancel.send(true);
+                    let _ =
+                        tokio::time::timeout(std::time::Duration::from_secs(10), old.join).await;
+                }
+                *sync_state.transport_state.docs_api.lock().await = None;
                 let transport = sync_state.transport_state.clone();
                 let ep_clone = ep.clone();
-                let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
-                *cancel_guard = Some(cancel);
+                let handle = iroh_sync::start_accept_loop(ep_clone, transport);
+                *cancel_guard = Some(handle);
             }
         }
 
@@ -200,8 +208,11 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
 pub async fn iroh_stop(app: tauri::AppHandle) -> Result<(), String> {
     let _stop_lock = IROH_START_LOCK.lock().await;
     let sync_state = get_sync_state(&app)?;
-    if let Some(cancel) = sync_state.accept_cancel.lock().await.take() {
-        let _ = cancel.send(true);
+    if let Some(handle) = sync_state.accept_cancel.lock().await.take() {
+        let _ = handle.cancel.send(true);
+        // Wait for the accept loop and its iroh-docs engine to stop before we
+        // drop the endpoint, so nothing is left referencing a dead engine.
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(10), handle.join).await;
     }
     // The engine is shutting down; drop the docs API snapshot so nothing
     // holds a handle to the now-dead iroh-docs actor (which would otherwise
@@ -246,8 +257,8 @@ pub async fn generate_pairing_qr(app: tauri::AppHandle) -> Result<PairingQrData,
         if cancel_guard.is_none() {
             let transport = sync_state.transport_state.clone();
             let ep_clone = ep.clone();
-            let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
-            *cancel_guard = Some(cancel);
+            let handle = iroh_sync::start_accept_loop(ep_clone, transport);
+            *cancel_guard = Some(handle);
         }
     }
 
@@ -459,8 +470,8 @@ pub async fn submit_pairing_code(
         if cancel_guard.is_none() {
             let transport = sync_state.transport_state.clone();
             let ep_clone = ep.clone();
-            let cancel = iroh_sync::start_accept_loop(ep_clone, transport);
-            *cancel_guard = Some(cancel);
+            let handle = iroh_sync::start_accept_loop(ep_clone, transport);
+            *cancel_guard = Some(handle);
         }
     }
 
