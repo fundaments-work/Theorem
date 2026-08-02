@@ -11,5 +11,5 @@ export type { ModalProps } from "./Modal";
 export { FloatingPanel } from "./Panel";
 export { PageHeader } from "./PageHeader";
 export { RouteErrorBoundary } from "./RouteErrorBoundary";
-export { Spinner, PageLoader, Skeleton, GlobalLoader } from "./loading";
-export type { SpinnerProps, PageLoaderProps, SkeletonProps } from "./loading";
+export { Spinner, PageLoader, GlobalLoader } from "./loading";
+export type { SpinnerProps, PageLoaderProps } from "./loading";

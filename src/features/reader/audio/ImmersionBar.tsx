@@ -113,7 +113,7 @@ export function ImmersionBar({
                         )}
                     />
                     {playbackState === 'loading' && (
-                        <Spinner size="sm" label="Preparing text-to-speech" className="shrink-0" />
+                        <Spinner size="sm" tone="accent" label="Preparing text-to-speech" className="shrink-0" />
                     )}
                     {playbackState === 'playing' && (
                         <div className="flex items-end gap-[3px] h-4 shrink-0">

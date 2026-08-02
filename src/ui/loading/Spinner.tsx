@@ -2,6 +2,7 @@ import { cn } from "../../core/lib/utils";
 
 export interface SpinnerProps {
     size?: "sm" | "md" | "lg";
+    tone?: "default" | "accent";
     className?: string;
     label?: string;
 }
@@ -12,13 +13,19 @@ const SPINNER_SIZES = {
     lg: "h-12 w-12 border-3",
 } as const;
 
-export function Spinner({ size = "md", className, label = "Loading..." }: SpinnerProps) {
+const SPINNER_TONES = {
+    default: "border-[var(--color-border)] border-t-[var(--color-accent)]",
+    accent: "border-[var(--color-accent)] border-t-transparent",
+} as const;
+
+export function Spinner({ size = "md", tone = "default", className, label = "Loading..." }: SpinnerProps) {
     return (
         <span role="status" aria-label={label} className="inline-flex items-center justify-center">
             <span
                 className={cn(
-                    "rounded-full border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin",
+                    "rounded-full animate-spin",
                     SPINNER_SIZES[size],
+                    SPINNER_TONES[tone],
                     className,
                 )}
             />

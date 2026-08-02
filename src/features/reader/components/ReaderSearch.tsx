@@ -253,7 +253,7 @@ export function ReaderSearch({
 
                     {query && isSearching && results.length === 0 && (
                         <div className="w-full flex flex-col items-center justify-center py-12 px-6 text-center">
-                            <Spinner size="sm" label="Scanning content" className="text-[color:var(--color-accent)] mb-3" />
+                            <Spinner size="sm" tone="accent" label="Scanning content" className="mb-3" />
                             <p className="w-full max-w-[15rem] text-xs text-[color:var(--color-text-muted)] leading-relaxed">Scanning content... {progress}%</p>
                         </div>
                     )}

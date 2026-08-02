@@ -283,7 +283,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                             ttsState === 'playing' || ttsState === 'loading' ? 'text-[color:var(--color-accent)]' : 'text-[color:var(--color-text-muted)]'
                         )} />
                         {ttsState === 'loading' && (
-                            <Spinner size="sm" label="Preparing text-to-speech" className="shrink-0" />
+                            <Spinner size="sm" tone="accent" label="Preparing text-to-speech" className="shrink-0" />
                         )}
                         {ttsState === 'playing' && (
                             <div className="flex items-end gap-[2px] h-4 shrink-0">

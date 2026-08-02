@@ -153,14 +153,3 @@
         box-shadow: none;
     }
 }
-
-
-@keyframes pdfjs-spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-.animate-spin {
-    animation: pdfjs-spin 1s linear infinite;
-}
