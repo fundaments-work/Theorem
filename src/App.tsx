@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { RouteErrorBoundary, KeyboardShortcutsHelp, AlertDialog } from "./ui";
+import { RouteErrorBoundary, KeyboardShortcutsHelp, AlertDialog, PageLoader } from "./ui";
 import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
 import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
@@ -50,23 +50,6 @@ const FeedsPage = lazy(() =>
 );
 const DESKTOP_STARTUP_MIN_WIDTH = 1024;
 const DESKTOP_STARTUP_MIN_HEIGHT = 720;
-
-function PageFallback() {
-    return (
-        <div className="flex h-full w-full items-center justify-center">
-            <div className="w-8 h-8 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
-        </div>
-    );
-}
-
-function ReaderFallback() {
-    return (
-        <div className="fixed inset-0 flex flex-col items-center justify-center bg-[var(--color-background)]">
-            <div className="w-12 h-12 border-3 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
-            <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">Opening reader...</p>
-        </div>
-    );
-}
 
 function App() {
     const currentRoute = useUIStore((state) => state.currentRoute);
@@ -447,7 +430,7 @@ function App() {
     };
 
     if (!storesHydrated) {
-        return <PageFallback />;
+        return <PageLoader className="fixed inset-0" />;
     }
 
     if (!hasCompletedOnboarding) {
@@ -457,7 +440,7 @@ function App() {
     if (isReaderMode) {
         return (
             <RouteErrorBoundary>
-                <Suspense fallback={<ReaderFallback />}>
+                <Suspense fallback={<PageLoader message="Opening reader..." className="fixed inset-0" />}>
                     <ReaderPage />
                 </Suspense>
             </RouteErrorBoundary>
@@ -479,7 +462,7 @@ function App() {
 
                 <main id="app-main" ref={mainScrollRef} className="flex flex-1 flex-col overflow-y-auto pb-[calc(4rem+var(--spacing-lg))] md:pb-0 md:px-8 md:py-6 custom-scrollbar overscroll-contain">
                     <RouteErrorBoundary>
-                        <Suspense fallback={<PageFallback />}>
+                        <Suspense fallback={<PageLoader />}>
                             {renderPage()}
                         </Suspense>
                     </RouteErrorBoundary>
