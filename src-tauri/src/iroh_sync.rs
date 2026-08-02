@@ -417,10 +417,6 @@ pub fn start_accept_loop(
         // handles to a dead iroh-docs engine are never mistaken for ready.
         *state_clone.docs_api.lock().await = None;
 
-        let paired_devices = state_clone.paired_devices.lock().await;
-        let has_devices = !paired_devices.is_empty();
-        drop(paired_devices);
-
         let blobs_path = data_dir.join("iroh-blobs");
 
         let stale_docs = data_dir.join("iroh-docs").join("db.redb");
@@ -430,25 +426,9 @@ pub fn start_accept_loop(
             let _ = std::fs::remove_dir_all(&blobs_path);
         }
 
-        if !has_devices {
-            let router = Router::builder(router_endpoint)
-                .accept(
-                    ALPN,
-                    PairingProtocolHandler {
-                        state: state_clone.clone(),
-                    },
-                )
-                .accept(
-                    crate::file_transfer::ALPN_BYTES,
-                    crate::file_transfer::FileTransferHandler {
-                        data_dir: data_dir.clone(),
-                    },
-                )
-                .spawn();
-            let _ = cancel_rx.changed().await;
-            let _ = router.shutdown().await;
-            return;
-        }
+        // Always initialize the docs engine, even with zero paired devices, so
+        // docs_api is ready before the first pairing (otherwise iroh_start
+        // times out on fresh devices and first-pair doc creation is blocked).
 
         let _ = std::fs::create_dir_all(&blobs_path);
         let blobs = match iroh_blobs::store::fs::FsStore::load(&blobs_path).await {
