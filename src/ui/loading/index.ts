@@ -4,3 +4,4 @@ export { PageLoader } from "./PageLoader";
 export type { PageLoaderProps } from "./PageLoader";
 export { Skeleton } from "./Skeleton";
 export type { SkeletonProps } from "./Skeleton";
+export { GlobalLoader } from "./GlobalLoader";

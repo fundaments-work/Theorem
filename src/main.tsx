@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./shell";
+import { GlobalLoader } from "./ui";
 import { initSentry } from "./core/lib/sentry";
 import "./index.css";
 
@@ -15,5 +16,6 @@ const root = createRoot(rootElement);
 root.render(
     <ErrorBoundary>
         <App />
+        <GlobalLoader />
     </ErrorBoundary>
 );

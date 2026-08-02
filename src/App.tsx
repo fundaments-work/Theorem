@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { RouteErrorBoundary, KeyboardShortcutsHelp, AlertDialog, PageLoader } from "./ui";
 import { AppTitlebar, Sidebar, BottomNav } from "./shell";
@@ -54,6 +54,7 @@ const DESKTOP_STARTUP_MIN_HEIGHT = 720;
 function App() {
     const currentRoute = useUIStore((state) => state.currentRoute);
     const setRoute = useUIStore((state) => state.setRoute);
+    const setLoading = useUIStore((state) => state.setLoading);
     const mainScrollRef = useRef<HTMLElement>(null);
     const autoSyncEnabled = useSettingsStore((state) => state.settings.deviceSync?.autoSyncEnabled ?? true);
     const updateSettings = useSettingsStore((state) => state.updateSettings);
@@ -64,10 +65,19 @@ function App() {
         useSettingsStore.persist.hasHydrated(),
     );
 
-    useEffect(() => {
-        if (storesHydrated) return;
+    useLayoutEffect(() => {
+        if (storesHydrated) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true, "Loading Theorem…");
         let cancelled = false;
-        const done = () => { if (!cancelled) setStoresHydrated(true); };
+        const done = () => {
+            if (!cancelled) {
+                setStoresHydrated(true);
+                setLoading(false);
+            }
+        };
         const timeout = setTimeout(done, 3000);
         const unsub = useSettingsStore.subscribe(() => {
             if (cancelled) return;
@@ -81,7 +91,7 @@ function App() {
             clearTimeout(timeout);
             unsub();
         };
-    }, [storesHydrated]);
+    }, [storesHydrated, setLoading]);
 
     const hasCompletedOnboardingStore = useSettingsStore(
         (state) => state.settings.hasCompletedOnboarding,
@@ -430,7 +440,7 @@ function App() {
     };
 
     if (!storesHydrated) {
-        return <PageLoader className="fixed inset-0" />;
+        return <div className="h-full w-full bg-[var(--color-background)]" />;
     }
 
     if (!hasCompletedOnboarding) {
