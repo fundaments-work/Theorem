@@ -11,6 +11,8 @@ import {
     sqliteSaveBookAnnotations,
     sqliteIndexBooksFtsBatch,
     sqliteIndexBookFts,
+    sqliteGetKv,
+    sqliteSetKv,
 } from "../lib/sqlite-storage";
 import { isTauri } from "../lib/env";
 import type {
@@ -174,6 +176,30 @@ function normalizeContentHash(contentHash?: string): string | undefined {
 
     const normalized = contentHash.trim().toLowerCase();
     return normalized.length > 0 ? normalized : undefined;
+}
+
+const FTS_HASH_KV_KEY = "fts:booksHash";
+
+function fnv1aInto(hash: number, value: string): number {
+    let h = hash >>> 0;
+    for (let i = 0; i < value.length; i++) {
+        h ^= value.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+    }
+    return h >>> 0;
+}
+
+export function computeFtsHash(books: Array<{ id: string; title: string; author: string }>): string {
+    let hash = 0x811c9dc5;
+    for (const book of books) {
+        hash = fnv1aInto(hash, book.id);
+        hash = fnv1aInto(hash, "\u0001");
+        hash = fnv1aInto(hash, book.title ?? "");
+        hash = fnv1aInto(hash, "\u0001");
+        hash = fnv1aInto(hash, book.author ?? "");
+        hash = fnv1aInto(hash, "\u0000");
+    }
+    return (hash >>> 0).toString(36);
 }
 
 function findDuplicateBookIndex(books: Book[], incomingBook: Book): number {
@@ -1376,7 +1402,16 @@ export const useLibraryStore = create<LibraryStore>()(
                         b.title,
                         b.author,
                     ] as [string, string, string]);
-                    sqliteIndexBooksFtsBatch(ftsBatch).catch(e => console.error("[catch]", e));
+                    void (async () => {
+                        const books = state.books as Array<{ id: string; title: string; author: string }>;
+                        const newHash = computeFtsHash(books);
+                        const prevHash = await sqliteGetKv(FTS_HASH_KV_KEY).catch(() => null);
+                        if (prevHash === newHash) {
+                            return;
+                        }
+                        await sqliteIndexBooksFtsBatch(ftsBatch).catch(e => console.error("[catch]", e));
+                        await sqliteSetKv(FTS_HASH_KV_KEY, newHash).catch(e => console.error("[catch]", e));
+                    })();
                 }
             },
         }
