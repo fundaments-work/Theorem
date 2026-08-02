@@ -121,19 +121,27 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
         .path()
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {e}"))?;
+    let sync_state = get_sync_state(&app)?;
 
     // iroh-docs 0.101 persists the CRDT replica to `docs.redb`; older releases
     // used `db.redb` (purged separately in iroh_sync.rs). Only the current
     // filename is size-checked so the growth cap actually fires.
     let docs_db_path = data_dir.join("iroh-docs").join("docs.redb");
+    const MAX_DB_BYTES: u64 = 100 * 1024 * 1024;
     if let Ok(meta) = std::fs::metadata(&docs_db_path) {
-        const MAX_DB_BYTES: u64 = 100 * 1024 * 1024;
         if meta.len() > MAX_DB_BYTES {
             eprintln!(
                 "[iroh-sync] redb database is {} MB — exceeding {} MB threshold. Wiping and recreating...",
                 meta.len() / (1024 * 1024),
                 MAX_DB_BYTES / (1024 * 1024)
             );
+            // Stop a running engine before deleting its files, otherwise the
+            // wipe would remove the redb/blobs out from under it.
+            if let Some(handle) = sync_state.accept_cancel.lock().await.take() {
+                let _ = handle.cancel.send(true);
+                let _ = tokio::time::timeout(std::time::Duration::from_secs(10), handle.join).await;
+            }
+            *sync_state.transport_state.docs_api.lock().await = None;
             let blobs_path = data_dir.join("iroh-blobs");
             let docs_path = data_dir.join("iroh-docs");
             let _ = std::fs::remove_dir_all(&blobs_path);
@@ -143,7 +151,6 @@ pub async fn iroh_start(app: tauri::AppHandle) -> Result<IrohNodeIdResponse, Str
 
     for attempt in 0..2 {
         let ep = get_or_init_iroh(&app).await?;
-        let sync_state = get_sync_state(&app)?;
 
         {
             let mut cancel_guard = sync_state.accept_cancel.lock().await;
@@ -488,13 +495,23 @@ pub async fn submit_pairing_code(
     let docs_ready = {
         let mut waited = 0;
         loop {
-            if sync_state
-                .transport_state
-                .docs_api
-                .try_lock()
-                .map(|g| g.is_some())
-                .unwrap_or(false)
-            {
+            // Only report ready when the snapshot belongs to the current accept
+            // loop (generation match); a stale snapshot from a previous engine
+            // is not usable.
+            let ready = {
+                let guard = sync_state.transport_state.docs_api.lock().await;
+                match guard.as_ref() {
+                    Some(snapshot) => {
+                        snapshot.generation
+                            == sync_state
+                                .transport_state
+                                .docs_generation
+                                .load(std::sync::atomic::Ordering::SeqCst)
+                    }
+                    None => false,
+                }
+            };
+            if ready {
                 break true;
             }
             waited += 1;
@@ -772,11 +789,7 @@ pub async fn docs_get_all_entries(
     let api = get_docs_api(&app).await?;
     let sync_state = get_sync_state(&app)?;
     let (blobs, devices) = {
-        let guard = sync_state
-            .transport_state
-            .docs_api
-            .try_lock()
-            .map_err(|_| "docs api busy".to_string())?;
+        let guard = sync_state.transport_state.docs_api.lock().await;
         let snapshot = guard
             .as_ref()
             .ok_or_else(|| "iroh-docs not initialized".to_string())?;
