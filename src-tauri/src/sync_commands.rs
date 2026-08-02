@@ -733,14 +733,34 @@ pub async fn docs_set_entry(
             .collect()
     };
 
+    // Surface write failures instead of silently dropping data, so the
+    // frontend knows the sync doc wasn't updated and can retry.
+    let mut first_error: Option<String> = None;
     for (doc_id,) in &targets {
-        if let Ok(Some(doc)) = api.open(*doc_id).await {
-            let _ = doc
-                .set_bytes(author, key.clone().into_bytes(), value.clone().into_bytes())
-                .await;
+        let outcome: Result<(), String> = async {
+            let doc = api
+                .open(*doc_id)
+                .await
+                .map_err(|e| format!("open doc {doc_id}: {e}"))?
+                .ok_or_else(|| format!("sync doc not found: {doc_id}"))?;
+            doc.set_bytes(author, key.clone().into_bytes(), value.clone().into_bytes())
+                .await
+                .map(|_| ())
+                .map_err(|e| format!("set_bytes for {doc_id}: {e}"))
+        }
+        .await;
+        if let Err(msg) = outcome {
+            eprintln!("[iroh-sync] {msg}");
+            if first_error.is_none() {
+                first_error = Some(msg);
+            }
         }
     }
-    Ok(())
+
+    match first_error {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
 }
 
 #[tauri::command]
