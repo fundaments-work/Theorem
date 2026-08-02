@@ -939,15 +939,21 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
                     match api.import(ticket).await {
                         Ok(doc) => {
                             let new_doc_id_str = doc.id().to_string();
-                            let mut devices =
-                                sync_state.transport_state.paired_devices.lock().await;
-                            if let Some(d) = devices.get_mut(&peer_device_id) {
-                                d.sync_doc_id = new_doc_id_str.clone();
-                                let _ = iroh_sync::save_paired_devices_to_disk(
-                                    &sync_state.transport_state.app_data_dir,
-                                    &devices,
-                                );
+                            {
+                                let mut devices =
+                                    sync_state.transport_state.paired_devices.lock().await;
+                                if let Some(d) = devices.get_mut(&peer_device_id) {
+                                    d.sync_doc_id = new_doc_id_str.clone();
+                                    let _ = iroh_sync::save_paired_devices_to_disk(
+                                        &sync_state.transport_state.app_data_dir,
+                                        &devices,
+                                    );
+                                }
                             }
+                            // The paired_devices guard is released above before
+                            // get_blobs_store (which awaits the docs_api lock); holding
+                            // both would invert the docs_api -> paired_devices lock order
+                            // and deadlock against docs_get_all_entries.
                             if let Ok(blobs) = get_blobs_store(&app).await {
                                 iroh_sync::subscribe_doc_events(app.clone(), doc.clone(), blobs);
                             }
@@ -992,14 +998,19 @@ pub async fn docs_sync_now(app: tauri::AppHandle, peer_device_id: String) -> Res
                 match api.import(ticket).await {
                     Ok(imported) => {
                         let new_doc_id = imported.id().to_string();
-                        let mut devices = sync_state.transport_state.paired_devices.lock().await;
-                        if let Some(d) = devices.get_mut(&peer_device_id) {
-                            d.sync_doc_id = new_doc_id;
-                            let _ = iroh_sync::save_paired_devices_to_disk(
-                                &sync_state.transport_state.app_data_dir,
-                                &devices,
-                            );
+                        {
+                            let mut devices =
+                                sync_state.transport_state.paired_devices.lock().await;
+                            if let Some(d) = devices.get_mut(&peer_device_id) {
+                                d.sync_doc_id = new_doc_id;
+                                let _ = iroh_sync::save_paired_devices_to_disk(
+                                    &sync_state.transport_state.app_data_dir,
+                                    &devices,
+                                );
+                            }
                         }
+                        // Release paired_devices before get_blobs_store (docs_api) to
+                        // keep the global docs_api -> paired_devices lock order.
                         if let Ok(blobs) = get_blobs_store(&app).await {
                             iroh_sync::subscribe_doc_events(app.clone(), imported.clone(), blobs);
                         }
