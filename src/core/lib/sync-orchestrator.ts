@@ -1217,10 +1217,13 @@ export async function provisionToIrohDocs(): Promise<boolean> {
         const devices = await getPairedDevices().catch(() => []);
         const fingerprint = devices.map((d) => d.deviceId).sort().join("|");
 
-        // Skip the round entirely when nothing changed since the last
-        // successful provision: no local mutations, same peer set, and no
-        // forced re-provision (e.g. after a doc re-import).
-        const needsProvision = _forceReProvision || _dataDirty || !_provisionedOnce
+        // Skip the round entirely only for structural reasons: never provisioned,
+        // a forced re-provision (e.g. after a doc re-import), or a changed peer
+        // set. We must NOT skip based on _dataDirty: that flag is only set when
+        // auto-sync is on, so a manual sync with auto-sync disabled would skip
+        // provisioning and silently drop the user's edits. The per-key
+        // _provisionedValues cache below still avoids re-writing unchanged data.
+        const needsProvision = _forceReProvision || !_provisionedOnce
             || fingerprint !== _lastProvisionFingerprint;
         if (!needsProvision) {
             return true;
