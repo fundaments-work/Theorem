@@ -382,9 +382,14 @@ const BookReaderPage = memo(function BookReaderPage() {
     }, [currentBookId, getBook]);
 
     // Shared cover extraction helper — runs when any book opens in the reader.
-    // Accepts the bytes already loaded for reading so we avoid a second
-    // full-file read over IPC.
-    const extractBookCover = useCallback(async (bookId: string | null, preloadedData?: ArrayBuffer) => {
+    // Accepts the bytes already loaded for reading (Blob or Uint8Array) so we
+    // avoid a second full-file read over IPC. The bytes are only converted to an
+    // ArrayBuffer after the early-return checks, so books that already have a
+    // cover pay no copy cost.
+    const extractBookCover = useCallback(async (
+        bookId: string | null,
+        preloadedSource?: Blob | Uint8Array,
+    ) => {
         if (!bookId) return;
         const book = getBook(bookId);
         if (!book) return;
@@ -395,8 +400,19 @@ const BookReaderPage = memo(function BookReaderPage() {
         }
 
         try {
-            const storagePath = book.storagePath || book.filePath;
-            const data = preloadedData ?? (await getBookData(book.id, storagePath));
+            let data: ArrayBuffer | undefined;
+            if (preloadedSource instanceof Blob) {
+                data = await preloadedSource.arrayBuffer().catch(() => undefined);
+            } else if (preloadedSource instanceof Uint8Array) {
+                const buffer = preloadedSource.buffer as ArrayBuffer;
+                data = buffer.slice(
+                    preloadedSource.byteOffset,
+                    preloadedSource.byteOffset + preloadedSource.byteLength,
+                );
+            } else {
+                const storagePath = book.storagePath || book.filePath;
+                data = (await getBookData(book.id, storagePath)) ?? undefined;
+            }
             if (!data) {
                 return;
             }
@@ -745,19 +761,7 @@ const BookReaderPage = memo(function BookReaderPage() {
         const fractions = readerRef.current?.getSectionFractions() ?? [];
         setSectionFractions(fractions);
 
-        void (async () => {
-            let preloadedData: ArrayBuffer | undefined;
-            if (file) {
-                preloadedData = await file.arrayBuffer().catch(() => undefined);
-            } else if (pdfData) {
-                const buffer = pdfData.buffer as ArrayBuffer;
-                preloadedData = buffer.slice(
-                    pdfData.byteOffset,
-                    pdfData.byteOffset + pdfData.byteLength,
-                );
-            }
-            void extractBookCover(currentBookId ?? null, preloadedData);
-        })();
+        void extractBookCover(currentBookId ?? null, file ?? pdfData ?? undefined);
     }, [currentBookId, getBook, extractBookCover, file, pdfData]);
 
     const lastClickFractionRef = useRef<number | null>(null);
