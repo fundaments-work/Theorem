@@ -381,8 +381,10 @@ const BookReaderPage = memo(function BookReaderPage() {
         void extractBookCover(currentBookId ?? null);
     }, [currentBookId, getBook]);
 
-    // Shared cover extraction helper — runs when any book opens in the reader
-    const extractBookCover = useCallback(async (bookId: string | null) => {
+    // Shared cover extraction helper — runs when any book opens in the reader.
+    // Accepts the bytes already loaded for reading so we avoid a second
+    // full-file read over IPC.
+    const extractBookCover = useCallback(async (bookId: string | null, preloadedData?: ArrayBuffer) => {
         if (!bookId) return;
         const book = getBook(bookId);
         if (!book) return;
@@ -394,7 +396,7 @@ const BookReaderPage = memo(function BookReaderPage() {
 
         try {
             const storagePath = book.storagePath || book.filePath;
-            const data = await getBookData(book.id, storagePath);
+            const data = preloadedData ?? (await getBookData(book.id, storagePath));
             if (!data) {
                 return;
             }
@@ -740,13 +742,23 @@ const BookReaderPage = memo(function BookReaderPage() {
         setToc(Array.isArray(tocItems) ? tocItems : []);
         setIsBookReady(true);
 
-        setTimeout(() => {
-            const fractions = readerRef.current?.getSectionFractions() ?? [];
-            setSectionFractions(fractions);
-        }, 100);
+        const fractions = readerRef.current?.getSectionFractions() ?? [];
+        setSectionFractions(fractions);
 
-        void extractBookCover(currentBookId ?? null);
-    }, [currentBookId, getBook, extractBookCover]);
+        void (async () => {
+            let preloadedData: ArrayBuffer | undefined;
+            if (file) {
+                preloadedData = await file.arrayBuffer().catch(() => undefined);
+            } else if (pdfData) {
+                const buffer = pdfData.buffer as ArrayBuffer;
+                preloadedData = buffer.slice(
+                    pdfData.byteOffset,
+                    pdfData.byteOffset + pdfData.byteLength,
+                );
+            }
+            void extractBookCover(currentBookId ?? null, preloadedData);
+        })();
+    }, [currentBookId, getBook, extractBookCover, file, pdfData]);
 
     const lastClickFractionRef = useRef<number | null>(null);
     const handleBookCompletionProgress = useCallback((bookId: string, progress: number) => {

@@ -37,6 +37,12 @@ const READER_ZOOM_STEP = 0.1;
 const READER_OPEN_TIMEOUT_MS = 20000;
 const READER_NAVIGATION_TIMEOUT_MS = 6000;
 
+// Parsed foliate Book models, keyed by stable book identity (materialized
+// path or filename+size) so repeat opens skip EPUB OPF/nav re-parsing. The
+// Book keeps its source File/Blob alive, so the cache is intentionally small.
+const BOOK_MODEL_CACHE_LIMIT = 2;
+const bookModelCache = new Map<string, any>();
+
 interface ReaderSearchExcerpt {
     pre?: string;
     match?: string;
@@ -304,11 +310,22 @@ export class FoliateEngine {
                 const buffer = typeof source === 'string' ? new TextEncoder().encode(source) : source;
                 file = new File([buffer], _filename, { type: 'application/epub+zip' });
             }
-            
-            this.book = await makeBook(file,
-                nativeFilePath ? import('../../../core/lib/tauri-epub-bridge')
-                    .then(m => m.tryNativePrefetchEpub(nativeFilePath)) : undefined
-            );
+
+            const bookCacheKey = nativeFilePath ?? `${_filename}:${file.size}`;
+            const cachedBook = bookModelCache.get(bookCacheKey);
+            if (cachedBook) {
+                this.book = cachedBook;
+            } else {
+                this.book = await makeBook(file,
+                    nativeFilePath ? import('../../../core/lib/tauri-epub-bridge')
+                        .then(m => m.tryNativePrefetchEpub(nativeFilePath)) : undefined
+                );
+                bookModelCache.set(bookCacheKey, this.book);
+                if (bookModelCache.size > BOOK_MODEL_CACHE_LIMIT) {
+                    const oldestKey = bookModelCache.keys().next().value;
+                    if (oldestKey !== undefined) bookModelCache.delete(oldestKey);
+                }
+            }
             this.searchSectionCache = null;
             this.searchCacheBookRef = this.book;
 
@@ -343,9 +360,12 @@ export class FoliateEngine {
             }
 
             this.applySettingsSync();
-            
-            await this.applySettingsAsync();
-            
+
+            // Build/apply the reader CSS concurrently with the first navigation;
+            // the content container stays hidden until onReady, so any re-layout
+            // from setStyles is not visible. We still await it before onReady.
+            const settingsApplied = this.applySettingsAsync().catch(() => undefined);
+
             this.applyZoomSync();
 
             const metadata = this.extractMetadata();
@@ -397,6 +417,8 @@ export class FoliateEngine {
             } finally {
                 this._navigationInProgress = false;
             }
+
+            await settingsApplied;
 
             this.options.onReady?.(metadata, toc);
 
