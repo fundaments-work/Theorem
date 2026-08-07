@@ -391,7 +391,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     }
 
     return (
-        <div className="animate-fade-in">
+        <div className="flex min-h-0 flex-1 flex-col animate-fade-in">
             
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
@@ -435,7 +435,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                 </button>
             </div>
 
-            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto [content-visibility:auto] overscroll-contain" style={{ height: "calc(100vh - 12rem)" }}>
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-smooth">
                 <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
                     <div style={{ paddingTop: `${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>
                         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -630,7 +630,7 @@ export function ShelvesPage() {
         const shelf = generalCollections.find((s) => s.id === selectedShelfId);
         if (shelf) {
             return (
-                <div className="mx-auto w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-0 sm:px-6 lg:px-8 lg:py-8">
+                <div className="mx-auto flex h-full w-full max-w-[var(--layout-content-max-width)] flex-col px-4 py-6 pb-0 sm:px-6 lg:px-8 lg:py-8">
                     <ShelfDetail shelf={shelf} onBack={() => setSelectedShelfId(null)} />
                 </div>
             );
