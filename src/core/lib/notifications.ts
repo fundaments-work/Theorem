@@ -9,7 +9,7 @@ type NotificationPermission = "granted" | "denied" | "default" | "prompt";
 
 let _isPermissionGranted: (() => Promise<boolean>) | undefined;
 let _requestPermission: (() => Promise<NotificationPermission>) | undefined;
-let _sendNotification: ((options: { title: string; body: string }) => void) | undefined;
+let _sendNotification: ((options: { title: string; body: string; icon?: string }) => void) | undefined;
 
 async function ensureBindings() {
     if (_sendNotification) return;
@@ -38,34 +38,44 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
     return "denied";
 }
 
-export async function notify(title: string, body: string) {
+export async function resolveNotificationIcon(name: string): Promise<string | undefined> {
+    if (!isTauri()) return undefined;
+    try {
+        const { resourceDir, join } = await import("@tauri-apps/api/path");
+        return await join(await resourceDir(), "resources", name);
+    } catch {
+        return undefined;
+    }
+}
+
+export async function notify(title: string, body?: string, icon?: string) {
     await ensureBindings();
     if (_sendNotification) {
-        await _sendNotification({ title, body });
+        await _sendNotification({ title, body: body ?? "", ...(icon ? { icon } : {}) });
     } else if ("Notification" in window && window.Notification.permission === "granted") {
         new window.Notification(title, { body });
     }
 }
 
-export async function notifyIfGranted(title: string, body: string) {
+export async function notifyIfGranted(title: string, body?: string, icon?: string) {
     await ensureBindings();
     if (_isPermissionGranted) {
         const granted = await _isPermissionGranted();
         if (granted) {
-            await notify(title, body);
+            await notify(title, body, icon);
         } else if (_requestPermission) {
             const permission = await _requestPermission();
             if (permission === "granted") {
-                await notify(title, body);
+                await notify(title, body, icon);
             }
         }
     } else if ("Notification" in window) {
         if (window.Notification.permission === "granted") {
-            await notify(title, body);
+            await notify(title, body, icon);
         } else if (window.Notification.permission === "default") {
             const permission = await window.Notification.requestPermission();
             if (permission === "granted") {
-                await notify(title, body);
+                await notify(title, body, icon);
             }
         }
     }

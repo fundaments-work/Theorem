@@ -399,7 +399,7 @@ export function DeviceSyncSection() {
                     if (!syncAbortRef.current) {
                         setSyncProgress(msg);
                     }
-                });
+                }, true);
 
                 if (result.success) {
                     setSuccessMessage(

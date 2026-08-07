@@ -213,7 +213,7 @@ export const AppTitlebar = memo(function AppTitlebar({
             }
 
             const { runDeviceSync } = await import("../core/lib/sync-orchestrator");
-            await runDeviceSync(pairedDevices[0].deviceId);
+            await runDeviceSync(pairedDevices[0].deviceId, undefined, true);
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             setDeviceSyncStatus("error", message);

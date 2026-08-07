@@ -26,11 +26,11 @@ import { isTauri } from "./env";
 import { saveCoverImage } from "./storage";
 import { sqliteRegisterMaterializedBook } from "./sqlite-storage";
 
-async function notifySync(title: string, body?: string) {
+async function notifySync(title: string, body?: string, icon?: string) {
     const settings = useSettingsStore.getState().settings;
     if (!settings.syncNotifications) return;
     const { notifyIfGranted } = await import("./notifications");
-    await notifyIfGranted(title, body ?? "");
+    await notifyIfGranted(title, body ?? "", icon);
 }
 
 const debug: (...args: unknown[]) => void = import.meta.env.DEV ? console.log : () => {};
@@ -509,6 +509,7 @@ let _lastSyncPeerId: string | undefined;
 export async function runDeviceSync(
     peerDeviceId: string,
     onProgress?: (msg: string) => void,
+    notifyOnComplete = false,
 ): Promise<SyncResult> {
     if (_isMerging) {
         return { success: false, domainsUpdated: [], error: "Sync already in progress" };
@@ -687,12 +688,18 @@ export async function runDeviceSync(
             setStatus("synced", summary);
             _lastSyncPeerId = peerDeviceId;
 
-            void notifySync("Sync Complete", summary);
+            if (notifyOnComplete) {
+                const { resolveNotificationIcon } = await import("./notifications");
+                const successIcon = await resolveNotificationIcon("notify-success.png");
+                void notifySync("Sync Complete", summary, successIcon);
+            }
             
             void prefetchRecentBooks(peerDeviceId);
         } else {
             setStatus("error", summary);
-            void notifySync("Sync Issue", summary);
+            if (notifyOnComplete) {
+                void notifySync("Sync Issue", summary);
+            }
         }
         _dataDirty = false;
 
@@ -701,7 +708,9 @@ export async function runDeviceSync(
         const errMsg = error instanceof Error ? error.message : String(error);
         log(`Sync failed: ${errMsg}`);
         setStatus("error", errMsg);
-        void notifySync("Sync Error", errMsg);
+        if (notifyOnComplete) {
+            void notifySync("Sync Error", errMsg);
+        }
         return { success: false, domainsUpdated: [], error: errMsg };
     } finally {
         _isMerging = false;
