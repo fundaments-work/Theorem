@@ -350,7 +350,7 @@ export function StatisticsPage() {
                             <div className="flex items-center gap-4">
                                 <div>
                                     <div className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider">This Week</div>
-                                    <div className="text-2xl font-semibold text-[color:var(--color-text-primary)] mt-1">{formatReadingTime(weekMinutes * 60)}</div>
+                                    <div className="text-2xl font-semibold text-[color:var(--color-text-primary)] mt-1">{formatReadingTime(weekMinutes)}</div>
                                 </div>
                                 {prevMinutes > 0 && (
                                     <div className={`text-xs font-medium ${change >= 0 ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}`}>
