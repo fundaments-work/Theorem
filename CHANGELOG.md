@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] - 2026-08-07
+
+### Added
+
+- **Success icon for sync notifications** — A green-check notification icon is
+  bundled as a Tauri resource and shown for "Sync Complete" OS notifications.
+  Sync errors still use the default app icon, so a completed sync no longer
+  looks like an alert.
+
+### Fixed
+
+- **Shelves page could not scroll to the last book** — The shelf detail grid
+  used a hardcoded `calc(100vh - 12rem)` height plus `content-visibility: auto`
+  inside a non-flex ancestor, so `flex-1 min-h-0` was inert and the final
+  virtualized rows were unreachable. Replaced it with the Library page's flex
+  height chain (`h-full flex flex-col` → `flex min-h-0 flex-1 flex-col`) and
+  dropped the `content-visibility` class from the scroll container.
+- **Reading time undercounted (≈half)** — Every visibility hide flushed with
+  `Math.floor()` and discarded the sub-minute remainder, then the start clock
+  reset on show, so a ~30 minute session could record ~15. The tracker now
+  accumulates milliseconds and carries the remainder across hide/show/pause/
+  resume/unmount; the unmount flush also writes to `stats` (total, daily
+  activity, streak) instead of only the per-book time. Stats are read fresh
+  from the store during flushes to avoid stale lost updates.
+- **Weekly digest showed 60× too much time** — The Statistics "This Week" card
+  rendered `formatReadingTime(weekMinutes * 60)`, turning minutes into hours.
+- **Excessive sync notifications** — `docs-sync-finished` fires on every iroh
+  round, so every auto-sync (2-min interval, startup, tab refocus, peer
+  online, mutation flush, doc re-import) posted an OS notification. Sync
+  notifications are now sent only for manually triggered syncs (Quick Sync in
+  the titlebar, Sync Now in Settings). Auto-sync feedback stays in the
+  in-app status pill.
+- **Sync lifecycle hardening** — `docs_api` is cleared on engine stop and
+  accept-loop exit, and a generation counter guards liveness checks so callers
+  fail fast against a stale snapshot instead of blocking on a dead engine
+  (`0535dc2`, `75be052`).
+- **Sync engine startup races** — The accept loop now initializes the docs
+  engine even with zero paired devices (fixing first-time pairing timeouts);
+  old accept-loop shutdown is awaited before a fresh loop spawns; pairing
+  spawn paths are serialized under a lock and endpoint TOCTOU removed; and
+  snapshot polling uses `tokio::time::sleep` instead of blocking a worker
+  thread (`6f1be37`, `cebcf6c`, `5ab1fc1`, `abc04dd`).
+- **Sync 100MB wipe + deadlocks** — The docs size-cap wipe now stops and
+  awaits the engine before deleting files; recovery paths release
+  `paired_devices` before awaiting `docs_api` (lock-order inversion); and the
+  pairing readiness poll requires the snapshot generation to match the current
+  accept loop (`e22befc`, `574d4b4`).
+- **Sync lost data on provision skip** — Manual "Sync Now" with auto-sync
+  disabled skipped provisioning entirely (the gate relied on `_dataDirty`,
+  which is never set when auto-sync is off), silently never pushing local
+  changes. The gate now skips only for structural reasons; a per-key cache
+  still avoids rewriting unchanged data (`a1bf94f`).
+- **Sync write errors swallowed** — `docs_set_entry` returned success even
+  when every per-doc write failed, silently dropping user data. It now returns
+  the first failure and logs each one so the frontend can retry (`48d6899`).
+
+### Changed
+
+- **Sync provisioning trimmed** — Rounds now provision only books/domains
+  whose serialized value actually changed (or after a forced re-provision),
+  instead of rewriting the whole library (~1008 IPC writes per round for a
+  1000-book library). Content polling in `docs_get_all_entries` no longer
+  waits up to 400ms per missing blob (`cfd1364`, `b2a1088`).
+
 ## [1.0.9] - 2026-07-25
 
 ### Added

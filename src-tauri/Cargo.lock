@@ -7334,7 +7334,7 @@ dependencies = [
 
 [[package]]
 name = "theorem"
-version = "1.0.9"
+version = "1.0.10"
 dependencies = [
  "bzip2 0.4.4",
  "futures",
@@ -7381,7 +7381,7 @@ dependencies = [
 
 [[package]]
 name = "theorem-sync-core"
-version = "1.0.9"
+version = "1.0.10"
 dependencies = [
  "hex",
  "qrcode",
