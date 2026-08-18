@@ -4,6 +4,7 @@ import { cn, normalizeAuthor, formatReadingTime } from "../../core/lib/utils";
 import { HIGHLIGHT_SOLID_COLORS } from "../../core/lib/design-tokens";
 import { PageHeader } from "../../ui";
 import { useLibraryStore, useSettingsStore, useUIStore } from "../../core/store";
+import { countBooksReadThisYear, isBookCompleted } from "../../core/lib/statistics";
 import type { DailyReadingActivity } from "../../core/types";
 import {
     BookOpen,
@@ -226,6 +227,8 @@ export function StatisticsPage() {
     const setRoute = useUIStore((state) => state.setRoute);
     const [showShareModal, setShowShareModal] = useState(false);
 
+    const booksReadThisYear = useMemo(() => countBooksReadThisYear(books), [books]);
+
     const shareStatsData = useMemo(() => {
         const completedBooks = books.filter((book) => {
             if (book.manualCompletionState === "read") return true;
@@ -243,7 +246,7 @@ export function StatisticsPage() {
             totalReadingTime: stats.totalReadingTime,
             currentStreak: stats.currentStreak,
             longestStreak: stats.longestStreak,
-            booksReadThisYear: stats.booksReadThisYear,
+            booksReadThisYear,
             yearlyBookGoal: stats.yearlyBookGoal,
             totalHighlights: annotations.filter((a) => a.type === "highlight").length,
             recentlyReading: currentlyReading
@@ -255,12 +258,6 @@ export function StatisticsPage() {
                 : undefined,
         };
     }, [books, stats, annotations]);
-
-    function isBookCompleted(book: (typeof books)[number]) {
-        if (book.manualCompletionState === "read") return true;
-        if (book.manualCompletionState === "unread") return false;
-        return !!book.completedAt || book.progress >= 0.99;
-    }
 
     const totalBooks = books.length;
     const completedBooks = useMemo(() => books.filter((book) => isBookCompleted(book)).length, [books]);
@@ -317,7 +314,7 @@ export function StatisticsPage() {
                     icon={<Target className="w-5 h-5" />}
                     label="Daily Goal"
                     value={`${stats.dailyGoal} min`}
-                    subtext={`${stats.booksReadThisYear}/${stats.yearlyBookGoal} books this year`}
+                    subtext={`${booksReadThisYear}/${stats.yearlyBookGoal} books this year`}
                 />
                 <StatCard
                     icon={<Flame className="w-5 h-5" />}
@@ -381,14 +378,15 @@ export function StatisticsPage() {
                         <div className="space-y-5 sm:space-y-6">
                             <ProgressBar
                                 label="Yearly Book Goal"
-                                current={stats.booksReadThisYear}
+                                current={booksReadThisYear}
                                 target={stats.yearlyBookGoal}
                             />
-                            <ProgressBar
-                                label="Books Completed"
-                                current={completedBooks}
-                                target={Math.max(completedBooks + 5, 10)}
-                            />
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-[color:var(--color-text-secondary)]">Books Completed</span>
+                                <span className="text-[color:var(--color-text-primary)] font-medium">
+                                    {completedBooks}
+                                </span>
+                            </div>
                         </div>
                     </section>
 

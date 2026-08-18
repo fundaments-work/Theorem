@@ -59,17 +59,17 @@ describe("Settings: tab content uses hidden CSS class", () => {
     });
 });
 
-describe("Settings: progress bar uses transition-[width]", () => {
-    it("progress bar does not use transition-all", () => {
-        const settingsTsx = readFileSync(
-            resolve("src/features/settings/Settings.tsx"),
+describe("Statistics progress bar does not use transition-all", () => {
+    it("progress bar atomic transition", () => {
+        const statisticsTsx = readFileSync(
+            resolve("src/features/statistics/Statistics.tsx"),
             "utf-8",
         );
-        // The progress bar should have transition-[width], not transition-all
-        expect(settingsTsx).toContain("transition-[width]");
-        // Verify no stray transition-all on the progress bar
-        const progressSection = settingsTsx.split("yearlyBookGoal")[1] || "";
-        expect(progressSection).not.toContain("transition-all");
+        // ProgressBar fill uses an explicit transition property, not transition-all
+        expect(statisticsTsx).toContain('style={{ width: `${percentage}%` }}');
+        // The ProgressBar's inner fill must not use transition-all
+        const progressBar = statisticsTsx.split("function ProgressBar")[1]?.split("function getDateTimestamp")[0] || "";
+        expect(progressBar).not.toContain("transition-all");
     });
 });
 
