@@ -554,6 +554,12 @@ export class FoliateEngine {
             }
         });
 
+        this.view.history?.addEventListener('index-change', () => {
+            if (this.options.onLocationChange && this.currentLocation) {
+                this.options.onLocationChange(this.currentLocation);
+            }
+        });
+
         this.view.history?.addEventListener('popstate', (_e: any) => {
         });
 

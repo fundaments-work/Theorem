@@ -17,7 +17,7 @@ import {
     shouldUseExtractedAuthor,
 } from "../../core/lib/cover-extractor";
 import { extractFilenameFromPath, ensureFilenameForFormat } from "../../core/lib/import";
-import { isTauri, isTauriMobile } from "../../core/lib/env";
+import { isTauri, isTauriMobile, useAndroidBackButton } from "../../core/lib/env";
 import {
     useVocabularyStore,
     useLibraryStore,
@@ -1194,6 +1194,17 @@ const BookReaderPage = memo(function BookReaderPage() {
         const handlePopState = (_event: PopStateEvent) => {
             
             if (useUIStore.getState().currentRoute === "reader") {
+                if (handleNavBackRef.current()) {
+                    const currentState = window.history.state;
+                    window.history.pushState(
+                        {
+                            ...(currentState && typeof currentState === "object" ? currentState : {}),
+                            __theorem_back: true,
+                        },
+                        "",
+                    );
+                    return;
+                }
                 flushPendingProgressUpdate();
                 setRoute("library");
             }
@@ -1231,6 +1242,34 @@ const BookReaderPage = memo(function BookReaderPage() {
             setRoute("library");
         }
     }, [activePanel, showColorPicker, showNoteEditor, setRoute, flushPendingProgressUpdate]);
+
+    const handleNavBack = useCallback((): boolean => {
+        if (showColorPicker) {
+            setShowColorPicker(false);
+            return true;
+        }
+        if (showNoteEditor) {
+            setShowNoteEditor(false);
+            return true;
+        }
+        if (activePanel) {
+            setActivePanel(null);
+            return true;
+        }
+        if (!isPdfFormat && readerRef.current?.canGoBack) {
+            readerRef.current.goBack();
+            return true;
+        }
+        return false;
+    }, [showColorPicker, setShowColorPicker, showNoteEditor, setShowNoteEditor, activePanel, setActivePanel, isPdfFormat]);
+
+    const handleNavBackRef = useRef(handleNavBack);
+    handleNavBackRef.current = handleNavBack;
+
+    useAndroidBackButton(() => {
+        if (useUIStore.getState().currentRoute !== "reader") return false;
+        return handleNavBackRef.current();
+    });
 
     const handleViewportTap = useCallback(() => {
         if (showColorPicker || showNoteEditor) {
@@ -1996,6 +2035,22 @@ const BookReaderPage = memo(function BookReaderPage() {
                 keys: "Ctrl+A",
                 category: "Reader",
                 handler: () => setActivePanel((prev) => prev === "bookmarks" ? null : "bookmarks"),
+            },
+            {
+                label: "Previous reading location (back)",
+                keys: "Alt+ArrowLeft",
+                category: "Reader",
+                handler: () => {
+                    if (!isPdfFormat && readerRef.current?.canGoBack) readerRef.current.goBack();
+                },
+            },
+            {
+                label: "Next reading location (forward)",
+                keys: "Alt+ArrowRight",
+                category: "Reader",
+                handler: () => {
+                    if (!isPdfFormat && readerRef.current?.canGoForward) readerRef.current.goForward();
+                },
             },
         ], "reader");
     }, [isPdfFormat, settings.readerSettings.fullscreen, updateReaderSettings, handlePdfAddBookmark, handleAddPageBookmark]);

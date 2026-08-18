@@ -22,6 +22,10 @@ export interface ReaderViewportHandle {
     prev: () => void;
     goToFraction: (fraction: number) => void;
     goTo: (location: string) => Promise<void>;
+    goBack: () => void;
+    goForward: () => void;
+    canGoBack: boolean;
+    canGoForward: boolean;
     search: (query: string) => AsyncGenerator<any>;
     clearSearch: () => void;
     
@@ -111,6 +115,10 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         prev,
         goTo,
         goToFraction,
+        goBack,
+        goForward,
+        canGoBack,
+        canGoForward,
         search,
         clearSearch,
         getEngine,
@@ -150,6 +158,10 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         prev: () => prev(),
         goToFraction: (fraction) => goToFraction(fraction),
         goTo: async (location) => { await goTo(location); },
+        goBack: () => goBack(),
+        goForward: () => goForward(),
+        canGoBack,
+        canGoForward,
         search: (query: string) => search(query) as AsyncGenerator<any>,
         clearSearch: () => clearSearch(),
         addHighlight: (cfi: string, text: string, color: HighlightColor) => addHighlight(cfi, text, color),
@@ -160,7 +172,7 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         getVisibleTextForTts: () => getVisibleTextForTts(),
         getNextPageTextForTts: () => getNextPageTextForTts(),
         getSectionFractions: () => getEngine()?.getSectionFractions() ?? [],
-    }), [next, prev, goToFraction, goTo, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getVisibleTextForTts, getNextPageTextForTts, getEngine]);
+    }), [next, prev, goToFraction, goTo, goBack, goForward, canGoBack, canGoForward, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getVisibleTextForTts, getNextPageTextForTts, getEngine]);
 
     useEffect(() => {
         return () => {
