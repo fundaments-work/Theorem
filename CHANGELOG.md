@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-08-18
+
+### Added
+
+- **Book export** — Right-click a book (or select several and use the batch
+  Export action) to copy the original file out of the app:
+  - Desktop: native save dialog via `@tauri-apps/plugin-dialog` + `writeFile`.
+  - Android: a new `save_file_mobile` command writes to the system Downloads
+    folder (``Download/Theorem``) through the mobile-folder-scan plugin's
+    MediaStore `saveFile` method.
+  - Browser/web: `<a download>` fallback when Tauri is unavailable.
+  - Books synced from another device are fetched on demand from a paired peer
+    first, with a clear message when none is available.
+  - Results surface as a toast notification (`sonner`) instead of an alert.
+- **Edit Book Info** — A full metadata editor that replaces the old
+  title-only rename. Access it from the book's context menu ("Edit Info") or
+  the new Edit button in Book Info. Editable fields: title, author,
+  description, publisher, published date, language, ISBN, category, tags, and
+  rating.
+- **Cover editing** — Change or remove a book's cover from the same Edit modal
+  via device image picker or a fetch-from-URL field, with an instant preview.
+  Changes are written into EPUB files as well as the library (see below).
+- **EPUB metadata/cover write-back** — New `rewrite_epub_metadata` Rust
+  command updates the OPF `<metadata>` dc: fields and replaces or embeds the
+  cover image (manifest + cover meta updated) directly in the stored `.book`
+  file. Encrypted EPUBs are rejected; the browser gets a best-effort fflate
+  fallback (`epub-write-browser.ts`) that keeps the `mimetype` entry stored
+  uncompressed. Edits are saved in-app even when file write-back fails (e.g.
+  a synced book not yet downloaded).
+- **Back to previous reading location** — Clicking a citation or footnote and
+  the mobile back gesture/hardware back now returns you to the page you were
+  on before following the link:
+  - Browser back gesture and Android hardware back step through foliate's
+    built-in location history (panels/color picker are closed first).
+  - Desktop shortcut `Alt+Left` / `Alt+Right` (previous/next location).
+  - EPUB only; PDF has no location history and is unaffected.
+- **Workbench remembers your last card** — The card view (and the active
+  filter, sort, and list/cards toggle) is remembered per session in
+  `sessionStorage` (`theorem-workbench:view-state`). Navigate away and back
+  and you land on the exact card you were reading, resolved by annotation id
+  so resorting or filtering doesn't lose your place.
+
+### Fixed
+
+- **Edit Book Info modal could not scroll** — The modal's `<form>` wrapper
+  broke the flex layout, so the body never shrank and the footer (Save
+  button) was clipped below the 90vh viewport limit on smaller screens. The
+  form is now a flex column so `ModalBody` scrolls and Save stays visible.
+- **Rust unit tests for EPUB parsing** — Two `epub_parser` fixtures used a
+  truncated `<package xmlns="http:...">` namespace URI (introduced by an
+  overly aggressive comment-strip pass), which made `test_locate_toc_sources`
+  and `test_read_epub_metadata_full` fail. The fixture tag was repaired; the
+  full Rust test suite is green again.
+
 ## [1.0.10] - 2026-08-07
 
 ### Added
