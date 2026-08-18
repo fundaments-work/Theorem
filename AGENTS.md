@@ -101,7 +101,7 @@ CI (`ci.yml`) runs typecheck, test, build, and rust-check (fmt, clippy, check) o
 
 SQLite via `rusqlite` + `r2d2` pool. All connections use `with_connection()` — never open raw `Connection::open()`. Migrations are versioned per store (Zustand persist middleware). When changing persisted schemas: bump version, update defaults, add/adjust `migrate`.
 
-Key constraints: `book.locations` (foliate-js positions) must NOT be stored in Zustand — use SQLite BLOB. `data:` cover paths must not be serialized into sync payloads.
+Key constraints: `book.locations` (foliate-js positions) must NOT be stored in Zustand — use SQLite BLOB. `data:` cover paths ARE serialized into sync payloads (covers are downsampled to ≤200×300 webp ~tens of KB) so that cover edits propagate to peers; keep them small.
 
 ## Anti-patterns (violations = bugs)
 

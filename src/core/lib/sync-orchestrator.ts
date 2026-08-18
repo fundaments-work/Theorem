@@ -1253,7 +1253,7 @@ export async function provisionToIrohDocs(): Promise<boolean> {
                 ...stripped,
                 ...(book.blobHash ? { blobHash: book.blobHash } : {}),
                 ...(book.coverBlobHash ? { coverBlobHash: book.coverBlobHash } : {}),
-                ...(coverPath && !coverPath.startsWith("data:") ? { coverPath } : {}),
+                ...(coverPath ? { coverPath } : {}),
             });
         };
 
@@ -1383,7 +1383,7 @@ export function subscribeZustandToIrohDocs(): () => void {
             ...stripped,
             ...(book.blobHash ? { blobHash: book.blobHash } : {}),
             ...(book.coverBlobHash ? { coverBlobHash: book.coverBlobHash } : {}),
-            ...(coverPath && !coverPath.startsWith("data:") ? { coverPath } : {}),
+            ...(coverPath ? { coverPath } : {}),
         });
     };
 

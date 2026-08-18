@@ -114,21 +114,19 @@ export function mergeBooks(
 
         const merged: Book = {
             ...match,
-            
-            title:
-                (inc.title && inc.title.length > (match.title?.length ?? 0))
-                    ? inc.title
-                    : match.title,
-            author:
-                (inc.author && inc.author.length > (match.author?.length ?? 0))
-                    ? inc.author
-                    : match.author,
-            description: match.description || inc.description,
-            publisher: match.publisher || inc.publisher,
-            language: match.language || inc.language,
-            isbn: match.isbn || inc.isbn,
-            publishedDate: match.publishedDate || inc.publishedDate,
-            category: match.category || inc.category,
+
+            // Incoming wins for pure descriptive metadata. The doc entry is
+            // the peer's latest whole-book snapshot (last-writer-wins), so
+            // importing it is what lets edits made after an initial sync
+            // propagate to already-populated devices.
+            title: (inc.title ?? "") !== "" ? inc.title : match.title,
+            author: (inc.author ?? "") !== "" ? inc.author : match.author,
+            description: inc.description ?? match.description,
+            publisher: inc.publisher ?? match.publisher,
+            language: inc.language ?? match.language,
+            isbn: inc.isbn ?? match.isbn,
+            publishedDate: inc.publishedDate ?? match.publishedDate,
+            category: inc.category ?? match.category,
             
             progress: remoteIsNewer
                 ? (inc.progress ?? match.progress)
@@ -151,11 +149,9 @@ export function mergeBooks(
             
             filePath: match.filePath || match.storagePath || `sqlite://${match.id}`,
             storagePath: match.storagePath || match.filePath || `sqlite://${match.id}`,
-            coverPath: match.coverPath || (
-                typeof inc.coverPath === "string" && inc.coverPath.startsWith("data:")
-                    ? inc.coverPath
-                    : match.coverPath
-            ),
+            coverPath: inc.coverPath && inc.coverPath.startsWith("data:")
+                ? inc.coverPath
+                : match.coverPath,
             
             contentHash: match.contentHash || inc.contentHash,
             

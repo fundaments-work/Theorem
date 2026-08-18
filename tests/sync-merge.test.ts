@@ -49,6 +49,8 @@ function makeBook(
         publisher: overrides.publisher,
         language: overrides.language,
         isbn: overrides.isbn,
+        publishedDate: overrides.publishedDate,
+        category: overrides.category,
         currentLocation: overrides.currentLocation,
         syncedWithoutFile: overrides.syncedWithoutFile,
     };
@@ -346,6 +348,78 @@ describe("mergeBooks", () => {
         expect(result[0].filePath).toBe("/local/books/a.epub");
         expect(result[0].storagePath).toBe("/local/storage/a.epub");
         expect(result[0].coverPath).toBe("/local/covers/a.png");
+    });
+
+    it("propagates metadata edits from incoming to an already-populated book", () => {
+        const existing = [
+            makeBook({
+                id: "a",
+                title: "Original Title",
+                author: "Original Author",
+                description: "Old description",
+                publisher: "Old Publisher",
+                isbn: "Old ISBN",
+                language: "Old Lang",
+                publishedDate: "2020-01-01",
+                category: "Old Category",
+            }),
+        ];
+        const incoming = [
+            makeBook({
+                id: "a",
+                title: "Edited Title",
+                author: "Edited Author",
+                description: "New description",
+                publisher: "New Publisher",
+                isbn: "New ISBN",
+                language: "New Lang",
+                publishedDate: "2024-05-01",
+                category: "New Category",
+            }),
+        ];
+
+        const result = mergeBooks(incoming, existing);
+        expect(result).toHaveLength(1);
+        expect(result[0].title).toBe("Edited Title");
+        expect(result[0].author).toBe("Edited Author");
+        expect(result[0].description).toBe("New description");
+        expect(result[0].publisher).toBe("New Publisher");
+        expect(result[0].isbn).toBe("New ISBN");
+        expect(result[0].language).toBe("New Lang");
+        expect(result[0].publishedDate).toBe("2024-05-01");
+        expect(result[0].category).toBe("New Category");
+    });
+
+    it("propagates an edited data: cover over an existing one", () => {
+        const existing = [
+            makeBook({
+                id: "a",
+                title: "A",
+                contentHash: "hash1",
+                coverPath: "data:image/webp;base64,OLDCover",
+            }),
+        ];
+        const incoming = [
+            makeBook({
+                id: "a",
+                title: "A",
+                contentHash: "hash1",
+                coverPath: "data:image/webp;base64,NEWC0VER",
+            }),
+        ];
+
+        const result = mergeBooks(incoming, existing);
+        expect(result[0].coverPath).toBe("data:image/webp;base64,NEWC0VER");
+    });
+
+    it("keeps local non-data cover when incoming has none", () => {
+        const existing = [
+            makeBook({ id: "a", title: "A", coverPath: "data:image/webp;base64,OLDCover" }),
+        ];
+        const incoming = [makeBook({ id: "a", title: "A" })];
+
+        const result = mergeBooks(incoming, existing);
+        expect(result[0].coverPath).toBe("data:image/webp;base64,OLDCover");
     });
 
     it("empty incoming array returns existing unchanged", () => {
