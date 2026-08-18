@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-08-18
+
+### Fixed
+
+- **Yearly Book Goal undercounted** — The yearly goal showed far fewer books
+  than were actually completed because the counter was only incremented on the
+  reader's auto-completion path; books marked "Finish" manually (library
+  context menu, batch bar, shelves) or completed earlier/synced-in were never
+  counted. The yearly count is now derived from the library itself (books with
+  a `completedAt` in the current year), so it is always accurate and can't
+  drift. Applied to the Statistics "Yearly Book Goal" bar, the page subtext,
+  and the Share Stats card.
+- **Metadata edits did not sync** — After editing a book's info, the changes
+  did not propagate to devices that already had the book. The peer merge kept
+  its own (old) values for description, publisher, language, ISBN, published
+  date, and category (`match.X || inc.X`), and title/author only adopted
+  longer values. The merge now adopts the incoming metadata, so edits made
+  after an initial sync reach other devices.
+- **Cover edits did not sync** — Changing or removing a cover showed only on
+  the editing device. `data:` cover paths were stripped from the sync payload
+  (and `coverBlobHash` was never used to transfer the bytes), so peers kept
+  the old cover. Covers (already downsampled to ≤200×300 webp) are now
+  serialized into the book payload, and the merge adopts an incoming `data:`
+  cover, so cover changes propagate.
+
+### Changed
+
+- **Settings "Current Progress" removed** — The Yearly Book Goal progress bar
+  in Settings duplicated the Statistics page, so it was removed to avoid
+  confusion.
+- **Settings storage now shows only downloaded books** — The Books row in
+  Data & Storage previously summed `fileSize` over the whole synced library
+  (including books synced from another device whose files aren't stored
+  locally) and showed the total book count. It now shows only the books
+  actually downloaded to the device and their on-disk size, with a note for
+  any sync-only books that aren't downloaded yet. The Library page continues
+  to show the total library count.
+- **Statistics "Books Completed" no longer shows a fake target** — The bar
+  previously implied a goal by rendering `26 / 31` where the `/31` was just
+  "completed + 5", not a real goal. It now renders as a plain count.
+
 ## [1.1.0] - 2026-08-18
 
 ### Added
