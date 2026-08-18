@@ -181,7 +181,9 @@ const StorageTab = memo(function StorageTab({ onClearData, onExportData }: { onC
         getRssStorageStats().then(setRssStats);
     }, []);
 
-    const totalStorage = books.reduce((acc, b) => acc + b.fileSize, 0);
+    const downloadedBooks = books.filter((b) => !b.syncedWithoutFile);
+    const syncOnlyCount = books.length - downloadedBooks.length;
+    const totalStorage = downloadedBooks.reduce((acc, b) => acc + b.fileSize, 0);
     const offlineDictionarySize = installedDictionaries.reduce((acc, d) => acc + d.sizeBytes, 0);
 
     return (
@@ -198,8 +200,14 @@ const StorageTab = memo(function StorageTab({ onClearData, onExportData }: { onC
                             <div>
                                 <p className="font-medium text-sm text-[color:var(--color-text-primary)]">Books</p>
                                 <p className="text-xs text-[color:var(--color-text-muted)]">
-                                    {books.length} {books.length === 1 ? "book" : "books"}
+                                    {downloadedBooks.length} {downloadedBooks.length === 1 ? "book" : "books"}
+                                    {syncOnlyCount > 0 && <> • {syncOnlyCount} sync-only</>}
                                 </p>
+                                {syncOnlyCount > 0 && (
+                                    <p className="text-xs text-[color:var(--color-text-muted)] mt-0.5">
+                                        {syncOnlyCount} {syncOnlyCount === 1 ? "book is" : "books are"} synced from another device but not downloaded yet
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
@@ -733,21 +741,6 @@ export const SettingsPage = memo(function SettingsPage() {
                                 <span className="text-sm text-[color:var(--color-text-secondary)]">books/year</span>
                             </div>
                         </SettingRow>
-
-                        <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-[color:var(--color-text-secondary)]">Current Progress</span>
-                                <span className="text-[color:var(--color-text-primary)] font-medium">
-                                    {stats.booksReadThisYear} / {stats.yearlyBookGoal} books
-                                </span>
-                            </div>
-                            <div className="mt-2 h-2 bg-[var(--color-surface-muted)] overflow-hidden">
-                                <div
-                                    className="h-full bg-[var(--color-accent)] transition-[width] duration-500"
-                                    style={{ width: `${Math.min(100, (stats.booksReadThisYear / Math.max(1, stats.yearlyBookGoal)) * 100)}%` }}
-                                />
-                            </div>
-                        </div>
 
                         <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-4">
                             <SettingRow
