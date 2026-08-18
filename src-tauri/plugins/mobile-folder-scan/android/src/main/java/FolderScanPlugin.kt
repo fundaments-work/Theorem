@@ -256,16 +256,16 @@ class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
         val bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
 
         val contentValues = ContentValues().apply {
-          put(MediaStore.Downloads.Media.DISPLAY_NAME, filename)
-          put(MediaStore.Downloads.Media.MIME_TYPE, "application/octet-stream")
+          put(MediaStore.Downloads.DISPLAY_NAME, filename)
+          put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            put(MediaStore.Downloads.Media.RELATIVE_PATH, "Download/Theorem")
-            put(MediaStore.Downloads.Media.IS_PENDING, 1)
+            put(MediaStore.Downloads.RELATIVE_PATH, "Download/Theorem")
+            put(MediaStore.Downloads.IS_PENDING, 1)
           }
         }
 
         val uri = activity.contentResolver.insert(
-          MediaStore.Downloads.Media.EXTERNAL_CONTENT_URI,
+          MediaStore.Downloads.EXTERNAL_CONTENT_URI,
           contentValues
         )
 
@@ -276,7 +276,7 @@ class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
 
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             contentValues.clear()
-            contentValues.put(MediaStore.Downloads.Media.IS_PENDING, 0)
+            contentValues.put(MediaStore.Downloads.IS_PENDING, 0)
             activity.contentResolver.update(uri, contentValues, null, null)
           }
 
