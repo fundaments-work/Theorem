@@ -23,6 +23,13 @@ import {
     ChevronsRight,
 } from "lucide-react";
 import { ShareMenu } from "./components/ShareMenu";
+import {
+    WORKBENCH_VIEW_STATE_KEY,
+    decodeWorkbenchViewState,
+    encodeWorkbenchViewState,
+    resolveWorkbenchPosition,
+} from "../../core/lib/workbench-state";
+import type { WorkbenchViewState } from "../../core/lib/workbench-state";
 
 function getTermPrimaryDefinition(term: VocabularyTerm): string {
     const firstMeaning = term.meanings[0];
@@ -225,12 +232,22 @@ export function AnnotationsPage() {
     const searchQuery = useUIStore((state) => state.searchQuery);
     const vocabularyTerms = useVocabularyStore((state) => state.vocabularyTerms);
     const deleteVocabularyTerm = useVocabularyStore((state) => state.deleteVocabularyTerm);
-    const [activeFilter, setActiveFilter] = useState<"all" | "highlights" | "notes" | "vocabulary">("all");
-    const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">("newest");
+    const savedViewState = useRef<ReturnType<typeof decodeWorkbenchViewState> | null>(null);
+    if (savedViewState.current === null) {
+        savedViewState.current = decodeWorkbenchViewState(
+            typeof window !== "undefined"
+                ? window.sessionStorage.getItem(WORKBENCH_VIEW_STATE_KEY)
+                : null
+        );
+    }
+    const workbenchSavedState = savedViewState.current;
+
+    const [activeFilter, setActiveFilter] = useState<"all" | "highlights" | "notes" | "vocabulary">(workbenchSavedState.activeFilter ?? "all");
+    const [sortBy, setSortBy] = useState<"newest" | "oldest" | "book">(workbenchSavedState.sortBy ?? "newest");
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
     const [sharingId, setSharingId] = useState<string | null>(null);
-    const [viewMode, setViewMode] = useState<"list" | "cards">("list");
+    const [viewMode, setViewMode] = useState<"list" | "cards">(workbenchSavedState.viewMode ?? "list");
     const [cardIndex, setCardIndex] = useState(0);
     const [groupIndex, setGroupIndex] = useState(0);
     const [selectedVocabTerm, setSelectedVocabTerm] = useState<VocabularyTerm | null>(null);
@@ -346,6 +363,33 @@ export function AnnotationsPage() {
             title: bookTitleLookup.get(bookId) || "Unknown source",
         }));
     }, [filteredAnnotations, bookTitleLookup]);
+
+    const workbenchRestoredRef = useRef(false);
+    useEffect(() => {
+        if (workbenchRestoredRef.current) return;
+        if (annotationGroups.length === 0) return;
+        workbenchRestoredRef.current = true;
+        const position = resolveWorkbenchPosition(annotationGroups, workbenchSavedState);
+        if (position) {
+            setGroupIndex(position.groupIndex);
+            setCardIndex(position.cardIndex);
+        }
+    }, [annotationGroups, workbenchSavedState]);
+
+    useEffect(() => {
+        const group = annotationGroups[groupIndex];
+        const card = group?.annotations[cardIndex];
+        const state: WorkbenchViewState = { viewMode, activeFilter, sortBy };
+        if (group && card) {
+            state.bookId = group.bookId;
+            state.cardId = card.id;
+        }
+        try {
+            window.sessionStorage.setItem(WORKBENCH_VIEW_STATE_KEY, encodeWorkbenchViewState(state));
+        } catch {
+            // sessionStorage unavailable — best-effort persistence
+        }
+    }, [viewMode, activeFilter, sortBy, groupIndex, cardIndex, annotationGroups]);
 
     const handleCardTouchStart = useCallback((e: React.TouchEvent) => {
         cardTouchStartX.current = e.touches[0].clientX;
