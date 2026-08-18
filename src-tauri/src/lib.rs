@@ -1,5 +1,6 @@
 mod database;
 mod epub_parser;
+mod epub_rewriter;
 mod file_transfer;
 mod iroh_sync;
 mod sync_commands;
@@ -710,6 +711,23 @@ async fn save_share_image_mobile(
 }
 
 #[tauri::command]
+async fn save_file_mobile(
+    app: tauri::AppHandle,
+    filename: String,
+    base64_data: String,
+) -> Result<String, String> {
+    #[cfg(target_os = "android")]
+    {
+        tauri_plugin_mobile_folder_scan::save_file(&app, &filename, &base64_data)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, filename, base64_data);
+        Err("Mobile file saving is only available on Android.".to_string())
+    }
+}
+
+#[tauri::command]
 async fn materialize_android_content_uri(
     app: tauri::AppHandle,
     uri: String,
@@ -957,6 +975,7 @@ pub fn run() {
             tts_resume,
             tts_get_voices,
             epub_parser::prefetch_zip_metadata,
+            epub_rewriter::rewrite_epub_metadata,
             read_file,
             read_cbr_as_cbz,
             read_pdf_file,
@@ -971,6 +990,7 @@ pub fn run() {
             scan_library_folder_mobile,
             scan_library_folder_desktop,
             save_share_image_mobile,
+            save_file_mobile,
             materialize_android_content_uri,
             database::sqlite_save_book_data,
             database::sqlite_register_materialized_book,

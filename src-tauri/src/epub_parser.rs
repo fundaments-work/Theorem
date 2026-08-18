@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-fn read_zip_entry_inner<R: std::io::Read + std::io::Seek>(
+pub(crate) fn read_zip_entry_inner<R: std::io::Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
     path: &str,
 ) -> Option<String> {
@@ -30,7 +30,7 @@ fn read_zip_by_name_inner<R: std::io::Read + std::io::Seek>(
     String::from_utf8(buf).ok()
 }
 
-fn resolve_relative(base: &str, target: &str) -> String {
+pub(crate) fn resolve_relative(base: &str, target: &str) -> String {
     let base_dir = Path::new(base).parent().unwrap_or(Path::new(""));
     base_dir
         .join(target.split(['?', '#']).next().unwrap_or(target))
@@ -39,7 +39,7 @@ fn resolve_relative(base: &str, target: &str) -> String {
         .to_string()
 }
 
-fn strip_xml_bom(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+pub(crate) fn strip_xml_bom(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
     use std::borrow::Cow;
     if bytes.len() >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF {
         return Cow::Borrowed(&bytes[3..]);
@@ -155,7 +155,7 @@ fn locate_toc_sources(opf_bytes: &[u8]) -> Result<LocatedTocSources, String> {
     Ok(LocatedTocSources { nav_href, ncx_href })
 }
 
-fn read_rootfile_path_inner<R: std::io::Read + std::io::Seek>(
+pub(crate) fn read_rootfile_path_inner<R: std::io::Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
 ) -> Option<String> {
     let bytes_str = read_zip_entry_inner(archive, "META-INF/container.xml")?;
@@ -337,7 +337,7 @@ mod tests {
     fn create_simple_opf(title: &str, author: &str) -> Vec<u8> {
         format!(
             r#"<?xml version="1.0"?>
-<package xmlns="http:
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid">
   <metadata>
     <dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">{}</dc:title>
     <dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">{}</dc:creator>

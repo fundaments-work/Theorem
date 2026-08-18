@@ -54,6 +54,12 @@ struct SaveImagePayload<'a> {
 
 #[cfg(target_os = "android")]
 #[derive(Deserialize)]
+struct SaveFileResponse {
+    uri: String,
+}
+
+#[cfg(target_os = "android")]
+#[derive(Deserialize)]
 struct SaveImageResponse {
     uri: String,
 }
@@ -121,6 +127,27 @@ pub fn save_image<R: Runtime>(
         .handle
         .run_mobile_plugin::<SaveImageResponse>(
             "saveImage",
+            SaveImagePayload {
+                filename,
+                base64_data,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(response.uri)
+}
+
+#[cfg(target_os = "android")]
+pub fn save_file<R: Runtime>(
+    app: &AppHandle<R>,
+    filename: &str,
+    base64_data: &str,
+) -> Result<String, String> {
+    let state = get_scan_state(app)?;
+    let response = state
+        .handle
+        .run_mobile_plugin::<SaveFileResponse>(
+            "saveFile",
             SaveImagePayload {
                 filename,
                 base64_data,

@@ -12,6 +12,8 @@ import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
 import { sqliteSearchBooks } from "../../core/lib/sqlite-storage";
 import { isTauri } from "../../core/lib/env";
+import { exportBook } from "../../core/lib/book-export";
+import { toast } from "sonner";
 import {
     FolderOpen,
     Plus,
@@ -276,6 +278,15 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
         setIsRenameModalOpen(false);
     }, [updateBook]);
 
+    const handleExport = useCallback(async (book: Book) => {
+        const result = await exportBook(book);
+        if (result.ok) {
+            toast.success(result.message || "Book exported successfully.");
+        } else {
+            toast.error(result.message || "Something went wrong while exporting the book.");
+        }
+    }, []);
+
     const debouncedSearchQuery = useDebounce(searchQuery, 250);
 
     const [ftsSearchIds, setFtsSearchIds] = useState<string[] | undefined>(undefined);
@@ -457,6 +468,8 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                                 onShowInfo: (b: Book) => { setInfoModalBook(b); setIsInfoModalOpen(true); },
                                 onAddToShelf: (id: string) => { setAddToShelfBookId(id); setIsAddToShelfModalOpen(true); },
                                 onRename: handleRename,
+                                onExport: handleExport,
+                                renameMenuLabel: "Rename",
                                 onMarkAsRead: markBookCompleted,
                                 onMarkAsUnread: markBookUnread,
                             };

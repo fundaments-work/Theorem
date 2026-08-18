@@ -241,6 +241,58 @@ class FolderScanPlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   @Command
+  fun saveFile(invoke: Invoke) {
+    scanExecutor.execute {
+      try {
+        val args = invoke.parseArgs(SaveImageArgs::class.java)
+        val filename = args.filename
+        val base64Data = args.base64Data
+
+        if (filename.isEmpty() || base64Data.isEmpty()) {
+          invoke.reject("Filename and file data are required.")
+          return@execute
+        }
+
+        val bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+
+        val contentValues = ContentValues().apply {
+          put(MediaStore.Downloads.Media.DISPLAY_NAME, filename)
+          put(MediaStore.Downloads.Media.MIME_TYPE, "application/octet-stream")
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            put(MediaStore.Downloads.Media.RELATIVE_PATH, "Download/Theorem")
+            put(MediaStore.Downloads.Media.IS_PENDING, 1)
+          }
+        }
+
+        val uri = activity.contentResolver.insert(
+          MediaStore.Downloads.Media.EXTERNAL_CONTENT_URI,
+          contentValues
+        )
+
+        if (uri != null) {
+          activity.contentResolver.openOutputStream(uri)?.use { os ->
+            os.write(bytes)
+          }
+
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            contentValues.clear()
+            contentValues.put(MediaStore.Downloads.Media.IS_PENDING, 0)
+            activity.contentResolver.update(uri, contentValues, null, null)
+          }
+
+          val response = JSObject()
+          response.put("uri", uri.toString())
+          invoke.resolve(response)
+        } else {
+          invoke.reject("Failed to create MediaStore entry")
+        }
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Failed to save file")
+      }
+    }
+  }
+
+  @Command
   fun getAndroidId(invoke: Invoke) {
     val response = JSObject()
     val androidId = Settings.Secure.getString(

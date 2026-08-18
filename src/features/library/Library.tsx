@@ -14,7 +14,7 @@ import { FORMAT_DISPLAY_NAMES } from "../../core/types";
 import {
     Plus, Filter, BookOpen, Loader2, FolderOpen, RefreshCw,
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
-    ChevronDown, Star, Check, CloudOff, Pencil
+    ChevronDown, Star, Check, CloudOff, Pencil, Download
 } from "lucide-react";
 import { ContextMenu, PageHeader } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
@@ -22,6 +22,9 @@ import { Modal, ModalHeader, ModalBody, ModalFooter, ConfirmDialog, AlertDialog 
 import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
 import { sqliteSearchBooks } from "../../core/lib/sqlite-storage";
+import { exportBook, exportBooks } from "../../core/lib/book-export";
+import { EditBookModal } from "./components/modals/EditBookModal";
+import { toast } from "sonner";
 
 const viewModeIcons: Record<LibraryViewMode, React.ReactNode> = {
     grid: <LayoutGrid className="w-4 h-4" />,
@@ -77,6 +80,8 @@ export const BookCard = memo(function BookCard({
     onShowInfo,
     onAddToShelf,
     onRename,
+    onExport,
+    renameMenuLabel,
     onMarkAsRead,
     onMarkAsUnread,
     isSelecting,
@@ -91,6 +96,8 @@ export const BookCard = memo(function BookCard({
     onShowInfo: (book: Book) => void;
     onAddToShelf: (bookId: string) => void;
     onRename: (book: Book) => void;
+    onExport: (book: Book) => void;
+    renameMenuLabel?: string;
     onMarkAsRead: (bookId: string) => void;
     onMarkAsUnread: (bookId: string) => void;
     isSelecting?: boolean;
@@ -179,10 +186,16 @@ export const BookCard = memo(function BookCard({
             onClick: () => onShowInfo(book),
         },
         {
-            id: "rename",
-            label: "Rename",
+            id: "edit-info",
+            label: renameMenuLabel ?? "Edit Info",
             icon: <Pencil className="w-4 h-4" />,
             onClick: () => onRename(book),
+        },
+        {
+            id: "export",
+            label: "Export",
+            icon: <Download className="w-4 h-4" />,
+            onClick: () => onExport(book),
         },
         {
             id: "separator2",
@@ -526,7 +539,7 @@ function ImportButton({
     );
 }
 
-export function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; isOpen: boolean; onClose: () => void }) {
+export function BookInfoModal({ book, isOpen, onClose, onEdit }: { book: Book | null; isOpen: boolean; onClose: () => void; onEdit?: (book: Book) => void }) {
     if (!book) return null;
 
     return (
@@ -647,6 +660,18 @@ export function BookInfoModal({ book, isOpen, onClose }: { book: Book | null; is
                 </div>
             </ModalBody>
             <ModalFooter>
+                {onEdit && (
+                    <button
+                        onClick={() => {
+                            onClose();
+                            onEdit(book);
+                        }}
+                        className="ui-btn px-3 py-1.5 text-xs font-bold uppercase"
+                    >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Edit
+                    </button>
+                )}
                 <button
                     onClick={onClose}
                     className="ui-btn-ghost"
@@ -904,8 +929,8 @@ export function LibraryPage() {
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
     const [addToShelfBookId, setAddToShelfBookId] = useState<string | null>(null);
     const [isAddToShelfModalOpen, setIsAddToShelfModalOpen] = useState(false);
-    const [renameBook, setRenameBook] = useState<Book | null>(null);
-    const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+    const [editBook, setEditBook] = useState<Book | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [alertInfo, setAlertInfo] = useState<{ title: string; message: string } | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{ bookId?: string; title: string; batch?: boolean } | null>(null);
 
@@ -1542,15 +1567,36 @@ export function LibraryPage() {
     }, []);
 
     const handleRename = useCallback((book: Book) => {
-        setRenameBook(book);
-        setIsRenameModalOpen(true);
+        setEditBook(book);
+        setIsEditModalOpen(true);
     }, []);
 
-    const handleRenameSave = useCallback((bookId: string, newTitle: string) => {
-        updateBook(bookId, { title: newTitle });
-        setRenameBook(null);
-        setIsRenameModalOpen(false);
-    }, [updateBook]);
+    const handleExport = useCallback(async (book: Book) => {
+        const result = await exportBook(book);
+        if (result.ok) {
+            toast.success(result.message || "Book exported successfully.");
+        } else {
+            toast.error(result.message || "Something went wrong while exporting the book.");
+        }
+    }, []);
+
+    const handleBatchExport = useCallback(async () => {
+        const booksToExport = useLibraryStore
+            .getState()
+            .books
+            .filter((b) => selectedBooks.includes(b.id));
+        if (booksToExport.length === 0) return;
+
+        const result = await exportBooks(booksToExport);
+        if (result.succeeded > 0) {
+            const failedNote = result.failed.length > 0 ? `\n\n${result.failed.length} book(s) failed to export.` : "";
+            toast.success(`Exported ${result.succeeded} of ${booksToExport.length} book(s).${failedNote}`);
+        } else {
+            toast.error(result.failed[0]?.reason || "No books were exported.");
+        }
+        clearSelection();
+        setIsSelecting(false);
+    }, [selectedBooks, clearSelection]);
 
     const handleAddToShelf = useCallback((bookId: string) => {
         setAddToShelfBookId(bookId);
@@ -1602,11 +1648,12 @@ export function LibraryPage() {
         onShowInfo: handleShowInfo,
         onAddToShelf: handleAddToShelf,
         onRename: handleRename,
+        onExport: handleExport,
         onMarkAsRead: handleMarkAsRead,
         onMarkAsUnread: handleMarkAsUnread,
         isSelecting,
         onToggleSelect: toggleBookSelection,
-    }), [handleOpenBook, handleToggleFavorite, handleDeleteBook, handleShowInfo, handleAddToShelf, handleRename, handleMarkAsRead, handleMarkAsUnread, isSelecting, toggleBookSelection]);
+    }), [handleOpenBook, handleToggleFavorite, handleDeleteBook, handleShowInfo, handleAddToShelf, handleRename, handleExport, handleMarkAsRead, handleMarkAsUnread, isSelecting, toggleBookSelection]);
 
     const toggleViewMode = () => {
         const modes: LibraryViewMode[] = ["grid", "list", "compact"];
@@ -2029,6 +2076,13 @@ export function LibraryPage() {
                         <BookMarked className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">Add to Shelf</span>
                     </button>
+                    <button
+                        onClick={handleBatchExport}
+                        className="ui-btn px-3 py-1.5 text-xs font-bold border-2 uppercase"
+                    >
+                        <Download className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Export</span>
+                    </button>
                     <div className="h-5 w-px bg-[var(--color-border)]" />
                     <button
                         onClick={handleBatchDelete}
@@ -2047,6 +2101,7 @@ export function LibraryPage() {
                     setIsInfoModalOpen(false);
                     setInfoModalBook(null);
                 }}
+                onEdit={handleRename}
             />
 
             <AddToShelfModal
@@ -2061,14 +2116,13 @@ export function LibraryPage() {
                 onCreateShelf={handleCreateShelf}
             />
 
-            <RenameBookModal
-                isOpen={isRenameModalOpen}
-                book={renameBook}
+            <EditBookModal
+                isOpen={isEditModalOpen}
+                book={editBook}
                 onClose={() => {
-                    setIsRenameModalOpen(false);
-                    setRenameBook(null);
+                    setIsEditModalOpen(false);
+                    setEditBook(null);
                 }}
-                onSave={handleRenameSave}
             />
 
             {alertInfo && (

@@ -60,7 +60,7 @@ fn materialized_book_path_in_dir(app_data_dir: &Path, book_id: &str) -> PathBuf 
         .join(format!("{book_id}.book"))
 }
 
-fn materialized_book_path(app: &AppHandle, book_id: &str) -> Result<PathBuf, String> {
+pub(crate) fn materialized_book_path(app: &AppHandle, book_id: &str) -> Result<PathBuf, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
