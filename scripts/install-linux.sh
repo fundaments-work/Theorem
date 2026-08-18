@@ -1,9 +1,24 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+IFS=$'\n\t'
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-repo_root="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-output_dir="${repo_root:+$repo_root/dist/packages/linux}"
+# Resolve this script's directory. Works when run from the repo, or when piped
+# via `curl | bash` (in which case BASH_SOURCE[0] is empty and there is no
+# local repo to resolve against).
+SCRIPT_DIR=""
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+fi
+
+repo_root=""
+if [[ -n "$SCRIPT_DIR" ]]; then
+    repo_root="$(cd -- "$SCRIPT_DIR/.." && pwd 2>/dev/null || true)"
+fi
+
+output_dir=""
+if [[ -n "$repo_root" && -d "$repo_root" ]]; then
+    output_dir="$repo_root/dist/packages/linux"
+fi
 output_dir="${output_dir:-/tmp/theorem-install}"
 
 # ── Logging ──
@@ -143,7 +158,7 @@ install_appimage() {
     install -Dm755 "$artifact" "$APP_DIR/Theorem.AppImage"
     ln -sf "$APP_DIR/Theorem.AppImage" "$BIN_DIR/theorem"
 
-    if [[ -f "$repo_root/src-tauri/icons/128x128.png" ]]; then
+    if [[ -n "$repo_root" && -f "$repo_root/src-tauri/icons/128x128.png" ]]; then
         install -Dm644 "$repo_root/src-tauri/icons/128x128.png" "$icons_dir/theorem.png"
     else
         curl -fsSL -o "$icons_dir/theorem.png" "https://raw.githubusercontent.com/$GH_REPO/main/src-tauri/icons/128x128.png"
@@ -264,3 +279,8 @@ log_info "App: $BIN_DIR/theorem"
 if command -v pacman >/dev/null 2>&1; then
     log_info "Arch Linux detected — for a native package, use docs/PKGBUILD:"
     log_info "  cd theorem && makepkg -si"
+fi
+
+# Clean up the temp download directory if we ran standalone (no repo checkout).
+cleanup
+exit 0
