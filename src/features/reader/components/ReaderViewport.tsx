@@ -176,9 +176,12 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         getSectionFractions: () => getEngine()?.getSectionFractions() ?? [],
     }), [next, prev, goToFraction, goTo, goBack, goForward, canGoBack, canGoForward, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getVisibleTextForTts, getNextPageTextForTts, getEngine]);
 
+    const onHistoryChangeRef = useRef(onHistoryChange);
+    onHistoryChangeRef.current = onHistoryChange;
+
     useEffect(() => {
-        onHistoryChange?.({ canGoBack, canGoForward });
-    }, [canGoBack, canGoForward, onHistoryChange]);
+        onHistoryChangeRef.current?.({ canGoBack, canGoForward });
+    }, [canGoBack, canGoForward]);
 
     useEffect(() => {
         return () => {

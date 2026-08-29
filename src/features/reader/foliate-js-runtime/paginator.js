@@ -916,7 +916,7 @@ export class Paginator extends HTMLElement {
     }
     async #scrollToRect(rect, reason) {
         if (this.scrolled) {
-            const offset = this.#getRectMapper()(rect).top
+            const offset = this.#getRectMapper()(rect).left - this.#margin
             return this.#scrollTo(offset, reason)
         }
         const offset = this.#getRectMapper()(rect).left

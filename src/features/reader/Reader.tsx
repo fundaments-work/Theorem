@@ -1176,6 +1176,11 @@ const BookReaderPage = memo(function BookReaderPage() {
     const [canGoBackState, setCanGoBackState] = useState(false);
     const [canGoForwardState, setCanGoForwardState] = useState(false);
 
+    const handleHistoryChange = useCallback(({ canGoBack, canGoForward }: { canGoBack: boolean; canGoForward: boolean }) => {
+        setCanGoBackState(prev => (prev !== canGoBack ? canGoBack : prev));
+        setCanGoForwardState(prev => (prev !== canGoForward ? canGoForward : prev));
+    }, []);
+
     const handleBack = useCallback(() => {
         if (activePanel) {
             setActivePanel(null);
@@ -2263,10 +2268,7 @@ const BookReaderPage = memo(function BookReaderPage() {
                         onViewportTap={handleViewportTap}
                         shouldForceViewportTap={shouldForceViewportTap}
                         onZoomGestureChange={handleZoomGestureChange}
-                        onHistoryChange={({ canGoBack, canGoForward }) => {
-                            setCanGoBackState(canGoBack);
-                            setCanGoForwardState(canGoForward);
-                        }}
+                        onHistoryChange={handleHistoryChange}
                         className="w-full h-full"
                     />
                 )}

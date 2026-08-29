@@ -50,6 +50,12 @@ export function useAndroidBackButton(handler: () => boolean) {
     }, [handler]);
 
     useEffect(() => {
-        return registerBackHandler(() => handlerRef.current());
+        const unregister = registerBackHandler(() => handlerRef.current());
+        if (isTauriMobile() && typeof window !== "undefined") {
+            window.history.pushState({ __theorem_back: true }, "");
+        }
+        return () => {
+            unregister();
+        };
     }, []); 
 }

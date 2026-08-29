@@ -183,10 +183,10 @@ function App() {
 
             const handled = dispatchBackAction();
             if (handled) {
-                window.history.pushState(
-                    { route: currentUIState.currentRoute, bookId: currentUIState.currentBookId },
-                    "",
-                );
+                return;
+            }
+
+            if (state && state.__theorem_back) {
                 return;
             }
 
