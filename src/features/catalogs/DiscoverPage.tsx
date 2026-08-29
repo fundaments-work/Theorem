@@ -59,9 +59,8 @@ export function DiscoverPage() {
         void loadDiscoverFeed();
     }, [loadDiscoverFeed]);
 
-    const handleSearchSubmit = async (e?: React.FormEvent) => {
-        e?.preventDefault();
-        const trimmed = searchQuery.trim();
+    const performSearch = useCallback(async (query: string) => {
+        const trimmed = query.trim();
         if (!trimmed) {
             setSearchResults([]);
             return;
@@ -70,15 +69,64 @@ export function DiscoverPage() {
         setIsSearching(true);
         try {
             const results = await DiscoverService.search(trimmed);
-            setSearchResults(results);
-            if (results.length === 0) {
-                toast("No books found for that query.");
+            if (results.length > 0) {
+                setSearchResults(results);
+            } else {
+                // Fallback search across currently loaded sections
+                const localMatches: OpdsEntry[] = [];
+                const qLower = trimmed.toLowerCase();
+                for (const section of sections) {
+                    for (const b of section.books) {
+                        if (
+                            b.title.toLowerCase().includes(qLower) ||
+                            (b.author && b.author.toLowerCase().includes(qLower)) ||
+                            (b.summary && b.summary.toLowerCase().includes(qLower))
+                        ) {
+                            if (!localMatches.some((m) => m.id === b.id)) {
+                                localMatches.push(b);
+                            }
+                        }
+                    }
+                }
+                setSearchResults(localMatches);
             }
         } catch (err: any) {
-            toast.error("Search failed. Please check your connection.");
+            console.warn("Online search failed, searching local sections:", err);
+            const localMatches: OpdsEntry[] = [];
+            const qLower = trimmed.toLowerCase();
+            for (const section of sections) {
+                for (const b of section.books) {
+                    if (
+                        b.title.toLowerCase().includes(qLower) ||
+                        (b.author && b.author.toLowerCase().includes(qLower))
+                    ) {
+                        if (!localMatches.some((m) => m.id === b.id)) {
+                            localMatches.push(b);
+                        }
+                    }
+                }
+            }
+            setSearchResults(localMatches);
         } finally {
             setIsSearching(false);
         }
+    }, [sections]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (searchQuery.trim().length >= 2) {
+                void performSearch(searchQuery);
+            } else if (!searchQuery.trim()) {
+                setSearchResults([]);
+            }
+        }, 350);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, performSearch]);
+
+    const handleSearchSubmit = (e?: React.FormEvent) => {
+        e?.preventDefault();
+        void performSearch(searchQuery);
     };
 
     const handleAddSourceSubmit = (e: React.FormEvent) => {
