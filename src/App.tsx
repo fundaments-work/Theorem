@@ -471,7 +471,7 @@ function App() {
             case "feeds":
                 return <FeedsPage />;
             case "opds":
-                return <OPDSBrowserPage />;
+                return isMobile() ? <LibraryPage /> : <OPDSBrowserPage />;
             default:
                 return <LibraryPage />;
         }

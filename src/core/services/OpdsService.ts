@@ -8,7 +8,7 @@ export const DEFAULT_OPDS_PRESETS: OpdsCatalog[] = [
     {
         id: "project-gutenberg",
         title: "Project Gutenberg",
-        url: "https://m.gutenberg.org/ebooks.opds/",
+        url: "https://www.gutenberg.org/ebooks.opds/",
         isPreset: true,
         description: "Over 60,000 free classics and public domain literature.",
     },

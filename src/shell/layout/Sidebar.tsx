@@ -115,7 +115,7 @@ export const Sidebar = memo(function Sidebar({ isMobile, onClose }: SidebarProps
 
             <nav aria-label="Main navigation" className="flex-1 overflow-y-auto py-6 min-h-0 custom-scrollbar [content-visibility:auto] overscroll-contain">
                 <ul className="flex flex-col">
-                    {mainNavItems.map((item) => {
+                    {(isMobile ? mainNavItems.filter((item) => item.id !== "opds") : mainNavItems).map((item) => {
                             const isActive = currentRoute === item.id;
 
                             return (

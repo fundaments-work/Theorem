@@ -24,7 +24,7 @@ export const useOpdsStore = create<OpdsState>()(
         (set, get) => ({
             catalogs: DEFAULT_OPDS_PRESETS,
             activeCatalogId: "project-gutenberg",
-            currentFeedUrl: "https://m.gutenberg.org/ebooks.opds/",
+            currentFeedUrl: "https://www.gutenberg.org/ebooks.opds/",
             feedHistory: [],
 
             addCatalog: (catalog) => {
@@ -115,12 +115,33 @@ export const useOpdsStore = create<OpdsState>()(
         }),
         {
             name: "theorem-opds",
-            version: 1,
+            version: 2,
             storage: createJSONStorage(() => theoremPersistStorage),
             partialize: (state) => ({
                 catalogs: state.catalogs,
                 activeCatalogId: state.activeCatalogId,
             }),
+            migrate: (persistedState: any, version: number) => {
+                if (version < 2 && persistedState) {
+                    const catalogs = Array.isArray(persistedState.catalogs)
+                        ? persistedState.catalogs.map((c: OpdsCatalog) => {
+                              if (c.url === "https://standardebooks.org/feeds/opds") {
+                                  return { ...c, url: "https://standardebooks.org/feeds/atom/new-releases" };
+                              }
+                              if (c.url === "https://m.gutenberg.org/ebooks.opds/") {
+                                  return { ...c, url: "https://www.gutenberg.org/ebooks.opds/" };
+                              }
+                              return c;
+                          })
+                        : DEFAULT_OPDS_PRESETS;
+                    return {
+                        ...persistedState,
+                        catalogs,
+                        activeCatalogId: "project-gutenberg",
+                    };
+                }
+                return persistedState;
+            },
         }
     )
 );

@@ -472,7 +472,7 @@ fn fetch_rss_feed(url: String) -> Result<String, String> {
         .get(&url)
         .timeout(std::time::Duration::from_secs(30))
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .header("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml, */*")
+        .header("Accept", "application/atom+xml;profile=opds-catalog, application/atom+xml, application/rss+xml, application/xml, text/xml, */*")
         .send()
         .map_err(|e| format!("Failed to fetch feed: {}", e))?;
 
