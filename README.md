@@ -75,11 +75,14 @@ See [AGENTS.md](./AGENTS.md) for the full repository map, conventions, and archi
 ## Features
 
 ### Multi-Format Reader
-EPUB, MOBI, AZW, AZW3, FB2, CBZ, CBR, PDF, TXT, and RSS articles. Foliate-based reflowable rendering with paged and scroll modes. PDF.js engine with zoom (50–200%), page-fit/width-fit modes, and outline navigation. Full table of contents with section progress. Estimated reading time per page and chapter. Reading progress saved per-book across sessions (page-accurate + CFI). File association — open ebooks directly from your file manager.
+EPUB, MOBI, AZW, AZW3, FB2, CBZ, CBR, PDF, TXT, and RSS articles. Foliate-based reflowable rendering with paged and scroll modes. PDF.js engine with zoom (50–200%), page-fit/width-fit modes, and outline navigation. In-place footnote and citation popovers without losing your place. Full table of contents with section progress. Estimated reading time per page and chapter. Reading progress saved per-book across sessions (page-accurate + CFI). File association — open ebooks directly from your file manager.
 
 <p align="center">
   <img src="./Screenshots/reader_screen.png" alt="Theorem reader with highlights and annotations in dark theme" width="700">
 </p>
+
+### Discover & OPDS Catalogs
+Browse curated storefronts and search over 75,000+ public domain classics from Project Gutenberg and Standard Ebooks with 1-click EPUB downloads. Connect custom OPDS 1.2 feeds from your personal Calibre, Kavita, or Komga server. Clean, deterministic clothbound covers for books without bundled artwork.
 
 ### Reading Customization
 Three reader themes: Light, Sepia, Dark. Font family (original, serif, sans-serif, monospace). Font size (12–36), line height (1.0–2.5), margins (0–35%). Letter spacing, word spacing, paragraph spacing. Text alignment, hyphenation toggle. Page animation styles (slide, fade, instant). Page layout (single, double, auto). Reading flow (paged, scroll, auto). Brightness slider. Zoom for fixed-layout formats. Full-screen mode. Auto-hide toolbar with configurable delay. Prefetch distance, animations toggle, virtual scrolling. Per-word highlighting during TTS immersion reading.

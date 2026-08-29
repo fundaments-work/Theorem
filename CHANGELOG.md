@@ -9,11 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **OPDS 1.2 Catalog Discovery & 1-Click Import (#59)** — Browse and download books
-  directly into your Theorem library from open standard OPDS feeds. Includes built-in
-  presets for Project Gutenberg (60,000+ free classics) and Standard Ebooks, plus
-  full support for custom self-hosted OPDS servers (Calibre, Kavita, Komga) with
-  search, category navigation, and Dublin Core metadata.
+- **Discover Editorial Storefront & 75,000+ Global Catalog Search (#59)** —
+  Browse and download books directly into your Theorem library with 1-click import.
+  Features curated editorial sections (Timeless Essentials, Restored Editions via
+  Standard Ebooks, Philosophy & Thought, Classic Fiction), live debounced global
+  search across 75,000+ public domain classics, `@tanstack/react-virtual` DOM
+  virtualization, and support for custom self-hosted OPDS 1.2 feeds (Calibre, Kavita,
+  Komga).
+- **Theorem Clothbound Cover Engine** — Deterministic typography and 7 refined
+  clothbound bookcloth color palettes (`crimson`, `obsidian`, `navy`, `forest`,
+  `ochre`, `slate`, `plum`) with double hairline rules for books missing bundled
+  artwork.
 - **In-Place Footnote & Citation Popovers** — Tapping footnotes, citations, and
   noteref links now reveals a non-disruptive, elegant popover overlay with rendered
   HTML, copy action, and an optional jump button, without losing your reading location.
@@ -23,15 +29,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed & Performance
 
+- **Adaptive SQLite Memory & Pool Optimization (#58)** — Configured platform-aware
+  database pools and memory limits (2 connections and 32MB mmap on Android; 4 connections
+  and 256MB mmap on Desktop) along with an automatic background `visibilitychange`
+  listener executing `PRAGMA shrink_memory;` when Theorem is minimized or tabbed away.
+- **Mobile Navigation & Hardware Back Button** — Resolved Android back button
+  history stack desynchronization by removing synthetic sentinels, implementing
+  clean LIFO state preservation in `src/App.tsx`, and adding automatic back-button
+  dismissal to all modals and dialogs.
+- **Reader Titlebar Status & Progress** — Placed a dedicated reading progress and
+  chapter indicator centered in desktop titlebars, and ensured page/chapter status
+  is always clearly visible on mobile screens.
+- **PDF.js GPU Memory Deallocation** — Reset canvas dimensions (`width = 1, height = 1`)
+  and released `ImageBitmap` references on page unmount to eliminate GPU backing store
+  retention during rapid scrolling.
 - **Mobile Performance & IPC Optimization** — Completely eliminated mobile lag and
   UI stutter on Android by configuring `tauri_plugin_log` to use `Stdout` only,
   preventing hundreds of background IPC log events from flooding the Android JNI
   bridge and starving the JavaScript thread.
 - **Reader Re-render Elimination** — Memoized reader history callbacks and decoupled
   render hooks in `ReaderViewport` to prevent infinite re-render loops on page turns.
-- **Mobile Hardware Back Button** — Restored history sentinel state handling so
-  Android hardware and gesture back actions cleanly dismiss modals, overlays, and
-  return to the library.
 
 ## [1.2.0] - 2026-08-29
 

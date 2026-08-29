@@ -93,9 +93,15 @@ CI (`ci.yml`) runs typecheck, test, build, and rust-check (fmt, clippy, check) o
 - **Frontend**: `src/core/services/StarDictService.ts` loads and queries dictionaries; `src/core/services/DictionaryService.ts` orchestrates online + offline lookups
 - **UI**: `src/features/settings/DictionaryDownloadModal.tsx` — download/install UI; vocabulary workspace in Workbench
 
+**Discover & Catalogs**:
+- **Storefront**: `src/features/catalogs/DiscoverPage.tsx` provides an editorial discovery experience with curated sections (Gutenberg, Standard Ebooks) and custom OPDS 1.2 feeds.
+- **Service**: `src/core/services/DiscoverService.ts` queries OPDS 1.2 XML / Atom feeds with Dublin Core metadata and EPUB acquisition links.
+- **Virtualization**: Search results use `@tanstack/react-virtual` for fast rendering across 75,000+ public domain titles.
+- **Cover system**: `src/ui/TheoremBookCover.tsx` renders deterministic clothbound covers across 7 palettes for books without bundled artwork.
+
 ## Tauri backend
 
-73 commands across `lib.rs` (file I/O, network, TTS, misc), `database.rs` (30 SQLite commands), `sync_commands.rs` (15 sync commands), `epub_parser.rs`, `epub_rewriter.rs`, `file_transfer.rs`. To find all: `grep -r '#\[tauri::command\]' src-tauri/src/`. When signatures change, update both Rust and TS call sites.
+74 commands across `lib.rs` (file I/O, network, TTS, misc), `database.rs` (31 SQLite commands), `sync_commands.rs` (15 sync commands), `epub_parser.rs`, `epub_rewriter.rs`, `file_transfer.rs`. To find all: `grep -r '#\[tauri::command\]' src-tauri/src/`. When signatures change, update both Rust and TS call sites.
 
 ## Persistence
 
