@@ -1100,6 +1100,7 @@ export function LibraryPage() {
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
 
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+    const [showUnshelvedOnly, setShowUnshelvedOnly] = useState(false);
     const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>("all");
     
     useEffect(() => {
@@ -1128,6 +1129,16 @@ export function LibraryPage() {
         return new Set(selectedShelf.bookIds);
     }, [selectedShelf]);
 
+    const allShelvedBookIds = useMemo(() => {
+        const set = new Set<string>();
+        for (const c of collections) {
+            for (const id of c.bookIds) {
+                set.add(id);
+            }
+        }
+        return set;
+    }, [collections]);
+
     const debouncedSearchQuery = useDebounce(searchQuery, 250);
 
     const [ftsSearchIds, setFtsSearchIds] = useState<string[] | undefined>(undefined);
@@ -1149,6 +1160,8 @@ export function LibraryPage() {
             searchQuery: debouncedSearchQuery,
             selectedShelfBookIds,
             showFavoritesOnly,
+            showUnshelvedOnly,
+            allShelvedBookIds,
             statusFilter,
             sortBy: settings.librarySortBy,
             sortOrder: settings.librarySortOrder,
@@ -1161,6 +1174,8 @@ export function LibraryPage() {
         settings.librarySortBy,
         settings.librarySortOrder,
         showFavoritesOnly,
+        showUnshelvedOnly,
+        allShelvedBookIds,
         statusFilter,
         ftsSearchIds,
     ]);
@@ -1678,15 +1693,16 @@ export function LibraryPage() {
             
             <div className="-mb-4">
             <PageHeader
-                title={selectedShelf ? selectedShelf.name : showFavoritesOnly ? "Favorites" : "Library"}
-                description={`${sortedBooks.length} ${sortedBooks.length === 1 ? 'book' : 'books'}${(selectedShelf || showFavoritesOnly) ? '' : ''}`}
+                title={selectedShelf ? selectedShelf.name : showFavoritesOnly ? "Favorites" : showUnshelvedOnly ? "Unshelved" : "Library"}
+                description={`${sortedBooks.length} ${sortedBooks.length === 1 ? 'book' : 'books'}${(selectedShelf || showFavoritesOnly || showUnshelvedOnly) ? '' : ''}`}
             >
-                {(selectedShelf || showFavoritesOnly) && (
+                {(selectedShelf || showFavoritesOnly || showUnshelvedOnly) && (
                     <button
                         onClick={() => {
                             sessionStorage.removeItem("theorem-selected-shelf");
                             setSelectedShelfId(null);
                             setShowFavoritesOnly(false);
+                            setShowUnshelvedOnly(false);
                         }}
                         className="text-xs font-medium text-[color:var(--color-accent)] hover:underline"
                     >
@@ -1834,13 +1850,28 @@ export function LibraryPage() {
                                         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] mb-3">Quick</h3>
                                         <div className="flex flex-col gap-1">
                                             <button
-                                                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                                                onClick={() => {
+                                                    setShowFavoritesOnly(!showFavoritesOnly);
+                                                    if (!showFavoritesOnly) setShowUnshelvedOnly(false);
+                                                }}
                                                 className={cn(
                                                     "px-3 py-2 text-[10px] font-bold border transition-colors",
                                                     showFavoritesOnly ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
                                                 )}
                                             >
                                                 Favorites
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setShowUnshelvedOnly(!showUnshelvedOnly);
+                                                    if (!showUnshelvedOnly) setShowFavoritesOnly(false);
+                                                }}
+                                                className={cn(
+                                                    "px-3 py-2 text-[10px] font-bold border transition-colors",
+                                                    showUnshelvedOnly ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]" : "text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                                )}
+                                            >
+                                                Unshelved
                                             </button>
                                             <button
                                                 onClick={() => updateSettings({ librarySortBy: "lastRead", librarySortOrder: "desc" })}
@@ -2025,7 +2056,10 @@ export function LibraryPage() {
                                         <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--color-text-muted)] mb-3">Quick</h3>
                                         <div className="flex flex-col gap-1">
                                             <button
-                                                onClick={() => setShowFavoritesOnly((prev) => !prev)}
+                                                onClick={() => {
+                                                    setShowFavoritesOnly((prev) => !prev);
+                                                    if (!showFavoritesOnly) setShowUnshelvedOnly(false);
+                                                }}
                                                 className={cn(
                                                     "w-full px-2.5 py-1.5 text-[10px] font-bold border transition-colors",
                                                     showFavoritesOnly
@@ -2034,6 +2068,20 @@ export function LibraryPage() {
                                                 )}
                                             >
                                                 Favorites
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setShowUnshelvedOnly((prev) => !prev);
+                                                    if (!showUnshelvedOnly) setShowFavoritesOnly(false);
+                                                }}
+                                                className={cn(
+                                                    "w-full px-2.5 py-1.5 text-[10px] font-bold border transition-colors",
+                                                    showUnshelvedOnly
+                                                        ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)]"
+                                                        : "bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] border-transparent hover:border-[var(--color-border)]"
+                                                )}
+                                            >
+                                                Unshelved
                                             </button>
                                             <button
                                                 onClick={() => updateSettings({ librarySortBy: "lastRead", librarySortOrder: "desc" })}

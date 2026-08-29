@@ -14,6 +14,8 @@ export interface LibraryFilterOptions {
     searchQuery: string;
     selectedShelfBookIds: Set<string> | null;
     showFavoritesOnly: boolean;
+    showUnshelvedOnly?: boolean;
+    allShelvedBookIds?: Set<string>;
     statusFilter: LibraryStatusFilter;
     sortBy: LibrarySortBy;
     sortOrder: LibrarySortOrder;
@@ -30,6 +32,8 @@ export function getFilteredAndSortedBooks({
     searchQuery,
     selectedShelfBookIds,
     showFavoritesOnly,
+    showUnshelvedOnly,
+    allShelvedBookIds,
     statusFilter,
     sortBy,
     sortOrder,
@@ -84,6 +88,10 @@ export function getFilteredAndSortedBooks({
 
     if (showFavoritesOnly) {
         result = result.filter((book) => book.isFavorite);
+    }
+
+    if (showUnshelvedOnly && allShelvedBookIds) {
+        result = result.filter((book) => !allShelvedBookIds.has(book.id));
     }
 
     if (statusFilter !== "all") {

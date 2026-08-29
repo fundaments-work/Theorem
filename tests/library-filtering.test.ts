@@ -403,4 +403,29 @@ describe("getFilteredAndSortedBooks", () => {
             expect(ids(sortableBooks)).toEqual(originalOrder);
         });
     });
+
+    describe("unshelved filtering", () => {
+        it("filters out books that belong to shelves when showUnshelvedOnly is true", () => {
+            const sampleBooks = [
+                makeBook({ id: "b1", title: "Book One" }),
+                makeBook({ id: "b2", title: "Book Two" }),
+                makeBook({ id: "b3", title: "Book Three" }),
+            ];
+            const shelvedSet = new Set(["b1", "b3"]);
+
+            const result = getFilteredAndSortedBooks({
+                books: sampleBooks,
+                searchQuery: "",
+                selectedShelfBookIds: null,
+                showFavoritesOnly: false,
+                showUnshelvedOnly: true,
+                allShelvedBookIds: shelvedSet,
+                statusFilter: "all",
+                sortBy: "title",
+                sortOrder: "asc",
+            });
+
+            expect(ids(result)).toEqual(["b2"]);
+        });
+    });
 });
