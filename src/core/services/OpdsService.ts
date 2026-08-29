@@ -6,18 +6,18 @@ import { XMLParser } from "fast-xml-parser";
 
 export const DEFAULT_OPDS_PRESETS: OpdsCatalog[] = [
     {
-        id: "standard-ebooks",
-        title: "Standard Ebooks",
-        url: "https://standardebooks.org/feeds/opds",
-        isPreset: true,
-        description: "Free, carefully formatted, and beautifully produced public domain ebooks.",
-    },
-    {
         id: "project-gutenberg",
         title: "Project Gutenberg",
         url: "https://m.gutenberg.org/ebooks.opds/",
         isPreset: true,
-        description: "Over 60,000 free ebooks including the world's great literature.",
+        description: "Over 60,000 free classics and public domain literature.",
+    },
+    {
+        id: "standard-ebooks",
+        title: "Standard Ebooks",
+        url: "https://standardebooks.org/feeds/atom/new-releases",
+        isPreset: true,
+        description: "Carefully produced, beautifully formatted public domain ebooks.",
     },
 ];
 
@@ -30,15 +30,32 @@ function resolveUrl(relativeOrAbsolute: string, baseUrl: string): string {
 }
 
 async function fetchFeedXml(url: string): Promise<string> {
+    let rawText = "";
     if (isTauri()) {
         const { invoke } = await import("@tauri-apps/api/core");
-        return await invoke<string>("fetch_rss_feed", { url });
+        rawText = await invoke<string>("fetch_rss_feed", { url });
+    } else {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Could not load catalog (${response.status})`);
+        }
+        rawText = await response.text();
     }
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch catalog: ${response.status} ${response.statusText}`);
+
+    // Auto-discover Atom/OPDS alternate link if an HTML page was returned
+    if (rawText.trim().startsWith("<!DOCTYPE html") || rawText.trim().startsWith("<html")) {
+        const match = rawText.match(/<link[^>]+rel=["']alternate["'][^>]+type=["'](application\/atom\+xml[^"']*)["'][^>]+href=["']([^"']+)["']/i)
+            || rawText.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']alternate["'][^>]+type=["'](application\/atom\+xml[^"']*)["']/i);
+        if (match) {
+            const feedHref = match[1].includes("http") ? match[1] : match[2];
+            if (feedHref && !feedHref.includes("atom+xml")) {
+                const resolvedFeedUrl = resolveUrl(feedHref, url);
+                return fetchFeedXml(resolvedFeedUrl);
+            }
+        }
     }
-    return await response.text();
+
+    return rawText;
 }
 
 async function fetchBinary(url: string): Promise<ArrayBuffer> {
@@ -57,7 +74,7 @@ async function fetchBinary(url: string): Promise<ArrayBuffer> {
     }
     const response = await fetch(url);
     if (!response.ok) {
-        throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to download book: ${response.status}`);
     }
     return await response.arrayBuffer();
 }
@@ -70,7 +87,7 @@ function createOpdsParser(): XMLParser {
         textNodeName: "#text",
         parseTagValue: false,
         parseAttributeValue: false,
-        isArray: (name: string) => name === "entry" || name === "link" || name === "author",
+        isArray: (name: string) => name === "entry" || name === "link" || name === "author" || name === "item",
         trimValues: true,
     });
 }
@@ -89,7 +106,7 @@ function extractFormatFromMime(mime?: string, href?: string): "epub" | "pdf" | "
     if (type.includes("epub") || path.endsWith(".epub")) return "epub";
     if (type.includes("pdf") || path.endsWith(".pdf")) return "pdf";
     if (type.includes("comic") || type.includes("cbz") || path.endsWith(".cbz")) return "cbz";
-    if (type.includes("mobi") || type.includes("prc") || path.endsWith(".mobi")) return "mobi";
+    if (type.includes("mobi") || type.includes("prc") || path.endsWith(".mobi") || type.includes("kindle")) return "mobi";
     return undefined;
 }
 
@@ -97,11 +114,12 @@ export async function parseOpdsFeed(xmlText: string, feedUrl: string): Promise<O
     const parser = createOpdsParser();
     const result = parser.parse(xmlText);
 
-    const feedNode = result.feed || result["atom:feed"] || result;
-    const title = getTextContent(feedNode.title || feedNode["atom:title"]) || "Catalog";
-    const subtitle = getTextContent(feedNode.subtitle || feedNode["atom:subtitle"]) || undefined;
-    const icon = getTextContent(feedNode.icon || feedNode["atom:icon"]) || undefined;
-    const updated = getTextContent(feedNode.updated || feedNode["atom:updated"]) || undefined;
+    // Support standard Atom, RSS 2.0, or RDF feeds
+    const feedNode = result.feed || result["atom:feed"] || result.rss?.channel || result;
+    const title = getTextContent(feedNode.title || feedNode["atom:title"]) || "Library Catalog";
+    const subtitle = getTextContent(feedNode.subtitle || feedNode["atom:subtitle"] || feedNode.description) || undefined;
+    const icon = getTextContent(feedNode.icon || feedNode["atom:icon"] || feedNode.image?.url) || undefined;
+    const updated = getTextContent(feedNode.updated || feedNode["atom:updated"] || feedNode.lastBuildDate) || undefined;
     const feedId = getTextContent(feedNode.id || feedNode["atom:id"]) || feedUrl;
 
     const rawLinks: any[] = Array.isArray(feedNode.link) ? feedNode.link : feedNode.link ? [feedNode.link] : [];
@@ -113,6 +131,7 @@ export async function parseOpdsFeed(xmlText: string, feedUrl: string): Promise<O
     let searchUrlTemplate: string | undefined;
 
     for (const link of rawLinks) {
+        if (typeof link === "string") continue;
         const rel = link["@_rel"] || "";
         const href = link["@_href"];
         const type = link["@_type"] || "";
@@ -124,10 +143,10 @@ export async function parseOpdsFeed(xmlText: string, feedUrl: string): Promise<O
         else if (rel === "previous" || rel === "prev") prevUrl = resolved;
         else if (rel === "up") upUrl = resolved;
         else if (rel === "start") startUrl = resolved;
-        else if (rel === "search") {
+        else if (rel === "search" || type.includes("opensearch")) {
             if (href.includes("{searchTerms}")) {
                 searchUrlTemplate = href;
-            } else if (type.includes("opensearchdescription")) {
+            } else {
                 searchUrlTemplate = resolved;
             }
         }
@@ -137,28 +156,29 @@ export async function parseOpdsFeed(xmlText: string, feedUrl: string): Promise<O
         ? feedNode.entry
         : feedNode.entry
           ? [feedNode.entry]
-          : [];
+          : Array.isArray(feedNode.item)
+            ? feedNode.item
+            : feedNode.item
+              ? [feedNode.item]
+              : [];
 
     const entries: OpdsEntry[] = [];
 
     for (const entryNode of rawEntries) {
-        const id = getTextContent(entryNode.id || entryNode["atom:id"]) || `opds-entry-${Math.random().toString(36).slice(2)}`;
+        const id = getTextContent(entryNode.id || entryNode["atom:id"] || entryNode.guid) || `book-${Math.random().toString(36).slice(2)}`;
         const entryTitle = getTextContent(entryNode.title || entryNode["atom:title"]) || "Untitled";
         
         let author: string | undefined;
-        const authors = entryNode.author || entryNode["atom:author"];
+        const authors = entryNode.author || entryNode["atom:author"] || entryNode["dc:creator"];
         if (Array.isArray(authors) && authors.length > 0) {
             author = getTextContent(authors[0].name || authors[0]["atom:name"] || authors[0]);
         } else if (authors) {
             author = getTextContent(authors.name || authors["atom:name"] || authors);
         }
-        if (!author && (entryNode["dc:creator"] || entryNode["dc:author"])) {
-            author = getTextContent(entryNode["dc:creator"] || entryNode["dc:author"]);
-        }
 
-        const summary = getTextContent(entryNode.summary || entryNode["atom:summary"]) || undefined;
+        const summary = getTextContent(entryNode.summary || entryNode["atom:summary"] || entryNode.description) || undefined;
         const content = getTextContent(entryNode.content || entryNode["atom:content"]) || undefined;
-        const entryUpdated = getTextContent(entryNode.updated || entryNode["atom:updated"]) || undefined;
+        const entryUpdated = getTextContent(entryNode.updated || entryNode["atom:updated"] || entryNode.pubDate) || undefined;
         const published = getTextContent(entryNode.published || entryNode["atom:published"] || entryNode["dc:issued"]) || undefined;
         const language = getTextContent(entryNode["dc:language"]) || undefined;
         const publisher = getTextContent(entryNode["dc:publisher"]) || undefined;
@@ -169,6 +189,16 @@ export async function parseOpdsFeed(xmlText: string, feedUrl: string): Promise<O
               ? [entryNode.link]
               : [];
 
+        // RSS enclosure support
+        if (entryNode.enclosure) {
+            const enc = entryNode.enclosure;
+            entryLinksRaw.push({
+                "@_rel": "http://opds-spec.org/acquisition",
+                "@_href": enc["@_url"] || enc.url,
+                "@_type": enc["@_type"] || enc.type,
+            });
+        }
+
         const links: OpdsLink[] = [];
         let coverUrl: string | undefined;
         let thumbnailUrl: string | undefined;
@@ -177,9 +207,19 @@ export async function parseOpdsFeed(xmlText: string, feedUrl: string): Promise<O
         let navUrl: string | undefined;
 
         for (const l of entryLinksRaw) {
-            const rel = l["@_rel"] || "";
+            if (typeof l === "string") {
+                const resolvedHref = resolveUrl(l, feedUrl);
+                const detectedFmt = extractFormatFromMime(undefined, l);
+                if (detectedFmt) {
+                    downloadUrl = resolvedHref;
+                    downloadFormat = detectedFmt;
+                }
+                continue;
+            }
+
+            const rel = (l["@_rel"] || "").toLowerCase();
             const href = l["@_href"];
-            const type = l["@_type"] || "";
+            const type = (l["@_type"] || "").toLowerCase();
             const linkTitle = l["@_title"] || undefined;
             if (!href) continue;
 
@@ -187,14 +227,22 @@ export async function parseOpdsFeed(xmlText: string, feedUrl: string): Promise<O
             links.push({ rel, href: resolvedHref, type, title: linkTitle });
 
             // Image / Thumbnail
-            if (rel.includes("opds-spec.org/image/thumbnail") || rel === "thumbnail") {
+            if (rel.includes("thumbnail") || rel.includes("image/thumbnail")) {
                 thumbnailUrl = resolvedHref;
-            } else if (rel.includes("opds-spec.org/image") || rel === "image" || rel === "cover") {
+            } else if (rel.includes("image") || rel.includes("cover")) {
                 coverUrl = resolvedHref;
+            } else if (type.includes("image/")) {
+                if (!coverUrl) coverUrl = resolvedHref;
             }
 
             // Acquisition (Direct Download)
-            if (rel.startsWith("http://opds-spec.org/acquisition") || rel === "acquisition" || type.includes("application/epub+zip") || type.includes("application/pdf")) {
+            if (
+                rel.includes("acquisition") ||
+                type.includes("application/epub+zip") ||
+                type.includes("application/pdf") ||
+                href.endsWith(".epub") ||
+                href.endsWith(".pdf")
+            ) {
                 const detectedFmt = extractFormatFromMime(type, href);
                 if (detectedFmt && (!downloadUrl || detectedFmt === "epub")) {
                     downloadUrl = resolvedHref;
@@ -202,8 +250,8 @@ export async function parseOpdsFeed(xmlText: string, feedUrl: string): Promise<O
                 }
             }
 
-            // Navigation
-            if (rel === "subsection" || type.includes("profile=opds-catalog") || type.includes("application/atom+xml")) {
+            // Navigation (drilldown subfeed)
+            if (rel === "subsection" || rel.includes("subsection") || type.includes("profile=opds-catalog") || type.includes("application/atom+xml")) {
                 if (!navUrl) {
                     navUrl = resolvedHref;
                 }
@@ -213,6 +261,8 @@ export async function parseOpdsFeed(xmlText: string, feedUrl: string): Promise<O
         if (!thumbnailUrl && coverUrl) thumbnailUrl = coverUrl;
         if (!coverUrl && thumbnailUrl) coverUrl = thumbnailUrl;
 
+        // If it has no download URL yet but links to a specific book OPDS feed (like Gutenberg single book),
+        // keep it as navigable so tapping it loads the book acquisition feed
         const isNavigation = !downloadUrl && Boolean(navUrl);
 
         entries.push({
@@ -251,44 +301,54 @@ export async function parseOpdsFeed(xmlText: string, feedUrl: string): Promise<O
     };
 }
 
-export class OpdsService {
-    static async fetchFeed(feedUrl: string): Promise<OpdsFeed> {
-        const xml = await fetchFeedXml(feedUrl);
-        return await parseOpdsFeed(xml, feedUrl);
-    }
+export const OpdsService = {
+    async fetchFeed(url: string): Promise<OpdsFeed> {
+        const xmlText = await fetchFeedXml(url);
+        return parseOpdsFeed(xmlText, url);
+    },
 
-    static async search(searchUrlTemplate: string, query: string, baseUrl: string): Promise<OpdsFeed> {
-        let searchUrl = searchUrlTemplate;
-        if (searchUrl.includes("{searchTerms}")) {
-            searchUrl = searchUrl.replace("{searchTerms}", encodeURIComponent(query));
+    async search(templateUrl: string, query: string, baseUrl: string): Promise<OpdsFeed> {
+        let url = templateUrl;
+        if (url.includes("{searchTerms}")) {
+            url = url.replace("{searchTerms}", encodeURIComponent(query));
         } else {
-            const sep = searchUrl.includes("?") ? "&" : "?";
-            searchUrl = `${searchUrl}${sep}q=${encodeURIComponent(query)}`;
+            const sep = url.includes("?") ? "&" : "?";
+            url = `${url}${sep}q=${encodeURIComponent(query)}`;
         }
-        const resolved = resolveUrl(searchUrl, baseUrl);
-        return await this.fetchFeed(resolved);
-    }
+        const resolved = resolveUrl(url, baseUrl);
+        return OpdsService.fetchFeed(resolved);
+    },
 
-    static async downloadAndImportBook(
+    async downloadAndImportBook(
         entry: OpdsEntry,
-        onProgress?: (step: string) => void
-    ): Promise<Book> {
-        if (!entry.downloadUrl) {
+        onProgress?: (msg: string) => void
+    ): Promise<string> {
+        let downloadUrl = entry.downloadUrl;
+
+        // If the entry links to a sub-feed (e.g. Gutenberg book acquisition feed), resolve it
+        if (!downloadUrl && entry.navUrl) {
+            onProgress?.("Resolving download options…");
+            const subFeed = await OpdsService.fetchFeed(entry.navUrl);
+            const acqEntry = subFeed.entries.find((e) => e.downloadUrl);
+            if (acqEntry?.downloadUrl) {
+                downloadUrl = acqEntry.downloadUrl;
+            }
+        }
+
+        if (!downloadUrl) {
             throw new Error("No download link available for this book.");
         }
 
         onProgress?.("Downloading book…");
-        const buffer = await fetchBinary(entry.downloadUrl);
-
-        onProgress?.("Saving to local storage…");
-        const bookId = `opds-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const buffer = await fetchBinary(downloadUrl);
+        const bookId = `book-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const format: BookFormat = entry.downloadFormat || "epub";
         const storagePath = await saveBookData(bookId, buffer);
 
         let coverPath: string | undefined;
         if (entry.coverUrl) {
             try {
-                onProgress?.("Fetching cover image…");
+                onProgress?.("Downloading cover…");
                 const coverBuffer = await fetchBinary(entry.coverUrl);
                 const blob = new Blob([coverBuffer], { type: "image/jpeg" });
                 coverPath = await saveCoverImage(bookId, blob);
@@ -300,22 +360,24 @@ export class OpdsService {
         const book: Book = {
             id: bookId,
             title: entry.title,
-            author: entry.author || "Unknown",
+            author: entry.author || "Unknown Author",
             format,
-            filePath: entry.downloadUrl,
+            filePath: storagePath,
             storagePath,
             fileSize: buffer.byteLength,
-            coverPath,
             addedAt: new Date(),
+            coverPath,
+            description: entry.summary,
+            publisher: entry.publisher,
+            language: entry.language,
             progress: 0,
+            tags: [],
             isFavorite: false,
             readingTime: 0,
-            tags: ["OPDS"],
-            coverExtractionDone: Boolean(coverPath),
+            lastReadAt: new Date(),
         };
 
         useLibraryStore.getState().addBook(book);
-        onProgress?.("Book added to library!");
-        return book;
-    }
-}
+        return bookId;
+    },
+};

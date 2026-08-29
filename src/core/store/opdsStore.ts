@@ -23,8 +23,8 @@ export const useOpdsStore = create<OpdsState>()(
     persist(
         (set, get) => ({
             catalogs: DEFAULT_OPDS_PRESETS,
-            activeCatalogId: "standard-ebooks",
-            currentFeedUrl: "https://standardebooks.org/feeds/opds",
+            activeCatalogId: "project-gutenberg",
+            currentFeedUrl: "https://m.gutenberg.org/ebooks.opds/",
             feedHistory: [],
 
             addCatalog: (catalog) => {

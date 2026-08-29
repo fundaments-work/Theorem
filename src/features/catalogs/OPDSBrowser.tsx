@@ -6,7 +6,6 @@ import {
     Download,
     Folder,
     Globe,
-    Info,
     Plus,
     RefreshCw,
     Search,
@@ -29,6 +28,7 @@ export function OPDSBrowserPage() {
     const navigateToFeed = useOpdsStore((state) => state.navigateToFeed);
     const navigateBack = useOpdsStore((state) => state.navigateBack);
     const addCatalog = useOpdsStore((state) => state.addCatalog);
+    const removeCatalog = useOpdsStore((state) => state.removeCatalog);
 
     const setRoute = useUIStore((state) => state.setRoute);
 
@@ -58,9 +58,8 @@ export function OPDSBrowserPage() {
             const data = await OpdsService.fetchFeed(url);
             setFeed(data);
         } catch (err: any) {
-            console.error("OPDS load error:", err);
-            setError(err.message || "Failed to load catalog feed.");
-            toast.error(err.message || "Failed to load catalog feed.");
+            console.error("Feed load error:", err);
+            setError("Could not load catalog. Please check your internet connection or URL.");
         } finally {
             setIsLoading(false);
         }
@@ -90,61 +89,29 @@ export function OPDSBrowserPage() {
                 );
                 setFeed(searchResults);
             } catch (err: any) {
-                toast.error("Search failed: " + (err.message || "Unknown error"));
+                toast.error("Could not find results for that query.");
             } finally {
                 setIsSearching(false);
             }
         }
     };
 
-    const filteredEntries = useMemo(() => {
-        if (!feed?.entries) return [];
-        if (!searchQuery.trim() || feed.searchUrlTemplate) {
-            return feed.entries;
-        }
-        const q = searchQuery.toLowerCase();
-        return feed.entries.filter(
-            (e) =>
-                e.title.toLowerCase().includes(q) ||
-                (e.author && e.author.toLowerCase().includes(q)) ||
-                (e.summary && e.summary.toLowerCase().includes(q))
-        );
-    }, [feed?.entries, searchQuery, feed?.searchUrlTemplate]);
-
-    const navigationEntries = useMemo(
-        () => filteredEntries.filter((e) => e.isNavigation),
-        [filteredEntries]
-    );
-
-    const acquisitionEntries = useMemo(
-        () => filteredEntries.filter((e) => !e.isNavigation),
-        [filteredEntries]
-    );
-
     const handleDownload = async (entry: OpdsEntry) => {
-        if (!entry.downloadUrl) {
-            toast.error("No download link found for this book.");
-            return;
-        }
-
         setDownloadingEntryId(entry.id);
-        const toastId = toast.loading(`Downloading "${entry.title}"…`);
-
+        const toastId = toast.loading(`Adding "${entry.title}" to library…`);
         try {
-            const book = await OpdsService.downloadAndImportBook(entry, (step) => {
-                toast.loading(step, { id: toastId });
+            await OpdsService.downloadAndImportBook(entry, (msg) => {
+                toast.loading(msg, { id: toastId });
             });
-
-            toast.success(`"${book.title}" added to library!`, {
+            toast.success(`"${entry.title}" added to Library`, {
                 id: toastId,
                 action: {
-                    label: "Read Now",
-                    onClick: () => setRoute("reader", book.id),
+                    label: "View Library",
+                    onClick: () => setRoute("library"),
                 },
             });
         } catch (err: any) {
-            console.error("Download failed:", err);
-            toast.error("Download failed: " + (err.message || "Unknown error"), { id: toastId });
+            toast.error(err.message || "Failed to download book", { id: toastId });
         } finally {
             setDownloadingEntryId(null);
         }
@@ -152,277 +119,265 @@ export function OPDSBrowserPage() {
 
     const handleAddCatalogSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const title = newCatalogTitle.trim();
-        const url = newCatalogUrl.trim();
+        if (!newCatalogTitle.trim() || !newCatalogUrl.trim()) return;
 
-        if (!title || !url) {
-            toast.error("Please provide both a title and valid URL.");
-            return;
+        let cleanUrl = newCatalogUrl.trim();
+        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+            cleanUrl = `https://${cleanUrl}`;
         }
 
-        try {
-            new URL(url);
-        } catch {
-            toast.error("Please enter a valid HTTP or HTTPS URL.");
-            return;
-        }
+        addCatalog({
+            title: newCatalogTitle.trim(),
+            url: cleanUrl,
+        });
 
-        addCatalog({ title, url });
+        setIsAddModalOpen(false);
         setNewCatalogTitle("");
         setNewCatalogUrl("");
-        setIsAddModalOpen(false);
-        toast.success(`Catalog "${title}" added!`);
+        toast.success(`Added "${newCatalogTitle}" catalog`);
     };
 
+    const navigationEntries = useMemo(() => {
+        return feed?.entries.filter((e) => e.isNavigation) || [];
+    }, [feed]);
+
+    const bookEntries = useMemo(() => {
+        return feed?.entries.filter((e) => !e.isNavigation) || [];
+    }, [feed]);
+
     return (
-        <div className="mx-auto flex h-full w-full max-w-[var(--layout-content-max-width)] flex-col px-4 py-6 pb-0 sm:px-6 lg:px-8 lg:py-8 animate-fade-in">
-            {/* Top Bar Header */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-                <div className="flex items-center gap-3">
+        <div className="flex flex-col min-h-full px-4 sm:px-6 md:px-8 py-6 space-y-6 max-w-7xl mx-auto w-full">
+            {/* Header & Catalog Tabs */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--color-border)] pb-5">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-[color:var(--color-text-primary)]">
+                        Catalogs
+                    </h1>
+                    <p className="text-xs text-[color:var(--color-text-muted)] mt-1">
+                        Browse and download free books directly into your library.
+                    </p>
+                </div>
+
+                {/* Catalog Pills Selector */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                    {catalogs.map((catalog) => {
+                        const isActive = activeCatalog?.id === catalog.id;
+                        return (
+                            <div key={catalog.id} className="relative group shrink-0">
+                                <button
+                                    onClick={() => setActiveCatalog(catalog.id)}
+                                    className={cn(
+                                        "px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5",
+                                        isActive
+                                            ? "bg-[var(--color-text-primary)] text-[var(--color-background)]"
+                                            : "bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-border)] hover:text-[color:var(--color-text-primary)]"
+                                    )}
+                                >
+                                    <Globe className="h-3 w-3" />
+                                    <span>{catalog.title}</span>
+                                </button>
+                                {!catalog.isPreset && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeCatalog(catalog.id);
+                                            toast.success("Catalog removed");
+                                        }}
+                                        className="hidden group-hover:flex absolute -top-1 -right-1 h-4 w-4 bg-zinc-800 text-white rounded-full items-center justify-center text-[9px] hover:bg-red-600"
+                                        title="Remove catalog"
+                                    >
+                                        <X className="h-2.5 w-2.5" />
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
+
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="px-3 py-1.5 rounded-full border border-dashed border-[var(--color-border)] text-xs font-medium text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:border-[var(--color-text-secondary)] flex items-center gap-1 shrink-0"
+                    >
+                        <Plus className="h-3 w-3" />
+                        <span>Add Library</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Navigation & Search Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
                     {feedHistory.length > 0 && (
                         <button
                             onClick={navigateBack}
-                            className="flex h-9 w-9 items-center justify-center border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                            title="Back"
+                            className="p-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors shrink-0"
                             aria-label="Back"
                         >
                             <ArrowLeft className="h-4 w-4" />
                         </button>
                     )}
-                    <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                            <h1 className="m-0 font-sans text-[1.45rem] font-semibold uppercase tracking-[0.12em] leading-[1.1] text-[color:var(--color-text-primary)] sm:text-[1.6rem]">
-                                {feed?.title || activeCatalog?.title || "Catalogs"}
-                            </h1>
-                            <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-subtle)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[color:var(--color-accent)]">
-                                <Globe className="h-3 w-3" /> OPDS
-                            </span>
-                        </div>
-                        <p className="mt-1 text-xs text-[color:var(--color-text-muted)] truncate max-w-md">
-                            {feed?.subtitle || activeCatalog?.description || activeCatalog?.url}
-                        </p>
-                    </div>
+                    <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)] truncate">
+                        {feed?.title || activeCatalog?.title || "Catalog"}
+                    </h2>
                 </div>
 
-                {/* Catalog Controls */}
-                <div className="flex items-center gap-2">
-                    <select
-                        value={activeCatalogId || ""}
-                        onChange={(e) => setActiveCatalog(e.target.value)}
-                        className="h-9 px-3 text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[color:var(--color-text-primary)] hover:border-[var(--color-accent)] focus:outline-none transition-colors"
-                    >
-                        {catalogs.map((c) => (
-                            <option key={c.id} value={c.id}>
-                                {c.title} {c.isPreset ? "(Preset)" : ""}
-                            </option>
-                        ))}
-                    </select>
-
-                    <button
-                        onClick={() => targetUrl && loadFeed(targetUrl)}
-                        disabled={isLoading}
-                        className="flex h-9 w-9 items-center justify-center border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] disabled:opacity-50 transition-colors"
-                        title="Refresh"
-                        aria-label="Refresh"
-                    >
-                        <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-                    </button>
-
-                    <button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="flex h-9 items-center gap-1.5 px-3 border border-[var(--color-accent)] bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-xs font-bold uppercase tracking-wider hover:opacity-90 transition-opacity"
-                    >
-                        <Plus className="h-4 w-4" />
-                        <span className="hidden sm:inline">Add Catalog</span>
-                    </button>
-                </div>
-            </div>
-
-            {/* Search Bar */}
-            <form onSubmit={handleSearch} className="relative mb-6">
-                <div className="relative flex items-center">
-                    <Search className="absolute left-3.5 h-4 w-4 text-[color:var(--color-text-muted)] pointer-events-none" />
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={
-                            feed?.searchUrlTemplate
-                                ? "Search catalog catalog…"
-                                : "Filter current page…"
-                        }
-                        className="h-10 w-full bg-[var(--color-surface)] border border-[var(--color-border)] pl-10 pr-24 text-xs text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none transition-colors"
-                    />
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setSearchQuery("");
-                                if (targetUrl) void loadFeed(targetUrl);
-                            }}
-                            className="absolute right-12 p-1 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
-                        >
-                            <X className="h-3.5 w-3.5" />
-                        </button>
-                    )}
-                    {feed?.searchUrlTemplate && (
-                        <button
-                            type="submit"
-                            disabled={isSearching}
-                            className="absolute right-1.5 h-7 px-2.5 bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)] text-[10px] font-bold uppercase tracking-wider hover:bg-[var(--color-border)] transition-colors"
-                        >
-                            {isSearching ? "Searching…" : "Search"}
-                        </button>
-                    )}
-                </div>
-            </form>
-
-            {/* Main Content Area */}
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-12">
-                {isLoading ? (
-                    <PageLoader message="Loading catalog feed…" className="py-20" />
-                ) : error ? (
-                    <div className="flex flex-col items-center justify-center gap-4 py-20 text-center border-2 border-dashed border-[var(--color-border)] p-8">
-                        <p className="text-sm font-semibold text-[color:var(--color-error)]">
-                            {error}
-                        </p>
-                        <button
-                            onClick={() => targetUrl && loadFeed(targetUrl)}
-                            className="px-4 py-2 bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-xs font-bold uppercase tracking-wider"
-                        >
-                            Retry
-                        </button>
-                    </div>
-                ) : (
-                    <div className="flex flex-col gap-8">
-                        {/* Navigation Categories / Subsections */}
-                        {navigationEntries.length > 0 && (
-                            <div className="flex flex-col gap-3">
-                                <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
-                                    Categories & Navigation ({navigationEntries.length})
-                                </h2>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                    {navigationEntries.map((nav) => (
-                                        <button
-                                            key={nav.id}
-                                            onClick={() => nav.navUrl && navigateToFeed(nav.navUrl)}
-                                            className="flex items-center justify-between p-3 bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-muted)] text-left transition-all group"
-                                        >
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <Folder className="h-4 w-4 text-[color:var(--color-accent)] shrink-0 group-hover:scale-110 transition-transform" />
-                                                <span className="text-xs font-bold text-[color:var(--color-text-primary)] truncate">
-                                                    {nav.title}
-                                                </span>
-                                            </div>
-                                            <ChevronRight className="h-4 w-4 text-[color:var(--color-text-muted)] group-hover:text-[color:var(--color-text-primary)] shrink-0" />
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
+                {feed?.searchUrlTemplate && (
+                    <form onSubmit={handleSearch} className="relative sm:w-72 md:w-80 shrink-0">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[color:var(--color-text-muted)]" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search books or authors…"
+                            className="w-full h-8 pl-8 pr-7 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md text-[color:var(--color-text-primary)] placeholder-[color:var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSearchQuery("");
+                                    if (targetUrl) void loadFeed(targetUrl);
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
                         )}
-
-                        {/* Acquisition Books Grid */}
-                        {acquisitionEntries.length > 0 ? (
-                            <div className="flex flex-col gap-3">
-                                <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
-                                    Available Books ({acquisitionEntries.length})
-                                </h2>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
-                                    {acquisitionEntries.map((book) => {
-                                        const isDownloading = downloadingEntryId === book.id;
-                                        return (
-                                            <div
-                                                key={book.id}
-                                                className="group relative flex flex-col bg-[var(--color-surface)] border border-[var(--color-border)] overflow-hidden transition-all hover:shadow-md hover:border-[var(--color-accent)]"
-                                            >
-                                                {/* Book Cover */}
-                                                <div
-                                                    onClick={() => setSelectedEntry(book)}
-                                                    className="relative aspect-[2/3] w-full bg-[var(--color-surface-muted)] cursor-pointer overflow-hidden flex items-center justify-center"
-                                                >
-                                                    {book.coverUrl ? (
-                                                        <img
-                                                            src={book.coverUrl}
-                                                            alt={book.title}
-                                                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                                            loading="lazy"
-                                                        />
-                                                    ) : (
-                                                        <div className="flex flex-col items-center justify-center p-3 text-center">
-                                                            <BookOpen className="h-8 w-8 text-[color:var(--color-text-muted)] mb-2" />
-                                                            <span className="text-[11px] font-bold text-[color:var(--color-text-primary)] line-clamp-2">
-                                                                {book.title}
-                                                            </span>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Format Badge */}
-                                                    {book.downloadFormat && (
-                                                        <span className="absolute top-2 right-2 rounded bg-black/75 px-1.5 py-0.5 text-[9px] font-black uppercase text-white tracking-widest backdrop-blur-sm">
-                                                            {book.downloadFormat}
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                {/* Book Info */}
-                                                <div className="flex flex-col flex-1 p-3">
-                                                    <h3
-                                                        onClick={() => setSelectedEntry(book)}
-                                                        className="text-xs font-bold text-[color:var(--color-text-primary)] line-clamp-1 cursor-pointer hover:text-[color:var(--color-accent)] transition-colors"
-                                                        title={book.title}
-                                                    >
-                                                        {book.title}
-                                                    </h3>
-                                                    <p className="text-[11px] text-[color:var(--color-text-muted)] line-clamp-1 mt-0.5">
-                                                        {book.author || "Unknown Author"}
-                                                    </p>
-
-                                                    <div className="mt-auto pt-3 flex items-center gap-1.5">
-                                                        <button
-                                                            onClick={() => handleDownload(book)}
-                                                            disabled={isDownloading}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 h-8 bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-[10px] font-black uppercase tracking-wider hover:opacity-90 disabled:opacity-50 transition-opacity"
-                                                        >
-                                                            <Download className={cn("h-3.5 w-3.5", isDownloading && "animate-bounce")} />
-                                                            <span>{isDownloading ? "Saving…" : "Get"}</span>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setSelectedEntry(book)}
-                                                            className="flex h-8 w-8 items-center justify-center border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] transition-colors"
-                                                            title="Details"
-                                                            aria-label="Details"
-                                                        >
-                                                            <Info className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ) : navigationEntries.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-[var(--color-border)]">
-                                <p className="text-xs font-bold uppercase tracking-widest text-[color:var(--color-text-muted)]">
-                                    No books found matching criteria
-                                </p>
-                            </div>
-                        ) : null}
-
-                        {/* Pagination Next Link */}
-                        {feed?.nextUrl && (
-                            <div className="flex justify-center pt-4">
-                                <button
-                                    onClick={() => feed.nextUrl && navigateToFeed(feed.nextUrl)}
-                                    className="px-6 py-2.5 border border-[var(--color-accent)] bg-[var(--color-surface)] text-[color:var(--color-accent)] text-xs font-bold uppercase tracking-wider hover:bg-[var(--color-accent)] hover:text-[color:var(--color-accent-contrast)] transition-colors"
-                                >
-                                    Next Page →
-                                </button>
-                            </div>
-                        )}
-                    </div>
+                    </form>
                 )}
             </div>
+
+            {/* Main Content Area */}
+            {isLoading || isSearching ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                    <PageLoader message="Loading books…" />
+                </div>
+            ) : error ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 bg-[var(--color-surface-muted)] rounded-xl border border-[var(--color-border)] p-6">
+                    <Globe className="h-8 w-8 text-[color:var(--color-text-muted)]" />
+                    <p className="text-xs text-[color:var(--color-text-muted)] max-w-sm">{error}</p>
+                    <button
+                        onClick={() => targetUrl && void loadFeed(targetUrl)}
+                        className="mt-2 px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-semibold rounded-md hover:bg-[var(--color-surface-muted)] flex items-center gap-1.5"
+                    >
+                        <RefreshCw className="h-3 w-3" />
+                        <span>Try Again</span>
+                    </button>
+                </div>
+            ) : (
+                <div className="space-y-8">
+                    {/* Category / Sub-feed Tiles */}
+                    {navigationEntries.length > 0 && (
+                        <div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {navigationEntries.map((entry) => (
+                                    <button
+                                        key={entry.id}
+                                        onClick={() => {
+                                            if (entry.navUrl) navigateToFeed(entry.navUrl);
+                                        }}
+                                        className="flex items-center justify-between p-3.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-muted)] text-left transition-colors group"
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="h-8 w-8 rounded bg-[var(--color-surface-muted)] flex items-center justify-center shrink-0 group-hover:bg-[var(--color-border)]">
+                                                <Folder className="h-4 w-4 text-[color:var(--color-text-secondary)]" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="text-xs font-semibold text-[color:var(--color-text-primary)] truncate">
+                                                    {entry.title}
+                                                </div>
+                                                {entry.summary && (
+                                                    <div className="text-[11px] text-[color:var(--color-text-muted)] truncate mt-0.5">
+                                                        {entry.summary}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <ChevronRight className="h-4 w-4 text-[color:var(--color-text-muted)] group-hover:text-[color:var(--color-text-primary)] shrink-0 ml-2" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Book Cards Grid */}
+                    {bookEntries.length > 0 ? (
+                        <div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                                {bookEntries.map((entry) => {
+                                    const isDownloading = downloadingEntryId === entry.id;
+                                    return (
+                                        <div
+                                            key={entry.id}
+                                            onClick={() => {
+                                                if (entry.navUrl && !entry.downloadUrl) {
+                                                    navigateToFeed(entry.navUrl);
+                                                } else {
+                                                    setSelectedEntry(entry);
+                                                }
+                                            }}
+                                            className="group flex flex-col cursor-pointer"
+                                        >
+                                            {/* Cover Container */}
+                                            <div className="relative aspect-[2/3] w-full rounded-md overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)] shadow-sm group-hover:shadow-md transition-shadow">
+                                                {entry.coverUrl || entry.thumbnailUrl ? (
+                                                    <img
+                                                        src={entry.thumbnailUrl || entry.coverUrl}
+                                                        alt={entry.title}
+                                                        loading="lazy"
+                                                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                    />
+                                                ) : (
+                                                    <div className="flex flex-col items-center justify-center h-full w-full p-3 text-center bg-[var(--color-surface-muted)]">
+                                                        <BookOpen className="h-6 w-6 text-[color:var(--color-text-muted)] mb-1.5" />
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--color-text-secondary)] line-clamp-3">
+                                                            {entry.title}
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {/* Download Button Overlay */}
+                                                {(entry.downloadUrl || entry.navUrl) && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            void handleDownload(entry);
+                                                        }}
+                                                        disabled={isDownloading}
+                                                        className="absolute bottom-2 right-2 p-2 rounded-full bg-black/80 text-white hover:bg-black shadow-md transition-transform transform active:scale-95 disabled:opacity-50"
+                                                        title="Add to Library"
+                                                        aria-label="Add to Library"
+                                                    >
+                                                        {isDownloading ? (
+                                                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                                        ) : (
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Title & Author */}
+                                            <div className="mt-2 flex flex-col min-w-0">
+                                                <h3 className="text-xs font-semibold text-[color:var(--color-text-primary)] truncate group-hover:text-[color:var(--color-accent)] transition-colors">
+                                                    {entry.title}
+                                                </h3>
+                                                <p className="text-[11px] text-[color:var(--color-text-muted)] truncate mt-0.5">
+                                                    {entry.author || "Public Domain"}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ) : navigationEntries.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-16 text-center space-y-2">
+                            <BookOpen className="h-8 w-8 text-[color:var(--color-text-muted)]" />
+                            <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">No books found in this catalog.</p>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Book Details Modal */}
             <Modal isOpen={!!selectedEntry} onClose={() => setSelectedEntry(null)}>
@@ -432,29 +387,20 @@ export function OPDSBrowserPage() {
                         <ModalBody className="space-y-4">
                             <div className="flex flex-col sm:flex-row gap-4">
                                 {selectedEntry.coverUrl && (
-                                    <div className="aspect-[2/3] w-28 shrink-0 bg-[var(--color-surface-muted)] overflow-hidden rounded">
+                                    <div className="aspect-[2/3] w-24 shrink-0 bg-[var(--color-surface-muted)] overflow-hidden rounded border border-[var(--color-border)]">
                                         <img src={selectedEntry.coverUrl} alt={selectedEntry.title} className="h-full w-full object-cover" />
                                     </div>
                                 )}
                                 <div className="flex flex-col gap-1 min-w-0">
                                     <h4 className="text-sm font-bold text-[color:var(--color-text-primary)]">{selectedEntry.title}</h4>
-                                    <p className="text-xs text-[color:var(--color-accent)] font-medium">{selectedEntry.author || "Unknown Author"}</p>
+                                    <p className="text-xs text-[color:var(--color-text-secondary)] font-medium">{selectedEntry.author || "Public Domain"}</p>
                                     {selectedEntry.publisher && (
-                                        <p className="text-[11px] text-[color:var(--color-text-muted)]">Publisher: {selectedEntry.publisher}</p>
-                                    )}
-                                    {selectedEntry.language && (
-                                        <p className="text-[11px] text-[color:var(--color-text-muted)]">Language: {selectedEntry.language.toUpperCase()}</p>
-                                    )}
-                                    {selectedEntry.downloadFormat && (
-                                        <p className="text-[11px] text-[color:var(--color-text-muted)]">Format: {selectedEntry.downloadFormat.toUpperCase()}</p>
+                                        <p className="text-[11px] text-[color:var(--color-text-muted)]">Source: {selectedEntry.publisher}</p>
                                     )}
                                 </div>
                             </div>
                             {selectedEntry.summary && (
                                 <div className="border-t border-[var(--color-border)] pt-3">
-                                    <h5 className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--color-text-muted)] mb-1">
-                                        Description
-                                    </h5>
                                     <p className="text-xs text-[color:var(--color-text-secondary)] leading-relaxed whitespace-pre-line max-h-48 overflow-y-auto">
                                         {selectedEntry.summary}
                                     </p>
@@ -464,19 +410,20 @@ export function OPDSBrowserPage() {
                         <ModalFooter>
                             <button
                                 onClick={() => setSelectedEntry(null)}
-                                className="px-4 py-2 border border-[var(--color-border)] text-xs font-semibold text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                                className="px-4 py-2 border border-[var(--color-border)] text-xs font-semibold text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] rounded"
                             >
                                 Close
                             </button>
-                            {selectedEntry.downloadUrl && (
+                            {(selectedEntry.downloadUrl || selectedEntry.navUrl) && (
                                 <button
                                     onClick={() => {
                                         void handleDownload(selectedEntry);
                                         setSelectedEntry(null);
                                     }}
-                                    className="px-4 py-2 bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-xs font-bold uppercase tracking-wider hover:opacity-90"
+                                    className="px-4 py-2 bg-[var(--color-text-primary)] text-[var(--color-background)] text-xs font-bold rounded hover:opacity-90 flex items-center gap-1.5"
                                 >
-                                    Download & Import
+                                    <Download className="h-3 w-3" />
+                                    <span>Add to Library</span>
                                 </button>
                             )}
                         </ModalFooter>
@@ -484,34 +431,34 @@ export function OPDSBrowserPage() {
                 )}
             </Modal>
 
-            {/* Add Custom Catalog Modal */}
+            {/* Add Custom Library Modal */}
             <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)}>
                 <form onSubmit={handleAddCatalogSubmit}>
-                    <ModalHeader title="Add Custom OPDS Catalog" onClose={() => setIsAddModalOpen(false)} />
+                    <ModalHeader title="Add Custom Library" onClose={() => setIsAddModalOpen(false)} />
                     <ModalBody className="space-y-4">
                         <div>
-                            <label className="block text-[11px] font-bold uppercase tracking-wider text-[color:var(--color-text-muted)] mb-1.5">
-                                Catalog Name
+                            <label className="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1.5">
+                                Library Name
                             </label>
                             <input
                                 type="text"
                                 value={newCatalogTitle}
                                 onChange={(e) => setNewCatalogTitle(e.target.value)}
                                 placeholder="e.g. My Calibre Server"
-                                className="w-full h-9 bg-[var(--color-surface)] border border-[var(--color-border)] px-3 text-xs text-[color:var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                                className="w-full h-9 bg-[var(--color-surface)] border border-[var(--color-border)] px-3 text-xs text-[color:var(--color-text-primary)] rounded focus:outline-none focus:border-[var(--color-accent)]"
                                 required
                             />
                         </div>
                         <div>
-                            <label className="block text-[11px] font-bold uppercase tracking-wider text-[color:var(--color-text-muted)] mb-1.5">
-                                OPDS Feed URL
+                            <label className="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1.5">
+                                Catalog URL
                             </label>
                             <input
-                                type="url"
+                                type="text"
                                 value={newCatalogUrl}
                                 onChange={(e) => setNewCatalogUrl(e.target.value)}
                                 placeholder="http://192.168.1.100:8080/opds"
-                                className="w-full h-9 bg-[var(--color-surface)] border border-[var(--color-border)] px-3 text-xs text-[color:var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                                className="w-full h-9 bg-[var(--color-surface)] border border-[var(--color-border)] px-3 text-xs text-[color:var(--color-text-primary)] rounded focus:outline-none focus:border-[var(--color-accent)]"
                                 required
                             />
                         </div>
@@ -520,15 +467,15 @@ export function OPDSBrowserPage() {
                         <button
                             type="button"
                             onClick={() => setIsAddModalOpen(false)}
-                            className="px-4 py-2 border border-[var(--color-border)] text-xs font-semibold text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)]"
+                            className="px-4 py-2 border border-[var(--color-border)] text-xs font-medium text-[color:var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] rounded"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="px-4 py-2 bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] text-xs font-bold uppercase tracking-wider hover:opacity-90"
+                            className="px-4 py-2 bg-[var(--color-text-primary)] text-[var(--color-background)] text-xs font-bold rounded hover:opacity-90"
                         >
-                            Add Catalog
+                            Add Library
                         </button>
                     </ModalFooter>
                 </form>

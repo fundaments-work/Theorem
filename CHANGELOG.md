@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-08-29
+
+### Added
+
+- **OPDS 1.2 Catalog Discovery & 1-Click Import (#59)** — Browse and download books
+  directly into your Theorem library from open standard OPDS feeds. Includes built-in
+  presets for Project Gutenberg (60,000+ free classics) and Standard Ebooks, plus
+  full support for custom self-hosted OPDS servers (Calibre, Kavita, Komga) with
+  search, category navigation, and Dublin Core metadata.
+- **In-Place Footnote & Citation Popovers** — Tapping footnotes, citations, and
+  noteref links now reveals a non-disruptive, elegant popover overlay with rendered
+  HTML, copy action, and an optional jump button, without losing your reading location.
+- **Native Brand Splash Screen** — Instant 0ms first-frame splash screen featuring
+  the Theorem Q.E.D. emblem directly rendered by the webview on boot, seamlessly
+  fading out once storage hydration completes.
+
+### Fixed & Performance
+
+- **Mobile Performance & IPC Optimization** — Completely eliminated mobile lag and
+  UI stutter on Android by configuring `tauri_plugin_log` to use `Stdout` only,
+  preventing hundreds of background IPC log events from flooding the Android JNI
+  bridge and starving the JavaScript thread.
+- **Reader Re-render Elimination** — Memoized reader history callbacks and decoupled
+  render hooks in `ReaderViewport` to prevent infinite re-render loops on page turns.
+- **Mobile Hardware Back Button** — Restored history sentinel state handling so
+  Android hardware and gesture back actions cleanly dismiss modals, overlays, and
+  return to the library.
+
 ## [1.2.0] - 2026-08-29
 
 ### Added
