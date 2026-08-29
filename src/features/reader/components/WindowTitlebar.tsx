@@ -13,8 +13,6 @@ import {
     Info,
     Headphones,
     Zap,
-    Undo2,
-    Redo2,
 } from "lucide-react";
 import { cn } from "../../../core/lib/utils";
 import { isMobile, isTauri } from "../../../core/lib/env";
@@ -157,10 +155,10 @@ export function WindowTitlebar({
     metadata,
     location,
     onBack,
-    canGoBack,
-    canGoForward,
-    onGoBack,
-    onGoForward,
+    canGoBack: _canGoBack,
+    canGoForward: _canGoForward,
+    onGoBack: _onGoBack,
+    onGoForward: _onGoForward,
     onPrevPage: _onPrevPage,
     onNextPage: _onNextPage,
     onToggleToc: _onToggleToc,
@@ -293,40 +291,13 @@ export function WindowTitlebar({
                 <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none lg:max-w-[400px]">
                     <button
                         onClick={onBack}
-                        className={cn(ICON_BUTTON_CLASS, "mr-1 shrink-0")}
+                        className={cn(ICON_BUTTON_CLASS, "mr-2 shrink-0")}
                         style={{ color: 'var(--reader-fg, var(--color-text))' }}
                         aria-label="Back to Library"
                         title="Back to Library"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
-
-                    {(canGoBack || canGoForward) && (
-                        <div className="flex items-center gap-0.5 mr-1 shrink-0">
-                            {canGoBack && onGoBack && (
-                                <button
-                                    onClick={onGoBack}
-                                    className={cn(ICON_BUTTON_CLASS)}
-                                    style={{ color: 'var(--reader-fg, var(--color-text))' }}
-                                    aria-label="Previous reading location (Alt+Left)"
-                                    title="Previous reading location (Alt+Left)"
-                                >
-                                    <Undo2 className="w-4 h-4" />
-                                </button>
-                            )}
-                            {canGoForward && onGoForward && (
-                                <button
-                                    onClick={onGoForward}
-                                    className={cn(ICON_BUTTON_CLASS)}
-                                    style={{ color: 'var(--reader-fg, var(--color-text))' }}
-                                    aria-label="Next reading location (Alt+Right)"
-                                    title="Next reading location (Alt+Right)"
-                                >
-                                    <Redo2 className="w-4 h-4" />
-                                </button>
-                            )}
-                        </div>
-                    )}
 
                     <div className="flex-1 min-w-0 text-left overflow-hidden pr-2">
                         <h1

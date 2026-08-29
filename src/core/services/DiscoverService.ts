@@ -121,18 +121,25 @@ function filterActualBooks(entries: OpdsEntry[]): OpdsEntry[] {
 }
 
 export const DiscoverService = {
-    async loadCuratedSections(forceRefresh = false): Promise<DiscoverSection[]> {
+    async loadCuratedSections(forceRefresh = false, language = "en"): Promise<DiscoverSection[]> {
         const results: DiscoverSection[] = [];
 
         await Promise.all(
             CURATED_FEEDS.map(async (feedConfig) => {
-                const cached = sectionCache.get(feedConfig.id);
+                const cacheKey = `${feedConfig.id}_${language}`;
+                const cached = sectionCache.get(cacheKey);
                 if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
                     results.push(cached.data);
                     return;
                 }
 
-                const feed = await fetchFeedSafe(feedConfig.url);
+                let targetUrl = feedConfig.url;
+                if (language && language !== "all" && targetUrl.includes("gutenberg.org")) {
+                    const separator = targetUrl.includes("?") ? "&" : "?";
+                    targetUrl = `${targetUrl}${separator}languages=${encodeURIComponent(language)}`;
+                }
+
+                const feed = await fetchFeedSafe(targetUrl);
                 if (feed && feed.entries.length > 0) {
                     const validBooks = filterActualBooks(feed.entries);
                     if (validBooks.length > 0) {
@@ -142,7 +149,7 @@ export const DiscoverService = {
                             subtitle: feedConfig.subtitle,
                             books: validBooks.slice(0, 20),
                         };
-                        sectionCache.set(feedConfig.id, { data: section, timestamp: Date.now() });
+                        sectionCache.set(cacheKey, { data: section, timestamp: Date.now() });
                         results.push(section);
                     }
                 }
@@ -153,11 +160,15 @@ export const DiscoverService = {
         return CURATED_FEEDS.map((f) => results.find((r) => r.id === f.id)).filter(Boolean) as DiscoverSection[];
     },
 
-    async search(query: string): Promise<OpdsEntry[]> {
+    async search(query: string, language = "en"): Promise<OpdsEntry[]> {
         const clean = query.trim();
         if (!clean) return [];
 
-        const gutenbergSearchUrl = `https://www.gutenberg.org/ebooks/search.opds/?query=${encodeURIComponent(clean)}`;
+        let gutenbergSearchUrl = `https://www.gutenberg.org/ebooks/search.opds/?query=${encodeURIComponent(clean)}`;
+        if (language && language !== "all") {
+            gutenbergSearchUrl += `&languages=${encodeURIComponent(language)}`;
+        }
+
         const feed = await fetchFeedSafe(gutenbergSearchUrl);
         return feed ? filterActualBooks(feed.entries) : [];
     },

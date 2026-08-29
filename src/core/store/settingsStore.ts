@@ -86,6 +86,7 @@ const defaultAppSettings: AppSettings = {
     goalNotifications: true,
     dailyReminderTime: "20:00",
     syncNotifications: true,
+    discoverLanguage: "en",
 };
 
 const defaultReadingStats: ReadingStats = {
