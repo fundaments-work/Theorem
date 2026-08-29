@@ -367,7 +367,7 @@ export interface RssArticle {
     isFavorite: boolean;
 }
 
-export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds";
+export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds" | "opds";
 
 export interface UIState {
     currentRoute: AppRoute;
@@ -461,3 +461,53 @@ export interface ThemeSettings {
 }
 
 export type { ThemeSettings as ReaderThemeSettings };
+
+export interface OpdsLink {
+    rel: string;
+    href: string;
+    type?: string;
+    title?: string;
+}
+
+export interface OpdsEntry {
+    id: string;
+    title: string;
+    author?: string;
+    summary?: string;
+    content?: string;
+    updated?: string;
+    published?: string;
+    language?: string;
+    publisher?: string;
+    coverUrl?: string;
+    thumbnailUrl?: string;
+    downloadUrl?: string;
+    downloadFormat?: "epub" | "pdf" | "cbz" | "mobi";
+    navUrl?: string;
+    isNavigation: boolean;
+    links: OpdsLink[];
+}
+
+export interface OpdsFeed {
+    id: string;
+    title: string;
+    subtitle?: string;
+    icon?: string;
+    updated?: string;
+    selfUrl?: string;
+    nextUrl?: string;
+    prevUrl?: string;
+    upUrl?: string;
+    startUrl?: string;
+    searchUrlTemplate?: string;
+    entries: OpdsEntry[];
+}
+
+export interface OpdsCatalog {
+    id: string;
+    title: string;
+    url: string;
+    isPreset?: boolean;
+    description?: string;
+    icon?: string;
+}

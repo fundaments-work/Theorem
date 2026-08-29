@@ -3,3 +3,4 @@ export { useLibraryStore } from './libraryStore';
 export { useSettingsStore } from './settingsStore';
 export { useVocabularyStore } from './vocabularyStore';
 export { useRssStore } from './rssStore';
+export { useOpdsStore } from './opdsStore';

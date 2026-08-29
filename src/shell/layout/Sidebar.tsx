@@ -5,6 +5,7 @@ import {
     ChevronRight,
     Flame,
     FolderOpen,
+    Globe,
     Library,
     NotebookPen,
     Rss,
@@ -28,6 +29,7 @@ const mainNavItems: SidebarItem[] = [
     { id: "bookmarks", label: "Bookmarks", icon: <Bookmark className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
     { id: "shelves", label: "Shelves", icon: <FolderOpen className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
     { id: "feeds", label: "Snapshots", icon: <Rss className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
+    { id: "opds", label: "Catalogs", icon: <Globe className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" /> },
 ];
 
 interface SidebarProps {

@@ -22,6 +22,7 @@ const APP_TITLEBAR_DOMAIN_BY_ROUTE: Record<AppRoute, SearchDomain> = {
     shelves: "shelves",
     bookmarks: "bookmarks",
     feeds: "feeds",
+    opds: "none",
 };
 
 const SEARCH_PLACEHOLDER_BY_DOMAIN: Record<Exclude<SearchDomain, "none">, string> = {

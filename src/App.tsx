@@ -51,6 +51,9 @@ const StatisticsPage = lazy(() =>
 const FeedsPage = lazy(() =>
     import("./features/feeds").then((module) => ({ default: module.FeedsPage })),
 );
+const OPDSBrowserPage = lazy(() =>
+    import("./features/catalogs").then((module) => ({ default: module.OPDSBrowserPage })),
+);
 const DESKTOP_STARTUP_MIN_WIDTH = 1024;
 const DESKTOP_STARTUP_MIN_HEIGHT = 720;
 
@@ -467,6 +470,8 @@ function App() {
                 return <StatisticsPage />;
             case "feeds":
                 return <FeedsPage />;
+            case "opds":
+                return <OPDSBrowserPage />;
             default:
                 return <LibraryPage />;
         }
