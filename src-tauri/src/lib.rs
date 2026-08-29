@@ -1031,6 +1031,7 @@ pub fn run() {
             database::sqlite_get_book_metadata,
             database::sqlite_save_book_annotations,
             database::sqlite_get_book_annotations,
+            database::sqlite_shrink_memory,
             sync_commands::iroh_start,
             sync_commands::iroh_stop,
             sync_commands::iroh_pair,

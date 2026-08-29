@@ -850,6 +850,10 @@ const PageCanvas = memo(function PageCanvas({
             cachedBitmapRef.current.close();
             cachedBitmapRef.current = null;
         }
+        if (canvasRef.current) {
+            canvasRef.current.width = 1;
+            canvasRef.current.height = 1;
+        }
     }, []);
 
     useEffect(() => {

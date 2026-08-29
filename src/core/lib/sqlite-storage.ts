@@ -198,3 +198,13 @@ export async function sqliteGetBookAnnotations(bookId: string): Promise<string[]
     const invoke = await getInvoke();
     return invoke('sqlite_get_book_annotations', { bookId }) as Promise<string[]>;
 }
+
+export async function sqliteShrinkMemory(): Promise<void> {
+    if (!isTauri()) return;
+    try {
+        const invoke = await getInvoke();
+        await invoke('sqlite_shrink_memory');
+    } catch {
+        // Ignore if unsupported or pool busy
+    }
+}

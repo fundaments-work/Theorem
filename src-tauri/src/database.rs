@@ -177,6 +177,11 @@ fn reclaim_legacy_book_blobs(
     Ok(reclaimed)
 }
 
+#[cfg(target_os = "android")]
+const DB_POOL_MAX_SIZE: u32 = 2;
+#[cfg(not(target_os = "android"))]
+const DB_POOL_MAX_SIZE: u32 = 4;
+
 fn init_db_pool(db_path: &Path) -> Result<&DbPool, String> {
     if let Some(pool) = DB_POOL.get() {
         return Ok(pool);
@@ -184,7 +189,7 @@ fn init_db_pool(db_path: &Path) -> Result<&DbPool, String> {
 
     let manager = SqliteConnectionManager::file(db_path);
     let pool = Pool::builder()
-        .max_size(4)
+        .max_size(DB_POOL_MAX_SIZE)
         .connection_customizer(Box::new(SqlitePerConnectionPragmas))
         .build(manager)
         .map_err(|error| format!("Failed to create SQLite connection pool: {error}"))?;
@@ -260,6 +265,16 @@ const DB_SCHEMA_PERSISTENT_PRAGMAS: &str = r#"
         ON book_annotations(book_id);
 "#;
 
+#[cfg(target_os = "android")]
+const DB_PER_CONNECTION_PRAGMAS: &str = r#"
+    PRAGMA busy_timeout = 5000;
+    PRAGMA cache_size = -2000;
+    PRAGMA mmap_size = 33554432;
+    PRAGMA temp_store = MEMORY;
+    PRAGMA journal_size_limit = 16777216;
+"#;
+
+#[cfg(not(target_os = "android"))]
 const DB_PER_CONNECTION_PRAGMAS: &str = r#"
     PRAGMA busy_timeout = 5000;
     PRAGMA cache_size = -8000;
@@ -1073,6 +1088,13 @@ pub fn sqlite_get_book_annotations_inner(
 pub fn sqlite_get_book_annotations(app: AppHandle, book_id: String) -> Result<Vec<String>, String> {
     with_connection(&app, |connection| {
         sqlite_get_book_annotations_inner(connection, &book_id)
+    })
+}
+
+#[tauri::command]
+pub fn sqlite_shrink_memory(app: AppHandle) -> Result<(), String> {
+    with_connection(&app, |connection| {
+        connection.execute_batch("PRAGMA shrink_memory;")
     })
 }
 
