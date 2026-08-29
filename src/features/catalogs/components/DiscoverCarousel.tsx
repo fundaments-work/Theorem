@@ -1,4 +1,4 @@
-import { memo, useRef } from "react";
+import { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { DiscoverSection } from "../../../core/services/DiscoverService";
 import type { OpdsEntry } from "../../../core/types";
@@ -9,7 +9,7 @@ export interface DiscoverCarouselProps {
     onSelectBook?: (entry: OpdsEntry) => void;
 }
 
-export const DiscoverCarousel = memo(function DiscoverCarousel({
+export function DiscoverCarousel({
     section,
     onSelectBook,
 }: DiscoverCarouselProps) {
@@ -69,4 +69,4 @@ export const DiscoverCarousel = memo(function DiscoverCarousel({
             </div>
         </section>
     );
-});
+}

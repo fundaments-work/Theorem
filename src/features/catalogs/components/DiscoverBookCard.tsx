@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { useState } from "react";
 import { Check, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "../../../core/lib/utils";
@@ -13,7 +13,7 @@ export interface DiscoverBookCardProps {
     className?: string;
 }
 
-export const DiscoverBookCard = memo(function DiscoverBookCard({
+export function DiscoverBookCard({
     entry,
     onSelect,
     className,
@@ -108,4 +108,4 @@ export const DiscoverBookCard = memo(function DiscoverBookCard({
             </div>
         </div>
     );
-});
+}

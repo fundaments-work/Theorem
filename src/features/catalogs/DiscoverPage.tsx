@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
     Globe,
+    Languages,
     Plus,
     RefreshCw,
     Search,
@@ -13,7 +14,7 @@ import { cn } from "../../core/lib/utils";
 import { useOpdsStore, useSettingsStore } from "../../core/store";
 import { DiscoverService, type DiscoverSection } from "../../core/services/DiscoverService";
 import type { OpdsEntry } from "../../core/types";
-import { Dropdown, Modal, ModalBody, ModalFooter, ModalHeader, PageLoader, TheoremBookCover } from "../../ui";
+import { Modal, ModalBody, ModalFooter, ModalHeader, PageLoader, TheoremBookCover } from "../../ui";
 import { DiscoverBookCard } from "./components/DiscoverBookCard";
 import { DiscoverCarousel } from "./components/DiscoverCarousel";
 import { DiscoverDetailModal } from "./components/DiscoverDetailModal";
@@ -281,17 +282,25 @@ export function DiscoverPage() {
                             )}
                         </form>
 
-                        {/* Official Theme-Matched Dropdown */}
-                        <div className="w-32 shrink-0">
-                            <Dropdown
-                                options={LANGUAGE_OPTIONS}
+                        {/* Language Selector: Native Crisp Theme Select */}
+                        <div className="flex items-center border border-[var(--color-border)] bg-[var(--color-surface)] h-8 px-2">
+                            <Languages className="w-3.5 h-3.5 text-[color:var(--color-text-muted)] mr-1.5 shrink-0" />
+                            <select
                                 value={discoverLanguage}
-                                onChange={handleLanguageChange}
-                                size="sm"
-                                variant="default"
-                                className="h-8 text-xs border border-[var(--color-border)]"
-                                align="right"
-                            />
+                                onChange={(e) => handleLanguageChange(e.target.value)}
+                                className="bg-transparent text-xs font-mono text-[color:var(--color-text-primary)] focus:outline-none cursor-pointer pr-1"
+                                aria-label="Select catalog language"
+                            >
+                                {LANGUAGE_OPTIONS.map((lang) => (
+                                    <option
+                                        key={lang.value}
+                                        value={lang.value}
+                                        className="bg-[var(--color-surface)] text-[color:var(--color-text-primary)]"
+                                    >
+                                        {lang.label}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         <button
@@ -514,3 +523,5 @@ export function DiscoverPage() {
         </div>
     );
 }
+
+export default DiscoverPage;
