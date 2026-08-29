@@ -288,7 +288,7 @@ export function WindowTitlebar({
         >
             <div className="h-12 lg:h-11 flex items-center gap-1 pl-3 pr-2">
                 
-                <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none lg:max-w-[400px]">
+                <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none lg:max-w-[360px]">
                     <button
                         onClick={onBack}
                         className={cn(ICON_BUTTON_CLASS, "mr-2 shrink-0")}
@@ -301,18 +301,43 @@ export function WindowTitlebar({
 
                     <div className="flex-1 min-w-0 text-left overflow-hidden pr-2">
                         <h1
-                            className="text-sm lg:text-sm font-bold lg:font-medium truncate leading-tight"
+                            className="text-xs sm:text-sm font-bold truncate leading-tight"
                             style={{ color: 'var(--reader-fg, var(--color-text))' }}
                         >
                             {metadata?.title || "Loading..."}
                         </h1>
-                        <div className="hidden sm:block text-[11px] lg:text-xs truncate opacity-70" style={{ color: 'var(--reader-fg, var(--color-text))' }}>
-                            {currentChapter} {formatLocation() ? `• ${formatLocation()}` : ''}
+                        <div
+                            className="flex items-center gap-1.5 text-[10px] sm:text-[11px] truncate mt-0.5"
+                            style={{ color: 'var(--reader-fg, var(--color-text))', opacity: 0.8 }}
+                        >
+                            {currentChapter && <span className="truncate max-w-[130px] sm:max-w-[180px]">{currentChapter}</span>}
+                            {currentChapter && formatLocation() && <span className="opacity-40">•</span>}
+                            {formatLocation() && <span className="font-mono font-medium">{formatLocation()}</span>}
                         </div>
                     </div>
                 </div>
 
-                <div className="hidden lg:block lg:flex-1" />
+                {/* Centered Desktop Reading Progress & Chapter Status */}
+                <div className="hidden lg:flex flex-1 items-center justify-center min-w-0 px-4 text-center pointer-events-none">
+                    <div className="flex items-center gap-2 max-w-lg truncate">
+                        {currentChapter && (
+                            <span
+                                className="text-xs font-medium truncate"
+                                style={{ color: 'var(--reader-fg, var(--color-text))', opacity: 0.85 }}
+                            >
+                                {currentChapter}
+                            </span>
+                        )}
+                        {formatLocation() && (
+                            <span
+                                className="text-[11px] font-mono font-medium shrink-0 px-2 py-0.5 rounded border border-[var(--color-border)] bg-[var(--color-surface-muted)]"
+                                style={{ color: 'var(--reader-fg, var(--color-text))' }}
+                            >
+                                {formatLocation()}
+                            </span>
+                        )}
+                    </div>
+                </div>
 
                 <div className="hidden sm:flex items-center gap-0.5 mr-0.5">
                     <ToolbarButton onClick={onToggleSearch} active={activePanel === "search"} title="Search" aria-label="Search">
