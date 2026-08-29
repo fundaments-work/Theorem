@@ -17,7 +17,7 @@ import {
     shouldUseExtractedAuthor,
 } from "../../core/lib/cover-extractor";
 import { extractFilenameFromPath, ensureFilenameForFormat } from "../../core/lib/import";
-import { isTauri, isTauriMobile, useAndroidBackButton } from "../../core/lib/env";
+import { isTauri, useAndroidBackButton } from "../../core/lib/env";
 import {
     useVocabularyStore,
     useLibraryStore,
@@ -1173,51 +1173,10 @@ const BookReaderPage = memo(function BookReaderPage() {
     const [dictionaryLookupError, setDictionaryLookupError] = useState<string | null>(null);
     const [dictionaryLookupLoading, setDictionaryLookupLoading] = useState(false);
     const [dictionaryLookupSaved, setDictionaryLookupSaved] = useState(false);
-
-    useEffect(() => {
-        if (typeof window === "undefined" || isTauriMobile()) {
-            return;
-        }
-
-        const state = window.history.state;
-        
-        if (!(state && typeof state === "object" && state.__theorem_back === true)) {
-            window.history.pushState(
-                {
-                    ...(state && typeof state === "object" ? state : {}),
-                    __theorem_back: true,
-                },
-                "",
-            );
-        }
-
-        const handlePopState = (_event: PopStateEvent) => {
-            
-            if (useUIStore.getState().currentRoute === "reader") {
-                if (handleNavBackRef.current()) {
-                    const currentState = window.history.state;
-                    window.history.pushState(
-                        {
-                            ...(currentState && typeof currentState === "object" ? currentState : {}),
-                            __theorem_back: true,
-                        },
-                        "",
-                    );
-                    return;
-                }
-                flushPendingProgressUpdate();
-                setRoute("library");
-            }
-        };
-
-        window.addEventListener("popstate", handlePopState);
-        return () => {
-            window.removeEventListener("popstate", handlePopState);
-        };
-    }, [setRoute, flushPendingProgressUpdate]);
+    const [canGoBackState, setCanGoBackState] = useState(false);
+    const [canGoForwardState, setCanGoForwardState] = useState(false);
 
     const handleBack = useCallback(() => {
-        
         if (activePanel) {
             setActivePanel(null);
             return;
@@ -1234,13 +1193,7 @@ const BookReaderPage = memo(function BookReaderPage() {
         }
 
         flushPendingProgressUpdate();
-        
-        if (typeof window !== "undefined" && window.history.length > 1) {
-            window.history.back();
-        } else {
-            
-            setRoute("library");
-        }
+        setRoute("library");
     }, [activePanel, showColorPicker, showNoteEditor, setRoute, flushPendingProgressUpdate]);
 
     const handleNavBack = useCallback((): boolean => {
@@ -1256,12 +1209,17 @@ const BookReaderPage = memo(function BookReaderPage() {
             setActivePanel(null);
             return true;
         }
+        if (speedReadMode) {
+            setSpeedReadMode(false);
+            setSpeedReadText("");
+            return true;
+        }
         if (!isPdfFormat && readerRef.current?.canGoBack) {
             readerRef.current.goBack();
             return true;
         }
         return false;
-    }, [showColorPicker, setShowColorPicker, showNoteEditor, setShowNoteEditor, activePanel, setActivePanel, isPdfFormat]);
+    }, [showColorPicker, setShowColorPicker, showNoteEditor, setShowNoteEditor, activePanel, setActivePanel, speedReadMode, setSpeedReadMode, isPdfFormat]);
 
     const handleNavBackRef = useRef(handleNavBack);
     handleNavBackRef.current = handleNavBack;
@@ -2220,6 +2178,10 @@ const BookReaderPage = memo(function BookReaderPage() {
                     metadata={metadata}
                     location={location}
                     onBack={handleBack}
+                    canGoBack={canGoBackState}
+                    canGoForward={canGoForwardState}
+                    onGoBack={() => readerRef.current?.goBack()}
+                    onGoForward={() => readerRef.current?.goForward()}
                     onPrevPage={() => readerRef.current?.prev()}
                     onNextPage={() => readerRef.current?.next()}
                     onToggleToc={() => togglePanel('toc')}
@@ -2301,6 +2263,10 @@ const BookReaderPage = memo(function BookReaderPage() {
                         onViewportTap={handleViewportTap}
                         shouldForceViewportTap={shouldForceViewportTap}
                         onZoomGestureChange={handleZoomGestureChange}
+                        onHistoryChange={({ canGoBack, canGoForward }) => {
+                            setCanGoBackState(canGoBack);
+                            setCanGoForwardState(canGoForward);
+                        }}
                         className="w-full h-full"
                     />
                 )}

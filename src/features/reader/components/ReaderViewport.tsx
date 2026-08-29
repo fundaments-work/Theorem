@@ -56,6 +56,7 @@ interface ReaderViewportProps {
     onZoomGestureChange?: (zoom: number) => void;
     initialLocation?: string;
     savedLocations?: string;
+    onHistoryChange?: (state: { canGoBack: boolean; canGoForward: boolean }) => void;
     
     nativeFilePath?: string;
 }
@@ -75,6 +76,7 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
     onZoomGestureChange,
     initialLocation,
     savedLocations,
+    onHistoryChange,
     nativeFilePath,
 }, ref) => {
     
@@ -173,6 +175,10 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         getNextPageTextForTts: () => getNextPageTextForTts(),
         getSectionFractions: () => getEngine()?.getSectionFractions() ?? [],
     }), [next, prev, goToFraction, goTo, goBack, goForward, canGoBack, canGoForward, search, clearSearch, addHighlight, addAnnotation, removeHighlight, loadAnnotations, clearSelection, getVisibleTextForTts, getNextPageTextForTts, getEngine]);
+
+    useEffect(() => {
+        onHistoryChange?.({ canGoBack, canGoForward });
+    }, [canGoBack, canGoForward, onHistoryChange]);
 
     useEffect(() => {
         return () => {
