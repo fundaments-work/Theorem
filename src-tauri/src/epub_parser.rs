@@ -50,12 +50,14 @@ pub(crate) fn strip_xml_bom(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
         if big_endian || little_endian {
             let body = &bytes[2..];
             let units: Vec<u16> = body
-                .chunks_exact(2)
-                .map(|c| {
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|&[b0, b1]| {
                     if big_endian {
-                        u16::from_be_bytes([c[0], c[1]])
+                        u16::from_be_bytes([b0, b1])
                     } else {
-                        u16::from_le_bytes([c[0], c[1]])
+                        u16::from_le_bytes([b0, b1])
                     }
                 })
                 .collect();
