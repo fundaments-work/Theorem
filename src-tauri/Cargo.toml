@@ -71,7 +71,9 @@ iroh-docs = "0.101.0"
 iroh-blobs = { version = "0.103.0", features = ["fs-store"] }
 iroh-gossip = "0.101.0"
 iroh-mdns-address-lookup = "0.4.0"
-# Platform-specific
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(not(target_os = "android"))'.dependencies]
 unrar-ng = "0.7.7"
 

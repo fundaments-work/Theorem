@@ -849,6 +849,11 @@ fn tts_get_voices(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, Strin
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+
     #[cfg(target_os = "linux")]
     apply_linux_webkit_workarounds();
 
@@ -865,7 +870,17 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("Theorem".to_string()),
+                    }),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+                ])
+                .build(),
+        )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_mobile_folder_scan::init())
         .plugin(tauri_plugin_android_tts_audio::init());
@@ -892,6 +907,7 @@ pub fn run() {
                 .or_else(|_| app.path().app_cache_dir())
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
 
+            eprintln!("[startup] Running database schema migrations...");
             if let Err(e) = database::run_schema_migrations(app.handle()) {
                 eprintln!("[database] Schema migration failed: {e}");
             }
@@ -900,6 +916,7 @@ pub fn run() {
                 .or_else(|_| std::env::var("COMPUTERNAME"))
                 .unwrap_or_else(|_| "Theorem Device".to_string());
 
+            eprintln!("[startup] Initializing device sync for: {}", device_name);
             match sync_commands::init_sync(app_data_dir, device_name, app.handle().clone()) {
                 Ok(sync_state) => {
                     app.manage(sync_state);
@@ -966,6 +983,7 @@ pub fn run() {
                     .plugin(tauri_plugin_updater::Builder::new().build())?;
             }
 
+            eprintln!("[startup] Theorem ready.");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
