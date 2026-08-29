@@ -75,9 +75,10 @@ export function TheoremBookCover({
             </div>
 
             {/* Bottom Emblem */}
-            <div className="relative z-10 flex items-center justify-center gap-1.5 pb-1">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2">
-                    <polygon points="12 2 2 22 22 22" />
+            <div className="relative z-10 flex items-center justify-center gap-2 pb-1">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="0" y="0" width="3" height="24" fill="#a1a1aa" />
+                    <rect x="0" y="10.5" width="15" height="3" fill="#a1a1aa" />
                 </svg>
                 <span className="text-[7px] tracking-[0.25em] uppercase font-bold text-zinc-400">
                     THEOREM

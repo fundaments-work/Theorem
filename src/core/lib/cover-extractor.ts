@@ -303,8 +303,11 @@ export function buildFallbackCoverSvg(title: string, author: string): string {
   </g>
 
   <!-- Bottom emblem -->
-  <path d="M 430 1190 L 450 1160 L 470 1190 Z" fill="none" stroke="#52525b" stroke-width="1.5"/>
-  <text x="450" y="1230" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" fill="#52525b" font-weight="600" letter-spacing="4">THEOREM</text>
+  <g transform="translate(442, 1170)">
+    <rect x="0" y="0" width="3.5" height="28" fill="#71717a"/>
+    <rect x="0" y="12" width="18" height="3.5" fill="#71717a"/>
+  </g>
+  <text x="450" y="1230" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" fill="#71717a" font-weight="700" letter-spacing="4">THEOREM</text>
 </svg>`;
 }
 

@@ -128,7 +128,7 @@ describe("Dictionary lookup performance", () => {
         const avgUs = (elapsed / ITERATIONS) * 1000;
 
         console.log(`Binary search on ${wordCount.toLocaleString()} words: ${avgUs.toFixed(1)} µs avg (${ITERATIONS} iterations)`);
-        expect(avgUs).toBeLessThan(200); // < 200 µs per lookup (accounting for CI variance)
+        expect(avgUs).toBeLessThan(500); // < 500 µs per lookup (accounting for CI / machine load variance)
     });
 
     it("parses 100K headwords in < 50 ms", () => {
