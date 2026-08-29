@@ -321,13 +321,13 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     const isListView = viewMode === "list";
     const isCompactView = viewMode === "compact";
 
-    const [cols, setCols] = useState(4);
+    const [cols, setCols] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1280 ? 7 : 4);
 
     useEffect(() => {
         const el = scrollRef.current;
         if (!el) return;
         const compute = () => {
-            const w = el.clientWidth;
+            const w = el.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1280);
             if (isListView) return 1;
             if (isCompactView) {
                 if (w >= 1280) return 6;
@@ -398,7 +398,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
         updateSettings({ libraryViewMode: nextMode });
     };
 
-    if (shelfBooks.length === 0) {
+    if (shelf.bookIds.length === 0) {
         return <EmptyShelfDetail shelfName={shelf.name} onAddBooks={handleGoToLibrary} />;
     }
 
@@ -448,6 +448,16 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             </div>
 
             <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-smooth">
+                {shelfBooks.length === 0 ? (
+                    <div className="text-center py-16 border-2 border-dashed border-[var(--color-border)]">
+                        <p className="text-[color:var(--color-text-muted)] font-bold uppercase text-xs tracking-widest">No documents match criteria</p>
+                        {searchQuery && (
+                            <button onClick={() => useUIStore.getState().setSearchQuery("")} className="mt-4 text-[10px] font-black uppercase text-[color:var(--color-accent)] hover:underline tracking-tighter">
+                                [ RESET SEARCH ]
+                            </button>
+                        )}
+                    </div>
+                ) : (
                 <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
                     <div style={{ paddingTop: `${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px` }}>
                         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -504,6 +514,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                         })}
                     </div>
                 </div>
+                )}
             </div>
             <BookInfoModal
                 book={infoModalBook}
@@ -699,7 +710,7 @@ export function ShelvesPage() {
                     </p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
                     {filteredShelves.map((shelf) => (
                         <ShelfCard
                             key={shelf.id}

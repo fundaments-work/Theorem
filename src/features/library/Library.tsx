@@ -1185,13 +1185,13 @@ export function LibraryPage() {
     const isListView = settings.libraryViewMode === "list";
     const isCompactView = settings.libraryViewMode === "compact";
 
-    const [observedCols, setObservedCols] = useState(4);
+    const [observedCols, setObservedCols] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1280 ? 7 : 4);
 
     useEffect(() => {
         const el = scrollRef.current;
         if (!el) return;
         const compute = () => {
-            const w = el.clientWidth;
+            const w = el.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1280);
             if (isListView) return 1;
             if (isCompactView) {
                 if (w >= 1280) return 6;
