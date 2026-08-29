@@ -37,10 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`2xl:grid-cols-8`, `xl:grid-cols-7`, `lg:grid-cols-5`, `md:grid-cols-4`,
   `sm:grid-cols-3`, `grid-cols-2`), unifying view mode preferences and fixing
   grid collapsing to 2 columns on search.
-- **Linux broken pipe SIGPIPE & startup diagnostics (fixes #70)** — Restored
-  default `SIGPIPE` signal disposition (`libc::signal(libc::SIGPIPE, libc::SIG_DFL)`)
-  on Unix startup to prevent `SIGABRT` crashes when piping stdout (e.g. `theorem | head`),
-  and added startup lifecycle diagnostics and structured file logging targets.
+- **Startup diagnostics & logging** — Added explicit startup lifecycle
+  breadcrumbs and structured file logging targets to aid troubleshooting early exits.
 - **Yearly Book Goal undercounted** — The yearly goal showed far fewer books
   than were actually completed because the counter was only incremented on the
   reader's auto-completion path; books marked "Finish" manually (library

@@ -849,11 +849,6 @@ fn tts_get_voices(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, Strin
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
-    }
-
     #[cfg(target_os = "linux")]
     apply_linux_webkit_workarounds();
 
