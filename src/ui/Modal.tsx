@@ -1,7 +1,8 @@
 
-import { useId } from "react";
+import { useCallback, useId } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { cn } from "../core/lib/utils";
+import { useAndroidBackButton } from "../core/lib/env";
 
 export interface ModalProps {
     isOpen: boolean;
@@ -31,6 +32,16 @@ export function Modal({
 }: ModalProps) {
     const autoHeaderId = useId();
     const headerId = ariaLabelledby || autoHeaderId;
+
+    useAndroidBackButton(
+        useCallback(() => {
+            if (isOpen) {
+                onClose();
+                return true;
+            }
+            return false;
+        }, [isOpen, onClose])
+    );
 
     return (
         <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>

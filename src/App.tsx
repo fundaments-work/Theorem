@@ -186,10 +186,10 @@ function App() {
 
             const handled = dispatchBackAction();
             if (handled) {
-                return;
-            }
-
-            if (state && state.__theorem_back) {
+                window.history.pushState(
+                    { route: currentUIState.currentRoute, bookId: currentUIState.currentBookId },
+                    "",
+                );
                 return;
             }
 
