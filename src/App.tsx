@@ -13,6 +13,7 @@ import { initI18n } from "./core/lib/i18n";
 import { initLogger } from "./core/lib/debug";
 import { prewarmPdfJsRuntime } from "./core/lib/pdfjs-runtime";
 import { prewarmFoliateRuntime } from "./core/lib/foliate-runtime";
+import { dispatchBackAction } from "./core/lib/back-navigation";
 import { OnboardingFlow } from "./features/onboarding";
 import { Toaster } from "sonner";
 
@@ -180,20 +181,26 @@ function App() {
             const state = event.state;
             const currentUIState = useUIStore.getState();
 
-            if (state && state.__theorem_back) {
+            const handled = dispatchBackAction();
+            if (handled) {
+                window.history.pushState(
+                    { route: currentUIState.currentRoute, bookId: currentUIState.currentBookId },
+                    "",
+                );
+                return;
+            }
+
+            if (currentUIState.currentRoute === "reader") {
+                setRoute("library", undefined, false);
                 return;
             }
 
             if (state && state.route) {
-                
                 if (state.route !== currentUIState.currentRoute || state.bookId !== currentUIState.currentBookId) {
                     setRoute(state.route, state.bookId, false);
                 }
-            } else if (!state) {
-                
-                if (currentUIState.currentRoute !== "library") {
-                    setRoute("library", undefined, false);
-                }
+            } else if (currentUIState.currentRoute !== "library") {
+                setRoute("library", undefined, false);
             }
         };
 

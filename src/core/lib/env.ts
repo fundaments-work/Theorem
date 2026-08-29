@@ -40,6 +40,8 @@ export function isTouchDevice(): boolean {
     return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
+import { registerBackHandler } from './back-navigation';
+
 export function useAndroidBackButton(handler: () => boolean) {
     const handlerRef = useRef(handler);
 
@@ -48,27 +50,6 @@ export function useAndroidBackButton(handler: () => boolean) {
     }, [handler]);
 
     useEffect(() => {
-        if (!isTauriMobile()) return;
-
-        window.history.pushState({ __theorem_back: true }, '');
-
-        const handlePopState = (_event: PopStateEvent) => {
-            
-            const handled = handlerRef.current();
-
-            if (handled) {
-                
-                window.history.pushState({ __theorem_back: true }, '');
-            } else {
-                
-            }
-        };
-
-        window.addEventListener('popstate', handlePopState);
-
-        return () => {
-            window.removeEventListener('popstate', handlePopState);
-            
-        };
+        return registerBackHandler(() => handlerRef.current());
     }, []); 
 }
