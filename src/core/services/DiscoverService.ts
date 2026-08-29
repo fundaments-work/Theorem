@@ -123,6 +123,7 @@ function filterActualBooks(entries: OpdsEntry[]): OpdsEntry[] {
 export const DiscoverService = {
     async loadCuratedSections(forceRefresh = false, language = "en"): Promise<DiscoverSection[]> {
         const results: DiscoverSection[] = [];
+        const isNonEnglish = Boolean(language && language !== "en" && language !== "all");
 
         await Promise.all(
             CURATED_FEEDS.map(async (feedConfig) => {
@@ -134,30 +135,62 @@ export const DiscoverService = {
                 }
 
                 let targetUrl = feedConfig.url;
-                if (language && language !== "all" && targetUrl.includes("gutenberg.org")) {
+                if (isNonEnglish && feedConfig.id === "new-releases") {
+                    // Standard Ebooks is English-only; use Gutenberg latest releases for other languages
+                    targetUrl = `https://www.gutenberg.org/ebooks/search.opds/?sort_order=release_date&languages=${encodeURIComponent(language)}`;
+                } else if (language && language !== "all" && targetUrl.includes("gutenberg.org")) {
                     const separator = targetUrl.includes("?") ? "&" : "?";
                     targetUrl = `${targetUrl}${separator}languages=${encodeURIComponent(language)}`;
                 }
 
-                const feed = await fetchFeedSafe(targetUrl);
-                if (feed && feed.entries.length > 0) {
-                    const validBooks = filterActualBooks(feed.entries);
-                    if (validBooks.length > 0) {
-                        const section: DiscoverSection = {
-                            id: feedConfig.id,
-                            title: feedConfig.title,
-                            subtitle: feedConfig.subtitle,
-                            books: validBooks.slice(0, 20),
-                        };
-                        sectionCache.set(cacheKey, { data: section, timestamp: Date.now() });
-                        results.push(section);
+                try {
+                    const feed = await fetchFeedSafe(targetUrl);
+                    if (feed && feed.entries && feed.entries.length > 0) {
+                        const validBooks = filterActualBooks(feed.entries);
+                        if (validBooks.length > 0) {
+                            const section: DiscoverSection = {
+                                id: feedConfig.id,
+                                title: feedConfig.title,
+                                subtitle: feedConfig.subtitle,
+                                books: validBooks.slice(0, 20),
+                            };
+                            sectionCache.set(cacheKey, { data: section, timestamp: Date.now() });
+                            results.push(section);
+                        }
                     }
+                } catch (err) {
+                    console.warn(`Error loading section ${feedConfig.id}:`, err);
                 }
             })
         );
 
+        // If specific categories returned empty for this language, fallback to top downloads
+        if (results.length === 0) {
+            try {
+                let fallbackUrl = "https://www.gutenberg.org/ebooks/search.opds/?sort_order=downloads";
+                if (language && language !== "all") {
+                    fallbackUrl += `&languages=${encodeURIComponent(language)}`;
+                }
+                const feed = await fetchFeedSafe(fallbackUrl);
+                if (feed && feed.entries && feed.entries.length > 0) {
+                    const validBooks = filterActualBooks(feed.entries);
+                    if (validBooks.length > 0) {
+                        results.push({
+                            id: "essentials",
+                            title: "Top Classics",
+                            subtitle: `Popular public domain works (${language.toUpperCase()}).`,
+                            books: validBooks.slice(0, 25),
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn("Error loading fallback language section:", err);
+            }
+        }
+
         // Maintain display order based on CURATED_FEEDS
-        return CURATED_FEEDS.map((f) => results.find((r) => r.id === f.id)).filter(Boolean) as DiscoverSection[];
+        const ordered = CURATED_FEEDS.map((f) => results.find((r) => r.id === f.id)).filter(Boolean) as DiscoverSection[];
+        return ordered.length > 0 ? ordered : results;
     },
 
     async search(query: string, language = "en"): Promise<OpdsEntry[]> {
