@@ -5,10 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - 2026-08-18
+## [1.2.0] - 2026-08-29
+
+### Added
+
+- **Library "Unshelved" filter** — Added an "Unshelved" quick filter option to
+  both desktop and mobile library filter menus to easily find books that are not
+  assigned to any shelf or collection.
+- **Google Play Books-style jump navigation** — Following links, citations,
+  footnotes, TOC chapters, or bookmarks now features location undo/redo controls
+  (`<Undo2 />` / `<Redo2 />`) directly in the top titlebar when controls are
+  revealed, along with `Alt+Left` / `Alt+Right` keyboard shortcuts. The reading
+  viewport remains 100% clean and distraction-free with zero floating badges.
 
 ### Fixed
 
+- **Centralized back navigation & mobile gestures** — Fixed the Android hardware
+  and gesture back button navigation via a centralized LIFO handler stack.
+  Back actions cleanly dismiss open modals and overlays, step back through
+  reading jumps, and exit back to the library or OS at the root.
+- **Reader Titlebar Back Button** — Clicking the top-left back button in the
+  reader titlebar now directly flushes progress and returns to the Library
+  instead of stepping backward through previous page turns.
+- **Desktop blank page on TOC / menu navigation** — Fixed an issue in the Foliate
+  paginator runtime where navigating to a chapter from the Table of Contents or
+  menu on desktop landed on a blank padding page (page 0), requiring a manual page
+  turn before text rendered. Paged navigation now anchors directly to content
+  page $\ge 1$.
+- **Shelves responsive grid alignment** — Synchronized Shelves and Shelf Detail
+  column calculations and CSS responsive grid breakpoints with the Library page
+  (`2xl:grid-cols-8`, `xl:grid-cols-7`, `lg:grid-cols-5`, `md:grid-cols-4`,
+  `sm:grid-cols-3`, `grid-cols-2`), unifying view mode preferences and fixing
+  grid collapsing to 2 columns on search.
+- **Linux broken pipe SIGPIPE & startup diagnostics (fixes #70)** — Restored
+  default `SIGPIPE` signal disposition (`libc::signal(libc::SIGPIPE, libc::SIG_DFL)`)
+  on Unix startup to prevent `SIGABRT` crashes when piping stdout (e.g. `theorem | head`),
+  and added startup lifecycle diagnostics and structured file logging targets.
 - **Yearly Book Goal undercounted** — The yearly goal showed far fewer books
   than were actually completed because the counter was only incremented on the
   reader's auto-completion path; books marked "Finish" manually (library
