@@ -246,8 +246,9 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
     const setRoute = useUIStore((state) => state.setRoute);
     const searchQuery = useUIStore((state) => state.searchQuery);
     const settings = useSettingsStore((state) => state.settings);
+    const updateSettings = useSettingsStore((state) => state.updateSettings);
     
-    const [viewMode, setViewMode] = useState<LibraryViewMode>("grid");
+    const viewMode = settings.libraryViewMode;
 
     const [infoModalBook, setInfoModalBook] = useState<Book | null>(null);
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
@@ -329,13 +330,13 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
             const w = el.clientWidth;
             if (isListView) return 1;
             if (isCompactView) {
-                if (w >= 1280) return 8;
-                if (w >= 1024) return 6;
-                if (w >= 768) return 5;
+                if (w >= 1280) return 6;
+                if (w >= 1024) return 5;
                 if (w >= 640) return 4;
                 return 3;
             }
-            if (w >= 1280) return 6;
+            if (w >= 1536) return 8;
+            if (w >= 1280) return 7;
             if (w >= 1024) return 5;
             if (w >= 768) return 4;
             if (w >= 640) return 3;
@@ -357,7 +358,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
         if (isListView) return 70;
         const el = scrollRef.current;
         if (!el) return 300;
-        const gap = isCompactView ? 12 : 24;
+        const gap = isCompactView ? 8 : 20;
         const cardW = Math.max(1, (el.clientWidth - (effectiveCols - 1) * gap) / Math.max(effectiveCols, 1));
         const textH = isCompactView ? 0 : 72;
         return Math.round(cardW * 1.5 + textH + gap);
@@ -394,7 +395,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
         const modes: LibraryViewMode[] = ["grid", "list", "compact"];
         const currentIndex = modes.indexOf(viewMode);
         const nextMode = modes[(currentIndex + 1) % modes.length];
-        setViewMode(nextMode);
+        updateSettings({ libraryViewMode: nextMode });
     };
 
     if (shelfBooks.length === 0) {
@@ -477,7 +478,7 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                             return (
                                 <div key={virtualRow.key} data-index={virtualRow.index} ref={rowVirtualizer.measureElement}>
                                     {isListView ? (
-                                        <div className="pb-2">
+                                        <div className="pb-1">
                                             <MemoizedBookCard
                                                 key={rowItems[0].id} book={rowItems[0]} viewMode={viewMode}
                                                 isSelecting={false} isSelected={false} onToggleSelect={() => {}}
@@ -486,8 +487,8 @@ function ShelfDetail({ shelf, onBack }: ShelfDetailProps) {
                                         </div>
                                     ) : (
                                         <div className={isCompactView
-                                            ? "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 pb-3"
-                                            : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10 pb-10"
+                                            ? "grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 pb-2"
+                                            : "grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 pb-5"
                                         }>
                                             {rowItems.map((book) => (
                                                 <MemoizedBookCard
@@ -698,7 +699,7 @@ export function ShelvesPage() {
                     </p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
                     {filteredShelves.map((shelf) => (
                         <ShelfCard
                             key={shelf.id}
