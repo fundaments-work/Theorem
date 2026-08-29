@@ -80,6 +80,41 @@ async function fetchBinary(url: string): Promise<ArrayBuffer> {
     return await res.arrayBuffer();
 }
 
+function filterActualBooks(entries: OpdsEntry[]): OpdsEntry[] {
+    const invalidKeywords = new Set([
+        "authors",
+        "author",
+        "bookshelves",
+        "bookshelf",
+        "subjects",
+        "subject",
+        "categories",
+        "category",
+        "languages",
+        "language",
+        "popular",
+        "latest",
+        "search",
+    ]);
+
+    return entries
+        .filter((entry) => {
+            if (entry.isNavigation) return false;
+            const lower = (entry.title || "").toLowerCase().trim();
+            if (invalidKeywords.has(lower)) return false;
+            if (!entry.title || entry.title.trim().length < 2) return false;
+            return true;
+        })
+        .map((entry) => {
+            let cleanTitle = entry.title;
+            cleanTitle = cleanTitle.replace(/\s+by\s+.*$/i, "").trim();
+            return {
+                ...entry,
+                title: cleanTitle || entry.title,
+            };
+        });
+}
+
 export const DiscoverService = {
     async loadCuratedSections(forceRefresh = false): Promise<DiscoverSection[]> {
         const results: DiscoverSection[] = [];
@@ -94,14 +129,17 @@ export const DiscoverService = {
 
                 const feed = await fetchFeedSafe(feedConfig.url);
                 if (feed && feed.entries.length > 0) {
-                    const section: DiscoverSection = {
-                        id: feedConfig.id,
-                        title: feedConfig.title,
-                        subtitle: feedConfig.subtitle,
-                        books: feed.entries.slice(0, 20),
-                    };
-                    sectionCache.set(feedConfig.id, { data: section, timestamp: Date.now() });
-                    results.push(section);
+                    const validBooks = filterActualBooks(feed.entries);
+                    if (validBooks.length > 0) {
+                        const section: DiscoverSection = {
+                            id: feedConfig.id,
+                            title: feedConfig.title,
+                            subtitle: feedConfig.subtitle,
+                            books: validBooks.slice(0, 20),
+                        };
+                        sectionCache.set(feedConfig.id, { data: section, timestamp: Date.now() });
+                        results.push(section);
+                    }
                 }
             })
         );
@@ -116,7 +154,7 @@ export const DiscoverService = {
 
         const gutenbergSearchUrl = `https://www.gutenberg.org/ebooks/search.opds/?query=${encodeURIComponent(clean)}`;
         const feed = await fetchFeedSafe(gutenbergSearchUrl);
-        return feed ? feed.entries : [];
+        return feed ? filterActualBooks(feed.entries) : [];
     },
 
     async downloadBook(

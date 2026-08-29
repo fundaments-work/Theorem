@@ -13,3 +13,5 @@ export { PageHeader } from "./PageHeader";
 export { RouteErrorBoundary } from "./RouteErrorBoundary";
 export { Spinner, PageLoader, GlobalLoader, SplashScreen } from "./loading";
 export type { SpinnerProps, PageLoaderProps, SplashScreenProps } from "./loading";
+export { TheoremBookCover } from "./TheoremBookCover";
+export type { TheoremBookCoverProps } from "./TheoremBookCover";

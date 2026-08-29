@@ -267,38 +267,44 @@ async function normalizeCoverBlob(rawCover: unknown, fallbackMimeType: string): 
 export function buildFallbackCoverSvg(title: string, author: string): string {
     const normalizedTitle = (title || 'Untitled').trim();
     const normalizedAuthor = (author || 'Unknown Author').trim();
-    const initials = normalizedTitle
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((word) => word.charAt(0).toUpperCase())
-        .join('')
-        .slice(0, 2) || 'BK';
 
     const escapedTitle = normalizedTitle
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .slice(0, 48);
+        .slice(0, 60);
     const escapedAuthor = normalizedAuthor
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .slice(0, 42);
+        .slice(0, 48);
 
     return `
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1300" viewBox="0 0 900 1300" role="img" aria-label="Book cover fallback">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#162334"/>
-      <stop offset="100%" stop-color="#0f6e9f"/>
-    </linearGradient>
-  </defs>
-  <rect width="900" height="1300" fill="url(#bg)"/>
-  <rect x="72" y="72" width="756" height="1156" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="2"/>
-  <circle cx="450" cy="380" r="160" fill="rgba(255,255,255,0.16)"/>
-  <text x="450" y="420" text-anchor="middle" font-family="Georgia, serif" font-size="120" fill="#ffffff" font-weight="700">${initials}</text>
-  <text x="450" y="710" text-anchor="middle" font-family="Georgia, serif" font-size="54" fill="#ffffff" font-weight="600">${escapedTitle}</text>
-  <text x="450" y="770" text-anchor="middle" font-family="Georgia, serif" font-size="32" fill="rgba(255,255,255,0.82)">${escapedAuthor}</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1350" viewBox="0 0 900 1350" role="img" aria-label="Book cover">
+  <rect width="900" height="1350" fill="#09090b"/>
+  <!-- Outer hairline frame -->
+  <rect x="54" y="54" width="792" height="1242" fill="none" stroke="#27272a" stroke-width="2"/>
+  <!-- Inner double rule -->
+  <rect x="72" y="72" width="756" height="1206" fill="none" stroke="#18181b" stroke-width="1"/>
+  
+  <!-- Header series mark -->
+  <text x="450" y="160" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" fill="#71717a" font-weight="700" letter-spacing="8">THEOREM CLASSICS</text>
+  <line x1="360" y1="190" x2="540" y2="190" stroke="#3f3f46" stroke-width="1.5"/>
+
+  <!-- Title & Author Block -->
+  <g transform="translate(450, 620)">
+    <text x="0" y="-40" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="52" fill="#ffffff" font-weight="700" letter-spacing="1">
+      ${escapedTitle}
+    </text>
+    <line x1="-80" y1="40" x2="80" y2="40" stroke="#52525b" stroke-width="1"/>
+    <text x="0" y="90" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="24" fill="#a1a1aa" font-weight="500" letter-spacing="3">
+      ${escapedAuthor}
+    </text>
+  </g>
+
+  <!-- Bottom emblem -->
+  <path d="M 430 1190 L 450 1160 L 470 1190 Z" fill="none" stroke="#52525b" stroke-width="1.5"/>
+  <text x="450" y="1230" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" fill="#52525b" font-weight="600" letter-spacing="4">THEOREM</text>
 </svg>`;
 }
 

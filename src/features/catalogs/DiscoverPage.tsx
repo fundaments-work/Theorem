@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-    BookOpen,
     Globe,
     Plus,
     RefreshCw,
@@ -13,7 +12,7 @@ import { cn } from "../../core/lib/utils";
 import { useOpdsStore } from "../../core/store";
 import { DiscoverService, type DiscoverSection } from "../../core/services/DiscoverService";
 import type { OpdsEntry } from "../../core/types";
-import { Modal, ModalBody, ModalFooter, ModalHeader, PageLoader } from "../../ui";
+import { Modal, ModalBody, ModalFooter, ModalHeader, PageLoader, TheoremBookCover } from "../../ui";
 import { DiscoverBookCard } from "./components/DiscoverBookCard";
 import { DiscoverCarousel } from "./components/DiscoverCarousel";
 import { DiscoverDetailModal } from "./components/DiscoverDetailModal";
@@ -214,18 +213,13 @@ export function DiscoverPage() {
                             className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-gradient-to-br from-[var(--color-surface)] via-[var(--color-surface-muted)] to-[var(--color-surface)] p-6 sm:p-8 cursor-pointer group shadow-sm hover:shadow-md transition-all duration-200"
                         >
                             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-8">
-                                <div className="aspect-[2/3] w-32 sm:w-40 shrink-0 rounded-lg overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)] shadow-lg group-hover:scale-105 transition-transform duration-300">
-                                    {heroBook.coverUrl || heroBook.thumbnailUrl ? (
-                                        <img
-                                            src={heroBook.coverUrl || heroBook.thumbnailUrl}
-                                            alt={heroBook.title}
-                                            className="h-full w-full object-cover"
-                                        />
-                                    ) : (
-                                        <div className="flex items-center justify-center h-full w-full p-4">
-                                            <BookOpen className="h-10 w-10 text-[color:var(--color-text-muted)]" />
-                                        </div>
-                                    )}
+                                <div className="aspect-[2/3] w-32 sm:w-40 shrink-0 rounded-lg overflow-hidden border border-[var(--color-border)] shadow-lg group-hover:scale-105 transition-transform duration-300">
+                                    <TheoremBookCover
+                                        title={heroBook.title}
+                                        author={heroBook.author}
+                                        coverUrl={heroBook.coverUrl || heroBook.thumbnailUrl}
+                                        badge="FEATURED CLASSIC"
+                                    />
                                 </div>
 
                                 <div className="flex flex-col justify-between space-y-4 text-center sm:text-left min-w-0 flex-1">

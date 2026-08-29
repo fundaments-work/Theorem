@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useLibraryStore, useUIStore } from "../../../core/store";
 import { DiscoverService } from "../../../core/services/DiscoverService";
 import type { OpdsEntry } from "../../../core/types";
-import { Modal, ModalBody, ModalFooter, ModalHeader } from "../../../ui";
+import { Modal, ModalBody, ModalFooter, ModalHeader, TheoremBookCover } from "../../../ui";
 
 export interface DiscoverDetailModalProps {
     entry: OpdsEntry | null;
@@ -52,18 +52,12 @@ export function DiscoverDetailModal({ entry, onClose }: DiscoverDetailModalProps
             <ModalBody className="space-y-5">
                 <div className="flex flex-col sm:flex-row gap-5">
                     {/* Cover Preview */}
-                    <div className="aspect-[2/3] w-28 sm:w-32 shrink-0 rounded-lg overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)] shadow-md">
-                        {entry.coverUrl || entry.thumbnailUrl ? (
-                            <img
-                                src={entry.coverUrl || entry.thumbnailUrl}
-                                alt={entry.title}
-                                className="h-full w-full object-cover"
-                            />
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-full w-full p-3 text-center">
-                                <BookOpen className="h-8 w-8 text-[color:var(--color-text-muted)] mb-1" />
-                            </div>
-                        )}
+                    <div className="aspect-[2/3] w-28 sm:w-32 shrink-0 rounded-lg overflow-hidden border border-[var(--color-border)] shadow-md">
+                        <TheoremBookCover
+                            title={entry.title}
+                            author={entry.author}
+                            coverUrl={entry.coverUrl || entry.thumbnailUrl}
+                        />
                     </div>
 
                     {/* Metadata Details */}

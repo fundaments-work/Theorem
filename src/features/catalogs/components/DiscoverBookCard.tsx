@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { BookOpen, Check, Download, Loader2 } from "lucide-react";
+import { Check, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "../../../core/lib/utils";
 import { useLibraryStore, useUIStore } from "../../../core/store";
 import { DiscoverService } from "../../../core/services/DiscoverService";
 import type { OpdsEntry } from "../../../core/types";
+import { TheoremBookCover } from "../../../ui";
 
 export interface DiscoverBookCardProps {
     entry: OpdsEntry;
@@ -58,29 +59,19 @@ export function DiscoverBookCard({ entry, onSelect, className }: DiscoverBookCar
             )}
         >
             {/* Book Cover Container */}
-            <div className="relative aspect-[2/3] w-full rounded-lg overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)] shadow-sm group-hover:shadow-md group-hover:border-[var(--color-border-strong)] transition-all duration-200">
-                {entry.coverUrl || entry.thumbnailUrl ? (
-                    <img
-                        src={entry.thumbnailUrl || entry.coverUrl}
-                        alt={entry.title}
-                        loading="lazy"
-                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300 ease-out"
-                    />
-                ) : (
-                    <div className="flex flex-col items-center justify-center h-full w-full p-4 text-center bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-surface-muted)]">
-                        <BookOpen className="h-7 w-7 text-[color:var(--color-text-muted)] mb-2" />
-                        <span className="text-[11px] font-semibold text-[color:var(--color-text-primary)] line-clamp-3 leading-snug">
-                            {entry.title}
-                        </span>
-                    </div>
-                )}
+            <div className="relative aspect-[2/3] w-full rounded-lg overflow-hidden border border-[var(--color-border)] shadow-sm group-hover:shadow-md group-hover:border-[var(--color-border-strong)] transition-all duration-200">
+                <TheoremBookCover
+                    title={entry.title}
+                    author={entry.author}
+                    coverUrl={entry.coverUrl || entry.thumbnailUrl}
+                />
 
                 {/* Micro Action Button on Cover */}
                 <button
                     onClick={handleGet}
                     disabled={isDownloading}
                     className={cn(
-                        "absolute bottom-2.5 right-2.5 flex items-center justify-center rounded-full transition-all duration-200 shadow-md",
+                        "absolute bottom-2.5 right-2.5 z-20 flex items-center justify-center rounded-full transition-all duration-200 shadow-md",
                         existingBook
                             ? "h-7 px-2.5 bg-zinc-900 text-zinc-100 text-[10px] font-bold border border-zinc-700 hover:bg-black"
                             : "h-7 px-2.5 bg-white text-black text-[10px] font-bold hover:bg-neutral-200 active:scale-95"
