@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { RouteErrorBoundary, KeyboardShortcutsHelp, AlertDialog, PageLoader } from "./ui";
+import { RouteErrorBoundary, KeyboardShortcutsHelp, AlertDialog, PageLoader, SplashScreen } from "./ui";
 import { AppTitlebar, Sidebar, BottomNav } from "./shell";
 import { useUIStore, useLibraryStore, useSettingsStore } from "./core/store";
 import { isTauriDesktop, isTauri, isMobile } from "./core/lib/env";
@@ -473,7 +473,7 @@ function App() {
     };
 
     if (!storesHydrated) {
-        return <div className="h-full w-full bg-[var(--color-background)]" />;
+        return <SplashScreen isReady={false} />;
     }
 
     if (!hasCompletedOnboarding) {

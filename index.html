@@ -55,7 +55,21 @@
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <div id="initial-splash" style="position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; user-select: none; z-index: 99999;">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 20px;">
+        <div style="width: 76px; height: 76px; border-radius: 18px; background: #0a0a0a; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.1);">
+          <svg viewBox="0 0 512 512" style="width: 48px; height: 48px; fill: #fafaf8;" xmlns="http://www.w3.org/2000/svg">
+            <path transform="translate(128, 128) scale(10.666)" d="M 4 4 H 20 V 8 L 14 8 V 16 H 18 V 20 H 14 L 10 20 V 8 L 4 8 V 4 Z M 10 16 H 14 V 20 H 10 V 16 Z" fill-rule="evenodd"/>
+          </svg>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+          <span style="font-size: 18px; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase; color: #f8fafc;">Theorem</span>
+          <span style="font-size: 10px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #94a3b8;">Local-First Reader</span>
+        </div>
+      </div>
+    </div>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 
