@@ -1,6 +1,8 @@
 
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState, memo } from 'react';
 import { useDocumentReader } from '../hooks/useDocumentReader';
+import { FootnotePopover } from './FootnotePopover';
+import type { FootnoteData } from '../engines/foliate-engine';
 import { cn } from "../../../core/lib/utils";
 import { PageLoader } from "../../../ui";
 import { getSettingsChanges } from "../../../core/lib/design-tokens";
@@ -82,6 +84,7 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
     
     const [navDirection, setNavDirection] = useState<'next' | 'prev' | null>(null);
     const [pageAnnouncement, setPageAnnouncement] = useState("");
+    const [footnote, setFootnote] = useState<FootnoteData | null>(null);
     const navTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     
     const pendingEngineUpdateRef = useRef<number | null>(null);
@@ -153,6 +156,7 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
         onLocationsSaved,
         onViewportTap,
         shouldForceViewportTap,
+        onFootnote: setFootnote,
     });
 
     useImperativeHandle(ref, () => ({
@@ -692,6 +696,16 @@ export const ReaderViewport = memo(forwardRef<ReaderViewportHandle, ReaderViewpo
                         background: navDirection === 'next'
                             ? 'linear-gradient(to left, var(--color-overlay-subtle), transparent)'
                             : 'linear-gradient(to right, var(--color-overlay-subtle), transparent)'
+                    }}
+                />
+            )}
+
+            {footnote && (
+                <FootnotePopover
+                    footnote={footnote}
+                    onClose={() => setFootnote(null)}
+                    onJump={(href) => {
+                        void goTo(href);
                     }}
                 />
             )}

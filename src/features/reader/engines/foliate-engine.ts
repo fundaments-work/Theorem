@@ -54,6 +54,14 @@ interface ReaderSearchSectionCacheItem {
     text: string;
 }
 
+export interface FootnoteData {
+    text: string;
+    html?: string;
+    title?: string;
+    href?: string;
+    rect?: { top: number; left: number; right: number; bottom: number; width: number; height: number };
+}
+
 export interface FoliateEngineOptions {
     onLocationChange?: (location: DocLocation) => void;
     onReady?: (metadata: DocMetadata, toc: TocItem[]) => void;
@@ -61,6 +69,7 @@ export interface FoliateEngineOptions {
     onTextSelected?: (cfi: string, text: string, rangeOrEvent: Range | MouseEvent) => void;
     onViewportTap?: () => void;
     shouldForceViewportTap?: () => boolean;
+    onFootnote?: (data: FootnoteData) => void;
 }
 
 export class FoliateEngine {
@@ -1828,6 +1837,14 @@ export class FoliateEngine {
                         return;
                     }
                     this.notifyViewportTap(null);
+                } else if (event.data?.type === 'foliate-footnote') {
+                    this.options.onFootnote?.({
+                        text: event.data.text,
+                        html: event.data.html,
+                        title: event.data.title,
+                        href: event.data.href,
+                        rect: event.data.rect,
+                    });
                 }
             };
             

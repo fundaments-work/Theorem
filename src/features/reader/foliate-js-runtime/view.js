@@ -391,17 +391,64 @@ export class View extends HTMLElement {
     #handleLinks(doc, index) {
         const { book } = this
         const section = book.sections[index]
-        doc.addEventListener('click', e => {
+        doc.addEventListener('click', async e => {
             const a = e.target.closest('a[href]')
             if (!a) return
             e.preventDefault()
             const href_ = a.getAttribute('href')
             const href = section?.resolveHref?.(href_) ?? href_
-            if (book?.isExternal?.(href))
+            if (book?.isExternal?.(href)) {
                 Promise.resolve(this.#emit('external-link', { a, href_ }, true))
                     .then(x => x ? globalThis.open(href_, '_blank') : null)
                     .catch(e => console.error(e))
-            else Promise.resolve(this.#emit('link', { a, href }, true))
+                return
+            }
+
+            // In-place footnote / citation popover
+            const epubType = (a.getAttributeNS?.('http://www.idpf.org/2007/ops', 'type') || a.getAttribute('epub:type') || '').toLowerCase()
+            const role = (a.getAttribute('role') || '').toLowerCase()
+            const isSup = a.matches('sup') || a.closest('sup') || a.classList.contains('footnote-ref') || a.classList.contains('noteref')
+            const isFootnoteRef = epubType.includes('noteref') || epubType.includes('footnote') || role.includes('doc-noteref') || isSup || href.includes('#fn') || href.includes('#note')
+
+            if (isFootnoteRef) {
+                try {
+                    const resolved = await book.resolveHref(href)
+                    if (resolved) {
+                        const targetDoc = (resolved.index === index) ? doc : await book.sections[resolved.index]?.createDocument?.()
+                        if (targetDoc) {
+                            const targetEl = resolved.anchor ? resolved.anchor(targetDoc) : null
+                            if (targetEl) {
+                                const text = targetEl.textContent?.trim() || ''
+                                const html = targetEl.innerHTML || text
+                                if (text) {
+                                    const rect = a.getBoundingClientRect()
+                                    const frameRect = doc.defaultView?.frameElement?.getBoundingClientRect()
+                                    window.parent?.postMessage({
+                                        type: 'foliate-footnote',
+                                        text,
+                                        html,
+                                        href,
+                                        title: a.getAttribute('title') || a.textContent || 'Footnote',
+                                        rect: {
+                                            top: (frameRect?.top || 0) + rect.top,
+                                            left: (frameRect?.left || 0) + rect.left,
+                                            bottom: (frameRect?.top || 0) + rect.bottom,
+                                            right: (frameRect?.left || 0) + rect.right,
+                                            width: rect.width,
+                                            height: rect.height,
+                                        }
+                                    }, '*')
+                                    return
+                                }
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Footnote extraction fallback:', err)
+                }
+            }
+
+            Promise.resolve(this.#emit('link', { a, href }, true))
                 .then(x => x ? this.goTo(href) : null)
                 .catch(e => console.error(e))
         })

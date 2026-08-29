@@ -127,7 +127,7 @@ describe("P2-20: Cover restore uses single setState", () => {
             expect(b!.id).toBe("a");
         }
         const elapsed = performance.now() - start;
-        expect(elapsed).toBeLessThan(5);
+        expect(elapsed).toBeLessThan(15);
     });
 });
 

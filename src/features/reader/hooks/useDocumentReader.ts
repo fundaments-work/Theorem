@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { FoliateEngine } from '../engines';
+import type { FootnoteData } from '../engines/foliate-engine';
 import type {
     Annotation,
     BookFormat,
@@ -23,6 +24,7 @@ export interface UseDocumentReaderOptions {
     onLocationsSaved?: (locations: string) => void;
     onViewportTap?: () => void;
     shouldForceViewportTap?: () => boolean;
+    onFootnote?: (data: FootnoteData) => void;
 }
 
 export interface UseDocumentReaderReturn {
@@ -176,6 +178,7 @@ export function useDocumentReader(options: UseDocumentReaderOptions = {}): UseDo
                 callbacksRef.current.onViewportTap?.();
             },
             shouldForceViewportTap: () => callbacksRef.current.shouldForceViewportTap?.() ?? false,
+            onFootnote: (data) => callbacksRef.current.onFootnote?.(data),
         });
 
         let isCancelled = false;
