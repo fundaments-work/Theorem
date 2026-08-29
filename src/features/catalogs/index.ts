@@ -1,1 +1,2 @@
-export { OPDSBrowserPage } from "./OPDSBrowser";
+export { DiscoverPage } from "./DiscoverPage";
+export { DiscoverPage as OPDSBrowserPage } from "./DiscoverPage";
