@@ -200,7 +200,6 @@ export interface AppSettings {
     goalNotifications: boolean;
     dailyReminderTime: string;
     syncNotifications: boolean;
-    discoverLanguage: string;
 }
 
 export interface PairedDevice {

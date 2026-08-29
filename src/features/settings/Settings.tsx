@@ -858,23 +858,6 @@ export const SettingsPage = memo(function SettingsPage() {
                             />
                         </SettingRow>
 
-                        <SettingRow
-                            label="Discover Language"
-                            description="Filter curated public domain catalogs and search by language"
-                        >
-                            <ButtonSelect
-                                options={[
-                                    { value: "en", label: "English" },
-                                    { value: "all", label: "All" },
-                                    { value: "es", label: "Spanish" },
-                                    { value: "fr", label: "French" },
-                                    { value: "de", label: "German" },
-                                    { value: "it", label: "Italian" },
-                                ]}
-                                value={settings.discoverLanguage || "en"}
-                                onChange={(v) => updateSettings({ discoverLanguage: v })}
-                            />
-                        </SettingRow>
 
                         <SettingRow
                             label="Daily Highlight"

@@ -121,30 +121,20 @@ function filterActualBooks(entries: OpdsEntry[]): OpdsEntry[] {
 }
 
 export const DiscoverService = {
-    async loadCuratedSections(forceRefresh = false, language = "en"): Promise<DiscoverSection[]> {
+    async loadCuratedSections(forceRefresh = false): Promise<DiscoverSection[]> {
         const results: DiscoverSection[] = [];
-        const isNonEnglish = Boolean(language && language !== "en" && language !== "all");
 
-        await Promise.all(
+        await Promise.allSettled(
             CURATED_FEEDS.map(async (feedConfig) => {
-                const cacheKey = `${feedConfig.id}_${language}`;
+                const cacheKey = feedConfig.id;
                 const cached = sectionCache.get(cacheKey);
                 if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
                     results.push(cached.data);
                     return;
                 }
 
-                let targetUrl = feedConfig.url;
-                if (isNonEnglish && feedConfig.id === "new-releases") {
-                    // Standard Ebooks is English-only; use Gutenberg latest releases for other languages
-                    targetUrl = `https://www.gutenberg.org/ebooks/search.opds/?sort_order=release_date&languages=${encodeURIComponent(language)}`;
-                } else if (language && language !== "all" && targetUrl.includes("gutenberg.org")) {
-                    const separator = targetUrl.includes("?") ? "&" : "?";
-                    targetUrl = `${targetUrl}${separator}languages=${encodeURIComponent(language)}`;
-                }
-
                 try {
-                    const feed = await fetchFeedSafe(targetUrl);
+                    const feed = await fetchFeedSafe(feedConfig.url);
                     if (feed && feed.entries && feed.entries.length > 0) {
                         const validBooks = filterActualBooks(feed.entries);
                         if (validBooks.length > 0) {
@@ -164,44 +154,16 @@ export const DiscoverService = {
             })
         );
 
-        // If specific categories returned empty for this language, fallback to top downloads
-        if (results.length === 0) {
-            try {
-                let fallbackUrl = "https://www.gutenberg.org/ebooks/search.opds/?sort_order=downloads";
-                if (language && language !== "all") {
-                    fallbackUrl += `&languages=${encodeURIComponent(language)}`;
-                }
-                const feed = await fetchFeedSafe(fallbackUrl);
-                if (feed && feed.entries && feed.entries.length > 0) {
-                    const validBooks = filterActualBooks(feed.entries);
-                    if (validBooks.length > 0) {
-                        results.push({
-                            id: "essentials",
-                            title: "Top Classics",
-                            subtitle: `Popular public domain works (${language.toUpperCase()}).`,
-                            books: validBooks.slice(0, 25),
-                        });
-                    }
-                }
-            } catch (err) {
-                console.warn("Error loading fallback language section:", err);
-            }
-        }
-
         // Maintain display order based on CURATED_FEEDS
         const ordered = CURATED_FEEDS.map((f) => results.find((r) => r.id === f.id)).filter(Boolean) as DiscoverSection[];
         return ordered.length > 0 ? ordered : results;
     },
 
-    async search(query: string, language = "en"): Promise<OpdsEntry[]> {
+    async search(query: string): Promise<OpdsEntry[]> {
         const clean = query.trim();
         if (!clean) return [];
 
-        let gutenbergSearchUrl = `https://www.gutenberg.org/ebooks/search.opds/?query=${encodeURIComponent(clean)}`;
-        if (language && language !== "all") {
-            gutenbergSearchUrl += `&languages=${encodeURIComponent(language)}`;
-        }
-
+        const gutenbergSearchUrl = `https://www.gutenberg.org/ebooks/search.opds/?query=${encodeURIComponent(clean)}`;
         const feed = await fetchFeedSafe(gutenbergSearchUrl);
         return feed ? filterActualBooks(feed.entries) : [];
     },
