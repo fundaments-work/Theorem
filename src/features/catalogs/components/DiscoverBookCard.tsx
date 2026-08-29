@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Check, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "../../../core/lib/utils";
@@ -13,19 +13,22 @@ export interface DiscoverBookCardProps {
     className?: string;
 }
 
-export function DiscoverBookCard({ entry, onSelect, className }: DiscoverBookCardProps) {
-    const books = useLibraryStore((state) => state.books);
+export const DiscoverBookCard = memo(function DiscoverBookCard({
+    entry,
+    onSelect,
+    className,
+}: DiscoverBookCardProps) {
+    const isBookInLibrary = useLibraryStore((state) =>
+        state.books.some(
+            (b) => b.title.toLowerCase().trim() === entry.title.toLowerCase().trim()
+        )
+    );
     const setRoute = useUIStore((state) => state.setRoute);
     const [isDownloading, setIsDownloading] = useState(false);
 
-    // Check if user already has this book in their library
-    const existingBook = books.find(
-        (b) => b.title.toLowerCase().trim() === entry.title.toLowerCase().trim()
-    );
-
     const handleGet = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (existingBook) {
+        if (isBookInLibrary) {
             setRoute("library");
             return;
         }
@@ -72,15 +75,15 @@ export function DiscoverBookCard({ entry, onSelect, className }: DiscoverBookCar
                     disabled={isDownloading}
                     className={cn(
                         "absolute bottom-2.5 right-2.5 z-20 flex items-center justify-center rounded-full transition-all duration-200 shadow-md",
-                        existingBook
+                        isBookInLibrary
                             ? "h-7 px-2.5 bg-zinc-900 text-zinc-100 text-[10px] font-bold border border-zinc-700 hover:bg-black"
                             : "h-7 px-2.5 bg-white text-black text-[10px] font-bold hover:bg-neutral-200 active:scale-95"
                     )}
-                    title={existingBook ? "In Library" : "Add to Library"}
+                    title={isBookInLibrary ? "In Library" : "Add to Library"}
                 >
                     {isDownloading ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : existingBook ? (
+                    ) : isBookInLibrary ? (
                         <span className="flex items-center gap-1">
                             <Check className="h-3 w-3" />
                             <span>In Library</span>
@@ -105,4 +108,4 @@ export function DiscoverBookCard({ entry, onSelect, className }: DiscoverBookCar
             </div>
         </div>
     );
-}
+});

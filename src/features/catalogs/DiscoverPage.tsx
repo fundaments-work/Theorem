@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
     Globe,
     Plus,
@@ -42,6 +42,8 @@ export function DiscoverPage() {
     const [newSourceTitle, setNewSourceTitle] = useState("");
     const [newSourceUrl, setNewSourceUrl] = useState("");
 
+    const [isPending, startTransition] = useTransition();
+
     const addCatalog = useOpdsStore((state) => state.addCatalog);
     const discoverLanguage = useSettingsStore((state) => state.settings.discoverLanguage) || "en";
     const updateSettings = useSettingsStore((state) => state.updateSettings);
@@ -83,17 +85,22 @@ export function DiscoverPage() {
         try {
             const data = await DiscoverService.loadCuratedSections(forceRefresh, lang);
             if (requestIdRef.current === currentReq) {
-                if (data && data.length > 0) {
-                    setSections(data);
-                } else {
-                    setSections([]);
-                    setError("No public domain books found for this language selection.");
-                }
+                startTransition(() => {
+                    if (data && data.length > 0) {
+                        setSections(data);
+                        setError(null);
+                    } else {
+                        setSections([]);
+                        setError("No public domain books found for this language selection.");
+                    }
+                });
             }
         } catch (err: any) {
             if (requestIdRef.current === currentReq) {
                 console.error("Discover load error:", err);
-                setError("Could not connect to online libraries.");
+                startTransition(() => {
+                    setError("Could not connect to online libraries.");
+                });
             }
         } finally {
             if (requestIdRef.current === currentReq) {
@@ -110,34 +117,38 @@ export function DiscoverPage() {
     const performSearch = useCallback(async (query: string, lang = discoverLanguage) => {
         const trimmed = query.trim();
         if (!trimmed) {
-            setSearchResults([]);
+            startTransition(() => {
+                setSearchResults([]);
+            });
             return;
         }
 
         setIsSearching(true);
         try {
             const results = await DiscoverService.search(trimmed, lang);
-            if (results && results.length > 0) {
-                setSearchResults(results);
-            } else {
-                // Fallback search across currently loaded sections
-                const localMatches: OpdsEntry[] = [];
-                const qLower = trimmed.toLowerCase();
-                for (const section of sections) {
-                    for (const b of section.books) {
-                        if (
-                            b.title.toLowerCase().includes(qLower) ||
-                            (b.author && b.author.toLowerCase().includes(qLower)) ||
-                            (b.summary && b.summary.toLowerCase().includes(qLower))
-                        ) {
-                            if (!localMatches.some((m) => m.id === b.id)) {
-                                localMatches.push(b);
+            startTransition(() => {
+                if (results && results.length > 0) {
+                    setSearchResults(results);
+                } else {
+                    // Fallback search across currently loaded sections
+                    const localMatches: OpdsEntry[] = [];
+                    const qLower = trimmed.toLowerCase();
+                    for (const section of sections) {
+                        for (const b of section.books) {
+                            if (
+                                b.title.toLowerCase().includes(qLower) ||
+                                (b.author && b.author.toLowerCase().includes(qLower)) ||
+                                (b.summary && b.summary.toLowerCase().includes(qLower))
+                            ) {
+                                if (!localMatches.some((m) => m.id === b.id)) {
+                                    localMatches.push(b);
+                                }
                             }
                         }
                     }
+                    setSearchResults(localMatches);
                 }
-                setSearchResults(localMatches);
-            }
+            });
         } catch (err: any) {
             console.warn("Online search failed, searching local sections:", err);
             const localMatches: OpdsEntry[] = [];
@@ -154,7 +165,9 @@ export function DiscoverPage() {
                     }
                 }
             }
-            setSearchResults(localMatches);
+            startTransition(() => {
+                setSearchResults(localMatches);
+            });
         } finally {
             setIsSearching(false);
         }
@@ -165,7 +178,9 @@ export function DiscoverPage() {
             if (searchQuery.trim().length >= 2) {
                 void performSearch(searchQuery, discoverLanguage);
             } else if (!searchQuery.trim()) {
-                setSearchResults([]);
+                startTransition(() => {
+                    setSearchResults([]);
+                });
             }
         }, 350);
 
@@ -178,7 +193,9 @@ export function DiscoverPage() {
     };
 
     const handleLanguageChange = (langCode: string) => {
-        updateSettings({ discoverLanguage: langCode });
+        startTransition(() => {
+            updateSettings({ discoverLanguage: langCode });
+        });
     };
 
     const handleAddSourceSubmit = (e: React.FormEvent) => {
@@ -213,12 +230,16 @@ export function DiscoverPage() {
     // Spotlight hero book (first book from the essentials list)
     const heroBook = sections[0]?.books?.[0] || null;
 
+    const handleSelectBook = useCallback((entry: OpdsEntry) => {
+        setSelectedBook(entry);
+    }, []);
+
     return (
         <div
             ref={scrollRef}
             className="flex-1 overflow-y-auto min-h-0 custom-scrollbar [content-visibility:auto] overscroll-contain h-full"
         >
-            <div className="flex flex-col min-h-full px-4 sm:px-6 md:px-8 py-6 space-y-8 max-w-7xl mx-auto w-full">
+            <div className="mx-auto w-full max-w-[var(--layout-content-max-width)] px-4 py-6 pb-12 sm:px-6 lg:px-8 lg:py-8 lg:pb-16 space-y-8 animate-fade-in">
                 {/* Top Discovery Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--color-border)] pb-5">
                     <div>
@@ -239,7 +260,9 @@ export function DiscoverPage() {
                                 value={searchQuery}
                                 onChange={(e) => {
                                     setSearchQuery(e.target.value);
-                                    if (!e.target.value.trim()) setSearchResults([]);
+                                    if (!e.target.value.trim()) {
+                                        startTransition(() => setSearchResults([]));
+                                    }
                                 }}
                                 placeholder="Search thousands of classics…"
                                 className="w-full h-8 pl-8 pr-7 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[color:var(--color-text-primary)] placeholder-[color:var(--color-text-muted)] focus:outline-none focus:border-[var(--color-text-primary)] transition-colors"
@@ -249,7 +272,7 @@ export function DiscoverPage() {
                                     type="button"
                                     onClick={() => {
                                         setSearchQuery("");
-                                        setSearchResults([]);
+                                        startTransition(() => setSearchResults([]));
                                     }}
                                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
                                 >
@@ -273,12 +296,12 @@ export function DiscoverPage() {
 
                         <button
                             onClick={() => loadDiscoverFeed(true, discoverLanguage)}
-                            disabled={isRefreshing || isLoading}
+                            disabled={isRefreshing || isLoading || isPending}
                             className="h-8 w-8 inline-flex items-center justify-center border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors shrink-0 disabled:opacity-50"
                             title="Refresh Discover feed"
                             aria-label="Refresh feed"
                         >
-                            <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+                            <RefreshCw className={cn("h-3.5 w-3.5", (isRefreshing || isPending) && "animate-spin")} />
                         </button>
 
                         <button
@@ -358,7 +381,7 @@ export function DiscoverPage() {
                                                 <DiscoverBookCard
                                                     key={entry.id}
                                                     entry={entry}
-                                                    onSelect={(b) => setSelectedBook(b)}
+                                                    onSelect={handleSelectBook}
                                                 />
                                             ))}
                                         </div>
@@ -426,7 +449,7 @@ export function DiscoverPage() {
                             <DiscoverCarousel
                                 key={section.id}
                                 section={section}
-                                onSelectBook={(b) => setSelectedBook(b)}
+                                onSelectBook={handleSelectBook}
                             />
                         ))}
                     </div>

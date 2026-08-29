@@ -109,7 +109,7 @@ export function TheoremBookCover({
     author,
     coverUrl,
     className,
-    badge = "THEOREM CLASSICS",
+    badge,
 }: TheoremBookCoverProps) {
     const [imageError, setImageError] = useState(false);
 
@@ -159,17 +159,26 @@ export function TheoremBookCover({
             />
 
             {/* Top Series Header */}
-            <div className="relative z-10 text-center pt-1">
-                <span
-                    style={{ color: palette.badgeColor }}
-                    className="text-[8px] sm:text-[9px] font-bold tracking-[0.2em] uppercase"
-                >
-                    {badge}
-                </span>
-                <div
-                    style={{ backgroundColor: palette.rule }}
-                    className="w-8 h-[1px] mx-auto mt-1.5 opacity-80"
-                />
+            <div className="relative z-10 text-center pt-1 min-h-[16px]">
+                {badge ? (
+                    <>
+                        <span
+                            style={{ color: palette.badgeColor }}
+                            className="text-[8px] sm:text-[9px] font-bold tracking-[0.2em] uppercase"
+                        >
+                            {badge}
+                        </span>
+                        <div
+                            style={{ backgroundColor: palette.rule }}
+                            className="w-8 h-[1px] mx-auto mt-1.5 opacity-80"
+                        />
+                    </>
+                ) : (
+                    <div
+                        style={{ backgroundColor: palette.rule }}
+                        className="w-8 h-[1px] mx-auto mt-2 opacity-60"
+                    />
+                )}
             </div>
 
             {/* Centered Title & Author Block */}

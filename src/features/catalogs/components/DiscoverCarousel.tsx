@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { DiscoverSection } from "../../../core/services/DiscoverService";
 import type { OpdsEntry } from "../../../core/types";
@@ -9,7 +9,10 @@ export interface DiscoverCarouselProps {
     onSelectBook?: (entry: OpdsEntry) => void;
 }
 
-export function DiscoverCarousel({ section, onSelectBook }: DiscoverCarouselProps) {
+export const DiscoverCarousel = memo(function DiscoverCarousel({
+    section,
+    onSelectBook,
+}: DiscoverCarouselProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     const scroll = (direction: "left" | "right") => {
@@ -35,17 +38,17 @@ export function DiscoverCarousel({ section, onSelectBook }: DiscoverCarouselProp
                     )}
                 </div>
 
-                <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                <div className="hidden sm:flex items-center gap-1 shrink-0">
                     <button
                         onClick={() => scroll("left")}
-                        className="p-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                        className="h-7 w-7 inline-flex items-center justify-center border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                         aria-label="Scroll left"
                     >
                         <ChevronLeft className="h-4 w-4" />
                     </button>
                     <button
                         onClick={() => scroll("right")}
-                        className="p-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                        className="h-7 w-7 inline-flex items-center justify-center border border-[var(--color-border)] bg-[var(--color-surface)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                         aria-label="Scroll right"
                     >
                         <ChevronRight className="h-4 w-4" />
@@ -66,4 +69,4 @@ export function DiscoverCarousel({ section, onSelectBook }: DiscoverCarouselProp
             </div>
         </section>
     );
-}
+});
