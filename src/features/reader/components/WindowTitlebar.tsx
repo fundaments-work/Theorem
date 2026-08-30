@@ -247,7 +247,7 @@ export function WindowTitlebar({
             { label: "Book Info", icon: <Info className="w-5 h-5" />, onClick: onToggleInfo, active: activePanel === "info" },
         ];
 
-    if (onToggleFullscreen) {
+    if (onToggleFullscreen && !isMobileRuntime) {
         menuItems.push({
             label: fullscreen ? "Exit Fullscreen" : "Fullscreen",
             icon: fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />,

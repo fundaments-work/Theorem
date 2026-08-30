@@ -9,6 +9,7 @@ import {
     Minimize2,
 } from 'lucide-react';
 import { cn, normalizeAuthor } from '../../../core/lib/utils';
+import { isMobile } from '../../../core/lib/env';
 import type { DocMetadata, DocLocation } from '../../../core/types';
 
 interface ReaderToolbarProps {
@@ -157,15 +158,17 @@ export function ReaderToolbar({
                     <span className="text-base font-serif font-bold">Aa</span>
                 </button>
 
-                <button
-                    onClick={onToggleFullscreen}
-                    className={READER_BUTTON_CLASS}
-                    data-active={fullscreen}
-                    title={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-                    aria-label={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-                >
-                    {fullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-                </button>
+                {!isMobile() && onToggleFullscreen && (
+                    <button
+                        onClick={onToggleFullscreen}
+                        className={READER_BUTTON_CLASS}
+                        data-active={fullscreen}
+                        title={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                        aria-label={fullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                    >
+                        {fullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                    </button>
+                )}
 
                 <div className="w-px h-6 bg-[var(--color-border)] mx-1" />
 
